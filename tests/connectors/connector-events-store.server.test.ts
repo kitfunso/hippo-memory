@@ -50,7 +50,7 @@ function markedFolder(): string {
 /** A copy that routes Slack team T_ACME and GitHub installation 101 to acme, so any other sender is unroutable. */
 async function copyWithRoutes(): Promise<string> {
   const root = copyOf();
-  await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
+  await sqliteStore(root).hippoDb.connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(

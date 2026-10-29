@@ -204,7 +204,7 @@ export async function rawArchiveForEvent(
   reason: string,
   event: ConnectorEvent,
 ): Promise<ArchiveRawResult> {
-  const archivedAt = await ctx.store.connectorWrites.archiveConnectorEntry({
+  const archivedAt = await ctx.store.hippoDb.connectorWrites.archiveConnectorEntry({
     ...archiveOf(ctx, id, reason),
     event,
   });

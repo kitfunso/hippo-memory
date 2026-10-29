@@ -33,7 +33,7 @@ describe('github DLQ', () => {
     });
     expect(id).toBe(1);
     const item = (
-      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+      await sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', 'default', {
         id,
       })
     )[0];
@@ -59,7 +59,7 @@ describe('github DLQ', () => {
       error: 'no tenant',
       bucket: 'unroutable',
     });
-    const item = (await sqliteStore(root).connectorEvents.deadLetters('github', '__unroutable__', { id }))[0];
+    const item = (await sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', '__unroutable__', { id }))[0];
     expect(item!.tenantId).toBe('__unroutable__');
     expect(item!.bucket).toBe('unroutable');
     const listed = await listDlq({ tenantId: '__unroutable__', store: sqliteStore(root) }, githubDlq);
@@ -132,21 +132,21 @@ describe('github DLQ', () => {
       error: 'boom',
     });
     const found = (
-      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+      await sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', 'default', {
         id,
       })
     )[0];
     expect(found).toBeDefined();
     expect(found!.id).toBe(id);
     expect(
-      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+      await sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', 'default', {
         id: 9999,
       }),
     ).toEqual([]);
   });
 
   it("reads and counts a retry on the caller's own rows only, so another tenant's id answers absent and stays unmarked", async () => {
-    const events = sqliteStore(root).connectorEvents;
+    const events = sqliteStore(root).hippoDb.connectorEvents;
     const id = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{}',
@@ -179,7 +179,7 @@ describe('github DLQ', () => {
     expect(result.retryCount).toBe(1);
 
     const after = (
-      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+      await sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', 'default', {
         id,
       })
     )[0];
@@ -206,7 +206,7 @@ describe('github DLQ', () => {
     });
     expect(
       (
-        await store.connectorEvents.deadLetters('github', '__unroutable__', {
+        await store.hippoDb.connectorEvents.deadLetters('github', '__unroutable__', {
           id: unroutable,
         })
       )[0]?.retryCount,
@@ -215,6 +215,6 @@ describe('github DLQ', () => {
       status: 'not_found',
       retryCount: 0,
     });
-    expect((await store.connectorEvents.deadLetters('github', 'acme', { id: acmes }))[0]?.retryCount).toBe(0);
+    expect((await store.hippoDb.connectorEvents.deadLetters('github', 'acme', { id: acmes }))[0]?.retryCount).toBe(0);
   });
 });

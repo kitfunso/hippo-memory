@@ -153,13 +153,13 @@ const REPLAY_HOLD_MS = 36_500 * DAY_MS;
 
 async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
   const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
-  if (!(await store.connectorEvents.claimDelivery(claim))) {
+  if (!(await store.hippoDb.connectorEvents.claimDelivery(claim))) {
     throw new HttpError(409, 'duplicate X-GitHub-Delivery');
   }
 }
 
 async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
-  await store.connectorEvents.releaseDelivery('github', key).catch((err) => {
+  await store.hippoDb.connectorEvents.releaseDelivery('github', key).catch((err) => {
     log.warn(
       'github webhook: could not free the replay hold of a failed delivery',
       errorFields(err),

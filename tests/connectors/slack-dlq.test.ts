@@ -30,7 +30,7 @@ describe('slack DLQ', () => {
   it('markSlackDlqRetried sets retried_at', async () => {
     await parkInDlq({ store: sqliteStore(root) }, slackDlq, { tenantId: 'default', rawPayload: '{}', error: 'boom' });
     const [item] = await listDlq({ tenantId: 'default', store: sqliteStore(root) }, slackDlq);
-    await sqliteStore(root).connectorEvents.markDeadLetterRetried('slack', 'default', item.id);
+    await sqliteStore(root).hippoDb.connectorEvents.markDeadLetterRetried('slack', 'default', item.id);
     const [after] = await listDlq({ tenantId: 'default', store: sqliteStore(root) }, slackDlq);
     expect(Number.isNaN(Date.parse(String(after.retriedAt)))).toBe(false);
   });

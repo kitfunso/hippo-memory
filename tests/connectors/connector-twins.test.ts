@@ -58,7 +58,7 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
       rawPayload: '{}',
       error: 'e',
     });
-    const events = sqliteStore(root).connectorEvents;
+    const events = sqliteStore(root).hippoDb.connectorEvents;
     await events.markDeadLetterRetried('github', 'default', g);
     await events.markDeadLetterRetried('slack', 'default', s);
     for (const row of [
@@ -105,6 +105,8 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
       retryCount: 1,
       reason: 'no tenant',
     });
-    expect((await sqliteStore(root).connectorEvents.deadLetters('github', 'default', { id }))[0]?.retryCount).toBe(1);
+    expect(
+      (await sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', 'default', { id }))[0]?.retryCount,
+    ).toBe(1);
   });
 });

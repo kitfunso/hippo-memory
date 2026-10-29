@@ -65,7 +65,7 @@ export async function parkInDlq<Own, Bucket extends string>(
     bucket: opts.bucket ?? DEFAULT_BUCKET,
     signature: redacted ? null : (opts.signature ?? null),
   });
-  return ctx.store.connectorEvents.parkDeadLetter(letter);
+  return ctx.store.hippoDb.connectorEvents.parkDeadLetter(letter);
 }
 
 /** The caller's tenant's parked rows on `dlq`. */
@@ -74,7 +74,7 @@ export function listDlq<C extends DeadLetterConnector>(
   dlq: ConnectorDlq<C, never, never>,
   opts: { limit?: number } = {},
 ): Promise<DeadLetterRows[C][]> {
-  return ctx.store.connectorEvents.deadLetters(dlq.connector, ctx.tenantId, {
+  return ctx.store.hippoDb.connectorEvents.deadLetters(dlq.connector, ctx.tenantId, {
     limit: opts.limit ?? DEFAULT_LIST_LIMIT,
   });
 }
@@ -116,7 +116,7 @@ async function failAndBump(
   row: { id: number; tenantId: string; retryCount: number },
   failure: { status: ReplayStatus; reason: string },
 ): Promise<ReplayResult> {
-  await store.connectorEvents.markDeadLetterRetried(dlq.connector, row.tenantId, row.id);
+  await store.hippoDb.connectorEvents.markDeadLetterRetried(dlq.connector, row.tenantId, row.id);
   return replayFailed(failure.status, row.retryCount + 1, failure.reason);
 }
 
@@ -127,11 +127,15 @@ async function replayableRow<C extends DeadLetterConnector>(
   connector: C,
   id: number,
 ): Promise<DeadLetterRows[C] | null> {
-  const [own] = await store.connectorEvents.deadLetters(connector, tenantId, { id });
+  const [own] = await store.hippoDb.connectorEvents.deadLetters(connector, tenantId, { id });
   if (own !== undefined) return own;
-  const [unroutable] = await store.connectorEvents.deadLetters(connector, UNROUTABLE_TENANT, {
-    id,
-  });
+  const [unroutable] = await store.hippoDb.connectorEvents.deadLetters(
+    connector,
+    UNROUTABLE_TENANT,
+    {
+      id,
+    },
+  );
   return unroutable ?? null;
 }
 
@@ -203,7 +207,11 @@ export async function replayParked<C extends DeadLetterConnector, Envelope exten
 
   const outcome = await steps.reingest(row, parsed);
   if (!outcome.ok) return failAndBump(ctx, steps.dlq, row, outcome);
-  await ctx.store.connectorEvents.markDeadLetterRetried(steps.dlq.connector, row.tenantId, row.id);
+  await ctx.store.hippoDb.connectorEvents.markDeadLetterRetried(
+    steps.dlq.connector,
+    row.tenantId,
+    row.id,
+  );
   const result: ReplayResult = {
     ok: true,
     status: outcome.status,

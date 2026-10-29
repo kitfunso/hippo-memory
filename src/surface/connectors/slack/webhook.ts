@@ -106,7 +106,7 @@ const REPLAY_HOLD_MS = DAY_MS;
 /** Routes a verified request once: the signature covers the timestamp and the body, so a repeat
  * is the same request. */
 async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
-  const events = d.store.connectorEvents;
+  const events = d.store.hippoDb.connectorEvents;
   const held = await events.claimDelivery({
     connector: 'slack',
     key: d.signature,

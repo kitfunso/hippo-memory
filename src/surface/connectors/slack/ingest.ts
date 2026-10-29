@@ -19,7 +19,7 @@ export async function ingestMessage(
   ctx: ConnectorContext,
   input: IngestInput,
 ): Promise<IngestResult> {
-  const events = ctx.store.connectorEvents;
+  const events = ctx.store.hippoDb.connectorEvents;
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
   // Idempotency check: if already seen, return the cached memory_id without re-running the
   // transform or hitting api.remember.

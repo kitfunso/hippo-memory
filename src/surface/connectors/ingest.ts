@@ -55,6 +55,6 @@ export async function rememberWithEventLog(
 }
 
 async function markSkipped(ctx: ConnectorContext, event: ConnectorEvent): Promise<IngestResult> {
-  await ctx.store.connectorEvents.markEventSeen(event);
+  await ctx.store.hippoDb.connectorEvents.markEventSeen(event);
   return { status: 'skipped', memoryId: null };
 }

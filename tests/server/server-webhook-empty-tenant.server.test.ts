@@ -68,7 +68,7 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     expect(res.status).toBe(200);
     expect(
       await tenantsOf((t) =>
-        sqliteStore(root).connectorEvents.deadLetters('github', t, {
+        sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', t, {
           limit: 100,
         }),
       ),
@@ -82,7 +82,7 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     await ghPost(handle.port, '{broken', 'issues');
     expect(
       await tenantsOf((t) =>
-        sqliteStore(root).connectorEvents.deadLetters('github', t, {
+        sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', t, {
           limit: 100,
         }),
       ),
@@ -96,7 +96,7 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     await slackPost(handle.port, '{"foo":1}');
     expect(
       await tenantsOf((t) =>
-        sqliteStore(root).connectorEvents.deadLetters('slack', t, {
+        sqliteStore(root).hippoDb.connectorEvents.deadLetters('slack', t, {
           limit: 100,
         }),
       ),

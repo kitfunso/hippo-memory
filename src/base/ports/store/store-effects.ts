@@ -5,7 +5,6 @@ import { AUDIT_LOG_EFFECTS } from './audit.js';
 import { CAPTURES_EFFECTS, COMPACTIONS_EFFECTS, COMPACTION_HOOKS_EFFECTS } from './capture.js';
 import { CARDS_EFFECTS } from './cards.js';
 import { CONFLICTS_EFFECTS } from './conflicts.js';
-import { CONNECTOR_EVENTS_EFFECTS, CONNECTOR_WRITES_EFFECTS } from './connectors.js';
 import { CONSOLIDATION_EFFECTS } from './consolidation.js';
 import { CONTEXT_READS_EFFECTS, DAG_READS_EFFECTS } from './context-reads.js';
 import { DIAGNOSTICS_EFFECTS, READINESS_EFFECTS } from './diagnostics.js';
@@ -56,8 +55,6 @@ export const STORE_EFFECTS = {
   graphReads: GRAPH_READS_EFFECTS,
   objects: OBJECTS_EFFECTS,
   readiness: READINESS_EFFECTS,
-  connectorWrites: CONNECTOR_WRITES_EFFECTS,
-  connectorEvents: CONNECTOR_EVENTS_EFFECTS,
   lastRecall: LAST_RECALL_EFFECTS,
   lessonWrites: LESSON_WRITES_EFFECTS,
   cards: CARDS_EFFECTS,

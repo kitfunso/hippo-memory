@@ -83,7 +83,7 @@ export async function ingestEvent(
   ctx: ConnectorContext,
   input: IngestInput,
 ): Promise<IngestResult> {
-  const events = ctx.store.connectorEvents;
+  const events = ctx.store.hippoDb.connectorEvents;
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
     eventUpdatedAt(input.event),

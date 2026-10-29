@@ -5,7 +5,8 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ServerHandle } from '../../src/server.js';
-import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
+import type { HippoDbStore } from '../../src/store/sqlite/hippo-db.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -26,7 +27,9 @@ import {
 } from '../_helpers/store-worker-server.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
-type InProcess = HippoStore & StoreGroups;
+type InProcess = HippoDbStore;
+/** The groups and methods a case runs on the server thread; a local repository goes under `hippoDb`. */
+type Swap = Partial<Omit<InProcess, 'hippoDb'>> & { readonly hippoDb?: Partial<InProcess['hippoDb']> };
 type Send = (server: ServerHandle) => Promise<Response>;
 type Step = readonly [label: string, send: Send, status: number];
 
@@ -213,7 +216,7 @@ const CONFLICT = `INSERT INTO memory_conflicts (memory_a_id, memory_b_id, reason
 async function copy() {
   const made = freshStore(seed.templates, 'local');
   homes.push(made.home);
-  await sqliteStore(made.root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT);
+  await sqliteStore(made.root).hippoDb.connectorEvents.registerSlackWorkspace('T_ACME', TENANT);
   onDb(made.root, (db) => {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
       '101',
@@ -335,7 +338,7 @@ describe('the routes moved off the server thread, on store workers against the i
 
 describe('the server-thread block of the routes this file covers', () => {
   const ROUTES: ReadonlyArray<
-    readonly [route: string, swapped: (inProcess: InProcess) => Partial<InProcess>, send: Send, status: number]
+    readonly [route: string, swapped: (inProcess: InProcess) => Swap, send: Send, status: number]
   > = [
     ['GET /v1/recall/drill/:id', (p) => ({ dagReads: p.dagReads }), drill('mem_x_summary'), 501],
     [
@@ -348,13 +351,13 @@ describe('the server-thread block of the routes this file covers', () => {
     ['GET /v1/context', (p) => ({ contextReads: p.contextReads }), context('?q=deploy'), 501],
     [
       'POST /v1/connectors/slack/events',
-      (p) => ({ connectorEvents: p.connectorEvents }),
+      (p) => ({ hippoDb: { connectorEvents: p.hippoDb.connectorEvents } }),
       slack(slackEvent('T_ACME', 'Ev_1', posted('1700.000001'))),
       501,
     ],
     [
       'POST /v1/connectors/github/events',
-      (p) => ({ connectorEvents: p.connectorEvents }),
+      (p) => ({ hippoDb: { connectorEvents: p.hippoDb.connectorEvents } }),
       github('d-1', comment('created')),
       501,
     ],
@@ -386,7 +389,9 @@ describe('the server-thread block of the routes this file covers', () => {
       const { root } = await copy();
       const info = vi.spyOn(log, 'trail');
       // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
-      const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
+      const worker = workerSqliteStore(root);
+      const { hippoDb: tier, ...groups } = swapped(serverThreadPart(root));
+      const store = Object.assign(worker, groups, { hippoDb: { ...worker.hippoDb, ...tier } });
 
       const res = await onServer(root, store, async (server) => seen('blocked', await send(server)));
 

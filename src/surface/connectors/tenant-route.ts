@@ -17,7 +17,7 @@ export async function resolveTenant(
   query: RouteQuery,
   { hostTenant, allowUnknown }: RouteFallback,
 ): Promise<string | null> {
-  const route = await store.connectorEvents.route(query);
+  const route = await store.hippoDb.connectorEvents.route(query);
   if (route.tenantId !== null) return route.tenantId;
   return route.routes === 0 || allowUnknown ? hostTenant : null;
 }

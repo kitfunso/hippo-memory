@@ -67,7 +67,12 @@ interface OptionalGroups
 
 /** The groups hippo.db keeps in its local tier, `store.hippoDb`, off the port. Surfaces still
  * prove them by name, so StoreWith and the group probes look for each one in the tier. */
-const LOCAL_GROUP_NAMES = ['sessions', 'auditMaintenance'] as const;
+const LOCAL_GROUP_NAMES = [
+  'sessions',
+  'auditMaintenance',
+  'connectorWrites',
+  'connectorEvents',
+] as const;
 
 export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];
 

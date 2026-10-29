@@ -28,7 +28,7 @@ export async function handleCommentDeleted(
 ): Promise<DeletionResult> {
   const { artifactRef, idempotencyKey, deliveryId, eventName } = input;
   const event = { connector: 'github', idempotencyKey, deliveryId, eventName } as const;
-  const done = await ctx.store.connectorEvents.markEventSeen(event, {
+  const done = await ctx.store.hippoDb.connectorEvents.markEventSeen(event, {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     artifactRef,

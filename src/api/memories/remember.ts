@@ -1,11 +1,7 @@
-// Write path: remember stores one memory after secret vetting and, for untrusted content, the
-// instruction check.
+// Write path: remember stores one memory after secret vetting; the prepare and result steps are
+// shared with the connector write, which adds the instruction check.
 
-import type {
-  ConnectorEvent,
-  ConnectorWrite,
-  ConnectorWriteOutcome,
-} from '../../base/ports/store.js';
+import type { ConnectorWriteOutcome } from '../../base/ports/store.js';
 import {
   detectInstruction,
   INSTRUCTION_LIKE_TAG,
@@ -32,7 +28,7 @@ import {
   ScopeForbiddenError,
 } from '../../base/scope/recall-scope.js';
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience
@@ -66,13 +62,6 @@ export interface RememberOptions {
   /** Never set from a request body: a route or tool that copied it would let a client pin a row
    * or pick its layer and source. */
   local?: RememberLocal;
-}
-
-/** A connector's write of content an agent doesn't control. */
-export interface ConnectorRememberOptions extends RememberOptions {
-  /** The connector event this write answers. The store logs it in the memory's own transaction;
-   * an event logged before stores nothing and answers `duplicate`. */
-  event?: ConnectorEvent;
 }
 
 /** A write that asks for the salience gate: one it judges not worth keeping answers
@@ -142,7 +131,7 @@ function assertOwnerIsCallers(ctx: Context, owner: string | undefined): void {
 
 /** The vetted row a remember writes, with its scope and quarantine verdict, decided the same way
  * on both paths. */
-interface PreparedRemember {
+export interface PreparedRemember {
   readonly entry: MemoryEntry;
   readonly requestedScope: string | null;
   readonly detection: { readonly flagged: boolean; readonly reason: string | null };
@@ -151,7 +140,7 @@ interface PreparedRemember {
 
 /** `untrusted` marks connector content an agent doesn't control, which the instruction check
  * gates. */
-function prepareRemember(
+export function prepareRemember(
   ctx: Context,
   opts: RememberOptions,
   untrusted: boolean,
@@ -223,7 +212,7 @@ function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken'
   };
 }
 
-function rememberResult(
+export function rememberResult(
   ctx: Context,
   prepared: PreparedRemember,
   written?: ConnectorWriteOutcome,
@@ -240,16 +229,6 @@ function rememberResult(
   if (warnings.length > 0) result.warnings = [...warnings];
   if (written?.outcome === 'duplicate') result.duplicate = { memoryId: written.memoryId };
   return result;
-}
-
-/** A flagged row's review record, which the store writes in the row's own transaction. */
-function quarantineOf({
-  requestedScope,
-  detection,
-}: PreparedRemember): ConnectorWrite['quarantine'] {
-  return detection.flagged
-    ? { originalScope: requestedScope, reason: detection.reason ?? 'unknown' }
-    : undefined;
 }
 
 // The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once
@@ -321,22 +300,4 @@ async function writeRemembered(ctx: Context, opts: RememberOptions): Promise<Rem
   const prepared = prepareRemember(ctx, opts, false);
   await ctx.store.entryWrites.writeEntry({ entry: prepared.entry, actor: ctx.actor.subject });
   return rememberResult(ctx, prepared);
-}
-
-/** Store one row of connector content, which the instruction check gates. connectorWrites
- * commits the row with its event and any quarantine record, so an event logged before stores
- * nothing and answers `duplicate`. */
-export async function rememberUntrusted(
-  ctx: ContextWith<'connectorWrites'>,
-  opts: ConnectorRememberOptions,
-): Promise<RememberResult> {
-  const prepared = prepareRemember(ctx, opts, true);
-  const written = await ctx.store.connectorWrites.writeConnectorEntry({
-    entry: prepared.entry,
-    actor: ctx.actor.subject,
-    event: opts.event,
-    quarantine: quarantineOf(prepared),
-  });
-  await autoSleepAfterWrite(ctx);
-  return rememberResult(ctx, prepared, written);
 }

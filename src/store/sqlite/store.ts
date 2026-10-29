@@ -23,8 +23,6 @@ import { sqliteFailureLog } from './capture/failure-log.js';
 import { sqliteCompactions } from './capture/compactions.js';
 import { sqliteReports } from './reports/reports.js';
 import { listSessionEvents } from './sessions/sessions.js';
-import { sqliteConnectorEvents } from './connectors/connector-events.js';
-import { sqliteConnectorWrites } from './connectors/connector-writes.js';
 import { sqliteConsolidation } from './consolidation/consolidation.js';
 import { sqliteLearning } from './learning/learning.js';
 import { sqlitePromotion } from './sharing/promotion.js';
@@ -117,8 +115,6 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
     dagReads: sqliteDagReads(on),
     auditLog: sqliteAuditLog(on),
     graphReads: sqliteGraphReads(on),
-    connectorWrites: sqliteConnectorWrites(handles),
-    connectorEvents: sqliteConnectorEvents(on),
     objects: sqliteObjects(handles),
     readiness: sqliteReadiness(files.hippoRoot, on),
     vectors: sqliteVectorReads(handles),

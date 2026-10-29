@@ -36,9 +36,10 @@ export {
   requireHostAdmin,
 } from './types.js';
 export type { Actor, Context, ContextReach, EntryContext, GlobalInReach } from './types.js';
-export { remember, rememberUntrusted } from './memories/remember.js';
+export { remember } from './memories/remember.js';
+export { rememberUntrusted } from './hippo-db/remember-untrusted.js';
+export type { ConnectorRememberOptions } from './hippo-db/remember-untrusted.js';
 export type {
-  ConnectorRememberOptions,
   GatedRememberOptions,
   RememberLocal,
   RememberOptions,

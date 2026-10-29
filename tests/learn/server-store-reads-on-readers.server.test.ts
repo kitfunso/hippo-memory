@@ -54,9 +54,9 @@ const made = { handoffId: 0, cardId: '' };
 /** The rows the moved-reads seed lacks, written through the in-process store: connector state, working memory, a claimed card, a failure, a token row, a rejection, a conflict and a dormant memory. */
 async function seedSessionAndAdmin(root: string): Promise<void> {
   const s = sqliteStore(root);
-  await s.connectorEvents.markEventSeen(SLACK_EVENT);
-  await s.connectorEvents.registerSlackWorkspace('T-seeded', TENANT);
-  await s.connectorEvents.parkDeadLetter({
+  await s.hippoDb.connectorEvents.markEventSeen(SLACK_EVENT);
+  await s.hippoDb.connectorEvents.registerSlackWorkspace('T-seeded', TENANT);
+  await s.hippoDb.connectorEvents.parkDeadLetter({
     connector: 'github',
     tenantId: TENANT,
     rawPayload: '{"seeded":true}',
@@ -64,8 +64,8 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
     signature: null,
     bucket: 'unroutable',
   });
-  await s.connectorEvents.saveCursor(SLACK_CURSOR, '1700000000.000100');
-  await s.connectorEvents.saveCursor(GITHUB_CURSOR, '2026-01-01T00:00:00Z');
+  await s.hippoDb.connectorEvents.saveCursor(SLACK_CURSOR, '1700000000.000100');
+  await s.hippoDb.connectorEvents.saveCursor(GITHUB_CURSOR, '2026-01-01T00:00:00Z');
   await s.hippoDb.sessions.save(TENANT, 'working_memory', {
     scope: 'deploy',
     content: 'watch the canary error rate',
@@ -135,10 +135,10 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
 
 const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read(
-    'connectorEvents.eventRecord',
+    'hippoDb.connectorEvents.eventRecord',
     async (s) => [
-      await s.connectorEvents.eventRecord(SLACK_EVENT),
-      await s.connectorEvents.eventRecord(
+      await s.hippoDb.connectorEvents.eventRecord(SLACK_EVENT),
+      await s.hippoDb.connectorEvents.eventRecord(
         { connector: 'slack', eventId: 'Ev-unseen' },
         { artifactRef: 'vault:golden:rollout.md', tenantId: TENANT },
       ),
@@ -146,10 +146,10 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     /seen: true.*mem_z_vault/,
   ),
   read(
-    'connectorEvents.route',
+    'hippoDb.connectorEvents.route',
     async (s) => [
-      await s.connectorEvents.route({ connector: 'slack', teamId: 'T-seeded' }),
-      await s.connectorEvents.route({
+      await s.hippoDb.connectorEvents.route({ connector: 'slack', teamId: 'T-seeded' }),
+      await s.hippoDb.connectorEvents.route({
         connector: 'github',
         installationId: '101',
       }),
@@ -157,19 +157,22 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     `[ { tenantId: '${TENANT}' }, { tenantId: '${TENANT}' } ]`,
   ),
   read(
-    'connectorEvents.deadLetters',
+    'hippoDb.connectorEvents.deadLetters',
     async (s) => [
-      await s.connectorEvents.deadLetters('github', TENANT, { limit: 5 }),
-      await s.connectorEvents.deadLetters('github', TENANT, { id: 1 }),
+      await s.hippoDb.connectorEvents.deadLetters('github', TENANT, { limit: 5 }),
+      await s.hippoDb.connectorEvents.deadLetters('github', TENANT, { id: 1 }),
     ],
     /unroutable payload.*unroutable payload/,
   ),
   read(
-    'connectorEvents.cursor',
-    async (s) => [await s.connectorEvents.cursor(SLACK_CURSOR), await s.connectorEvents.cursor(GITHUB_CURSOR)],
+    'hippoDb.connectorEvents.cursor',
+    async (s) => [
+      await s.hippoDb.connectorEvents.cursor(SLACK_CURSOR),
+      await s.hippoDb.connectorEvents.cursor(GITHUB_CURSOR),
+    ],
     `[ '1700000000.000100', '2026-01-01T00:00:00Z' ]`,
   ),
-  read('connectorEvents.slackWorkspaces', (s) => s.connectorEvents.slackWorkspaces(), 'T-seeded'),
+  read('hippoDb.connectorEvents.slackWorkspaces', (s) => s.hippoDb.connectorEvents.slackWorkspaces(), 'T-seeded'),
   read(
     'hippoDb.auditMaintenance.objectBackedAmong',
     async (s) =>
