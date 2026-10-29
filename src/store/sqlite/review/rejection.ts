@@ -4,7 +4,7 @@
  * reverse is a cycle). */
 
 import { rejectionDigest } from '../../../base/records/rejection-digest.js';
-import type { DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
 import type { RejectedValueRow, RejectionCheck } from '../../../base/ports/store/rejections.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -116,7 +116,7 @@ export function deleteRejectedValue(
     db,
     `DELETE FROM rejected_values WHERE tenant_id = ? AND digest = ?`,
   ).run(tenantId, digest);
-  return (result.changes ?? 0) > 0;
+  return changedRows(result) > 0;
 }
 
 /** List tombstones for a tenant, newest first: the `rejections` verb. */

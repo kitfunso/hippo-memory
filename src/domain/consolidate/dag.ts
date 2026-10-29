@@ -337,8 +337,8 @@ export async function rebuildDirtySummaries(
   const rebuiltContent = new Map<string, string>();
   for (const [index, { summary, children }] of queue.entries()) {
     // Yield the macrotask queue every 25 summaries: each iteration is synchronous store work, so a
-    // batch of up to 1000 would starve timers and IPC (server keep-alives, Vitest's birpc
-    // heartbeat).
+    // batch of up to MAX_DAG_REBUILD_CAP would starve timers and IPC (server keep-alives, Vitest's
+    // birpc heartbeat).
     if (index > 0 && index % 25 === 0) {
       await new Promise((resolve) => setImmediate(resolve));
     }

@@ -365,13 +365,13 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints
- * for this session, read on `ctx`'s store for its project. Omits an unchanged static block only
- * when `printedHash` matches; `arm` is the ledger arm (`hippo` or `holdout`, null at rate 0); a
- * holdout gets empty stdout. `staticHash` is the hash to echo back (null with no static block, a
- * sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only. Throws
- * BadRequestError past the input caps, and on a shared store for a project assertCallerProject
- * refuses, before any arm is booked. */
+/** The text `hippo context --pinned-only --format additional-context` prints for this session
+ * with HOOK_INCLUDE_RECENT recent rows, read on `ctx`'s store for its project. Omits an unchanged
+ * static block only when `printedHash` matches; `arm` is the ledger arm (`hippo` or `holdout`, null
+ * at rate 0); a holdout gets empty stdout. `staticHash` is the hash to echo back (null with no
+ * static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
+ * Throws BadRequestError past the input caps, and on a shared store for a project
+ * assertCallerProject refuses, before any arm is booked. */
 export async function buildPromptHookContext(
   ctx: Context,
   req: PromptHookRequest,

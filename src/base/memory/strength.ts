@@ -14,7 +14,7 @@ export interface StrengthModel {
   /** Strength each doubling of the retrieval count adds. */
   readonly retrievalBoostSlope: number;
   /** The most halvings bad outcome marks apply; bad marks alone never push a memory under
-   * sleep's 0.05 retire line. */
+   * sleep's DECAY_THRESHOLD retire line. */
   readonly maxWrongHalvings: number;
   /** Multiplies the `negative` valence weight, after parseLossAversionRatio's floor. */
   readonly lossAversionRatio: number;

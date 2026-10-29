@@ -1,4 +1,4 @@
-import { MemoryEntry, Layer, createMemory } from '../../base/memory/entry.js';
+import { MemoryEntry, Layer, createMemory, HIGH_SCHEMA_FIT } from '../../base/memory/entry.js';
 import { calculateStrength } from '../../base/memory/strength.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
@@ -12,8 +12,7 @@ import { isReusable } from '../../base/memory/memory-quality.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35; // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2; // minimum cluster size to merge
-// with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of the 1,500-token context
-// budget
+// with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of DEFAULT_CONTEXT_BUDGET
 const MERGE_MAX_SOURCES = 5;
 /** Characters of merged text the detail line quotes. */
 const MERGE_DETAIL_PREVIEW_CHARS = 60;
@@ -24,8 +23,8 @@ const MERGE_MAX_CHARS = 2000; // total source text; sources past either cap stay
 // recomputes live strength and never reads the stored field, so a stored-strength write is inert
 // for ranking and overwritten by the next decay pass.
 const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
-// deriveHalfLife grants its high-fit bonus only above 0.7, so a rollup at 0.7 gets none.
-const MERGED_SCHEMA_FIT = 0.7;
+// deriveHalfLife grants its high-fit bonus only above HIGH_SCHEMA_FIT, so a rollup at it gets none.
+const MERGED_SCHEMA_FIT = HIGH_SCHEMA_FIT;
 
 export async function retireHeldTexts(run: SleepRun): Promise<void> {
   const { survivors } = run;

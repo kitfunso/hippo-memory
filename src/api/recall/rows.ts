@@ -171,7 +171,7 @@ export interface RecallJsonRow {
   trace_outcome?: SearchResult['entry']['traceOutcome'];
   superseded?: boolean;
   superseded_by?: SearchResult['entry']['supersededBy'];
-  graphVia?: SearchResult['graphVia'];
+  graph_via?: SearchResult['graphVia'];
   confidence?: ReturnType<typeof confidenceFacets>['tier'];
   aged_out?: ReturnType<typeof confidenceFacets>['agedOut'];
   source?: 'global' | 'local';
@@ -179,7 +179,7 @@ export interface RecallJsonRow {
   bm25?: SearchResult['bm25'];
   cosine?: SearchResult['cosine'];
   envelope?: ReturnType<typeof explainMatch>['envelope'];
-  rerankTrace?: SearchResult['rerankTrace'];
+  rerank_trace?: SearchResult['rerankTrace'];
 }
 
 export interface RecallJsonRowOptions {
@@ -214,7 +214,7 @@ export function recallJsonRow({
     base.superseded_by = r.entry.supersededBy;
   }
   if (r.graphVia) {
-    base.graphVia = r.graphVia;
+    base.graph_via = r.graphVia;
   }
   if (showWhy) {
     const explanation = explainMatch(query, r);
@@ -230,7 +230,7 @@ export function recallJsonRow({
     }
     // The ordered lifecycle re-ranking steps, so a caller can see why a row moved.
     if (r.rerankTrace && r.rerankTrace.length > 0) {
-      base.rerankTrace = r.rerankTrace;
+      base.rerank_trace = r.rerankTrace;
     }
   }
   return base;

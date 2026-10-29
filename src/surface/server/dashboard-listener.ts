@@ -9,7 +9,7 @@ import { DASHBOARD_GROUPS } from './dashboard-types.js';
 import { configReader } from '../../host/config-file.js';
 import { evalClock, evalStoreRules } from '../../infra/eval-switches.js';
 import { loadStaticFiles } from '../dashboard/static-file.js';
-import { defaultServerRuntime, type ServerRuntime } from '../open-store.js';
+import { sqliteServerRuntimeWithExitHook, type SqliteServerRuntime } from '../open-store.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../http/http-util.js';
@@ -46,7 +46,7 @@ export interface DashboardOptions {
   readonly cacheClock?: () => number;
   /** Stop and exit on SIGINT or SIGTERM; only `hippo dashboard` sets it. */
   readonly handleSignals?: boolean;
-  /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; 30 s when unset. */
+  /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; DEFAULT_BODY_DEADLINE_MS when unset. */
   readonly bodyDeadlineMs?: number;
 }
 
@@ -71,7 +71,7 @@ export class DashboardListenError extends Error {
  * the store's workers. */
 function servingFor(
   opts: DashboardOptions,
-  { store, storeFor, host }: ServerRuntime,
+  { store, storeFor, host }: SqliteServerRuntime,
 ): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const clock = evalClock();
@@ -103,7 +103,10 @@ function servingFor(
 /** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never
  * claims the API server's pidfile, so both can serve one store. */
 export async function serveDashboard(opts: DashboardOptions): Promise<DashboardHandle> {
-  const runtime = defaultServerRuntime(opts.hippoRoot, evalStoreRules(envLossAversionRatio()));
+  const runtime = sqliteServerRuntimeWithExitHook(
+    opts.hippoRoot,
+    evalStoreRules(envLossAversionRatio()),
+  );
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
   const server = dashboardListener(serving, runtime, inflight);
@@ -140,7 +143,7 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
 
 function dashboardListener(
   serving: DashboardServing,
-  runtime: ServerRuntime,
+  runtime: SqliteServerRuntime,
   inflight: Set<ServerResponse>,
 ): Server {
   // Its own count: the dashboard serves no /health, so its late handlers never mix into the API

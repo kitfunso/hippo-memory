@@ -1,7 +1,7 @@
 // The event-log statements both connectors share; each connector names its table, key column and
 // extra columns.
 
-import type { DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -44,7 +44,7 @@ export function markEventSeen(
     db,
     `INSERT OR IGNORE INTO ${log.table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`,
   ).run(...values);
-  return Number(inserted.changes ?? 0) !== 0;
+  return changedRows(inserted) > 0;
 }
 
 export function eventRecord(

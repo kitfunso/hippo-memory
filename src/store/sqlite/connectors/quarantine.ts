@@ -1,7 +1,7 @@
 // hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with
 // their audit rows.
 import { appendAuditEvents } from '../audit/audit.js';
-import { withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
 import type { KeysetPosition } from '../../../base/util/keyset.js';
 import { keysetAfter } from '../../../db/sql.js';
 import { readEntriesByIds, readEntry } from '../entries/entry-reads.js';
@@ -212,7 +212,7 @@ function approveQuarantined(
         db,
         `UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`,
       ).run(row.originalScope, id, tenantId, quarantineScope);
-      if (Number(updated.changes ?? 0) !== 1) return rollback({ outcome: 'scope_moved' });
+      if (changedRows(updated) !== 1) return rollback({ outcome: 'scope_moved' });
       approveQuarantineRow(db, { tenantId, id, actor });
       appendAuditEvents(db, [
         {

@@ -1,7 +1,7 @@
 /**
  * Learned memory-value scorer, a rescue-only veto in the sleep decay pass (it can only shrink the
  * condemned set); mirrors benchmarks/memory-value/*.mjs. rescueSet rescues a condemned entry iff it
- * ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set; memory-value-wiring.test.ts
+ * ranks in the top RESCUE_BUDGET share of its tenant's non-pinned set; memory-value-wiring.test.ts
  * guards parity.
  */
 
@@ -38,8 +38,8 @@ const RESCUE_BUDGET = 0.3;
 
 /**
  * Per-tenant floor on the non-pinned candidate set: below it ranks are noise, and
- * keepN=ceil(0.3*N) would rescue a 1-entry tenant's entry every sleep forever. A code constant
- * tied to that reasoning, not user-tunable (like RESCUE_BUDGET). */
+ * keepN=ceil(RESCUE_BUDGET*N) would rescue a 1-entry tenant's entry every sleep forever. A code
+ * constant tied to that reasoning, not user-tunable (like RESCUE_BUDGET). */
 const MIN_RESCUE_GROUP = 10;
 
 export interface MvFeatureVector {
@@ -364,9 +364,9 @@ export interface RescueSetOptions {
 }
 
 /**
- * Rescue decision: the subset of condemnedIds ranking in the top 30% of their tenant's non-pinned
- * set by learned score. Pass `precomputedRanks` to skip the internal ranking so the whole-store
- * pass runs once per sleep; `weights`/`digest` overrides exist for tests only.
+ * Rescue decision: the subset of condemnedIds ranking in the top RESCUE_BUDGET share of their
+ * tenant's non-pinned set by learned score. Pass `precomputedRanks` to skip the internal ranking
+ * so the whole-store pass runs once per sleep; `weights`/`digest` overrides exist for tests only.
  */
 export function rescueSet(
   entries: MemoryEntry[],

@@ -15,11 +15,11 @@ import { issueLocalKey, type LocalKey } from './local-key.js';
 import { KeyVerifier } from './api-key.js';
 import { hasGroup, hasGroups, type HippoStore, type StoreWith } from '../../base/ports/store.js';
 import {
-  defaultServerRuntime,
+  sqliteServerRuntimeWithExitHook,
   tenantOfApiKey,
   type ResolveOptions,
-  type ServerRuntime,
-  type StoreSession,
+  type SqliteServerRuntime,
+  type RequestStores,
 } from '../open-store.js';
 import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
@@ -82,7 +82,7 @@ interface HandleRequestOptions {
   readonly streamSlots: Map<string, number>;
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
-  readonly workerCounts: ServerRuntime['workerCounts'];
+  readonly workerCounts: SqliteServerRuntime['workerCounts'];
   /** /ready's one probe for the server's life, on the store as booted; unset when the store has
    * no readiness group. */
   readonly ready: ReadyProbe | undefined;
@@ -299,7 +299,7 @@ interface BootPlan {
 async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHandle> {
   const { host, requestedPort, startedAt } = plan;
 
-  const runtime = defaultServerRuntime(opts.hippoRoot, {
+  const runtime = sqliteServerRuntimeWithExitHook(opts.hippoRoot, {
     store: opts.store,
     queueMax: envStoreQueueMax(),
     ...evalStoreRules(envLossAversionRatio()),
@@ -341,7 +341,7 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 function requestOptionsFor(
   { startedAt, limiters }: BootPlan,
   served: ResolvedServeOptions,
-  { workerCounts }: ServerRuntime,
+  { workerCounts }: SqliteServerRuntime,
 ): HandleRequestOptions {
   return {
     startedAt,
@@ -370,7 +370,7 @@ function frozenAddonRoutes(
 function servedOptsFor(
   opts: ServeOptions,
   { routes, publicJsonBodies, limiters }: BootPlan,
-  runtime: ServerRuntime,
+  runtime: SqliteServerRuntime,
   localKey: LocalKey,
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
@@ -414,7 +414,7 @@ function servedOptsFor(
 
 function acceptingServer(
   served: ResolvedServeOptions,
-  runtime: ServerRuntime,
+  runtime: SqliteServerRuntime,
   inflight: Set<ServerResponse>,
   options: HandleRequestOptions,
 ): Server {
@@ -438,8 +438,8 @@ function acceptingServer(
  * abort signal. */
 function servedFor(
   served: ResolvedServeOptions,
-  runtime: ServerRuntime,
-  { limits, session }: { readonly limits: RequestLimits; readonly session: StoreSession },
+  runtime: SqliteServerRuntime,
+  { limits, session }: { readonly limits: RequestLimits; readonly session: RequestStores },
 ): ResolvedServeOptions {
   // One view per store, so the served, caller and ledger stores share the view of one.
   const views = new Map<HippoStore, HippoStore>();

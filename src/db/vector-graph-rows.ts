@@ -20,8 +20,8 @@ import {
 import { cachedStatement } from './statement-cache.js';
 import { placeholders } from './sql.js';
 
-// The graph beat the paged scan at both p50 and p95 from 1,000 vectors on; docs/ARCHITECTURE.md has
-// the bench.
+// The graph beat the paged scan at both p50 and p95 from this many vectors on; docs/ARCHITECTURE.md
+// has the bench.
 /** Stored vectors a store holds before its nearest-row reads search a graph. */
 export const VECTOR_GRAPH_THRESHOLD = 1_000;
 /** Share of a graph's nodes that may be stale, or its file's rows new, before it is rebuilt. */

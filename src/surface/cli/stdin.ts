@@ -24,9 +24,9 @@ function defaultWaitMs(): number {
 }
 
 /**
- * Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of idle (default 1000ms,
- * or `HIPPO_STDIN_WAIT_MS`), refreshed on each chunk so a slow real write is not cut off, capped
- * at `waitMs * 10`. */
+ * Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of idle (default
+ * DEFAULT_STDIN_WAIT_MS, or `HIPPO_STDIN_WAIT_MS`), refreshed on each chunk so a slow real write is
+ * not cut off, capped at `waitMs * 10`. */
 export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<BoundedStdin> {
   let stdin: NodeJS.ReadStream;
   try {

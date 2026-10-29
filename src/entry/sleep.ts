@@ -1,6 +1,6 @@
 // The root entry's sleep and consolidation: each opens one handle per store and fills the outside
 // services that a caller's Context or options leave out.
-import { defaultStore, inStoreSession, withSharedStoreHandles } from '../surface/open-store.js';
+import { sqliteStore, inSqliteSession, withSharedStoreHandles } from '../surface/open-store.js';
 import type { SleepStore } from '../base/ports/store.js';
 import {
   runConsolidation,
@@ -31,7 +31,7 @@ export async function sleep(ctx: SleepContext, opts?: SleepOptions): Promise<Sle
   // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close
   // hippo.db's last, which checkpoints and deletes the WAL.
   return withSharedStoreHandles((session) =>
-    sleepWholeStore(withEntryInfra({ ...ctx, store: inStoreSession(ctx.store, session) }), opts),
+    sleepWholeStore(withEntryInfra({ ...ctx, store: inSqliteSession(ctx.store, session) }), opts),
   );
 }
 
@@ -45,14 +45,14 @@ export async function consolidate(
   target: string | SleepStore,
   options: PublishedConsolidateOptions = {},
 ): Promise<ConsolidationResult> {
-  const [store, root] = isFolder(target) ? [defaultStore(target), target] : [target, ''];
+  const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
   const { fetcher, ...rest } = options;
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const llm = anthropicLlmFromEnv(fetcher);
   // One handle per store, for the reason `sleep` gives.
   return withSharedStoreHandles((session) =>
-    runConsolidation(inStoreSession(store, session), {
+    runConsolidation(inSqliteSession(store, session), {
       ...rest,
       config,
       tenantId,

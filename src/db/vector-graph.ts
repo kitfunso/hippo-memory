@@ -39,7 +39,7 @@ export interface GraphView {
   linksOf(node: number, level: number): ArrayLike<number>;
 }
 
-export interface SearchOptions {
+export interface VectorGraphSearchOptions {
   k: number;
   ef: number;
   /** Checked for every candidate before it can enter the result; a rejected node is still walked
@@ -235,7 +235,7 @@ function viewOf(graph: VectorGraph): GraphView {
 export function searchGraph(
   graph: VectorGraph,
   query: Float32Array,
-  opts: SearchOptions,
+  opts: VectorGraphSearchOptions,
 ): SearchResult {
   return searchView(viewOf(graph), query, {
     ...opts,
@@ -247,7 +247,7 @@ export function searchGraph(
 export function searchView(
   graph: GraphView,
   query: Float32Array,
-  opts: SearchOptions & { vectorOf: VectorLookup },
+  opts: VectorGraphSearchOptions & { vectorOf: VectorLookup },
 ): SearchResult {
   if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim) {
     return { aborted: false, hits: [], visited: 0 };

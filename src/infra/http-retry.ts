@@ -45,7 +45,7 @@ export function llmTimeoutMs(configured?: number): number {
 }
 
 /** One LLM call with its retries: two full attempts and the longest wait between them, where
- * three slow failures would hold a sleep for 3x the timeout. */
+ * all DEFAULT_ATTEMPTS slow failures would hold a sleep for that many timeouts. */
 export function llmTotalMs(timeoutMs: number = llmTimeoutMs()): number {
   return 2 * timeoutMs + DEFAULT_MAX_DELAY_MS;
 }

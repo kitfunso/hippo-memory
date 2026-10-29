@@ -1,4 +1,4 @@
-import type { DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import {
   type SessionHandoff,
   type SessionHandoffRow,
@@ -309,7 +309,7 @@ export function stampHandoffOutcome(
     )
     `,
   ).run(outcome, tenantId, sessionId, tenantId, sessionId);
-  return Number(result.changes ?? 0);
+  return changedRows(result);
 }
 
 /** Rewrites the session's newest handoff when it is still a transcript read, in one statement so
@@ -340,7 +340,7 @@ function replaceTranscriptHandoff(
     WHERE id = (${newest}) AND json_valid(evidence_json)
       AND json_extract(evidence_json, '$.derivedFrom') = 'transcript'`,
   ).run(...columns.map(([, value]) => value), ...params);
-  if (Number(result.changes ?? 0) === 0) return null;
+  if (changedRows(result) === 0) return null;
   const row = cachedStatement(
     db,
     `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`,

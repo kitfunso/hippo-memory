@@ -14,14 +14,22 @@ export interface DryRunForm {
   readonly honoured: (args: readonly string[], flags: CliFlags) => boolean;
 }
 
+/** A flag an earlier release took: the release that removed it and what to do instead. */
+export interface RemovedFlag {
+  readonly removedIn: string;
+  readonly advice: string;
+}
+
 /** What a verb declares; its key in the table is its name, and the table's order is the help
  * listing's. */
 export interface VerbRow {
   /** The flags this verb reads; any other flag still parses, and the verb says it ignores it. */
   readonly flags: VerbFlags;
-  /** Flags an earlier release took, each with what to do instead: typing one stops the run and
-   * names the removal. */
-  readonly removedFlags?: Readonly<Record<string, string>>;
+  /** Flags an earlier release took: typing one stops the run and names the removal. */
+  readonly removedFlags?: Readonly<Record<string, RemovedFlag>>;
+  /** The handler refuses each subcommand's unknown flags with a stricter message, so main() leaves
+   * the check to it. */
+  readonly checksOwnFlags?: true;
   /** Help blocks, each opening with a newline so the full listing is their concatenation. */
   readonly usage?: readonly string[];
   /** Help blocks the full listing prints after every verb's own; `hippo <verb> --help` prints

@@ -6,13 +6,13 @@ entry/eval-scripts.d.ts: evalNow re-export
 entry/eval-scripts.d.ts: folderIndex function
 entry/eval-scripts.d.ts: getReranker re-export
 entry/eval-scripts.d.ts: goalPush re-export
-entry/eval-scripts.d.ts: hybridSearch function
 entry/eval-scripts.d.ts: ingestEvent const
 entry/eval-scripts.d.ts: ingestMessage const
 entry/eval-scripts.d.ts: isRecallBoostAblated re-export
 entry/eval-scripts.d.ts: judgeAll function
 entry/eval-scripts.d.ts: outcome re-export
 entry/eval-scripts.d.ts: outcomeMultiplier function
+entry/eval-scripts.d.ts: rankHybridWithEvalSwitches function
 entry/eval-scripts.d.ts: remember function
 entry/eval-scripts.d.ts: retrieve const
 entry/eval-scripts.d.ts: retrieveRanking const
@@ -310,7 +310,7 @@ entry/store-kit.d.ts: repairKeeps re-export
 entry/store-kit.d.ts: replacesIndex re-export
 entry/store-kit.d.ts: requireGroup re-export
 entry/store-kit.d.ts: runStoreConformance re-export
-entry/store-kit.d.ts: sqliteStore re-export
+entry/store-kit.d.ts: sqliteStore const
 entry/store-kit.d.ts: tallyAmbientEntries function
 entry/store-kit.d.ts: targetReader re-export
 entry/testing.d.ts: MemoryWire re-export
@@ -446,9 +446,9 @@ server.d.ts: ServerHandle re-export
 server.d.ts: SessionCaptureRequest re-export
 server.d.ts: SessionCaptureResult re-export
 server.d.ts: WorkingState re-export
-server.d.ts: authCreate function
-server.d.ts: authCreateSelf function
-server.d.ts: authRevoke function
+server.d.ts: authCreate const
+server.d.ts: authCreateSelf const
+server.d.ts: authRevoke const
 server.d.ts: bindSessionOwner re-export
 server.d.ts: captureFailureForCaller re-export
 server.d.ts: captureSessionTexts re-export

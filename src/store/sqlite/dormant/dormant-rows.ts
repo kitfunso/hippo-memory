@@ -1,6 +1,6 @@
 // The dormant_memories rows: the snapshot sleep keeps of a faded memory, read and written on the
 // caller's handle.
-import type { DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { fromWire, toWire, type MemoryWire } from '../../../base/memory/memory-wire.js';
 import { isObjectLike, isStringValue } from '../../../base/session/capture-contract.js';
@@ -242,7 +242,7 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
     db,
     `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ?`,
   ).run(tenantId, id);
-  return Number(result.changes ?? 0) > 0;
+  return changedRows(result) > 0;
 }
 
 /**

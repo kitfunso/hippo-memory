@@ -3,7 +3,7 @@ import { recallScopeFilter } from '../../base/scope/recall-scope.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { auditQueryFields } from '../../base/records/audit-report.js';
 import { rankBothStores } from '../../domain/sharing/search-both.js';
-import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
+import { rankHybrid, vectorSourceOf } from '../../domain/search/hybrid.js';
 import type { HybridVectorCandidates, VectorSource } from '../../domain/search/vector.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { ContextResultEntry } from './context-types.js';
@@ -157,7 +157,7 @@ async function searchLocalRows(
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
-  const ctxResults = await hybridSearch(query, localEntries, {
+  const ctxResults = await rankHybrid(query, localEntries, {
     ...engineSettings(ctx, plan),
     source: vectorSourceOf({
       store,

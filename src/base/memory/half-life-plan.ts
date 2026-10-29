@@ -58,7 +58,7 @@ export interface HalfLifeMove {
 export interface HalfLifeOutcome {
   /** Memories moved to the new base. */
   rescaled: number;
-  /** Memories of decisions, incidents and other objects moved off the flat 90 days. */
+  /** Memories of decisions, incidents and other objects moved off LEGACY_TYPED_HALF_LIFE. */
   typed: number;
   /** Memories left alone because they are not on the old base. */
   kept: number;
@@ -95,12 +95,12 @@ function baseTarget(e: MoveFields, from: number, to: number): number | null {
   return bonus === null ? null : deriveHalfLife(to, e) + bonus;
 }
 
-/** True for an object's memory still on the flat 90 days. */
+/** True for an object's memory still on the flat LEGACY_TYPED_HALF_LIFE. */
 function onTypedBase(e: MoveFields): boolean {
   return TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null;
 }
 
-/** The half-life an object's memory moves to off the flat 90 days, or null when it stays. */
+/** The half-life an object's memory moves to off the flat LEGACY_TYPED_HALF_LIFE, else null. */
 function typedTarget(e: MoveFields, to: number): number | null {
   const bonus = TYPED_SOURCES.has(e.source) ? halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) : null;
   const next = bonus === null ? e.halfLifeDays : deriveHalfLife(to, e) + bonus;
@@ -135,7 +135,8 @@ export function planHalfLifeMoves(rows: HalfLifeRows, to: number): HalfLifePlan 
 /** A row either move may change, kept in place of the row while the cursor runs. */
 interface Movable {
   change: Omit<HalfLifeChange, 'halfLifeDays'>;
-  /** On the flat 90 days an object's writer gave, by source and recall bonus alone. */
+  /** On the flat LEGACY_TYPED_HALF_LIFE an object's writer gave, by source and recall bonus
+   * alone. */
   typedBase: boolean;
   base: number | null;
   typed: number | null;

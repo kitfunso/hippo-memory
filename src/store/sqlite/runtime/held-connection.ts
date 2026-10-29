@@ -32,8 +32,8 @@ function holdSqliteConnection(hippoRoot: string, runtime: StoreRuntime): StoreHo
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
-      // The server's lock wait: this open runs on the event loop, where SQLite's 5 s default and
-      // the 30 s journal-mode retry would stall every request.
+      // The server's lock wait: this open runs on the event loop, where DEFAULT_BUSY_WAIT_MS, the
+      // busy_timeout and journal-mode retry an open takes by default, would stall every request.
       heldDb = grantFor({ runtime }).open(hippoRoot, SERVER_DB_WAIT_MS);
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot), runtime);
     } catch (err) {

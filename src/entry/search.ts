@@ -2,7 +2,7 @@
 // the environment are read here, at the entry, so the domain rankers take both as inputs.
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
-import { rankBm25, type SearchOptions } from '../domain/search/bm25-search.js';
+import { rankBm25, type Bm25SearchOptions } from '../domain/search/bm25-search.js';
 import { rankMultihop } from '../domain/search/multihop.js';
 import { withEvalSwitches } from './folder-search.js';
 
@@ -11,7 +11,7 @@ import { withEvalSwitches } from './folder-search.js';
 export function search(
   query: string,
   entries: MemoryEntry[],
-  options: SearchOptions = {},
+  options: Bm25SearchOptions = {},
 ): SearchResult[] {
   return rankBm25(
     query,
@@ -25,7 +25,7 @@ export function search(
 export function multihopSearch(
   query: string,
   entries: MemoryEntry[],
-  options: SearchOptions = {},
+  options: Bm25SearchOptions = {},
 ): SearchResult[] {
   return rankMultihop(
     query,

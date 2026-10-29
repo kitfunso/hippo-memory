@@ -12,7 +12,7 @@ export const DEFAULT_DRILL_DOWN_LIMIT = 50;
 export const MAX_DRILL_DOWN_DEPTH = 10;
 
 export interface DrillDownOptions {
-  /** Cap on number of children returned. Default 50. */
+  /** Cap on number of children returned. Default DEFAULT_DRILL_DOWN_LIMIT. */
   limit?: number;
   /** Token budget: children append in created order until the next would exceed it (cost:
    * printed line under `cost`, else ceil(content.length / 4)). For depth > 1 the budget is

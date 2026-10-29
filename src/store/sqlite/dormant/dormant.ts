@@ -1,5 +1,10 @@
 // hippo.db's Dormant group: the memories sleep set aside, listed, restored or forgotten for good.
-import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
+import {
+  changedRows,
+  withWriteScope,
+  withWriteScopeOr,
+  type DatabaseSyncLike,
+} from '../../../db/index.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { touchableScopeSql } from '../runtime/rule-sql.js';
 import type { SqlFragment } from '../../../db/sql.js';
@@ -49,7 +54,7 @@ function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey
 
 function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIso: string): number {
   const sql = `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ? AND dormant_at < ?`;
-  return Number(cachedStatement(db, sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
+  return changedRows(cachedStatement(db, sql).run(key.tenantId, key.id, cutoffIso));
 }
 
 /** Deletes `keys` in transactions of about `budget.holdMs`, letting other writers in between;

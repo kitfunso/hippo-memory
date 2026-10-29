@@ -61,7 +61,7 @@ import { fileURLToPath } from 'node:url';
 import { applyOutcome } from '../../dist/entry/memory.js';
 import { loadAllEntriesIn, readEntryIn, writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
 import { storeFilesOf } from '../../dist/store/sqlite/runtime/handles.js';
-import { hybridSearch } from '../../dist/entry/eval-scripts.js';
+import { rankHybridWithEvalSwitches as hybridSearch } from '../../dist/entry/eval-scripts.js';
 import { buildCorpus } from '../../dist/domain/search/bm25.js';
 import { markRetrieved } from '../../dist/entry/memory.js';
 import { withSharedStoreHandles } from '../../dist/db/index.js';

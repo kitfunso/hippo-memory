@@ -7,7 +7,7 @@ import type { DatabaseSyncLike } from '../../src/db/index.js';
 import {
   writeEntriesSkippingRejected,
   writeEntriesTogether,
-  writeEntryOn,
+  writeEntryInOwnTx,
   writeEntryDbOnly,
   writePromotedEntry,
 } from '../../src/store/sqlite/entries/entry-writes.js';
@@ -51,7 +51,7 @@ function withHeldRow(run: (db: DatabaseSyncLike, files: StoreFiles, a: MemoryEnt
 
 describe('a write of an id another tenant holds', () => {
   it('is refused by writeEntry', () => {
-    withHeldRow((db, files, _a, b) => expect(() => writeEntryOn(db, files, b)).toThrow(ConflictError));
+    withHeldRow((db, files, _a, b) => expect(() => writeEntryInOwnTx(db, files, b)).toThrow(ConflictError));
   });
 
   it('is refused by writePromotedEntry', () => {

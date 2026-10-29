@@ -56,7 +56,7 @@ export function writeEntryIn(
 ): void {
   onHandle(
     files.hippoRoot,
-    (db) => entryWrites.writeEntryOn(db, files, entry, opts),
+    (db) => entryWrites.writeEntryInOwnTx(db, files, entry, opts),
     openOn(files),
   );
 }

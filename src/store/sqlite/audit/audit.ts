@@ -1,4 +1,4 @@
-import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { keysetAfter } from '../../../db/sql.js';
 import type { JsonValue, JsonObject } from '../../../base/util/json.js';
 import { parseStoredObject } from '../../../base/util/stored-json.js';
@@ -97,7 +97,7 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
     tenantId,
     cutoff,
   );
-  return Number(result.changes ?? 0);
+  return changedRows(result);
 }
 
 /** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike

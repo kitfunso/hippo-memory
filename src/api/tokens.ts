@@ -36,9 +36,9 @@ export async function recordTokens(
 /** Days a token or failure report covers when the caller names none. */
 export const DEFAULT_REPORT_WINDOW_DAYS = 30;
 
-/** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent,
- * skipped as unchanged and re-read, per surface, with session counts and mean tokens per
- * session. */
+/** Token ledger totals for the tenant over the last `days` days (default
+ * DEFAULT_REPORT_WINDOW_DAYS): tokens sent, skipped as unchanged and re-read, per surface, with
+ * session counts and mean tokens per session. */
 export function tokenSummary(
   ctx: ContextWith<'reports'>,
   opts: { days?: number } = {},
@@ -47,7 +47,7 @@ export function tokenSummary(
 }
 
 /** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default
- * 30). */
+ * DEFAULT_REPORT_WINDOW_DAYS). */
 export function failureSummary(
   ctx: ContextWith<'reports'>,
   opts: { days?: number } = {},

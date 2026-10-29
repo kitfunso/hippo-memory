@@ -31,9 +31,9 @@ export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 export const MEMORY_KINDS = ['raw', 'distilled', 'superseded', 'archived'] as const;
 export type MemoryKind = (typeof MEMORY_KINDS)[number];
 
-// Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison
-// sorts them chronologically. The row writer stores `created` in that form (isoInstant); only rows
-// written before it may hold another.
+// Timestamps are Date.toISOString() output (ISO_STAMP_CHARS chars, UTC, ms, trailing Z), so byte
+// comparison sorts them chronologically. The row writer stores `created` in that form (isoInstant);
+// only rows written before it may hold another.
 
 // Fields are camelCase in memory; src/base/memory/memory-wire.ts keeps the snake_case keys of every
 // stored and wire format.
@@ -308,9 +308,9 @@ export function createSuccessor(
 }
 
 /**
- * How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3
- * is novel and decays faster if unused. Tags shared with existing memories count by rarity (a
- * rare shared tag fits more), plus content-token overlap. */
+ * How well new content fits existing knowledge, 0..1: above HIGH_SCHEMA_FIT consolidates
+ * faster, below LOW_SCHEMA_FIT is novel and decays faster if unused. Tags shared with existing
+ * memories count by rarity (a rare shared tag fits more), plus content-token overlap. */
 export function computeSchemaFit(
   content: string,
   tags: string[],

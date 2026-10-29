@@ -26,7 +26,7 @@ export function captureError(
   tenantId: string | undefined,
   now: Date,
 ): MemoryEntry {
-  // Truncate to first 500 chars to avoid storing megabytes of build logs
+  // Truncate to AUTOLEARN_TEXT_CHARS to avoid storing megabytes of build logs
   const clean = redactSecretsStrict(stderr);
   const wasTruncated = clean.length > AUTOLEARN_TEXT_CHARS;
   const truncated = clean.slice(0, AUTOLEARN_TEXT_CHARS).trim();

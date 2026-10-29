@@ -12,7 +12,7 @@ export {
   type GraphModel,
 } from '../../domain/graph/view.js';
 
-/** The entity a graph read focuses on. Capped at the 512 entity-name cap, not the id-shaped 256,
+/** The entity a graph read focuses on. Capped at MAX_ENTITY_NAME_LEN, not the id-shaped MAX_ID_LEN,
  * so a long decision or policy name stays focusable. */
 export function graphEntityOf(raw: string | null): string | undefined {
   if (raw !== null && raw.length > MAX_ENTITY_NAME_LEN) {

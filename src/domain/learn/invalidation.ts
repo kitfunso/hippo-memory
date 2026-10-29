@@ -103,16 +103,8 @@ export async function invalidateMatching(
     await store.lessonWrites.writeTogether(weakened);
     return result;
   }
-  const tokens = invalidationTokenize(target.from);
-  const tag = target.from.toLowerCase().trim();
-  const dryRun = options?.dryRun === true;
-  const result: InvalidationResult = {
-    invalidated: 0,
-    targets: [],
-    skippedPinned: [],
-    dryRun,
-    preview: [],
-  };
+  const { tokens, tag } = mentionOf(target);
+  const result = emptyResult(options?.dryRun === true);
   const weakened: MemoryEntry[] = [];
   let after: EntryCursor | undefined;
   do {
@@ -161,11 +153,23 @@ export async function invalidateMatchingAmong(
 export function invalidationMatcher(
   targets: readonly InvalidationTarget[],
 ): (entry: MemoryEntry) => boolean {
-  const patterns = targets.map((t) => ({
-    tokens: invalidationTokenize(t.from),
-    tag: t.from.toLowerCase().trim(),
-  }));
+  const patterns = targets.map(mentionOf);
   return (entry) => patterns.some((p) => referencesPattern(entry, p.tokens, p.tag));
+}
+
+/** What a row must mention to match a target: enough of its tokens, or its exact tag. */
+interface Mention {
+  readonly tokens: string[];
+  readonly tag: string;
+}
+
+/** The tokens and the exact tag a row must mention to match `target`. */
+function mentionOf(target: InvalidationTarget): Mention {
+  return { tokens: invalidationTokenize(target.from), tag: target.from.toLowerCase().trim() };
+}
+
+function emptyResult(dryRun: boolean): InvalidationResult {
+  return { invalidated: 0, targets: [], skippedPinned: [], dryRun, preview: [] };
 }
 
 function referencesPattern(entry: MemoryEntry, fromTokens: string[], exactTag: string): boolean {
@@ -182,22 +186,15 @@ function weakenMatches(
   target: InvalidationTarget,
   options?: InvalidationOptions,
 ) {
-  const fromTokens = invalidationTokenize(target.from);
-  const exactTag = target.from.toLowerCase().trim();
+  const { tokens, tag } = mentionOf(target);
   const dryRun = options?.dryRun === true;
-  const result: InvalidationResult = {
-    invalidated: 0,
-    targets: [],
-    skippedPinned: [],
-    dryRun,
-    preview: [],
-  };
+  const result = emptyResult(dryRun);
   const weakened: MemoryEntry[] = [];
 
   for (const entry of entries) {
     if (options?.onlyId !== undefined) {
       if (entry.id !== options.onlyId) continue;
-    } else if (!referencesPattern(entry, fromTokens, exactTag)) continue;
+    } else if (!referencesPattern(entry, tokens, tag)) continue;
 
     // Pinned check runs AFTER matching so pinned would-be targets are observable in skippedPinned
     // (pattern mode and onlyId mode alike).

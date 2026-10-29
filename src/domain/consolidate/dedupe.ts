@@ -33,7 +33,7 @@ export interface DedupResult {
 }
 
 /**
- * Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of
+ * Quantization step for strength-tie comparisons: an epsilon applied by rounding instead of
  * an abs-diff threshold, so the tiebreak is transitive.
  */
 const STRENGTH_TIE_EPSILON = 0.01;

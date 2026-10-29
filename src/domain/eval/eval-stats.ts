@@ -94,9 +94,9 @@ export interface Estimate {
 
 /** Options shared by the bootstrap functions. */
 export interface BootstrapOptions {
-  /** Resamples. Default 5000. */
+  /** Resamples. Default DEFAULT_ITERATIONS. */
   iterations?: number;
-  /** Two-sided level, e.g. 0.05 for a 95% interval. Default 0.05. */
+  /** Two-sided level, e.g. 0.05 for a 95% interval. Default DEFAULT_ALPHA. */
   alpha?: number;
   /** PRNG seed. Default 1. */
   seed?: number;
@@ -292,7 +292,7 @@ export interface TestedEstimate extends Estimate {
 
 /** Options for {@link twoLevelBootstrap}. */
 export interface TwoLevelOptions extends BootstrapOptions {
-  /** Resamples. Default 10,000. */
+  /** Resamples. Default DEFAULT_TWO_LEVEL_ITERATIONS. */
   readonly iterations?: number;
   /** Value the p-value tests against: 0 for differences, 1 for ratios. Default 0. */
   readonly nullValue?: number;
@@ -383,7 +383,7 @@ export interface VerdictSpec {
   readonly tieBand: readonly [number, number];
   /** An estimate on this value or beyond it, on the helpful side, reaches the minimum effect. */
   readonly minimumEffectAt: number;
-  /** Default 0.05. */
+  /** Default DEFAULT_ALPHA. */
   readonly alpha?: number;
 }
 
@@ -434,12 +434,12 @@ export interface HarmGate {
   readonly resolveOk: boolean;
 }
 
-/** Smallest resolve-rate drop the gate tolerates: 5 points below the baseline. */
+/** Smallest resolve-rate drop below the baseline the gate tolerates, as a fraction. */
 const RESOLVE_DIFF_FLOOR = -0.05;
 
 /** Cost ratio's upper bound below 1.10, resolve difference's lower bound (a fraction) above
- * -0.05. Both estimates must use alpha 0.05, the conservative reading of "upper 95% bound"; a
- * NaN bound fails. */
+ * RESOLVE_DIFF_FLOOR. Both estimates must use DEFAULT_ALPHA, the conservative reading of "upper
+ * 95% bound"; a NaN bound fails. */
 export function harmGate(costRatio: Estimate, resolveDiff: Estimate): HarmGate {
   const costOk = costRatio.high < 1.1;
   const resolveOk = resolveDiff.low > RESOLVE_DIFF_FLOOR;

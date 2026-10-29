@@ -50,7 +50,7 @@ export interface HybridBlend {
 export interface HybridOrder {
   /** Disable MMR re-ranking even when embeddings are available. */
   mmr?: boolean;
-  /** MMR balance: 1.0 = pure relevance, 0.0 = pure diversity. Default 0.7. */
+  /** MMR balance: 1.0 = pure relevance, 0.0 = pure diversity. Default DEFAULT_MMR_LAMBDA. */
   mmrLambda?: number;
   /** Optional reranker. Runs after MMR, before budget filtering. See src/base/ports/reranker.ts. */
   reranker?: RerankerFn;
@@ -62,12 +62,10 @@ export interface HybridOrder {
 export interface HybridBoosts {
   /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
   scope?: string | null;
-  /**
-   * Multiplier on DAG summary scores. Default 0.85 (`runtime.summaryDeboost` overrides; per-call
-   * wins). 1.0 disables.
-   */
+  /** Multiplier on DAG summary scores: per-call, then `runtime.summaryDeboost`, then
+   * DEFAULT_SUMMARY_DEBOOST. 1.0 disables. */
   summaryDeboost?: number;
-  /** 1.05 micro-boost for summaries rebuilt within 7 days. Default true. */
+  /** DEFAULT_FRESHNESS_BOOST for summaries rebuilt within FRESHNESS_WINDOW_MS. Default true. */
   summaryFreshness?: boolean;
 }
 
@@ -146,7 +144,7 @@ type HybridRanking = HybridBlend &
  * names no store. */
 export type HybridSearchOptions = HybridRanking & HybridFolder;
 
-/** hybridSearch's options once the caller names its stores; the folder fields belong to the
+/** rankHybrid's options once the caller names its stores; the folder fields belong to the
  * published wrapper. */
 export type HybridRankOptions = HybridRanking & {
   /** The global store the graph stream also walks; the published wrapper opens it from
@@ -158,7 +156,7 @@ export type HybridRankOptions = HybridRanking & {
  * BM25 blended with cosine similarity when `source` holds vectors and a provider is available, BM25
  * * strength * recency otherwise.
  */
-export async function hybridSearch(
+export async function rankHybrid(
   query: string,
   entries: MemoryEntry[],
   options: HybridRankOptions & RankTime,

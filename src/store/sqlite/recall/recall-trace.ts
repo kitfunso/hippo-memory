@@ -34,7 +34,7 @@ const INSERT_TRACE_SQL = `
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
-// Six binds a row; 100 rows is 600, under the 999 floor of SQLite's bound-parameter limit.
+// Six binds a row, so this many rows stay under the 999 floor of SQLite's bound-parameter limit.
 const RESULT_ROWS_PER_INSERT = 100;
 
 /** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection.

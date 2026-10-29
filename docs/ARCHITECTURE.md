@@ -3,11 +3,11 @@
 ## Layers
 
 Eight layers, lowest first: base (pure helpers, core types, the ports), host (the disk, environment and process reads: config.json, project walks, home folders, atomic writes, child processes), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), infra (the adapters behind the ports), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
-Domain code gets every model and socket through a port in `src/base/ports`: `EmbedderFor` builds an embedding provider from a config, `Http` sends a request under a timeout policy, `CrossEncoderLoad` loads the reranker's model, and `Llm`, the machine and the git runner do the rest. `src/infra` holds the real ones: the embedding providers and the local embedder, the Transformers.js loaders, `fetchWithRetry`, and the hosted rerankers with their registry and the TypeSafe judge (`src/infra/rerankers`, whose `endpoint.ts` holds the one outbound rule: TypeSafe's address, the pinned Jev model and the bounded, retried post). `src/base/embeddings/local.ts` keeps only the model rules and a package probe that loads nothing, because token-eval scripts import it by its dist path. The layer order in `.dependency-cruiser.cjs` fails a domain file that imports `src/infra`, and the domain rules in `.oxlintrc.json` fail one that imports an adapter module or function by name, or that calls `fetch`.
+Domain code gets every model and socket through a port in `src/base/ports`: `EmbedderFor` builds an embedding provider from a config, `Http` sends a request under a timeout policy, `CrossEncoderLoad` loads the reranker's model, and `Llm`, the machine and the git runner do the rest. `src/infra` holds the real ones: the embedding providers and the local embedder, the Transformers.js loaders, `fetchWithRetry`, and the hosted rerankers with their registry and the TypeSafe judge (`src/infra/rerankers`, whose `endpoint.ts` holds the one outbound rule: TypeSafe's address, the pinned Jev model and the bounded, retried post). `src/base/embeddings/local.ts` keeps only the model rules and a package probe that loads nothing, because token-eval scripts import it by its dist path. The layer order in `.dependency-cruiser.cjs` fails a domain file that imports `src/infra`, and the domain rules in `oxlint.config.ts` fail one that imports an adapter module or function by name, or that calls `fetch`.
 `src/base` imports no `fs`, `os` or `child_process`; those reads live in `src/host`, and domain and api import host for its types only, getting its answers from the machine port or their caller. The `no-io-below-host` and `host-types-only` rules in `.dependency-cruiser.cjs` hold both lines. A host keeps no module state: the project-walk cache and the sticky shared-store flag live in a `Host` (`src/host/host.ts`) that each root builds and drops with itself (a CLI command through `currentMachine()`, a server runtime, the sleep child, and each SQLite store object through `storeFilesOf`).
 The roots wire the real adapters in. Every api `Context` carries them as `ctx.infra`, which its composition root sets. A published entry takes an `EntryContext`, where `infra` is optional, and `withEntryInfra` in `src/surface/entry-infra.ts` fills in the real ports. `ctx.infra` hands api code the context's embedder, and a `ConfiguredFolder` or `globalTarget` carries its `embedderFor`, so a target built from it embeds with no further wiring. Eval and benchmark scripts import the wired `embedAll`, `folderIndex`, `getReranker` and `judgeAll` from `src/entry/eval-scripts.ts`.
 The tree shows them: `src/base`, `src/domain` and `src/surface` hold one folder per feature, and `src/db`, `src/store` and `src/api` are one feature each. `src/entry` and the five root files stay at the top of `src` because package.json exports and bin/hippo.js name their dist paths.
-A file imports only from its own layer or a lower one. `layers.json` is the map; `.dependency-cruiser.cjs` builds its rules from it, so `npm run check:deps` fails any upward import and any src folder or root file the map does not list. `.dependency-cruiser-cycles.cjs` fails a runtime import cycle between two features or two top folders. The name rules (SQLite words in src/api and src/domain, `requireGroup` in the routes) are oxlint rules in `.oxlintrc.json`.
+A file imports only from its own layer or a lower one. `layers.json` is the map; `.dependency-cruiser.cjs` builds its rules from it, so `npm run check:deps` fails any upward import and any src folder or root file the map does not list. `.dependency-cruiser-cycles.cjs` fails a runtime import cycle between two features or two top folders. The name rules (SQLite words in src/api and src/domain, `requireGroup` in the routes) are oxlint rules in `oxlint.config.ts`.
 
 ## Store port
 
@@ -63,7 +63,7 @@ Flags (set to `1` or `true`):
   - CAVEAT: half_life increments persisted by prior unflagged runs are NOT reconstructed (consolidation legitimately writes half_life too), so ablation arms run on FRESH stores, as the experiment protocol mandates.
 - `HIPPO_ABLATE_OUTCOME`: both outcome channels become neutral (`_SLOW` and `_FAST` together). The slow side also silences replay's outcome reward bias (`replayPriority`). NOT gated: the opt-in `recall --value-aware` rerank (an explicit CLI flag that also reads outcome counts); ablated arms must not pass it.
 - `HIPPO_ABLATE_OUTCOME_SLOW`: `rewardFactor` becomes 1 (no half-life modulation).
-- `HIPPO_ABLATE_OUTCOME_FAST`: `hybridSearch` `outcomeBoost` becomes 1.
+- `HIPPO_ABLATE_OUTCOME_FAST`: `rankHybrid` `outcomeBoost` becomes 1.
 - `HIPPO_ABLATE_RECENCY`: the search recency factor becomes 1 (the creation-age multiplier `0.8 + 0.2*exp(-age/30d)`); decay, strengthening and outcomes stay live.
 - `HIPPO_EVAL_RECENCY_DAYS`: a positive number replaces the 30-day scale of that recency factor (tuning grids only). Unset, zero, negative or junk values keep 30.
 - `HIPPO_FAKE_NOW`: timestamp injected as the default `now` for strength computation and retrieval stamping (simulated-time protocols). It MUST be the exact `Date.toISOString()` form (`YYYY-MM-DDTHH:mm:ss.sssZ`); it is validated by round-trip, so junk, locale dates, non-UTC offsets and rolled-over dates (`2026-02-31`) all fall back to the real clock.
@@ -73,7 +73,7 @@ The rankers in `src/domain/search` read none of these. They take the switches as
 Formula notes (load-bearing for the experiments). Ablating decay has TWO intrinsic co-effects, because the unified formula routes other mechanisms THROUGH the decay term. Both are real properties of the architecture, not implementation accidents; experiment analysis must attribute accordingly (the decay-off arm is "decay + its dependents off", see prereg amendment A1):
 
 1. Read-side strengthening flattens: raw = retrievalBoost * emotionalMult >= 1, and the [0,1] clamp caps it at 1.0, so the recall boost can only offset decay, never exceed baseline. (Write-side still runs.)
-2. Outcome-slow goes inert: `rewardFactor` only acts by scaling the effective half-life INSIDE the decay exponent; with decay := 1 there is no exponent for it to modulate. Outcome-slow is decay-rate modulation BY DESIGN, so "no decay" necessarily means "no slow channel" (the fast channel in `hybridSearch` is unaffected).
+2. Outcome-slow goes inert: `rewardFactor` only acts by scaling the effective half-life INSIDE the decay exponent; with decay := 1 there is no exponent for it to modulate. Outcome-slow is decay-rate modulation BY DESIGN, so "no decay" necessarily means "no slow channel" (the fast channel in `rankHybrid` is unaffected).
 
 Nothing caches these env vars. The readers here read them on each call, so a test that stubs one sees it at once and resets nothing. `HIPPO_LOSS_AVERSION_RATIO` is a root setting: the CLI, `serve()`, the stdio MCP host, the sleep child and the dashboard read it once when they build their store and hand it down as `lossAversionRatio` (`sqliteStore(root, { lossAversionRatio })`, `strengthOptionsOf(config.runtime)`); a library caller passes it the same way.
 
@@ -865,8 +865,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RerankerFn`: Determinism is required for paired A/B and for the workload-validity gate in docs/evals/2026-05-10-f6-reranker-prereg.md.
 
 ### src/domain/search/rrf.ts
-- `module header`: the value already in use across hippo's `hybridSearch` since v1.0.
-- `module header`: Generic over the candidate id type so this helper can be shared by `src/search.ts::hybridSearch` (T = number, idx into MemoryEntry[]) and the LongMemEval F9 hybrid retrieve benchmark (T = string, session_id).
+- `module header`: the value already in use across hippo's `rankHybrid` since v1.0.
+- `module header`: Generic over the candidate id type so this helper can be shared by `src/domain/search/hybrid.ts::rankHybrid` (T = number, idx into MemoryEntry[]) and the LongMemEval F9 hybrid retrieve benchmark (T = string, session_id).
 
 ### src/base/util/secret-detect.ts
 - `module header`: Secret detection for memory content (v39 memory scope isolation, S4; docs/plans/2026-07-01-memory-scope-isolation.md).
@@ -955,9 +955,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
 ### src/domain/sharing/search-both.ts
-- `HybridSearchOptions.summaryDeboost`: v0.30 / E4 — propagated to underlying hybridSearch calls.
-- `HybridSearchOptions.summaryFreshness`: v0.30 / E4 — propagated.
-- `HybridSearchOptions.recallScope`: v1.25.0 — recall-mode scope filter, consumed by `searchBothHybrid` only.
+- `SearchBothHybridOptions.summaryDeboost`: v0.30 / E4: propagated to underlying rankHybrid calls.
+- `SearchBothHybridOptions.summaryFreshness`: v0.30 / E4: propagated.
+- `SearchBothHybridOptions.recallScope`: v1.25.0: recall-mode scope filter, consumed by `searchBothHybrid` only.
 - `searchBothHybrid`: v1.25.0 recall mode: push the scope predicate into SQL exactly like api.recall (loadRecallSearchEntries)
 - `rankBothStores`: T2 note: PLAIN stable score sort on purpose -- local/global inputs are each deterministically ordered, so stability holds and an exact tie keeps the LOCAL result ahead of the global one.
 
@@ -1007,7 +1007,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `writeEntry` (stray doc above stampOriginProject): Used by E1.3+ connectors to stamp idempotency rows atomically with the memory write.
 
 ### src/store/entry-writes.ts
-- `writeEntryOn`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction; then rethrow so the caller sees the refusal.
+- `writeEntryInOwnTx`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction; then rethrow so the caller sees the refusal.
 - `writeEntryDbOnly`: v0.30 / E2 — DAG live-coupling: child write under a level-2 summary marks the parent dirty for E3 sleep-cycle rebuild. Early-exit on null dag_parent_id (vast majority of writes); cost is one null check on the hot path.
 
 ### src/store/handoffs.ts

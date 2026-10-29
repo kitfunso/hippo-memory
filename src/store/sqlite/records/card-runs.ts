@@ -1,6 +1,11 @@
 // The card run lifecycle: claim, heartbeat, block, review, complete and reclaim, with their run checks.
 
-import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
+import {
+  changedRows,
+  withWriteScope,
+  withWriteScopeOr,
+  type DatabaseSyncLike,
+} from '../../../db/index.js';
 import { HandoffOutcome, isHandoffOutcome } from '../../../base/session/handoff.js';
 import {
   Card,
@@ -120,7 +125,7 @@ function transitionCards(
     ...from,
   ];
   const result = cachedStatement(db, sql).run(...params);
-  return Number(result.changes ?? 0);
+  return changedRows(result);
 }
 
 /** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race.

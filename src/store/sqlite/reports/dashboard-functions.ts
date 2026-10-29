@@ -151,7 +151,7 @@ function holdsTextBinds(text: string | null): TextBinds {
   return { text, probe: probe === '' ? null : probe, wide: ALL_WIDE.test(seen) ? 1 : 0 };
 }
 
-// FTS5 cannot look up fewer than 3 characters, so a shorter probe leaves the needle to HOLDS_TEXT
+// FTS5's trigram index cannot look up a shorter probe, so one leaves the needle to HOLDS_TEXT
 // over every row.
 const MIN_PROBE_CHARS = 3;
 

@@ -17,15 +17,15 @@ export const DEFAULT_ASSEMBLE_BUDGET = 4000;
 export interface AssembleOptions {
   /** Token budget. Default DEFAULT_ASSEMBLE_BUDGET. */
   budget?: number;
-  /** Recent raw rows always kept verbatim. Default 10. */
+  /** Recent raw rows always kept verbatim. Default DEFAULT_FRESH_TAIL_COUNT. */
   freshTailCount?: number;
   /** Substitute parent summaries for older raws when ≥2 share a level-2 ancestor. Default true. */
   summarizeOlder?: boolean;
   /** Exact scope match when set, so an authorised caller can assemble a private session.
    * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */
   scope?: string;
-  /** Hard cap on the session raws the window is chosen from (default 5000); `truncated` is set
-   * when it is hit. */
+  /** Hard cap on the session raws the window is chosen from (default DEFAULT_ROW_CAP); `truncated`
+   * is set when it is hit. */
   rowCap?: number;
   cost?: AssembleCost;
   project?: CallerProject;

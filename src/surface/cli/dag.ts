@@ -11,6 +11,7 @@ import {
 } from '../../api/context/context-render.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { printError } from './output.js';
+import { MAX_DRILL_DOWN_DEPTH } from '../../api/objects/drill-down.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -176,12 +177,17 @@ async function assembleSession({
   );
 }
 
-// --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently
-// clamped.
+// --depth N walks N levels down (default 1, hard cap MAX_DRILL_DOWN_DEPTH); out-of-range is
+// rejected, never silently clamped.
 function drillDepthFlag(flags: CliFlags): number | undefined {
   const depth = numberFlag(flags, 'depth');
-  if (depth !== undefined && (!Number.isInteger(depth) || depth < 1 || depth > 10)) {
-    printError(`--depth must be an integer between 1 and 10 (got ${stringFlag(flags, 'depth')})`);
+  if (
+    depth !== undefined &&
+    (!Number.isInteger(depth) || depth < 1 || depth > MAX_DRILL_DOWN_DEPTH)
+  ) {
+    printError(
+      `--depth must be an integer between 1 and ${MAX_DRILL_DOWN_DEPTH} (got ${stringFlag(flags, 'depth')})`,
+    );
     throw new CliExit(2);
   }
   return depth;

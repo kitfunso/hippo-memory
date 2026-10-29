@@ -10,7 +10,7 @@ import { loadConfig } from '../../host/config-file.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { hasGroup, type HippoStore } from '../../base/ports/store.js';
 import { entryHost, withEntryInfra } from '../entry-infra.js';
-import { defaultReach } from '../open-store.js';
+import { sqliteReach } from '../open-store.js';
 
 export async function promptHookContext(
   ctx: EntryContext,
@@ -32,7 +32,7 @@ async function folderReach(
 ): Promise<ContextReach | undefined> {
   if (!hasGroup(store, 'folderFiles')) return undefined;
   const { folder } = await store.folderFiles.home();
-  const reach = defaultReach({
+  const reach = sqliteReach({
     hippoRoot: folder,
     store,
     shared: opts?.sharedStore,

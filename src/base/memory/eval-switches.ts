@@ -7,12 +7,12 @@ import { PRODUCTION_STRENGTH, withLossAversion, type StrengthModel } from './str
 /** The switches recall's rank boosts honour. */
 export interface RankAblation {
   readonly recency: boolean;
-  /** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null (the 30-day scale stays). */
+  /** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null (RECENCY_SCALE_DAYS stays). */
   readonly recencyDays: number | null;
   readonly outcomeFast: boolean;
 }
 
-/** Production ranking: every rank boost on, at the 30-day recency scale. */
+/** Production ranking: every rank boost on, at the RECENCY_SCALE_DAYS recency scale. */
 export const NO_RANK_ABLATION: RankAblation = Object.freeze({
   recency: false,
   recencyDays: null,

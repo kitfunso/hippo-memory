@@ -13,7 +13,7 @@ import { currentEntries, type CurrentnessOptions } from './as-of.js';
 import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 
 /**
- * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact
+ * rankHybrid's vector arm: which rows it may add, plus the caller's JS admission rules (exact
  * private regex, entry filters).
  */
 export type HybridVectorCandidates = VectorCandidateSpec & {
@@ -94,7 +94,7 @@ export async function embedQueryBy(
 }
 
 // Search runs on every hook prompt, so one line per reason per process says why vectors went unused
-// without flooding stderr. A repeat still logs, at debug and then every 100th at warn, so a
+// without flooding stderr. A repeat still logs, at debug and then every SAMPLE_EVERY at warn, so a
 // fallback that keeps happening stays visible.
 function warnBm25Fallback(reason: string, detail: string, fields?: LogFields): void {
   log.warnThenSample(

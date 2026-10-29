@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import type { DummyRuleMap } from 'oxlint';
+import repoConfig from '../../oxlint.config.ts';
 
 const REPO = join(import.meta.dirname, '..', '..');
 const OXLINT = join(REPO, 'node_modules', 'oxlint', 'bin', 'oxlint');
@@ -12,33 +14,21 @@ interface Diagnostic {
   readonly filename: string;
 }
 
-/** An oxlint rule setting: a severity, or a severity and its options. */
-type RuleSetting = string | readonly [string, ...object[]];
-
-interface RuleTable {
-  readonly [rule: string]: RuleSetting;
-}
-
-interface Config {
-  jsPlugins: { readonly name: string; specifier: string }[];
-  rules?: RuleTable;
-  overrides?: { rules?: RuleTable }[];
-}
-
 /** `rules` without the anti-slop ones. */
-const withoutAntiSlop = (rules: RuleTable | undefined): RuleTable | undefined =>
-  rules && Object.fromEntries(Object.entries(rules).filter(([name]) => !name.startsWith('anti-slop/')));
+const withoutAntiSlop = (rules: DummyRuleMap): DummyRuleMap =>
+  Object.fromEntries(Object.entries(rules).filter(([name]) => !name.startsWith('anti-slop/')));
 
-/** The repo's .oxlintrc.json in `root`, its plugin paths pointing back at the repo. The anti-slop
- * plugin is TypeScript, which Node 22.16 (the engines floor) cannot load, so it and its rules go. */
+/** The repo's oxlint.config.ts as JSON in `root`, its plugin paths pointing back at the repo. The
+ * anti-slop plugin is TypeScript, which Node 22.16 (the engines floor) cannot load, so it and its rules go. */
 function configIn(root: string): string {
-  // SAFETY: .oxlintrc.json is the repo's own config, whose jsPlugins entries all carry a specifier.
-  const config = JSON.parse(readFileSync(join(REPO, '.oxlintrc.json'), 'utf8')) as Config;
-  config.jsPlugins = config.jsPlugins
-    .filter((plugin) => plugin.name !== 'anti-slop')
-    .map((plugin) => ({ ...plugin, specifier: relative(root, join(REPO, plugin.specifier)).split(sep).join('/') }));
-  config.rules = withoutAntiSlop(config.rules);
-  for (const override of config.overrides ?? []) override.rules = withoutAntiSlop(override.rules);
+  const config = {
+    ...repoConfig,
+    jsPlugins: repoConfig.jsPlugins
+      .filter((plugin) => plugin.name !== 'anti-slop')
+      .map((plugin) => ({ ...plugin, specifier: relative(root, join(REPO, plugin.specifier)).split(sep).join('/') })),
+    rules: withoutAntiSlop(repoConfig.rules),
+    overrides: repoConfig.overrides.map((override) => ({ ...override, rules: withoutAntiSlop(override.rules) })),
+  };
   const file = join(root, '.oxlintrc.json');
   writeFileSync(file, JSON.stringify(config));
   return file;
@@ -68,7 +58,7 @@ function lint(files: Record<string, string>): Map<string, string[]> {
   }
 }
 
-describe('.oxlintrc.json boundary rules', () => {
+describe('oxlint.config.ts boundary rules', () => {
   it('holds every signature kind to 5 positional parameters with one hit, past a rest or this one', () => {
     const hits = lint({
       'src/base/six.ts': 'export interface P {\n  m(a: 1, b: 2, c: 3, d: 4, e: 5, f: 6): void;\n}\n',
@@ -114,7 +104,7 @@ describe('.oxlintrc.json boundary rules', () => {
 const PROPERTY = 'eslint(no-restricted-properties)';
 const IMPORT = 'eslint(no-restricted-imports)';
 
-describe('.oxlintrc.json env, exit and outside-world rules', () => {
+describe('oxlint.config.ts env, exit and outside-world rules', () => {
   it('fails process.env outside env.ts in each spelling, and process.exit outside the three process ends', () => {
     const hits = lint({
       'src/domain/member.ts': 'export const h = process.env.HOME;\n',
@@ -152,7 +142,7 @@ describe('.oxlintrc.json env, exit and outside-world rules', () => {
   });
 });
 
-describe('.oxlintrc.json CLI rules', () => {
+describe('oxlint.config.ts CLI rules', () => {
   it('fails a flag turned into text by hand, and passes a list cast and a string', () => {
     const flag = (body: string): string => `export const f = (flags: Flags): string => ${body};\n`;
     const hits = lint({
@@ -208,7 +198,7 @@ describe('.oxlintrc.json CLI rules', () => {
   });
 });
 
-describe('.oxlintrc.json store rules', () => {
+describe('oxlint.config.ts store rules', () => {
   it('fails a store branch, a twin, SQL and BEGIN outside the data layer, and a surface that books a recall', () => {
     const hits = lint({
       'src/api/kind.ts': "export const k = (ctx: Ctx): number => (ctx.store.kind === 'mem' ? 1 : 2);\n",
@@ -235,7 +225,7 @@ describe('.oxlintrc.json store rules', () => {
   });
 });
 
-describe('.oxlintrc.json test env rule', () => {
+describe('oxlint.config.ts test env rule', () => {
   it('fails a test that writes process.env by hand, and passes reads, a child env object and tests/_helpers', () => {
     const hits = lint({
       'tests/assign.test.ts': "process.env.A = 'x';\nprocess.env[key] = 'y';\nprocess.env.B ??= 'z';\n",
@@ -259,7 +249,7 @@ describe('.oxlintrc.json test env rule', () => {
   });
 });
 
-describe('.oxlintrc.json store-group and grant rules', () => {
+describe('oxlint.config.ts store-group and grant rules', () => {
   it('fails HippoStore and hasGroups in api and domain code, which take the groups they name', () => {
     const hits = lint({
       'src/api/whole.ts':

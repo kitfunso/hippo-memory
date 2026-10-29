@@ -24,7 +24,7 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
   }
 }
 
-describe('recall --why rerankTrace', () => {
+describe('recall --why rerank_trace', () => {
   let home: string;
   const tenantId = 'default';
   const sessionId = 'sess-a7-cli';
@@ -98,17 +98,17 @@ describe('recall --why rerankTrace', () => {
     expect(positions).toEqual(sorted);
   });
 
-  it('JSON --why includes rerankTrace on the hero item, contiguous chain', async () => {
+  it('JSON --why includes rerank_trace on the hero item, contiguous chain', async () => {
     const out = await hippo(home, ...WHY_ARGS, '--json');
     // SAFETY: `recall --json` output is written by this CLI's own JSON
     // formatter, which always emits `results[].id` and, under `--why`, a
-    // `rerankTrace` array of `{stage, scoreBefore, scoreAfter}` steps.
+    // `rerank_trace` array of `{stage, scoreBefore, scoreAfter}` steps.
     const parsed = JSON.parse(out) as {
-      results: Array<{ id: string; rerankTrace?: Array<{ stage: string; scoreBefore: number; scoreAfter: number }> }>;
+      results: Array<{ id: string; rerank_trace?: Array<{ stage: string; scoreBefore: number; scoreAfter: number }> }>;
     };
     const hero = parsed.results.find((r) => r.id === heroId);
     expect(hero?.id, `hero not in results:\n${out}`).toBe(heroId);
-    const trace = hero!.rerankTrace!;
+    const trace = hero!.rerank_trace!;
     expect(trace.map((s) => s.stage)).toEqual([
       'interference',
       'value',
@@ -125,9 +125,9 @@ describe('recall --why rerankTrace', () => {
   it('a bare --salience-threshold reads as 1, so only the never-recalled peer is downweighted', async () => {
     const out = await hippo(home, 'recall', 'auth', '--why', '--json', '--salience-threshold');
     // SAFETY: the same `recall --json --why` shape the test above reads.
-    const parsed = JSON.parse(out) as { results: Array<{ id: string; rerankTrace?: Array<{ stage: string }> }> };
+    const parsed = JSON.parse(out) as { results: Array<{ id: string; rerank_trace?: Array<{ stage: string }> }> };
     const stages = (id: string): string[] =>
-      (parsed.results.find((r) => r.id === id)?.rerankTrace ?? []).map((s) => s.stage);
+      (parsed.results.find((r) => r.id === id)?.rerank_trace ?? []).map((s) => s.stage);
     expect(stages(peerId)).toContain('retrieval-count-downweight');
     expect(stages(heroId)).not.toContain('retrieval-count-downweight');
   });

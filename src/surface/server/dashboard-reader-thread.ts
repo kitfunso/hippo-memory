@@ -9,7 +9,7 @@ import { buildMemoryPage, buildSearch } from '../../api/dashboard/queries.js';
 import { createSnapshotClock } from '../../api/dashboard/snapshot-clock.js';
 import type { Context } from '../../api/types.js';
 import { configReader } from '../../host/config-file.js';
-import { defaultDashboardReads, defaultStore } from '../open-store.js';
+import { sqliteDashboardReads, sqliteStore } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { postReply } from '../../base/util/thread-reply.js';
 import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';
@@ -26,8 +26,8 @@ function readerStore(
   clock: { readonly nowMs: number; readonly wallMs: number },
 ) {
   const rules = evalStoreRules(envLossAversionRatio());
-  const store = defaultStore(hippoRoot, rules);
-  const reads = defaultDashboardReads(hippoRoot, rules);
+  const store = sqliteStore(hippoRoot, rules);
+  const reads = sqliteDashboardReads(hippoRoot, rules);
   const stamps = createSnapshotClock(
     reads,
     () => clock.nowMs,

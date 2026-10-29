@@ -1,7 +1,7 @@
 // Card rows: the columns, the row mappers, the comment insert, the blank-text check and the
 // unknown-card error that card reads and writes share.
 
-import { type DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import { Card, CardStatus, CardRun, CardComment } from '../../../base/records/card.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
@@ -123,7 +123,7 @@ export function insertCardComment(
     SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM cards WHERE id = ? AND tenant_id = ?)
   `,
   ).run(cardId, author, body, now, tenantId, cardId, tenantId);
-  if (Number(result.changes ?? 0) === 0) {
+  if (changedRows(result) === 0) {
     throw unknownCard(cardId);
   }
   const id = Number(result.lastInsertRowid ?? 0);

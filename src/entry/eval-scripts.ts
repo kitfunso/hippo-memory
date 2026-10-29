@@ -1,7 +1,7 @@
 // The functions eval and benchmark scripts call by name, with the real embedder, models, HTTP and
 // ports wired in: a frozen script re-points its import line here and keeps every call as written.
 import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
-import { hybridSearch as rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
+import { rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
 import { outcomeMultiplier as outcomeNudge } from '../domain/search/boosts.js';
 import { evalNow, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
 // Frozen eval scripts set HIPPO_FAKE_NOW per simulated session and read the clock and the
@@ -17,7 +17,6 @@ import { httpOver } from '../infra/http.js';
 import { realRerankers } from '../infra/rerankers/index.js';
 import * as api from '../api/index.js';
 import type {
-  Context,
   EntryContext,
   GatedRememberOptions,
   RememberOptions,
@@ -27,7 +26,7 @@ import type {
 import { ingestEvent as ingestGithubEvent } from '../surface/connectors/github/ingest.js';
 import { ingestMessage as ingestSlackMessage } from '../surface/connectors/slack/ingest.js';
 import { CONNECTOR_GROUPS, type ConnectorContext } from '../surface/connectors/ingest.js';
-import { entryInfra, withEntryInfra } from '../surface/entry-infra.js';
+import { entryInfra, filled, withEntryInfra } from '../surface/entry-infra.js';
 
 // The target a folderIndex builds carries the embedder, so embedAll needs no wiring of its own.
 export { embedAll } from '../domain/search/embed-memories.js';
@@ -44,9 +43,9 @@ export function folderIndex(
   return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, entryInfra());
 }
 
-/** The domain hybridSearch under the environment's eval switches and clock, with no folder
+/** rankHybrid under the environment's eval switches and clock, with no folder
  * defaults filled. */
-export function hybridSearch(
+export function rankHybridWithEvalSwitches(
   query: string,
   entries: MemoryEntry[],
   options: HybridRankOptions = {},
@@ -77,13 +76,6 @@ export function judgeAll(
 ): Promise<(Judgment | null)[]> {
   const { fetcher, ...rest } = opts;
   return judgeOver(contents, { ...rest, http: httpOver(fetcher) });
-}
-
-/** `fn` with the entry's real ports filled into a Context its script built without them. */
-function filled<A extends unknown[], R>(
-  fn: (ctx: Context, ...args: A) => R,
-): (ctx: EntryContext, ...args: A) => R {
-  return (ctx, ...args) => fn(withEntryInfra(ctx), ...args);
 }
 
 export function remember(

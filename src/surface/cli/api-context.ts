@@ -21,16 +21,16 @@ import type { HippoStore, StoreGroups } from '../../base/ports/store-index.js';
 import type { OptionalGroup, StoreWith } from '../../base/ports/store.js';
 import {
   askingNearestFirst,
-  defaultImportFiles,
-  defaultImportStores,
-  defaultReach,
-  defaultStore,
-  runStoreBatch,
-  runStoreHookRequest,
-  runStoreRequest,
-  type StoreOptions,
+  sqliteImportFiles,
+  sqliteImportStores,
+  sqliteReach,
+  sqliteStore,
+  runSqliteBatch,
+  runSqliteHookRequest,
+  runSqliteRequest,
+  type SqliteStoreOptions,
   type StoreRuntime,
-  type StoreSession,
+  type RequestStores,
 } from '../open-store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import {
@@ -122,12 +122,12 @@ export interface CliScope {
 /** What a command's stores open on: its runtime, and inside a request that request's session. */
 interface Scope {
   readonly runtime: StoreRuntime;
-  readonly session?: StoreSession | undefined;
+  readonly session?: RequestStores | undefined;
 }
 
 // A session's stores hold the runtime its handles return to, so a stdio loop's frames and stores
 // share one.
-function storeOptions({ runtime, session }: Scope): StoreOptions {
+function storeOptions({ runtime, session }: Scope): SqliteStoreOptions {
   return {
     ...evalStoreRules(envLossAversionRatio()),
     runtime: session?.runtime ?? runtime,
@@ -139,7 +139,7 @@ function storeOptions({ runtime, session }: Scope): StoreOptions {
 function storeOn(scope: Scope, hippoRoot: string): CliStore {
   const opts = storeOptions(scope);
   const maxVectors = cliConfig(hippoRoot).vectorGraph.maxVectors;
-  return askingNearestFirst(defaultStore(hippoRoot, opts), {
+  return askingNearestFirst(sqliteStore(hippoRoot, opts), {
     hippoRoot,
     ask: serverNearestAsk(hippoRoot),
     maxVectors,
@@ -157,7 +157,7 @@ function reachOn(
 ): ContextReach {
   const { ledger, folderFiles } = store;
   return contextReach(
-    defaultReach({
+    sqliteReach({
       hippoRoot,
       store,
       openGlobal: (root) => storeOn(scope, root),
@@ -195,9 +195,9 @@ function contextOn(
 
 /** The stores of one CLI command: each opens on `runtime` and, inside a request, on that request's
  * session. */
-export function cliCommand(runtime: StoreRuntime, session?: StoreSession): CliCommand {
+export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliCommand {
   const scope: Scope = { runtime, session };
-  const inSession = (own: StoreSession): CliCommand => cliCommand(runtime, own);
+  const inSession = (own: RequestStores): CliCommand => cliCommand(runtime, own);
   return {
     store: (root) => storeOn(scope, root),
     folder: (root) => ({
@@ -211,22 +211,22 @@ export function cliCommand(runtime: StoreRuntime, session?: StoreSession): CliCo
     ledgerReach: (root) =>
       ledgerReachOf({ reach: reachOn(scope, root, storeOn(scope, root), cliInfra().embedderFor) }),
     importBatch: (root) => (run) =>
-      runStoreBatch(
-        (own) => run(defaultImportFiles(root, storeOptions({ runtime, session: own }))),
+      runSqliteBatch(
+        (own) => run(sqliteImportFiles(root, storeOptions({ runtime, session: own }))),
         runtime,
       ),
     storeBatch: (root) => (run) =>
-      runStoreRequest((own) => run(storeOn({ runtime, session: own }, root)), 'cli', runtime),
+      runSqliteRequest((own) => run(storeOn({ runtime, session: own }, root)), 'cli', runtime),
     syncOptions: (tenantId, machine, extra = {}) => ({
       tenantId,
       configAt: cliConfig,
       machine,
-      stores: defaultImportStores(storeOptions(scope)),
+      stores: sqliteImportStores(storeOptions(scope)),
       run: cliInfra(),
       ...extra,
     }),
-    request: (run) => runStoreRequest((own) => run(inSession(own)), 'cli', runtime),
-    hookRequest: (run) => runStoreHookRequest((own) => run(inSession(own)), runtime),
+    request: (run) => runSqliteRequest((own) => run(inSession(own)), 'cli', runtime),
+    hookRequest: (run) => runSqliteHookRequest((own) => run(inSession(own)), runtime),
     stdioHost: () => stdioHostOn(runtime),
   };
 }
@@ -234,7 +234,7 @@ export function cliCommand(runtime: StoreRuntime, session?: StoreSession): CliCo
 /** Creates the global store, or finishes one that was partly made: what a first share needs of
  * it. */
 export function cliInitGlobal(): void {
-  defaultImportFiles(hippoHomeDir()).ensure();
+  sqliteImportFiles(hippoHomeDir()).ensure();
 }
 
 /** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
@@ -245,7 +245,7 @@ function rootAutoSleep(
   hostTenantId: string,
 ): () => Promise<void> {
   return () =>
-    runStoreRequest(
+    runSqliteRequest(
       (session) =>
         autoSleepConsolidate({
           store: storeOn({ runtime, session }, root),
@@ -276,7 +276,7 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
     return { ...shared, autoSleep: { ...sleeps, hostTenantId, newSince: newRowsOn(store) } };
   };
   const contextIn =
-    (session: StoreSession, signal: AbortSignal) =>
+    (session: RequestStores, signal: AbortSignal) =>
     (hippoRoot: string, tenantId: string): McpContext<CliStore> => {
       const scope: Scope = { runtime, session };
       const store = storeOn(scope, hippoRoot);
@@ -302,6 +302,6 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
   // builds.
   return {
     runFrame: (signal, run) =>
-      runStoreRequest((session) => run(contextIn(session, signal)), 'cli', runtime),
+      runSqliteRequest((session) => run(contextIn(session, signal)), 'cli', runtime),
   };
 }

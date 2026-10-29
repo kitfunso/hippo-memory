@@ -22,9 +22,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
  * Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible
- * endpoint, gated on HIPPO_LLM_RERANKER_URL against accidental cost. Timeout is 30s for the whole
- * call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to identity
- * ordering, so recall never hangs.
+ * endpoint, gated on HIPPO_LLM_RERANKER_URL against accidental cost. Timeout is DEFAULT_TIMEOUT_MS
+ * for the whole call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to
+ * identity ordering, so recall never hangs.
  */
 export function createLlmReranker(http: Http): RerankerFn {
   const outage = createOutageWarning('llm', 'keeping the input order');
