@@ -175,7 +175,10 @@ export const SESSION_VERBS = {
     ],
   }),
   embed: verb(() => import('../maintenance.js'), 'handleEmbed', {
-    flags: { switches: ['global', 'reset-physics', 'status'] },
+    flags: { switches: ['global', 'status'] },
+    removedFlags: {
+      'reset-physics': 'Drop it: 3.0 removed the physics engine, so no state is left to reset.',
+    },
     usage: [
       `
   embed                    Embed all memories for semantic search

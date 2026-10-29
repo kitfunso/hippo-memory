@@ -1,7 +1,6 @@
 // The one recall ranker's entry point: rankRecall runs the pool, search and stage steps for a profile.
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
@@ -50,11 +49,9 @@ export interface RankRecallCtx extends RankSource {
 
 /** Search-engine choice and tuning; tuning left unset takes the engine's own default. */
 export interface RankRecallEngine {
-  usePhysics: boolean;
-  /** Set when the request names an engine (HTTP `mode=hybrid` or `physics`). Without it, a
-   * 'position' profile keeps the load order. */
+  /** Set when the request names an engine (HTTP `mode=hybrid`). Without it, a 'position' profile
+   * keeps the load order. */
   engineNamed?: boolean;
-  physicsConfig: PhysicsConfig;
   multihop: boolean;
   /** Graph-stream rrf fusion over the local store; hop and seed counts fall back to the engine
    * defaults. */
@@ -63,8 +60,7 @@ export interface RankRecallEngine {
   mmrLambda?: number;
   localBump?: number;
   minResults?: number;
-  /** Score breakdowns for `hippo explain`; explain's physics call also leaves out minResults and
-   * includeSuperseded. */
+  /** Score breakdowns for `hippo explain`. */
   explain: boolean;
 }
 

@@ -107,7 +107,6 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     (s) => s.consolidation.rejected(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
     "reason: 'wrong'",
   ),
-  read('consolidation.particleIds', (s) => s.consolidation.particleIds(), 'mem_p_noise'),
   read('consolidation.duplicateCandidates', (s) => s.consolidation.duplicateCandidates(), 'mem_z_twin2'),
   read('consolidation.dirtyGraphTenants', (s) => s.consolidation.dirtyGraphTenants(), /maxPendingId: [1-9]/),
   read('consolidation.dirtySummaries', (s) => s.consolidation.dirtySummaries(10), 'mem_x_child1'),

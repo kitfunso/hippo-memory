@@ -3,13 +3,12 @@ import { vi } from 'vitest';
 import { dirname, join } from 'node:path';
 import { adminActor, rememberUntrusted } from '../../src/api/index.js';
 import { setMeta } from '../../src/db/index.js';
-import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { extractGraph } from '../../src/domain/graph/extract.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { hashedVector } from './hashed-embedding-server.js';
-import { FAKE_NOW, rowsOf, seedPortBranches, seedTemplates, TENANT, type Templates } from './recall-golden-seed.js';
+import { rowsOf, seedPortBranches, seedTemplates, TENANT, type Templates } from './recall-golden-seed.js';
 import { keyFor, onDb } from './store-worker-server.js';
 import { apiCtx } from './api-ctx.js';
 import { objectsAt } from './objects-at.js';
@@ -41,7 +40,7 @@ export interface MovedReadsSeed {
   readonly keyIds: readonly string[];
 }
 
-/** Vectors and particles for five rows, one of them 8 numbers long, and a vector whose memory row is gone. */
+/** Vectors for five rows, one of them 8 numbers long, and a vector whose memory row is gone. */
 function seedVectors(root: string): void {
   const entries = loadEntriesByIds(root, ['mem_p_plain', 'mem_p_new', 'mem_p_private', 'mem_p_old', 'mem_p_noise']);
   const index = Object.fromEntries(
@@ -53,7 +52,6 @@ function seedVectors(root: string): void {
   onDb(root, (db) => {
     upsertVectors(db, [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]], VECTOR_IDENTITY);
     setMeta(db, EMBEDDING_MODEL_META_KEY, VECTOR_IDENTITY);
-    resetAllPhysicsState(db, entries, index, { now: new Date(FAKE_NOW) });
   });
 }
 
@@ -114,7 +112,6 @@ const LEFT = {
     'SELECT id, tenant_id, scope, retrieval_count, strength, half_life_days, last_retrieved FROM memories ORDER BY id',
   held: 'SELECT memory_id, tenant_id, status, original_scope, decided_by, decided_at IS NOT NULL AS decided FROM memory_quarantine ORDER BY memory_id',
   vectors: 'SELECT memory_id, model, dim, hex(vector) AS vector FROM memory_vectors ORDER BY memory_id',
-  particles: 'SELECT memory_id FROM memory_physics ORDER BY memory_id',
   model: `SELECT value FROM meta WHERE key = '${EMBEDDING_MODEL_META_KEY}'`,
 } as const;
 

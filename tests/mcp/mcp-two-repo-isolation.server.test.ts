@@ -144,8 +144,8 @@ function acmeCtx(): FullContext {
   return apiCtx(store, TENANT, { subject: 'api_key:two-repo', role: 'member', owner: 'alice' });
 }
 
-function writeConfig(extra: Record<string, JsonValue> = {}): void {
-  fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ ...BASE_CONFIG, ...extra }));
+function writeConfig(): void {
+  fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify(BASE_CONFIG));
 }
 
 const HIDDEN_FROM_ACME = (): string[] => [ids.beta, ids.none, ids.other, ids.bob, ids.betaNear];
@@ -298,26 +298,6 @@ describe('MCP on a shared store with two repos', () => {
       HIDDEN_FROM_BETA(),
       'beta recall',
     );
-  });
-
-  it("hippo_recall in physics mode keeps beta's nearest row out of acme", async () => {
-    writeConfig({ physics: { enabled: true } });
-    try {
-      expectOnly(
-        await shown('acme', 'hippo_recall', { query: 'lighthouse' }),
-        [ids.acme],
-        HIDDEN_FROM_ACME(),
-        'acme physics recall',
-      );
-      expectOnly(
-        await shown('beta', 'hippo_recall', { query: 'lighthouse' }),
-        [ids.beta, ids.betaNear],
-        HIDDEN_FROM_BETA(),
-        'beta physics recall',
-      );
-    } finally {
-      writeConfig();
-    }
   });
 
   it('include_continuity gives each repo its own task snapshot', async () => {

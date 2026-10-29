@@ -3,9 +3,7 @@
  *
  * Locks: summaryDeboost precedence (per-call > env > 0.85 default), freshness
  * micro-boost (1.05 when last_rebuilt_at within 7 days), DAG metadata in
- * ScoreBreakdown when explain=true, physicsSearch physics-particle path,
- * physicsSearch hybridSearch-fallback inheritance via options spread,
- * shared.searchBothHybrid pass-through + composition invariant, MMR + reranker
+ * ScoreBreakdown when explain=true, shared.searchBothHybrid pass-through + composition invariant, MMR + reranker
  * interactions.
  */
 
@@ -14,16 +12,13 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
+import { hybridSearch } from '../../src/entry/folder-search.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import type { RerankerOptions, RerankResult } from '../../src/base/ports/reranker.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
-import { savePhysicsState } from '../../src/db/physics-state.js';
-import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -163,39 +158,6 @@ describe('first-class DAG recall (scoring layer)', () => {
     // final = composite (pre-deboost) * 0.85 * 1.05 = composite * 0.8925
   });
 
-  it('physicsSearch physics-particle path applies deboost', async () => {
-    const summary = makeL2Summary('physics-particle deboost summary');
-    writeEntry(hippoRoot, summary);
-
-    // Seed physics state so physicsSearch picks the physics-particle path
-    const queryVec = [1, 0, 0, 0];
-    const particle: PhysicsParticle = {
-      memoryId: summary.id,
-      position: [1, 0, 0, 0], // perfect cosine match with query
-      velocity: [0, 0, 0, 0],
-      mass: 1.0,
-      charge: 0,
-      temperature: 0.5,
-      lastSimulation: new Date().toISOString(),
-    };
-    const db = openHippoDb(hippoRoot);
-    try {
-      savePhysicsState(db, [particle]);
-    } finally {
-      closeHippoDb(db);
-    }
-
-    const results = await physicsSearch('physics-particle test', [summary], {
-      hippoRoot,
-      queryEmbedding: queryVec,
-      explain: true,
-    });
-    const br = findResult(results, summary.id)?.breakdown;
-    expect(br?.mode).toBe('physics');
-    expect(br?.summaryDeboost).toBeCloseTo(0.85);
-    expect(br?.dagLevel).toBe(2);
-  });
-
   it('explain mode populates 6 breakdown fields for L2', async () => {
     const summary = makeL2Summary('explain-test summary', {
       lastRebuiltAt: new Date().toISOString(),
@@ -311,25 +273,5 @@ describe('first-class DAG recall (scoring layer)', () => {
     } finally {
       removeDir(globalRoot);
     }
-  });
-
-  it('physicsSearch hybridSearch-fallback inherits deboost via options spread', async () => {
-    // No physics state seeded for L2 summary → physicsSearch falls back to
-    // hybridSearch via L685/689/693/707 once it detects no particle for the entry.
-    // Actually physicsSearch's fallbacks at L780-789 fire when embedding is
-    // unavailable / model mismatch / empty queryVector. Without hippoRoot or
-    // with queryEmbedding=[], it returns hybridSearch's results.
-    const summary = makeL2Summary('fallback-test summary content');
-    writeEntry(hippoRoot, summary);
-    // Force fallback path: pass queryEmbedding=[] AND no embedding service
-    // (which the test env doesn't have anyway). physicsSearch should hit the
-    // `if (!isEmbeddingAvailable()) return hybridSearch(...)` branch.
-    const results = await physicsSearch('fallback-test', [summary], {
-      hippoRoot,
-      explain: true,
-    });
-    // Fallback to hybridSearch → deboost applied
-    const br = findResult(results, summary.id)?.breakdown;
-    expect(br?.summaryDeboost).toBeCloseTo(0.85);
   });
 });

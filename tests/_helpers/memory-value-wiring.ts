@@ -45,11 +45,7 @@ export function enableMemoryValue(hippoRoot: string, extra: Partial<HippoConfig>
   fs.writeFileSync(
     configPath,
     // dormant off: these gates were pre-registered on the delete path.
-    JSON.stringify(
-      { memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false }, ...extra },
-      null,
-      2,
-    ),
+    JSON.stringify({ memoryValue: { enabled: true }, dormant: { enabled: false }, ...extra }, null, 2),
   );
 }
 

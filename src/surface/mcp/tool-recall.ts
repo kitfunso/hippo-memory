@@ -216,7 +216,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   const out: RenderSlot = {};
   await retrieveRanking(
     ctx,
-    toolRecallOptions(ctx, req),
+    toolRecallOptions(req),
     recallPresenter(budget, {
       config: ctx.config,
       includeContinuity,
@@ -233,11 +233,11 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   return rendered.text;
 }
 
-function toolRecallOptions(ctx: Context, { opts, project }: ToolRecallRequest): RecallOptions {
+function toolRecallOptions({ opts, project }: ToolRecallRequest): RecallOptions {
   return {
     ...opts,
     window: { ...opts.window, limit: TOOL_RECALL_LIMIT },
-    mode: ctx.config.physics?.enabled !== false ? 'physics' : 'hybrid',
+    mode: 'hybrid',
     filter: { ...opts.filter, keepHeldCopies: true, project },
     // The hint is computed below over the list the tool shows; the window's copy would emit its
     // audit row twice.

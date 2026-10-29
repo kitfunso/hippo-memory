@@ -345,7 +345,6 @@ export type {
   IndexStepKind,
   IdPage,
   IdPageRequest,
-  ParticleStats,
   StoredVectorSummary,
   VectorCoverage,
   VectorRow,

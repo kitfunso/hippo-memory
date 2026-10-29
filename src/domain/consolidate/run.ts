@@ -1,20 +1,12 @@
 import { MemoryEntry } from '../../base/memory/entry.js';
 import type { DecayBasis, StrengthModel } from '../../base/memory/strength.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
 import type { DormantMove, StrengthRefresh } from '../../base/ports/store/consolidation.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import type { SleepRows, Survivors } from './survivors.js';
 import type { TombstoneChecks } from './tombstones.js';
 import type { ConsolidateEvent } from './events.js';
-
-/** A pass that threw and was skipped; the sleep carries on without it. */
-export interface PhaseFailure {
-  phase: string;
-  message: string;
-  fields: LogFields;
-}
 
 export interface ConsolidationResult {
   decayed: number;
@@ -49,10 +41,6 @@ export interface ConsolidationResult {
   dryRun: boolean;
   /** What the run did, in order; the CLI and /v1/sleep render each event as a line. */
   events: ConsolidateEvent[];
-  /** Passes that failed and were skipped, with the error's log fields, for a caller that drops
-   * `events`. */
-  phaseFailures: PhaseFailure[];
-  physicsSimulated: number;
   /** Ids the decay pass removes (or would remove, under dryRun). */
   removedIds?: string[];
 }
@@ -64,7 +52,7 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
 }
 
 /** The store a consolidation runs on: its own group, the learning group extraction writes
- * through, the lesson and audit writes its passes make, and the particles physics moves. */
+ * through, and the lesson and audit writes its passes make. */
 export type ConsolidationStore = StoreWith<
   'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'
 >;
@@ -124,31 +112,5 @@ export function newConsolidationResult(dryRun: boolean): ConsolidationResult {
     entityProfilesCreated: 0,
     dryRun,
     events: [],
-    phaseFailures: [],
-    physicsSimulated: 0,
   };
-}
-
-/** Logs the failure with its stack, keeps it in the result for callers that run the sleep
- * elsewhere, and adds the event the sleep report shows. */
-export function recordPhaseFailure<E>(result: ConsolidationResult, phase: string, error: E): void {
-  const failure = {
-    phase,
-    message: errorMessage(error),
-    fields: errorFields(error),
-  };
-  result.phaseFailures.push(failure);
-  result.events.push({ kind: 'phaseSkipped', phase, message: failure.message });
-  log.warn(
-    `consolidate: ${phase} pass failed and was skipped: ${failure.message}`,
-    errorFields(error),
-  );
-}
-
-/** Logs each phase failure a consolidation result carries, for a caller that ran it out of
- * sight. */
-export function logPhaseFailures(result: ConsolidationResult): void {
-  for (const { phase, message, fields } of result.phaseFailures) {
-    log.warn(`consolidate: ${phase} pass failed and was skipped: ${message}`, fields);
-  }
 }

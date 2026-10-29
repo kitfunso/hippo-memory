@@ -9,7 +9,6 @@ import {
   ERROR_TAG,
   EXTRACTED_TAG,
 } from '../../base/memory/entry.js';
-import { strengthModelFor } from '../../base/memory/eval-switches.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import {
   AGENT_MEMORY_SOURCE_PREFIX,
@@ -182,8 +181,6 @@ export async function shareMemory(
       embeddings: global.config.embeddings,
       embedderFor: global.embedderFor,
       failureNotices: options.embed.failureNotices,
-      strength: strengthModelFor(options.embed.evalSwitches, global.config.runtime),
-      clock: options.embed.clock,
     };
     embedMemoryDetached(target, globalEntry);
   }

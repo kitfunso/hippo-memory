@@ -28,7 +28,6 @@ let home: string;
 let hippoRoot: string;
 
 function cliCore(): CliCoreRecall {
-  const config = loadConfig(hippoRoot);
   return {
     rank: {
       budget: 4000,
@@ -37,8 +36,6 @@ function cliCore(): CliCoreRecall {
       includeSuperseded: false,
       explicitScope: null,
       activeScope: null,
-      usePhysics: false,
-      physicsConfig: config.physics,
       multihop: false,
       mmr: false,
       mmrLambda: 0.7,

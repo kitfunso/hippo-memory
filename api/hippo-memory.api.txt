@@ -26,7 +26,6 @@ entry/folder-search.d.ts: embedMemory function
 entry/folder-search.d.ts: folderVectorSource function
 entry/folder-search.d.ts: hybridSearch function
 entry/folder-search.d.ts: loadRecallSearchEntries function
-entry/folder-search.d.ts: physicsSearch function
 entry/folder-search.d.ts: withEvalSwitches function
 entry/importers.d.ts: ImportOptions re-export
 entry/importers.d.ts: ImportResult re-export
@@ -227,7 +226,6 @@ entry/store-kit.d.ts: OriginFilter re-export
 entry/store-kit.d.ts: OutcomeWrite re-export
 entry/store-kit.d.ts: PROTECTED_ROWS re-export
 entry/store-kit.d.ts: PageRequest re-export
-entry/store-kit.d.ts: PhysicsParticle re-export
 entry/store-kit.d.ts: PlanningFallacyEvidence re-export
 entry/store-kit.d.ts: PredictionBaserate re-export
 entry/store-kit.d.ts: PushGoalOptions re-export
@@ -302,7 +300,6 @@ entry/store-kit.d.ts: loadConfig re-export
 entry/store-kit.d.ts: normalizeValueForRejection re-export
 entry/store-kit.d.ts: ownScopeTouches re-export
 entry/store-kit.d.ts: passesScopeFilterForRecall re-export
-entry/store-kit.d.ts: physicsSearch re-export
 entry/store-kit.d.ts: rankVectorRows re-export
 entry/store-kit.d.ts: rarestFtsQuery re-export
 entry/store-kit.d.ts: readerMayChange re-export

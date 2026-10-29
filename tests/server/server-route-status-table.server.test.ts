@@ -295,7 +295,7 @@ describe('HTTP route status table: status and error text per route', () => {
       create: await post('/v1/memories', { content: 'parity http create', kind: 'distilled', tags: ['a'] }),
       graph: await get('/v1/graph?limit=5'),
       recall: await get('/v1/memories?q=zebra-route&limit=5&include_continuity=1'),
-      recallBadMode: await get('/v1/memories?q=x&mode=nope'),
+      recallBadMode: await get('/v1/memories?q=x&mode=physics'),
       assemble: await get('/v1/sessions/sess-1/assemble?budget=500'),
       drill: await get(`/v1/recall/drill/${seeded.recall}`),
       archive: await post(`/v1/memories/${seeded.raw}/archive`, { reason: 'parity' }),
@@ -311,7 +311,7 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.graph, 200, { truncated: false });
     shows(out.recall, 200, { results: [{ content: 'parity recall needle zebra-route' }] });
     expect(out.recall.cacheControl).toBe('no-store');
-    shows(out.recallBadMode, 400, { error: "mode must be 'bm25', 'hybrid', or 'physics'" });
+    shows(out.recallBadMode, 400, { error: "mode must be 'bm25' or 'hybrid'" });
     shows(out.assemble, 200, { sessionId: 'sess-1' });
     shows(out.drill, 422, { error: 'Id is a leaf row, not a level-2+ summary; nothing to drill into' });
     shows(out.archive, 200, { ok: true });

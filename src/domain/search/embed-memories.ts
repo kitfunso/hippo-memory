@@ -1,7 +1,6 @@
 // Embeds memories into the vector index: picks the adapter for a target and runs embedAll and embedMemoryInto on it.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
-import { rankStrength } from './boosts.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../base/ports/embedder.js';
 import type { EmbeddingsConfig } from '../../base/config/config.js';
@@ -29,15 +28,14 @@ export interface EmbedWith {
   readonly failureNotices: FailureNotices;
 }
 
-/** The root's eval switches and clock, which score the particles a vector write seeds, and its
- * warned failures. */
+/** The root's eval switches and clock, which score and stamp the rows a share or sync writes, and
+ * the failures its embeds already warned about. */
 export type EmbedRun = Pick<InfraPorts, 'evalSwitches' | 'clock' | 'failureNotices'>;
 
-/** The store's own index when it keeps one, else its vector groups, whose seeded particles score
- * under `run`. */
+/** The store's own index when it keeps one, else its vector groups. */
 export function folderEmbedTarget(
   { store, config, embedderFor }: ConfiguredFolder<EmbedStore>,
-  { evalSwitches: switches, clock, failureNotices }: EmbedRun,
+  { failureNotices }: Pick<InfraPorts, 'failureNotices'>,
 ): EmbedTarget {
   const { embeddingIndex, vectors, vectorWrites } = store;
   const { embeddings } = config;
@@ -45,9 +43,8 @@ export function folderEmbedTarget(
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
     return { embeddingIndex, rows, embeddings, embedderFor, failureNotices };
   }
-  const strength = rankStrength({ switches, runtime: config.runtime });
   const groups = { vectors, vectorWrites };
-  return { groups, embeddings, embedderFor, failureNotices, strength, clock };
+  return { groups, embeddings, embedderFor, failureNotices };
 }
 
 /** A store an embed reaches: its own index when it keeps one, else its vector groups. */

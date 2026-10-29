@@ -3,7 +3,7 @@
 
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { logPhaseFailures, type ConsolidationResult } from '../../domain/consolidate/run.js';
+import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { strengthOf, type Context, type ContextWith } from '../types.js';
 
@@ -74,8 +74,7 @@ export async function autoSleepAfterWrite(
     });
 }
 
-/** What one auto-sleep runs: the consolidation alone, its skipped passes logged by the process
- * that ran it. */
+/** What one auto-sleep runs: the consolidation alone. */
 export async function autoSleepConsolidate(
   ctx: Pick<
     ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'>,
@@ -83,13 +82,11 @@ export async function autoSleepConsolidate(
   >,
 ): Promise<ConsolidationResult> {
   const { store, config, tenantId, infra } = ctx;
-  const result = await runConsolidation(store, {
+  return runConsolidation(store, {
     config,
     tenantId,
     llm: infra.llm,
     now: infra.clock(),
     strength: strengthOf(ctx),
   });
-  logPhaseFailures(result);
-  return result;
 }

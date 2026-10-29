@@ -1498,7 +1498,7 @@ Triggered by a founder question: can hippo save organisations tokens and make an
 |---|---|---|
 | Token budgets on every surface (recall 4000, context 1500, MCP recall 4000, MCP context 3000, pinned inject 1500) | `src/cli.ts`, `src/api/index.ts`, `src/base/config/config.ts` | Works; the MCP descriptions advertised 1500 for both until PR #227 |
 | Greedy score-ordered packing, dedup, MMR, `minResults` | `src/search.ts:694-785` | Fills the budget; never stops early on weak results |
-| Lifecycle stress eval with a per-condition `tokens` field | `scripts/lifecycle-stress/run.mjs` | The only token-reporting harness; headline NULL (Part III) |
+| Lifecycle stress eval with a per-condition `tokens` field | `scripts/lifecycle-stress/run.mjs` | Removed in 3.0 with the physics search it ranked by; headline NULL (Part III) |
 | Structured handoff and snapshot caps instead of transcripts | `src/base/session/handoff.ts`, `src/capture.ts:1026` | Bounded by design (non-goal 12) |
 
 ### Track TE - Token efficiency
@@ -2480,7 +2480,7 @@ Carry owner, tenant, origin project, scope, pin, source evidence, effective time
 
 Freeze the representation and candidate construction. Compare the shipping lexical rank path, that same path with recency/strength removed and other factors fixed, plain JavaScript BM25, and plain BM25 plus evidence-based outcome feedback. Ablate recency and strength separately before their combined removal. Register exact score equations and settings: decision, path, scope-tag, extraction, churn, temporal and DAG boosts, local/global source weighting and any other configured factor must be explicitly retained, removed or disabled per arm. Removing age/strength alone is not a pure-BM25 baseline. Mandatory tenant/project/scope/temporal admission and invalidation stay in every arm. Keep optional hybrid/graph/MMR/reranker changes out of these component comparisons or register them separately.
 
-The current JavaScript BM25 and SQLite FTS5's native BM25 have different scoring contracts; switching between them is a separate comparison. Physics remains an explicit experimental arm. No pure-BM25 or physics-off default is established by this plan.
+The current JavaScript BM25 and SQLite FTS5's native BM25 have different scoring contracts; switching between them is a separate comparison. Physics was an explicit experimental arm until 3.0 removed the physics engine. No pure-BM25 or physics-off default is established by this plan.
 
 Apply tenant/project/scope and temporal eligibility before candidate limits and ranking, and recheck admission before injection. Report all-evidence coverage, stale intrusion, per-category regressions and latency alongside paired R@5. Draft: [S1 ranking](docs/evals/2026-09-30-s1-ranking-ablation-prereg.md).
 

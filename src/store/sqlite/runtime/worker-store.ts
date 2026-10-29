@@ -104,7 +104,6 @@ function storedOnWorkers(sender: Sender): VectorReads['stored'] {
   const sent: SentParts = {
     vectors: async (ids) =>
       vectorViewsOf(await send<VectorPack>(sender, 'vectors.stored', ['vectors', ids], mode)),
-    particles: (ids) => send(sender, 'vectors.stored', ['particles', ids], mode),
   };
   const stored: VectorReads['stored'] = async (part, ids) =>
     ids.length === 0 ? new Map() : sent[part](ids);

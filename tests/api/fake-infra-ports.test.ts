@@ -130,7 +130,6 @@ describe('the api on fake infra ports', () => {
   it('remembers, recalls through the reranker, builds context and sleeps through the llm on the fakes alone', async () => {
     const fake = fakeInfra(join(hippoRoot, '..'));
     const ctx = contextOn(fake);
-    const config = ctx.config;
 
     await remember(ctx, { content: 'the release train leaves every second thursday from platform nine' });
     await remember(ctx, {
@@ -152,8 +151,6 @@ describe('the api on fake infra ports', () => {
           explicitScope: null,
           activeScope: null,
           reranker: { fn: picked!.fn, topK: picked!.defaultTopK },
-          usePhysics: false,
-          physicsConfig: config.physics,
           multihop: false,
           mmr: false,
           mmrLambda: 0.7,

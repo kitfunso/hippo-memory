@@ -1,6 +1,5 @@
 /** Hippo's config: its shape and its defaults. config-keys.ts reads each key of .hippo/config.json. */
 
-import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../rank/physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../memory/strength.js';
 import { SALIENCE_DEFAULTS } from '../memory/salience.js';
 import type { PromptRecallMetric } from '../rank/prompt-recall.js';
@@ -42,7 +41,6 @@ export interface HippoConfig {
     enabled: boolean;
   };
   gitLearnPatterns: string[];
-  physics: PhysicsConfig;
   /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when embeddings are available: needs doc-to-doc
    *  similarity. */
   mmr: {
@@ -241,7 +239,6 @@ export const DEFAULT_CONFIG: HippoConfig = {
     'breaking',
     'deprecate',
   ],
-  physics: { ...DEFAULT_PHYSICS_CONFIG },
   mmr: {
     enabled: true,
     lambda: DEFAULT_MMR_LAMBDA,

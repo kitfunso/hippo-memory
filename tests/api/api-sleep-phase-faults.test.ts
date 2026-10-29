@@ -18,12 +18,6 @@ import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
-import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
-import {
-  logPhaseFailures,
-  newConsolidationResult,
-  type ConsolidationResult,
-} from '../../src/domain/consolidate/run.js';
 import { log } from '../../src/base/util/log.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
@@ -196,7 +190,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   });
 });
 
-describe('a skipped pass or a failed graph rebuild is logged with its error', () => {
+describe('a failed graph extract is logged with its error', () => {
   let testCtx: ReturnType<typeof newCtx>;
 
   beforeEach(() => {
@@ -205,69 +199,6 @@ describe('a skipped pass or a failed graph rebuild is logged with its error', ()
 
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it('a physics pass throw is logged, recorded in the result and keeps its detail line', async () => {
-    const boom = new Error('physics fault: particleIds threw');
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    const { ctx } = testCtx;
-    const failing = {
-      ...ctx,
-      config: {
-        ...ctx.config,
-        physics: { ...ctx.config.physics, enabled: true as const },
-      },
-      store: {
-        ...ctx.store,
-        consolidation: {
-          ...ctx.store.consolidation,
-          particleIds: async (): Promise<string[]> => {
-            throw boom;
-          },
-        },
-      },
-    };
-    let seen: ConsolidationResult | undefined;
-    await runSleep(
-      failing,
-      {},
-      {
-        consolidate: async (store, opts) => (seen = await runConsolidation(store, opts)),
-      },
-    );
-
-    expect(seen?.phaseFailures).toEqual([
-      {
-        phase: 'physics',
-        message: boom.message,
-        fields: expect.objectContaining({ errorClass: 'Error' }),
-      },
-    ]);
-    expect(detailLines(seen ?? { dryRun: false })).toContain(`  ⚠️ physics simulation skipped: ${boom.message}`);
-    const logged = warn.mock.calls.find(([message]) => message.includes('physics pass failed'));
-    expect(logged?.[1]).toEqual(
-      expect.objectContaining({
-        errorClass: 'Error',
-        stack: expect.stringContaining('physics fault'),
-      }),
-    );
-  });
-
-  it('logPhaseFailures logs each recorded failure at warn with its fields', () => {
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    logPhaseFailures({
-      ...newConsolidationResult(false),
-      phaseFailures: [
-        {
-          phase: 'physics',
-          message: 'boom',
-          fields: { errorClass: 'TypeError' },
-        },
-      ],
-    });
-    expect(warn).toHaveBeenCalledWith('consolidate: physics pass failed and was skipped: boom', {
-      errorClass: 'TypeError',
-    });
   });
 
   it('a graph extract failure for a dirty tenant is logged with errorFields and keeps its detail line', async () => {

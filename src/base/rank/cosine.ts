@@ -1,4 +1,4 @@
-// The vector math every ranking site shares (embeddings, the vector index, physics): one dot
+// The vector math every ranking site shares (embeddings, the vector index): one dot
 // product, one length and one rule for a vector too short to have a direction.
 
 /** A vector shorter than this has no direction: it normalises to nothing and scores 0 against
