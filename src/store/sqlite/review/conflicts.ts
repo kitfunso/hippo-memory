@@ -65,44 +65,21 @@ interface ConflictJoinRow extends ConflictWire {
   b_origin_project: string | null;
 }
 
-/** One member's joined columns, each null when the left join found no row. */
-interface MemberOfOptions {
-  readonly id: string | null;
-  readonly scope: string | null;
-  readonly kind: string | null;
-  readonly supersededBy: string | null;
-  readonly originProject: string | null;
-}
-
-function memberOf({
-  id,
-  scope,
-  kind,
-  supersededBy,
-  originProject,
-}: MemberOfOptions): ConflictMember | null {
+/** One side's member from its MEMBER_COLS columns; null when the left join found no row. */
+function memberOf(r: ConflictJoinRow, side: 'a' | 'b'): ConflictMember | null {
+  const id = r[`${side}_id` as const];
+  const kind = r[`${side}_kind` as const];
   if (id === null || kind === null) return null;
-  return { scope, kind, supersededBy, originProject };
+  return {
+    scope: r[`${side}_scope` as const],
+    kind,
+    supersededBy: r[`${side}_superseded_by` as const],
+    originProject: r[`${side}_origin_project` as const],
+  };
 }
 
 function toConflictRow(r: ConflictJoinRow): ConflictRow {
-  return {
-    conflict: rowToMemoryConflict(r),
-    a: memberOf({
-      id: r.a_id,
-      scope: r.a_scope,
-      kind: r.a_kind,
-      supersededBy: r.a_superseded_by,
-      originProject: r.a_origin_project,
-    }),
-    b: memberOf({
-      id: r.b_id,
-      scope: r.b_scope,
-      kind: r.b_kind,
-      supersededBy: r.b_superseded_by,
-      originProject: r.b_origin_project,
-    }),
-  };
+  return { conflict: rowToMemoryConflict(r), a: memberOf(r, 'a'), b: memberOf(r, 'b') };
 }
 
 /** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no
