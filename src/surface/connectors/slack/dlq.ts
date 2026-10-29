@@ -6,7 +6,7 @@ import {
   type Reingest,
   type ReplayResult,
   type SignatureRefusal,
-} from '../dlq.js';
+} from '../../../api/dead-letters.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { verifySlackSignature } from './signature.js';

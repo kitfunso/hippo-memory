@@ -11,7 +11,7 @@ import { previousSecretInForce, SLACK_PREVIOUS, warnIfOpenEnded } from '../previ
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
-import { parkInDlq } from '../dlq.js';
+import { parkInDlq } from '../../../api/dead-letters.js';
 import { errorFields, log } from '../../../base/util/log.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';

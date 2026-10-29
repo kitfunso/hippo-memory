@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq } from '../../src/api/dead-letters.js';
 import { githubDlq, replayGithubDlqEntry as replayGitHub } from '../../src/surface/connectors/github/dlq.js';
 import { slackDlq, replaySlackDlqEntry as replaySlack } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

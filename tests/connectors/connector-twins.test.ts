@@ -1,7 +1,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { adminActor } from '../../src/api/index.js';
-import { parkInDlq, replayParked } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq, replayParked } from '../../src/api/dead-letters.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { rememberWithEventLog } from '../../src/surface/connectors/ingest.js';

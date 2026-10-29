@@ -2,7 +2,7 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { listDlq } from '../../src/surface/connectors/dlq.js';
+import { listDlq } from '../../src/api/dead-letters.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

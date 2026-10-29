@@ -4,7 +4,7 @@ import {
   type ConnectorDlq,
   type ReplayResult,
   type SignatureRefusal,
-} from '../dlq.js';
+} from '../../../api/dead-letters.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope, type GitHubWebhookEnvelope } from './types.js';
 import type { JsonValue } from '../../../base/util/json.js';

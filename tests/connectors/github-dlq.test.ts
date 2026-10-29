@@ -1,6 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { parkInDlq, listDlq } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq, listDlq } from '../../src/api/dead-letters.js';
 import { githubDlq, replayGithubDlqEntry, type DlqBucket } from '../../src/surface/connectors/github/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

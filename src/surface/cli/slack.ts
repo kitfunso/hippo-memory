@@ -7,7 +7,7 @@ import {
   envSlackTeamId,
 } from '../../base/util/env.js';
 import * as api from '../../api/index.js';
-import { listDlq } from '../connectors/dlq.js';
+import { listDlq } from '../../api/dead-letters.js';
 import { replaySlackDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
 import { backfillChannel } from '../connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../connectors/slack/web-client.js';

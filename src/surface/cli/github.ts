@@ -5,7 +5,7 @@ import { envGitHubToken, envGitHubWebhookSecret } from '../../base/util/env.js';
 import { adminActor } from '../../api/index.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
-import { listDlq } from '../connectors/dlq.js';
+import { listDlq } from '../../api/dead-letters.js';
 import { githubDlq, replayGithubDlqEntry, type IngestHook } from '../connectors/github/dlq.js';
 import { ingestEvent, type IngestEvent } from '../connectors/github/ingest.js';
 import { handleCommentDeleted } from '../connectors/github/deletion.js';

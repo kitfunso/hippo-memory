@@ -22,7 +22,7 @@ import {
   type IngestEvent as GitHubIngestEvent,
 } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
-import { parkInDlq } from '../dlq.js';
+import { parkInDlq } from '../../../api/dead-letters.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenant } from '../tenant-route.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';

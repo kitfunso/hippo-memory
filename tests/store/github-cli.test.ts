@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq } from '../../src/api/dead-letters.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
 import type { JsonValue } from '../../src/base/util/json.js';

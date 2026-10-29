@@ -1,21 +1,23 @@
 // The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel,
 // one set of defaults, one replay result.
 
-import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
-import { DLQ_REDACTED_NOTE, redactPayload } from '../../base/util/secret-detect.js';
-import type { ConnectorStore } from './ingest.js';
+import { DEFAULT_LIST_LIMIT } from '../base/util/limits.js';
+import { DLQ_REDACTED_NOTE, redactPayload } from '../base/util/secret-detect.js';
 import type {
   ConnectorDeadLetter,
   DeadLetterConnector,
   DeadLetterRows,
-} from '../../base/ports/store.js';
-import type { JsonValue } from '../../base/util/json.js';
-import { errorMessage } from '../../base/util/log.js';
+  StoreWith,
+} from '../base/ports/store.js';
+import type { JsonValue } from '../base/util/json.js';
+import { errorMessage } from '../base/util/log.js';
 
 /** The tenant stored on a row no tenant was resolved for; the column is NOT NULL. */
 const UNROUTABLE_TENANT = '__unroutable__';
 
 const DEFAULT_BUCKET = 'parse_error';
+
+type DeadLetterStore = StoreWith<'connectorEvents'>;
 
 /** What a caller hands over to park one payload, whatever the connector. */
 export interface ParkOptions<Bucket extends string> {
@@ -45,7 +47,7 @@ export interface ConnectorDlq<C extends DeadLetterConnector, Own, Bucket extends
 
 export async function parkInDlq<Own, Bucket extends string>(
   dlq: ConnectorDlq<DeadLetterConnector, Own, Bucket>,
-  store: ConnectorStore,
+  store: DeadLetterStore,
   opts: ParkOptions<Bucket> & NoInfer<Own>,
 ): Promise<number> {
   const rawPayload = redactPayload(opts.rawPayload);
@@ -64,7 +66,7 @@ export async function parkInDlq<Own, Bucket extends string>(
 
 export function listDlq<C extends DeadLetterConnector>(
   dlq: ConnectorDlq<C, never, never>,
-  store: ConnectorStore,
+  store: DeadLetterStore,
   opts: { tenantId: string; limit?: number },
 ): Promise<DeadLetterRows[C][]> {
   return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, {
@@ -105,7 +107,7 @@ function replayFailed(status: ReplayStatus, retryCount: number, reason: string):
  * count. */
 async function failAndBump(
   dlq: ConnectorDlq<DeadLetterConnector, never, never>,
-  store: ConnectorStore,
+  store: DeadLetterStore,
   row: { id: number; tenantId: string; retryCount: number },
   failure: { status: ReplayStatus; reason: string },
 ): Promise<ReplayResult> {
@@ -116,7 +118,7 @@ async function failAndBump(
 /** The caller's row by id, else an unroutable one: that row belongs to no tenant until a replay
  * routes it. Another tenant's row reads as absent. */
 async function replayableRow<C extends DeadLetterConnector>(
-  store: ConnectorStore,
+  store: DeadLetterStore,
   connector: C,
   tenantId: string,
   id: number,
@@ -171,7 +173,7 @@ export interface ReplayTarget {
  * once, except a missing signature. */
 export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
   steps: ReplaySteps<C, Envelope>,
-  store: ConnectorStore,
+  store: DeadLetterStore,
   { tenantId, id, force }: ReplayTarget,
 ): Promise<ReplayResult> {
   const row = await replayableRow(store, steps.dlq.connector, tenantId, id);
