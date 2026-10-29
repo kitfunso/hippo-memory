@@ -47,12 +47,12 @@ export interface HippoConfig {
    *  similarity. */
   mmr: {
     enabled: boolean;
-    /** 1.0 = pure relevance (current behavior). 0.0 = pure diversity. 0.7 is a typical balance. */
+    /** 1.0 = pure relevance, 0.0 = pure diversity; DEFAULT_MMR_LAMBDA by default. */
     lambda: number;
   };
   search: {
-    /** Multiplier applied to local-store scores when merged with global results (searchBothHybrid). 1.0 = no bias,
-     *  1.2 = 20% local priority. */
+    /** Multiplier applied to local-store scores when merged with global results (searchBothHybrid):
+     * DEFAULT_LOCAL_BUMP by default, and 1.0 means no bias. */
     localBump: number;
   };
   /** Replay settings — biologically-inspired rehearsal during consolidation. */

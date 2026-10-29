@@ -62,8 +62,8 @@ export function outcomeNudge(
   return clamp(1 + slope * Math.tanh(net), { min, max });
 }
 
-/** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it
- * too. */
+/** Retrieval-time outcome nudge within [OUTCOME_NUDGE_MIN, OUTCOME_NUDGE_MAX]; the bm25-outcome
+ * eval baseline ranks with it too. */
 export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;

@@ -52,8 +52,8 @@ export interface HybridSearchOptions extends SearchOptions {
   explain?: boolean;
   mmr?: boolean;
   mmrLambda?: number;
-  /** Multiplier applied to local-store scores when merging with global.
-   *  Defaults to 1.2. Use 1.0 to remove the local bias for eval comparisons. */
+  /** Multiplier applied to local-store scores when merging with global; DEFAULT_LOCAL_BUMP when
+   * unset. 1.0 removes the local bias for eval comparisons. */
   localBump?: number;
   /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
   scope?: string | null;
@@ -71,10 +71,10 @@ export interface HybridSearchOptions extends SearchOptions {
   asOf?: string;
   /** Budget cost per result, spent the same way in each store and in the merged list. */
   cost?: ResultCost;
-  /** Propagated to underlying rankHybrid calls.
-   *  Per-call > the root's HIPPO_SUMMARY_DEBOOST > 0.85 default. */
+  /** Propagated to underlying rankHybrid calls: per-call, then the root's HIPPO_SUMMARY_DEBOOST,
+   * then DEFAULT_SUMMARY_DEBOOST. */
   summaryDeboost?: number;
-  /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
+  /** Propagated. Default true: DEFAULT_FRESHNESS_BOOST if rebuilt within FRESHNESS_WINDOW_MS. */
   summaryFreshness?: boolean;
   /** Optional admission predicate applied to the loaded candidates of BOTH stores before
    * ranking, cross-store dedupe and budgeting, so an excluded row cannot shadow its admitted
