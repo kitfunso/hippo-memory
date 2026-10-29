@@ -117,7 +117,10 @@ export function owned(owner: string, session?: RequestStores): CallerContext {
     config,
     tenantId: TENANT,
     actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
-    reach: { ...SHARED_REACH, ledger: { ledger: store.ledger, folderFiles: store.folderFiles, config } },
+    reach: {
+      ...SHARED_REACH,
+      ledger: { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config },
+    },
   };
 }
 

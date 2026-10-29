@@ -9,15 +9,12 @@ import { CONTEXT_READS_EFFECTS } from './context-reads.js';
 import { DIAGNOSTICS_EFFECTS } from './diagnostics.js';
 import { DORMANT_EFFECTS } from './dormant.js';
 import { ENTRY_WRITES_EFFECTS } from './entry-writes.js';
-import { FOLDER_FILES_EFFECTS } from './folder-files.js';
 import { GOALS_EFFECTS } from './goals.js';
 import { KEY_WRITES_EFFECTS } from './keys.js';
 import { LEARNING_EFFECTS } from './learning.js';
-import { LEDGER_EFFECTS } from './ledger.js';
 import { OBJECTS_EFFECTS } from './objects.js';
 import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
 import { FAILURE_LOG_EFFECTS } from './rejections.js';
-import { SHARING_EFFECTS } from './sharing.js';
 import { EMBEDDING_INDEX_EFFECTS, VECTORS_EFFECTS, VECTOR_WRITES_EFFECTS } from './vectors.js';
 import type { MethodEffects } from './effects.js';
 import type { BaseMethods, StoreGroups } from '../store.js';
@@ -53,10 +50,7 @@ export const STORE_EFFECTS = {
   dormant: DORMANT_EFFECTS,
   failureLog: FAILURE_LOG_EFFECTS,
   compactions: COMPACTIONS_EFFECTS,
-  ledger: LEDGER_EFFECTS,
   embeddingIndex: EMBEDDING_INDEX_EFFECTS,
-  folderFiles: FOLDER_FILES_EFFECTS,
-  sharing: SHARING_EFFECTS,
   consolidation: CONSOLIDATION_EFFECTS,
   learning: LEARNING_EFFECTS,
   captures: CAPTURES_EFFECTS,

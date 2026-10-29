@@ -199,7 +199,7 @@ async function planWithDuplicates(
 async function duplicatesAmong(s: StoreSession, texts: readonly string[]): Promise<boolean[]> {
   if (texts.length === 0) return [];
   const origins = s.visible === null ? undefined : ['', ...s.visible];
-  const rows = await s.store.sharing.textKeysHolding(
+  const rows = await s.store.hippoDb.sharing.textKeysHolding(
     { tenantId: s.tenantId, live: true, origins },
     texts,
   );

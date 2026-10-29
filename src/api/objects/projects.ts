@@ -39,7 +39,7 @@ function scopeOf(ctx: ContextWith<'projectTags'>): ProjectTagScope {
 
 async function folderOf(ctx: RepairContext): Promise<StoreFolder> {
   if (ctx.reach?.isGlobal) return { isGlobal: true, machine: ctx.infra.machine };
-  const { project } = await ctx.store.folderFiles.home();
+  const { project } = await ctx.store.hippoDb.folderFiles.home();
   return { isGlobal: false, shared: sharedStoreOf(ctx), project };
 }
 

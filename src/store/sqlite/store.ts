@@ -22,11 +22,8 @@ import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteConsolidation } from './consolidation/consolidation.js';
 import { sqliteLearning } from './learning/learning.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
-import { sqliteSharing } from './sharing/sharing.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
 import { sqliteEmbeddingIndex } from './vectors/embedding-index.js';
-import { sqliteLedger } from './ledger/ledger.js';
-import { sqliteFolderFiles } from './folder-files/folder-files.js';
 import { sqliteEntryWrites } from './entries/entry-writes.js';
 import { finishRecall } from './recall/last-recall.js';
 import { sqliteObjects } from './records/objects.js';
@@ -114,10 +111,7 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
  * copies and sharing. */
 function sqliteFolderGroups(handles: Handles): Omit<FolderGroups, LocalGroup> {
   return {
-    ledger: sqliteLedger(handles.on, handles.files.opens.grant.session),
     embeddingIndex: sqliteEmbeddingIndex(handles),
-    folderFiles: sqliteFolderFiles(handles),
-    sharing: sqliteSharing(handles.on),
   };
 }
 

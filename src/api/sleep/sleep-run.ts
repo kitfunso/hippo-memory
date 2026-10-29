@@ -284,7 +284,7 @@ async function shareOnSleep(
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = globalTargetOf(ctx);
   const { store } = ctx;
-  const { sharing, folderFiles } = store;
+  const { sharing, folderFiles } = store.hippoDb;
   if (
     !ctx.config.autoShareOnSleep ||
     target === undefined ||
@@ -299,8 +299,7 @@ async function shareOnSleep(
   const shared = await phases.autoShare(
     {
       store: {
-        sharing,
-        folderFiles,
+        hippoDb: { sharing, folderFiles },
         entriesWhere: (filter, page) => store.entriesWhere(filter, page),
       },
     },

@@ -251,35 +251,47 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     /^\[ true \]$/,
   ),
   read('failureLog.requestOutcome', (s) => s.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION), "'stored'"),
-  read('sharing.sourceTallies', (s) => s.sharing.sourceTallies(TENANT), /count: [1-9]/),
+  read('hippoDb.sharing.sourceTallies', (s) => s.hippoDb.sharing.sourceTallies(TENANT), /count: [1-9]/),
 ];
 
 /** The groups that were the local files: the ledger, the folder and sharing; the index's sessions run on the writer. */
 const FOLDER_GROUP_READS: readonly Read[] = [
-  read('folderFiles.home', (s) => s.folderFiles.home(), /folderName: '/),
-  read('ledger.lastSent', (s) => s.ledger.lastSent(TENANT, SESSION, 'http_recall'), "hash: 'block-seeded'"),
+  read('hippoDb.folderFiles.home', (s) => s.hippoDb.folderFiles.home(), /folderName: '/),
   read(
-    'sharing.entriesWithSignals',
+    'hippoDb.ledger.lastSent',
+    (s) => s.hippoDb.ledger.lastSent(TENANT, SESSION, 'http_recall'),
+    "hash: 'block-seeded'",
+  ),
+  read(
+    'hippoDb.sharing.entriesWithSignals',
     (s) =>
-      s.sharing.entriesWithSignals({ tags: [], sourcePrefix: 'never', minRetrievals: 0, valences: [] }, TENANT, {
-        limit: 3,
-      }),
+      s.hippoDb.sharing.entriesWithSignals(
+        { tags: [], sourcePrefix: 'never', minRetrievals: 0, valences: [] },
+        TENANT,
+        {
+          limit: 3,
+        },
+      ),
     /id: 'mem_/,
   ),
-  read('sharing.textKeysPage', (s) => s.sharing.textKeysPage(TENANT, { limit: 3 }), /id: 'mem_/),
+  read('hippoDb.sharing.textKeysPage', (s) => s.hippoDb.sharing.textKeysPage(TENANT, { limit: 3 }), /id: 'mem_/),
   read(
-    'sharing.textKeysHolding',
+    'hippoDb.sharing.textKeysHolding',
     async (s) => [
-      await s.sharing.textKeysHolding({ tenantId: TENANT }, [PLAIN]),
-      await s.sharing.textKeysHolding({ tenantId: TENANT, live: true, origins: ['', 'golden'] }, [PLAIN]),
+      await s.hippoDb.sharing.textKeysHolding({ tenantId: TENANT }, [PLAIN]),
+      await s.hippoDb.sharing.textKeysHolding({ tenantId: TENANT, live: true, origins: ['', 'golden'] }, [PLAIN]),
     ],
     /mem_p_plain[\s\S]*mem_p_plain/,
   ),
-  read('sharing.takenIds', (s) => s.sharing.takenIds(['mem_p_plain', 'mem_missing']), "[ 'mem_p_plain' ]"),
-  read('sharing.searchEntries', (s) => s.sharing.searchEntries('deploy', 50, TENANT), 'mem_p_plain'),
   read(
-    'sharing.recallEntries',
-    (s) => s.sharing.recallEntries('deploy', { limit: 50, tenantId: TENANT }),
+    'hippoDb.sharing.takenIds',
+    (s) => s.hippoDb.sharing.takenIds(['mem_p_plain', 'mem_missing']),
+    "[ 'mem_p_plain' ]",
+  ),
+  read('hippoDb.sharing.searchEntries', (s) => s.hippoDb.sharing.searchEntries('deploy', 50, TENANT), 'mem_p_plain'),
+  read(
+    'hippoDb.sharing.recallEntries',
+    (s) => s.hippoDb.sharing.recallEntries('deploy', { limit: 50, tenantId: TENANT }),
     'mem_p_plain',
   ),
 ];

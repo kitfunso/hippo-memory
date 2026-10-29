@@ -19,7 +19,7 @@ export type FullContext = ContextWith<OptionalGroup> & HippoDbContext & { readon
  * store as the ledger home when it keeps a ledger. */
 export function testReach(hippoRoot: string, store: HippoStore): ContextReach {
   const ledger = hasGroups(store, ['ledger', 'folderFiles'])
-    ? { ledger: store.ledger, folderFiles: store.folderFiles, config: loadConfig(hippoRoot) }
+    ? { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config: loadConfig(hippoRoot) }
     : undefined;
   return contextReach(sqliteReach({ hippoRoot, store }), loadConfig, resolveEmbeddingProvider, ledger);
 }

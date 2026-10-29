@@ -202,7 +202,7 @@ async function createGlobalStoreOnFirstRun<S extends RequiredStore>(
   const target = contextFor(root, tenantId).reach?.globalTarget;
   // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
   if (target === undefined) return root;
-  await target.store.folderFiles.ensure();
+  await target.store.hippoDb.folderFiles.ensure();
   log.warn(
     `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
   );

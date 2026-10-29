@@ -48,7 +48,7 @@ function sleepJob(
     sqliteReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
     loadConfig,
     infra.embedderFor,
-    { ledger: store.ledger, folderFiles: store.folderFiles, config },
+    { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config },
   );
   return sleepWholeStore(
     { tenantId: job.tenantId, actor: job.actor, store, reach, config, infra },

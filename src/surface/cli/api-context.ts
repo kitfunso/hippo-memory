@@ -152,7 +152,7 @@ function reachOn(
   store: CliStore,
   embedderFor: EmbedderFor,
 ): ContextReach {
-  const { ledger, folderFiles } = store;
+  const { ledger, folderFiles } = store.hippoDb;
   return contextReach(
     sqliteReach({
       hippoRoot,

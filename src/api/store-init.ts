@@ -6,5 +6,5 @@ import { requireHostAdmin, type ContextWith } from './types.js';
  * the host admin only. */
 export async function initMemoryStore(ctx: ContextWith<'folderFiles'>): Promise<void> {
   requireHostAdmin(ctx, 'Creating a store');
-  await ctx.store.folderFiles.ensure();
+  await ctx.store.hippoDb.folderFiles.ensure();
 }

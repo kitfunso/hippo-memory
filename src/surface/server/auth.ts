@@ -16,6 +16,7 @@ import { isJsonString } from '../../base/util/json.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { isLoopbackAddress } from '../../base/util/net.js';
 import { coreEnrichment } from '../../api/hippo-db-context.js';
+import { ledgerHomeOf } from '../../api/ledger-db.js';
 
 /** Kept under its old name because src/server.ts publishes it. */
 export const isLoopback = isLoopbackAddress;
@@ -105,7 +106,7 @@ type AuthOptions = Pick<
 
 type ContextOptions = AuthOptions &
   Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra'> &
-  Partial<Pick<ResolvedServeOptions, 'callers' | 'signal' | 'ledgerStore'>>;
+  Partial<Pick<ResolvedServeOptions, 'callers' | 'signal'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
 // `clinton@corp`.
@@ -382,19 +383,14 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   // The reader keys on the file's stamp, so each request still sees an edit made while the server
   // runs.
   const config = opts.configAt(opts.hippoRoot);
-  const { ledgerStore } = opts;
-  const ledger = ledgerStore && {
-    ledger: ledgerStore.ledger,
-    folderFiles: ledgerStore.folderFiles,
-    config,
-  };
+  const { store, signal } = opts;
+  const enrich = coreEnrichment(store);
   // Per request, never cached at serve: the global store can be created while the server runs.
   const infra = opts.infra();
+  const ledger = ledgerHomeOf(enrich, config);
   const reach = contextReach(opts.reachOf(team), opts.configAt, infra.embedderFor, ledger);
   const callers = opts.callers;
   const actor = bearerActor(id);
-  const { store, signal } = opts;
-  const enrich = coreEnrichment(store);
   return {
     tenantId: id.tenantId,
     actor,

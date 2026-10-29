@@ -25,13 +25,15 @@ export function hasHippoDb<S extends Context['store']>(store: S): store is S & H
  * the request's own store, so each call runs under that request's deadline and session. */
 export function coreEnrichment(store: Context['store']): CoreEnrichment | undefined {
   if (!hasHippoDb(store)) return undefined;
-  const { lastRecall, sessions, readiness, graphReads } = store.hippoDb;
-  return { lastRecall, handoff: sessions, readiness, graph: graphReads };
+  const { lastRecall, sessions, readiness, graphReads, ledger, folderFiles } = store.hippoDb;
+  return { lastRecall, handoff: sessions, readiness, graph: graphReads, ledger, folderFiles };
 }
 
 /** What a core path reads from the global store's local tier; unset on a store without one. */
 export function globalEnrichment(store: Context['store']): GlobalEnrichment | undefined {
-  return hasHippoDb(store) ? { graph: store.hippoDb.graphReads } : undefined;
+  if (!hasHippoDb(store)) return undefined;
+  const { graphReads, ledger, folderFiles } = store.hippoDb;
+  return { graph: graphReads, ledger, folderFiles };
 }
 
 /** A root's reach with the global store's config loaded beside it; `configAt` is the root's own

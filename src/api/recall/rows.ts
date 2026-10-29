@@ -64,7 +64,7 @@ export async function scopeHiddenCount(
   global: StoreWith<'sharing'> | undefined,
   requested: string | undefined,
 ): Promise<number> {
-  const probes = [ctx.store.sharing, global?.sharing].map(
+  const probes = [ctx.store.hippoDb.sharing, global?.hippoDb.sharing].map(
     async (sharing) => (await sharing?.searchEntries(query, undefined, ctx.tenantId)) ?? [],
   );
   const probe = (await Promise.all(probes)).flat();

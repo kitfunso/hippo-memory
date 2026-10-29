@@ -39,7 +39,7 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store
   // fails the whole promote.
   const globalEntry = globalCopyOf(
-    await ctx.store.folderFiles.home(),
+    await ctx.store.hippoDb.folderFiles.home(),
     entry,
     sharedStoreOf(ctx),
     ctx.infra.clock(),

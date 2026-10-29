@@ -13,7 +13,7 @@ import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { issueLocalKey, type LocalKey } from './local-key.js';
 import { KeyVerifier } from './api-key.js';
-import { hasGroup, hasGroups, type HippoStore, type StoreWith } from '../../base/ports/store.js';
+import { hasGroup, type HippoStore, type StoreWith } from '../../base/ports/store.js';
 import {
   sqliteServerRuntimeWithExitHook,
   tenantOfApiKey,
@@ -407,7 +407,6 @@ function servedOptsFor(
     keyVerifier: new KeyVerifier(),
     callers,
     callersFor: (storeFor) => callersOnRequest(callers, counted && storeFor(counted)),
-    ledgerStore: hasGroups(store, ['ledger', 'folderFiles']) ? store : undefined,
     infra: rootInfra(runtime.host),
     sleeps,
     counts,
@@ -457,7 +456,6 @@ function servedFor(
     reachOf: (shared) => runtime.reachOf(shared, limits, session),
     storeFor,
     callers: served.callersFor(storeFor),
-    ledgerStore: served.ledgerStore && storeFor(served.ledgerStore),
     signal: limits.signal,
   };
 }

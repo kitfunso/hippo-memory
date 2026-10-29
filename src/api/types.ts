@@ -2,13 +2,7 @@
 // error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
-import type {
-  FolderFiles,
-  GlobalGroup,
-  Ledger,
-  RequiredStore,
-  StoreReach,
-} from '../base/ports/store.js';
+import type { GlobalGroup, RequiredStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
 import type {
   GlobalTargetGroup,
@@ -18,7 +12,7 @@ import type {
 } from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
-import type { CoreEnrichment, GlobalEnrichment } from './enrichment.js';
+import type { CoreEnrichment, FolderHome, GlobalEnrichment, LedgerBook } from './enrichment.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { FailureNotices } from '../base/util/failure-notices.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
@@ -53,9 +47,9 @@ export interface GlobalInReach {
 
 /** A store a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */
 export interface LedgerHome {
-  readonly ledger: Ledger;
+  readonly ledger: LedgerBook;
   /** Where the store sits, which its delivery rows name by hash. */
-  readonly folderFiles: FolderFiles;
+  readonly folderFiles: FolderHome;
   readonly config: HippoConfig;
 }
 

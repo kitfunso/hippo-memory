@@ -23,14 +23,14 @@ export async function syncGlobalToLocal(
   global: { readonly store: SharingStore },
   opts: { includeCrossProject?: boolean; embed: EmbedRun },
 ): Promise<number> {
-  const home = await into.store.folderFiles.home();
+  const home = await into.store.hippoDb.folderFiles.home();
   if (home.shared) {
     throw new BadRequestError(
       `Refusing to sync into ${home.folder}: a shared store takes no copies of a personal global store, ` +
         `whose rows would reach every member.`,
     );
   }
-  if (!(await global.store.folderFiles.home()).exists) return 0;
+  if (!(await global.store.hippoDb.folderFiles.home()).exists) return 0;
 
   const rules = { project: home.project, includeCrossProject: opts.includeCrossProject };
   return copyMissingRows(into, global.store, rules, opts.embed);
@@ -122,7 +122,7 @@ async function copyMissingRows(
   rules: CopyRules,
   embed: EmbedRun,
 ) {
-  const candidates = await missingRows(into.store.sharing, from.sharing);
+  const candidates = await missingRows(into.store.hippoDb.sharing, from.hippoDb.sharing);
   if (candidates.length === 0) return 0;
   const byId = new Map<string, MemoryEntry>();
   const wanted = candidates.map((k) => k.id);

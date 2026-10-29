@@ -8,7 +8,7 @@ import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
 import type { BoundAddonRoute } from './route-table.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../../base/ports/store-index.js';
-import type { RequiredStore, StoreReach, StoreWith } from '../../base/ports/store.js';
+import type { RequiredStore, StoreReach } from '../../base/ports/store.js';
 import type { McpTools } from '../mcp/protocol.js';
 import type { LocalKey } from './local-key.js';
 import type { KeyVerifier } from './api-key.js';
@@ -153,8 +153,6 @@ export type ResolvedServeOptions = ServeOptions & {
   /** `callers` as one request reads them: the auto-sleep count runs on the request's own store,
    * which `storeFor` maps. */
   callersFor: (storeFor: <S extends HippoStore>(store: S) => S) => CallerState;
-  /** The served store as a ledger home, proved at boot; unset for a store that keeps no ledger. */
-  ledgerStore?: StoreWith<'ledger' | 'folderFiles'>;
   /** This server's outside services: one reranker registry for the server's life, the rest per
    * Context. */
   infra: () => InfraPorts;

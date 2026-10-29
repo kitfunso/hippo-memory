@@ -18,7 +18,7 @@ import { autoSleepDue } from './sleep/auto-sleep.js';
 import { newRowsOn } from './callers.js';
 import { snapshotFields, type WorkingState } from '../base/session/working-state.js';
 import type { Context, ContextWith } from './types.js';
-import type { Ledger } from '../base/ports/store.js';
+import type { LedgerBook } from './enrichment.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff
  * is written. */
@@ -103,10 +103,10 @@ async function closeSnapshot(
 }
 
 /** The caller's store and the global one, each once; a store that keeps no ledger is left out. */
-function rereadLedgers(ctx: Context): Ledger[] {
+function rereadLedgers(ctx: Context): LedgerBook[] {
   const local = ctx.reach?.hasLocal === false ? undefined : ctx.reach?.ledger?.ledger;
   // A call on the global store reaches it twice, as itself and as the global store beside it.
-  const global = ctx.reach?.isGlobal === true ? undefined : ctx.reach?.global?.store.ledger;
+  const global = ctx.reach?.isGlobal === true ? undefined : ctx.reach?.global?.enrich?.ledger;
   return [local, global].filter((ledger) => ledger !== undefined);
 }
 

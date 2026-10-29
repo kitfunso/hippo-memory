@@ -82,6 +82,9 @@ const LOCAL_GROUP_NAMES = [
   'dagReads',
   'graphReads',
   'graphRebuild',
+  'ledger',
+  'folderFiles',
+  'sharing',
 ] as const;
 
 export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];

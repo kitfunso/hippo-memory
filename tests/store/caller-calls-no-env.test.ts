@@ -93,7 +93,7 @@ describe('caller calls under a foreign environment', () => {
     const store = sqliteStore(root);
     const config = loadConfig(root);
     // As a server root sets it: the store keeps a ledger, so session-end re-reads book there.
-    const ledger = { ledger: store.ledger, folderFiles: store.folderFiles, config };
+    const ledger = { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config };
     const ctx: CallerContext = {
       store,
       config,
