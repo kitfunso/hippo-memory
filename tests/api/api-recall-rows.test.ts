@@ -255,6 +255,18 @@ describe('recallJsonRow and recallRerankerPick', () => {
     expect(why.reason).toBe('BM25: matched terms [deploy]');
   });
 
+  it('names every key in snake_case, the graph hop and the ranking steps included', async () => {
+    const top = (await rankDeploy()).results[0]!;
+    const r: SearchResult = {
+      ...top,
+      graphVia: { hops: 1, relType: 'supersedes', direction: 'from' },
+      rerankTrace: [{ stage: 'utility', scoreBefore: 1, scoreAfter: 0.9 }],
+    };
+    const row = recallJsonRow({ r, query: 'deploy', showWhy: true, isGlobal: false, now: evalNow() });
+    expect(Object.keys(row).filter((key) => /[A-Z]/.test(key))).toEqual([]);
+    expect(row).toMatchObject({ graph_via: r.graphVia, rerank_trace: r.rerankTrace });
+  });
+
   it('picks no reranker for a blank name and throws for an unknown one', () => {
     expect(recallRerankerPick({ infra: testInfra() }, '')).toBeNull();
     expect(() => recallRerankerPick({ infra: testInfra() }, 'no-such-reranker')).toThrow();
