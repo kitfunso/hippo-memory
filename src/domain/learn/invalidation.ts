@@ -100,7 +100,7 @@ export async function invalidateMatching(
       (entry) => entry !== null,
     );
     const { result, weakened } = weakenMatches(entries, target, options);
-    await store.lessonWrites.writeTogether(weakened);
+    await store.hippoDb.lessonWrites.writeTogether(weakened);
     return result;
   }
   const { tokens, tag } = mentionOf(target);
@@ -121,7 +121,7 @@ export async function invalidateMatching(
     after = page.next ?? undefined;
   } while (after);
   // One write for every page, so a failed invalidation weakens none of them.
-  await store.lessonWrites.writeTogether(weakened);
+  await store.hippoDb.lessonWrites.writeTogether(weakened);
   return result;
 }
 
@@ -143,7 +143,7 @@ export async function invalidateMatchingAmong(
     ids.flatMap((id) => fresh.get(id) ?? []),
     target,
   );
-  if (weakened.length > 0) await store.lessonWrites.writeTogether(weakened);
+  if (weakened.length > 0) await store.hippoDb.lessonWrites.writeTogether(weakened);
   const byId = new Map(weakened.map((entry) => [entry.id, entry]));
   for (let i = 0; i < live.length; i++) live[i] = byId.get(live[i].id) ?? live[i];
   return result;

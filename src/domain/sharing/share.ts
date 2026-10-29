@@ -379,7 +379,7 @@ async function sharePage(
   now: Date,
 ) {
   const copies = page.flatMap((entry) => toGlobalEntry(local, entry, true, now) ?? []);
-  const written = new Set(await to.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
+  const written = new Set(await to.hippoDb.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
   const shared = copies.filter((copy) => written.has(copy.id));
   return { shared, refused: copies.length - shared.length };
 }

@@ -8,7 +8,7 @@ import { CONSOLIDATION_EFFECTS } from './consolidation.js';
 import { CONTEXT_READS_EFFECTS, DAG_READS_EFFECTS } from './context-reads.js';
 import { DIAGNOSTICS_EFFECTS, READINESS_EFFECTS } from './diagnostics.js';
 import { DORMANT_EFFECTS } from './dormant.js';
-import { ENTRY_WRITES_EFFECTS, LESSON_WRITES_EFFECTS } from './entry-writes.js';
+import { ENTRY_WRITES_EFFECTS } from './entry-writes.js';
 import { FOLDER_FILES_EFFECTS } from './folder-files.js';
 import { GOALS_EFFECTS } from './goals.js';
 import { GRAPH_READS_EFFECTS, GRAPH_REBUILD_EFFECTS } from './graph.js';
@@ -52,7 +52,6 @@ export const STORE_EFFECTS = {
   graphReads: GRAPH_READS_EFFECTS,
   objects: OBJECTS_EFFECTS,
   readiness: READINESS_EFFECTS,
-  lessonWrites: LESSON_WRITES_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
   dormant: DORMANT_EFFECTS,

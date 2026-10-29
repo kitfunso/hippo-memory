@@ -31,7 +31,6 @@ import { sqliteLedger } from './ledger/ledger.js';
 import { sqliteFolderFiles } from './folder-files/folder-files.js';
 import { sqliteDagReads } from './graph/dag-reads.js';
 import { sqliteEntryWrites } from './entries/entry-writes.js';
-import { sqliteLessonWrites } from './learning/lesson-writes.js';
 import { finishRecall } from './recall/last-recall.js';
 import { sqliteGraphReads } from './graph/graph-reads.js';
 import { sqliteObjects } from './records/objects.js';
@@ -86,7 +85,6 @@ function sqliteLocalGroups(
     diagnostics: sqliteDiagnostics(on),
     graphRebuild: sqliteGraphRebuild(on),
     agentImport: sqliteAgentImport(handles),
-    lessonWrites: sqliteLessonWrites(handles),
     dormant: sqliteDormant(handles),
     compactions: sqliteCompactions(handles),
     failureLog: sqliteFailureLog(on),

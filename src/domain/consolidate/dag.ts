@@ -176,7 +176,7 @@ async function summarizeCluster(
   result.summariesCreated++;
 
   const linked = cluster.members.map((member) => ({ ...member, dagParentId: summaryEntry.id }));
-  await store.lessonWrites.writeTogether(linked);
+  await store.hippoDb.lessonWrites.writeTogether(linked);
   result.factsLinked += linked.length;
   await settleFreshSummary(store, summaryEntry, 'buildDag', 'buildDag-clean');
 }
@@ -450,7 +450,7 @@ async function profileCluster(
   result.profilesCreated++;
 
   const linked = cluster.members.map((member) => ({ ...member, dagParentId: profileEntry.id }));
-  await store.lessonWrites.writeTogether(linked);
+  await store.hippoDb.lessonWrites.writeTogether(linked);
   result.l2sLinked += linked.length;
   await settleFreshSummary(store, profileEntry, 'buildEntityProfiles', 'buildEntityProfiles-clean');
 }

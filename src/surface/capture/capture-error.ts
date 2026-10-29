@@ -102,7 +102,11 @@ export async function storeLesson(
   caller?: LessonCaller,
 ): Promise<'stored' | 'duplicate'> {
   const sig = failureSignature(text);
-  const held = await store.lessonWrites.contentsWithTag(tenantId, 'auto-captured', caller?.origins);
+  const held = await store.hippoDb.lessonWrites.contentsWithTag(
+    tenantId,
+    'auto-captured',
+    caller?.origins,
+  );
   if (held.some((content) => failureSignature(content) === sig)) return 'duplicate';
   const entry = createMemory(
     text,

@@ -282,7 +282,7 @@ async function openLessonBatch(
   opts: LearnOptions,
 ): Promise<OpenedLessonBatch> {
   const { profile } = opts;
-  const writes = ctx.store.lessonWrites;
+  const writes = ctx.store.hippoDb.lessonWrites;
   // One pass serves the batch: invalidation matches against `live`, which follows every write
   // below. Schema fit needs every readable row, and each lesson is scored against them as they were
   // before the batch.

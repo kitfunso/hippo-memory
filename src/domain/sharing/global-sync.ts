@@ -141,7 +141,7 @@ async function copyMissingRows(
   const written =
     copies.length === 0
       ? []
-      : await into.store.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
+      : await into.store.hippoDb.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
   finishSyncDown(into, written.length, copies.length - written.length, embed);
   return written.length;
 }

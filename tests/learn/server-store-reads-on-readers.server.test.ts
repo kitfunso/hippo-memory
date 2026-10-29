@@ -181,10 +181,10 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
       ),
     /'sem_/,
   ),
-  read('lessonWrites.textsHolding', (s) => s.lessonWrites.textsHolding(TENANT, [PLAIN], null), PLAIN),
+  read('hippoDb.lessonWrites.textsHolding', (s) => s.hippoDb.lessonWrites.textsHolding(TENANT, [PLAIN], null), PLAIN),
   read(
-    'lessonWrites.contentsWithTag',
-    (s) => s.lessonWrites.contentsWithTag(TENANT, 'goal-alpha', undefined),
+    'hippoDb.lessonWrites.contentsWithTag',
+    (s) => s.hippoDb.lessonWrites.contentsWithTag(TENANT, 'goal-alpha', undefined),
     'migrate the rollout scripts',
   ),
   read(
