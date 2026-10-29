@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import type { ConflictListQuery } from '../../src/base/ports/store/conflicts.js';
 import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';

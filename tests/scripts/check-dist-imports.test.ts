@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { checkDistImports, distImports } from '../../scripts/check-dist-imports.mjs';
+import { checkDistImports, distImports } from '../../scripts/checks/check-dist-imports.mjs';
 
 describe('distImports', () => {
   it('reads static, dynamic and distImport forms, skips erased types, and ignores code inside strings', () => {

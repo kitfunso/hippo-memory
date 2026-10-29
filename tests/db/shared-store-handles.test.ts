@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 let tmp: string;
 let root: string;

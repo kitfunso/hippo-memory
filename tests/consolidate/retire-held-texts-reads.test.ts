@@ -8,7 +8,7 @@ import { normalizeValueForRejection, rejectionDigest } from '../../src/base/reco
 import { mergedText } from '../../src/base/util/same-text.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
-import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';

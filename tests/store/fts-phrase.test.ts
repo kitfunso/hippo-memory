@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { ftsAnyPhrase, ftsPhrase } from '../../src/store/sqlite/fts-phrase.js';
+import { ftsAnyPhrase, ftsPhrase } from '../../src/store/sqlite/recall/fts-phrase.js';
 
 describe('ftsPhrase', () => {
   it('doubles each inner double quote and wraps the term', () => {

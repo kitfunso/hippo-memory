@@ -52,7 +52,7 @@ import { fileURLToPath } from 'node:url';
 import { createMemory, applyOutcome } from '../../dist/entry/memory.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { loadAllEntriesIn, writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
-import { storeFilesOf } from '../../dist/store/sqlite/handles.js';
+import { storeFilesOf } from '../../dist/store/sqlite/runtime/handles.js';
 import { withSharedStoreHandles } from '../../dist/db/index.js';
 import { hybridSearch } from '../../dist/entry/eval-scripts.js';
 import { outcomeMultiplier } from '../../dist/entry/eval-scripts.js';

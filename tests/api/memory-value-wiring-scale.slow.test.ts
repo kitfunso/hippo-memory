@@ -10,7 +10,7 @@ import { mulberry32 } from '../_helpers/property.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, loadSessionDecayContext, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { closeHippoDb, openHippoDb, withWriteScope } from '../../src/db/index.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {
   dir,

@@ -1,4 +1,4 @@
-// The entry filter's WHERE terms (sqlite/entry-filter.ts) keep the rows each field means, in order, over memories and
+// The entry filter's WHERE terms (sqlite/entries/entry-filter.ts) keep the rows each field means, in order, over memories and
 // dormant snapshots alike.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -8,7 +8,7 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { EntryFilter } from '../../src/base/ports/store/reports.js';
 import type { EntryCursor, EntryPage } from '../../src/base/ports/store/types.js';
-import { dormantSnapshotsWhere, insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
+import { dormantSnapshotsWhere, insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import {

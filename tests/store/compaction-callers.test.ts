@@ -9,7 +9,7 @@ import {
   saveItems,
   startCompaction,
   type ItemContext,
-} from '../../src/store/sqlite/compactions-record.js';
+} from '../../src/store/sqlite/capture/compactions-record.js';
 import { storeLesson } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { snapshotFields, WORKING_STATE_CAPS } from '../../src/base/session/working-state.js';
@@ -18,8 +18,8 @@ import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { bindSessionOwner, compactResumeForCaller } from '../../src/server.js';
 import type { ContextWith, EntryContext } from '../../src/api/types.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { handlesOf, storeFilesOf } from '../../src/store/sqlite/handles.js';
-import { sqliteCompactionHooks } from '../../src/store/sqlite/compaction-hooks.js';
+import { handlesOf, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { sqliteCompactionHooks } from '../../src/store/sqlite/capture/compaction-hooks.js';
 import {
   ALICE,
   BOB,

@@ -6,7 +6,7 @@ import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity
 import type { EmbeddingIndex } from '../../src/base/ports/store.js';
 import type { EmbeddingIndexState } from '../../src/base/ports/store/vectors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 

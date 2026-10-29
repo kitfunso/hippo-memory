@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OTHER_STORE_MARKER } from '../../src/db/open.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 import { OtherStoreFolderError } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initStore } from '../../src/store/sqlite/runtime/handles.js';
 
 let root: string;
 beforeEach(() => {

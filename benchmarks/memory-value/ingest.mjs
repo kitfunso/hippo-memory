@@ -48,7 +48,7 @@ import { fileURLToPath } from 'node:url';
 import { createMemory, computeSchemaFit } from '../../dist/entry/memory.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
-import { storeFilesOf } from '../../dist/store/sqlite/handles.js';
+import { storeFilesOf } from '../../dist/store/sqlite/runtime/handles.js';
 import { RequestStores } from '../../dist/db/index.js';
 import {
   parseLmeDate,

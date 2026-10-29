@@ -33,7 +33,7 @@ export function createPhysicsTable(db: DatabaseSyncLike): void {
   `);
 }
 
-// SAFETY: every read cast to this row selects PHYSICS_COLUMNS; scripts/check-row-casts.mjs proves
+// SAFETY: every read cast to this row selects PHYSICS_COLUMNS; scripts/checks/check-row-casts.mjs proves
 // it.
 interface PhysicsRow {
   memory_id: string;

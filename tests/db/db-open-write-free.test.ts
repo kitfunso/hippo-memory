@@ -10,7 +10,7 @@ import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { countMatching, recordStatements, STORE_OPEN } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initStore } from '../../src/store/sqlite/runtime/handles.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; this require + cast mirrors

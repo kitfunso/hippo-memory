@@ -1,5 +1,5 @@
 /**
- * Schema v50: the per-turn delivery ledger tables (src/store/sqlite/delivery-ledger.ts writes them).
+ * Schema v50: the per-turn delivery ledger tables (src/store/sqlite/ledger/delivery-ledger.ts writes them).
  */
 
 import { describe, it, expect } from 'vitest';

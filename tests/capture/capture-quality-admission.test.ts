@@ -11,10 +11,10 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { closeHippoDb } from '../../src/db/index.js';
-import { gatedWrite } from '../../src/store/sqlite/gated-write.js';
+import { gatedWrite } from '../../src/store/sqlite/capture/gated-write.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 

@@ -11,7 +11,7 @@ import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/base/memory/agent-memory-report.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
 import type { ToolId } from '../../src/base/memory/agent-memory-tools.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { DormantMemory } from '../../src/base/ports/store/dormant.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';

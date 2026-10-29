@@ -1,9 +1,9 @@
 // The store functions capture code calls with a folder and plain values: each opens its own handle on a real store.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
+import { summarizeFailures } from '../../src/store/sqlite/capture/failure-log.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { duplicateKey } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

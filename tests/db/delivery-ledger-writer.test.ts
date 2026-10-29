@@ -1,11 +1,11 @@
-// The delivery ledger writer (src/store/sqlite/delivery-ledger.ts) and the recorder's row building, on a real SQLite store.
+// The delivery ledger writer (src/store/sqlite/ledger/delivery-ledger.ts) and the recorder's row building, on a real SQLite store.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
   deliveryPruneSchedule,
   writeDeliveryEventOnHandle,
   writeDeliveryEventVia,
-} from '../../src/store/sqlite/delivery-ledger.js';
+} from '../../src/store/sqlite/ledger/delivery-ledger.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
@@ -22,7 +22,7 @@ import {
 } from '../_helpers/count-statements.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 // A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.

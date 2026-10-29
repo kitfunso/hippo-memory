@@ -4,14 +4,14 @@ import * as path from 'node:path';
 import { afterEach, vi } from 'vitest';
 import { apiCtx, type FullContext } from './api-ctx.js';
 import { makeRoot } from './make-root.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { adminActor } from '../../src/api/types.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { writeEntriesTogether } from './root-forms.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { removeDir } from './remove-dir.js';
 
 export const SIZES = [10, 200] as const;

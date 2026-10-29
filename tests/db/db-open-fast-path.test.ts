@@ -24,8 +24,8 @@ import { HEALED_INDEXES, HEALED_TABLES } from '../../src/db/continuity-tables.js
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 
 afterEach(() => {

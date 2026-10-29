@@ -20,7 +20,7 @@ import {
   resolveConflictKeeping,
   loadAllEntries,
 } from '../_helpers/root-forms.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import {
   ROW_READ,
   SIZES,

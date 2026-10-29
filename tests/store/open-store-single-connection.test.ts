@@ -9,8 +9,8 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAmbientCandidates, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { openStore } from '../../src/store/sqlite/runtime/handles.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db/db-open-write-free.test.ts.

@@ -2,7 +2,7 @@
 import { expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/delivery-ledger.js';
+import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/ledger/delivery-ledger.js';
 import type {
   DeliveryCandidateInput,
   DeliveryEventInput,
@@ -12,9 +12,9 @@ import type {
 import { blockHash } from '../../src/base/util/token-text.js';
 import { realpathOrResolve } from '../../src/host/real-path.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { seed, verdictOf, writeHostTranscript, type ReadOptions } from '../_helpers/host-transcript.js';
-import { type Project } from '../_helpers/delivery-boundary.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { seed, verdictOf, writeHostTranscript, type ReadOptions } from './host-transcript.js';
+import { type Project } from './delivery-boundary.js';
+import { makeRoot } from './make-root.js';
 
 export const SCRIPT = path.resolve(__dirname, '..', '..', 'scripts', 'z10-reconstruct.mjs');
 export const STAGES: DeliveryStage[] = ['load', 'eligible', 'gate', 'budget', 'limit', 'final'];

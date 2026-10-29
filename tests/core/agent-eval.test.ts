@@ -22,7 +22,7 @@ import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { markRetrieved } from '../../src/entry/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntriesIn, writeEntryIn } from '../../src/store/sqlite/fixtures.js';
-import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 

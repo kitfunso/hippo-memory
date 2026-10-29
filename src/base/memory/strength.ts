@@ -26,7 +26,7 @@ export interface StrengthModel {
   readonly recallStrengthens: boolean;
 }
 
-/** The model every production path scores with; strengthSql (src/store/sqlite/rule-sql.ts) reads
+/** The model every production path scores with; strengthSql (sqlite/runtime/rule-sql.ts) reads
  * the same fields. */
 export const PRODUCTION_STRENGTH: StrengthModel = Object.freeze({
   decayBase: 0.5,

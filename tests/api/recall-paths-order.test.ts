@@ -9,7 +9,7 @@ import { RECALL_RECORDING, type ShownHints } from '../../src/api/recall/finish.j
 import type { CliCoreRecall } from '../../src/api/recall/types.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { isJsonNumber } from '../../src/base/util/json.js';
 import { type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

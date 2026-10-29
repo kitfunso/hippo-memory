@@ -90,7 +90,7 @@ export interface MemoryEntry {
   /**
    * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known
    * (legacy or unnamed write), denied by ambient context. Stamped at write time by
-   * stampOriginProject (sqlite/entry-row.ts); undefined only before the first write. */
+   * stampOriginProject (sqlite/entries/entry-row.ts); undefined only before the first write. */
   originProject?: string | null;
 }
 

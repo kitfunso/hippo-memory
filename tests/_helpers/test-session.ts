@@ -1,9 +1,9 @@
 // The handle forms the root-keyed helpers open with: on the running test's session when its file holds one per test
 // (sessionPerTest), else on a handle of their own, so a helper call costs what one call in a CLI command costs.
 import type { DatabaseSyncLike, RequestStores } from '../../src/db/index.js';
-import { grantFor, type HandleOptions, type SqliteStoreOptions } from '../../src/store/sqlite/grant.js';
-import * as handles from '../../src/store/sqlite/handles.js';
-import { type HandleOpener, type Handles, readWrite, type StoreFiles } from '../../src/store/sqlite/open.js';
+import { grantFor, type HandleOptions, type SqliteStoreOptions } from '../../src/store/sqlite/runtime/grant.js';
+import * as handles from '../../src/store/sqlite/runtime/handles.js';
+import { type HandleOpener, type Handles, readWrite, type StoreFiles } from '../../src/store/sqlite/runtime/open.js';
 import { sqliteStore as storeAt } from '../../src/store/sqlite/store.js';
 
 const held: (() => RequestStores)[] = [];

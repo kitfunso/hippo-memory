@@ -5,7 +5,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { storedTextKeys } from '../../src/base/util/same-text.js';
@@ -22,7 +22,7 @@ import {
 import { removeDir } from '../_helpers/remove-dir.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 let root: string;
 

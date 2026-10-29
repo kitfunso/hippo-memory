@@ -1,11 +1,11 @@
-import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serializeEntry, deserializeEntry } from '../../src/base/memory/markdown.js';
-import { stampOriginProject } from '../../src/store/sqlite/entry-row.js';
+import { stampOriginProject } from '../../src/store/sqlite/entries/entry-row.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';

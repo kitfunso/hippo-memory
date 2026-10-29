@@ -5,7 +5,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { computeAmbientState } from '../../src/base/memory/ambient.js';
 import { apiCtx, onSession } from '../_helpers/api-ctx.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';

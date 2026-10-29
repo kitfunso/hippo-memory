@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const REPO = process.cwd();
-const SCRIPT = path.join(REPO, 'scripts', 'check-tests-pass.mjs');
+const SCRIPT = path.join(REPO, 'scripts', 'checks', 'check-tests-pass.mjs');
 const FIXTURES = path.join(REPO, 'tests', 'fixtures', 'prepublish-gate');
 
 function runGate(fixture: string, env: Record<string, string | undefined> = {}, extraArgs: string[] = []) {
@@ -16,7 +16,7 @@ function runGate(fixture: string, env: Record<string, string | undefined> = {}, 
   return { status: r.status, stderr: r.stderr, stdout: r.stdout };
 }
 
-describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
+describe('prepublish test gate (scripts/checks/check-tests-pass.mjs)', () => {
   test('exits 0 when the suite passes', () => {
     const r = runGate('passing');
     expect(r.status, r.stderr).toBe(0);
@@ -88,14 +88,14 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     const pkg = JSON.parse(readFileSync(path.join(REPO, 'package.json'), 'utf-8'));
     const chain: string = pkg.scripts.prepublishOnly;
     for (const step of [
-      'node scripts/check-manifest-versions.mjs',
-      'node scripts/check-em-dashes-in-release-notes.mjs',
-      'node scripts/check-graph-writes.mjs',
+      'node scripts/checks/check-manifest-versions.mjs',
+      'node scripts/checks/check-em-dashes-in-release-notes.mjs',
+      'node scripts/checks/check-graph-writes.mjs',
       'npm run build:all',
     ]) {
       expect(chain).toContain(step);
     }
-    expect(chain.endsWith('&& node scripts/check-tests-pass.mjs')).toBe(true);
+    expect(chain.endsWith('&& node scripts/checks/check-tests-pass.mjs')).toBe(true);
   });
 });
 

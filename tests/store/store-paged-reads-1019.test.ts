@@ -5,10 +5,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
-import { syncMirrorFiles } from '../../src/store/sqlite/mirrors.js';
-import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
+import { syncMirrorFiles } from '../../src/store/sqlite/folder-files/mirrors.js';
+import { writeRecallTrace } from '../../src/store/sqlite/recall/recall-trace.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 

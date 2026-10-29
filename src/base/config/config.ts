@@ -117,7 +117,7 @@ export interface HippoConfig {
   memoryValue: {
     enabled: boolean;
   };
-  /** Dormant memories (sqlite/dormant.ts), on by default: the sleep decay pass moves a memory
+  /** Dormant memories (sqlite/dormant/dormant.ts), on by default: the sleep decay pass moves a memory
    * that faded below the threshold there instead of deleting it (`hippo dormant restore|forget
    * <id>`); a faded memory the secret detector flags is always deleted. `{"enabled": false}`
    * restores delete-on-fade. */
@@ -137,8 +137,8 @@ export interface HippoConfig {
   agentMemories: {
     tools: string[] | null;
   };
-  /** Per-turn delivery ledger (src/store/sqlite/delivery-ledger.ts): hashes, ids, counts and rejection reasons for each
-   *  pinned-only context call. Default off; read from the store the token ledger writes to. */
+  /** Per-turn delivery ledger (src/store/sqlite/ledger/delivery-ledger.ts): hashes, ids, counts and rejection reasons
+   *  for each pinned-only context call. Default off; read from the store the token ledger writes to. */
   deliveryLedger: {
     enabled: boolean;
   };

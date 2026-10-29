@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
-import { findRowCasts, selectNames } from '../../scripts/check-row-casts.mjs';
+import { findRowCasts, selectNames } from '../../scripts/checks/check-row-casts.mjs';
 
 // The check reads property lists and receiver names, so a small lib keeps the compile inside the unit budget.
 const MINIMAL_LIB = [

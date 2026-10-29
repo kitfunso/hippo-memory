@@ -5,7 +5,7 @@ import { afterAll } from 'vitest';
 import { initTestStore } from './store-template.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 
 export interface MakeRootOptions {
   /** Written to `<root>/config.json`, where the store reads its config. */

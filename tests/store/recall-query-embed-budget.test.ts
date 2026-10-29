@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vectors/vector-index.js';
 import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
@@ -20,7 +20,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 

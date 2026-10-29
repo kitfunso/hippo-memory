@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { copyFileSync } from 'node:fs';
 import { contextGet } from '../../src/api/index.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';

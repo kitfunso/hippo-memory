@@ -8,7 +8,7 @@ import { getCurrentSchemaVersion, repairFtsDrift } from '../../src/db/migrate.js
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 // SAFETY: node:sqlite has no bundled types; the spy only needs prepare's SQL argument.

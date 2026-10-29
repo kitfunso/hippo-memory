@@ -53,7 +53,7 @@ export interface CorrectionLink {
 }
 
 /** Which memories a filtered read keeps, as data: hippo.db compiles it to a WHERE
- * (sqlite/entry-filter.ts). Each field that is set narrows the rows. */
+ * (sqlite/entries/entry-filter.ts). Each field that is set narrows the rows. */
 export interface EntryFilter {
   /** One tenant's rows, or every tenant's under ALL_TENANTS. */
   readonly tenantId: TenantId;

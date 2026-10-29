@@ -1,6 +1,6 @@
 // In-memory observer for one call (a context call, a compaction boundary or a session end): what
 // was considered, why each was rejected, what reached stdout. No DB access (the caller hands
-// build()'s output to src/store/sqlite/delivery-ledger.ts); hashes, ids, counts and enums only, never
+// build()'s output to src/store/sqlite/ledger/delivery-ledger.ts); hashes, ids, counts and enums only, never
 // text. The observer state is delivery-observation.ts; the event row it builds is delivery-event.ts.
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { PromptRecallGate } from '../base/rank/prompt-recall.js';

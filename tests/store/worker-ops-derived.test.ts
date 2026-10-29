@@ -1,7 +1,7 @@
 // WORKER_OPS comes from the effect tables beside the port's signatures, and names exactly what hippo.db's store sets.
 import { describe, expect, it } from 'vitest';
 import { STORE_EFFECTS } from '../../src/base/ports/store.js';
-import { WORKER_OPS } from '../../src/store/sqlite/worker-ops.js';
+import { WORKER_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

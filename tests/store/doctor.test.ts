@@ -14,7 +14,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { runDoctor, formatDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import type { SpoolFs } from '../../src/infra/spool-files.js';
-import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
+import { startCompaction } from '../../src/store/sqlite/capture/compactions-record.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import {
