@@ -25,7 +25,7 @@ const ON_WRITER: Placement = {
   // A snapshot load rewrites the active-task mirror file.
   'hippoDb.sessions': ['loadSnapshot'],
   // A session's lock token and staged vectors sit on the thread that opened it.
-  embeddingIndex: ['open'],
+  'hippoDb.embeddingIndex': ['open'],
 };
 
 type Placement = { readonly [G in keyof StoreEffects]?: readonly (keyof StoreEffects[G])[] } & {

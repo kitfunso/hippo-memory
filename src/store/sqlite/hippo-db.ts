@@ -1,5 +1,7 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import { sqliteEmbeddingIndex } from './vectors/embedding-index.js';
+import { EMBEDDING_INDEX_EFFECTS } from '../../base/ports/store/vectors.js';
 import { sqliteGoals } from './sessions/goals.js';
 import { GOALS_EFFECTS } from '../../base/ports/store/goals.js';
 import { sqliteCards } from './records/cards.js';
@@ -101,6 +103,7 @@ export function hippoDbRepos(handles: Handles) {
     objects: sqliteObjects(handles),
     cards: sqliteCards(handles.on),
     goals: sqliteGoals(handles.on),
+    embeddingIndex: sqliteEmbeddingIndex(handles),
   };
 }
 
@@ -149,4 +152,5 @@ export const HIPPO_DB_EFFECTS = {
   objects: OBJECTS_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
+  embeddingIndex: EMBEDDING_INDEX_EFFECTS,
 } as const satisfies { readonly [R in keyof HippoDbRepos]: MethodEffects<HippoDbRepos[R]> };

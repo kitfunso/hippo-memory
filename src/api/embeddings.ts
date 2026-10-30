@@ -47,5 +47,5 @@ export async function storedVectorCount(ctx: ContextWith<'embeddingIndex'>): Pro
 /** Memories against vectors, counted in the store, for the embed status and backfill lines. */
 export async function embedCoverage(ctx: ContextWith<'embeddingIndex'>): Promise<VectorCoverage> {
   requireHostAdmin(ctx, 'Reading the vector index');
-  return indexStep(ctx.store.embeddingIndex, { kind: 'coverage' });
+  return indexStep(ctx.store.hippoDb.embeddingIndex, { kind: 'coverage' });
 }

@@ -21,11 +21,11 @@ afterEach(async () => {
 });
 
 const KINDS = {
-  'in process': (root: string): EmbeddingIndex => sqliteStore(root).embeddingIndex,
+  'in process': (root: string): EmbeddingIndex => sqliteStore(root).hippoDb.embeddingIndex,
   'on the store worker': (root: string): EmbeddingIndex => {
     const store = workerSqliteStore(root);
     closing.push(() => store.close());
-    return store.embeddingIndex;
+    return store.hippoDb.embeddingIndex;
   },
 } as const;
 type Kind = keyof typeof KINDS;
@@ -41,7 +41,7 @@ async function seeded(): Promise<Seeded> {
   const entries = ['alpha', 'beta', 'gamma'].map((t) => createMemory(`index handle ${t}`));
   writeEntriesTogether(root, entries);
   const ids = [entries[0]!.id, entries[1]!.id, entries[2]!.id] as const;
-  const index = sqliteStore(root).embeddingIndex;
+  const index = sqliteStore(root).hippoDb.embeddingIndex;
   const { id } = await index.open();
   await index.step(id, {
     kind: 'save',

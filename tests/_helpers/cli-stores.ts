@@ -48,7 +48,7 @@ export function compactionFolder(root: string, tenantId = 'default'): Compaction
 /** hippo.db's own vector index under `root`, as embedMemory and embedAll take it. */
 export function localIndex(root: string): EmbedTarget {
   return {
-    embeddingIndex: storeAt(root).embeddingIndex,
+    embeddingIndex: storeAt(root).hippoDb.embeddingIndex,
     rows: storeAt(root),
     embeddings: loadConfig(root).embeddings,
     embedderFor: resolveEmbeddingProvider,

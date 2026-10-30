@@ -12,7 +12,7 @@ import {
   requireGroup,
   sqliteStore,
   type HippoStore,
-  type StoreGroups,
+  type Goals,
   type VectorWrites,
 } from '../../dist/entry/store-kit.js';
 import { graphExpandRecall, hybridSearch } from '../../dist/entry/search.js';
@@ -38,7 +38,7 @@ declare const consolidation: SleepStore['hippoDb']['consolidation'];
 declare const req: Parameters<typeof captureSessionTexts>[1];
 declare const end: Omit<Parameters<typeof sessionEndHandoffForCaller>[1], 'sessionId'>;
 declare const base: HippoStore;
-declare const embeddingIndex: StoreGroups['embeddingIndex'];
+declare const goals: Goals;
 
 describe('UPGRADING-3.0 advice', () => {
   it('narrows the store and hands the entry a Context built around it (narrowStore, Context.store, session entries)', () => {
@@ -105,13 +105,13 @@ describe('UPGRADING-3.0 advice', () => {
     expectTypeOf<VectorWrites['indexKey']>().toEqualTypeOf<() => Promise<string>>();
   });
 
-  it('names the optional groups a store literal sets in its type (HippoStore)', () => {
+  it('sets the required groups alone on a store literal typed HippoStore (HippoStore)', () => {
     typeOnly(() => {
-      const store: HippoStore & Pick<StoreGroups, 'embeddingIndex'> = { ...base, embeddingIndex };
-      // @ts-expect-error HippoStore names no optional group, so a literal typed HippoStore may not set one
-      const refused: HippoStore = { ...base, embeddingIndex };
-      expectTypeOf(store).toHaveProperty('embeddingIndex');
-      expectTypeOf(refused).not.toHaveProperty('embeddingIndex');
+      const store: HippoStore = { ...base };
+      // @ts-expect-error HippoStore names no group of hippo.db's local tier, so a literal typed HippoStore may not set one
+      const refused: HippoStore = { ...base, goals };
+      expectTypeOf(store).not.toHaveProperty('goals');
+      expectTypeOf(refused).not.toHaveProperty('goals');
     });
   });
 

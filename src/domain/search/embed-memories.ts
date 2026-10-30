@@ -33,12 +33,13 @@ export interface EmbedWith {
  * the failures its embeds already warned about. */
 export type EmbedRun = Pick<InfraPorts, 'evalSwitches' | 'clock' | 'failureNotices'>;
 
-/** The store's own index when it keeps one, else its vector groups. */
+/** The store's own index when its tier keeps one, else its vector groups. */
 export function folderEmbedTarget(
   { store, config, embedderFor }: ConfiguredFolder<EmbedStore>,
   { failureNotices }: Pick<InfraPorts, 'failureNotices'>,
 ): EmbedTarget {
-  const { embeddingIndex, vectors, vectorWrites } = store;
+  const { vectors, vectorWrites } = store;
+  const embeddingIndex = store.hippoDb?.embeddingIndex;
   const { embeddings } = config;
   if (embeddingIndex !== undefined) {
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
@@ -48,7 +49,7 @@ export function folderEmbedTarget(
   return { groups, embeddings, embedderFor, failureNotices };
 }
 
-/** A store an embed reaches: its own index when it keeps one, else its vector groups. */
+/** A store an embed reaches: its own index when its tier keeps one, else its vector groups. */
 export type EmbedStore = StoreWith<never, 'embeddingIndex'>;
 
 /** What embedding one memory and every memory does on a target: the folder index under its lock, or

@@ -98,7 +98,7 @@ export async function vectorSummary(
   ctx: ContextWith<'embeddingIndex'>,
 ): Promise<StoredVectorSummary> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return indexStep(ctx.store.embeddingIndex, { kind: 'summary' });
+  return indexStep(ctx.store.hippoDb.embeddingIndex, { kind: 'summary' });
 }
 
 /**
@@ -110,7 +110,7 @@ export async function embeddingReindexNeeded(
   providerId: string,
 ): Promise<boolean> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return indexStep(ctx.store.embeddingIndex, { kind: 'reindex', providerId });
+  return indexStep(ctx.store.hippoDb.embeddingIndex, { kind: 'reindex', providerId });
 }
 
 /** Every correction link, one keyset page per store call. */

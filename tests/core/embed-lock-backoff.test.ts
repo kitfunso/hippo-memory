@@ -32,7 +32,7 @@ describe('embedAll waiting on a held embedding index lock', () => {
     const root = makeRoot('embed-lock-backoff');
     const held = takeFileLock(join(root, 'embeddings.lock.db'));
     expect(held.kind).toBe('taken');
-    const index = storeAt(root).embeddingIndex;
+    const index = storeAt(root).hippoDb.embeddingIndex;
     vi.useFakeTimers({ now: Date.parse('2026-01-15T00:00:00.000Z') });
     const startedAt = Date.now();
     const asked: number[] = [];

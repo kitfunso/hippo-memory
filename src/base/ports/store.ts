@@ -98,6 +98,7 @@ const LOCAL_GROUP_NAMES = [
   'objects',
   'cards',
   'goals',
+  'embeddingIndex',
 ] as const;
 
 export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];
@@ -293,7 +294,8 @@ export type StoreWith<G extends OptionalGroup, F extends OptionalGroup = never> 
 type TierWith<G extends LocalGroup, F extends LocalGroup> = ([G] extends [never]
   ? unknown
   : { readonly hippoDb: Pick<LocalGroups, G> }) &
-  ([F] extends [never] ? unknown : { readonly hippoDb?: Partial<Pick<LocalGroups, F>> });
+  // `& object` keeps the maybe-tier from being a weak type, so a tier of only other groups meets it.
+  ([F] extends [never] ? unknown : { readonly hippoDb?: Partial<Pick<LocalGroups, F>> & object });
 
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-blocked.js';
 

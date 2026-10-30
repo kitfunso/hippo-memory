@@ -14,7 +14,6 @@ import { listEntriesWhere } from './entries/entry-filter.js';
 import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
-import { sqliteEmbeddingIndex } from './vectors/embedding-index.js';
 import { sqliteEntryWrites } from './entries/entry-writes.js';
 import { finishRecall } from './recall/last-recall.js';
 import { sqliteVectorReads } from './vectors/vector-reads.js';
@@ -31,9 +30,7 @@ import type {
   BaseMethods,
   ContextReads,
   ContinuityBlock,
-  FolderGroups,
   HippoStore,
-  LocalGroup,
   LocalGroups,
   StoreReach,
   VectorWrites,
@@ -65,16 +62,7 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
     contextReads: sqliteContextReads(handles),
     auditLog: sqliteAuditLog(on),
     vectors: sqliteVectorReads(handles),
-    ...sqliteFolderGroups(handles),
     close: () => answered(() => files.runtime?.held.flush(files.hippoRoot)),
-  };
-}
-
-/** The groups only a store kept as files in a folder serves: its ledger, own index, promote
- * copies and sharing. */
-function sqliteFolderGroups(handles: Handles): Omit<FolderGroups, LocalGroup> {
-  return {
-    embeddingIndex: sqliteEmbeddingIndex(handles),
   };
 }
 

@@ -21,8 +21,8 @@ describe('WORKER_OPS', () => {
         if (place !== effect) moved.push(`${group}.${method}: ${effect} -> ${place}`);
       }
     }
-    // The adapter's own placements, each with its reason in worker-ops.ts.
-    expect(moved.sort()).toEqual(['embeddingIndex.open: read -> write', 'vectors.nearestEntries: read -> pinned-read']);
+    // The adapter's own placement, with its reason in worker-ops.ts.
+    expect(moved).toEqual(['vectors.nearestEntries: read -> pinned-read']);
   });
 
   it("names, group by group, exactly the methods hippo.db's store sets", () => {
@@ -44,7 +44,10 @@ describe('WORKER_OPS', () => {
         .filter(([method, effect]) => places.get(method) !== effect)
         .map(([method, effect]) => `hippoDb.${repo}.${method}: ${effect} -> ${places.get(method)}`);
     });
-    // The adapter's own placement, with its reason in worker-ops.ts.
-    expect(moved).toEqual(['hippoDb.sessions.loadSnapshot: read -> write']);
+    // The adapter's own placements, each with its reason in worker-ops.ts.
+    expect(moved.sort()).toEqual([
+      'hippoDb.embeddingIndex.open: read -> write',
+      'hippoDb.sessions.loadSnapshot: read -> write',
+    ]);
   });
 });
