@@ -7,6 +7,7 @@ import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { strengthOf, type Context, type ContextWith } from '../types.js';
 import { withDetached } from '../detached.js';
+import type { SleepCount } from '../enrichment.js';
 
 /**
  * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes
@@ -24,13 +25,13 @@ export interface AutoSleepDue {
 
 /** Counts only when enabled: the count reads the store. */
 export async function autoSleepDue(
-  newSince: (tenantId: string, now: Date) => Promise<number>,
+  counted: SleepCount,
   tenantId: string,
   config: HippoConfig['autoSleep'],
   now: Date,
 ): Promise<AutoSleepDue> {
   const { enabled, threshold } = config;
-  const count = enabled ? await newSince(tenantId, now) : 0;
+  const count = enabled ? await counted.createdSinceLastSleep(tenantId, now) : 0;
   return { enabled, count, threshold, due: enabled && count >= threshold };
 }
 
@@ -40,17 +41,20 @@ export async function autoSleepDue(
  * follows has landed.
  */
 export async function autoSleepAfterWrite(
-  ctx: Pick<Context, 'tenantId' | 'config' | 'callers' | 'infra' | 'detached'>,
+  ctx: Pick<Context, 'tenantId' | 'config' | 'callers' | 'infra' | 'detached' | 'enrich'>,
 ): Promise<void> {
   const host = ctx.callers?.autoSleep;
+  // The count runs on the request's own store, through its local tier.
+  const counted = ctx.enrich?.sleepCount;
   const { tenantId, config } = ctx;
-  if (host === undefined || !config.autoSleep.enabled || tenantId !== host.hostTenantId) return;
+  if (host === undefined || counted === undefined) return;
+  if (!config.autoSleep.enabled || tenantId !== host.hostTenantId) return;
   if (host.latch.held) return;
   // Held from the count on, so two writes landing together never both start a sleep.
   host.latch.held = true;
   let due = false;
   try {
-    due = (await autoSleepDue(host.newSince, tenantId, config.autoSleep, ctx.infra.clock())).due;
+    due = (await autoSleepDue(counted, tenantId, config.autoSleep, ctx.infra.clock())).due;
   } catch (err) {
     log.warn(
       `auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`,

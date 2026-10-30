@@ -55,6 +55,11 @@ export interface FolderHome {
   home(): Promise<StoreHome>;
 }
 
+/** The rows a tenant wrote since the store's last sleep, which a write's auto-sleep counts. */
+export interface SleepCount {
+  createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
+}
+
 /** Filled by a root from the request's own store, so each call runs under that request. */
 export interface CoreEnrichment {
   readonly lastRecall?: LastRecallFinish;
@@ -65,6 +70,8 @@ export interface CoreEnrichment {
   /** The token and delivery ledger the prompt hook and session hooks book to. */
   readonly ledger?: LedgerBook;
   readonly folderFiles?: FolderHome;
+  /** Unset, a write starts no auto-sleep. */
+  readonly sleepCount?: SleepCount;
 }
 
 /** What a core path reads from the operator's global store's local tier, filled by the root that

@@ -13,7 +13,7 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpContext, McpHost } from '../mcp/protocol.js';
 import { allMcpTools } from '../mcp/request.js';
 import type { ImportFiles } from '../importers/core.js';
-import type { OptionalGroup, StoreWith } from '../../base/ports/store.js';
+import type { OptionalGroup } from '../../base/ports/store.js';
 import {
   askingNearestFirst,
   sqliteImportFiles,
@@ -36,12 +36,7 @@ import {
 } from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
-import {
-  createCallerState,
-  newRowsOn,
-  type AutoSleepHost,
-  type CallerState,
-} from '../../api/callers.js';
+import { createCallerState, type AutoSleepHost, type CallerState } from '../../api/callers.js';
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
@@ -274,13 +269,13 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
   // The rings span the loop; each folder keeps an auto-sleep and its latch, as a write's context
   // names no folder, and each frame counts on its own store.
   const byRoot = new Map<string, Pick<AutoSleepHost, 'run' | 'latch'>>();
-  const callersOn = (root: string, store: StoreWith<'reports'>): CallerState => {
+  const callersOn = (root: string): CallerState => {
     let sleeps = byRoot.get(root);
     if (sleeps === undefined) {
       sleeps = { run: rootAutoSleep(runtime, root, hostTenantId), latch: { held: false } };
       byRoot.set(root, sleeps);
     }
-    return { ...shared, autoSleep: { ...sleeps, hostTenantId, newSince: newRowsOn(store) } };
+    return { ...shared, autoSleep: { ...sleeps, hostTenantId } };
   };
   const contextIn =
     (session: RequestStores, signal: AbortSignal) =>
@@ -300,7 +295,7 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
         tools,
         config: cliConfig(hippoRoot),
         reach: reachOn(scope, hippoRoot, store, infra.embedderFor),
-        callers: callersOn(hippoRoot, store),
+        callers: callersOn(hippoRoot),
         infra,
         signal,
         detached: runtime,

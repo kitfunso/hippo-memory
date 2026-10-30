@@ -15,7 +15,6 @@ import {
   compactResumeText,
 } from './context/context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
-import { newRowsOn } from './callers.js';
 import { snapshotFields, type WorkingState } from '../base/session/working-state.js';
 import type { Context, ContextWith } from './types.js';
 import type { LedgerBook } from './enrichment.js';
@@ -278,7 +277,7 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
   const prefix = `turn close, session ${w.sessionId}`;
   try {
     const { enabled, count, threshold, due } = await autoSleepDue(
-      newRowsOn(ctx.store),
+      ctx.store.hippoDb.reports,
       ctx.tenantId,
       ctx.config.autoSleep,
       ctx.infra.clock(),

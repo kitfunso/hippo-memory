@@ -150,9 +150,6 @@ export type ResolvedServeOptions = ServeOptions & {
   keyVerifier: KeyVerifier;
   /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
-  /** `callers` as one request reads them: the auto-sleep count runs on the request's own store,
-   * which `storeFor` maps. */
-  callersFor: (storeFor: <S extends HippoStore>(store: S) => S) => CallerState;
   /** This server's outside services: one reranker registry for the server's life, the rest per
    * Context. */
   infra: () => InfraPorts;

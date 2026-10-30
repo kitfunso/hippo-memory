@@ -5,7 +5,7 @@ import type { HippoConfig } from '../base/config/config.js';
 import type { EmbedderFor } from '../base/ports/embedder.js';
 import type { StoreReach } from '../base/ports/store.js';
 import type { Context, ContextReach, LedgerHome } from './types.js';
-import type { CoreEnrichment, GlobalEnrichment } from './enrichment.js';
+import type { CoreEnrichment, GlobalEnrichment, SleepCount } from './enrichment.js';
 
 export type { HippoDbStore, HippoDbTier } from '../store/sqlite/hippo-db.js';
 
@@ -25,8 +25,21 @@ export function hasHippoDb<S extends Context['store']>(store: S): store is S & H
  * the request's own store, so each call runs under that request's deadline and session. */
 export function coreEnrichment(store: Context['store']): CoreEnrichment | undefined {
   if (!hasHippoDb(store)) return undefined;
-  const { lastRecall, sessions, readiness, graphReads, ledger, folderFiles } = store.hippoDb;
-  return { lastRecall, handoff: sessions, readiness, graph: graphReads, ledger, folderFiles };
+  const { hippoDb } = store;
+  const { lastRecall, sessions, readiness, graphReads, ledger, folderFiles } = hippoDb;
+  // Read at the count, so a call that writes nothing never touches the reports group.
+  const sleepCount: SleepCount = {
+    createdSinceLastSleep: (tenantId, now) => hippoDb.reports.createdSinceLastSleep(tenantId, now),
+  };
+  return {
+    lastRecall,
+    handoff: sessions,
+    readiness,
+    graph: graphReads,
+    ledger,
+    folderFiles,
+    sleepCount,
+  };
 }
 
 /** What a core path reads from the global store's local tier; unset on a store without one. */
