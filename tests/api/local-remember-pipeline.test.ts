@@ -196,18 +196,15 @@ describe('rememberLocally starts the embedding', () => {
     await embeddings.close();
   });
 
-  // The embedding is never awaited by the write, so the test waits for the local server's round trip on a busy box.
-  it('leaves a vector for the stored row, and none for a skipped write', async () => {
+  // A context with no keeper of its own makes the write wait for its embed.
+  it('leaves a vector for the stored row before it returns, and none for a skipped write', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
     const ctx = store({
       ...SALIENCE_ON,
       embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url },
     });
     const entry = storedRow(await rememberLocally(ctx, { content: TEXT, tags: [] }));
-    await vi.waitFor(() => expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]), {
-      timeout: 20_000,
-      interval: 50,
-    });
+    expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]);
     const asked = embeddings.requests();
     expect((await rememberLocally(ctx, { content: TEXT, tags: [] })).status).toBe('skipped');
     expect(embeddings.requests()).toBe(asked);

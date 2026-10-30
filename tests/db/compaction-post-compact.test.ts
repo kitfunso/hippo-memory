@@ -20,7 +20,7 @@ import {
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 let s: Scratch;
 let logFile: string;
@@ -381,7 +381,9 @@ describe('the global store fallback', () => {
     fs.mkdirSync(path.join(other, '.git'), { recursive: true });
     const otherRoot = path.join(other, '.hippo');
     initTestStore(otherRoot);
-    expect(await syncGlobalToLocal(...sharingStores(otherRoot, s.globalRoot), { embed: TEST_RUN })).toBe(0);
+    expect(
+      await syncGlobalToLocal(...sharingStores(otherRoot, s.globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
+    ).toBe(0);
   });
 
   it('a folder with no project marker gives user-global rows', async () => {

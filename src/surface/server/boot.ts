@@ -33,6 +33,7 @@ import { createCallerState, newRowsOn, type CallerState } from '../../api/caller
 import { coreEnrichment } from '../../api/hippo-db-context.js';
 import {
   DEFAULT_SHUTDOWN_DRAIN_MS,
+  DETACHED_SETTLE_MS,
   drainAndClose,
   setKeepAliveTimeouts,
   shutdownBoundMs,
@@ -329,7 +330,7 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     // An auto-sleep answers no request, so draining skips it; its child must leave the store before
     // the store closes.
     await served.sleeps.settled();
-    await runtime.close();
+    await runtime.close(DETACHED_SETTLE_MS);
   };
 
   if (opts.handleSignals) {
@@ -408,6 +409,7 @@ function servedOptsFor(
     callers,
     callersFor: (storeFor) => callersOnRequest(callers, counted && storeFor(counted)),
     infra: rootInfra(runtime.host),
+    detached: runtime.detached,
     sleeps,
     counts,
   };

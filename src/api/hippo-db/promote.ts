@@ -10,6 +10,7 @@ import { generateId, type MemoryEntry } from '../../base/memory/entry.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
+import { withDetached } from '../detached.js';
 import { sharedStoreOf, type ContextWith } from '../types.js';
 import { canReadScope, isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
 
@@ -50,7 +51,9 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
   // A promote may create the global store, which only the write target names before it exists.
-  embedMemoryDetached(folderEmbedTarget(target, ctx.infra), globalEntry);
+  await withDetached(ctx, (detached) =>
+    embedMemoryDetached(folderEmbedTarget(target, ctx.infra), globalEntry, detached),
+  );
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 

@@ -10,6 +10,7 @@ import { embedMemoryDetached, type EmbedTarget } from '../../src/domain/search/e
 import type { StoreGroups } from '../../src/base/ports/store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { DetachedSet } from '../../src/base/util/detached-set.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -36,8 +37,9 @@ describe('embedMemoryDetached', () => {
     };
     const entry = createMemory('a memory whose embed path rejects', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     try {
-      embedMemoryDetached(target, entry);
-      await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+      const detached = new DetachedSet();
+      embedMemoryDetached(target, entry, detached);
+      await detached.settle();
       await new Promise((resolve) => setImmediate(resolve));
       expect(warn).toHaveBeenCalledWith(
         `embedding ${entry.id} failed unexpectedly`,

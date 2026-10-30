@@ -17,6 +17,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { strengthOf, type Context, type ContextWith, type SleepContext } from '../types.js';
 import { auditRemoveErrors } from '../hippo-db/audit-maintenance.js';
 import { globalTargetOf } from '../infra.js';
+import { withDetached } from '../detached.js';
 import type { SleepOptions, SleepResult } from './sleep.js';
 import type { SleepEvent } from './events.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -296,20 +297,23 @@ async function shareOnSleep(
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable,
   // not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = await phases.autoShare(
-    {
-      store: {
-        hippoDb: { sharing, folderFiles },
-        entriesWhere: (filter, page) => store.entriesWhere(filter, page),
+  const shared = await withDetached(ctx, (detached) =>
+    phases.autoShare(
+      {
+        store: {
+          hippoDb: { sharing, folderFiles },
+          entriesWhere: (filter, page) => store.entriesWhere(filter, page),
+        },
       },
-    },
-    target,
-    {
-      tenantId: ALL_TENANTS,
-      minScore: AUTO_SHARE_MIN_SCORE,
-      stats: autoShareStats,
-      embed: ctx.infra,
-    },
+      target,
+      {
+        tenantId: ALL_TENANTS,
+        minScore: AUTO_SHARE_MIN_SCORE,
+        stats: autoShareStats,
+        embed: ctx.infra,
+        detached,
+      },
+    ),
   );
   const { secretSkipped, rejectedSkipped } = autoShareStats;
   return {

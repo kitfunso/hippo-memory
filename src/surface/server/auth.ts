@@ -105,7 +105,7 @@ type AuthOptions = Pick<
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
 type ContextOptions = AuthOptions &
-  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra'> &
+  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra' | 'detached'> &
   Partial<Pick<ResolvedServeOptions, 'callers' | 'signal'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
@@ -383,7 +383,7 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   // The reader keys on the file's stamp, so each request still sees an edit made while the server
   // runs.
   const config = opts.configAt(opts.hippoRoot);
-  const { store, signal } = opts;
+  const { store, signal, detached } = opts;
   const enrich = coreEnrichment(store);
   // Per request, never cached at serve: the global store can be created while the server runs.
   const infra = opts.infra();
@@ -402,6 +402,7 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
     infra,
     signal,
     enrich,
+    detached,
   };
 }
 

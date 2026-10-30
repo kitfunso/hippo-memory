@@ -1,4 +1,5 @@
 entry/eval-scripts.d.ts: Context re-export
+entry/eval-scripts.d.ts: DetachedWork re-export
 entry/eval-scripts.d.ts: JudgeConnection type
 entry/eval-scripts.d.ts: adminActor re-export
 entry/eval-scripts.d.ts: embedAll re-export
@@ -124,6 +125,7 @@ entry/session-text.d.ts: scrubForSharing re-export
 entry/session-text.d.ts: sessionTail re-export
 entry/session-text.d.ts: transcriptWorkingState re-export
 entry/sleep.d.ts: ConsolidationResult re-export
+entry/sleep.d.ts: DetachedWork re-export
 entry/sleep.d.ts: RescueRank re-export
 entry/sleep.d.ts: SleepContext re-export
 entry/sleep.d.ts: SleepEvent re-export
@@ -366,6 +368,7 @@ index.d.ts: ConfidenceFacets re-export
 index.d.ts: ConfidenceLevel re-export
 index.d.ts: ConsolidationResult re-export
 index.d.ts: DecayOptions re-export
+index.d.ts: DetachedWork re-export
 index.d.ts: EmotionalValence re-export
 index.d.ts: HandoffEvidence re-export
 index.d.ts: HandoffOutcome re-export
@@ -432,6 +435,7 @@ server.d.ts: CallerSessionEndResult re-export
 server.d.ts: CaptureContext re-export
 server.d.ts: ConflictError re-export
 server.d.ts: Context re-export
+server.d.ts: DetachedWork re-export
 server.d.ts: ForbiddenError re-export
 server.d.ts: HippoStore re-export
 server.d.ts: HttpError re-export

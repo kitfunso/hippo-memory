@@ -102,11 +102,11 @@ describe('withSharedStoreHandles', () => {
     expect(first.isOpen).toBe(true);
     const second = await withSharedStoreHandles(openIn, { runtime });
     expect(second).toBe(first);
-    runtime.dispose();
+    await runtime.dispose();
     expect(first.isOpen).toBe(false);
   });
 
-  it('dispose closes a session still open when the process leaves', async () => {
+  it('closeNow closes a session still open when the process leaves', async () => {
     const runtime = new StoreRuntime();
     let held: DatabaseSyncLike | undefined;
     let release = (): void => undefined;
@@ -118,7 +118,7 @@ describe('withSharedStoreHandles', () => {
       { runtime },
     );
     await vi.waitFor(() => expect(held).toBeDefined());
-    runtime.dispose();
+    runtime.closeNow();
     expect(held!.isOpen).toBe(false);
     release();
     await done;

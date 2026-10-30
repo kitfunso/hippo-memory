@@ -195,6 +195,7 @@ hippo 3.0 removes names that 2.1 marked `@deprecated` and the raw store function
 | The pre-compact log and the session-end log a hook writes held only the message of a failure. | Each failure line also carries `errorClass=`, `stack=` and `cause=`, as a stderr line does. |
 | The Anthropic client retried a 5xx reply but not a reset connection or an attempt that timed out. | It retries both, within the same attempt count and total time budget, since a message call stores nothing on the far side. |
 | `hippo recall --json` named two result-row keys in camelCase: `graphVia`, on a row the graph walk added, and `rerankTrace`, under `--why`. | `graph_via` and `rerank_trace`, so every key of a result row is snake_case, as `trace_outcome` and `superseded_by` are. The values do not change. `/v1/recall` on `serve()` keeps its `rerankTrace`. |
+| `sleep` on the package root returned while the embeds of the rows its auto-share copied to the global store still ran, so a caller that closed its store next could cut them off. | It resolves once those embeds finish or log their failure. To return sooner, set `detached` on the `Context`, the new optional member of type `DetachedWork`, which the package root and `hippo-memory/server` export: an object whose `detach(work)` keeps each promise it is handed. Settle every kept promise before you close the store, as `hippo` does for each command and `serve()` does in `stop()`, which waits up to 5 seconds for them. |
 
 ## MemoryEntry field names
 

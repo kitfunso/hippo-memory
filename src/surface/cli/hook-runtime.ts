@@ -199,6 +199,6 @@ export function captureTarget(cli: CliCommand, root: string): CaptureTarget {
     root,
     store: folder.store,
     config: folder.config,
-    embed: detachedEmbedder(folder, cliInfra()),
+    embed: detachedEmbedder(folder, cliInfra(), cli.detached),
   };
 }

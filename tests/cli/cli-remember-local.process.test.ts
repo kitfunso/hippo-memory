@@ -209,4 +209,20 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     expect(Object.keys(loadEmbeddingIndex(s.root)).sort()).toEqual(ids(rows).sort());
     expect(s.counters()['total_remembered']).toBe('2');
   });
+
+  // In process, a slow embed shows whether the command returns before its vector lands, as a runCli caller sees it.
+  it('remember and a failed watch run in process return after their vectors land', async () => {
+    const s = new Store();
+    s.env['OPENAI_API_KEY'] = 'test-key-not-secret';
+    configure(s.root, { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } });
+    failingScript(s);
+    embeddings.setFault(300);
+    try {
+      expect((await s.run('remember', TEXT)).status).toBe(0);
+      expect((await s.run('watch', 'node', 'fail.js')).status).toBe(3);
+    } finally {
+      embeddings.setFault(null);
+    }
+    expect(Object.keys(loadEmbeddingIndex(s.root)).sort()).toEqual(ids(s.rows()).sort());
+  });
 });

@@ -7,6 +7,7 @@ import { ALL_TENANTS } from '../base/util/tenant.js';
 import { syncGlobalToLocal } from '../domain/sharing/global-sync.js';
 import { autoShare, listPeers, shareMemory } from '../domain/sharing/share.js';
 import { globalTargetOf } from './infra.js';
+import { withDetached } from './detached.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 export { AUTO_SHARE_MIN_SCORE, transferScore } from '../domain/sharing/share.js';
@@ -38,8 +39,9 @@ export async function shareToGlobal(
   id: string,
   opts: { readonly force: boolean },
 ): Promise<MemoryEntry | null> {
+  const target = requireGlobalTarget(ctx, 'share');
   const options = { force: opts.force, tenantId: ctx.tenantId, embed: ctx.infra };
-  return shareMemory(ctx, requireGlobalTarget(ctx, 'share'), id, options);
+  return withDetached(ctx, (detached) => shareMemory(ctx, target, id, { ...options, detached }));
 }
 
 /** The caller's memories whose transfer score reaches `minScore`, copied to the global store
@@ -48,11 +50,9 @@ export async function autoShareToGlobal(
   ctx: ContextWith<'sharing' | 'folderFiles'>,
   opts: { readonly minScore: number; readonly dryRun: boolean },
 ): Promise<MemoryEntry[]> {
-  return autoShare(ctx, requireGlobalTarget(ctx, 'auto-share'), {
-    ...opts,
-    tenantId: ctx.tenantId,
-    embed: ctx.infra,
-  });
+  const target = requireGlobalTarget(ctx, 'auto-share');
+  const options = { ...opts, tenantId: ctx.tenantId, embed: ctx.infra };
+  return withDetached(ctx, (detached) => autoShare(ctx, target, { ...options, detached }));
 }
 
 /** The projects that shared into the global store: the caller's tenant, or every tenant for the
@@ -75,5 +75,9 @@ export async function syncFromGlobal(
   opts: { readonly includeCrossProject: boolean },
 ): Promise<number> {
   const local = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };
-  return syncGlobalToLocal(local, requireGlobalTarget(ctx, 'sync'), { ...opts, embed: ctx.infra });
+  const target = requireGlobalTarget(ctx, 'sync');
+  const options = { ...opts, embed: ctx.infra };
+  return withDetached(ctx, (detached) =>
+    syncGlobalToLocal(local, target, { ...options, detached }),
+  );
 }

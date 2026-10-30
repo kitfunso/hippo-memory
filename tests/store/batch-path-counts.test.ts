@@ -20,7 +20,7 @@ import { writeEntriesTogether, loadEveryTenantEntries, writeEntry } from '../_he
 import { memoryRows } from '../_helpers/seed-rows.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
 /** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */
@@ -228,7 +228,9 @@ describe('syncGlobalToLocal', () => {
     }
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN })).toBe(3);
+    expect(
+      await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
+    ).toBe(3);
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipped 2 rejected value'));
     const local = new Map(loadEveryTenantEntries(localRoot).map((e) => [e.id, e]));
@@ -250,7 +252,7 @@ describe('syncGlobalToLocal', () => {
     for (const n of [10, 200]) {
       const { localRoot, globalRoot } = stores(n);
       const { result, statements } = await recordStatementsAsync(() =>
-        syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN }),
+        syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
       );
       expect(result).toBe(n);
       counts.push({
@@ -264,9 +266,9 @@ describe('syncGlobalToLocal', () => {
 
   it('reads no full row of either store when every global row is already local', async () => {
     const { localRoot, globalRoot } = stores(50);
-    await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED });
     const { result, statements } = await recordStatementsAsync(() =>
-      syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN }),
+      syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
     );
     expect(result).toBe(0);
     expect(countMatching(statements, FULL_ROW)).toBe(0);

@@ -10,6 +10,7 @@ import type { FailureNotices } from '../../base/util/failure-notices.js';
 import { warnEmbedFailureOnce } from './embed-failures.js';
 import { type IndexRows, type IndexEmbedTarget, indexAdapter } from './embed-index-target.js';
 import { type StoreEmbedTarget, storeAdapter } from './embed-store-target.js';
+import type { DetachedWork } from './detached-work.js';
 
 /** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a
  * memory that stays out of the vector index. */
@@ -83,12 +84,17 @@ export async function embedMemoryInto(
   return adapterFor(on).one(provider, entry);
 }
 
-/** embedMemory for a write that does not wait on its vector. A rejection outside embedMemory's
- * own handling is logged here, since nothing else holds it and an unhandled one ends the
- * process. */
-export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
-  embedMemoryInto(on, entry).catch((err) =>
-    log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)),
+/** embedMemory for a write that does not wait on its vector: `detached` keeps the embed until its
+ * root settles it. A rejection outside embedMemory's own handling is logged here. */
+export function embedMemoryDetached(
+  on: EmbedTarget,
+  entry: MemoryEntry,
+  detached: DetachedWork,
+): void {
+  detached.detach(
+    embedMemoryInto(on, entry).catch((err) =>
+      log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)),
+    ),
   );
 }
 

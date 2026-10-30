@@ -28,8 +28,8 @@ beforeEach(() => {
   vi.spyOn(log, 'error').mockImplementation(() => undefined);
 });
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
@@ -195,6 +195,7 @@ describe('replies the stdio loop writes', () => {
         ran = true;
         return real.runFrame(signal, run);
       },
+      settle: (withinMs) => real.settle(withinMs),
     };
     startStdioLoop(slow);
     feed('{"jsonrpc":"2.0","id":13,"method":"tools/list"}\n');

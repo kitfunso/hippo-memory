@@ -29,6 +29,7 @@ import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
+import type { DetachedWork } from '../search/detached-work.js';
 import type { SharingStore } from './text-keys.js';
 import type { EntrySignals, PageRequest, StoreHome, StoreWith } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
@@ -150,7 +151,13 @@ export async function shareMemory(
   local: { readonly store: StoreWith<'folderFiles'> },
   global: ConfiguredFolder<SharingStore>,
   id: string,
-  options: { force?: boolean; tenantId: string; skipEmbed?: boolean; embed: EmbedRun },
+  options: {
+    force?: boolean;
+    tenantId: string;
+    skipEmbed?: boolean;
+    embed: EmbedRun;
+    detached: DetachedWork;
+  },
 ): Promise<MemoryEntry | null> {
   // Tenant A cannot share tenant B's memory to global: the read finds no row of another tenant.
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
@@ -175,7 +182,7 @@ export async function shareMemory(
       embedderFor: global.embedderFor,
       failureNotices: options.embed.failureNotices,
     };
-    embedMemoryDetached(target, globalEntry);
+    embedMemoryDetached(target, globalEntry, options.detached);
   }
 
   return globalEntry;
@@ -427,6 +434,8 @@ export async function autoShare(
     tenantId: TenantId;
     stats?: AutoShareStats;
     embed: EmbedRun;
+    /** Keeps the batch embed of the shared rows until the root settles it. */
+    detached: DetachedWork;
   },
 ): Promise<MemoryEntry[]> {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
@@ -450,8 +459,10 @@ export async function autoShare(
   });
 
   if (shared.length > 0) {
-    void embedAll(folderEmbedTarget(global, options.embed)).catch((err) =>
-      logEmbedAllFailure('autoShare', err),
+    options.detached.detach(
+      embedAll(folderEmbedTarget(global, options.embed)).catch((err) =>
+        logEmbedAllFailure('autoShare', err),
+      ),
     );
   }
 

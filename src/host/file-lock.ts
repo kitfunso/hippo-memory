@@ -104,11 +104,17 @@ function unlinkIfHeld(path: string, held: FileIdentity, stat: StatFn): void {
   }
 }
 
+// node:sqlite closes a connection it garbage-collects, which would free a lock whose FileLock nobody
+// references; a held connection stays reachable here until release() or remove(), or its thread ends.
+const heldConnections = new Set<LockConnection>();
+
 function holder(db: LockConnection, path: string, held: FileIdentity, stat: StatFn): FileLock {
+  heldConnections.add(db);
   let done = false;
   const finish = (unlink: boolean): void => {
     if (done) return;
     done = true;
+    heldConnections.delete(db);
     try {
       if (WIN32) closeLogged(db, path);
       if (unlink) unlinkIfHeld(path, held, stat);
