@@ -94,7 +94,7 @@ export function objectList<K extends ObjectKind>(
   kind: K,
   opts: ObjectListOptions<K>,
 ): Promise<ObjectByKind[K][]> {
-  return listObjects(ctx.store.objects, DESCRIPTORS[kind], ctx.tenantId, opts);
+  return listObjects(ctx.store.hippoDb.objects, DESCRIPTORS[kind], ctx.tenantId, opts);
 }
 
 /** One object by table id, or null when the caller's tenant has none. */
@@ -103,7 +103,7 @@ export function objectGet<K extends ObjectKind>(
   kind: K,
   id: number,
 ): Promise<ObjectByKind[K] | null> {
-  return objectById(ctx.store.objects, DESCRIPTORS[kind], ctx.tenantId, id);
+  return objectById(ctx.store.hippoDb.objects, DESCRIPTORS[kind], ctx.tenantId, id);
 }
 
 /** Retires one object as the caller; its mirror memory stays as saved. */
@@ -112,7 +112,7 @@ export function objectClose<K extends ObjectKind>(
   kind: K,
   id: number,
 ): Promise<ObjectByKind[K]> {
-  return closeObject(ctx.store.objects, DESCRIPTORS[kind], {
+  return closeObject(ctx.store.hippoDb.objects, DESCRIPTORS[kind], {
     tenantId: ctx.tenantId,
     id,
     actor: ctx.actor.subject,
@@ -128,7 +128,12 @@ export function objectCreate<K extends SavableKind>(
   write: ObjectWrites[K],
   origin?: WriteOrigin,
 ): Promise<ObjectByKind[K]> {
-  return saveObject(ctx.store.objects, SAVABLE[kind], saveSiteOf(ctx), taggedFrom(write, origin));
+  return saveObject(
+    ctx.store.hippoDb.objects,
+    SAVABLE[kind],
+    saveSiteOf(ctx),
+    taggedFrom(write, origin),
+  );
 }
 
 export interface ObjectSupersedeOptions<K extends SavableKind> {

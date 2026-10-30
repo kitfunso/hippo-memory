@@ -60,7 +60,7 @@ export function incidentOpen(
 ): Promise<Incident> {
   const { defaultHalfLifeDays } = ctx.config;
   const tagged = taggedFrom(write, origin);
-  return openIncident(ctx.store.objects, {
+  return openIncident(ctx.store.hippoDb.objects, {
     baseHalfLifeDays: defaultHalfLifeDays,
     tenantId: ctx.tenantId,
     opts: tagged,
@@ -77,7 +77,7 @@ export function incidentResolve(
   id: number,
   resolutionText: string,
 ): Promise<Incident> {
-  return resolveOpenIncident(ctx.store.objects, {
+  return resolveOpenIncident(ctx.store.hippoDb.objects, {
     tenantId: ctx.tenantId,
     id,
     resolutionText,
@@ -94,22 +94,22 @@ export function policiesInForce(
   date: string,
   opts: { readonly name?: string },
 ): Promise<Policy[]> {
-  return policiesAsOf(ctx.store.objects, ctx.tenantId, date, { name: opts.name });
+  return policiesAsOf(ctx.store.hippoDb.objects, ctx.tenantId, date, { name: opts.name });
 }
 
 /** The caller's active skills as one AGENTS.md block; empty when there are none. */
 export function skillsExport(ctx: ContextWith<'objects'>): Promise<string> {
-  return skillsMarkdown(ctx.store.objects, ctx.tenantId);
+  return skillsMarkdown(ctx.store.hippoDb.objects, ctx.tenantId);
 }
 
 /** The brief a refresh of `repo` would save, without saving it. */
 export function briefDigest(ctx: ContextWith<'objects'>, repo: string): Promise<BriefDigest> {
-  return briefFromReceipts(ctx.store.objects, ctx.tenantId, repo);
+  return briefFromReceipts(ctx.store.hippoDb.objects, ctx.tenantId, repo);
 }
 
 /** Saves a new version of the repo's brief from its receipts, as the caller. */
 export function briefRefresh(ctx: ContextWith<'objects'>, repo: string): Promise<ProjectBrief> {
-  return refreshedBrief(ctx.store.objects, saveSiteOf(ctx), repo);
+  return refreshedBrief(ctx.store.hippoDb.objects, saveSiteOf(ctx), repo);
 }
 
 /** The active decision whose mirror is `memoryId`, or null: what the CLI's `--supersedes
@@ -118,7 +118,7 @@ export function decisionIdByMemory(
   ctx: ContextWith<'objects'>,
   memoryId: string,
 ): Promise<number | null> {
-  return resolveActiveDecisionIdByMemory(ctx.store.objects, ctx.tenantId, memoryId);
+  return resolveActiveDecisionIdByMemory(ctx.store.hippoDb.objects, ctx.tenantId, memoryId);
 }
 
 /** Weakens the memory a new decision replaces, once that decision has saved. */

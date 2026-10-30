@@ -52,8 +52,8 @@ function listedNames(res: McpResponse | null): string[] {
 
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
-// The stub lacks the local files and hippo.db's local tier, so every tool but the eight that need them runs on it.
-const READY = ['hippo_recall', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context'];
+// The stub lacks the local files and hippo.db's local tier, so every tool but the nine that need them runs on it.
+const READY = ['hippo_recall', 'hippo_remember', 'hippo_outcome', 'hippo_context'];
 const ready = declared.filter((name) => READY.includes(name));
 
 describe('store-ready MCP tools', () => {
@@ -83,6 +83,7 @@ describe('store-ready MCP tools', () => {
       'hippo_resolve',
       'hippo_share',
       'hippo_peers',
+      'hippo_predict_baserate',
     ]);
     for (const name of unready) {
       const res = await handleMcpRequest(
@@ -170,12 +171,12 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
   it("hippo_predict_baserate reads the store's closed rows inside the caller's tenant and leaves its audit row there", async () => {
     const side = portOnlySide(fixture.dir, ['objects']);
     const claim = { classTag: 'cutover', claimText: 'the cutover takes two days', estimateValue: 2 };
-    const saved = await side.store.objects.saveObject(TENANT_A, 'prediction', {
+    const saved = await side.store.hippoDb.objects.saveObject(TENANT_A, 'prediction', {
       ...claim,
       mirror: predictionMirror(TENANT_A, claim, 30, evalNow()),
       actor: 'seed',
     });
-    await side.store.objects.closeObject(TENANT_A, 'prediction', saved.id, {
+    await side.store.hippoDb.objects.closeObject(TENANT_A, 'prediction', saved.id, {
       closureState: 'closed',
       actualValue: 3,
       actor: 'seed',

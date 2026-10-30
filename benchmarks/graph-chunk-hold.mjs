@@ -22,7 +22,7 @@ const MEMORIES = Number(process.argv[2] ?? 20_000);
 
 /** Each decision names two policies, so the graph gets about two references per decision on top of its entities. */
 async function seedObjects(root) {
-  const objects = sqliteStore(root).objects;
+  const objects = sqliteStore(root).hippoDb.objects;
   for (let p = 0; p < POLICIES; p++) await savePolicy(objects, loadConfig(root).defaultHalfLifeDays, TENANT, { policyName: `RetryRule${p}`, policyText: `retry budget ${p}` });
   for (let d = 0; d < DECISIONS; d++) {
     await saveDecision(objects, loadConfig(root).defaultHalfLifeDays, TENANT, { decisionText: `Call ${d} applies RetryRule${d % POLICIES} and RetryRule${(d * 7 + 3) % POLICIES}` });

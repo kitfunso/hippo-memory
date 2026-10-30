@@ -9,11 +9,11 @@ import {
   OPTIONAL_GROUPS,
   requireGroup,
   sqliteStore,
+  type Goals,
   type HippoStore,
   type MemoryEntry,
   type OptionalGroup,
   type StoreGroup,
-  type StoreGroups,
   type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
 import type { DecayOptions } from '../../src/entry/memory.js';
@@ -33,11 +33,11 @@ describe('hippo-memory/store-kit entry types', () => {
 
   it('hasGroup narrows an optional group; hasGroup and requireGroup take the store first and a group name second', () => {
     typeOnly(() => {
-      if (hasGroup(store, 'goals')) expectTypeOf(store.goals).toEqualTypeOf<StoreGroups['goals']>();
+      if (hasGroup(store, 'goals')) expectTypeOf(store.hippoDb.goals).toEqualTypeOf<Goals>();
       expectTypeOf(hasGroup(store, 'base')).toEqualTypeOf<boolean>();
       expectTypeOf(hasGroup(store, 'sessions' satisfies StoreGroup)).toEqualTypeOf<boolean>();
     });
-    expectTypeOf(requireGroup<'goals'>).returns.toEqualTypeOf<StoreGroups['goals']>();
+    expectTypeOf(requireGroup<'goals'>).returns.toEqualTypeOf<Goals>();
     // @ts-expect-error the group comes after the store
     typeOnly(() => hasGroup('base', store));
     // @ts-expect-error 'base' is always present, so it is not an optional group

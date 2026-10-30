@@ -400,7 +400,7 @@ async function rebuildGraph(
   tenantId: string,
   budget: WriteBudget,
 ): Promise<ExtractResult> {
-  const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
+  const derived = deriveGraph(await loadGraphSources(store.hippoDb.objects, tenantId));
   const ops = await store.hippoDb.graphReads.graphDelta(tenantId, derived);
   let next = 0;
   let skipped = 0;

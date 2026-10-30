@@ -676,7 +676,7 @@ describe("a store worker's wal_autocheckpoint", () => {
     cleanups.push(() => store.close());
     const save = (n: number) => {
       const saved = { classTag: 'release', claimText: `claim ${n}` };
-      return store.objects.saveObject('default', 'prediction', {
+      return store.hippoDb.objects.saveObject('default', 'prediction', {
         ...saved,
         mirror: predictionMirror('default', saved, 30, evalNow()),
         actor: 'test',

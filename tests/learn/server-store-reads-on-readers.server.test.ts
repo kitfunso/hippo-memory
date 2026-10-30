@@ -71,8 +71,8 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
     content: 'watch the canary error rate',
     sessionId: SESSION,
   });
-  const card = await s.cards.create(TENANT, { title: 'cut the eu release' });
-  await s.cards.claim(TENANT, card.id, 'codex', SESSION);
+  const card = await s.hippoDb.cards.create(TENANT, { title: 'cut the eu release' });
+  await s.hippoDb.cards.claim(TENANT, card.id, 'codex', SESSION);
   await s.hippoDb.failureLog.record({
     tenantId: TENANT,
     sessionId: SESSION,
@@ -207,10 +207,10 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     (s) => s.hippoDb.sessions.read(TENANT, 'working_memory', { sessionId: SESSION }),
     'watch the canary error rate',
   ),
-  read('cards.detail', (s) => s.cards.detail(TENANT, made.cardId), 'cut the eu release'),
-  read('cards.detail runs', async (s) => (await s.cards.detail(TENANT, made.cardId))?.runs, 'codex'),
-  read('cards.list', (s) => s.cards.list(TENANT, { limit: 10 }), 'cut the eu release'),
-  read('goals.sessionGoals', (s) => s.goals.sessionGoals(TENANT, SESSION), 'goal-alpha'),
+  read('hippoDb.cards.detail', (s) => s.hippoDb.cards.detail(TENANT, made.cardId), 'cut the eu release'),
+  read('hippoDb.cards.detail runs', async (s) => (await s.hippoDb.cards.detail(TENANT, made.cardId))?.runs, 'codex'),
+  read('hippoDb.cards.list', (s) => s.hippoDb.cards.list(TENANT, { limit: 10 }), 'cut the eu release'),
+  read('hippoDb.goals.sessionGoals', (s) => s.hippoDb.goals.sessionGoals(TENANT, SESSION), 'goal-alpha'),
   read(
     'hippoDb.conflicts.list',
     (s) => s.hippoDb.conflicts.list({ tenantId: TENANT, status: 'open', limit: 5 }),
@@ -372,10 +372,14 @@ const READS: readonly Read[] = [
     /tagCounts: Map\(\d+\) \{/,
   ),
   read('contextReads.schemaFit', (s) => s.contextReads.schemaFit(TENANT, PLAIN, ['deploy']), /^(0(\.\d+)?|1)$/),
-  read('objects.objectById prediction', (s) => s.objects.objectById(TENANT, 'prediction', 1), 'deploy-duration'),
   read(
-    'objects.listObjects predictions',
-    (s) => s.objects.listObjects(TENANT, 'prediction', { limit: 5 }),
+    'hippoDb.objects.objectById prediction',
+    (s) => s.hippoDb.objects.objectById(TENANT, 'prediction', 1),
+    'deploy-duration',
+  ),
+  read(
+    'hippoDb.objects.listObjects predictions',
+    (s) => s.hippoDb.objects.listObjects(TENANT, 'prediction', { limit: 5 }),
     'deploy-duration',
   ),
   read(
@@ -454,27 +458,31 @@ const READS: readonly Read[] = [
       }),
     /op: '(update|insert)Entity'/,
   ),
-  read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
-  read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
   read(
-    'objects.listObjects by memory id',
+    'hippoDb.objects.listObjects',
+    (s) => s.hippoDb.objects.listObjects(TENANT, 'decision', { limit: 5 }),
+    'We adopt RetryPolicy',
+  ),
+  read('hippoDb.objects.objectById', (s) => s.hippoDb.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
+  read(
+    'hippoDb.objects.listObjects by memory id',
     async (s) => {
-      const memoryId = (await s.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? '';
-      return (await s.objects.listObjects(TENANT, 'decision', { status: 'active', memoryId, limit: 1 }))[0]?.id;
+      const memoryId = (await s.hippoDb.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? '';
+      return (await s.hippoDb.objects.listObjects(TENANT, 'decision', { status: 'active', memoryId, limit: 1 }))[0]?.id;
     },
     /^[1-9][0-9]*$/,
   ),
   read(
-    'objects.listObjects policies in force',
-    (s) => s.objects.listObjects(TENANT, 'policy', { asOf: '9999-12-31T23:59:59.999Z', limit: 5 }),
+    'hippoDb.objects.listObjects policies in force',
+    (s) => s.hippoDb.objects.listObjects(TENANT, 'policy', { asOf: '9999-12-31T23:59:59.999Z', limit: 5 }),
     'RetryPolicy',
   ),
   read(
-    'objects.listObjects active skills by name',
-    (s) => s.objects.listObjects(TENANT, 'skill', { byName: true, status: 'active', limit: 5 }),
+    'hippoDb.objects.listObjects active skills by name',
+    (s) => s.hippoDb.objects.listObjects(TENANT, 'skill', { byName: true, status: 'active', limit: 5 }),
     'page the owner, then revert',
   ),
-  read('objects.briefReceipts', (s) => s.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
+  read('hippoDb.objects.briefReceipts', (s) => s.hippoDb.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
   read('hippoDb.readiness.ping', (s) => s.hippoDb.readiness.ping(), /^undefined$/),
   ...SESSION_AND_ADMIN_READS,
   ...FOLDER_GROUP_READS,

@@ -12,7 +12,7 @@ export async function predictionSave(
   ctx: ContextWith<'objects'>,
   input: Omit<PredictionSave, 'actor'>,
 ): Promise<Prediction> {
-  return ctx.store.objects.saveObject(ctx.tenantId, 'prediction', {
+  return ctx.store.hippoDb.objects.saveObject(ctx.tenantId, 'prediction', {
     ...input,
     actor: ctx.actor.subject,
   });
@@ -39,21 +39,21 @@ export async function predictionList(
   ctx: ContextWith<'objects'>,
   query: PredictionListQuery,
 ): Promise<Prediction[]> {
-  return ctx.store.objects.listObjects(ctx.tenantId, 'prediction', query);
+  return ctx.store.hippoDb.objects.listObjects(ctx.tenantId, 'prediction', query);
 }
 
 export async function predictionBaserate(
   ctx: ContextWith<'objects'>,
   classTag: string,
 ): Promise<PredictionBaserate> {
-  return ctx.store.objects.predictionBaserate(ctx.tenantId, classTag, ctx.actor.subject);
+  return ctx.store.hippoDb.objects.predictionBaserate(ctx.tenantId, classTag, ctx.actor.subject);
 }
 
 export async function predictionById(
   ctx: ContextWith<'objects'>,
   id: number,
 ): Promise<Prediction | null> {
-  return ctx.store.objects.objectById(ctx.tenantId, 'prediction', id);
+  return ctx.store.hippoDb.objects.objectById(ctx.tenantId, 'prediction', id);
 }
 
 export async function predictionClose(
@@ -61,7 +61,7 @@ export async function predictionClose(
   id: number,
   close: Omit<PredictionClose, 'actor'>,
 ): Promise<Prediction> {
-  return ctx.store.objects.closeObject(ctx.tenantId, 'prediction', id, {
+  return ctx.store.hippoDb.objects.closeObject(ctx.tenantId, 'prediction', id, {
     ...close,
     actor: ctx.actor.subject,
   });

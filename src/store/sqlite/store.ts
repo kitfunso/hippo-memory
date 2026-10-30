@@ -5,20 +5,18 @@ import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './keys/auth.js';
 import { appendAuditEvents, listAuditEvents } from './audit/audit.js';
 import { type DatabaseSyncLike, type RequestStores } from '../../db/index.js';
-import { activeGoalsWithPolicies, sqliteGoals } from './sessions/goals.js';
+import { activeGoalsWithPolicies } from './sessions/goals.js';
 import { planningFallacyEvidence } from './learning/planning-fallacy-evidence.js';
 import { recordTokenUse } from './ledger/token-ledger.js';
 import { listAmbientCandidates, listContextCandidates, schemaFit } from './recall/candidates.js';
 import { readEntriesInIdOrder, listFreshRawMemories } from './entries/entry-reads.js';
 import { listEntriesWhere } from './entries/entry-filter.js';
-import { sqliteCards } from './records/cards.js';
 import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
 import { sqliteEmbeddingIndex } from './vectors/embedding-index.js';
 import { sqliteEntryWrites } from './entries/entry-writes.js';
 import { finishRecall } from './recall/last-recall.js';
-import { sqliteObjects } from './records/objects.js';
 import { sqliteVectorReads } from './vectors/vector-reads.js';
 import { readLatestHandoff } from './sessions/handoffs.js';
 import { updateStats } from './entries/index-and-stats.js';
@@ -66,10 +64,7 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
     entryWrites: sqliteEntryWrites(handles),
     contextReads: sqliteContextReads(handles),
     auditLog: sqliteAuditLog(on),
-    objects: sqliteObjects(handles),
     vectors: sqliteVectorReads(handles),
-    cards: sqliteCards(on),
-    goals: sqliteGoals(on),
     ...sqliteFolderGroups(handles),
     close: () => answered(() => files.runtime?.held.flush(files.hippoRoot)),
   };

@@ -47,7 +47,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
       const root = makeRoot('objects-atomic', { init: false });
       copyTree(fixture.dir, root);
       const store = sqliteStore(root);
-      const { objects } = store;
+      const { objects } = store.hippoDb;
       const first = saving(c, 1);
       await objects.saveObject(TENANT_A, c.kind, first.save);
       refuseAuditOps(root, [createOp(c.kind), closeOp(c.kind)]);
@@ -74,7 +74,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     const root = makeRoot('objects-links', { init: false });
     copyTree(fixture.dir, root);
     const store = sqliteStore(root);
-    const { objects } = store;
+    const { objects } = store.hippoDb;
     const first = opening(1);
     await objects.saveObject(TENANT_A, 'incident', first.open);
     const held = Array.from({ length: 1200 }, () => mirrorIdOf(first));
@@ -94,7 +94,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     const root = makeRoot('objects-atomic', { init: false });
     copyTree(fixture.dir, root);
     const store = sqliteStore(root);
-    const { objects } = store;
+    const { objects } = store.hippoDb;
     const first = opening(1);
     await objects.saveObject(TENANT_A, 'incident', first.open);
     refuseAuditOps(root, ['incident_open', 'incident_resolve']);

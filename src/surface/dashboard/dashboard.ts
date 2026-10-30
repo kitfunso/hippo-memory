@@ -60,7 +60,7 @@ export async function searchRoute(r: DashboardRouteRequest): Promise<void> {
 // reply byte for byte.
 export async function cardsRoute(r: DashboardRouteRequest): Promise<void> {
   const after = parseCursor(r.query.get('cursor'), 'string', 'string');
-  const { cards, next } = await r.ctx.store.cards.list(r.ctx.tenantId, {
+  const { cards, next } = await r.ctx.store.hippoDb.cards.list(r.ctx.tenantId, {
     limit: MAX_LIST_LIMIT,
     after,
   });
@@ -71,7 +71,7 @@ export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promi
   // The Board has always answered 404, not 400, for an id that does not fit the pattern.
   sendOrNotFound(
     r.res,
-    CARD_ID.test(id!) ? await r.ctx.store.cards.detail(r.ctx.tenantId, id!) : null,
+    CARD_ID.test(id!) ? await r.ctx.store.hippoDb.cards.detail(r.ctx.tenantId, id!) : null,
   );
 }
 

@@ -191,7 +191,7 @@ describe('sleep enqueue-hook', () => {
     const phases: Partial<SleepPhases> = {
       extractGraph: async (store, tid) => {
         if (tid === T) {
-          await saveDecision(store.objects, loadConfig(tc.hippoRoot).defaultHalfLifeDays, tid, {
+          await saveDecision(store.hippoDb.objects, loadConfig(tc.hippoRoot).defaultHalfLifeDays, tid, {
             decisionText: 'Adopt Redis as the shared caching tier',
           });
         }

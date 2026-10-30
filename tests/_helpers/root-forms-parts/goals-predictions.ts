@@ -18,7 +18,7 @@ import type { ClosureState } from '../../../src/base/records/prediction.js';
 import { onHandle, sqliteStore } from '../test-session.js';
 
 export async function pushGoal(hippoRoot: string, opts: PushGoalOptions): Promise<Goal> {
-  return await sqliteStore(hippoRoot).goals.push(opts.tenantId, opts);
+  return await sqliteStore(hippoRoot).hippoDb.goals.push(opts.tenantId, opts);
 }
 
 export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOptions): ActiveGoals {
@@ -26,15 +26,15 @@ export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsO
 }
 
 export async function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOptions): Promise<void> {
-  return await sqliteStore(hippoRoot).goals.complete(resolveTenantId({}), goalId, opts);
+  return await sqliteStore(hippoRoot).hippoDb.goals.complete(resolveTenantId({}), goalId, opts);
 }
 
 export async function suspendGoal(hippoRoot: string, goalId: string): Promise<void> {
-  return await sqliteStore(hippoRoot).goals.suspend(resolveTenantId({}), goalId);
+  return await sqliteStore(hippoRoot).hippoDb.goals.suspend(resolveTenantId({}), goalId);
 }
 
 export async function resumeGoal(hippoRoot: string, goalId: string): Promise<void> {
-  return await sqliteStore(hippoRoot).goals.resume(resolveTenantId({}), goalId);
+  return await sqliteStore(hippoRoot).hippoDb.goals.resume(resolveTenantId({}), goalId);
 }
 
 export async function closePrediction(
@@ -44,11 +44,11 @@ export async function closePrediction(
   close: Omit<PredictionClose, 'actor'>,
   actor: string = CLI_ACTOR,
 ): Promise<Prediction> {
-  return await sqliteStore(hippoRoot).objects.closeObject(tenantId, 'prediction', id, { ...close, actor });
+  return await sqliteStore(hippoRoot).hippoDb.objects.closeObject(tenantId, 'prediction', id, { ...close, actor });
 }
 
 export async function loadPredictionById(hippoRoot: string, tenantId: string, id: number): Promise<Prediction | null> {
-  return await sqliteStore(hippoRoot).objects.objectById(tenantId, 'prediction', id);
+  return await sqliteStore(hippoRoot).hippoDb.objects.objectById(tenantId, 'prediction', id);
 }
 
 export async function loadPredictionsByClass(
@@ -63,7 +63,7 @@ export async function loadPredictionsByClass(
 ): Promise<Prediction[]> {
   const { closureState, after } = opts;
   const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
-  return await sqliteStore(hippoRoot).objects.listObjects(
+  return await sqliteStore(hippoRoot).hippoDb.objects.listObjects(
     tenantId,
     'prediction',
     closureState === undefined ? { classTag, limit, after } : { classTag, closureState, limit, after },
@@ -75,7 +75,7 @@ export async function loadAllPredictions(
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
 ): Promise<Prediction[]> {
-  return await sqliteStore(hippoRoot).objects.listObjects(tenantId, 'prediction', {
+  return await sqliteStore(hippoRoot).hippoDb.objects.listObjects(tenantId, 'prediction', {
     limit: opts.limit ?? DEFAULT_LIST_LIMIT,
     after: opts.after,
   });
@@ -98,7 +98,7 @@ export async function loadOpenPredictions(
 ): Promise<Prediction[]> {
   const { classTag, after } = opts;
   const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
-  return await sqliteStore(hippoRoot).objects.listObjects(tenantId, 'prediction', {
+  return await sqliteStore(hippoRoot).hippoDb.objects.listObjects(tenantId, 'prediction', {
     classTag,
     closureState: 'open',
     limit,

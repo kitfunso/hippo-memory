@@ -1,5 +1,11 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import { sqliteGoals } from './sessions/goals.js';
+import { GOALS_EFFECTS } from '../../base/ports/store/goals.js';
+import { sqliteCards } from './records/cards.js';
+import { CARDS_EFFECTS } from '../../base/ports/store/cards.js';
+import { sqliteObjects } from './records/objects.js';
+import { OBJECTS_EFFECTS } from '../../base/ports/store/objects.js';
 import { sqliteAgentImport } from './maintenance/agent-import.js';
 import { AGENT_IMPORT_EFFECTS } from '../../base/ports/store/agent-import.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
@@ -92,6 +98,9 @@ export function hippoDbRepos(handles: Handles) {
     projectTags: sqliteProjectTags(handles),
     diagnostics: sqliteDiagnostics(handles.on),
     agentImport: sqliteAgentImport(handles),
+    objects: sqliteObjects(handles),
+    cards: sqliteCards(handles.on),
+    goals: sqliteGoals(handles.on),
   };
 }
 
@@ -137,4 +146,7 @@ export const HIPPO_DB_EFFECTS = {
   projectTags: PROJECT_TAGS_EFFECTS,
   diagnostics: DIAGNOSTICS_EFFECTS,
   agentImport: AGENT_IMPORT_EFFECTS,
+  objects: OBJECTS_EFFECTS,
+  cards: CARDS_EFFECTS,
+  goals: GOALS_EFFECTS,
 } as const satisfies { readonly [R in keyof HippoDbRepos]: MethodEffects<HippoDbRepos[R]> };

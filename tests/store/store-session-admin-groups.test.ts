@@ -64,8 +64,8 @@ describe('sessions group', () => {
 describe('cards group', () => {
   it('runs a card from create to complete in both forms', async () => {
     const r = root();
-    const sync = sqliteStore(r).cards;
-    const served = sqliteStore(r).cards;
+    const sync = sqliteStore(r).hippoDb.cards;
+    const served = sqliteStore(r).hippoDb.cards;
     const card = await sync.create(T, { title: 'wire the port' });
     expect((await served.detail(T, card.id))?.card.title).toBe('wire the port');
     const claimed = await served.claim(T, card.id, 'claude');
@@ -85,8 +85,8 @@ describe('cards group', () => {
 describe('goals group', () => {
   it('pushes a goal and lists it, then completes it', async () => {
     const r = root();
-    const sync = sqliteStore(r).goals;
-    const served = sqliteStore(r).goals;
+    const sync = sqliteStore(r).hippoDb.goals;
+    const served = sqliteStore(r).hippoDb.goals;
     const goal = await sync.push(T, { sessionId: 's1', goalName: 'ship the refactor' });
     expect((await served.sessionGoals(T, 's1')).map((g) => g.id)).toEqual([goal.id]);
     await served.suspend(T, goal.id);

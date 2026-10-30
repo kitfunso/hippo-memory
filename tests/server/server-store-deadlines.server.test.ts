@@ -28,7 +28,7 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const SAVE = 'objects.saveObject';
+const SAVE = 'hippoDb.objects.saveObject';
 // Far past any test's own timeout, so a call behind a held lock can only end when the test releases the lock or the executor stops the thread.
 const LONG_WAIT_MS = 60_000;
 // Long enough that the request is on its worker before it expires; the tests wait for the expiry and never for a clock.
@@ -282,7 +282,7 @@ describe("a store thread's queue", () => {
     const executor = createSqliteExecutor(root);
     cleanups.push(() => executor.close());
 
-    const call = executor.call('objects.listObjects', ['default', 'prediction', { limit: 1 }], {
+    const call = executor.call('hippoDb.objects.listObjects', ['default', 'prediction', { limit: 1 }], {
       mode: 'read',
       requestId: undefined,
       deadlineAt: Date.now() - 1,

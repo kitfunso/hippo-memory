@@ -186,10 +186,20 @@ describe('HippoStore base writes', () => {
       ...saves.map(
         (save): GroupCall<'base', unknown> =>
           (s) =>
-            s.objects.saveObject(TENANT_A, 'prediction', save),
+            s.hippoDb.objects.saveObject(TENANT_A, 'prediction', save),
       ),
-      (s) => s.objects.closeObject(TENANT_A, 'prediction', 1, { closureState: 'closed', actualValue: 4, actor: 'cli' }),
-      (s) => s.objects.closeObject(TENANT_A, 'prediction', 2, { closureState: 'closed', actualValue: 3, actor: 'cli' }),
+      (s) =>
+        s.hippoDb.objects.closeObject(TENANT_A, 'prediction', 1, {
+          closureState: 'closed',
+          actualValue: 4,
+          actor: 'cli',
+        }),
+      (s) =>
+        s.hippoDb.objects.closeObject(TENANT_A, 'prediction', 2, {
+          closureState: 'closed',
+          actualValue: 3,
+          actor: 'cli',
+        }),
       (s) => s.planningFallacyEvidence(TENANT_A, ['deploy', 'work']),
       (s) => s.planningFallacyEvidence(TENANT_A, ['work']),
       (s) => s.planningFallacyEvidence(TENANT_A, ['nothing']),

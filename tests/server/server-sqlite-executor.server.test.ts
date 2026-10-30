@@ -36,7 +36,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const SAVE = 'objects.saveObject';
+const SAVE = 'hippoDb.objects.saveObject';
 
 afterEach(undoAll);
 
@@ -259,9 +259,9 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     const root = newRoot();
     const info = vi.spyOn(log, 'trail');
     // The worker-backed store with one group run on its server-thread part, as a group the op table missed runs: the defect the grant exists to catch.
-    const store = Object.assign(workerSqliteStore(root), {
-      objects: serverThreadPart(root).objects,
-    });
+    const worker = workerSqliteStore(root);
+    const objects = serverThreadPart(root).hippoDb.objects;
+    const store = Object.assign(worker, { hippoDb: { ...worker.hippoDb, objects } });
     const server = await start(root, store);
 
     const res = await send(server);
@@ -343,7 +343,9 @@ describe('stopping a server with store workers', () => {
     await store.close();
 
     expect(executor.liveThreads()).toBe(0);
-    await expect(store.objects.listObjects('default', 'prediction', { limit: 1 })).rejects.toThrow(/store is closed/);
+    await expect(store.hippoDb.objects.listObjects('default', 'prediction', { limit: 1 })).rejects.toThrow(
+      /store is closed/,
+    );
   });
 });
 
