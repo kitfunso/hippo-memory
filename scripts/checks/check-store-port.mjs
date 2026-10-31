@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-// CI store-port shape gate: the rules that follow types across files, which no lint rule can do. The core port is read
-// from its interfaces; hippo.db's local tier, which has none, from the types its repositories' bodies infer. The
-// store's import and name rules live in .dependency-cruiser.cjs and oxlint.config.ts.
+// CI store-port shape gate: the rules that follow types across files, which no lint rule can do, read from the core
+// port's and the local tier's interfaces. The store's import and name rules live in .dependency-cruiser.cjs and
+// oxlint.config.ts.
 
 import { existsSync, readdirSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { looseTenants } from '../lib/loose-tenants.mjs';
-import { portFunctionParams } from '../lib/port-type-facts.mjs';
-import { tierFunctionParams } from '../lib/tier-type-facts.mjs';
+import { portFunctionParams, unreadRoots } from '../lib/port-type-facts.mjs';
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -20,22 +19,18 @@ function tsFiles(dir, out = []) {
 
 // A function cannot cross to the store worker thread, so a rule reaches the store as data.
 const AS_DATA = 'Send the rule as data the store can read; a function cannot cross to the store worker.';
-const files = ['src/store', 'src/base/ports'].flatMap((dir) => (existsSync(dir) ? tsFiles(dir) : []));
-const tier = tierFunctionParams();
+const inDirs = (dirs) => dirs.flatMap((dir) => (existsSync(dir) ? tsFiles(dir) : []));
+const files = inDirs(['src/store', 'src/base/ports']);
+const unread = unreadRoots();
 const failures = [
   {
-    sites: files.flatMap(portFunctionParams),
-    what: 'A port method takes a parameter whose type holds a function',
-    fix: AS_DATA,
+    sites: unread,
+    what: "The scan could not read a root of the store's types, so the types it reaches went unchecked",
+    fix: 'Point STORE_ROOT or TIER_ROOT in scripts/lib/port-type-facts.mjs at the interface, and type each repository by a declared interface.',
   },
   {
-    sites: tier.unread,
-    what: "The scan could not read hippo.db's local tier, so none of its methods was checked",
-    fix: 'Point TIER_DOOR in scripts/lib/tier-type-facts.mjs at the file that exports hippoDbRepos(), whose return type lists each repository and its methods.',
-  },
-  {
-    sites: tier.sites,
-    what: "A method of hippo.db's local tier takes a parameter whose type holds a function",
+    sites: unread.length > 0 ? [] : inDirs(['src/base/ports', 'src/base/records']).flatMap(portFunctionParams),
+    what: 'A port or local-tier method takes a parameter whose type holds a function',
     fix: AS_DATA,
   },
   {

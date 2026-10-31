@@ -1,14 +1,5 @@
 {
-  "order": [
-    "base",
-    "host",
-    "db",
-    "store",
-    "domain",
-    "infra",
-    "api",
-    "surface"
-  ],
+  "order": ["base", "host", "db", "store", "domain", "infra", "api", "surface"],
   "folders": {
     "base": "base",
     "host": "host",
@@ -39,7 +30,7 @@
   "adapter": {
     "folder": "store/sqlite",
     "root": "surface/open-store.ts",
-    "doors": ["store/sqlite/index.ts", "store/sqlite/hippo-db.ts"],
+    "doors": ["store/sqlite/index.ts"],
     "testKit": { "file": "surface/testing-kit.ts", "door": "store/sqlite/fixtures.ts" }
   },
   "paths": {
@@ -54,7 +45,7 @@
       "api/context/",
       "api/auth/"
     ],
-    "localTier": ["store/sqlite/hippo-db.ts"],
+    "localTier": ["base/ports/hippo-db.ts"],
     "storeRules": ["store/rules/"],
     "ioFree": ["@base", "@domain", "@api"],
     "hostTypesOnly": ["@domain", "@api"],

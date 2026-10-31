@@ -1,6 +1,6 @@
 // The context a local feature's api module takes: a store that carries hippo.db's local tier.
 // Only a surface that proved the tier at composition builds one, so no core path reaches it.
-import type { HippoDbStore, HippoDbTier } from '../store/sqlite/hippo-db.js';
+import type { HippoDbStore, HippoDbTier } from '../base/ports/hippo-db.js';
 import { NoLocalTierError } from '../base/util/store-blocked.js';
 import type { HippoConfig } from '../base/config/config.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
@@ -8,8 +8,6 @@ import type { EmbedderFor } from '../base/ports/embedder.js';
 import type { StoreReach } from '../base/ports/store.js';
 import type { Context, ContextReach, LedgerHome } from './types.js';
 import type { CoreEnrichment, GlobalEnrichment, SleepCount } from './enrichment.js';
-
-export type { HippoDbStore, HippoDbTier } from '../store/sqlite/hippo-db.js';
 
 export interface HippoDbContext extends Context {
   /** The store with the tier on it, so the one rebind a request makes of `store` binds both. */

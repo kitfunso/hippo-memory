@@ -8,12 +8,8 @@ import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../../api/recall/request.js';
 import { recordTokens } from '../../api/tokens.js';
-import {
-  coreEnrichment,
-  globalTargetOf,
-  hasHippoDb,
-  type HippoDbStore,
-} from '../../api/hippo-db-context.js';
+import { coreEnrichment, globalTargetOf, hasHippoDb } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import type { Context as ApiContext } from '../../api/types.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';

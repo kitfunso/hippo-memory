@@ -10,7 +10,7 @@ import { detachedEmbedder } from '../../src/api/embeddings.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { DoctorStore } from '../../src/surface/cli/doctor.js';
-import type { HippoDbRepos } from '../../src/store/sqlite/hippo-db.js';
+import type { HippoDbRepos } from '../../src/base/ports/hippo-db.js';
 import { TEST_DETACHED, TEST_RUN } from './test-run.js';
 
 /** hippo.db under `root` with no runtime: a test holds it across its commands and reads its mirrors

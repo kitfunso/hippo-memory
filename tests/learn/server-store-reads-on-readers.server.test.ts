@@ -27,7 +27,7 @@ import {
   seedLocalGroups,
   shown,
 } from '../_helpers/local-group-reads.js';
-import type { HippoDbStore } from '../../src/store/sqlite/hippo-db.js';
+import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
 const NOW = new Date(FAKE_NOW);

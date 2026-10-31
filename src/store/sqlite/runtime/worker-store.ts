@@ -26,7 +26,7 @@ import {
   type WorkerGroup,
   WORKER_OPS,
 } from './worker-ops.js';
-import type { HippoDbRepos, HippoDbStore } from '../hippo-db.js';
+import type { HippoDbRepos, HippoDbStore } from '../../../base/ports/hippo-db.js';
 import { asHippoDb } from './hippo-db-stores.js';
 import { handlesOf } from './handles.js';
 

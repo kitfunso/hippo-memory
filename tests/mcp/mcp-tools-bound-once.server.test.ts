@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import type { HippoDbStore } from '../../src/api/hippo-db-context.js';
+import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
 import { allMcpTools, bindMcpTools } from '../../src/surface/mcp/request.js';
 import type { McpContext, McpResponse } from '../../src/surface/mcp/protocol.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';

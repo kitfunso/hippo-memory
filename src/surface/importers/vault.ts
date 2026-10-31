@@ -6,11 +6,8 @@ import { createMemory, MemoryEntry } from '../../base/memory/entry.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
 import { rawRowsUnder } from '../../api/memories/memories.js';
 import { wouldRefuse } from '../../api/hippo-db/rejections.js';
-import {
-  coreEnrichment,
-  type HippoDbContext,
-  type HippoDbStore,
-} from '../../api/hippo-db-context.js';
+import { coreEnrichment, type HippoDbContext } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../host/config-file.js';

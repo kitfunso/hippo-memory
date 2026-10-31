@@ -19,7 +19,7 @@ import {
 import type { CaptureDedup, CapturedOutcome } from '../../base/records/capture.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
-import type { HippoDbStore } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import { ensureStoreFiles } from '../../api/store-init.js';
 import { textKeysHeldUnder } from '../../api/hippo-db/captures.js';
 

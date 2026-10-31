@@ -21,7 +21,8 @@ import { readLatestHandoff } from './sessions/handoffs.js';
 import { updateStats } from './entries/index-and-stats.js';
 
 import { sqliteKeyWrites } from './keys/keys.js';
-import { hippoDbRepos, type HippoDbStore } from './hippo-db.js';
+import { hippoDbRepos } from './hippo-db.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import { type Handles, type OnHandle, readOnly, type StoreFiles } from './runtime/open.js';
 import { handlesOf, openStore } from './runtime/handles.js';
 import { answered, bound, skipEmpty, type Bodies } from './runtime/bound.js';

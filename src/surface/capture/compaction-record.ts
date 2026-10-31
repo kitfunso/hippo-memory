@@ -28,7 +28,7 @@ import { errorFields, errorMessage, reportCompactionFailure } from '../../base/u
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { readTranscriptTail } from '../../infra/transcript-tail.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
-import type { HippoDbStore } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */
 export const PRE_COMPACT_INSTRUCTION =

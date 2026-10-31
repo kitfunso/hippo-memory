@@ -34,6 +34,23 @@ export type QuarantineApproval =
 
 export type QuarantineRejection = { readonly outcome: 'rejected' } | QuarantineRefusal;
 
+/** hippo.db's quarantine queue; a refusal resolves, never rejects, and writes nothing. */
+export interface Quarantine {
+  /** At most `limit` of the tenant's records, newest first (quarantinedAt as text in byte order,
+   * then memoryId, both descending); `after` keeps only records below its pair. 'pending' leaves
+   * out a record whose memory row is gone; every other status keeps it, with null content. No
+   * audit row. */
+  list(tenantId: string, query: QuarantineListQuery): Promise<QuarantinedMemory[]>;
+  /** In one transaction, all or none: restores the memory's originalScope if it is in the tenant
+   * and still under `quarantine:private:...`; marks the record approved (decidedAt from the
+   * store's clock, decidedBy `actor`); appends one quarantine_approve row ({originalScope}). */
+  approve(tenantId: string, id: string, actor: string): Promise<QuarantineApproval>;
+  /** In one transaction, both or neither: marks the record rejected (decidedAt and decidedBy as
+   * approve) and appends one quarantine_reject row. The memory row is not touched, so it stays
+   * under its quarantine scope, and a record with no memory row can still be rejected. */
+  reject(tenantId: string, id: string, actor: string): Promise<QuarantineRejection>;
+}
+
 export interface QuarantineRow {
   tenantId: string;
   memoryId: string;

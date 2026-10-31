@@ -16,7 +16,7 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { listAmbientCandidates } from '../../src/store/sqlite/recall/candidates.js';
 import type { AmbientRefusal } from '../../src/base/ports/store.js';
 import type { SummaryDescendants } from '../../src/base/records/dag-reads.js';
-import type { HippoDbStore } from '../../src/api/hippo-db-context.js';
+import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/runtime/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';

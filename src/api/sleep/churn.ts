@@ -5,7 +5,8 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/churn-stale.js';
 import type { Context } from '../types.js';
-import { hasHippoDb, type HippoDbContext, type HippoDbStore } from '../hippo-db-context.js';
+import { hasHippoDb, type HippoDbContext } from '../hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 
 export type { ChurnStaleResult };
 

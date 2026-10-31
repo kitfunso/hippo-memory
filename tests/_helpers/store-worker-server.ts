@@ -17,7 +17,7 @@ import {
 } from '../../src/store/sqlite/runtime/executor.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { sqliteStoreOn } from '../../src/store/sqlite/store.js';
-import type { HippoDbStore } from '../../src/store/sqlite/hippo-db.js';
+import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
 import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { makeRoot } from './make-root.js';
 

@@ -32,7 +32,7 @@ import { isVscodeTranscript } from './copilot-transcript.js';
 import { transcriptWorkingState } from './working-state.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { preCompact, type PreCompactContext } from '../../api/pre-compact.js';
-import type { HippoDbStore } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;

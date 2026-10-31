@@ -1,7 +1,8 @@
 // Creating a store for `hippo init`: the database, its mirror folders and first-run setup.
 
 import { requireHostAdmin } from './types.js';
-import type { HippoDbContext, HippoDbTier } from './hippo-db-context.js';
+import type { HippoDbContext } from './hippo-db-context.js';
+import type { HippoDbTier } from '../base/ports/hippo-db.js';
 
 /** A store holds every tenant, so only the host admin creates one. */
 export async function initMemoryStore(ctx: HippoDbContext): Promise<void> {

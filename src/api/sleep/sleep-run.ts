@@ -24,7 +24,8 @@ import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import { globalTargetOf, type HippoDbContext, type HippoDbStore } from '../hippo-db-context.js';
+import { globalTargetOf, type HippoDbContext } from '../hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial:
  * true` row, or shrink the pages dedup, the audit and ambient read; production never sets them. */

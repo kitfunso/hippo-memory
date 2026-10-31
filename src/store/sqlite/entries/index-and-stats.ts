@@ -10,7 +10,8 @@ import type { HippoIndex } from '../runtime/rows.js';
 import { writeStatsMirror, buildStatsFromDb } from '../folder-files/mirrors.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
-import { bound } from '../runtime/bound.js';
+import { bound, type Bodies } from '../runtime/bound.js';
+import type { Stats } from '../../../base/ports/hippo-db.js';
 import type { StoreAt } from '../../../db/connect.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -41,16 +42,13 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
   };
 }
 
-/** The store-wide counters a local write moves, beside the rows it wrote. */
-export function sqliteStats({ on, files }: Handles) {
+export function sqliteStats({ on, files }: Handles): Stats {
   return bound(
     on,
     {
-      /** Adds `count` to the one store-wide remembered counter, no tenant. Its rows have
-       * committed, so a busy store never fails the write; a store runtime holds the count. */
-      bumpRemembered: (db: DatabaseSyncLike, count: number) =>
+      bumpRemembered: (db, count) =>
         updateStatsUnlessBusy(db, files, { remembered: count }, `remembered ${count}`),
-    },
+    } satisfies Bodies<Stats>,
     openStore,
   );
 }

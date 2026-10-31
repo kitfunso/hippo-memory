@@ -9,7 +9,7 @@ import { sqliteAgentImport } from './agent-import.js';
 import { handlesOf, initStore } from '../runtime/handles.js';
 import { inPortTerms } from '../runtime/port-errors.js';
 import { sqliteStore } from '../store.js';
-import type { HippoDbTier, HippoDbStore } from '../hippo-db.js';
+import type { HippoDbTier, HippoDbStore } from '../../../base/ports/hippo-db.js';
 import type { SqliteStoreOptions } from '../runtime/grant.js';
 
 type SqliteImportStore = HippoDbStore & HippoDbTier;

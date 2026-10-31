@@ -2,11 +2,8 @@
 
 import { rememberUntrusted, type RememberOptions } from '../../api/index.js';
 import type { Actor } from '../../api/types.js';
-import {
-  coreEnrichment,
-  type HippoDbContext,
-  type HippoDbStore,
-} from '../../api/hippo-db-context.js';
+import { coreEnrichment, type HippoDbContext } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import type { ConnectorEvent } from '../../base/records/connectors.js';
 import { markConnectorEventSeen } from '../../api/hippo-db/connector-events.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';

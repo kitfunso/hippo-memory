@@ -1,6 +1,7 @@
 // What a store can do is whether it carries the local tier: audit and learn run on hippo.db's stores, and a store
 // without the tier gets neither sleep nor an unfenced hippo.db.
-import type { HippoDbContext, HippoDbStore } from '../../src/api/hippo-db-context.js';
+import type { HippoDbContext } from '../../src/api/hippo-db-context.js';
+import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';

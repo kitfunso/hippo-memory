@@ -19,7 +19,7 @@ node:sqlite is synchronous, and the store port is async so another store can do 
 
 The store has two tiers. The core port is `HippoStore` in `src/base/ports/store.ts` and `src/base/ports/store/`: the base methods and the groups `keyWrites`, `entryWrites`, `contextReads`, `auditLog`, `vectors` and `vectorWrites`. Every store sets all of it, and no member is optional.
 
-hippo.db's local tier is `store.hippoDb`, which `src/store/sqlite/hippo-db.ts` builds from the SQLite repositories. No other store has it, so it is not part of the port. Its methods run on the store workers like the port's, and `HIPPO_DB_EFFECTS` places each one.
+hippo.db's local tier is `store.hippoDb`. Its port is `HippoDbRepos` in `src/base/ports/hippo-db.ts`, and `src/store/sqlite/hippo-db.ts` builds it from the SQLite repositories. No other store has it, so it is not part of the core port. Its methods run on the store workers like the port's, and `HIPPO_DB_EFFECTS` places each one.
 
 A surface proves the tier once, when it binds, with `hasHippoDb` from `src/api/hippo-db-context.ts`. A route marked `hippoDb: true`, a webhook, the dashboard and an MCP tool bound with `onHippoDb` bind only on a store with the tier. On any other store each one answers the same refusal, `NoLocalTierError`, a 501. A local api module takes a `HippoDbContext`, whose `store` carries the tier, so binding the store to a request binds the tier with it.
 
@@ -29,7 +29,7 @@ A core path that can use the tier but works without it reads `ctx.enrich`, a `Co
 
 Domain code never imports `src/store`. A domain function that calls the tier names the repositories it calls under `hippoDb`. Their interfaces, and the record and request shapes they pass, live in `src/base/records`; their effect table is `src/store/sqlite/hippo-db-effects.ts`.
 
-Three checks hold the line. The depcruise rule `core-port-no-sqlite` fails a core file (the port, and the remember, recall, context, auth and audit api files) that reaches `src/store/sqlite` through any module, type-only imports included, so a local function in a core folder lives in `src/api/hippo-db`. `scripts/checks/check-store-port.mjs` fails a port or tier method that takes a function, which cannot cross to a store worker; it reads the tier's method types as `hippoDbRepos` infers them. `tests/api/published-tier-types.slow.test.ts` fails a symbol a package export publishes whose type reaches a type the tier door declares.
+Three checks hold the line. The depcruise rule `core-port-no-sqlite` fails a core file (the port, and the remember, recall, context, auth and audit api files) that reaches `src/store/sqlite` or the tier's port through any module, type-only imports included, so a local function in a core folder lives in `src/api/hippo-db`. `scripts/checks/check-store-port.mjs` fails a port or tier method that takes a function, which cannot cross to a store worker. `tests/api/published-tier-types.slow.test.ts` fails a symbol a package export publishes whose type reaches a type the tier's port declares.
 
 ### Where the port lives
 
