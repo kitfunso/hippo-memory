@@ -65,8 +65,8 @@ export type {
 } from '../base/records/rejections.js';
 
 // The hippo-memory/store-kit subpath: the core port, row types and hippo.db's rule helpers for a second HippoStore.
-// Its one known user, hippo-enterprise's Postgres store (pgStore in src/pg/store/pg-store.ts), pins hippo-memory
-// ^1.69.0 and must port to this 3.0 core port before it can take 3.0.
+// Its one known user, hippo-enterprise's Postgres store, pins hippo-memory ^1.69.0 and must port to this 3.0 core
+// port before it can take 3.0.
 
 /** hippo.db's store, which an add-on swaps for its own HippoStore in serve(); it takes only an
  * add-on's rules. Typed as the core port: hippo.db's local tier is not part of the contract. */
