@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ARMS, ARM_SEEDS, TOKEN_KEY, armSet } from './arms.mjs';
-import { assertNoAncestorInstructions, checkHomes } from './homes.mjs';
+import { assertNoAncestorInstructions, checkHomes, formatHomesReport } from './homes.mjs';
 import { validateFamilies, drawOrder, taskRoles } from './lessons.mjs';
 import { openContext, cacheTaskRepos } from './runs.mjs';
 import { assertNoPhraseLeaks } from './leaks.mjs';
@@ -289,8 +289,9 @@ async function main() {
   if (mode === 'dry') return dryRun(args, steps);
   const dirName = (st) => st.runName ?? st.sequence.id;
   const runs = [...new Map(steps.map((st) => [`${dirName(st)}|${st.arm}|${st.seed}`, { seq: dirName(st), arm: st.arm, seed: st.seed }])).values()];
-  checkHomes({ outDir: out, runs, passEnv, install: arms.includes('X2') ? checkInstaller(codexOpts.codexBin) : null });
+  const reports = checkHomes({ outDir: out, runs, passEnv, install: arms.includes('X2') ? checkInstaller(codexOpts.codexBin) : null });
   console.log(`Homes check passed for ${runs.length} runs.`);
+  console.log(formatHomesReport(reports).join('\n'));
   if (mode === 'check') return;
   const progress = { last: 'none' };
   const opts = {
@@ -313,7 +314,7 @@ async function main() {
     if (objectLockRetries.count) console.log(`Git object-lock retries (antivirus holding a fresh object): ${objectLockRetries.count}.`);
   }
   // ab-analyze averages unequal seed counts unpaired, so Z0 records go to the Z0 analyzer, which pairs shared seeds.
-  console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs (pairs shared seeds; it lands with PR #357), never ab-analyze.mjs.`);
+  console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs, which pairs shared seeds; never ab-analyze.mjs.`);
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
