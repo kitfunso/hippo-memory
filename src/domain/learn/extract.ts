@@ -19,7 +19,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { Learning } from '../../base/ports/store/learning.js';
+import type { Learning } from '../../base/records/learning.js';
 
 export interface ExtractedFact {
   content: string;

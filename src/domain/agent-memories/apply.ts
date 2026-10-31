@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools.js';
-import type { ContainerApply, MirrorFailure } from '../../base/ports/store/agent-import.js';
+import type { ContainerApply, MirrorFailure } from '../../base/records/agent-import.js';
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import { addOutcomes, planSteps } from './container-steps.js';
 import {

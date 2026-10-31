@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
-import type { EmbeddingIndex } from '../../src/base/ports/store.js';
+import type { EmbeddingIndex } from '../../src/base/records/embedding-index.js';
 import type { EmbeddingIndexState } from '../../src/base/ports/store/vectors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';

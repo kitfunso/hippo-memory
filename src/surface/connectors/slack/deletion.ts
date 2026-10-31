@@ -1,5 +1,5 @@
 import { rawArchiveForEvent } from '../../../api/index.js';
-import type { ConnectorEvent } from '../../../base/ports/store.js';
+import type { ConnectorEvent } from '../../../base/records/connectors.js';
 import type { ConnectorContext } from '../ingest.js';
 
 export interface DeletionInput {

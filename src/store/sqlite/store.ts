@@ -43,8 +43,8 @@ import { readActiveTaskSnapshot } from './sessions/task-snapshots.js';
 import { entriesWithoutVector, writeVectors } from './vectors/vector-index.js';
 import { embedLockKey } from './vectors/embed-lock.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
-import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
-import type { Diagnostics } from '../../base/ports/store/diagnostics.js';
+import type { ProjectTagReads } from '../../base/records/project-tags.js';
+import type { Diagnostics } from '../../base/records/diagnostics.js';
 
 /** The built-in store on `handles`: hippo.db under the port's own method names, each call run to
  * its end on its own short-lived handle before its Promise settles, so no write scope spans an

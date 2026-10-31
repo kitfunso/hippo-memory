@@ -10,8 +10,8 @@ import type {
   IndexStep,
   IndexStepAnswers,
   IndexStepKind,
-  HippoStore,
-} from '../../base/ports/store.js';
+} from '../../base/records/embedding-index.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { chunked } from '../../base/util/chunked.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { FailureNotices } from '../../base/util/failure-notices.js';

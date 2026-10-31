@@ -1,7 +1,7 @@
 // Where-you-left-off verbs that read or save the live state: snapshot, current and working memory.
 
 import { CONTINUITY_EVENT_LIMIT, continuityLatest } from '../../api/continuity/continuity.js';
-import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/records/sessions.js';
 import { snapshotJson } from '../../base/session/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot } from './print.js';

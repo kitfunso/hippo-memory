@@ -16,7 +16,7 @@ import {
   sessionTail,
   resolveLastSessionTranscript,
 } from './transcript.js';
-import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
+import type { CaptureDedup, CapturedOutcome } from '../../base/records/capture.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
 import type { HippoDbStore } from '../../api/hippo-db-context.js';

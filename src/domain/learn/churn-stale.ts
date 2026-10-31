@@ -1,5 +1,5 @@
 // Which memories the churn pass checks and what it writes.
-import type { Learning } from '../../base/ports/store/learning.js';
+import type { Learning } from '../../base/records/learning.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import { GitReadError, type ChurnRepo } from './churn-git.js';

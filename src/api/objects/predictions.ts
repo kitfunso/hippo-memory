@@ -3,8 +3,8 @@ import type {
   PredictionClose,
   PredictionListQuery,
   PredictionSave,
-} from '../../base/ports/store.js';
-import type { Prediction, SavePredictionOptions } from '../../base/ports/store/objects.js';
+} from '../../base/records/objects.js';
+import type { Prediction, SavePredictionOptions } from '../../base/records/objects.js';
 import type { PredictionBaserate } from '../../base/ports/store/types.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
 

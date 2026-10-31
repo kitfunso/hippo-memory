@@ -13,7 +13,7 @@ import type {
   RelationType,
   SourceObjectRef,
   SourceObjectType,
-} from '../../src/base/ports/store/graph.js';
+} from '../../src/base/records/graph.js';
 import {
   diffGraph,
   type StoredEntity,

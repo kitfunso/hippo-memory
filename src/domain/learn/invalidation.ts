@@ -4,8 +4,8 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { LessonWrites } from '../../base/ports/store/entry-writes.js';
-import type { Learning } from '../../base/ports/store/learning.js';
+import type { LessonWrites } from '../../base/records/lesson-writes.js';
+import type { Learning } from '../../base/records/learning.js';
 
 const HEADLINE_CHARS = 60;
 // The share of a row's tokens that must match the target's before the row counts as mentioning it.

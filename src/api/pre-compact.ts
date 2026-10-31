@@ -3,8 +3,8 @@
 
 import type { CaptureInput } from '../base/session/capture-contract.js';
 import { mergeWorkingState, type WorkingState } from '../base/session/working-state.js';
-import type { CompactionStart } from '../base/ports/store/capture.js';
-import type { TaskSnapshot } from '../base/ports/store/sessions.js';
+import type { CompactionStart } from '../base/records/capture.js';
+import type { TaskSnapshot } from '../base/records/sessions.js';
 import type { ContinuityKey } from '../base/ports/store/types.js';
 import { errorFields, errorMessage, log, type LineLog } from '../base/util/log.js';
 import type { HippoDbContext } from './hippo-db-context.js';

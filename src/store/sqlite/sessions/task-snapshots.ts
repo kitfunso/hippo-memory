@@ -8,7 +8,7 @@ import { redactSecretsStrict } from '../../../base/util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../../../base/util/version.js';
 import { TASK_SNAPSHOT_COLUMNS, rowToTaskSnapshot } from '../runtime/rows.js';
 import type { TaskSnapshotJson } from '../../../base/session/continuity-json.js';
-import type { TaskSnapshot, SnapshotInput } from '../../../base/ports/store/sessions.js';
+import type { TaskSnapshot, SnapshotInput } from '../../../base/records/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror } from './session-mirrors.js';
 import type { StoreFiles } from '../runtime/open.js';
 import {

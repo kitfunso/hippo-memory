@@ -5,7 +5,7 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { PromptRecallGate } from '../../base/rank/prompt-recall.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { Ledger } from '../../base/ports/store.js';
+import type { Ledger } from '../../base/records/ledger.js';
 import type {
   DeliveryBlockState,
   DeliveryEventInput,

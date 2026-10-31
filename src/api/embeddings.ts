@@ -12,7 +12,8 @@ import {
 } from '../domain/search/embed-memories.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
 import type { DetachedWork } from '../domain/search/detached-work.js';
-import type { HippoStore, VectorCoverage } from '../base/ports/store.js';
+import type { HippoStore } from '../base/ports/store.js';
+import type { VectorCoverage } from '../base/records/embedding-index.js';
 import { requireHostAdmin, type Context } from './types.js';
 import type { HippoDbContext } from './hippo-db-context.js';
 

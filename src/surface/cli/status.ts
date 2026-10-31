@@ -23,8 +23,8 @@ import {
   vectorSummary,
   type MemoryDetail,
 } from '../../api/status.js';
-import type { StatusCounts } from '../../base/ports/store/reports.js';
-import type { StoredVectorSummary } from '../../base/ports/store.js';
+import type { StatusCounts } from '../../base/records/reports.js';
+import type { StoredVectorSummary } from '../../base/records/embedding-index.js';
 import { type CliContext, type CliCommand } from './api-context.js';
 import { sqliteDiagnosticsStore } from '../open-store.js';
 

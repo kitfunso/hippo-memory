@@ -14,7 +14,7 @@ import type {
   ConnectorEventRecord,
   ConnectorWriteOutcome,
   DeadLetterRows,
-} from '../../src/base/ports/store.js';
+} from '../../src/base/records/connectors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   outcomeOf,
@@ -27,7 +27,7 @@ import {
   type FixtureStore,
 } from '../_helpers/store-conformance.js';
 import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
-import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/base/ports/store/connectors.js';
+import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/base/records/connectors.js';
 import {
   sqliteConnectorEventsSide,
   type ConnectorEventsSide,

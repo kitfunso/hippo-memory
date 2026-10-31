@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { PostCompactPayload } from '../base/session/capture-contract.js';
-import type { CompactionText } from '../base/ports/store/capture.js';
+import type { CompactionText } from '../base/records/capture.js';
 import { errorFields, errorMessage } from '../base/util/log.js';
 import { takeFileLock } from '../host/file-lock.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';

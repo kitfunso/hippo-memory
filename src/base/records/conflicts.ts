@@ -1,9 +1,9 @@
 // The Conflicts group's types: a conflict read with both members' columns, and the keyset page that
 // carries them.
-import type { KeysetPosition } from '../../util/keyset.js';
-import type { TenantId } from '../../util/tenant.js';
-import type { MemoryConflict } from '../../memory/conflict-wire.js';
-import type { MethodEffects } from './effects.js';
+
+import type { KeysetPosition } from '../util/keyset.js';
+import type { TenantId } from '../util/tenant.js';
+import type { MemoryConflict } from '../memory/conflict-wire.js';
 
 export type { MemoryConflict };
 
@@ -76,10 +76,3 @@ export interface Conflicts {
    * side still holds the scope in `resolution`; false, with nothing written, otherwise. */
   resolve(tenantId: string, resolution: ConflictResolution): Promise<boolean>;
 }
-
-/** What each Conflicts method does to the store; every adapter honours it. */
-export const CONFLICTS_EFFECTS = {
-  list: 'read',
-  get: 'read',
-  resolve: 'write',
-} as const satisfies MethodEffects<Conflicts>;

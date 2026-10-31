@@ -11,7 +11,7 @@ import {
   type RepairResult,
   type StoreFolder,
 } from '../../domain/sharing/project-merge.js';
-import type { ProjectTagReads, ProjectTagScope } from '../../base/ports/store/project-tags.js';
+import type { ProjectTagReads, ProjectTagScope } from '../../base/records/project-tags.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { sharedStoreOf } from '../types.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
@@ -22,7 +22,7 @@ export type {
   ProjectSummary,
   RepairResult,
 } from '../../domain/sharing/project-merge.js';
-export type { ProjectFold } from '../../base/ports/store/project-tags.js';
+export type { ProjectFold } from '../../base/records/project-tags.js';
 
 export interface MergeProjectNamesOptions {
   from: string;

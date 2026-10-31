@@ -34,7 +34,7 @@ import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../base/session/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../base/scope/project-identity.js';
 import { shouldSkipUnchanged } from '../base/session/skip-unchanged.js';
-import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
+import type { TokenSurface, TokenUse } from '../base/records/ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
 import { DEFAULT_CONTEXT_BUDGET } from './context/context.js';

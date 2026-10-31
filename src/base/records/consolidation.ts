@@ -1,11 +1,11 @@
-// The store work of one sleep, kept apart from port.ts: reads and writes only, each one call on the
+// The store work of one sleep on hippo.db's local tier: reads and writes only, each one call on the
 // store. What to decay, merge, promote, rebuild and expire is decided in src/domain/consolidate.
-import type { MemoryEntry } from '../../memory/entry.js';
-import type { HalfLifeOutcome } from '../../memory/half-life-plan.js';
-import type { AppendAuditOptions, EntryCursor, EntryPage } from './types.js';
+
+import type { MemoryEntry } from '../memory/entry.js';
+import type { HalfLifeOutcome } from '../memory/half-life-plan.js';
+import type { AppendAuditOptions, EntryCursor, EntryPage } from '../ports/store/types.js';
 import type { RejectedValueRow } from './rejections.js';
 import type { SessionEvent } from './sessions.js';
-import type { MethodEffects } from './effects.js';
 
 export type {
   HalfLifeChange,
@@ -14,7 +14,7 @@ export type {
   HalfLifeRow,
   HalfLifeRows,
   ObjectLink,
-} from '../../memory/half-life-plan.js';
+} from '../memory/half-life-plan.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
@@ -61,22 +61,6 @@ export interface Consolidation {
    * marked. */
   markGraphDrained(tenantId: string, maxId: number): Promise<number>;
 }
-
-/** What each Consolidation method does to the store; every adapter honours it. */
-export const CONSOLIDATION_EFFECTS = {
-  begin: 'write',
-  entryIdsPage: 'read',
-  rejected: 'read',
-  dirtySummaries: 'read',
-  unprofiledTopicSummaries: 'read',
-  settleSummary: 'write',
-  commit: 'write',
-  recordSleep: 'write',
-  auditEachRow: 'write',
-  duplicateCandidates: 'read',
-  dirtyGraphTenants: 'read',
-  markGraphDrained: 'write',
-} as const satisfies MethodEffects<Consolidation>;
 
 export interface SleepBegin {
   readonly dryRun: boolean;

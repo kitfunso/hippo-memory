@@ -6,7 +6,7 @@ import { tenantAnd } from './tenant.js';
 import type { SqlFragment } from '../../../db/sql.js';
 import { orderSql, STORE_ORDER } from '../../rules/order.js';
 import type { EntryCursor, EntryPage } from '../../../base/ports/store/types.js';
-import type { IdPage } from '../../../base/ports/store/vectors.js';
+import type { IdPage } from '../../../base/records/embedding-index.js';
 import { rowToEntry, type MemoryRow } from './rows.js';
 
 /** What a page in loadAllEntries' order asks for; `newest` walks that order backwards, newest

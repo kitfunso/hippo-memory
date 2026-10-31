@@ -10,7 +10,8 @@ import {
   type PlanningFallacyDecision,
 } from '../../domain/predictions/planning-fallacy.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import type { HippoStore, LastRecall, LastRecallWrites } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { LastRecall, LastRecallWrites } from '../../base/records/last-recall.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { estimateTokens } from '../../base/util/token-text.js';

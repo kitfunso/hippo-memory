@@ -7,7 +7,7 @@ import type {
   ConnectorDeadLetter,
   DeadLetterConnector,
   DeadLetterRows,
-} from '../base/ports/store.js';
+} from '../base/records/connectors.js';
 import type { JsonValue } from '../base/util/json.js';
 import { errorMessage } from '../base/util/log.js';
 import type { HippoDbContext } from './hippo-db-context.js';

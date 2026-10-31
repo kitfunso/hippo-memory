@@ -1,6 +1,6 @@
 // The graph groups: the entity graph's reads and the rebuild's writes.
-import type { ScopeActor } from '../../scope/recall-scope.js';
-import type { MethodEffects } from './effects.js';
+
+import type { ScopeActor } from '../scope/recall-scope.js';
 
 /** How many ids one graph read takes at a time: results come back in this order per batch, and a
  * `limit` holds per batch, so every implementation must use the same size. */
@@ -51,12 +51,6 @@ export interface GraphReads {
    * what changed since. */
   graphDelta(tenantId: string, desired: DesiredGraph): Promise<GraphOp[]>;
 }
-
-/** What each GraphReads method does to the store; every adapter honours it. */
-export const GRAPH_READS_EFFECTS = {
-  graphRows: 'read',
-  graphDelta: 'read',
-} as const satisfies MethodEffects<GraphReads>;
 
 export type EntityType = 'person' | 'project' | 'customer' | 'system' | 'policy' | 'decision';
 
@@ -110,11 +104,6 @@ export interface GraphRebuild {
     opts: ApplyGraphOpsOptions,
   ): Promise<ApplyGraphOpsResult>;
 }
-
-/** What each GraphRebuild method does to the store; every adapter honours it. */
-export const GRAPH_REBUILD_EFFECTS = {
-  applyOps: 'write',
-} as const satisfies MethodEffects<GraphRebuild>;
 
 /** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives
  * a mirror forget/prune (memory_id may go null) and is re-validated by the rebuild, not enforced

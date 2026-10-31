@@ -1,13 +1,16 @@
 // The dashboard's reads. Each answers per-project counts, one page, a capped point set or a fixed
 // grid, so what a read hands back never grows with the tenant's row count. Strengths are judged at
 // the `nowMs` each read names.
-import type { MemoryFacts } from '../../memory/memory-facts.js';
+
+import type { MemoryFacts } from '../memory/memory-facts.js';
 import type { ConflictRow } from './conflicts.js';
 
 /** A project's scatter lists each row up to this many rows, and counts grid cells past it. */
 export const SCATTER_POINTS_MAX = 4_000;
+
 /** Grid columns span log10(age + 1) up to log10(maxAgeDays + 1); rows span strength 0 to 1. */
 export const SCATTER_COLS = 64;
+
 export const SCATTER_ROWS = 32;
 
 /** Each left-out row counts under the first of quarantined, superseded and archived that fits

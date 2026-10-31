@@ -3,7 +3,7 @@
 // moving a workspace needs no delete first.
 
 import type { ConnectorStore } from '../ingest.js';
-import type { SlackWorkspace } from '../../../base/ports/store/connectors.js';
+import type { SlackWorkspace } from '../../../base/records/connectors.js';
 
 export type { SlackWorkspace };
 

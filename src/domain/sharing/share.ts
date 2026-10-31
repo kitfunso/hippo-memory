@@ -31,12 +31,15 @@ import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 import type { DetachedWork } from '../search/detached-work.js';
 import type { SharingStore } from './text-keys.js';
-import type { EntrySignals, PageRequest, StoreHome, HippoStore } from '../../base/ports/store.js';
+import type { EntrySignals } from '../../base/records/sharing.js';
+import type { PageRequest } from '../../base/records/reports.js';
+import type { StoreHome } from '../../base/records/folder-files.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import type { Captures } from '../../base/ports/store/capture.js';
+import type { Captures } from '../../base/records/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
-import type { FolderFiles } from '../../base/ports/store/folder-files.js';
-import type { Sharing } from '../../base/ports/store/sharing.js';
+import type { FolderFiles } from '../../base/records/folder-files.js';
+import type { Sharing } from '../../base/records/sharing.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([

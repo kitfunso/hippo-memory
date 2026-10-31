@@ -6,7 +6,7 @@
  * a fused-score effect.
  */
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import type { Entity, Relation } from '../../base/ports/store/graph.js';
+import type { Entity, Relation } from '../../base/records/graph.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphWalk } from './recall.js';
 import { DEFAULT_GRAPH_HOPS } from '../../base/rank/recall-defaults.js';
 

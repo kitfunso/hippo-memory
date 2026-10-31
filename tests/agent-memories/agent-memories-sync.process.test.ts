@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
 import { supersedeNow } from '../_helpers/supersede-now.js';
 import { gateFirstWrite } from '../_helpers/write-gate.js';
-import type { ContainerApply } from '../../src/base/ports/store/agent-import.js';
+import type { ContainerApply } from '../../src/base/records/agent-import.js';
 import type { ImportStore, ImportStores } from '../../src/domain/agent-memories/types.js';
 import { consolidate } from '../../src/index.js';
 import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/api/agent-memories.js';

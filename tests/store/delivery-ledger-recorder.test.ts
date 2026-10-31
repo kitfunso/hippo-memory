@@ -18,7 +18,7 @@ import {
 import type { DeliveryEventInput, DeliveryEventType } from '../../src/base/session/delivery.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { flushDeliveryRecorder } from '../../src/api/ledger-db.js';
-import type { Ledger } from '../../src/base/ports/store.js';
+import type { Ledger } from '../../src/base/records/ledger.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { evalNow } from '../../src/infra/eval-switches.js';

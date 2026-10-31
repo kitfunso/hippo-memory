@@ -7,7 +7,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
-import type { Consolidation, SleepCommit, SummarySettle } from '../../src/base/ports/store/consolidation.js';
+import type { Consolidation, SleepCommit, SummarySettle } from '../../src/base/records/consolidation.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

@@ -23,7 +23,7 @@ import { escapeLike } from '../../../base/util/escape.js';
 import { ftsAnyPhrase } from './fts-phrase.js';
 import { placeholders } from '../../../db/sql.js';
 import type { OriginFilter } from '../../../base/ports/store/types.js';
-import type { RecallSearchEntriesOptions } from '../../../base/ports/store/sharing.js';
+import type { RecallSearchEntriesOptions } from '../../../base/records/sharing.js';
 import {
   VECTOR_CANDIDATE_LIMIT,
   type VectorCandidateSpec,

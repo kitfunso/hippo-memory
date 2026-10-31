@@ -12,7 +12,7 @@ import type {
   CardListQuery,
   CardPage,
   Cards,
-} from '../../../base/ports/store/cards.js';
+} from '../../../base/records/cards.js';
 import { keysetPage } from '../../../base/util/keyset.js';
 import type { OnHandle } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';

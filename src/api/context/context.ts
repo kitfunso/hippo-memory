@@ -1,5 +1,5 @@
 // Ambient context injection: contextGet, the selection it drives and the retrieval it records.
-import type { TaskSnapshot } from '../../base/ports/store/sessions.js';
+import type { TaskSnapshot } from '../../base/records/sessions.js';
 import { markRetrieved } from '../../base/memory/entry.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';

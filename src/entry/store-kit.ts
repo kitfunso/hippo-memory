@@ -62,7 +62,7 @@ export type {
   LiftedRejection,
   Rejection,
   RejectionSource,
-} from '../base/ports/store/rejections.js';
+} from '../base/records/rejections.js';
 
 // The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types,
 // hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
@@ -82,49 +82,41 @@ export {
 } from '../surface/open-store.js';
 export { runStoreConformance } from './store-conformance.js';
 export type { ConformanceRunner } from './conformance/kit.js';
-export {
-  type AmbientCandidateRequest,
-  type CallerItemsSaved,
-  type CardCreate,
-  type Cards,
-  type Compactions,
-  type Conflicts,
-  type ContextReads,
-  type Dormant,
-  type DormantRestoreRequest,
-  type EntryRemoval,
-  type EntryTarget,
-  type EntryWrite,
-  type EntryWrites,
-  type FailureLog,
-  type Goals,
-  type HippoStore,
-  type KeyListQuery,
-  type KeyMint,
-  type KeyRevoke,
-  type KeyWrites,
-  type LastRecall,
-  type LastRecallWrites,
-  type OutcomeWrite,
-  type RawArchive,
-  type RecallSearchArgs,
-  type RecallWrites,
-  type RejectionCheck,
-  type Rejections,
-  type Reports,
-  type SelfKeyMint,
-  type Sessions,
-  type CoreGroups,
-  type SupersedeWrite,
-  type VectorReads,
-  type VectorBackfillQuery,
-  type VectorRowWrite,
-  type VectorWrite,
-  type VectorWriteResult,
-  type VectorWrites,
-  type WorkingMemoryFilter,
-  type WorkingMemoryPush,
+export type {
+  AmbientCandidateRequest,
+  ContextReads,
+  EntryRemoval,
+  EntryTarget,
+  EntryWrite,
+  EntryWrites,
+  HippoStore,
+  KeyListQuery,
+  KeyMint,
+  KeyRevoke,
+  KeyWrites,
+  OutcomeWrite,
+  RawArchive,
+  RecallSearchArgs,
+  RecallWrites,
+  SelfKeyMint,
+  CoreGroups,
+  SupersedeWrite,
+  VectorReads,
+  VectorBackfillQuery,
+  VectorRowWrite,
+  VectorWrite,
+  VectorWriteResult,
+  VectorWrites,
 } from '../base/ports/store-index.js';
+export type { CallerItemsSaved, Compactions } from '../base/records/capture.js';
+export type { CardCreate, Cards } from '../base/records/cards.js';
+export type { Conflicts } from '../base/records/conflicts.js';
+export type { Dormant, DormantRestoreRequest } from '../base/records/dormant.js';
+export type { FailureLog, RejectionCheck, Rejections } from '../base/records/rejections.js';
+export type { Goals } from '../base/records/goals.js';
+export type { LastRecall, LastRecallWrites } from '../base/records/last-recall.js';
+export type { Reports } from '../base/records/reports.js';
+export type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from '../base/records/sessions.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as
 // hippo.db does.
 export function entryAfterOutcome(
@@ -169,12 +161,12 @@ export type {
   SessionEventInput,
   SnapshotInput,
   WorkingMemoryItem,
-} from '../base/ports/store/sessions.js';
+} from '../base/records/sessions.js';
 export type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
 // The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
 export type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
-export type { CardDetail } from '../base/ports/store/cards.js';
-export type { CompleteGoalOptions, PushGoalOptions } from '../base/ports/store/goals.js';
+export type { CardDetail } from '../base/records/cards.js';
+export type { CompleteGoalOptions, PushGoalOptions } from '../base/records/goals.js';
 export type {
   ConflictListQuery,
   ConflictMember,
@@ -184,13 +176,13 @@ export type {
   ConflictSide,
   LoserFate,
   MemoryConflict,
-} from '../base/ports/store/conflicts.js';
+} from '../base/records/conflicts.js';
 export type {
   DormantMemory,
   DormantRestoreOutcome,
   ListDormantOptions,
-} from '../base/ports/store/dormant.js';
-export type { CallerItems, CompactionStart } from '../base/ports/store/capture.js';
+} from '../base/records/dormant.js';
+export type { CallerItems, CompactionStart } from '../base/records/capture.js';
 export type {
   CorrectionLink,
   EntryFilter,
@@ -199,8 +191,8 @@ export type {
   StatusCounts,
   StrengthTallies,
   LegacyStats,
-} from '../base/ports/store/reports.js';
-export type { TokenSummary, TokenUse } from '../base/ports/store/ledger.js';
+} from '../base/records/reports.js';
+export type { TokenSummary, TokenUse } from '../base/records/ledger.js';
 export type { AmbientTallies } from '../base/memory/ambient.js';
 export { StoreBusyError } from '../base/ports/store.js';
 // A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it

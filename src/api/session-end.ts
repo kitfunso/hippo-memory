@@ -5,7 +5,7 @@
 import * as path from 'node:path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
-import type { SessionEvent } from '../base/ports/store/sessions.js';
+import type { SessionEvent } from '../base/records/sessions.js';
 import type { TranscriptCalls } from '../base/session/transcript-calls.js';
 import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
 import { errorMessage, log, errorFields, type LineLog, type LogFields } from '../base/util/log.js';

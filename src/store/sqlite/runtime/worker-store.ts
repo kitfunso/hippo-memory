@@ -5,12 +5,12 @@ import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../../db/index.js';
 import { currentRequestId, type RequestLimits } from '../../../base/util/request-scope.js';
 import type {
   HippoStore,
-  Readiness,
   CoreGroups,
   StoredPart,
   StoredParts,
   VectorReads,
 } from '../../../base/ports/store.js';
+import type { Readiness } from '../../../base/records/diagnostics.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore, sqliteStoreOn } from '../store.js';
 import type { StoreRules } from '../../../base/ports/infra.js';

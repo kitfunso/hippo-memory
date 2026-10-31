@@ -13,7 +13,7 @@ import {
   type FailureReading,
 } from './failure-reading.js';
 import type { JsonValue } from '../../base/util/json.js';
-import type { CaptureErrorOutcome, FailureOutcome } from '../../base/ports/store/rejections.js';
+import type { CaptureErrorOutcome, FailureOutcome } from '../../base/records/rejections.js';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 /** The store a failure is logged and its lesson kept in, with that store's config. */

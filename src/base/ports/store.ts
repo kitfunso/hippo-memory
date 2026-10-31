@@ -2,8 +2,8 @@
 // serve it from any thread, and hippo.db is one adapter. Type-only apart from the store errors.
 import type { MemoryEntry } from '../memory/entry.js';
 import type { TenantId } from '../util/tenant.js';
-import type { TokenUse } from './store/ledger.js';
-import type { SessionEvent, TaskSnapshot } from './store/sessions.js';
+import type { TokenUse } from '../records/ledger.js';
+import type { SessionEvent, TaskSnapshot } from '../records/sessions.js';
 import type { SessionHandoff } from '../session/handoff.js';
 import type { AuditLog } from './store/audit.js';
 import type { EntryWrites } from './store/entry-writes.js';
@@ -11,7 +11,7 @@ import type { VectorReads, VectorWrites } from './store/vectors.js';
 import type { KeyWrites } from './store/keys.js';
 import type { ContextReads } from './store/context-reads.js';
 import type { RecallSearchArgs, RecallWrites } from './store/recall-writes.js';
-import type { EntryFilter, PageRequest } from './store/reports.js';
+import type { EntryFilter, PageRequest } from '../records/reports.js';
 export type { FolderStore, StoreReach } from './store/reach.js';
 import type {
   ApiKeyRecord,
@@ -108,26 +108,8 @@ export interface ContinuityBlock {
 }
 
 // The groups' own request and row shapes, for the api and store-kit to name.
-export type {
-  ConnectorEvent,
-  ConnectorWrite,
-  ConnectorWriteOutcome,
-  ConnectorArchive,
-  ConnectorWrites,
-  ConnectorEventRecord,
-  DeliveryClaim,
-  ConnectorDeadLetter,
-  ConnectorEvents,
-  DeadLetterConnector,
-  DeadLetterRows,
-} from './store/connectors.js';
 
-export type {
-  RecallSearchArgs,
-  RecallWrites,
-  LastRecallWrites,
-  LastRecall,
-} from './store/recall-writes.js';
+export type { RecallSearchArgs, RecallWrites } from './store/recall-writes.js';
 export type {
   VectorReads,
   StoredPart,
@@ -137,16 +119,6 @@ export type {
   VectorWriteResult,
   VectorBackfillQuery,
   VectorWrites,
-  EmbeddingIndex,
-  IndexSession,
-  IndexStep,
-  IndexStepAnswers,
-  IndexStepKind,
-  IdPage,
-  IdPageRequest,
-  StoredVectorSummary,
-  VectorCoverage,
-  VectorRow,
 } from './store/vectors.js';
 export type { KeyRevoke, KeyMint, SelfKeyMint, KeyListQuery, KeyWrites } from './store/keys.js';
 export type {
@@ -155,14 +127,7 @@ export type {
   AmbientCandidates,
   AmbientRefusal,
   ContextReads,
-  SessionRawQuery,
-  SessionRawCount,
-  DescendantAdmission,
   DescendantOrigin,
-  DescendantPage,
-  DescendantWalk,
-  SummaryDescendants,
-  DagReads,
 } from './store/context-reads.js';
 export type {
   EntryWrite,
@@ -172,40 +137,8 @@ export type {
   EntryRemoval,
   RawArchive,
   EntryWrites,
-  LessonWrites,
 } from './store/entry-writes.js';
-export type {
-  PredictionSave,
-  PredictionClose,
-  PredictionFilter,
-  PredictionListQuery,
-  ObjectListQuery,
-  ObjectClose,
-  ObjectSave,
-  IncidentOpen,
-  IncidentOpenRefusal,
-  IncidentResolve,
-  PoliciesInForceQuery,
-  SkillsByNameQuery,
-  Objects,
-} from './store/objects.js';
-export type { AuditLog, AuditMaintenance } from './store/audit.js';
-export type { Readiness } from './store/diagnostics.js';
-export type { GraphViewQuery, GraphWalkQuery, GraphRows, GraphReads } from './store/graph.js';
-export type { Ledger, LedgerTurn, PilotArmOptions } from './store/ledger.js';
-export type {
-  PromotedCopy,
-  Promotion,
-  EntrySignals,
-  EntryTextKey,
-  EntryTextKeyPage,
-  RecallSearchEntriesOptions,
-  Sharing,
-  SourceTally,
-} from './store/sharing.js';
-export type { EntryFilter, PageRequest } from './store/reports.js';
-export type { TextsHoldingOptions } from './store/capture.js';
-export type { FolderFiles, StoreHome } from './store/folder-files.js';
+export type { AuditLog } from './store/audit.js';
 
 // Value exports of the effect tables, kept in a port file of their own.
 export { BASE_EFFECTS, STORE_EFFECTS } from './store/store-effects.js';

@@ -23,7 +23,7 @@ import {
   deriveGraph,
   loadGraphSources,
 } from '../../src/domain/graph/extract.js';
-import type { EntityType } from '../../src/base/ports/store/graph.js';
+import type { EntityType } from '../../src/base/records/graph.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';

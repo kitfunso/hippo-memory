@@ -11,12 +11,12 @@ import {
 } from '../entries/entry-reads.js';
 import { TENANT_IS } from '../runtime/tenant.js';
 import { chunked } from '../../../base/util/chunked.js';
+import type { DescendantOrigin } from '../../../base/ports/store.js';
 import type {
-  DescendantOrigin,
   SummaryDescendants,
   DagReads,
   DescendantWalk,
-} from '../../../base/ports/store.js';
+} from '../../../base/records/dag-reads.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../runtime/rows.js';
 import { descendantAdmits } from '../../../base/scope/read-admission.js';
 import type { OnHandle } from '../runtime/open.js';

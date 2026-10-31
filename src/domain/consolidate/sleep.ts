@@ -34,7 +34,7 @@ import type {
   SleepBegin,
   SleepStart,
   UntracedSession,
-} from '../../base/ports/store/consolidation.js';
+} from '../../base/records/consolidation.js';
 import { SleepRows, Survivors } from './survivors.js';
 import { tombstoneChecks } from './tombstones.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';

@@ -6,7 +6,7 @@ import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memo
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../src/base/ports/store/conflicts.js';
+import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../src/base/records/conflicts.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {

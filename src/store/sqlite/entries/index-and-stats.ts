@@ -15,7 +15,7 @@ import type { StoreAt } from '../../../db/connect.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
-import type { SleepStart } from '../../../base/ports/store/consolidation.js';
+import type { SleepStart } from '../../../base/records/consolidation.js';
 import { META_KEY, getMetaNumber } from '../../../db/meta.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and

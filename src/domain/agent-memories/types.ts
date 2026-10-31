@@ -3,10 +3,10 @@
 import type { Scope, ToolId } from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { AgentImport } from '../../base/ports/store/agent-import.js';
-import type { ProjectTags } from '../../base/ports/store/project-tags.js';
-import type { Rejections } from '../../base/ports/store/rejections.js';
-import type { Sharing } from '../../base/ports/store/sharing.js';
+import type { AgentImport } from '../../base/records/agent-import.js';
+import type { ProjectTags } from '../../base/records/project-tags.js';
+import type { Rejections } from '../../base/records/rejections.js';
+import type { Sharing } from '../../base/records/sharing.js';
 
 /** All an adapter may know about the machine, its disk and git included; it reads nothing else,
  * so tests can fake it all. */

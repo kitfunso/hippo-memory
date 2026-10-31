@@ -6,14 +6,14 @@ import type {
   DormantMove,
   StrengthRefresh,
   Consolidation,
-} from '../../base/ports/store/consolidation.js';
+} from '../../base/records/consolidation.js';
 import type { SleepRows, Survivors } from './survivors.js';
 import type { TombstoneChecks } from './tombstones.js';
 import type { ConsolidateEvent } from './events.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { AuditMaintenance } from '../../base/ports/store/audit.js';
-import type { LessonWrites } from '../../base/ports/store/entry-writes.js';
-import type { Learning } from '../../base/ports/store/learning.js';
+import type { AuditMaintenance } from '../../base/records/audit-maintenance.js';
+import type { LessonWrites } from '../../base/records/lesson-writes.js';
+import type { Learning } from '../../base/records/learning.js';
 
 export interface ConsolidationResult {
   decayed: number;

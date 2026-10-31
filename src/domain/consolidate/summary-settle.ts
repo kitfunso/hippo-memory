@@ -4,7 +4,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { log } from '../../base/util/log.js';
 import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
-import type { SummarySettled, Consolidation } from '../../base/ports/store/consolidation.js';
+import type { SummarySettled, Consolidation } from '../../base/records/consolidation.js';
 import type { HippoStore } from '../../base/ports/store.js';
 
 type SettleStore = HippoStore & { readonly hippoDb: { readonly consolidation: Consolidation } };

@@ -3,7 +3,7 @@
 
 import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
-import type { ConnectorEventRecord } from '../../../base/ports/store/connectors.js';
+import type { ConnectorEventRecord } from '../../../base/records/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 

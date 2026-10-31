@@ -2,15 +2,15 @@
 // reports.
 
 import { isJsonObject, isJsonString } from '../base/util/json.js';
-import type { LegacyStats } from '../base/ports/store/reports.js';
+import type { LegacyStats } from '../base/records/reports.js';
 import type {
   CorrectionLink,
   RawProvenance,
   ReportPage,
   StatusCounts,
-} from '../base/ports/store/reports.js';
+} from '../base/records/reports.js';
 import { READ_PAGE_ROWS } from '../base/util/pages.js';
-import type { Reports } from '../base/ports/store/reports.js';
+import type { Reports } from '../base/records/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
 import { requireHostAdmin, strengthOf, type Context } from './types.js';
@@ -21,7 +21,7 @@ import {
   calculateStrength,
   resolveConfidence,
 } from '../base/memory/strength.js';
-import type { StoredVectorSummary } from '../base/ports/store.js';
+import type { StoredVectorSummary } from '../base/records/embedding-index.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
 import type { HippoDbContext } from './hippo-db-context.js';
 

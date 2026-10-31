@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/graph/extract.js';
 import { entityKey } from '../../src/store/rules/graph-delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
-import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/ports/store/graph.js';
+import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/records/graph.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';

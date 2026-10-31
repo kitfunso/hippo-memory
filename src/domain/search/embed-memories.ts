@@ -11,7 +11,7 @@ import { type IndexRows, type IndexEmbedTarget, indexAdapter } from './embed-ind
 import { type StoreEmbedTarget, storeAdapter } from './embed-store-target.js';
 import type { DetachedWork } from './detached-work.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { EmbeddingIndex } from '../../base/ports/store/vectors.js';
+import type { EmbeddingIndex } from '../../base/records/embedding-index.js';
 
 /** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a
  * memory that stays out of the vector index. */

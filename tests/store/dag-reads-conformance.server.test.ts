@@ -9,7 +9,7 @@ import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
 import type { AuditEvent, HippoStore, MemoryEntry } from '../../src/entry/store-kit.js';
-import type { DescendantWalk, SessionRawCount, SummaryDescendants } from '../../src/base/ports/store.js';
+import type { DescendantWalk, SessionRawCount, SummaryDescendants } from '../../src/base/records/dag-reads.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../src/base/util/pages.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';

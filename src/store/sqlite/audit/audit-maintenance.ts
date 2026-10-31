@@ -31,10 +31,10 @@ import type {
   QualityRepairResult,
   QualityRepairIssue,
   RepairProtection,
-} from '../../../base/ports/store/audit.js';
+} from '../../../base/records/audit-maintenance.js';
 import { openStore } from '../runtime/handles.js';
 import { answered, bound, skipEmpty, type Bodies } from '../runtime/bound.js';
-import type { AuditMaintenance } from '../../../base/ports/store.js';
+import type { AuditMaintenance } from '../../../base/records/audit-maintenance.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { getMeta, pragmaUserVersion, setMeta, META_KEY } from '../../../db/meta.js';

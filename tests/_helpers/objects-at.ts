@@ -1,4 +1,4 @@
-import type { Objects } from '../../src/base/ports/store.js';
+import type { Objects } from '../../src/base/records/objects.js';
 import type { RequestStores } from '../../src/db/request-stores.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 

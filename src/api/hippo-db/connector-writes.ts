@@ -1,6 +1,6 @@
 // Connector writes: content an agent doesn't control, which the instruction check gates, written
 // with its event and any quarantine record on hippo.db's local tier, and a connector's deletes.
-import type { ConnectorEvent, ConnectorWrite } from '../../base/ports/store.js';
+import type { ConnectorEvent, ConnectorWrite } from '../../base/records/connectors.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 import {
   countRemembered,

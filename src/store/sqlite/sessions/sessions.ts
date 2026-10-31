@@ -23,8 +23,8 @@ import type {
   WorkingMemoryItem,
   WorkingMemoryFilter,
   WorkingMemoryPush,
-} from '../../../base/ports/store/sessions.js';
-import type { UntracedSession } from '../../../base/ports/store/consolidation.js';
+} from '../../../base/records/sessions.js';
+import type { UntracedSession } from '../../../base/records/consolidation.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './session-mirrors.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { continuityStamp, type ContinuityKey } from '../../../base/ports/store/types.js';

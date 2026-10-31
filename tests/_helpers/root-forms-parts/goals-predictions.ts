@@ -2,7 +2,7 @@
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
-import type { CompleteGoalOptions, PushGoalOptions } from '../../../src/base/ports/store/goals.js';
+import type { CompleteGoalOptions, PushGoalOptions } from '../../../src/base/records/goals.js';
 import * as goalsSql from '../../../src/store/sqlite/sessions/goals.js';
 import * as baserateSql from '../../../src/store/sqlite/learning/prediction-baserate.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
@@ -13,7 +13,7 @@ import type {
   Goal,
   PredictionBaserate,
 } from '../../../src/base/ports/store/types.js';
-import type { Prediction, PredictionClose } from '../../../src/base/ports/store/objects.js';
+import type { Prediction, PredictionClose } from '../../../src/base/records/objects.js';
 import type { ClosureState } from '../../../src/base/records/prediction.js';
 import { onHandle, sqliteStore } from '../test-session.js';
 

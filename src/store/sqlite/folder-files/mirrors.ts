@@ -21,7 +21,7 @@ import {
   rowToEntry,
   MEMORY_CONFLICT_COLUMNS,
 } from '../runtime/rows.js';
-import type { LegacyStats } from '../../../base/ports/store/reports.js';
+import type { LegacyStats } from '../../../base/records/reports.js';
 import type { ConflictWire } from '../../../base/memory/conflict-wire.js';
 import { mirrorDecimal, serializeEntry } from '../../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../../host/atomic-write.js';

@@ -1,11 +1,7 @@
 // Moves a store's memories still on an old default half-life base to a new one, once, audit-logged;
 // the plan is src/base/memory/half-life-plan.ts, which the store runs inside the move's own
 // transaction as a sleep begins.
-import type {
-  SleepBegin,
-  SleepStart,
-  Consolidation,
-} from '../../base/ports/store/consolidation.js';
+import type { SleepBegin, SleepStart, Consolidation } from '../../base/records/consolidation.js';
 import type { HippoStore } from '../../base/ports/store.js';
 
 /** What {@link migrateDefaultHalfLife} did, or would do under `dryRun`. */

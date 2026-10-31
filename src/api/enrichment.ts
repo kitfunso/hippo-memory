@@ -1,12 +1,12 @@
 // What a core path reads from hippo.db's local tier when its root has one; a store without the tier
 // leaves it unset, and each path takes its fallback. Each member names only the calls core makes.
-import type { StoreHome } from '../base/ports/store/folder-files.js';
-import type { LedgerTurn, PilotArmOptions, TokenSurface } from '../base/ports/store/ledger.js';
+import type { StoreHome } from '../base/records/folder-files.js';
+import type { LedgerTurn, PilotArmOptions, TokenSurface } from '../base/records/ledger.js';
 import type { PilotArm } from '../base/session/pilot-arm.js';
 import type { LastSent } from '../base/session/skip-unchanged.js';
 import type { ApiCall } from '../base/session/transcript-calls.js';
-import type { LastRecallWrites } from '../base/ports/store/recall-writes.js';
-import type { HandoffFilter } from '../base/ports/store/sessions.js';
+import type { LastRecallWrites } from '../base/records/last-recall.js';
+import type { HandoffFilter } from '../base/records/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
 import type { ContinuityKey } from '../base/ports/store/types.js';
 import type { GraphWalk } from '../domain/graph/recall.js';

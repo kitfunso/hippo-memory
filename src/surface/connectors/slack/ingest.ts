@@ -1,4 +1,4 @@
-import type { ConnectorEvent } from '../../../base/ports/store.js';
+import type { ConnectorEvent } from '../../../base/records/connectors.js';
 import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { messageToRememberOpts } from './transform.js';
 import type { ChannelMeta } from './scope.js';

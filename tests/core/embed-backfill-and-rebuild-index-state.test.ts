@@ -21,7 +21,7 @@ import { localIndex, storeAt } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import type { EmbeddingIndex } from '../../src/base/ports/store.js';
+import type { EmbeddingIndex } from '../../src/base/records/embedding-index.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 

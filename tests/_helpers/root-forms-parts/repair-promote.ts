@@ -7,7 +7,7 @@ import { promote } from '../../../src/api/hippo-db/promote.js';
 import { apiCtx } from '../api-ctx.js';
 import { type StoreFiles } from '../../../src/store/sqlite/runtime/open.js';
 import type { RepairProtection } from '../../../src/base/memory/memory-audit.js';
-import type { QualityRepairResult } from '../../../src/base/ports/store/audit.js';
+import type { QualityRepairResult } from '../../../src/base/records/audit-maintenance.js';
 import { sqliteStore } from '../test-session.js';
 
 export async function copyToGlobal(

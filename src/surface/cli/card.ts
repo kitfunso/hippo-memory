@@ -5,7 +5,7 @@ import { type Card, type CardStatus, isCardStatus } from '../../base/records/car
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { keysetPages } from '../../api/pages.js';
-import type { CardDetail } from '../../base/ports/store/cards.js';
+import type { CardDetail } from '../../base/records/cards.js';
 import { printError } from './output.js';
 import { printJsonList } from './json-list.js';
 import {

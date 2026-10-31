@@ -1,8 +1,8 @@
 // The session, snapshot and handoff shapes the Sessions group takes and returns.
-import type { JsonValue, JsonObject } from '../../util/json.js';
-import type { HandoffEvidence, HandoffOutcome, SessionHandoff } from '../../session/handoff.js';
-import type { ContinuityKey } from './types.js';
-import type { MethodEffects } from './effects.js';
+
+import type { JsonValue, JsonObject } from '../util/json.js';
+import type { HandoffEvidence, HandoffOutcome, SessionHandoff } from '../session/handoff.js';
+import type { ContinuityKey } from '../ports/store/types.js';
 
 export interface TaskSnapshot {
   id: number;
@@ -198,15 +198,6 @@ export interface Sessions {
   ): Promise<string | null>;
 }
 
-/** What each Sessions method does to the store; every adapter honours it. */
-export const SESSIONS_EFFECTS = {
-  save: 'write',
-  read: 'read',
-  clear: 'write',
-  loadSnapshot: 'read',
-  bindSessionOwner: 'write',
-} as const satisfies MethodEffects<Sessions>;
-
 /** Each method's overloads as one argument list, so an adapter writes one body per method. */
 export type SessionSaveArgs =
   | [tenantId: string, kind: 'snapshot', snapshot: SnapshotInput, key: ContinuityKey | null]
@@ -218,6 +209,7 @@ export type SessionSaveArgs =
       key?: ContinuityKey | null,
     ]
   | [tenantId: string, kind: 'working_memory', item: WorkingMemoryPush];
+
 export type SessionReadArgs =
   | [tenantId: string, kind: 'event', query: SessionEventQuery]
   | [tenantId: string, kind: 'handoff', query: HandoffQuery, key?: ContinuityKey | null]
@@ -226,6 +218,7 @@ export type SessionReadArgs =
       kind: 'working_memory',
       query: WorkingMemoryFilter & { readonly limit?: number },
     ];
+
 export type SessionClearArgs =
   | [
       tenantId: string,

@@ -21,7 +21,7 @@ import type {
   ItemsOptions,
   OpenCompaction,
   StepFailure,
-} from '../../base/ports/store/capture.js';
+} from '../../base/records/capture.js';
 import { loadConfig } from '../../host/config-file.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';

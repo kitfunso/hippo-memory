@@ -13,7 +13,7 @@ import type {
   CaptureErrorOutcome,
   FailureOutcome,
   RoutineRule,
-} from '../../base/ports/store/rejections.js';
+} from '../../base/records/rejections.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { withEntryInfra } from '../entry-infra.js';
 import { withHippoDb, type HippoDbContext } from '../../api/hippo-db-context.js';

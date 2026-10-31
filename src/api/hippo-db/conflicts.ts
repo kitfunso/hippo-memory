@@ -8,12 +8,8 @@ import {
   personalScopeOf,
   scopeReaderOf,
 } from '../../base/scope/recall-scope.js';
-import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
-import type {
-  ConflictMember,
-  ConflictRow,
-  ConflictSide,
-} from '../../base/ports/store/conflicts.js';
+import type { MemoryConflict } from '../../base/records/conflicts.js';
+import type { ConflictMember, ConflictRow, ConflictSide } from '../../base/records/conflicts.js';
 import { conflictLoserFate } from '../../domain/consolidate/conflicts.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';

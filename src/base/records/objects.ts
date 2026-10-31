@@ -9,12 +9,11 @@ import type {
   Policy,
   SavableKind,
   Skill,
-} from '../../records/object-types.js';
-import type { KeysetPosition } from '../../util/keyset.js';
-import type { MemoryEntry } from '../../memory/entry.js';
-import type { ClosureState } from '../../records/prediction.js';
-import type { PredictionBaserate } from './types.js';
-import type { MethodEffects } from './effects.js';
+} from './object-types.js';
+import type { KeysetPosition } from '../util/keyset.js';
+import type { MemoryEntry } from '../memory/entry.js';
+import type { ClosureState } from './prediction.js';
+import type { PredictionBaserate } from '../ports/store/types.js';
 
 /** Which of a tenant's rows of one kind a list reads: every status when `status` is unset, every
  * value of the kind's one filter column (customer, repo) when `filter` is, every mirror when
@@ -190,16 +189,6 @@ export interface Objects {
   ): Promise<PredictionBaserate>;
 }
 
-/** What each Objects method does to the store; every adapter honours it. */
-export const OBJECTS_EFFECTS = {
-  listObjects: 'read',
-  objectById: 'read',
-  closeObject: 'write',
-  saveObject: 'write',
-  briefReceipts: 'read',
-  predictionBaserate: 'write',
-} as const satisfies MethodEffects<Objects>;
-
 /** Each method's overloads as one argument list, so an adapter writes one body per method: the
  * kind and the payload's shape pick the statement. */
 export type ObjectListArgs =
@@ -209,9 +198,11 @@ export type ObjectListArgs =
       kind: ObjectKind,
       query: ObjectListQuery | PoliciesInForceQuery | SkillsByNameQuery,
     ];
+
 export type ObjectCloseArgs =
   | [tenantId: string, kind: 'prediction', id: number, close: PredictionClose]
   | [tenantId: string, kind: ObjectKind, id: number, close: ObjectClose | IncidentResolve];
+
 export type ObjectSaveArgs =
   | [tenantId: string, kind: 'prediction', save: PredictionSave]
   | [tenantId: string, kind: 'incident', open: IncidentOpen]

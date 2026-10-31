@@ -21,7 +21,7 @@ import type {
   TokenSurface,
   TokenSurfaceSummary,
   TokenUse,
-} from '../../../base/ports/store/ledger.js';
+} from '../../../base/records/ledger.js';
 import type { LastSent } from '../../../base/session/skip-unchanged.js';
 import type { ApiCall } from '../../../base/session/transcript-calls.js';
 import { DAY_MS } from '../../../base/util/time.js';

@@ -14,7 +14,7 @@ import {
 } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
-import type { Entity, GraphRows, GraphWalkQuery, Relation } from '../../base/ports/store/graph.js';
+import type { Entity, GraphRows, GraphWalkQuery, Relation } from '../../base/records/graph.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import {
   passesCliRecallScopeFilter,

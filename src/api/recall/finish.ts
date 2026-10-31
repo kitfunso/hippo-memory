@@ -2,7 +2,7 @@
 // counter, token ledger row and the client's shown list).
 import { auditQueryFields } from '../../base/records/audit-report.js';
 import type { HippoStore, RecallWrites } from '../../base/ports/store.js';
-import type { TokenSurface } from '../../base/ports/store/ledger.js';
+import type { TokenSurface } from '../../base/records/ledger.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
 import { strengthOf, type Context } from '../types.js';

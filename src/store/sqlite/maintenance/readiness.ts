@@ -1,6 +1,6 @@
 // GET /ready's probe of hippo.db: one cheap read on the store's handle.
 import { existsSync } from 'node:fs';
-import type { Readiness } from '../../../base/ports/store/diagnostics.js';
+import type { Readiness } from '../../../base/records/diagnostics.js';
 import { getHippoDbPath } from '../../../db/index.js';
 import { answered } from '../runtime/bound.js';
 import type { Handles } from '../runtime/open.js';

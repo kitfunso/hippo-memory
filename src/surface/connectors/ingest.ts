@@ -7,7 +7,7 @@ import {
   type HippoDbContext,
   type HippoDbStore,
 } from '../../api/hippo-db-context.js';
-import type { ConnectorEvent } from '../../base/ports/store.js';
+import type { ConnectorEvent } from '../../base/records/connectors.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { InfraPorts } from '../../base/ports/infra.js';

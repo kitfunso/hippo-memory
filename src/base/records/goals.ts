@@ -1,6 +1,6 @@
 // The goal options the Goals group takes.
-import type { PolicyType, Goal } from './types.js';
-import type { MethodEffects } from './effects.js';
+
+import type { PolicyType, Goal } from '../ports/store/types.js';
 
 /** Level a pushed goal gets when the caller names none. */
 export const DEFAULT_GOAL_LEVEL = 0;
@@ -39,12 +39,3 @@ export interface Goals {
   suspend(tenantId: string, goalId: string): Promise<void>;
   resume(tenantId: string, goalId: string): Promise<void>;
 }
-
-/** What each Goals method does to the store; every adapter honours it. */
-export const GOALS_EFFECTS = {
-  push: 'write',
-  sessionGoals: 'read',
-  complete: 'write',
-  suspend: 'write',
-  resume: 'write',
-} as const satisfies MethodEffects<Goals>;

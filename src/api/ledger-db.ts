@@ -1,7 +1,7 @@
 // The ledgers a caller writes to: the token ledger's store and the delivery ledger's recorder, which
 // context, recall and the session hooks share.
-import type { LedgerTurn } from '../base/ports/store.js';
-import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
+import type { LedgerTurn } from '../base/records/ledger.js';
+import type { TokenSurface, TokenUse } from '../base/records/ledger.js';
 import type { LastSent } from '../base/session/skip-unchanged.js';
 import type { HippoConfig } from '../base/config/config.js';
 import type { CoreEnrichment } from './enrichment.js';

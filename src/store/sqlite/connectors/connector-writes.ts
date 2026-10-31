@@ -10,7 +10,7 @@ import type {
   ConnectorWrite,
   ConnectorWriteOutcome,
   ConnectorWrites,
-} from '../../../base/ports/store.js';
+} from '../../../base/records/connectors.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProject } from '../entries/entry-row.js';
 import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from '../entries/entry-writes.js';

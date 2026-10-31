@@ -1,7 +1,7 @@
 // What `hippo doctor` and `hippo support-bundle` read from hippo.db's own files: read-only, so a
 // check never creates, migrates or locks the store it inspects.
-import type { JsonObject } from '../../util/json.js';
-import type { MethodEffects } from './effects.js';
+
+import type { JsonObject } from '../util/json.js';
 
 export interface Diagnostics {
   /** Rejects when the store cannot be opened or its schema version read. */
@@ -10,12 +10,6 @@ export interface Diagnostics {
    * column. */
   inventory(): Promise<StoreInventory>;
 }
-
-/** What each Diagnostics method does to the store; every adapter honours it. */
-export const DIAGNOSTICS_EFFECTS = {
-  health: 'read',
-  inventory: 'read',
-} as const satisfies MethodEffects<Diagnostics>;
 
 export interface CompactionCounts {
   total: number;
@@ -75,8 +69,3 @@ export interface Readiness {
    * cannot. */
   ping(): Promise<void>;
 }
-
-/** What each Readiness method does to the store; every adapter honours it. */
-export const READINESS_EFFECTS = {
-  ping: 'read',
-} as const satisfies MethodEffects<Readiness>;

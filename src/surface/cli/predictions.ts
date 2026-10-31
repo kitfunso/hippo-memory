@@ -8,7 +8,7 @@ import { parseListLimit, type CliFlags, stringFlag, type CommandContext } from '
 import { requireInit } from './shared.js';
 import { foundOrExit, idArgOrExit, requireStatus } from './object-verbs.js';
 import { fail } from './exit.js';
-import type { Prediction } from '../../base/ports/store/objects.js';
+import type { Prediction } from '../../base/records/objects.js';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 const BASERATE_DECIMALS = 3;

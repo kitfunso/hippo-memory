@@ -5,7 +5,7 @@ import {
   memoryNotFoundText,
   NotFoundError,
 } from '../../base/errors/api-errors.js';
-import type { StoreHome } from '../../base/ports/store.js';
+import type { StoreHome } from '../../base/records/folder-files.js';
 import { generateId, type MemoryEntry } from '../../base/memory/entry.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';

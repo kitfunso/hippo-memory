@@ -7,7 +7,7 @@ import type {
   LiftedRejection,
   RejectedValueRow,
   Rejections,
-} from '../../base/ports/store/rejections.js';
+} from '../../base/records/rejections.js';
 import type { HippoStore } from '../../base/ports/store.js';
 
 type RejectionStore = HippoStore & { readonly hippoDb: { readonly rejections: Rejections } };

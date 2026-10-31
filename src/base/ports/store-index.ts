@@ -12,8 +12,6 @@ export type {
   KeyMint,
   KeyRevoke,
   KeyWrites,
-  LastRecall,
-  LastRecallWrites,
   OutcomeWrite,
   RawArchive,
   RecallSearchArgs,
@@ -28,11 +26,3 @@ export type {
   VectorWriteResult,
   VectorWrites,
 } from './store.js';
-export type { CardCreate, Cards } from './store/cards.js';
-export type { Conflicts } from './store/conflicts.js';
-export type { Dormant, DormantRestoreRequest } from './store/dormant.js';
-export type { Goals } from './store/goals.js';
-export type { Reports } from './store/reports.js';
-export type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from './store/sessions.js';
-export type { RejectionCheck, Rejections, FailureLog } from './store/rejections.js';
-export type { CallerItemsSaved, Compactions } from './store/capture.js';

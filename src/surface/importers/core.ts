@@ -11,8 +11,8 @@ import { vetSecrets } from '../../base/util/secret-detect.js';
 import { log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { EntryWrites } from '../../base/ports/store/entry-writes.js';
-import type { Rejections } from '../../base/ports/store/rejections.js';
-import type { Sharing } from '../../base/ports/store/sharing.js';
+import type { Rejections } from '../../base/records/rejections.js';
+import type { Sharing } from '../../base/records/sharing.js';
 import type { Clock } from '../../base/ports/infra.js';
 
 /** Below this length a chunk holds nothing worth recalling. */

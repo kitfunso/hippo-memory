@@ -22,7 +22,7 @@ import {
   type RelationRow,
 } from '../../../src/store/sqlite/graph/graph-rows.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
-import type { Entity, EntityType, Relation } from '../../../src/base/ports/store/graph.js';
+import type { Entity, EntityType, Relation } from '../../../src/base/records/graph.js';
 import { openStore } from '../../../src/store/sqlite/runtime/handles.js';
 import * as searchRowsSql from '../../../src/store/sqlite/recall/search-rows.js';
 import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
@@ -30,7 +30,8 @@ import * as tokenLedgerSql from '../../../src/store/sqlite/ledger/token-ledger.j
 import * as vectorIndexSql from '../../../src/store/sqlite/vectors/vector-index.js';
 import { applyRebuild, type RebuildPatch } from '../../../src/domain/consolidate/summary-settle.js';
 import { loadEveryTenantEntries } from './entries.js';
-import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/base/ports/store/vectors.js';
+import type { VectorCandidateSpec } from '../../../src/base/ports/store/vectors.js';
+import type { StoredVectorSummary } from '../../../src/base/records/embedding-index.js';
 import { handlesOf, onHandle, sqliteStore } from '../test-session.js';
 
 /** The tenant's newest entities, `entityType` only when named. */

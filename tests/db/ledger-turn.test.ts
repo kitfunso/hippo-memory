@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from '../../src/api/delivery/delivery-recorder.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
-import type { TokenUse } from '../../src/base/ports/store/ledger.js';
+import type { TokenUse } from '../../src/base/records/ledger.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

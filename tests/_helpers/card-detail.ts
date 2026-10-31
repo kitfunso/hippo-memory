@@ -1,4 +1,4 @@
-import type { CardDetail } from '../../src/base/ports/store/cards.js';
+import type { CardDetail } from '../../src/base/records/cards.js';
 import { apiCtx } from './api-ctx.js';
 
 /** What `hippo card show` prints for a card (deps, runs, comments, latest handoff), read through the api. */

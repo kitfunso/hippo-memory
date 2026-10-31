@@ -7,7 +7,7 @@ import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';
-import type { SessionRawCount, SessionRawKey } from '../base/ports/store/context-reads.js';
+import type { SessionRawCount, SessionRawKey } from '../base/records/dag-reads.js';
 import type { HippoDbContext } from './hippo-db-context.js';
 
 export const DEFAULT_FRESH_TAIL_COUNT = 10;

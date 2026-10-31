@@ -16,7 +16,7 @@ import type {
   PredictionListQuery,
   PredictionSave,
   SavePredictionOptions,
-} from '../../../base/ports/store/objects.js';
+} from '../../../base/records/objects.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import type { JsonObject } from '../../../base/util/json.js';
 import { handleStamp } from '../runtime/handle-clock.js';

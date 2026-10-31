@@ -10,7 +10,7 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { captureError } from '../../src/domain/learn/autolearn.js';
 import { recordTokenUse } from '../../src/store/sqlite/ledger/token-ledger.js';
-import type { TokenSurface } from '../../src/base/ports/store/ledger.js';
+import type { TokenSurface } from '../../src/base/records/ledger.js';
 import { PATH_TAGS, query, Store, type Ran } from '../_helpers/cli-verb-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { evalNow } from '../../src/infra/eval-switches.js';

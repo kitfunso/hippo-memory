@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeActiveTaskMirror, writeRecentSessionMirror } from '../../src/store/sqlite/sessions/session-mirrors.js';
-import type { SessionEvent, TaskSnapshot } from '../../src/base/ports/store/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../../src/base/records/sessions.js';
 
 const SNAPSHOT: TaskSnapshot = {
   id: 7,

@@ -1,6 +1,6 @@
 // DAG drill-down from a summary to its children.
 
-import type { SummaryDescendants } from '../../base/ports/store.js';
+import type { SummaryDescendants } from '../../base/records/dag-reads.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';

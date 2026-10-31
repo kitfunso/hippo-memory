@@ -13,7 +13,7 @@ import type {
   ContainerApplied,
   ContainerApply,
   MirrorFailure,
-} from '../../../base/ports/store/agent-import.js';
+} from '../../../base/records/agent-import.js';
 
 function applyContainer(
   db: DatabaseSyncLike,

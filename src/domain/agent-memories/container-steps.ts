@@ -2,7 +2,7 @@
 // from the outcomes.
 import { Layer, createMemory, type MemoryEntry } from '../../base/memory/entry.js';
 import { calculateStrength } from '../../base/memory/strength.js';
-import type { ImportStep, StepOutcome } from '../../base/ports/store/agent-import.js';
+import type { ImportStep, StepOutcome } from '../../base/records/agent-import.js';
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import type { ContainerWork, StoreSession } from './container-view.js';
 import type { ContainerPlan } from './plan.js';

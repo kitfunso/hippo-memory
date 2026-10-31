@@ -1,20 +1,15 @@
 // The agent-memories import's one write per container: the sync plans a container's writes as data
 // from entry pages, and applyContainer runs them in one transaction once the rows they were planned
 // on still stand.
-import type { MemoryEntry } from '../../memory/entry.js';
+
+import type { MemoryEntry } from '../memory/entry.js';
 import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
-import type { MethodEffects } from './effects.js';
 
 export interface AgentImport {
   /** The steps in order in one write scope, or a trial scope that rolls back on `dryRun`;
    * mirrors follow the commit. */
   applyContainer(plan: ContainerApply): Promise<ContainerApplied>;
 }
-
-/** What each AgentImport method does to the store; every adapter honours it. */
-export const AGENT_IMPORT_EFFECTS = {
-  applyContainer: 'write',
-} as const satisfies MethodEffects<AgentImport>;
 
 /** A live row as the plan read it. */
 export interface PlannedRow {

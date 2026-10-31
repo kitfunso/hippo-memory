@@ -35,7 +35,7 @@ import type {
   Rejection,
   RejectionCheck,
   Rejections,
-} from '../../../base/ports/store/rejections.js';
+} from '../../../base/records/rejections.js';
 import { mergedSuccessor } from '../../../base/memory/merged-row.js';
 import { rejectedText, rejectionReaches } from '../../../base/records/rejection-text.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';

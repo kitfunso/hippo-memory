@@ -1,6 +1,6 @@
 // The per-session goal stack that recall boosts: push, list, complete, suspend and resume.
 
-import type { CompleteGoalOptions, PushGoalOptions } from '../../base/ports/store/goals.js';
+import type { CompleteGoalOptions, PushGoalOptions } from '../../base/records/goals.js';
 import { requireHostAdmin, type EntryContext } from '../types.js';
 import type { Goal } from '../../base/ports/store/types.js';
 import { requireHippoDb, type HippoDbContext } from '../hippo-db-context.js';

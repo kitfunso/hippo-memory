@@ -1,6 +1,6 @@
 // The connector conformance tests' store with reads of the event logs, quarantine records and dead-letter queues
 // straight from their tables.
-import type { ConnectorDeadLetter, ConnectorEvent } from '../../src/base/ports/store.js';
+import type { ConnectorDeadLetter, ConnectorEvent } from '../../src/base/records/connectors.js';
 import type { ConnectorStore } from '../../src/surface/connectors/ingest.js';
 import { auditRowsOn } from './audit-rows.js';
 import { onHandle, sqliteStore } from './test-session.js';

@@ -43,7 +43,7 @@ import { deferDueMirrors, markMirrorsDue } from '../folder-files/due-mirrors.js'
 import type { Handles, StoreFiles, StoreModel } from '../runtime/open.js';
 import { bindHandleClock } from '../runtime/handle-clock.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
-import type { RenameSourceOptions } from '../../../base/ports/store/agent-import.js';
+import type { RenameSourceOptions } from '../../../base/records/agent-import.js';
 import type { StrengthenOptions } from '../../../base/ports/store/recall-writes.js';
 import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
 import { assertWriteRight, readerReaches, targetReader } from '../../../base/scope/recall-scope.js';

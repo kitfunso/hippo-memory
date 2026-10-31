@@ -4,7 +4,7 @@
 // transaction, which is what holds when two workers race.
 
 import type { RememberOptions } from '../../../api/index.js';
-import type { ConnectorEvent } from '../../../base/ports/store.js';
+import type { ConnectorEvent } from '../../../base/records/connectors.js';
 import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
 import {

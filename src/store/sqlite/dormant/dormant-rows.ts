@@ -9,16 +9,16 @@ import type { SqlFragment } from '../../../db/sql.js';
 import { EVERY_SCOPE } from '../runtime/rule-sql.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { escapeLike } from '../../../base/util/escape.js';
-import type { EntryFilter } from '../../../base/ports/store/reports.js';
+import type { EntryFilter } from '../../../base/records/reports.js';
 import { parseStoredJson, warnDamagedColumn } from '../../../base/util/stored-json.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import type { DormantMove } from '../../../base/ports/store/consolidation.js';
+import type { DormantMove } from '../../../base/records/consolidation.js';
 import {
   dormantListCap,
   dormantTerms,
   type DormantMemory,
   type ListDormantOptions,
-} from '../../../base/ports/store/dormant.js';
+} from '../../../base/records/dormant.js';
 import { DORMANT_ORDER, orderSql } from '../../rules/order.js';
 import type { DormantSnapshot } from '../../../base/ports/store/types.js';
 import { narrowingAnd, type FilterColumn } from '../entries/entry-filter.js';

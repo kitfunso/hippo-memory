@@ -14,7 +14,7 @@ import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { DECISION } from '../../src/domain/objects/decisions.js';
-import type { Entity } from '../../src/base/ports/store/graph.js';
+import type { Entity } from '../../src/base/records/graph.js';
 import { extractGraph, extractGraphChunked } from '../../src/domain/graph/extract.js';
 import {
   openHippoDb,

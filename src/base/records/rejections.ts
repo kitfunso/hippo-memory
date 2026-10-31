@@ -1,4 +1,3 @@
-import type { MethodEffects } from './effects.js';
 // What a store refuses or fails to keep: the rejection tombstones every write guard reads, and the
 // failure log.
 
@@ -20,14 +19,6 @@ export interface Rejections {
    * counts what a run skips. */
   refusedAmong(checks: readonly RejectionCheck[]): Promise<boolean[]>;
 }
-
-/** What each Rejections method does to the store; every adapter honours it. */
-export const REJECTIONS_EFFECTS = {
-  apply: 'write',
-  lift: 'write',
-  list: 'read',
-  refusedAmong: 'read',
-} as const satisfies MethodEffects<Rejections>;
 
 export interface RejectedValueRow {
   tenantId: string;
@@ -95,13 +86,6 @@ export interface FailureLog {
   ): Promise<FailureOutcome | null>;
   settleOutcome(tenantId: string, requestId: string, outcome: FailureOutcome): Promise<void>;
 }
-
-/** What each FailureLog method does to the store; every adapter honours it. */
-export const FAILURE_LOG_EFFECTS = {
-  record: 'write',
-  requestOutcome: 'read',
-  settleOutcome: 'write',
-} as const satisfies MethodEffects<FailureLog>;
 
 /** One failed tool call, for `recordFailure`. Never the failure text: it can carry paths and
  * secrets. */

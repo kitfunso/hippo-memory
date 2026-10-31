@@ -12,7 +12,7 @@ import {
   type StoreFolder,
 } from '../../src/domain/sharing/project-merge.js';
 import { mergedText } from '../../src/base/util/same-text.js';
-import type { ProjectTagReads } from '../../src/base/ports/store/project-tags.js';
+import type { ProjectTagReads } from '../../src/base/records/project-tags.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

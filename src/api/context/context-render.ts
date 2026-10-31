@@ -12,7 +12,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../../base/memory/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
-import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/records/sessions.js';
 import type { AssembleCost, AssembleResult, AssembledContextItem } from '../assemble.js';
 import type { ContextCost, ContextResultEntry } from './context-types.js';
 import type {

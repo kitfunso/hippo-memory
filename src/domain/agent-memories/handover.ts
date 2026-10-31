@@ -3,11 +3,7 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { projectNames } from '../../base/scope/project-identity.js';
-import type {
-  ContainerApply,
-  ImportStep,
-  MirrorFailure,
-} from '../../base/ports/store/agent-import.js';
+import type { ContainerApply, ImportStep, MirrorFailure } from '../../base/records/agent-import.js';
 import { liveUnder, type ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
 import { toolReport, type ImportReport } from '../../base/memory/agent-memory-report.js';

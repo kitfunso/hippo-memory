@@ -1,6 +1,6 @@
 // The status reports as the scorecard tests read them: through sqliteStore's reports group.
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import type { CorrectionLink, RawProvenancePage } from '../../src/base/ports/store/reports.js';
+import type { CorrectionLink, RawProvenancePage } from '../../src/base/records/reports.js';
 import { sqliteStore } from './test-session.js';
 import { makeRoot } from './make-root.js';
 import { writeEntriesTogether } from './root-forms.js';

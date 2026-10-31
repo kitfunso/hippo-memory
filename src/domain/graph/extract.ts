@@ -13,13 +13,14 @@ import type {
   SourceObjectType,
   GraphReads,
   GraphRebuild,
-} from '../../base/ports/store/graph.js';
+} from '../../base/records/graph.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../base/util/write-budget.js';
 import { loadDecisions } from '../objects/decisions.js';
 import { loadPolicies } from '../objects/policies.js';
 import { loadCustomerNotes } from '../objects/customer-notes.js';
 import { loadProjectBriefs } from '../objects/project-briefs.js';
-import type { Objects, HippoStore } from '../../base/ports/store.js';
+import type { Objects } from '../../base/records/objects.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { escapeRegex } from '../../base/util/escape.js';
 

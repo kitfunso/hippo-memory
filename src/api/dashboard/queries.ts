@@ -5,7 +5,7 @@ import type {
   DashboardReads,
   DashboardSortKey,
   ListedRow,
-} from '../../base/ports/store/dashboard-reads.js';
+} from '../../base/records/dashboard-reads.js';
 import { BANDS, LAYERS, originOfKey, projectIdentity, round3, type Chip } from './live.js';
 import type { Stamp } from './snapshot-clock.js';
 import type { MemoryPage, MemoryRow, SearchResult } from './types.js';

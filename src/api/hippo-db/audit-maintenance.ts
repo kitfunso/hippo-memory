@@ -6,10 +6,10 @@ import {
   type AuditIssue,
   type AuditResult,
 } from '../../base/memory/memory-audit.js';
-import type { AuditMaintenance } from '../../base/ports/store.js';
+import type { AuditMaintenance } from '../../base/records/audit-maintenance.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { memoryPages } from '../memories/memories.js';
-import type { QualityRepairResult } from '../../base/ports/store/audit.js';
+import type { QualityRepairResult } from '../../base/records/audit-maintenance.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
 
 /** The pass that removes audit errors; it leads the reason on each forget row. */

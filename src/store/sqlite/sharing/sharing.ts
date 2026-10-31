@@ -9,7 +9,7 @@ import { listTextKeysHolding } from './copy-rows.js';
 import type { OnHandle } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
 import { bound, type Bodies } from '../runtime/bound.js';
-import type { Sharing } from '../../../base/ports/store/sharing.js';
+import type { Sharing } from '../../../base/records/sharing.js';
 import { listRecallEntries, listSearchEntries } from '../recall/search-rows.js';
 
 const sharingReadsBodies: Bodies<Sharing> = {

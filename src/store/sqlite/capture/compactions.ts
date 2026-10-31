@@ -9,11 +9,7 @@ import {
   startCompaction,
   type Log,
 } from './compactions-record.js';
-import type {
-  CallerItems,
-  CallerItemsSaved,
-  Compactions,
-} from '../../../base/ports/store/capture.js';
+import type { CallerItems, CallerItemsSaved, Compactions } from '../../../base/records/capture.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 
 interface WriteCallerItemsOptions {

@@ -4,7 +4,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
-import type { ConflictListQuery } from '../../src/base/ports/store/conflicts.js';
+import type { ConflictListQuery } from '../../src/base/records/conflicts.js';
 import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts } from '../_helpers/root-forms.js';

@@ -5,8 +5,8 @@ import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { AuditMaintenance } from '../../base/ports/store/audit.js';
-import type { Consolidation } from '../../base/ports/store/consolidation.js';
+import type { AuditMaintenance } from '../../base/records/audit-maintenance.js';
+import type { Consolidation } from '../../base/records/consolidation.js';
 
 /** The store's rows as this run loaded them: by created then id, with a dry run's half-life
  * preview applied. */

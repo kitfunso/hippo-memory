@@ -1,7 +1,7 @@
 // Write path: remember stores one memory after secret vetting; the prepare and result steps are
 // shared with the connector write, which adds the instruction check.
 
-import type { ConnectorWriteOutcome } from '../../base/ports/store.js';
+import type { ConnectorWriteOutcome } from '../../base/records/connectors.js';
 import {
   detectInstruction,
   INSTRUCTION_LIKE_TAG,

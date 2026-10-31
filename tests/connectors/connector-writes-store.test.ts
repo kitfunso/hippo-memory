@@ -16,7 +16,7 @@ import {
 } from '../../src/surface/connectors/github/transform.js';
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
-import type { ConnectorEvent } from '../../src/base/ports/store.js';
+import type { ConnectorEvent } from '../../src/base/records/connectors.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';

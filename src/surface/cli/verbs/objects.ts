@@ -6,7 +6,7 @@ import {
   DEFAULT_SERVER_HOST,
   DEFAULT_SERVER_PORT,
 } from '../../server/defaults.js';
-import { DEFAULT_GOAL_LEVEL } from '../../../base/ports/store/goals.js';
+import { DEFAULT_GOAL_LEVEL } from '../../../base/records/goals.js';
 import { WM_DEFAULT_IMPORTANCE } from '../flag-defaults.js';
 import { WM_MAX_ENTRIES } from '../../../base/util/limits.js';
 import { type VerbSpec, verb } from '../verb-row.js';

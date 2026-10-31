@@ -12,7 +12,7 @@ import type {
   DuplicateCandidates,
   HalfLifeRow,
   ObjectLink,
-} from '../../../base/ports/store/consolidation.js';
+} from '../../../base/records/consolidation.js';
 
 /** The typed-object tables whose rows name a backing memory in `memory_id`. */
 const OBJECT_TABLES = Object.values(KINDS).map((kind) => kind.table);
