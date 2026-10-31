@@ -1,15 +1,16 @@
 /** Z0 sizing, part 1 of 2: variance components, a chi-square bound, and simulated power of the analyzer's own tests.
- * Every simulated run goes through the analyzer's bootstraps and verdict rules, so the power is the full analysis's (prereg 209). */
+ * Every simulated run goes through the analyzer's t tests over repositories and its verdict rules, so the power is the full
+ * analysis's (prereg 209, Amendment 1). */
 
-import { combineCodings, harmGate, holmAdjust, seededRandom, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
-import { CODINGS, SPECS, blocks, byCoding, mean, meanBootstrap, ratioBootstrap, sum } from './z0-hypotheses.mjs';
+import { combineCodings, holmAdjust, seededRandom, verdict } from '../../dist/eval/eval-stats.js';
+import { lnGamma } from '../../dist/eval/repository-t.js';
+import { CODINGS, SPECS, blocks, byCoding, harmT, mean, repeatT, sum } from './z0-hypotheses.mjs';
 
 export const SEEDS = 3;
-export const H3_RATIO = SPECS.H3.minimumEffectAt;
 
-/** Holm's first step over H1-H3: the size must hold even when this hypothesis has the family's smallest p (prereg 209).
+/** Holm's first step over H1 and H2: the size must hold even when this hypothesis has the family's smallest p (prereg 209).
  * @param {number} p */
-export const strictest = (p) => holmAdjust([p, Number.NaN, Number.NaN])[0];
+export const strictest = (p) => holmAdjust([p, Number.NaN])[0];
 
 /** FNV-1a over the parts, so a design's draws depend on its own coordinates and never on the search order. */
 export function cellSeed(...parts) {
@@ -27,16 +28,6 @@ export function normalCdf(x) {
   const t = 1 / (1 + (0.3275911 * Math.abs(x)) / Math.SQRT2);
   const tail = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp((-x * x) / 2);
   return x >= 0 ? 1 - tail / 2 : tail / 2;
-}
-
-const LANCZOS = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
-
-function lnGamma(z) {
-  const x = z - 1;
-  let a = LANCZOS[0];
-  for (let i = 1; i < LANCZOS.length; i++) a += LANCZOS[i] / (x + i);
-  const t = x + 7.5;
-  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
 }
 
 // The series alone converges for every x the bisection visits, as quantiles here stay far below the overflow range.
@@ -94,7 +85,6 @@ export function varianceComponents(units, bound) {
 
 const sd = Math.sqrt;
 const share = (xs, keep) => xs.filter(keep).length / xs.length;
-const bootSeed = (rand) => 1 + Math.floor(rand() * 2 ** 31);
 
 /** One simulated H1 or H2 run: the same draws under both codings, each with its own spread, dilution and unit loss. */
 export function repeatRun(cal, design, delta, rand) {
@@ -121,14 +111,13 @@ const decide = (ests, spec) => combineCodings(...CODINGS.map((c) => verdict(ests
 /** Power of H1 or H2 per design and minimum effect; the true-zero runs, shared by every effect, are cached.
  * `cal` holds per coding { scale, loss, repo, family, seed }, the variances already at their bound.
  * @param {Record<string, {scale: number, loss: number, repo: number, family: number, seed: number}>} cal
- * @param {{sims: number, iterations: number, seed: number}} opts @param {string} label */
+ * @param {{sims: number, seed: number}} opts @param {string} label */
 export function repeatSizer(cal, opts, label) {
   const runs = (design, delta) => {
     const rand = seededRandom(cellSeed(opts.seed, label, design.repos, design.families, delta));
     return Array.from({ length: opts.sims }, () => {
       const run = repeatRun(cal, design, delta, rand);
-      const seed = bootSeed(rand);
-      return byCoding((c) => meanBootstrap(run[c], { iterations: opts.iterations, seed }));
+      return byCoding((c) => repeatT(run[c], {}));
     });
   };
   const zeros = new Map();
@@ -153,56 +142,10 @@ function costPair(cal, mu, zr, zf, rand) {
 
 const centre = (cal, ratio) => Math.log(ratio) - (cal.repo + cal.family + cal.seed) / 2;
 
-/** One simulated H3 run: lesson families of the plan's sizes plus its share of no-lesson tasks, each its own family.
- * A family's pairs are summed into one unit: the bootstrap keeps a family whole and a ratio of sums is additive,
- * so the resamples and the estimate match per-task units exactly, at a fraction of the cost. */
-export function ratioRun(cal, layout, design, ratio, rand) {
-  const sizes = Array.from({ length: design.families }, (_, f) => layout.familySizes[f % layout.familySizes.length]);
-  const noLesson = Math.round(sum(sizes) * layout.noLessonRatio);
+/** One simulated set N run at a true cost ratio (1 unless given), with resolve pairs from the symmetrised calibration table.
+ * A task's seeds are summed into one unit carrying `n`: the t tests read repository sums only, so the result is exact. */
+export function harmRun(cal, design, rand, ratio = 1) {
   const mu = centre(cal, ratio);
-  const units = [];
-  const add = (repo, family, set, zr, tasks) => {
-    const zf = normal(rand);
-    const unit = { repo, family, set, t: { cost: 0 }, c: { cost: 0 } };
-    for (let k = 0; k < tasks * SEEDS; k++) {
-      const { t, c } = costPair(cal, mu, zr, zf, rand);
-      unit.t.cost += t;
-      unit.c.cost += c;
-    }
-    units.push(unit);
-  };
-  for (let r = 0; r < design.repos; r++) {
-    const zr = normal(rand);
-    sizes.forEach((n, f) => add(`r${r}`, `r${r}f${f}`, 'R', zr, n));
-    for (let k = 0; k < noLesson; k++) add(`r${r}`, `r${r}n${k}`, 'N', zr, 1);
-  }
-  return units;
-}
-
-/** H3 power per design: a win at a true ratio of 0.95 and a tie at 1, under the analyzer's ratio bootstrap. */
-export function ratioSizer(cal, layout, opts) {
-  const runs = (design, ratio) => {
-    const rand = seededRandom(cellSeed(opts.seed, 'H3', design.repos, design.families, ratio));
-    return Array.from({ length: opts.sims }, () => {
-      const units = ratioRun(cal, layout, design, ratio, rand);
-      const e = ratioBootstrap(units, 'cost', { iterations: opts.iterations, seed: bootSeed(rand) });
-      return verdict(e, strictest(e.p), SPECS.H3).verdict;
-    });
-  };
-  /** @param {{repos: number, families: number}} design */
-  return (design) => {
-    const zero = runs(design, 1);
-    return { win: share(runs(design, H3_RATIO), (v) => v === 'win'), tie: share(zero, (v) => v === 'tie'), falseWin: share(zero, (v) => v === 'win') };
-  };
-}
-
-// The analyzer's per-pair resolve difference, over units that each sum `n` pairs.
-const resolveDiff = (us) => (sum(us.map((u) => u.t.resolved)) - sum(us.map((u) => u.c.resolved))) / sum(us.map((u) => u.n));
-
-/** One simulated set N run at a true zero: cost ratio 1, and resolve pairs from the symmetrised calibration table.
- * A task's seeds are summed into one unit, exact for both statistics for the reason ratioRun gives. */
-export function harmRun(cal, design, rand) {
-  const mu = centre(cal, 1);
   const units = [];
   for (let r = 0; r < design.repos; r++) {
     const zr = normal(rand);
@@ -228,11 +171,7 @@ export function harmSizer(cal, opts) {
   /** @param {{repos: number, tasks: number}} design */
   return (design) => {
     const rand = seededRandom(cellSeed(opts.seed, 'H4', design.repos, design.tasks));
-    const passes = Array.from({ length: opts.sims }, () => {
-      const units = harmRun(cal, design, rand);
-      const stat = { iterations: opts.iterations, seed: bootSeed(rand) };
-      return harmGate(ratioBootstrap(units, 'cost', stat), twoLevelBootstrap(blocks(units), resolveDiff, { ...stat, nullValue: 0 })).pass;
-    });
+    const passes = Array.from({ length: opts.sims }, () => harmT(harmRun(cal, design, rand), {}).gate.pass);
     return { pass: share(passes, Boolean) };
   };
 }

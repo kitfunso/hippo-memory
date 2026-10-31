@@ -4,16 +4,27 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { seededRandom } from '../dist/eval/eval-stats.js';
+import { lnGamma, studentTQuantile } from '../dist/eval/repository-t.js';
 import { chiSquareQuantile, confirmSize, normal, normalCdf, repeatRun, repeatSizer, smallestPassing, varianceComponents } from '../scripts/token-eval/z0-size-sim.mjs';
 import { runCli } from '../scripts/token-eval/z0-size.mjs';
+import { CELLS, skewCell } from '../scripts/token-eval/z0-skew-check.mjs';
 import { PRICES, generate, jsonl } from './fixtures/z0-gen.js';
 
-// Each case runs thousands of seeded bootstraps: 9 s locally, 49 s for one case on a shared CI runner.
+// Each case simulates thousands of runs; a shared CI runner can be several times slower than a laptop.
 vi.setConfig({ testTimeout: 180_000 });
 
-const Z_HOLM = 2.39398;
-const Z_95 = 1.959964;
 const spread = (repo: number, family: number, seed: number) => ({ scale: 1, loss: 0, repo, family, seed });
+/** E[f(K)] for K = sqrt(V / df), V chi-square with df degrees of freedom: the sample sd over the true sd. Midpoint rule. */
+function overChi(df: number, f: (k: number) => number): number {
+  const [steps, hi] = [20_000, df + 60 * Math.sqrt(2 * df)];
+  const [h, logC] = [hi / steps, -(df / 2) * Math.log(2) - lnGamma(df / 2)];
+  let total = 0;
+  for (let i = 0; i < steps; i++) {
+    const v = (i + 0.5) * h;
+    total += Math.exp(logC + (df / 2 - 1) * Math.log(v) - v / 2) * f(Math.sqrt(v / df)) * h;
+  }
+  return total;
+}
 const both = (s: ReturnType<typeof spread>) => ({ violation: s, excluded: s });
 
 type Unit = { repo: string; family: string; value: number };
@@ -30,20 +41,21 @@ function nested(rand: () => number, repos: number, families: number, seeds: numb
 }
 
 describe('Z0 sizing', () => {
-  it('matches the closed-form power when only the seed spread is non-zero', () => {
+  it('matches the exact t power when only the seed spread is non-zero', () => {
     const [repos, families, sigma, m] = [20, 5, 0.5, 0.1];
-    const se = sigma / Math.sqrt(repos * families * 3);
-    // With no repository or family spread, the two-level bootstrap's variance is c times the mean's.
-    const c = (repos - 1) / repos + (families - 1) / families;
-    const seBoot = se * Math.sqrt(c);
-    const win = normalCdf(m / se - Z_HOLM * Math.sqrt(c));
-    const tie = 2 * normalCdf(Math.min(m - Z_95 * seBoot, Z_HOLM * seBoot) / se) - 1;
-    expect(win).toBeCloseTo(0.617, 3);
-    expect(tie).toBeCloseTo(0.616, 3);
-    const power = repeatSizer(both(spread(0, 0, sigma ** 2)), { sims: 300, iterations: 800, seed: 7 }, 'T1')({ repos, families }, m);
-    // 300 runs give a standard error near 0.03, and the bootstrap's own noisy SE lifts the tie share by about 0.03.
-    expect(Math.abs(power.win - win)).toBeLessThan(0.07);
-    expect(Math.abs(power.tie - tie)).toBeLessThan(0.07);
+    const [df, se] = [repos - 1, sigma / Math.sqrt(repos * families * 3)];
+    // Holm's first step over 2 tests at 0.025 two-sided; the tie reads the plain 95% interval.
+    const [tHolm, t95] = [studentTQuantile(1 - 0.05 / 4, df), studentTQuantile(0.975, df)];
+    expect([tHolm, t95].map((t) => t.toFixed(4))).toEqual(['2.4334', '2.0930']);
+    // Repository means are normal and independent of their sample sd, so each share is one integral over that sd.
+    const win = overChi(df, (k) => normalCdf(m / se - tHolm * k));
+    const tie = overChi(df, (k) => Math.max(0, 2 * normalCdf(Math.min(m / se - t95 * k, tHolm * k)) - 1));
+    expect(win).toBeCloseTo(0.8387, 4);
+    expect(tie).toBeCloseTo(0.8111, 4);
+    const power = repeatSizer(both(spread(0, 0, sigma ** 2)), { sims: 1000, seed: 7 }, 'T1')({ repos, families }, m);
+    // 1000 runs give a standard error near 0.012.
+    expect(Math.abs(power.win - win)).toBeLessThan(0.04);
+    expect(Math.abs(power.tie - tie)).toBeLessThan(0.04);
   });
 
   it('keeps the false-win rate at a true zero within the Holm level across a small grid', () => {
@@ -52,9 +64,17 @@ describe('Z0 sizing', () => {
       { design: { repos: 20, families: 1 }, cal: both(spread(0, 0, 0.25)) },
     ];
     for (const { design, cal } of grid) {
-      const { falseWin } = repeatSizer(cal, { sims: 1000, iterations: 500, seed: 3 }, 'T2')(design, 0.15);
-      expect(falseWin).toBeLessThanOrEqual(0.05 / 3 + 0.01);
+      const { falseWin } = repeatSizer(cal, { sims: 1000, seed: 3 }, 'T2')(design, 0.15);
+      expect(falseWin).toBeLessThanOrEqual(0.05 / 2 + 0.01);
     }
+  });
+
+  it('holds the H4 cost gate to its two-sided 2.5% at a true ratio of 1.10 when repository costs are near normal', () => {
+    // Skewed cells sit between 2.5% and the prereg's 5% (z0-skew-check.mjs, analyzer doc); this one shows the interval is sound.
+    const near = CELLS.find((c: { name: string }) => c.name.startsWith('near normal'))!;
+    const s = skewCell(near, 10_000, 1);
+    expect(s.cox).toBeLessThanOrEqual(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 10_000));
+    expect(s.coxGate).toBeLessThanOrEqual(s.cox);
   });
 
   it('recovers nested variance components, and its repository bound covers at the stated level', () => {
@@ -94,7 +114,7 @@ describe('Z0 sizing', () => {
     const prices = { ...PRICES, codex: { inputPerMTok: 1.25, cacheWritePerMTok: 0, cacheReadPerMTok: 0.125, outputPerMTok: 10 } };
     const files = { 'runs.jsonl': jsonl(g.records), 'plan.json': JSON.stringify(g.plan), 'prices.json': JSON.stringify(prices) };
     for (const [f, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, f), text);
-    const argv = ['--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--sims', '20', '--iterations', '200', '--repos', '5,8', '--claude-usd-per-day', '250', '--out', 'size.json'];
+    const argv = ['--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--sims', '20', '--repos', '5,8', '--claude-usd-per-day', '250', '--out', 'size.json'];
     const res = runCli(argv, dir);
     expect(res).toMatchObject({ code: 0, stderr: '' });
     const report = JSON.parse(fs.readFileSync(path.join(dir, 'size.json'), 'utf8'));
