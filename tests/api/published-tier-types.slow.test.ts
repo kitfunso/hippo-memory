@@ -19,6 +19,9 @@ function tierReaches(root: string, entries: readonly string[]): string[] {
   );
   const checker = program.getTypeChecker();
   const inPackage = posix(resolve(root)).toLowerCase() + '/';
+  // A CI checkout keeps node_modules, TypeScript's lib included, inside the package; walking those members expands
+  // generics such as Array<T> without end.
+  const ownFile = (f: string): boolean => f.toLowerCase().startsWith(inPackage) && !f.includes('/node_modules/');
   const declaredIn = (symbol: ts.Symbol | undefined, test: (file: string) => boolean): boolean =>
     (symbol?.declarations ?? []).some((d) => test(posix(d.getSourceFile().fileName)));
   const reaches = (type: ts.Type, seen: Set<ts.Type>): boolean => {
@@ -40,7 +43,7 @@ function tierReaches(root: string, entries: readonly string[]): string[] {
         inner.push(...checker.getTypeArguments(object as ts.TypeReference));
       }
       // A type declared outside the package is data whose members the walk does not need.
-      if (declaredIn(type.aliasSymbol ?? type.getSymbol(), (f) => f.toLowerCase().startsWith(inPackage))) {
+      if (declaredIn(type.aliasSymbol ?? type.getSymbol(), ownFile)) {
         for (const prop of checker.getPropertiesOfType(type)) inner.push(checker.getTypeOfSymbol(prop));
         for (const sig of [...type.getCallSignatures(), ...type.getConstructSignatures()]) {
           inner.push(checker.getReturnTypeOfSignature(sig), ...sig.parameters.map((p) => checker.getTypeOfSymbol(p)));
@@ -82,6 +85,24 @@ function publishedEntries(): string[] {
   return Object.values(exports).map((js) => js.replace(/^\.\//, '').replace(/\.js$/, '.d.ts'));
 }
 
+const TIER_FIXTURE =
+  'export interface HippoDbRepos { readonly rows: { read(): Promise<string> } }\n' +
+  'export interface HippoDbTier { readonly hippoDb: HippoDbRepos }\n';
+
+/** tierReaches over `entries` in a scratch package holding `files`. */
+function reachesIn(files: Readonly<Record<string, string>>, entries: readonly string[]): string[] {
+  const root = mkdtempSync(join(tmpdir(), 'hippo-published-tier-'));
+  try {
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+    return tierReaches(root, entries);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 describe('published symbols and the local tier', () => {
   it('no symbol any package.json export publishes reaches a type the tier door declares', () => {
     const entries = publishedEntries();
@@ -90,11 +111,8 @@ describe('published symbols and the local tier', () => {
   });
 
   it('fails a symbol that returns, narrows to, aliases or constrains a type parameter to the tier type, an entry with no exports or no file, and passes data, generics and recursive types', () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-published-tier-'));
     const files = {
-      'store/sqlite/hippo-db.d.ts':
-        'export interface HippoDbRepos { readonly rows: { read(): Promise<string> } }\n' +
-        'export interface HippoDbTier { readonly hippoDb: HippoDbRepos }\n',
+      'store/sqlite/hippo-db.d.ts': TIER_FIXTURE,
       'entry.d.ts': [
         "import type { HippoDbTier } from './store/sqlite/hippo-db.js';",
         'type Wrapped = { readonly inner: Promise<readonly HippoDbTier[]> };',
@@ -110,21 +128,27 @@ describe('published symbols and the local tier', () => {
       ].join('\n'),
       'empty.d.ts': 'export {};\n',
     };
-    try {
-      for (const [path, text] of Object.entries(files)) {
-        mkdirSync(dirname(join(root, path)), { recursive: true });
-        writeFileSync(join(root, path), text);
-      }
-      expect(tierReaches(root, ['entry.d.ts', 'empty.d.ts', 'missing.d.ts'])).toEqual([
-        'empty.d.ts: no declarations',
-        'entry.d.ts: Leaky',
-        'entry.d.ts: isTier',
-        'entry.d.ts: narrow',
-        'entry.d.ts: open',
-        'missing.d.ts: no declarations',
-      ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    expect(reachesIn(files, ['entry.d.ts', 'empty.d.ts', 'missing.d.ts'])).toEqual([
+      'empty.d.ts: no declarations',
+      'entry.d.ts: Leaky',
+      'entry.d.ts: isTier',
+      'entry.d.ts: narrow',
+      'entry.d.ts: open',
+      'missing.d.ts: no declarations',
+    ]);
+  });
+
+  it('reads a node_modules type only through its type arguments, so one that expands without end still ends', () => {
+    const files = {
+      'store/sqlite/hippo-db.d.ts': TIER_FIXTURE,
+      'node_modules/deep/index.d.ts': 'export interface Deep<T> { readonly value: T; next(): Deep<T[]> }\n',
+      'entry.d.ts': [
+        "import type { HippoDbTier } from './store/sqlite/hippo-db.js';",
+        "import type { Deep } from './node_modules/deep/index.js';",
+        'export declare function numbers(): Deep<number>;',
+        'export declare function tiers(): Deep<HippoDbTier>;',
+      ].join('\n'),
+    };
+    expect(reachesIn(files, ['entry.d.ts'])).toEqual(['entry.d.ts: tiers']);
   });
 });
