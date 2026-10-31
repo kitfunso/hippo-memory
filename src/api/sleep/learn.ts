@@ -29,6 +29,7 @@ import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js'
 import { duplicateKey, heldTextKeys, storedTextKeys } from '../../base/util/same-text.js';
 import type { LessonWrites } from '../../base/ports/store.js';
 import { memoryPages } from '../memories/memories.js';
+import { countRemembered } from '../memories/remember.js';
 import { strengthOf, type Context, type ContextWith } from '../types.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
 
@@ -39,8 +40,8 @@ type LearnContext = ContextWith<'lessonWrites'> & HippoDbContext;
 export interface LearnProfile {
   readonly tags: readonly string[];
   readonly source: string;
-  /** Also invalidate what a migration subject supersedes, score schema fit, path-tag, count and
-   * embed each row. */
+  /** Also invalidate what a migration subject supersedes, score schema fit, path-tag and embed
+   * each row. */
   readonly full: boolean;
 }
 
@@ -146,8 +147,8 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
     if (at !== -1) live.splice(at, 1);
   }
   counts.added += landed.length;
+  await countRemembered(ctx, landed.length);
   if (!batch.full) return;
-  if (landed.length > 0) await ctx.store.hippoDb.stats.bumpRemembered(landed.length);
   const { embedderFor, clock, failureNotices } = ctx.infra;
   const { store, config } = ctx;
   const target = {

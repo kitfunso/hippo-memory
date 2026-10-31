@@ -1,7 +1,8 @@
 // The write half every connector's ingest shares, after its own pre-check of the event log.
 
 import { rememberUntrusted, type RememberOptions } from '../../api/index.js';
-import type { ContextWith } from '../../api/types.js';
+import type { Actor, ContextWith } from '../../api/types.js';
+import { coreEnrichment } from '../../api/hippo-db-context.js';
 import type { ConnectorEvent, OptionalGroup, StoreWith } from '../../base/ports/store.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -21,6 +22,17 @@ export interface WebhookPorts {
   store: ConnectorStore;
   config: HippoConfig;
   infra: InfraPorts;
+}
+
+/** A connector's Context on the server's ports: its writes count and start an auto-sleep through
+ * the store's local tier, as any remember does. */
+export function connectorContext(
+  ports: WebhookPorts,
+  tenantId: string,
+  actor: Actor,
+): ConnectorContext {
+  const { store, config, infra } = ports;
+  return { tenantId, actor, store, config, infra, enrich: coreEnrichment(store) };
 }
 
 export type IngestStatus = 'ingested' | 'duplicate' | 'skipped' | 'skipped_duplicate';

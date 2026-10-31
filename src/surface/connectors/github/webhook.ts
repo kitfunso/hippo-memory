@@ -36,7 +36,7 @@ import {
   type WebhookRequest,
 } from '../../http/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
-import type { ConnectorContext, WebhookPorts } from '../ingest.js';
+import { connectorContext, type ConnectorContext, type WebhookPorts } from '../ingest.js';
 import { errorFields, log } from '../../../base/util/log.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ
@@ -230,13 +230,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     return;
   }
 
-  const ctx: ConnectorContext = {
-    tenantId: resolvedTenant,
-    actor: { subject: 'connector:github', role: 'admin' },
-    store: d.store,
-    config: d.config,
-    infra: d.infra,
-  };
+  const ctx = connectorContext(d, resolvedTenant, { subject: 'connector:github', role: 'admin' });
   if (await dispatchGitHubEvent({ d, ctx, body, deliveryId: d.deliveryId, routing })) return;
 
   // Header allow-listed but body shape didn't satisfy the matching guard.

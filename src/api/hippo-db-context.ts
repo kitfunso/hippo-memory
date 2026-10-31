@@ -26,7 +26,7 @@ export function hasHippoDb<S extends Context['store']>(store: S): store is S & H
 export function coreEnrichment(store: Context['store']): CoreEnrichment | undefined {
   if (!hasHippoDb(store)) return undefined;
   const { hippoDb } = store;
-  const { lastRecall, sessions, readiness, graphReads, ledger, folderFiles } = hippoDb;
+  const { lastRecall, sessions, readiness, graphReads, ledger, folderFiles, stats } = hippoDb;
   // Read at the count, so a call that writes nothing never touches the reports group.
   const sleepCount: SleepCount = {
     createdSinceLastSleep: (tenantId, now) => hippoDb.reports.createdSinceLastSleep(tenantId, now),
@@ -39,6 +39,7 @@ export function coreEnrichment(store: Context['store']): CoreEnrichment | undefi
     ledger,
     folderFiles,
     sleepCount,
+    remembered: stats,
   };
 }
 

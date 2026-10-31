@@ -290,8 +290,15 @@ export async function remember(
       }
     : opts.local;
   const result = await writeRemembered(ctx, { ...opts, local });
+  await countRemembered(ctx, 1);
   await autoSleepAfterWrite(ctx);
   return startedWeak ? { ...result, startedWeak } : result;
+}
+
+/** The one owner of "a memory was remembered": every path that lands remembered rows calls it,
+ * and a store without hippo.db's local tier keeps no counter. */
+export async function countRemembered(ctx: Pick<Context, 'enrich'>, count: number): Promise<void> {
+  if (count > 0) await ctx.enrich?.remembered?.bumpRemembered(count);
 }
 
 /** The store's entryWrites group writes the row and its one remember audit row, under the

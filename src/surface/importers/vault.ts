@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../../base/memory/entry.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
+import { coreEnrichment } from '../../api/hippo-db-context.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
@@ -76,6 +77,7 @@ function vaultContext(
     store,
     config: loadConfig(hippoRoot),
     infra,
+    enrich: coreEnrichment(store),
   };
 }
 

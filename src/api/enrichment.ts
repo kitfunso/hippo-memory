@@ -55,6 +55,11 @@ export interface FolderHome {
   home(): Promise<StoreHome>;
 }
 
+/** The store-wide remembered counter, `Total remembered` in `hippo status`. */
+export interface RememberedCount {
+  bumpRemembered(count: number): Promise<void>;
+}
+
 /** The rows a tenant wrote since the store's last sleep, which a write's auto-sleep counts. */
 export interface SleepCount {
   createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
@@ -72,6 +77,8 @@ export interface CoreEnrichment {
   readonly folderFiles?: FolderHome;
   /** Unset, a write starts no auto-sleep. */
   readonly sleepCount?: SleepCount;
+  /** Unset, a write moves no remembered counter. */
+  readonly remembered?: RememberedCount;
 }
 
 /** What a core path reads from the operator's global store's local tier, filled by the root that

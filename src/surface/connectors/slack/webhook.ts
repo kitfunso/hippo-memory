@@ -26,7 +26,7 @@ import {
   type WebhookRequest,
 } from '../../http/http-util.js';
 import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/json.js';
-import type { ConnectorContext, WebhookPorts } from '../ingest.js';
+import { connectorContext, type ConnectorContext, type WebhookPorts } from '../ingest.js';
 
 export function warnSlackPreviousSecretOpen(): void {
   warnIfOpenEnded(
@@ -189,13 +189,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   if (answerUrlVerification(res, body)) return;
   const resolvedTenant = await tenantOrPark(d, body);
   if (resolvedTenant === null) return;
-  const ctx: ConnectorContext = {
-    tenantId: resolvedTenant,
-    actor: { subject: 'connector:slack', role: 'admin' },
-    store: d.store,
-    config: d.config,
-    infra: d.infra,
-  };
+  const ctx = connectorContext(d, resolvedTenant, { subject: 'connector:slack', role: 'admin' });
   if (!isSlackEventEnvelope(body)) {
     await parkAndAck(d, {
       tenantId: ctx.tenantId,

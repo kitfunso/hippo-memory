@@ -46,9 +46,10 @@ export function sqliteStats({ on, files }: Handles) {
   return bound(
     on,
     {
-      /** Adds `count` to the one store-wide remembered counter, no tenant. */
+      /** Adds `count` to the one store-wide remembered counter, no tenant. Its rows have
+       * committed, so a busy store never fails the write; a store runtime holds the count. */
       bumpRemembered: (db: DatabaseSyncLike, count: number) =>
-        updateStats(db, files, { remembered: count }),
+        updateStatsUnlessBusy(db, files, { remembered: count }, `remembered ${count}`),
     },
     openStore,
   );

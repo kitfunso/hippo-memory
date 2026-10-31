@@ -4,6 +4,7 @@ import type { ConnectorEvent, ConnectorWrite } from '../../base/ports/store.js';
 import type { ContextWith } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 import {
+  countRemembered,
   prepareRemember,
   rememberResult,
   type PreparedRemember,
@@ -43,6 +44,8 @@ export async function rememberUntrusted(
     event: opts.event,
     quarantine: quarantineOf(prepared),
   });
+  // A duplicate event stored nothing, so it counts nothing.
+  if (written.outcome === 'written') await countRemembered(ctx, 1);
   await autoSleepAfterWrite(ctx);
   return rememberResult(ctx, prepared, written);
 }

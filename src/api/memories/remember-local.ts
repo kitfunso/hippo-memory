@@ -117,7 +117,6 @@ export async function rememberLocally(
   if ('skipped' in written) return { status: 'skipped', ...written.skipped };
   const { id, warnings = [], startedWeak } = written;
   const entry = await storedEntry(ctx, id);
-  await ctx.store.hippoDb.stats.bumpRemembered(1);
   return withDetached(ctx, (detached): LocalRememberOutcome => {
     const embedding = indexInBackground(ctx, entry);
     detached.detach(embedding);
