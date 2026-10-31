@@ -1,0 +1,2605 @@
+{
+  "schema": "z0-size/1",
+  "settings": {
+    "repos": [
+      5,
+      8,
+      10,
+      12,
+      15,
+      20
+    ],
+    "effects": [
+      0.15,
+      0.2,
+      0.25
+    ],
+    "power": 0.8,
+    "sims": 2000,
+    "seed": 1,
+    "searchSims": 200,
+    "maxFamilies": 60,
+    "maxFamiliesPerRepo": 4,
+    "maxNTasks": 600,
+    "spreadBound": 0.8,
+    "seedCap": 9,
+    "targetZ": 3.5,
+    "levelSims": 20000,
+    "firstWave": 3,
+    "holmLevel": 0.025,
+    "quota": {
+      "claude-code": {
+        "usdPerDay": 229.2,
+        "source": "flag"
+      },
+      "codex": {
+        "usdPerDay": 100,
+        "source": "default assumption"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-cj4/runs.regraded.jsonl",
+      "sha256": "4b553cba71dbff53002d35232bf493ccc5648f2bd5c44713cf505692a061d43d"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-bm4/runs.regraded.jsonl",
+      "sha256": "142957fe4d138d6f164a51df31a71eb2cb991f31d706c393ece329cbcd95791b"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-ml2/runs.jsonl",
+      "sha256": "68b5916525ee3d65f376fed291d274bc79f67c1090386e13ce6646550d8acb4b"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-bmx/runs.regraded.jsonl",
+      "sha256": "136f95923cdf7f5daaa9b45436daa926ff5bfebd0923f670e71c6d8af7fcc026"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-cj4/plan.json",
+      "sha256": "13f8432f81d3eec5bf95282635f6b6ad52219bbed6a40e4ad3a2a3e6841300fd"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-bm4/plan.json",
+      "sha256": "fed1f59fb564b20bd83193b22dee5ab72a51bb9b34c7b4823ab786fb343822b2"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-ml2/plan.json",
+      "sha256": "5b6de6fc68ea4a3317c31e4c6ca71a99106dc9f79766860140320e69aca68334"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-bmx/plan.json",
+      "sha256": "53466068e693ce64aa131f2148d3c141fd20c4694655c64193e2b4a90984c143"
+    },
+    {
+      "role": "prices",
+      "file": "C:/z0-runs/s7/prices.json",
+      "sha256": "8978b782e6a85656828ac6aea5c47a8f813c2482671645001a9ed7f9a6423393"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-records.mjs",
+      "sha256": "74b5c7628e15d3a7e6ede4ae5dd7342681cacd8741bd475ba3e3568360e93281"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-filters.mjs",
+      "sha256": "ce05ed2922bef1df9ed0b93f28d6c11ac0a4a01d0ae045be480eb4f8f30effff"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-hypotheses.mjs",
+      "sha256": "eb7ef8d54a15adfc9c64d86e89b37533681da566ff4d73cfaf5ef26925fe52ca"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-gates.mjs",
+      "sha256": "49936d0769a9038756a8e8774cd69425c0a4159d837d1bab03d850a0698672d0"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-blind.mjs",
+      "sha256": "9ea5b6cb50e562b3be393e44e3f4ac6fac12f346bf315265bd13f2d981bf4d30"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-analyze.mjs",
+      "sha256": "e6e7df1644b48e40f4ffb32c70b2959bfdd3f5581c4bb3b98e453d84225446e4"
+    },
+    {
+      "role": "source",
+      "file": "src/eval/eval-stats.ts",
+      "sha256": "83bb5f2c0a6b8616fc6a415eb8a0c99427d3cc36f82e41c8ed8dd265a7d8e6ee"
+    },
+    {
+      "role": "source",
+      "file": "dist/eval/eval-stats.js",
+      "sha256": "a5b06d32b21bfccdfa3cf2c73970d94e073267e324dba1860620266578c0fba4"
+    },
+    {
+      "role": "source",
+      "file": "src/eval/repository-t.ts",
+      "sha256": "ebbb3de2744580c628892dc8d8b5a4a3fc7844b9bd0c4ed4b518df2defffaac1"
+    },
+    {
+      "role": "source",
+      "file": "dist/eval/repository-t.js",
+      "sha256": "967ad624fe71f0d1caebec2fa501eaf316b21f1759c610c9a9a018c8e05e0f34"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-size.mjs",
+      "sha256": "8ec20cc30d29ad99e177fbbcbd0e7231b48a588abc4912b2cb9ee2c1bec79111"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-size-sim.mjs",
+      "sha256": "d1f60f83c4815be3a56ba6137a8b284a56ccd293af76b1f9271994ced8970401"
+    }
+  ],
+  "warnings": [],
+  "calibration": {
+    "records": 470,
+    "scored": 470,
+    "abandoned": [],
+    "H1": {
+      "naRate": 0,
+      "violation": {
+        "components": {
+          "repos": 2,
+          "families": 6,
+          "units": 12,
+          "noise": 0.1412037037037037,
+          "family": 0,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.3425660023474545,
+            "family": 0,
+            "sequence": 0
+          },
+          "df": {
+            "family": 4,
+            "sequence": 2,
+            "noise": 4
+          },
+          "sBar": 2,
+          "kBar": 3
+        },
+        "loss": 0
+      },
+      "excluded": {
+        "components": {
+          "repos": 2,
+          "families": 6,
+          "units": 12,
+          "noise": 0.1412037037037037,
+          "family": 0,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.3425660023474545,
+            "family": 0,
+            "sequence": 0
+          },
+          "df": {
+            "family": 4,
+            "sequence": 2,
+            "noise": 4
+          },
+          "sBar": 2,
+          "kBar": 3
+        },
+        "loss": 0
+      }
+    },
+    "H2": {
+      "naRate": 0,
+      "violation": {
+        "components": {
+          "repos": 2,
+          "families": 6,
+          "units": 12,
+          "noise": 0.16666666666666666,
+          "family": 0,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.40434019949207745,
+            "family": 0,
+            "sequence": 0
+          },
+          "df": {
+            "family": 4,
+            "sequence": 2,
+            "noise": 4
+          },
+          "sBar": 2,
+          "kBar": 3
+        },
+        "loss": 0
+      },
+      "excluded": {
+        "components": {
+          "repos": 2,
+          "families": 6,
+          "units": 12,
+          "noise": 0.16666666666666666,
+          "family": 0,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.40434019949207745,
+            "family": 0,
+            "sequence": 0
+          },
+          "df": {
+            "family": 4,
+            "sequence": 2,
+            "noise": 4
+          },
+          "sBar": 2,
+          "kBar": 3
+        },
+        "loss": 0
+      }
+    },
+    "H4": {
+      "components": {
+        "repos": 2,
+        "families": 11,
+        "units": 22,
+        "noise": 0.07295309512428619,
+        "family": 0,
+        "sequence": 0,
+        "upper": {
+          "noise": 0.12203928665273635,
+          "family": 0,
+          "sequence": 0
+        },
+        "df": {
+          "family": 9,
+          "sequence": 2,
+          "noise": 9
+        },
+        "sBar": 2,
+        "kBar": 5.5
+      },
+      "controlSd": 0.3688877705506565,
+      "resolve": {
+        "pairs": 22,
+        "discordant": 0,
+        "both": 1,
+        "oneSide": 0.03527221309066533,
+        "oneSideEstimate": 0
+      }
+    },
+    "plan": {
+      "R": {
+        "families": 6,
+        "teachPerFamily": 1.1666666666666667,
+        "applyPerFamily": 2.1666666666666665,
+        "familySizes": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          5
+        ],
+        "noLessonRatio": 0.55
+      },
+      "X": {
+        "families": 6,
+        "teachPerFamily": 1.1666666666666667,
+        "applyPerFamily": 2.1666666666666665,
+        "familySizes": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          5
+        ],
+        "noLessonRatio": 0
+      }
+    },
+    "perRecord": {
+      "A1/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.4652429857142857,
+          "codex": 0
+        }
+      },
+      "A*/teach": {
+        "records": 70,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.4300802857142858,
+          "codex": 0
+        }
+      },
+      "A2/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.49902977142857136,
+          "codex": 0
+        }
+      },
+      "A4/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.3759489714285714,
+          "codex": 0
+        }
+      },
+      "A5/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.4299949714285714,
+          "codex": 0
+        }
+      },
+      "A0/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.3801847285714285,
+          "codex": 0
+        }
+      },
+      "A2/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3077292090909091,
+          "codex": 0
+        }
+      },
+      "A*/no-lesson": {
+        "records": 110,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.30164589818181825,
+          "codex": 0
+        }
+      },
+      "A4/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3237837,
+          "codex": 0
+        }
+      },
+      "A5/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3005585454545456,
+          "codex": 0
+        }
+      },
+      "A0/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.2859712636363636,
+          "codex": 0
+        }
+      },
+      "A1/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.2901867727272727,
+          "codex": 0
+        }
+      },
+      "A2/apply": {
+        "records": 26,
+        "sessions": 1.0384615384615385,
+        "usd": {
+          "claude-code": 0.22717776153846153,
+          "codex": 0
+        }
+      },
+      "A*/apply": {
+        "records": 130,
+        "sessions": 1.2538461538461538,
+        "usd": {
+          "claude-code": 0.25204081846153836,
+          "codex": 0
+        }
+      },
+      "A4/apply": {
+        "records": 26,
+        "sessions": 1.0769230769230769,
+        "usd": {
+          "claude-code": 0.20060894615384617,
+          "codex": 0
+        }
+      },
+      "A5/apply": {
+        "records": 26,
+        "sessions": 1.1538461538461537,
+        "usd": {
+          "claude-code": 0.24289104615384616,
+          "codex": 0
+        }
+      },
+      "A0/apply": {
+        "records": 26,
+        "sessions": 1.8846153846153846,
+        "usd": {
+          "claude-code": 0.3731553923076923,
+          "codex": 0
+        }
+      },
+      "A1/apply": {
+        "records": 26,
+        "sessions": 1.1153846153846154,
+        "usd": {
+          "claude-code": 0.21637094615384614,
+          "codex": 0
+        }
+      },
+      "X2/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.6608559857142858,
+          "codex": 0
+        }
+      },
+      "X*/teach": {
+        "records": 56,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.5311549,
+          "codex": 0
+        }
+      },
+      "X3/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.4970365285714286,
+          "codex": 0
+        }
+      },
+      "X4/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.48016024285714287,
+          "codex": 0
+        }
+      },
+      "X1/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.48656684285714286,
+          "codex": 0
+        }
+      },
+      "X1/apply": {
+        "records": 26,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.25968153846153846
+        }
+      },
+      "X*/apply": {
+        "records": 104,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.3605034538461539
+        }
+      },
+      "X2/apply": {
+        "records": 26,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.3667207076923077
+        }
+      },
+      "X3/apply": {
+        "records": 26,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.39624689230769233
+        }
+      },
+      "X4/apply": {
+        "records": 26,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.41936467692307705
+        }
+      }
+    }
+  },
+  "unavailable": [],
+  "effects": [
+    {
+      "minimumEffect": 0.15,
+      "rows": [
+        {
+          "repos": 5,
+          "H1": {
+            "familiesPerRepo": null,
+            "families": null,
+            "power": {
+              "win": 0.7485,
+              "tie": 0.738,
+              "falseWin": 0.007,
+              "meanSeeds": 5.119,
+              "stopShare": 0.18975
+            },
+            "boundsPower": null
+          },
+          "H2": {
+            "familiesPerRepo": null,
+            "families": null,
+            "power": {
+              "win": 0.6725,
+              "tie": 0.6545,
+              "falseWin": 0.0055,
+              "meanSeeds": 5.3725,
+              "stopShare": 0.27
+            },
+            "boundsPower": null
+          },
+          "H4": {
+            "tasksPerRepo": 7,
+            "tasks": 35,
+            "power": {
+              "pass": 0.8235
+            }
+          },
+          "fits": false
+        },
+        {
+          "repos": 8,
+          "H1": {
+            "familiesPerRepo": 3,
+            "families": 24,
+            "power": {
+              "win": 0.85,
+              "tie": 0.8355,
+              "falseWin": 0.0085,
+              "meanSeeds": 4.6705,
+              "stopShare": 0.09575
+            },
+            "boundsPower": {
+              "win": 0.229,
+              "tie": 0.225,
+              "meanSeeds": 4.3855,
+              "stopShare": 0.735
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 4,
+            "families": 32,
+            "power": {
+              "win": 0.912,
+              "tie": 0.915,
+              "falseWin": 0.005,
+              "meanSeeds": 4.295,
+              "stopShare": 0.02825
+            },
+            "boundsPower": {
+              "win": 0.4045,
+              "tie": 0.3915,
+              "meanSeeds": 5.204,
+              "stopShare": 0.5565
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 4,
+            "tasks": 32,
+            "power": {
+              "pass": 0.807
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 3,
+            "families": 24
+          },
+          "setN": {
+            "tasksPerRepo": 6,
+            "tasks": 48
+          },
+          "setX": {
+            "familiesPerRepo": 4,
+            "families": 32
+          },
+          "sessions": 4941.482,
+          "usd": {
+            "claude-code": 987.033569749,
+            "codex": 339.36724024533333
+          },
+          "days": {
+            "claude-code": 4.306429187386562,
+            "codex": 3.3936724024533333
+          },
+          "usageAtCap": {
+            "sessions": 8392,
+            "usd": {
+              "claude-code": 1700.701059090909,
+              "codex": 588.2574442666667
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 7.420161688878312,
+            "codex": 5.882574442666667
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 10,
+          "H1": {
+            "familiesPerRepo": 3,
+            "families": 30,
+            "power": {
+              "win": 0.913,
+              "tie": 0.9205,
+              "falseWin": 0.007,
+              "meanSeeds": 3.9425,
+              "stopShare": 0.027
+            },
+            "boundsPower": {
+              "win": 0.5195,
+              "tie": 0.515,
+              "meanSeeds": 5.6525,
+              "stopShare": 0.42275
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 3,
+            "families": 30,
+            "power": {
+              "win": 0.87,
+              "tie": 0.8865,
+              "falseWin": 0.009,
+              "meanSeeds": 4.524,
+              "stopShare": 0.06175
+            },
+            "boundsPower": {
+              "win": 0.3105,
+              "tie": 0.3155,
+              "meanSeeds": 4.8375,
+              "stopShare": 0.648
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 4,
+            "tasks": 40,
+            "power": {
+              "pass": 0.886
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 3,
+            "families": 30
+          },
+          "setN": {
+            "tasksPerRepo": 6,
+            "tasks": 60
+          },
+          "setX": {
+            "familiesPerRepo": 3,
+            "families": 30
+          },
+          "sessions": 5186.692500000001,
+          "usd": {
+            "claude-code": 1049.565189890977,
+            "codex": 329.51356045600005
+          },
+          "days": {
+            "claude-code": 4.579254755196235,
+            "codex": 3.2951356045600004
+          },
+          "usageAtCap": {
+            "sessions": 9455,
+            "usd": {
+              "claude-code": 1976.0640313636359,
+              "codex": 551.491354
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 8.621570817467871,
+            "codex": 5.51491354
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 12,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 24,
+            "power": {
+              "win": 0.808,
+              "tie": 0.817,
+              "falseWin": 0.004,
+              "meanSeeds": 4.6445,
+              "stopShare": 0.12425
+            },
+            "boundsPower": {
+              "win": 0.215,
+              "tie": 0.208,
+              "meanSeeds": 4.30575,
+              "stopShare": 0.75075
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 3,
+            "families": 36,
+            "power": {
+              "win": 0.9355,
+              "tie": 0.9355,
+              "falseWin": 0.005,
+              "meanSeeds": 3.7935,
+              "stopShare": 0.019
+            },
+            "boundsPower": {
+              "win": 0.554,
+              "tie": 0.544,
+              "meanSeeds": 5.72975,
+              "stopShare": 0.395
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 36,
+            "power": {
+              "pass": 0.8485
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 24
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 48
+          },
+          "setX": {
+            "familiesPerRepo": 3,
+            "families": 36
+          },
+          "sessions": 5011.032,
+          "usd": {
+            "claude-code": 994.0819470849636,
+            "codex": 351.9431416668
+          },
+          "days": {
+            "claude-code": 4.337181270004205,
+            "codex": 3.519431416668
+          },
+          "usageAtCap": {
+            "sessions": 8806,
+            "usd": {
+              "claude-code": 1760.625976090909,
+              "codex": 661.7896248
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 7.681614206330319,
+            "codex": 6.617896247999999
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 15,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 30,
+            "power": {
+              "win": 0.904,
+              "tie": 0.8945,
+              "falseWin": 0.011,
+              "meanSeeds": 3.9705,
+              "stopShare": 0.03825
+            },
+            "boundsPower": {
+              "win": 0.479,
+              "tie": 0.507,
+              "meanSeeds": 5.54575,
+              "stopShare": 0.448
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 30,
+            "power": {
+              "win": 0.8605,
+              "tie": 0.8645,
+              "falseWin": 0.004,
+              "meanSeeds": 4.44375,
+              "stopShare": 0.08125
+            },
+            "boundsPower": {
+              "win": 0.308,
+              "tie": 0.304,
+              "meanSeeds": 4.83875,
+              "stopShare": 0.6445
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 45,
+            "power": {
+              "pass": 0.928
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 30
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 60
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 30
+          },
+          "sessions": 5181.965,
+          "usd": {
+            "claude-code": 1050.4380992232955,
+            "codex": 325.5337307125001
+          },
+          "days": {
+            "claude-code": 4.583063260136543,
+            "codex": 3.255337307125001
+          },
+          "usageAtCap": {
+            "sessions": 9455,
+            "usd": {
+              "claude-code": 1976.0640313636359,
+              "codex": 551.491354
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 8.621570817467871,
+            "codex": 5.51491354
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 20,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 40,
+            "power": {
+              "win": 0.9615,
+              "tie": 0.961,
+              "falseWin": 0.0055,
+              "meanSeeds": 3.21175,
+              "stopShare": 0.00325
+            },
+            "boundsPower": {
+              "win": 0.7215,
+              "tie": 0.7075,
+              "meanSeeds": 5.54725,
+              "stopShare": 0.2265
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 40,
+            "power": {
+              "win": 0.9505,
+              "tie": 0.943,
+              "falseWin": 0.0105,
+              "meanSeeds": 3.51925,
+              "stopShare": 0.008
+            },
+            "boundsPower": {
+              "win": 0.6415,
+              "tie": 0.621,
+              "meanSeeds": 5.827,
+              "stopShare": 0.307
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 2,
+            "tasks": 40,
+            "power": {
+              "pass": 0.8945
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 40
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 80
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 40
+          },
+          "sessions": 5964.408333333333,
+          "usd": {
+            "claude-code": 1201.5835551484392,
+            "codex": 372.91346694599997
+          },
+          "days": {
+            "claude-code": 5.2425111481171,
+            "codex": 3.7291346694599996
+          },
+          "usageAtCap": {
+            "sessions": 12606.666666666668,
+            "usd": {
+              "claude-code": 2634.7520418181816,
+              "codex": 735.3218053333333
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 11.49542775662383,
+            "codex": 7.3532180533333324
+          },
+          "fallbacks": []
+        }
+      ],
+      "chosen": {
+        "repos": 8,
+        "H1": {
+          "familiesPerRepo": 3,
+          "families": 24,
+          "power": {
+            "win": 0.85,
+            "tie": 0.8355,
+            "falseWin": 0.0085,
+            "meanSeeds": 4.6705,
+            "stopShare": 0.09575
+          },
+          "boundsPower": {
+            "win": 0.229,
+            "tie": 0.225,
+            "meanSeeds": 4.3855,
+            "stopShare": 0.735
+          }
+        },
+        "H2": {
+          "familiesPerRepo": 4,
+          "families": 32,
+          "power": {
+            "win": 0.912,
+            "tie": 0.915,
+            "falseWin": 0.005,
+            "meanSeeds": 4.295,
+            "stopShare": 0.02825
+          },
+          "boundsPower": {
+            "win": 0.4045,
+            "tie": 0.3915,
+            "meanSeeds": 5.204,
+            "stopShare": 0.5565
+          }
+        },
+        "H4": {
+          "tasksPerRepo": 4,
+          "tasks": 32,
+          "power": {
+            "pass": 0.807
+          }
+        },
+        "fits": true,
+        "boundsPass": false,
+        "setR": {
+          "familiesPerRepo": 3,
+          "families": 24
+        },
+        "setN": {
+          "tasksPerRepo": 6,
+          "tasks": 48
+        },
+        "setX": {
+          "familiesPerRepo": 4,
+          "families": 32
+        },
+        "sessions": 4941.482,
+        "usd": {
+          "claude-code": 987.033569749,
+          "codex": 339.36724024533333
+        },
+        "days": {
+          "claude-code": 4.306429187386562,
+          "codex": 3.3936724024533333
+        },
+        "usageAtCap": {
+          "sessions": 8392,
+          "usd": {
+            "claude-code": 1700.701059090909,
+            "codex": 588.2574442666667
+          }
+        },
+        "daysAtCap": {
+          "claude-code": 7.420161688878312,
+          "codex": 5.882574442666667
+        },
+        "fallbacks": []
+      },
+      "level": {
+        "H1": {
+          "cells": [
+            {
+              "name": "rule at bounds",
+              "coding": "violation",
+              "level": 0.030850263355906696,
+              "runs": 5316,
+              "stopShare": 0.7342,
+              "ceiling": 0.029282622769730062
+            },
+            {
+              "name": "rule at bounds",
+              "coding": "excluded",
+              "level": 0.030850263355906696,
+              "runs": 5316,
+              "stopShare": 0.7342,
+              "ceiling": 0.029282622769730062
+            },
+            {
+              "name": "three seeds",
+              "coding": "violation",
+              "level": 0.0138,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "three seeds",
+              "coding": "excluded",
+              "level": 0.0138,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "violation",
+              "level": 0.013,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "excluded",
+              "level": 0.013,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "violation",
+              "level": 0.015,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "excluded",
+              "level": 0.015,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            }
+          ],
+          "held": false
+        },
+        "H2": {
+          "cells": [
+            {
+              "name": "rule at bounds",
+              "coding": "violation",
+              "level": 0.024157801418439716,
+              "runs": 9024,
+              "stopShare": 0.5488,
+              "ceiling": 0.028287023163379863
+            },
+            {
+              "name": "rule at bounds",
+              "coding": "excluded",
+              "level": 0.024157801418439716,
+              "runs": 9024,
+              "stopShare": 0.5488,
+              "ceiling": 0.028287023163379863
+            },
+            {
+              "name": "three seeds",
+              "coding": "violation",
+              "level": 0.0157,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "three seeds",
+              "coding": "excluded",
+              "level": 0.0157,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "violation",
+              "level": 0.01375,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "excluded",
+              "level": 0.01375,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "violation",
+              "level": 0.0147,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "excluded",
+              "level": 0.0147,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            }
+          ],
+          "held": true
+        },
+        "held": false
+      }
+    },
+    {
+      "minimumEffect": 0.2,
+      "rows": [
+        {
+          "repos": 5,
+          "H1": {
+            "familiesPerRepo": 4,
+            "families": 20,
+            "power": {
+              "win": 0.902,
+              "tie": 0.914,
+              "falseWin": 0.009,
+              "meanSeeds": 3.63375,
+              "stopShare": 0.02225
+            },
+            "boundsPower": {
+              "win": 0.57,
+              "tie": 0.562,
+              "meanSeeds": 5.463,
+              "stopShare": 0.36025
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 4,
+            "families": 20,
+            "power": {
+              "win": 0.8865,
+              "tie": 0.8855,
+              "falseWin": 0.011,
+              "meanSeeds": 4.09025,
+              "stopShare": 0.04675
+            },
+            "boundsPower": {
+              "win": 0.4455,
+              "tie": 0.436,
+              "meanSeeds": 5.26275,
+              "stopShare": 0.496
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 7,
+            "tasks": 35,
+            "power": {
+              "pass": 0.8235
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 4,
+            "families": 20
+          },
+          "setN": {
+            "tasksPerRepo": 7,
+            "tasks": 35
+          },
+          "setX": {
+            "familiesPerRepo": 4,
+            "families": 20
+          },
+          "sessions": 3180.6845833333346,
+          "usd": {
+            "claude-code": 635.2448913555,
+            "codex": 205.3350951223333
+          },
+          "days": {
+            "claude-code": 2.7715745696138745,
+            "codex": 2.053350951223333
+          },
+          "usageAtCap": {
+            "sessions": 6148.333333333334,
+            "usd": {
+              "claude-code": 1270.8471175454545,
+              "codex": 367.66090266666663
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 5.544708191734095,
+            "codex": 3.6766090266666662
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 8,
+          "H1": {
+            "familiesPerRepo": 3,
+            "families": 24,
+            "power": {
+              "win": 0.9495,
+              "tie": 0.96,
+              "falseWin": 0.01,
+              "meanSeeds": 3.225,
+              "stopShare": 0.00325
+            },
+            "boundsPower": {
+              "win": 0.716,
+              "tie": 0.7055,
+              "meanSeeds": 5.39325,
+              "stopShare": 0.22825
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 3,
+            "families": 24,
+            "power": {
+              "win": 0.9335,
+              "tie": 0.9405,
+              "falseWin": 0.0045,
+              "meanSeeds": 3.5235,
+              "stopShare": 0.01625
+            },
+            "boundsPower": {
+              "win": 0.6145,
+              "tie": 0.612,
+              "meanSeeds": 5.588,
+              "stopShare": 0.32375
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 4,
+            "tasks": 32,
+            "power": {
+              "pass": 0.807
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 3,
+            "families": 24
+          },
+          "setN": {
+            "tasksPerRepo": 6,
+            "tasks": 48
+          },
+          "setX": {
+            "familiesPerRepo": 3,
+            "families": 24
+          },
+          "sessions": 3585.9759999999997,
+          "usd": {
+            "claude-code": 722.649582415309,
+            "codex": 223.91669600720002
+          },
+          "days": {
+            "claude-code": 3.1529213892465493,
+            "codex": 2.239166960072
+          },
+          "usageAtCap": {
+            "sessions": 7564,
+            "usd": {
+              "claude-code": 1580.851225090909,
+              "codex": 441.19308320000005
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 6.897256653974298,
+            "codex": 4.411930832
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 10,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 20,
+            "power": {
+              "win": 0.8965,
+              "tie": 0.8895,
+              "falseWin": 0.0085,
+              "meanSeeds": 3.66525,
+              "stopShare": 0.04225
+            },
+            "boundsPower": {
+              "win": 0.573,
+              "tie": 0.568,
+              "meanSeeds": 5.523,
+              "stopShare": 0.3555
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 20,
+            "power": {
+              "win": 0.8535,
+              "tie": 0.839,
+              "falseWin": 0.009,
+              "meanSeeds": 4.05875,
+              "stopShare": 0.08075
+            },
+            "boundsPower": {
+              "win": 0.4225,
+              "tie": 0.412,
+              "meanSeeds": 5.20125,
+              "stopShare": 0.5115
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 4,
+            "tasks": 40,
+            "power": {
+              "pass": 0.886
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 20
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 40
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 20
+          },
+          "sessions": 3262.225833333333,
+          "usd": {
+            "claude-code": 659.9094040101135,
+            "codex": 204.29364434833332
+          },
+          "days": {
+            "claude-code": 2.8791858813704776,
+            "codex": 2.0429364434833333
+          },
+          "usageAtCap": {
+            "sessions": 6303.333333333334,
+            "usd": {
+              "claude-code": 1317.3760209090908,
+              "codex": 367.66090266666663
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 5.747713878311915,
+            "codex": 3.6766090266666662
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 12,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 24,
+            "power": {
+              "win": 0.9555,
+              "tie": 0.9525,
+              "falseWin": 0.007,
+              "meanSeeds": 3.259,
+              "stopShare": 0.01
+            },
+            "boundsPower": {
+              "win": 0.6945,
+              "tie": 0.675,
+              "meanSeeds": 5.30875,
+              "stopShare": 0.2435
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 24,
+            "power": {
+              "win": 0.9275,
+              "tie": 0.9175,
+              "falseWin": 0.0055,
+              "meanSeeds": 3.544,
+              "stopShare": 0.02675
+            },
+            "boundsPower": {
+              "win": 0.5935,
+              "tie": 0.6,
+              "meanSeeds": 5.56025,
+              "stopShare": 0.3365
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 36,
+            "power": {
+              "pass": 0.8485
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 24
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 48
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 24
+          },
+          "sessions": 3606.8599999999997,
+          "usd": {
+            "claude-code": 727.3214915094181,
+            "codex": 224.73001946880004
+          },
+          "days": {
+            "claude-code": 3.173304936777566,
+            "codex": 2.2473001946880005
+          },
+          "usageAtCap": {
+            "sessions": 7564,
+            "usd": {
+              "claude-code": 1580.851225090909,
+              "codex": 441.19308320000005
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 6.897256653974298,
+            "codex": 4.411930832
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 15,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 30,
+            "power": {
+              "win": 0.9815,
+              "tie": 0.977,
+              "falseWin": 0.0075,
+              "meanSeeds": 3.03925,
+              "stopShare": 0.00075
+            },
+            "boundsPower": {
+              "win": 0.8025,
+              "tie": 0.814,
+              "meanSeeds": 4.8735,
+              "stopShare": 0.13175
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 30,
+            "power": {
+              "win": 0.9745,
+              "tie": 0.9745,
+              "falseWin": 0.0055,
+              "meanSeeds": 3.1225,
+              "stopShare": 0.0025
+            },
+            "boundsPower": {
+              "win": 0.732,
+              "tie": 0.735,
+              "meanSeeds": 5.25075,
+              "stopShare": 0.202
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 45,
+            "power": {
+              "pass": 0.928
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 30
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 60
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 30
+          },
+          "sessions": 4261.821249999999,
+          "usd": {
+            "claude-code": 859.6950729263067,
+            "codex": 260.00911951500007
+          },
+          "days": {
+            "claude-code": 3.7508511035179177,
+            "codex": 2.6000911951500005
+          },
+          "usageAtCap": {
+            "sessions": 9455,
+            "usd": {
+              "claude-code": 1976.0640313636359,
+              "codex": 551.491354
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 8.621570817467871,
+            "codex": 5.51491354
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 20,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 40,
+            "power": {
+              "win": 0.9985,
+              "tie": 0.984,
+              "falseWin": 0.0085,
+              "meanSeeds": 3.00025,
+              "stopShare": 0
+            },
+            "boundsPower": {
+              "win": 0.9285,
+              "tie": 0.929,
+              "meanSeeds": 3.944,
+              "stopShare": 0.02425
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 40,
+            "power": {
+              "win": 0.9955,
+              "tie": 0.984,
+              "falseWin": 0.0085,
+              "meanSeeds": 3.00375,
+              "stopShare": 0
+            },
+            "boundsPower": {
+              "win": 0.8805,
+              "tie": 0.88,
+              "meanSeeds": 4.496,
+              "stopShare": 0.06425
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 2,
+            "tasks": 40,
+            "power": {
+              "pass": 0.8945
+            }
+          },
+          "fits": true,
+          "boundsPass": true,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 40
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 80
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 40
+          },
+          "sessions": 5608.218333333333,
+          "usd": {
+            "claude-code": 1132.1824687259848,
+            "codex": 338.82661780333336
+          },
+          "days": {
+            "claude-code": 4.939714086937107,
+            "codex": 3.3882661780333336
+          },
+          "usageAtCap": {
+            "sessions": 12606.666666666668,
+            "usd": {
+              "claude-code": 2634.7520418181816,
+              "codex": 735.3218053333333
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 11.49542775662383,
+            "codex": 7.3532180533333324
+          },
+          "fallbacks": []
+        }
+      ],
+      "chosen": {
+        "repos": 20,
+        "H1": {
+          "familiesPerRepo": 2,
+          "families": 40,
+          "power": {
+            "win": 0.9985,
+            "tie": 0.984,
+            "falseWin": 0.0085,
+            "meanSeeds": 3.00025,
+            "stopShare": 0
+          },
+          "boundsPower": {
+            "win": 0.9285,
+            "tie": 0.929,
+            "meanSeeds": 3.944,
+            "stopShare": 0.02425
+          }
+        },
+        "H2": {
+          "familiesPerRepo": 2,
+          "families": 40,
+          "power": {
+            "win": 0.9955,
+            "tie": 0.984,
+            "falseWin": 0.0085,
+            "meanSeeds": 3.00375,
+            "stopShare": 0
+          },
+          "boundsPower": {
+            "win": 0.8805,
+            "tie": 0.88,
+            "meanSeeds": 4.496,
+            "stopShare": 0.06425
+          }
+        },
+        "H4": {
+          "tasksPerRepo": 2,
+          "tasks": 40,
+          "power": {
+            "pass": 0.8945
+          }
+        },
+        "fits": true,
+        "boundsPass": true,
+        "setR": {
+          "familiesPerRepo": 2,
+          "families": 40
+        },
+        "setN": {
+          "tasksPerRepo": 4,
+          "tasks": 80
+        },
+        "setX": {
+          "familiesPerRepo": 2,
+          "families": 40
+        },
+        "sessions": 5608.218333333333,
+        "usd": {
+          "claude-code": 1132.1824687259848,
+          "codex": 338.82661780333336
+        },
+        "days": {
+          "claude-code": 4.939714086937107,
+          "codex": 3.3882661780333336
+        },
+        "usageAtCap": {
+          "sessions": 12606.666666666668,
+          "usd": {
+            "claude-code": 2634.7520418181816,
+            "codex": 735.3218053333333
+          }
+        },
+        "daysAtCap": {
+          "claude-code": 11.49542775662383,
+          "codex": 7.3532180533333324
+        },
+        "fallbacks": []
+      },
+      "level": {
+        "H1": {
+          "cells": [
+            {
+              "name": "rule at bounds",
+              "coding": "violation",
+              "level": 0.018001337242195135,
+              "runs": 19443,
+              "stopShare": 0.02785000000000004,
+              "ceiling": 0.027239343259028048
+            },
+            {
+              "name": "rule at bounds",
+              "coding": "excluded",
+              "level": 0.018001337242195135,
+              "runs": 19443,
+              "stopShare": 0.02785000000000004,
+              "ceiling": 0.027239343259028048
+            },
+            {
+              "name": "three seeds",
+              "coding": "violation",
+              "level": 0.0139,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "three seeds",
+              "coding": "excluded",
+              "level": 0.0139,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "violation",
+              "level": 0.0162,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "excluded",
+              "level": 0.0162,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "violation",
+              "level": 0.01395,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "excluded",
+              "level": 0.01395,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            }
+          ],
+          "held": true
+        },
+        "H2": {
+          "cells": [
+            {
+              "name": "rule at bounds",
+              "coding": "violation",
+              "level": 0.021136133737954532,
+              "runs": 18783,
+              "stopShare": 0.06084999999999996,
+              "ceiling": 0.027278346786426634
+            },
+            {
+              "name": "rule at bounds",
+              "coding": "excluded",
+              "level": 0.021136133737954532,
+              "runs": 18783,
+              "stopShare": 0.06084999999999996,
+              "ceiling": 0.027278346786426634
+            },
+            {
+              "name": "three seeds",
+              "coding": "violation",
+              "level": 0.0173,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "three seeds",
+              "coding": "excluded",
+              "level": 0.0173,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "violation",
+              "level": 0.01445,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "excluded",
+              "level": 0.01445,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "violation",
+              "level": 0.0173,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "excluded",
+              "level": 0.0173,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            }
+          ],
+          "held": true
+        },
+        "held": true
+      }
+    },
+    {
+      "minimumEffect": 0.25,
+      "rows": [
+        {
+          "repos": 5,
+          "H1": {
+            "familiesPerRepo": 3,
+            "families": 15,
+            "power": {
+              "win": 0.8925,
+              "tie": 0.911,
+              "falseWin": 0.005,
+              "meanSeeds": 3.4385,
+              "stopShare": 0.01875
+            },
+            "boundsPower": {
+              "win": 0.6335,
+              "tie": 0.6315,
+              "meanSeeds": 5.32925,
+              "stopShare": 0.276
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 3,
+            "families": 15,
+            "power": {
+              "win": 0.8665,
+              "tie": 0.8825,
+              "falseWin": 0.005,
+              "meanSeeds": 3.755,
+              "stopShare": 0.04125
+            },
+            "boundsPower": {
+              "win": 0.5355,
+              "tie": 0.5285,
+              "meanSeeds": 5.393,
+              "stopShare": 0.389
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 7,
+            "tasks": 35,
+            "power": {
+              "pass": 0.8235
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 3,
+            "families": 15
+          },
+          "setN": {
+            "tasksPerRepo": 7,
+            "tasks": 35
+          },
+          "setX": {
+            "familiesPerRepo": 3,
+            "families": 15
+          },
+          "sessions": 2408.64875,
+          "usd": {
+            "claude-code": 493.6185699946249,
+            "codex": 145.688312485
+          },
+          "days": {
+            "claude-code": 2.1536586823500214,
+            "codex": 1.45688312485
+          },
+          "usageAtCap": {
+            "sessions": 4882.5,
+            "usd": {
+              "claude-code": 1034.5609190454545,
+              "codex": 275.745677
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 4.513791095311756,
+            "codex": 2.75745677
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 8,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 16,
+            "power": {
+              "win": 0.9065,
+              "tie": 0.915,
+              "falseWin": 0.004,
+              "meanSeeds": 3.3055,
+              "stopShare": 0.0235
+            },
+            "boundsPower": {
+              "win": 0.645,
+              "tie": 0.638,
+              "meanSeeds": 5.162,
+              "stopShare": 0.27175
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 16,
+            "power": {
+              "win": 0.8615,
+              "tie": 0.89,
+              "falseWin": 0.005,
+              "meanSeeds": 3.58775,
+              "stopShare": 0.0445
+            },
+            "boundsPower": {
+              "win": 0.552,
+              "tie": 0.5505,
+              "meanSeeds": 5.36475,
+              "stopShare": 0.35225
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 4,
+            "tasks": 32,
+            "power": {
+              "pass": 0.807
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 16
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 32
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 16
+          },
+          "sessions": 2425.877333333334,
+          "usd": {
+            "claude-code": 489.4803019277939,
+            "codex": 150.97718050586667
+          },
+          "days": {
+            "claude-code": 2.1356034115523297,
+            "codex": 1.5097718050586666
+          },
+          "usageAtCap": {
+            "sessions": 5042.666666666666,
+            "usd": {
+              "claude-code": 1053.900816727273,
+              "codex": 294.1287221333333
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 4.598171102649533,
+            "codex": 2.9412872213333334
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 10,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 20,
+            "power": {
+              "win": 0.9785,
+              "tie": 0.976,
+              "falseWin": 0.006,
+              "meanSeeds": 3.0635,
+              "stopShare": 0.00275
+            },
+            "boundsPower": {
+              "win": 0.7595,
+              "tie": 0.7685,
+              "meanSeeds": 4.6985,
+              "stopShare": 0.16225
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 20,
+            "power": {
+              "win": 0.9545,
+              "tie": 0.949,
+              "falseWin": 0.011,
+              "meanSeeds": 3.1995,
+              "stopShare": 0.0085
+            },
+            "boundsPower": {
+              "win": 0.6895,
+              "tie": 0.7065,
+              "meanSeeds": 5.12,
+              "stopShare": 0.2255
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 4,
+            "tasks": 40,
+            "power": {
+              "pass": 0.886
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 20
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 40
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 20
+          },
+          "sessions": 2864.8549999999996,
+          "usd": {
+            "claude-code": 577.5921727240758,
+            "codex": 175.88518156866667
+          },
+          "days": {
+            "claude-code": 2.520035657609406,
+            "codex": 1.7588518156866666
+          },
+          "usageAtCap": {
+            "sessions": 6303.333333333334,
+            "usd": {
+              "claude-code": 1317.3760209090908,
+              "codex": 367.66090266666663
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 5.747713878311915,
+            "codex": 3.6766090266666662
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 12,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 24,
+            "power": {
+              "win": 0.9935,
+              "tie": 0.993,
+              "falseWin": 0.003,
+              "meanSeeds": 3.0105,
+              "stopShare": 0.00025
+            },
+            "boundsPower": {
+              "win": 0.848,
+              "tie": 0.8345,
+              "meanSeeds": 4.2505,
+              "stopShare": 0.091
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 24,
+            "power": {
+              "win": 0.9785,
+              "tie": 0.9745,
+              "falseWin": 0.0085,
+              "meanSeeds": 3.0345,
+              "stopShare": 0.00075
+            },
+            "boundsPower": {
+              "win": 0.807,
+              "tie": 0.7925,
+              "meanSeeds": 4.69425,
+              "stopShare": 0.1325
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 36,
+            "power": {
+              "pass": 0.8485
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 24
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 48
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 24
+          },
+          "sessions": 3376.533999999999,
+          "usd": {
+            "claude-code": 681.514503384709,
+            "codex": 204.51595587440005
+          },
+          "days": {
+            "claude-code": 2.9734489676470726,
+            "codex": 2.0451595587440003
+          },
+          "usageAtCap": {
+            "sessions": 7564,
+            "usd": {
+              "claude-code": 1580.851225090909,
+              "codex": 441.19308320000005
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 6.897256653974298,
+            "codex": 4.411930832
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 15,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 30,
+            "power": {
+              "win": 0.998,
+              "tie": 0.9825,
+              "falseWin": 0.0105,
+              "meanSeeds": 3,
+              "stopShare": 0
+            },
+            "boundsPower": {
+              "win": 0.9165,
+              "tie": 0.9285,
+              "meanSeeds": 3.56725,
+              "stopShare": 0.02475
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 30,
+            "power": {
+              "win": 0.9975,
+              "tie": 0.981,
+              "falseWin": 0.007,
+              "meanSeeds": 3.00175,
+              "stopShare": 0
+            },
+            "boundsPower": {
+              "win": 0.8995,
+              "tie": 0.892,
+              "meanSeeds": 4.0275,
+              "stopShare": 0.049
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 45,
+            "power": {
+              "pass": 0.928
+            }
+          },
+          "fits": true,
+          "boundsPass": true,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 30
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 60
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 30
+          },
+          "sessions": 4205.4725,
+          "usd": {
+            "claude-code": 849.0189674619545,
+            "codex": 254.0207775645
+          },
+          "days": {
+            "claude-code": 3.7042712367450026,
+            "codex": 2.540207775645
+          },
+          "usageAtCap": {
+            "sessions": 9455,
+            "usd": {
+              "claude-code": 1976.0640313636359,
+              "codex": 551.491354
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 8.621570817467871,
+            "codex": 5.51491354
+          },
+          "fallbacks": []
+        },
+        {
+          "repos": 20,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 40,
+            "power": {
+              "win": 1,
+              "tie": 0.987,
+              "falseWin": 0.0065,
+              "meanSeeds": 3,
+              "stopShare": 0
+            },
+            "boundsPower": {
+              "win": 0.978,
+              "tie": 0.9755,
+              "meanSeeds": 3.06925,
+              "stopShare": 0.00025
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 40,
+            "power": {
+              "win": 1,
+              "tie": 0.9805,
+              "falseWin": 0.009,
+              "meanSeeds": 3,
+              "stopShare": 0
+            },
+            "boundsPower": {
+              "win": 0.957,
+              "tie": 0.9545,
+              "meanSeeds": 3.2385,
+              "stopShare": 0.003
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 2,
+            "tasks": 40,
+            "power": {
+              "pass": 0.8945
+            }
+          },
+          "fits": true,
+          "boundsPass": true,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 40
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 80
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 40
+          },
+          "sessions": 5606.666666666666,
+          "usd": {
+            "claude-code": 1131.9307287272727,
+            "codex": 338.57865333333336
+          },
+          "days": {
+            "claude-code": 4.938615744883389,
+            "codex": 3.3857865333333335
+          },
+          "usageAtCap": {
+            "sessions": 12606.666666666668,
+            "usd": {
+              "claude-code": 2634.7520418181816,
+              "codex": 735.3218053333333
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 11.49542775662383,
+            "codex": 7.3532180533333324
+          },
+          "fallbacks": []
+        }
+      ],
+      "chosen": {
+        "repos": 15,
+        "H1": {
+          "familiesPerRepo": 2,
+          "families": 30,
+          "power": {
+            "win": 0.998,
+            "tie": 0.9825,
+            "falseWin": 0.0105,
+            "meanSeeds": 3,
+            "stopShare": 0
+          },
+          "boundsPower": {
+            "win": 0.9165,
+            "tie": 0.9285,
+            "meanSeeds": 3.56725,
+            "stopShare": 0.02475
+          }
+        },
+        "H2": {
+          "familiesPerRepo": 2,
+          "families": 30,
+          "power": {
+            "win": 0.9975,
+            "tie": 0.981,
+            "falseWin": 0.007,
+            "meanSeeds": 3.00175,
+            "stopShare": 0
+          },
+          "boundsPower": {
+            "win": 0.8995,
+            "tie": 0.892,
+            "meanSeeds": 4.0275,
+            "stopShare": 0.049
+          }
+        },
+        "H4": {
+          "tasksPerRepo": 3,
+          "tasks": 45,
+          "power": {
+            "pass": 0.928
+          }
+        },
+        "fits": true,
+        "boundsPass": true,
+        "setR": {
+          "familiesPerRepo": 2,
+          "families": 30
+        },
+        "setN": {
+          "tasksPerRepo": 4,
+          "tasks": 60
+        },
+        "setX": {
+          "familiesPerRepo": 2,
+          "families": 30
+        },
+        "sessions": 4205.4725,
+        "usd": {
+          "claude-code": 849.0189674619545,
+          "codex": 254.0207775645
+        },
+        "days": {
+          "claude-code": 3.7042712367450026,
+          "codex": 2.540207775645
+        },
+        "usageAtCap": {
+          "sessions": 9455,
+          "usd": {
+            "claude-code": 1976.0640313636359,
+            "codex": 551.491354
+          }
+        },
+        "daysAtCap": {
+          "claude-code": 8.621570817467871,
+          "codex": 5.51491354
+        },
+        "fallbacks": []
+      },
+      "level": {
+        "H1": {
+          "cells": [
+            {
+              "name": "rule at bounds",
+              "coding": "violation",
+              "level": 0.01675178753830439,
+              "runs": 19580,
+              "stopShare": 0.02100000000000002,
+              "ceiling": 0.027231495236563805
+            },
+            {
+              "name": "rule at bounds",
+              "coding": "excluded",
+              "level": 0.01675178753830439,
+              "runs": 19580,
+              "stopShare": 0.02100000000000002,
+              "ceiling": 0.027231495236563805
+            },
+            {
+              "name": "three seeds",
+              "coding": "violation",
+              "level": 0.0177,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "three seeds",
+              "coding": "excluded",
+              "level": 0.0177,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "violation",
+              "level": 0.01455,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "excluded",
+              "level": 0.01455,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "violation",
+              "level": 0.0136,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "excluded",
+              "level": 0.0136,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            }
+          ],
+          "held": true
+        },
+        "H2": {
+          "cells": [
+            {
+              "name": "rule at bounds",
+              "coding": "violation",
+              "level": 0.017982017982017984,
+              "runs": 19019,
+              "stopShare": 0.04905000000000004,
+              "ceiling": 0.027264167064258632
+            },
+            {
+              "name": "rule at bounds",
+              "coding": "excluded",
+              "level": 0.017982017982017984,
+              "runs": 19019,
+              "stopShare": 0.04905000000000004,
+              "ceiling": 0.027264167064258632
+            },
+            {
+              "name": "three seeds",
+              "coding": "violation",
+              "level": 0.0158,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "three seeds",
+              "coding": "excluded",
+              "level": 0.0158,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "violation",
+              "level": 0.01375,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "excluded",
+              "level": 0.01375,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "violation",
+              "level": 0.01745,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "excluded",
+              "level": 0.01745,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            }
+          ],
+          "held": true
+        },
+        "held": true
+      }
+    }
+  ],
+  "notes": [
+    "Power runs through the analyzer's own fixed-repository t tests (family is the unit) at Holm's strictest level, 0.05/2 over H1 and H2 (prereg 209, Amendment 2); a win needs both codings.",
+    "H3 is reported with no verdict, so it sets no size; set R is sized by H1 alone.",
+    "Seeds follow the blind rule: wave 1 runs 3 seeds, then the fewest up to seedCap whose predicted standard error is at most the minimum effect over targetZ, the larger of the two codings. A run the rule cannot size stops and counts as neither win nor tie.",
+    "A size passes at the calibration's point estimates. boundsPower repeats that size with every spread at its one-sided spreadBound upper bound, and choose prefers the rows that pass there.",
+    "Set N's one-sided resolve share is taken at its exact one-sided spreadBound upper bound (Clopper-Pearson); resolve.oneSideEstimate is the point value.",
+    "Families per repository are capped at maxFamiliesPerRepo. Each size is found by a search at searchSims, then confirmed at sims one size at a time; reported power is from the full sim count.",
+    "Sessions count each record's first session plus its teach and correction resumes, at the rule's mean seeds; screen sessions are not counted. usageAtCap prices the rule's arms at seedCap.",
+    "Days are list-price dollars of usage over the per-day quota; a quota marked \"default assumption\" is a placeholder, not a measurement.",
+    "level is the share of true-zero runs below Holm's strictest 0.025, at the chosen design under the seed rule at the bounds, 3 seeds, 2 seeds at the bounds and 0/1 values. Each cell is read against 0.025 plus 2 simulation errors of the runs it kept (the rule's cell drops the runs it stopped), and a cell with no run fails; held: false stops the freeze."
+  ]
+}

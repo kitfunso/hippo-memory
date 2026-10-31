@@ -305,7 +305,11 @@ The blind reader's round 1 (seed 41, 30 pairs) disagreed with the checkers on 7 
 - `cj-f1-l1` judged `src/` only, but the repository's `format-pr.yml` formats the whole tree. Five disagreements were 108-character lines in test files, all in teach cells. The checker now reads every `.jl` file. On the saved diffs this changes teach verdicts only: every apply with a long test line already failed on `src/`.
 - `lib.mjs` counted the message of a commit that `git commit --amend` replaced, so a corrected message could never pass. Two disagreements. An amend now replaces the message before it, and `--amend --no-edit` keeps it.
 
-The S3 proof of the fixed checkers (`C:/z0-runs/s3/proof-cj-g5fix.log`) passed 8 of 9 tasks. On `cj-f1-a1` the widened checker fails the validation's good commit `b1c322d4`, which leaves a 161-character line in `test/frontend/cast.jl`; it was written when the checker read `src/` only. A corrected good commit, `134a0984` on ref `task/cj-f1-a1/good-g5`, splits that line as the `src/` line already is. Run directly, the checker passes it and fails the bad commit `d433c50f`. Pointing `validation.json` at it waits for Keith, and the post-fix regrade and round 2 wait for the proof. The proof's stub preflight also flags `cj-f4-l1`'s key phrase in a stub tree; `cj-f4` is not in calibration.
+The S3 proof of the fixed checkers (`C:/z0-runs/s3/proof-cj-g5fix.log`) passed 8 of 9 tasks. On `cj-f1-a1` the widened checker fails the validation's good commit `b1c322d4`, which leaves a 161-character line in `test/frontend/cast.jl`; it was written when the checker read `src/` only. A corrected good commit, `134a0984` on ref `task/cj-f1-a1/good-g5`, splits that line as the `src/` line already is. Run directly, the checker passes it and fails the bad commit `d433c50f`. On 2026-10-15, on Keith's go, `validation.json` was pointed at it, and the same ref was fetched into the runner's repository `C:/z0-runs/eval-repos/cj`. Its one-task proof, run by Keith in the terminal (`prove.mjs --only cj-f1-a1`, no log file), passed (checker pass on good and fail on bad; the run's only failure is the known `cj-f4` stub flag).
+
+## S9: G5 on Comonicon.jl, round 2
+
+The post-fix regrade ran all 140 cells with no errors and no flipped lesson. The blind reader's round 2 (seed 42, 30 of 103 eligible pairs) disagreed with the checkers on 1 pair, 3%, so G5 passes for `cal-cj4` (`C:/z0-runs/s7/cal-cj4/grading.json`). Six cells changed their acceptance result between runs of the same hidden test, 2 in the repro pass and 4 in the post-fix pass, spread over arms A0, A2, A4 and A5. The proof's stub preflight also flags `cj-f4-l1`'s key phrase in a stub tree; `cj-f4` is not in calibration.
 
 ## S9: preliminary sizing
 
@@ -316,6 +320,96 @@ z0-size on `cal-cj4` and `cal-bm4`, before G5, at 200 simulations: no grid row r
 - The two-level bootstrap of prereg 189 calls too many wins with few repositories. At the D6 bound, 1000 simulations at 60 families: 5.0% (H1) and 16.6% (H3) of true-zero runs were wins at 5 repositories, 2.2% and 9.9% at 10, against Holm's 1.7%. At the point variance, 2000 simulations: 2.9% and 5.6% at 5 repositories of 6 families, 1.7% and 3.0% at 10, 1.2% and 1.9% at 20.
 - A t test over repositories with G-1 degrees of freedom (H1 on repository means, H3 on the pooled ratio with a cluster-robust error) kept every point-variance cell at or under 1.7%, at a cost in power that is gone by 20 repositories: H1 at 20 points, 6 families, 21% against the bootstrap's 59% at 5 repositories, 68% against 82% at 10, 98% against 99% at 20. At the bound, H3 still made 5% to 7% false wins under both tests. Script and logs: `C:/z0-runs/s9/prelim/smallsample.mjs`, `ss-point.log`, `ss-bound.log`.
 - First-try repeats on applies, cj and bm together: A0 23 of 26, A1 3 of 26, A2 1 of 26, A4 2 of 26, A5 4 of 26.
+
+## S9: Amendment 2, fixed repositories
+
+S9 sizing with the repository as the unit found no feasible design (`C:/z0-runs/s9/sizes.json`, `sizes-point.json`). Two set R repositories give the repository variance one degree of freedom, and its 80% bound, 0.708, is 25 times the estimate, 0.028. At that estimate H1 needs 20 scored repositories at 25 points and H4 more than 30, and H2 cannot be sized with one set X repository. Amendment 2 narrows the claim to the scored repositories and makes the family the unit (plan `hippo-archive/z0-amend2-plan.html`, sent to Keith on 2026-10-15).
+
+An outside review (Opus, plan plus prereg and code) found two blockers, both now fixed:
+
+- Power rested on a noise variance measured on 4 degrees of freedom (2 for H2). At its 80% bound a fixed three seeds gives H1 52% power at 5 repositories of 8 families. The fix is the blind seed rule (Amendment 2, item 5).
+- The symmetric delta interval for the cost ratio passed 5.2% to 5.6% of runs at a true 1.10 under the harsher spreads. The log form passes 3.2% to 4.7%. The committed skew check (`z0-skew-check.mjs` at `f21ff8d3`, 20,000 runs a cell) gives the log form 3.44% to 4.59% in the skewed cells, against 5.37% to 6.00% for the symmetric form in four of them; the table is in the analyzer doc.
+
+Probes, all in the session scratchpad and run against `feat/z0-repo-t`:
+
+- `TEST=pooled node crossed-probe.mjs 400 cj4 bm4 ml2` gives the calibration components. H1 (12 units, 2 repositories, 3 families, 2 seeds): noise 0.141 on 4 degrees of freedom, family 0 (bound 0.033), sequence 0 (bound 0.039). H2 (6 units, ml only): noise 0.292 on 2 degrees of freedom.
+- `level-check.mjs` (20,000 runs per cell, 8 families, 3 seeds) gives the share of true-zero runs with p under 0.025: 0.014 to 0.027 with 2 or more repositories, and up to 0.040 with one. At two seeds and the bounds it was 0.027.
+- `node pilot-probe.mjs 4000 5 8` tests the seed rule at 5 repositories of 8 families. At the calibration's family and sequence estimates and noise up to its bound, win power is 0.90 to 0.94 and tie 0.88 to 0.95, with a mean of 3.1 to 5.9 seeds. With family and sequence at their bounds, win is 0.69 to 0.77 and tie 0.58 to 0.69. False win or loss is 0.015 to 0.028.
+- `node pilot-probe.mjs 1500 20 3`: at the bounds, 20 repositories of 3 families reach win 0.85 to 0.88 and tie 0.82 to 0.86. More repositories beat more seeds, because seeds do not shrink the family term.
+- `node h4-pooled-probe.mjs 400 cj4 bm4`: set N had 22 pairs and none resolved on one side only, so the resolve half had no spread. With 5% discordance per side, the H4 gate passes 0.92 at 5 repositories of 40 tasks and 0.95 at 8 of 26. The cost half at a true 1.10 passed 1.0% to 3.7%.
+
+Families per repository are bounded by the distinct conventions a repository has: the development repositories gave 3 (cj), 3 to 4 (bm) and 2 (hp). The sizer therefore searches repository counts at up to 4 families each.
+
+## S9: sizing under Amendment 2
+
+`bash C:/z0-runs/s9/size-a2.sh 229.2 cj4 bm4 ml2` on `d06ae697` (`C:/z0-runs/s9/sizes-a2-d06ae697.json`; 2,000 runs a row, 20,000 a level cell). At the preregistered 15 points the sizer picks 12 repositories: set R 24 families, set N 48 tasks, set X 48 families, 5,751 sessions, $1,135 of Claude and $449 of Codex at list price ($1,925 and $723 if every rule arm reaches 9 seeds). H1 has 0.81 power at the point spreads and 0.22 at their 80% bounds, where the rule stops 75% of runs; H2 has 0.92 and 0.00; H4 passes 0.85 with 36 tasks. No row passes at the bounds. At 20 points: 10 repositories, 3,752 sessions, $750. At 25 points: 5 repositories, 2,672 sessions, $545.
+
+The level holds for H1 at every effect (at most 2.3%). It fails for H2 at 15 and 25 points. Set X calibration has one repository, so H2's bounds are wide and the rule stops almost every run there: all 20,000 at 15 points, all but 14 at 20, all but 106 at 25, where 5.7% of the runs it let go were false wins against a 5.5% bar. A cell the rule empties fails by design (the test at `tests/token-eval-z0-size.test.ts` asserts it), because the rule's level there is unmeasured. The freeze at 15 points therefore waits for a second set X repository in calibration. The run itself waits for funding: $1,135 is past the $200 a month of free Console credit.
+
+`d06ae697` fixed the level check on the way: it judged every cell against 0.025 plus 2 simulation errors of all 20,000 runs, even when the rule left a few hundred, which fails a sound test about half the time. Each cell now uses its own run count. No verdict above changed.
+
+## S9: G5 on boring-maths set R
+
+Round 1 (seed 41) disagreed on 4 of 30 pairs, 13%, so G5 failed for `cal-bm4`. The fix changed two shared files (judged copies in `C:/z0-runs/s9/bm4-r1-checks/` and `bmx-r1-checks/`):
+
+- `test-commands.mjs` counted `vitest --version` and `--help` as test runs. A vitest call that only prints and exits no longer counts.
+- `commit-messages.mjs` kept the message of a commit that `git commit --amend` replaced, as Comonicon.jl's `lib.mjs` did. An amend now replaces the message before it.
+
+The post-fix regrade moved 14 bm-f4-l1 finals and one first and one final of bm-f5-l1, all from fail to pass. Round 1 rescored on the fixed checkers gives 1 of 30. Round 2 (seed 42) disagreed on 0 of 30, so G5 passes for `cal-bm4` (`C:/z0-runs/s7/cal-bm4/grading.json`).
+
+## S9: G5 on boring-maths set X, round 1
+
+Round 1 (seed 41) disagreed on 4 of 30 pairs, 13%, so G5 failed for `cal-bmx`. All four are bm-f5 finals the checker failed and the reader passed: the agent ran the wrong test command first and the right one after the correction. A final check saw every command of the session, so a rule about which command to run could never pass a corrected session. The correction asks the agent to fix it (prereg lines 105 to 110), so the final check must judge the work after it. The fix:
+
+- The runner hands a final check after a resume the resume's own commands in `CHECK_RESUME_COMMANDS`: what each transcript gained since the first check. The boundary is per transcript file, because a subagent file can sit between the main file's commands, so the first check's list is not always a prefix of the final one. The grading save keeps the list as `commandsResume`. The regrade derives it for an older save from the final list past the first, and faults `resume-commands` when the first is not a prefix. Every final-checked cell in `cal-ml2`, `cal-cj4`, `cal-bmx` and `cal-bm4` has it as a prefix.
+- bm-f5-l1 and bm-f5-l2 judge the resume's commands when those ran tests, else all of them, so a confirmed session that runs nothing more keeps its verdict. The helper sits in `test-commands.mjs`, which only these two import, so no other checker's identity changes.
+- A reader pair for a final check lists the commands before and after the follow-up message, and its label tells the reader to judge those after it when any bear on the rule. `C:/z0-runs/s9/reader-brief.md` gains one line pointing at that label; the round 1 brief is kept as `reader-brief.r1.md`.
+
+On the saved checks no first verdict moves in `cal-bmx` or `cal-bm4`. In `cal-bmx`, 16 teach finals go from fail to pass, and the round 1 sample rescored gives 0 of 30.
+
+The same defects in chunks that passed G5, sized and left as judged (reading 19):
+
+- `cal-bm4` passed with the same bm-f5 checkers. The resume fix would move 22 of its finals from fail to pass (5 apply, 17 teach). Its round 1 reader labelled fail three pairs of the shape `cal-bmx`'s reader labelled pass, because neither the pair file nor the brief marked the follow-up message.
+- bm-f4-l1 and cj-f2-l1 judge every commit of the session. With their amend fixes in place, judging only the resume's commits moves none of their finals.
+- `cal-ml2`'s `ml-commit-format.mjs` still counts a message that an amend replaced. All 8 of its teach corrections were amends; judged on the resume's commits alone, 7 of those 8 finals would pass.
+
+## S9: G5 on boring-maths set X, round 2
+
+The post-fix regrade on `df959fe0` (`C:/z0-runs/s9/chain-bmx-r2.ps1`) ran all 88 cells with no errors. It moved 16 finals from fail to pass, 8 each of bm-f5-l1 and bm-f5-l2, and no first verdict; no check and no acceptance result changed between its two runs. The blind reader's round 2 (seed 42, 30 of 90 eligible pairs, 6 of them split at a follow-up message) disagreed with the checkers on 0 pairs, so G5 passes for `cal-bmx` (`C:/z0-runs/s7/cal-bmx/grading.json`).
+
+## S9: sizing with two set X repositories
+
+`bash C:/z0-runs/s9/size-a2x.sh 229.2` on `df959fe0` (sizer at `d06ae697`; `C:/z0-runs/s9/sizes-a2x.json`), on all four chunks after G5, with the regraded runs of `cal-cj4`, `cal-bm4` and `cal-bmx`. Set X now has two repositories, so H2's spreads come from 12 units on 4 degrees of freedom: noise 0.167 (bound 0.404), family and sequence 0. H1's are unchanged: noise 0.141 (bound 0.343).
+
+- At the preregistered 15 points every count from 8 repositories up fits, and none passes at the bounds. `choose()` then takes the cheapest fit and checks the level there only: 8 repositories, set R 24 families, set N 48 tasks, set X 32 families, 4,941 sessions, $987 of Claude and $339 of Codex at list price. Its level fails. H1's rule-at-bounds cell gives 3.09% false wins against a ceiling of 2.93%, on the 5,316 of 20,000 runs the rule kept (it stops 73%). H2's level holds there, 2.4% against 2.8%.
+- At 20 points: 20 repositories, passing at the bounds, 5,608 sessions, $1,132, level held. At 25 points: 15 repositories, passing at the bounds, 4,205 sessions, $849, level held.
+
+Under Amendment 2 item 6 the scored-set inventory picks the repository count, and the level must hold at that design. `bash C:/z0-runs/s9/size-a2x-at.sh <N>` forces the count (`sizes-a2x-e0.15-r<N>.json`). At 15 points the level holds at every other fitting count:
+
+| Repositories | Set R / X families, set N tasks | H1 win, point (bounds) | H2 win, point (bounds) | H4 pass | Sessions | Claude | Codex | Claude at the seed cap |
+|---|---|---|---|---|---|---|---|---|
+| 10 | 30 / 30, 60 | 0.913 (0.519) | 0.870 (0.310) | 0.886 | 5,187 | $1,050 | $330 | $1,976 |
+| 12 | 24 / 36, 48 | 0.808 (0.215) | 0.935 (0.554) | 0.849 | 5,011 | $994 | $352 | $1,761 |
+| 15 | 30 / 30, 60 | 0.904 (0.479) | 0.861 (0.308) | 0.928 | 5,182 | $1,050 | $326 | $1,976 |
+| 20 | 40 / 40, 80 | 0.962 (0.722) | 0.951 (0.641) | 0.894 | 5,964 | $1,202 | $373 | $2,635 |
+
+The rule-at-bounds cells are the highest in each, 1.9% to 2.3% against ceilings of 2.8% to 2.9%; every other cell is at most 1.7%. So the freeze at 15 points can go ahead at 10 or more repositories, with the count left to the inventory, where 2 to 4 conventions per repository bound the families. Funding is open: every design is past the $200 a month of free Console credit.
+
+## S9: the freeze
+
+Stage 2's check (prereg 240), on the commit that adds this section:
+
+- **Sizes.** `docs/evals/z0-freeze/` holds `sizes-a2x.json` and the four forced counts at 15 points, `sizes-a2x-e0.15-r<N>.json`, from the run above.
+- **Analyzer.** The six `z0-*` modules, and `eval-stats` and `repository-t` in both `src/eval/` and `dist/eval/`, as its reports list them (`MODULES` in `z0-blind.mjs`), plus the seed rule (`z0-seed-rule.mjs`) and the sizer (`z0-size.mjs`, `z0-size-sim.mjs`). `docs/evals/z0-freeze/analyzer.sha256` gives each file's sha256, and the analyzer hash is that file's: `905d91ac2084dbcad6d0f427223a6fac13ff9963e787d95bb6a539cef3d837b8`. After `npm run build`, `sha256sum -c docs/evals/z0-freeze/analyzer.sha256` from the repository root checks it. On this commit its tests passed 82 of 82 (`token-eval-z0-analyze`, `token-eval-z0-analyze-cli`, `repository-t`, `token-eval-z0-size`, `token-eval-z0-seed-rule`).
+- **hippo** is frozen at tag `z0-freeze` on `cb656ba4`, the calibration build every calibration record names (dist hash `59e0c77e`).
+
+From `cb656ba4` to this commit, the diff outside `scripts/`, `docs/`, `tests/` and `changelog.d/` is the analyzer's `src/eval/eval-stats.ts` and `src/eval/repository-t.ts`, and `benchmarks/token-eval/README.md`. The runner pins its own checkout's commit and dist hash, and the analyzer adds files to `dist/eval/`, so the scored run cannot carry `59e0c77e`. Stage 4 runs from a commit whose diff from the tag keeps to those paths, and records that commit and its dist hash beside the tag.
+
+The send-once prompt hook (#893) is not in the frozen build. Calibration measured `cb656ba4`, so a different hippo would need a new calibration; under prereg 245, send-once is scored later as a new A2 arm on the frozen scored families.
+
+Open for the founder's go (prereg 265 to 269): the session ceiling, the minimum effect and the funding. At 15 points the level holds from 10 repositories up. A pick at 20 or 25 points at a count the sizer did not choose first reruns `bash C:/z0-runs/s9/size-a2x-at.sh <repos> <effect>`.
+
+Closed at the go, 2026-10-16, and recorded in the prereg's founder section: 15 points, 10 repositories (`sizes-a2x-e0.15-r10.json`: 30 set R and 30 set X families, 60 set N tasks, 5,187 sessions), a session ceiling of 9,500, and Claude sessions on the founder's subscription plan, so the $1,050 list price is plan usage, not billed money. The pick needs no rerun, because the sizer already ran this count at this effect.
 
 ## Contract limits found
 

@@ -142,13 +142,32 @@ describe('z0-regrade regrade and grading', () => {
       const then = runDumps.find((d) => d.CHECK_POST_COMMIT === post && d.CHECK_LESSON_ID === 'f2-l1')!;
       expect(then).toBeDefined();
       const keys = [...new Set([...Object.keys(then), ...Object.keys(now)])];
-      expect(keys.filter((k) => then[k] !== now[k]).sort()).toEqual(['CHECK_COMMANDS', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME']);
+      const files = i === 1 ? ['CHECK_COMMANDS', 'CHECK_RESUME_COMMANDS'] : ['CHECK_COMMANDS'];
+      expect(keys.filter((k) => then[k] !== now[k]).sort()).toEqual([...files, 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME']);
       const mapped = (p: string) => p.replace(join(shared.out, 'runs'), join(realpathSync.native(c.out), 'rg'));
       for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME']) expect(now[k]).toBe(mapped(then[k]));
       // One commands file per cell, so after both calls it holds the final check's list.
       if (i === 1) expect(JSON.parse(readFileSync(now.CHECK_COMMANDS, 'utf8'))).toEqual(grade.commandsFinal);
+      if (i === 1) expect(JSON.parse(readFileSync(now.CHECK_RESUME_COMMANDS, 'utf8'))).toEqual(grade.commandsResume);
       for (const d of [then, now]) expect(Object.keys(d).some((k) => k.toUpperCase() === 'CLAUDE_CODE_OAUTH_TOKEN') || Object.values(d).includes(TOKEN)).toBe(false);
     }
+  }, 300_000);
+
+  it('a save without resume commands gets the final list past its first one, and one whose first list is no prefix is a resume-commands error (9b)', async () => {
+    const file = (out: string) => join(out, 'grading', 'seqF', 'A0', 'seed1', 't2.grade.json');
+    const { commandsResume, ...old } = gradeOf(shared.out, 't2');
+    expect(commandsResume.length).toBeGreaterThan(0);
+    const c = copyOut(shared);
+    writeFileSync(file(c.out), JSON.stringify(old));
+    const before = dumpsIn(shared.dumps);
+    expect(await regrade(c, ['--cell', keyOf('t2')])).toMatchObject({ code: 0 });
+    const resumed = dumpsIn(shared.dumps).filter((f) => !before.includes(f)).map((f) => dumpOf(shared.dumps, f)).filter((d) => d.CHECK_RESUME_COMMANDS);
+    expect(resumed).toHaveLength(1);
+    expect(JSON.parse(readFileSync(resumed[0].CHECK_RESUME_COMMANDS, 'utf8'))).toEqual(commandsResume);
+    const d = copyOut(shared);
+    writeFileSync(file(d.out), JSON.stringify({ ...old, commandsFirst: ['not in the final list'] }));
+    expect(await regrade(d, ['--cell', keyOf('t2')])).toMatchObject({ code: 0 });
+    expect(rowFor(d.out, 't2')).toMatchObject({ status: 'error', error: { stage: 'resume-commands' } });
   }, 300_000);
 
   it('a --pass-env name or a run env key missing now is refused before any cell (10, R27)', async () => {

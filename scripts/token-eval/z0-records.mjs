@@ -7,6 +7,9 @@ export const RN_ARMS = ['A0', 'A1', 'A2', 'A4', 'A5'];
 export const X_ARMS = ['X1', 'X2', 'X3', 'X4'];
 export const ALL_ARMS = [...RN_ARMS, ...X_ARMS];
 export const TWO_SEED_ARMS = new Set(['A0', 'A4', 'X4']);
+// Amendment 2 item 5: only the arms the seed rule sizes may run a seed above 3, up to SEED_CAP.
+export const SEED_CAP = 9;
+export const RULE_ARMS = new Set(['A1', 'A2', 'A5', 'X2', 'X3']);
 
 const SETS = new Set(['R', 'N', 'X']);
 const KINDS = new Set(['teach', 'apply', 'no-lesson']);
@@ -73,9 +76,10 @@ function checkLessons(r, crashed) {
 /** Set, arm, seed, kind and family rules, shared by records and plan cells. */
 function checkSlot(x) {
   check(SETS.has(x.set), 'set must be R, N or X');
-  check(Number.isInteger(x.seed) && x.seed >= 1 && x.seed <= 3, 'seed must be an integer from 1 to 3');
+  check(Number.isInteger(x.seed) && x.seed >= 1 && x.seed <= SEED_CAP, `seed must be an integer from 1 to ${SEED_CAP}`);
   check((x.set === 'X' ? X_ARMS : RN_ARMS).includes(x.arm), `arm ${x.arm} is not an arm of set ${x.set}`);
-  check(!(x.seed === 3 && TWO_SEED_ARMS.has(x.arm)), `seed 3 is not run for ${x.arm} (prereg 124)`);
+  check(!(x.seed > 2 && TWO_SEED_ARMS.has(x.arm)), `seed ${x.seed} is not run for ${x.arm} (prereg 124)`);
+  check(!(x.seed > 3 && !RULE_ARMS.has(x.arm)), `seed ${x.seed} is not run for ${x.arm}: only A1, A2, A5, X2 and X3 take seeds above 3 (Amendment 2 item 5)`);
   check(KINDS.has(x.kind), 'kind must be teach, apply or no-lesson');
   check(x.kind !== 'no-lesson' || x.set === 'N', 'kind no-lesson appears only in set N');
   check(x.kind === 'no-lesson' ? x.familyId === null : isName(x.familyId), 'familyId is a string for teach and apply, null for no-lesson');

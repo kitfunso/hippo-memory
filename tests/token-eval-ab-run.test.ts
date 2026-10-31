@@ -5,9 +5,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { runAll, planRuns, validateTasks, preflight, cacheTaskRepos } from '../scripts/token-eval/ab-run.mjs';
 import { usageFromResult, isUsageLimit, transcriptWork } from '../scripts/token-eval/records.mjs';
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
+import { SEED_CAP } from '../scripts/token-eval/z0-records.mjs';
 import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
 import { validateCorpus, validateRecord } from './fixtures/z0-contract.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -142,6 +144,26 @@ describe('Z0 runner plan and reads', () => {
     expect(firsts(1)[0]).not.toBe(firsts(1)[1]);
     const fours = planRuns(spec, ['A0', 'A1'], () => 4);
     expect(new Set(fours.filter((s: { arm: string }) => s.arm === 'A0').map((s: { seed: number }) => s.seed))).toEqual(new Set([1, 2, 3, 4]));
+  });
+
+  it('plans wave 2 from firstSeed: only the seeds above 3, one drawn order per seed, the cells a plan from seed 1 gives', () => {
+    const tasks = (ids: string) => ids.split('').map((id) => ({ id, kind: 'no-lesson' }));
+    const spec = { sequences: [{ id: 's1', tasks: tasks('abcdef') }, { id: 's2', tasks: tasks('ghijkl') }] };
+    const arms = ['A1', 'A2', 'A5'];
+    type Step = { seed: number; position: number; arm: string; sequence: { id: string }; taskId: string };
+    const cell = (s: Step) => `${s.seed}|${s.position}|${s.arm}|${s.sequence.id}|${s.taskId}`;
+    const wave2: Step[] = planRuns(spec, arms, () => 5, 4);
+    const whole: Step[] = planRuns(spec, arms, () => 5);
+    expect(new Set(wave2.map((s) => s.seed))).toEqual(new Set([4, 5]));
+    expect(wave2.map(cell)).toEqual(whole.filter((s) => s.seed >= 4).map(cell));
+    for (const seed of [4, 5]) {
+      for (const id of ['s1', 's2']) {
+        const orderOf = (arm: string) => wave2.filter((s) => s.seed === seed && s.arm === arm && s.sequence.id === id).sort((a, b) => a.position - b.position).map((s) => s.taskId).join('');
+        expect(new Set(arms.map(orderOf)).size, `seed ${seed} ${id}`).toBe(1);
+      }
+    }
+    const uneven: Step[] = planRuns(spec, arms, (arm: string) => ({ A1: 5, A2: 4, A5: 3 })[arm], 4);
+    expect(uneven.map((s) => `${s.arm}${s.seed}`).filter((k, i, all) => all.indexOf(k) === i).sort()).toEqual(['A14', 'A15', 'A24']);
   });
 
   it('reads usage from modelUsage, not the top-level usage that can read zero', () => {
@@ -577,6 +599,68 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(Math.max(...cells.filter((c) => c.arm !== 'A1').map((c) => c.seed))).toBe(2);
     expect(Math.max(...cells.map((c) => c.seed))).toBe(3);
   });
+
+  it('--seed-rule plans wave 2: it refuses a stop file, a wrong schema, an unlisted arm, a count outside 3 to 9, --seeds and --screen, and plans seeds above 3 only', () => {
+    const scratch = tmp('ab-run-wave2-');
+    const r = makeRepo();
+    const tasksFile = join(scratch, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y')] }] }));
+    let written = 0;
+    type RuleFile = { schema: string; stop: boolean; seeds: Record<string, number> | number[] | null };
+    const rule = (over: Partial<RuleFile> = {}): string => {
+      const file = join(scratch, `rule-${written++}.json`);
+      writeFileSync(file, JSON.stringify({ schema: 'z0-seed-rule/1', stop: false, seeds: { A1: 5, A2: 5, A5: 5 }, ...over }));
+      return file;
+    };
+    const out = join(scratch, 'out');
+    const cli = (...extra: string[]) => spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--dry-run', '--arms', 'A1,A2,A5', ...extra], { encoding: 'utf8', env: { ...process.env, Z0_ANCESTOR_STOP: scratch } });
+    const refused: [string, string[], string][] = [
+      ['a stop file', ['--seed-rule', rule({ stop: true, seeds: null })], 'the rule did not say go'],
+      ['a wrong schema', ['--seed-rule', rule({ schema: 'z0-seed-rule/2' })], 'schema must be "z0-seed-rule/1"'],
+      ['seeds that is not an object', ['--seed-rule', rule({ seeds: [5, 5, 5] })], 'seeds must be an object'],
+      ['an arm not listed', ['--seed-rule', rule({ seeds: { A1: 5, A2: 5 } })], 'arm A5 is not listed in the seed rule\'s seeds'],
+      ['a count of 10', ['--seed-rule', rule({ seeds: { A1: 10, A2: 5, A5: 5 } })], 'A1 needs a seed count from 3 to 9, got 10'],
+      ['a count of 2', ['--seed-rule', rule({ seeds: { A1: 5, A2: 2, A5: 5 } })], 'A2 needs a seed count from 3 to 9, got 2'],
+      ['a fractional count', ['--seed-rule', rule({ seeds: { A1: 5, A2: 5, A5: 4.5 } })], 'A5 needs a seed count from 3 to 9, got 4.5'],
+      ['--seeds', ['--seed-rule', rule(), '--seeds', '4'], 'cannot be combined with --seeds or --screen'],
+      ['--screen', ['--seed-rule', rule(), '--screen'], 'cannot be combined with --seeds or --screen'],
+      ['no file', ['--seed-rule'], '--seed-rule needs'],
+    ];
+    for (const [what, args, message] of refused) {
+      const res = cli(...args);
+      expect(res.status, what).not.toBe(0);
+      expect(res.stderr, what).toContain(message);
+      expect(existsSync(out), what).toBe(false);
+    }
+
+    const file = rule({ seeds: { A1: 5, A2: 4, A5: 3 } });
+    const ok = cli('--seed-rule', file);
+    expect(ok.status, ok.stderr).toBe(0);
+    expect(ok.stdout).toContain('seeds A1:4-5 A2:4-4.');
+    expect(ok.stdout).not.toContain('A5:');
+    expect(ok.stdout.split('\n')).toContain(`seed rule sha256 ${createHash('sha256').update(readFileSync(file)).digest('hex')}`);
+    const cells: Array<{ arm: string; seed: number }> = JSON.parse(readFileSync(join(out, 'plan.json'), 'utf8'));
+    expect(new Set(cells.map((c) => `${c.arm}${c.seed}`))).toEqual(new Set(['A14', 'A15', 'A24']));
+
+    // The runner's cap is the record contract's SEED_CAP: that count plans.
+    const nine = cli('--seed-rule', rule({ seeds: { A1: SEED_CAP, A2: SEED_CAP, A5: SEED_CAP } }));
+    expect(nine.status, nine.stderr).toBe(0);
+    expect(nine.stdout).toContain(`A1:4-${SEED_CAP}`);
+  }, 60_000);
+
+  it('--seed-rule with every count at 3 prints "wave 2 has no sessions", writes no plan and creates no out dir', () => {
+    const scratch = tmp('ab-run-wave2-none-');
+    const r = makeRepo();
+    const tasksFile = join(scratch, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y')] }] }));
+    const ruleFile = join(scratch, 'rule.json');
+    writeFileSync(ruleFile, JSON.stringify({ schema: 'z0-seed-rule/1', stop: false, seeds: { A1: 3, A2: 3, A5: 3 } }));
+    const out = join(scratch, 'out');
+    const res = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--dry-run', '--arms', 'A1,A2,A5', '--seed-rule', ruleFile], { encoding: 'utf8', env: { ...process.env, Z0_ANCESTOR_STOP: scratch } });
+    expect(res.status, res.stderr).toBe(0);
+    expect(res.stdout.trim()).toBe('wave 2 has no sessions');
+    expect(existsSync(out)).toBe(false);
+  }, 60_000);
 
   it('a real run refuses an --out that already holds runs.jsonl and leaves it untouched', () => {
     const scratch = tmp('ab-run-reuse-');

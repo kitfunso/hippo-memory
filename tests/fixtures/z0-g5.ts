@@ -10,7 +10,7 @@ import { generate, type Z0Record } from './z0-gen.js';
 import { tmp } from './z0-harness.js';
 
 export type Verdict = 'pass' | 'fail' | 'na';
-export interface Cell { arm: string; position: number; seed?: number; kind?: 'teach' | 'apply'; first?: Verdict; final?: Verdict; finalChecked?: boolean; diff?: string; commands?: string[] }
+export interface Cell { arm: string; position: number; seed?: number; kind?: 'teach' | 'apply'; first?: Verdict; final?: Verdict; finalChecked?: boolean; diff?: string; commands?: string[]; resume?: string[] }
 export const SEQ = 'seqF';
 export const RULE = 'Write the lesson file';
 export const PHRASE = 'zq-f1-l1';
@@ -26,7 +26,7 @@ function gradeOf(c: Cell) {
     lessonId: 'f1-l1', staleLessonId: null, stubRef: `refs/eval/${SEQ}/t${c.position}`, stub: 's', pre: 'p', first: 'f', final: 'f',
     finalChecked: c.finalChecked ?? false, finalCheck: c.finalChecked ? 'f' : null, stale: null,
     verdicts: { first, final: c.final ?? first, staleFollow: null }, acceptancePassed: true,
-    commandsFirst: commands, commandsFinal: commands, commandsStale: null, checkers: { 'f1-l1': 'x' },
+    commandsFirst: commands, commandsFinal: [...commands, ...(c.resume ?? [])], ...(c.resume ? { commandsResume: c.resume } : {}), commandsStale: null, checkers: { 'f1-l1': 'x' },
   };
 }
 export type Grade = ReturnType<typeof gradeOf>;

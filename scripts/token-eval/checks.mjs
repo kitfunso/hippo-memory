@@ -68,18 +68,22 @@ export class CheckerError extends Error {
   }
 }
 
-/** Run a lesson's checker on the workspace; `commands` goes to the checker as a JSON file named by CHECK_COMMANDS. Throws WorkspaceGitError on a broken .git. */
-export function runCheck(lesson, { work, env, preCommit, postCommit, commands, scratch, timeoutMs = 120_000 }) {
+/** Run a lesson's checker on the workspace; `commands` goes to the checker as a JSON file named by CHECK_COMMANDS, and `resumeCommands` (a final check after a resume) by CHECK_RESUME_COMMANDS. Throws WorkspaceGitError on a broken .git. */
+export function runCheck(lesson, { work, env, preCommit, postCommit, commands, resumeCommands = null, scratch, timeoutMs = 120_000 }) {
   fs.mkdirSync(scratch, { recursive: true });
   const commandsFile = path.join(scratch, 'z0-commands.json');
   fs.writeFileSync(commandsFile, JSON.stringify(commands));
+  const resumeFile = path.join(scratch, 'z0-resume-commands.json');
+  fs.rmSync(resumeFile, { force: true });
+  if (resumeCommands) fs.writeFileSync(resumeFile, JSON.stringify(resumeCommands));
+  const resumeEnv = resumeCommands ? { CHECK_RESUME_COMMANDS: resumeFile } : {};
   // Appended last so they win: core.fsmonitor and filter drivers in the agent's .git/config name programs a checker's `git status` would run.
   const filterParams = agentGit(work, (_rgit, _scratch, params) => params);
   const configParams = [env.GIT_CONFIG_PARAMETERS, filterParams, "'core.fsmonitor=false'"].filter(Boolean).join(' ');
   const r = spawnSync(process.execPath, [lesson.checkPath, ...(lesson.check.args ?? [])], {
     cwd: work, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 26,
     // A checker's git reads the workspace config alone, never the operator's global hooks or diff drivers.
-    env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_PARAMETERS: configParams, CHECK_PRE_COMMIT: preCommit, CHECK_POST_COMMIT: postCommit, CHECK_COMMANDS: commandsFile, CHECK_LESSON_ID: lesson.id },
+    env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_PARAMETERS: configParams, CHECK_PRE_COMMIT: preCommit, CHECK_POST_COMMIT: postCommit, CHECK_COMMANDS: commandsFile, ...resumeEnv, CHECK_LESSON_ID: lesson.id },
   });
   const stderr = r.stderr ?? '';
   if (r.error?.code === 'ETIMEDOUT') throw new CheckerError(`checker for lesson ${lesson.id} timed out after ${timeoutMs} ms`, stderr);

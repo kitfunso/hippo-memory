@@ -5,7 +5,7 @@ import { git } from './exec.mjs';
 import { agentGit } from './checks.mjs';
 import { readerDiff } from './grading.mjs';
 import { lessonIndex } from './lessons.mjs';
-import { listGrades, readRows, rowsFile } from './regrade.mjs';
+import { listGrades, readRows, resumeCommandsOf, rowsFile } from './regrade.mjs';
 import { flipsOf, postfixCheckers } from './g5-flips.mjs';
 import { FORBIDDEN, visibleCommand, blindLeaks, equalShares, fenced, fillStrata, labelsTemplate, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
 
@@ -90,19 +90,29 @@ export function pairDiff(out, e, which) {
   return agentGit(dir, (rgit) => readerDiff(rgit, dir, g.pre, which === 'first' ? g.first : g.finalCheck));
 }
 
-/** A pair's file body: prompt, rule, the commands with memory-tool ones dropped silently (R4), and the redacted diff. */
+const FINAL_LABEL = 'The agent got one follow-up message after its first try, and the diff is its work after it. Judge the commands after the follow-up when any of them bear on the rule; otherwise judge them all. Does the work obey the rule? Write pass, fail or na (the rule does not apply) in labels.tsv.';
+
+/** A pair's file body: prompt, rule, the commands with memory-tool ones dropped silently (R4), split at the follow-up for a final pair, and the redacted diff. */
 function renderPair(ctx, p) {
   const g = p.entry.grade;
-  const commands = (p.which === 'first' ? g.commandsFirst : g.commandsFinal) ?? [];
-  // Cut after redaction, so a memory word in the out dir's own path does not hide a plain command; chained plain parts stay.
-  const kept = commands.map((c) => visibleCommand(ctx.redact(c))).filter((c) => c !== null);
+  const final = p.which === 'final';
+  const after = final ? resumeCommandsOf(g) : null;
+  if (final && after === null) throw new Error(`${p.pairId}: the save has no resume commands and its first commands are not a prefix of its final ones`);
+  const parts = [['## Commands the agent ran', g.commandsFirst ?? []], ...(final ? [['## Commands after the follow-up message', after]] : [])];
+  let dropped = 0;
+  const commandText = parts.flatMap(([head, commands]) => {
+    // Cut after redaction, so a memory word in the out dir's own path does not hide a plain command; chained plain parts stay.
+    const kept = commands.map((c) => visibleCommand(ctx.redact(c))).filter((c) => c !== null);
+    dropped += commands.length - kept.length;
+    return [head, kept.length ? fenced(ctx.redact(kept.join('\n\n')), 'sh') : '(none)', ''];
+  });
   const text = [
     '## Task', ctx.text.prompt(g.sequence, g.taskId), '', '## Rule', ctx.text.lesson(g.lessonId).rule, '',
-    '## Commands the agent ran', kept.length ? fenced(ctx.redact(kept.join('\n\n')), 'sh') : '(none)', '',
+    ...commandText,
     '## Diff', fenced(ctx.redact(pairDiff(ctx.out, p.entry, p.which)), 'diff'),
-    '## Label', 'Does the diff obey the rule? Write pass, fail or na (the rule does not apply) in labels.tsv.', '',
+    '## Label', final ? FINAL_LABEL : 'Does the diff obey the rule? Write pass, fail or na (the rule does not apply) in labels.tsv.', '',
   ].join('\n');
-  return { text, dropped: commands.length - kept.length };
+  return { text, dropped };
 }
 
 /** Equal shares per arm, then proportional to the arm's verdict counts (R18), each stratum in seeded order. */

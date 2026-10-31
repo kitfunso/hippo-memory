@@ -81,7 +81,7 @@ interface TaskDef {
 interface RunExtra { limitWaitMs?: number; limitMaxWaits?: number; sessionTimeoutMs?: number; pins?: Record<string, string>; log?: (m: string) => void }
 /** What the toy lesson checker logs per call; the probe fields appear only with its `probe` arg. */
 interface CheckLine {
-  lesson: string; pre: string; post: string; preRef: string | null; commands: string[]; has?: boolean;
+  lesson: string; pre: string; post: string; preRef: string | null; commands: string[]; resume: string[] | null; has?: boolean;
   head?: string; symbolic?: string | null; logAll?: string; reflog?: string | null; refs?: string;
 }
 const lesson = (id: string, rule: string, extra: Partial<LessonDef> = {}): LessonDef => ({ id, rule, reason: `the ${id} checker reads it`, keyPhrase: `zq-${id}`, check: { script: 'lesson.mjs', args: [] }, ...extra });
@@ -256,6 +256,7 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
     expect(a1Checks).toHaveLength(10);
     for (const c of a1Checks) expect(c.commands.slice(0, 2)).toEqual(['git status && cat lib.js', 'npm run lint']);
     expect(a1Checks.filter((c) => c.commands.length === 3).map((c) => c.commands[2])).toEqual(Array(5).fill('echo resumed No:'));
+    expect(a1Checks.map((c) => c.resume)).toEqual(a1Checks.map((c) => (c.commands.length === 3 ? ['echo resumed No:'] : null)));
   }, 600_000);
 
   it('--pins refuses a run off its pins before any session, so it writes no record', async () => {
@@ -495,6 +496,9 @@ describe('session evidence', () => {
     const checks = checkLog(log).filter((c) => c.lesson === 'f1-l1');
     expect(checks[0].commands).toEqual(['git status && cat lib.js', 'npm run lint']);
     expect(checks[1].commands).toEqual(['git status && cat lib.js', 'echo resumed No:', 'npm run lint']);
+    // CHECK_RESUME_COMMANDS: what each transcript gained since the first check, so the subagent's earlier command stays out. The applies' first checks get none.
+    expect(checks.map((c) => c.resume)).toEqual([null, ['echo resumed No:'], null, null]);
+    expect(JSON.parse(readFileSync(join(out, 'grading', 'seqF', 'A0', 'seed1', 't1.grade.json'), 'utf8')).commandsResume).toEqual(['echo resumed No:']);
     // Session 1 makes 3 tool calls, its subagent 1 and the resume 1.
     expect(find(recs, 'A0', 'n1').toolCalls).toBe(3);
     expect(find(recs, 'A0', 't1').toolCalls).toBe(5);

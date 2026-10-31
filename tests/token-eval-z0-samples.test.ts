@@ -107,6 +107,27 @@ describe('reader sample draw', () => {
     expect(pairsOf(s.out)[0]).toMatchObject({ file: 'p01', droppedCommands: 1 });
   });
 
+  it('splits a final pair\'s commands at the follow-up, saved or past a prefix first list, and refuses a save with neither (24c)', () => {
+    const cell: Cell = { arm: 'A0', position: 0, kind: 'teach', first: 'fail', final: 'pass', finalChecked: true, commands: ['npx vitest run'], resume: ['npm test'] };
+    for (const saved of [true, false]) {
+      const s = synthOut([cell]);
+      const file = join(gradeDir(s.out, 'A0'), 't0.grade.json');
+      const { commandsResume: _, ...old } = readJson(file);
+      if (!saved) writeFileSync(file, JSON.stringify(old));
+      expect(draw(s.out, s.tasks)).toMatchObject({ code: 0 });
+      const body = (which: string) => readFileSync(join(s.out, 'g5', 'reader-r1', `${pairsOf(s.out).find((p) => p.pairId.endsWith(`:${which}`))!.file}.md`), 'utf8');
+      expect(body('final')).toContain('## Commands the agent ran\n```sh\nnpx vitest run\n```\n\n\n## Commands after the follow-up message\n```sh\nnpm test\n```\n');
+      expect(body('final')).toContain('Judge the commands after the follow-up');
+      expect(body('first')).toContain('## Commands the agent ran\n```sh\nnpx vitest run\n```\n');
+      expect(body('first')).not.toContain('follow-up');
+    }
+    const s = synthOut([cell]);
+    const file = join(gradeDir(s.out, 'A0'), 't0.grade.json');
+    const { commandsResume: _, ...old } = readJson(file);
+    writeFileSync(file, JSON.stringify({ ...old, commandsFinal: ['npm test'] }));
+    expect(draw(s.out, s.tasks)).toMatchObject({ code: 1, stderr: expect.stringContaining('not a prefix') });
+  });
+
   it('drops every command that names an instruction or memory file, and the reader diff leaves those files out (24b)', () => {
     const commands = ['npm test', 'cat AGENTS.md', 'ls .claude\\rules', 'cat sub/CLAUDE.local.md', 'cat AGENTS.override.md', 'head MEMORY.md'];
     const s = synthOut([{ arm: 'A0', position: 0, commands }]);
