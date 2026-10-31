@@ -27,6 +27,11 @@ function tierReaches(root: string, entries: readonly string[]): string[] {
     if ([type.aliasSymbol, type.getSymbol()].some((s) => declaredIn(s, (f) => TIER_DOOR.test(f)))) return true;
     const inner: ts.Type[] = [...(type.aliasTypeArguments ?? [])];
     if (type.isUnionOrIntersection()) inner.push(...type.types);
+    // `<T extends HippoDbTier>(s: T)` reaches the tier only through T's constraint.
+    if (type.flags & ts.TypeFlags.TypeParameter) {
+      const constraint = checker.getBaseConstraintOfType(type);
+      if (constraint !== undefined) inner.push(constraint);
+    }
     if (type.flags & ts.TypeFlags.Object) {
       // SAFETY: TypeFlags.Object marks an ObjectType.
       const object = type as ts.ObjectType;
@@ -39,6 +44,7 @@ function tierReaches(root: string, entries: readonly string[]): string[] {
         for (const prop of checker.getPropertiesOfType(type)) inner.push(checker.getTypeOfSymbol(prop));
         for (const sig of [...type.getCallSignatures(), ...type.getConstructSignatures()]) {
           inner.push(checker.getReturnTypeOfSignature(sig), ...sig.parameters.map((p) => checker.getTypeOfSymbol(p)));
+          inner.push(...(sig.getTypeParameters() ?? []));
           const narrowed = checker.getTypePredicateOfSignature(sig)?.type;
           if (narrowed !== undefined) inner.push(narrowed);
         }
@@ -83,7 +89,7 @@ describe('published symbols and the local tier', () => {
     expect(tierReaches(REPO, entries)).toEqual([]);
   });
 
-  it('fails a symbol that returns, narrows to or aliases the tier type, an entry with no exports or no file, and passes data and recursive types', () => {
+  it('fails a symbol that returns, narrows to, aliases or constrains a type parameter to the tier type, an entry with no exports or no file, and passes data, generics and recursive types', () => {
     const root = mkdtempSync(join(tmpdir(), 'hippo-published-tier-'));
     const files = {
       'store/sqlite/hippo-db.d.ts':
@@ -95,7 +101,9 @@ describe('published symbols and the local tier', () => {
         'export type Leaky = Wrapped;',
         'export declare function open(): HippoDbTier;',
         'export declare function isTier(store: object): store is HippoDbTier;',
+        'export declare function narrow<T extends HippoDbTier>(s: T): void;',
         'export declare function clean(at: Date): Promise<number>;',
+        'export declare function first<T>(rows: readonly T[]): T;',
         'export interface Chain { readonly next?: Chain; readonly value: number }',
         // As tsc emits it: without `export {}` a .d.ts exports every top-level declaration, Wrapped too.
         'export {};',
@@ -111,6 +119,7 @@ describe('published symbols and the local tier', () => {
         'empty.d.ts: no declarations',
         'entry.d.ts: Leaky',
         'entry.d.ts: isTier',
+        'entry.d.ts: narrow',
         'entry.d.ts: open',
         'missing.d.ts: no declarations',
       ]);
