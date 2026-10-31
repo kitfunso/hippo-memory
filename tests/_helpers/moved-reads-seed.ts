@@ -90,7 +90,7 @@ export async function seedMovedReads(): Promise<MovedReadsSeed> {
   const templates = await seedTemplates(async (root) => {
     // A remember may share to the user's global store, which must not be the real one.
     vi.stubEnv('HIPPO_HOME', join(dirname(root), 'seed-home'));
-    seedPortBranches(root);
+    await seedPortBranches(root);
     seedVectors(root);
     await seedGraph(root);
     held = [];

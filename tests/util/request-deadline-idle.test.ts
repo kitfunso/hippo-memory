@@ -21,24 +21,24 @@ describe('RequestDeadline.onceIdle', () => {
     const deadline = new RequestDeadline(Date.now() + 1000);
     const first = pendingCall();
     const second = pendingCall();
-    deadline.track(first.call);
-    deadline.track(second.call);
+    const firstCall = deadline.track(first.call);
+    const secondCall = deadline.track(second.call);
     const ran: string[] = [];
     deadline.onceIdle(() => ran.push('first'));
     deadline.onceIdle(() => ran.push('second'));
 
     first.settle();
-    await first.call;
+    await firstCall;
     expect(ran).toEqual([]);
     second.settle();
-    await second.call;
+    await secondCall;
     expect(ran).toEqual(['first', 'second']);
 
     // Each ran once: a later idle moment does not replay them.
     const third = pendingCall();
-    deadline.track(third.call);
+    const thirdCall = deadline.track(third.call);
     third.settle();
-    await third.call;
+    await thirdCall;
     expect(ran).toEqual(['first', 'second']);
   });
 });

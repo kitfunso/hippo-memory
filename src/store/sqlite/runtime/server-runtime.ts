@@ -66,8 +66,8 @@ function boundToRequest<S extends HippoStore>(
   return session === undefined ? bound : inSqliteSession(bound, session);
 }
 
-/** Detached work still writes through the stores, so it settles before they close; one past the
- * bound fails against the closed stores, and DetachedSet logs it. */
+/** Detached work still writes through the stores, so it settles before they close; an embed past
+ * the bound fails on the closed stores, and embedMemoryInStore warns once and resolves 'failed'. */
 async function settleDetached(runtime: StoreRuntime, withinMs: number): Promise<void> {
   const left = await runtime.settle(withinMs);
   if (left === 0) return;

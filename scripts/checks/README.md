@@ -11,7 +11,7 @@ One line per gate. Each runs from the repo root as `node scripts/checks/<name>`.
 - `check-error-text.mjs`: hand-spelled caught-error text per file may fall, never rise; use errorMessage().
 - `check-expiring-keys-floor.mjs`: each store floor constant names a release that ships its schema.
 - `check-floating-api.mjs`: src and tests never drop the Promise of an api write function.
-- `check-floating-promises.mjs`: a promise call in src is awaited or handled.
+- `check-floating-promises.mjs`: a promise call in src or tests is awaited or handled; in tests a `void` marks one started on purpose.
 - `check-graph-writes.mjs`: only the two graph writers in src/store/sqlite/graph write the graph tables.
 - `check-lint-ratchet.mjs`: oxlint hits per rule may fall, never rise.
 - `check-long-lines.mjs`: no src line over 120 characters beyond the baseline.
