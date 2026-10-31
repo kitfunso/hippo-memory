@@ -21,6 +21,7 @@ function tsFiles(dir, out = []) {
 // A function cannot cross to the store worker thread, so a rule reaches the store as data.
 const AS_DATA = 'Send the rule as data the store can read; a function cannot cross to the store worker.';
 const files = ['src/store', 'src/base/ports'].flatMap((dir) => (existsSync(dir) ? tsFiles(dir) : []));
+const tier = tierFunctionParams();
 const failures = [
   {
     sites: files.flatMap(portFunctionParams),
@@ -28,7 +29,12 @@ const failures = [
     fix: AS_DATA,
   },
   {
-    sites: tierFunctionParams(),
+    sites: tier.unread,
+    what: "The scan could not read hippo.db's local tier, so none of its methods was checked",
+    fix: 'Point TIER_DOOR in scripts/lib/tier-type-facts.mjs at the file that exports hippoDbRepos(), whose return type lists each repository and its methods.',
+  },
+  {
+    sites: tier.sites,
     what: "A method of hippo.db's local tier takes a parameter whose type holds a function",
     fix: AS_DATA,
   },

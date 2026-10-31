@@ -76,33 +76,33 @@ function methodHits(checker, inSrc, root, label, method) {
   return hits;
 }
 
-/** Whether `root` is hippo-memory's own folder, where a missing tier door means the scan read nothing. */
+/** Whether `root` is hippo-memory's own folder, where a scan that reads no tier has checked nothing. */
 function isHippoRepo(root) {
   const pkg = resolve(root, 'package.json');
   return existsSync(pkg) && JSON.parse(readFileSync(pkg, 'utf8')).name === 'hippo-memory';
 }
 
-/** `file:line repo.method(param.path)` for each parameter of a local-tier method whose type holds a function, read
- * from the type hippoDbRepos returns; [] when `root` is not hippo-memory and has no tier door. */
+const unread = (why) => ({ sites: [], unread: [why] });
+
+/** `sites`: `file:line repo.method(param.path)` for each local-tier method parameter whose type holds a function, read
+ * from the type hippoDbRepos returns. `unread`: why the scan could not read the tier, so it checked nothing. */
 export function tierFunctionParams(root = '.') {
   const door = resolve(root, TIER_DOOR);
-  if (!existsSync(door)) {
-    if (!isHippoRepo(root)) return [];
-    return [`${TIER_DOOR}:1 is missing, so no local-tier method was checked; point TIER_DOOR at hippoDbRepos' file`];
-  }
+  if (!existsSync(door)) return isHippoRepo(root) ? unread(`${TIER_DOOR} is missing`) : { sites: [], unread: [] };
   const src = posix(resolve(root, 'src')) + '/';
   const inSrc = (decl) => posix(decl.getSourceFile().fileName).startsWith(src);
   const program = ts.createProgram([door], OPTIONS);
   const checker = program.getTypeChecker();
   const sf = program.getSourceFile(door);
   const repos = sf && checker.getSymbolAtLocation(sf)?.exports?.get(REPOS);
-  if (repos === undefined) return [`${TIER_DOOR}:1 exports no ${REPOS} to read the tier from`];
+  if (repos === undefined) return unread(`${TIER_DOOR}:1 exports no ${REPOS}`);
   const [build] = checker.getTypeOfSymbol(repos).getCallSignatures();
-  return checker
+  const sites = checker
     .getPropertiesOfType(checker.getReturnTypeOfSignature(build))
     .flatMap((repo) =>
       checker
         .getPropertiesOfType(checker.getTypeOfSymbol(repo))
         .flatMap((method) => methodHits(checker, inSrc, root, `${repo.name}.${method.name}`, method)),
     );
+  return { sites, unread: [] };
 }

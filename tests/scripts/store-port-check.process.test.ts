@@ -9,6 +9,13 @@ const SCRIPT = join(REPO, 'scripts', 'checks', 'check-store-port.mjs');
 
 type Run = { status: number | null; stdout: string; stderr: string; sites: string[] };
 
+/** The whole stderr of a run that could not read the local tier, for the one reason `site`. */
+const UNREAD = (site: string): string =>
+  "The scan could not read hippo.db's local tier, so none of its methods was checked:\n" +
+  `  ${site}\n` +
+  'Point TIER_DOOR in scripts/lib/tier-type-facts.mjs at the file that exports hippoDbRepos(), whose return type lists' +
+  ' each repository and its methods.\n';
+
 function runOn(files: Record<string, string>): Run {
   const root = mkdtempSync(join(tmpdir(), 'hippo-store-port-'));
   try {
@@ -174,16 +181,20 @@ describe('check-store-port.mjs', () => {
     expect(r.status, r.stderr).toBe(0);
   });
 
-  it("fails in hippo-memory's own folder when the tier door is missing, so the tier is never skipped unchecked", () => {
+  it("fails in hippo-memory's own folder when the tier door is missing, under its own heading and fix", () => {
     const r = runOn({
       'package.json': '{ "name": "hippo-memory" }\n',
       'src/base/ports/store.ts':
         'export interface Group { read(tenantId: string, opts: { readonly limit: number }): void }\n',
     });
     expect(r.status).toBe(1);
-    expect(r.sites).toEqual([
-      "src/store/sqlite/hippo-db.ts:1 is missing, so no local-tier method was checked; point TIER_DOOR at hippoDbRepos' file",
-    ]);
+    expect(r.stderr).toBe(UNREAD('src/store/sqlite/hippo-db.ts is missing'));
+  });
+
+  it('fails a tier door that exports no hippoDbRepos under the same heading', () => {
+    const r = runOn({ 'src/store/sqlite/hippo-db.ts': 'export function otherRepos() { return {}; }\n' });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toBe(UNREAD('src/store/sqlite/hippo-db.ts:1 exports no hippoDbRepos'));
   });
 
   it('passes on the real repo', () => {
