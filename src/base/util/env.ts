@@ -102,12 +102,45 @@ function nonNegInt(name: string): () => number | undefined {
   };
 }
 
-/**
- * The whole environment, for code that takes it as an injectable map (agent-memory machines, owner
- * checks, support bundles).
- */
-export function processEnv(): NodeJS.ProcessEnv {
-  return process.env;
+// What the agent-tool path rules read from a Machine's env (src/base/util/agent-homes.ts, the
+// agent-memory adapters and the hook installers); a rule that reads another variable adds it here.
+const MACHINE_ENV = [
+  'HOME',
+  'USERPROFILE',
+  'APPDATA',
+  'XDG_CONFIG_HOME',
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_CODE_PROJECT_DIR_NAME',
+  'CODEX_HOME',
+  'COPILOT_HOME',
+  'VSCODE_PORTABLE',
+  'VSCODE_APPDATA',
+  'GEMINI_CLI_HOME',
+  'OPENCLAW_WORKSPACE_DIR',
+  'OPENCLAW_STATE_DIR',
+  'OPENCLAW_HOME',
+  'OPENCLAW_PROFILE',
+  'QWEN_CODE_MEMORY_BASE_DIR',
+  'QWEN_RUNTIME_DIR',
+  'QWEN_HOME',
+  'QWEN_CODE_MEMORY_LOCAL',
+  'QWEN_CODE_MEMORY_PROJECT_SCOPE',
+  'HIPPO_AGENT_MEMORY_TOOLS',
+] as const;
+
+/** The MACHINE_ENV variables as they stand now, as the map a Machine carries. */
+export function envMachine(): Readonly<Record<string, string | undefined>> {
+  return Object.fromEntries(MACHINE_ENV.map((name) => [name, raw(name)]));
+}
+
+/** The names of the set variables that start with `prefix`, never their values. */
+export function envNamesStarting(prefix: string): string[] {
+  return Object.keys(process.env).filter((name) => name.startsWith(prefix));
+}
+
+/** HIPPO_STRICT_OWNER: only `1` makes `remember --owner` reject an owner off the contract. */
+export function envStrictOwner(): boolean {
+  return raw('HIPPO_STRICT_OWNER') === '1';
 }
 
 /** A variable whose name comes from configuration, such as an embedding provider's key variable. */

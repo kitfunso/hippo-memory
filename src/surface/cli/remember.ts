@@ -1,6 +1,6 @@
 // The write verbs: `hippo remember` and `hippo supersede`.
 
-import { envActiveScope } from '../../base/util/env.js';
+import { envActiveScope, envStrictOwner } from '../../base/util/env.js';
 import * as fs from 'node:fs';
 import { ERROR_TAG, Layer, ConfidenceLevel, type MemoryEntry } from '../../base/memory/entry.js';
 import * as api from '../../api/index.js';
@@ -17,7 +17,7 @@ import {
   pickWrites,
 } from './memory-writes.js';
 import { cliInitGlobal, type CliCommand } from './api-context.js';
-import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
+import { validateOwner } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
@@ -90,7 +90,7 @@ type RememberEnvelope = Pick<RememberRequest, 'kind' | 'owner' | 'artifactRef' |
 function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const kind = parseKindFlag(flags);
   const ownerCheck = validateOwner(stringFlag(flags, 'owner') ?? null, {
-    strict: isStrictOwnerEnv(),
+    strict: envStrictOwner(),
   });
   if (!ownerCheck.ok) {
     fail(ownerCheck.message);
