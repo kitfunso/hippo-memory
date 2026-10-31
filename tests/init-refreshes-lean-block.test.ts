@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { hippoBlock } from '../src/hooks/hook-blocks.js';
+import { HOOKS, hippoBlock } from '../src/hooks/hook-blocks.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
@@ -124,7 +124,7 @@ hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 \`\`\`
 `.trim();
 
-// The Claude Code block as it stands: Claude Code's own auto memory saves what it learns, so it has no plain remember line.
+// The Claude Code block 2.2.0 wrote, which asked for a remember on every failure.
 const CLAUDE_CURRENT = `
 ## Project Memory (Hippo)
 
@@ -280,15 +280,25 @@ const write = (f: string, text: string) => fs.writeFileSync(path.join(proj, f), 
 const read = (f: string, dir = proj) => fs.readFileSync(path.join(dir, f), 'utf8');
 const inner = (text: string) => text.slice(text.indexOf(START) + START.length, text.indexOf(END)).trim();
 const outside = (text: string) => [text.slice(0, text.indexOf(START) + START.length), text.slice(text.indexOf(END))];
+// Every hippo command in a fenced block or a code span; a command in plain prose is not seen.
+function hippoCommands(text: string): string[] {
+  const fenced: string[] = [];
+  const prose = text.replace(/```[^\n]*\n([\s\S]*?)```/g, (_m, body: string) => {
+    fenced.push(...body.split('\n'));
+    return '\n';
+  });
+  const spans = [...prose.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
+  return [...fenced, ...spans].map((s) => s.trim()).filter((s) => s.startsWith('hippo '));
+}
 
 describe('the instruction block', () => {
-  it('asks Claude Code only for task context and error causes, since its hooks capture the session', () => {
+  it('asks Claude Code only for the context fallback, since its hooks store failures and capture the session', () => {
     write('CLAUDE.md', '# Rules\n');
     write('AGENTS.md', '# Agents\n');
     init();
     const claude = inner(read('CLAUDE.md'));
     expect(claude).toContain('hippo context --auto --budget 1500');
-    expect(claude).toContain('hippo remember "<what went wrong and why>" --error');
+    expect(hippoCommands(claude)).toEqual(['hippo context --auto --budget 1500']);
     expect(claude).not.toContain('hippo remember "<lesson>"');
     expect(claude).not.toContain(REMEMBER_LINE);
     expect(claude).not.toContain('hippo outcome');
@@ -413,12 +423,12 @@ describe('hippo init on a file that already has a hippo block', () => {
     expect(out).not.toMatch(/Refreshed|Left the edited/);
   });
 
-  it('leaves the current Claude Code block as it is, since its own auto memory saves what it learns', () => {
+  it('refreshes the 2.2.0 Claude Code block, which asked for a remember on every failure', () => {
     const before = `# Rules\n\n${START}\n${CLAUDE_CURRENT}\n${END}\n`;
     write('CLAUDE.md', before);
-    const out = init();
-    expect(read('CLAUDE.md')).toBe(before);
-    expect(out).not.toMatch(/Refreshed|Left the edited/);
+    expect(init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
+    expect(inner(read('CLAUDE.md'))).toBe(HOOKS['claude-code'].content);
+    expect(init()).not.toMatch(/Refreshed|Left the edited/);
   });
 
   it('changes nothing on a second run', () => {

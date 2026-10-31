@@ -74,14 +74,8 @@ block has appeared in this session, run this at the start of a task:
 hippo context --auto --budget 1500
 \`\`\`
 
-When you find out why something failed, record it right then, while you
-work, never as a closing step:
-\`\`\`bash
-hippo remember "<what went wrong and why>" --error
-\`\`\`
-
 The installed hooks store failed tool calls and capture the session when it
-ends, so there is nothing to run before you finish.
+ends, so there is nothing to record or run by hand.
 `.trim(),
   },
   'codex': {
@@ -128,6 +122,7 @@ hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 // when a block changes.
 const SHIPPED_HOOK_HASHES = new Map([
   ['c80e760208aed70f6094757736b9a2f496ba5c30d88bc2a7ae3e128b403dcc6b', 'claude-code'],
+  ['75937be6b7fdc2b87bcb08b7fec56757808075db129d99eff3e9f769f80a7781', 'claude-code'],
   ['f1e5815a4b7205c43e2db792215df1943e7853635a1e0f4561b150a41b756451', 'codex'],
   ['c04e48f2896a4fee9ae98f8f832e2d26a3910269df3beb5bcd6baee3cd9db68e', 'claude-code'],
   ['e6b12bd8983c032e5ca8e95a97aeff4178a5a05026d10acad5b2e1b25d5656dd', 'claude-code'],
