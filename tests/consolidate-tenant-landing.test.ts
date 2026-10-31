@@ -68,7 +68,7 @@ describe('merge pass partitions by tenant before clustering', () => {
       const semanticRows = allAfter.filter((e) => e.layer === Layer.Semantic);
       expect(semanticRows).toHaveLength(2);
 
-      const byTenant = new Map(semanticRows.map((e) => [e.tenantId, e]));
+      const byTenant = new Map(semanticRows.map((e) => [e.tenant_id, e]));
       expect(byTenant.has('tenant-a')).toBe(true);
       expect(byTenant.has('tenant-b')).toBe(true);
       expect(byTenant.has('default')).toBe(false);
@@ -82,8 +82,8 @@ describe('merge pass partitions by tenant before clustering', () => {
 
       // Sources demoted (not deleted) under their OWN tenant — cross-check
       // no source crossed into the other tenant's row.
-      const aSources = allAfter.filter((e) => e.tenantId === 'tenant-a' && e.layer === Layer.Episodic);
-      const bSources = allAfter.filter((e) => e.tenantId === 'tenant-b' && e.layer === Layer.Episodic);
+      const aSources = allAfter.filter((e) => e.tenant_id === 'tenant-a' && e.layer === Layer.Episodic);
+      const bSources = allAfter.filter((e) => e.tenant_id === 'tenant-b' && e.layer === Layer.Episodic);
       expect(aSources).toHaveLength(2);
       expect(bSources).toHaveLength(2);
     } finally {
@@ -121,7 +121,7 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
       // (c): the trace landed under the resolved tenant, not 'default' —
       // this is the fix; before it, createMemory omitted tenantId and every
       // trace stamped 'default' regardless of HIPPO_TENANT.
-      expect(traces[0]!.tenantId).toBe('tenant-x');
+      expect(traces[0]!.tenant_id).toBe('tenant-x');
 
       // (d): idempotency ghost regression pin. traceExistsForSession checks
       // under consolidationTenant ('tenant-x'). Before the fix the trace
@@ -159,11 +159,11 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
       const stored = storeExtractedFacts(home, source, facts);
 
       expect(stored).toHaveLength(1);
-      expect(stored[0]!.tenantId).toBe('tenant-extract');
+      expect(stored[0]!.tenant_id).toBe('tenant-extract');
 
       const persisted = loadAllEntries(home).find((e) => e.id === stored[0]!.id);
       expect(persisted).toBeDefined();
-      expect(persisted!.tenantId).toBe('tenant-extract');
+      expect(persisted!.tenant_id).toBe('tenant-extract');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

@@ -11,7 +11,8 @@ import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcom
 import { captureToolFailure } from '../src/capture/capture-error.js';
 import { failureSignature, lessonFromFailure } from '../src/capture/failure-reading.js';
 import { blockHash } from '../src/util/token-text.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest, RejectedValueError } from '../src/store/rejection.js';
+import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import type { JsonValue } from '../src/util/json.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -63,7 +64,7 @@ describe('repeat-error rate', () => {
 
   it('counts a repeat only when another session hit the signature first', () => {
     withDb(home, (db) => {
-      const log = (sessionId: string | null, sigHash: string, outcome: FailureOutcome = 'duplicate'): void =>
+      const log = (sessionId: string | null, sigHash: string, outcome: FailureOutcome = 'duplicate'): number =>
         recordFailure(db, { tenantId: 'default', sessionId, tool: 'Bash', outcome, sigHash });
       log('s1', 'A', 'stored');
       log('s1', 'A');

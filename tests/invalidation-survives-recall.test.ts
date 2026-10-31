@@ -13,11 +13,12 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { markRetrieved } from '../src/core/memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { remember, getContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 
 function ctx() {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' as const } };
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' as const });
 }
 
 beforeEach(() => {
@@ -32,7 +33,7 @@ afterEach(() => {
 
 describe('a deliberate stale tier survives being read', () => {
   it('a recall through getContext leaves an invalidated memory invalidated', async () => {
-    const { id } = remember(ctx(), { content: 'deploys go through the legacy pipeline' });
+    const { id } = await remember(ctx(), { content: 'deploys go through the legacy pipeline' });
 
     const result = invalidateMatching(home, { from: 'legacy pipeline', to: null, type: 'deprecation' });
     expect(result.invalidated).toBe(1);

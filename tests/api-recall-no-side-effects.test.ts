@@ -19,13 +19,15 @@
  * Real-DB per project convention.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
-import { remember, recall, getContext, type Context } from '../src/api/index.js';
+import { remember, retrieve, getContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-recall-noside-'));
@@ -49,16 +51,16 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
   it('api.recall does NOT write last_retrieval_ids; api.getContext DOES', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'recall-divergence-target-1' });
-      remember(ctx, { content: 'recall-divergence-target-2 also matches' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      await remember(ctx, { content: 'recall-divergence-target-1' });
+      await remember(ctx, { content: 'recall-divergence-target-2 also matches' });
 
       // Snapshot: index.last_retrieval_ids starts empty.
       const before = loadIndex(home).last_retrieval_ids ?? [];
       expect(before).toEqual([]);
 
       // api.recall — should NOT mutate.
-      const recallResult = recall(ctx, { query: 'target', limit: 5 });
+      const recallResult = await retrieve(ctx, { query: 'target', limit: 5 });
       expect(recallResult.results.length).toBeGreaterThan(0);
       const afterRecall = loadIndex(home).last_retrieval_ids ?? [];
       expect(afterRecall).toEqual(before);
@@ -75,18 +77,18 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
     }
   });
 
-  it('batched api.recall calls leave last_retrieval_ids untouched (no overwrite race)', () => {
+  it('batched api.recall calls leave last_retrieval_ids untouched (no overwrite race)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'batched-A' });
-      remember(ctx, { content: 'batched-B' });
-      remember(ctx, { content: 'batched-C' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      await remember(ctx, { content: 'batched-A' });
+      await remember(ctx, { content: 'batched-B' });
+      await remember(ctx, { content: 'batched-C' });
 
       // SDK pattern: batch many recall calls in a row.
-      recall(ctx, { query: 'batched-A', limit: 5 });
-      recall(ctx, { query: 'batched-B', limit: 5 });
-      recall(ctx, { query: 'batched-C', limit: 5 });
+      await retrieve(ctx, { query: 'batched-A', limit: 5 });
+      await retrieve(ctx, { query: 'batched-B', limit: 5 });
+      await retrieve(ctx, { query: 'batched-C', limit: 5 });
 
       // last_retrieval_ids must remain empty — none of the recalls wrote it.
       const idx = loadIndex(home);

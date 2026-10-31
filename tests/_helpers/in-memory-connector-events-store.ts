@@ -1,6 +1,6 @@
 // A store other than hippo.db for the ConnectorEvents group, built on the in-memory connector-writes store: it copies tenant routing
 // and both dead-letter queues out of hippo.db once, then answers from memory and shares the event log the write group keeps.
-import type { EntryWrites, HippoStore } from '../../src/server.js';
+import type { EntryWrites, HippoStore } from '../../src/entry/store-kit.js';
 import type { ConnectorDeadLetter, ConnectorEvents, ConnectorWrites } from '../../src/store/port.js';
 import { inMemoryConnectorWritesStore, rowsOf, sqliteConnectorSide, type ConnectorSide } from './in-memory-connector-writes-store.js';
 

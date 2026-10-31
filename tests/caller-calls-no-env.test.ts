@@ -79,7 +79,7 @@ function origins(db: DatabaseSyncLike, table: string): string[] {
 
 describe('caller calls under a foreign environment', () => {
   it("each of the five calls writes only to ctx.tenantId and the body's project", () => {
-    const ctx: Context = { hippoRoot: root, tenantId: TENANT, actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
+    const ctx: Context = { hippoRoot: root, tenantId: TENANT, actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' }, reach: { hasLocal: true, isGlobal: false, shared: true } };
     const base = { sessionId: SESSION, project: PROJECT };
 
     expect(preCompactForCaller(ctx, { ...base, trigger: 'auto', workingState: STATE })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });

@@ -1,4 +1,5 @@
 // getContext with the delivery observer attached: same result, no writes, and a reason for every rejected candidate.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -6,14 +7,16 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type Context, type ContextOpts } from '../src/api/index.js';
+import { getContext, type ContextOpts } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { HippoConfig } from '../src/core/config.js';
 import {
-  _setDeliveryFaultForTests, createDeliveryRecorder, type DeliveryEventInput, type DeliveryEventType, type DeliveryRecorder,
+  createDeliveryRecorder, type DeliveryEventInput, type DeliveryFault, type DeliveryEventType, type DeliveryRecorder,
 } from '../src/store/delivery-recorder.js';
 import { blockHash } from '../src/util/token-text.js';
+import { flushDeliveryRecorder } from '../src/api/prompt-hook.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PROJECT = 'proj-a';
 const PROMPT = 'how should the postgres migration rollback plan work';
@@ -21,7 +24,7 @@ const PROMPT = 'how should the postgres migration rollback plan work';
 let tmpRoot: string;
 let local: string;
 let globalRoot: string;
-let ctx: Context;
+let ctx: FullContext;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
@@ -35,8 +38,9 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
   }));
 }
 
-function recorder(): DeliveryRecorder {
+function recorder(fault?: DeliveryFault): DeliveryRecorder {
   return createDeliveryRecorder({
+    fault,
     root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
     stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
   });
@@ -98,14 +102,13 @@ beforeEach(() => {
   initStore(local);
   initStore(globalRoot);
   process.env.HIPPO_HOME = globalRoot;
-  ctx = { hippoRoot: local, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.HIPPO_HOME;
   delete process.env.HIPPO_FAKE_NOW;
-  _setDeliveryFaultForTests(null);
   _resetAblationCacheForTests();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
@@ -142,9 +145,8 @@ describe('the observer never changes getContext', () => {
     configure({ promptRecall: true });
     seedMixedStore();
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    _setDeliveryFaultForTests('observe');
     const without = await getContext(ctx, baseOpts);
-    const rec = recorder();
+    const rec = recorder('observe');
     expect(await getContext(ctx, { ...baseOpts, deliveryObserver: rec })).toEqual(without);
     const write = vi.fn(() => 1);
     rec.flush(write);
@@ -284,5 +286,62 @@ describe('prompt facts on a boundary or context row', () => {
     expect(event.eventType).toBe('prompt-submit');
     expect(event.promptHash).not.toBeNull();
     expect(event.promptLength).toBe(13);
+  });
+});
+
+describe('the tool-failure recorder', () => {
+  const failureRecorder = (eventType: DeliveryEventType, payload: Record<string, string>, fault?: DeliveryFault) => createDeliveryRecorder({
+    fault, root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
+    stdinText: JSON.stringify({ session_id: 's', hook_event_name: 'PostToolUseFailure', ...payload }),
+  });
+
+  it('reads tool_use_id trimmed and cut to 128 characters, and a blank one as null', () => {
+    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: '  toolu_1  ' })).toolUseId).toBe('toolu_1');
+    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: 'x'.repeat(300) })).toolUseId).toBe('x'.repeat(128));
+    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: '   ' })).toolUseId).toBeNull();
+    expect(eventOf(failureRecorder('tool-failure', {})).toolUseId).toBeNull();
+  });
+
+  it('sets the tool call and failure link on tool-failure rows only, with no candidates or counts', () => {
+    const rec = failureRecorder('tool-failure', { tool_use_id: 'toolu_1' });
+    rec.logged(42);
+    const input = eventOf(rec);
+    expect([input.eventType, input.surface, input.blockState, input.toolUseId, input.failureId]).toEqual(['tool-failure', 'hook', 'empty', 'toolu_1', 42]);
+    expect([input.candidates, input.consideredCount, input.emittedCount, input.promptHash, input.promptLength]).toEqual([[], 0, 0, null, 0]);
+    const other = failureRecorder('prompt-submit', { tool_use_id: 'toolu_1', prompt: 'hello' });
+    other.logged(42);
+    const o = eventOf(other);
+    expect([o.toolUseId, o.failureId]).toEqual([null, null]);
+  });
+
+  it('logged(null) leaves the link empty', () => {
+    const rec = failureRecorder('tool-failure', {});
+    rec.logged(null);
+    expect(eventOf(rec).failureId).toBeNull();
+  });
+
+  it('a throw inside logged marks the recorder broken, so it writes nothing', () => {
+    const rec = failureRecorder('tool-failure', { tool_use_id: 'toolu_1' }, 'observe');
+    rec.logged(7);
+    const write = vi.fn(() => 1);
+    rec.flush(write);
+    expect(write).not.toHaveBeenCalled();
+  });
+});
+
+describe('a recorder fault at the flush boundary', () => {
+  it.each<[DeliveryFault]>([
+    ['observe'],
+    ['build'],
+    ['flush'],
+  ])('%s: flushDeliveryRecorder returns, writes nothing and logs one ledger line', (fault) => {
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const rec = recorder(fault);
+    rec.queried('a query');
+    const write = vi.fn(() => 1);
+    expect(() => flushDeliveryRecorder(rec, write)).not.toThrow();
+    expect(write).not.toHaveBeenCalled();
+    const lines = err.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('delivery ledger'));
+    expect(lines).toHaveLength(1);
   });
 });

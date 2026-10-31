@@ -1,7 +1,7 @@
 // MCP and the CLI resolve a conflict through one api function, so each refuses the same bad input the dashboard refuses.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, ConflictError, NotFoundError, resolveMemoryConflict, type HippoDbContext } from '../src/api/index.js';
+import { adminActor, ConflictError, NotFoundError, resolveMemoryConflict } from '../src/api/index.js';
 import { handleResolve } from '../src/cli/curate.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
@@ -10,6 +10,7 @@ import { readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const TENANT = 'default';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -49,7 +50,7 @@ function supersedeB({ b }: Pair): void {
 }
 
 async function mcpResolve(args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester' });
+  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester', role: 'admin', hostAdmin: true, store: sqliteStore(root) });
 }
 
 function replyText(res: McpResponse | null): string {
@@ -111,12 +112,12 @@ describe('CLI hippo resolve', () => {
 });
 
 describe('resolveMemoryConflict', () => {
-  const ctxIn = (tenantId: string): HippoDbContext => ({ hippoRoot: root, tenantId, actor: adminActor('test') });
+  const ctxIn = (tenantId: string) => ({ hippoRoot: root, tenantId, actor: adminActor('test'), store: sqliteStore(root) });
 
-  it('answers a resolved conflict with 409 and another tenant\'s with 404', () => {
+  it('answers a resolved conflict with 409 and another tenant\'s with 404', async () => {
     const pair = seedPair();
-    expect(() => resolveMemoryConflict(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id })).toThrow(NotFoundError);
-    expect(resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toEqual({ conflictId: pair.conflictId, keptId: pair.a.id, loserId: pair.b.id });
-    expect(() => resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toThrow(ConflictError);
+    await expect(resolveMemoryConflict(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(NotFoundError);
+    expect(await resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toEqual({ conflictId: pair.conflictId, keptId: pair.a.id, loserId: pair.b.id });
+    await expect(resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(ConflictError);
   });
 });

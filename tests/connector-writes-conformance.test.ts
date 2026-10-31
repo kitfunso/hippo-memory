@@ -1,13 +1,14 @@
 // ConnectorWrites answers alike on hippo.db and on a store held in memory: the same outcomes, the same errors, the same entries,
 // event log rows, quarantine records and audit rows, over two tenants. The last block holds hippo.db to all-or-nothing.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { reject, type HippoDbContext } from '../src/api/index.js';
+import { reject } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
-import type { AuditEvent } from '../src/server.js';
+import type { AuditEvent } from '../src/entry/store-kit.js';
 import { requireGroup } from '../src/store/index.js';
 import { markSlackEventSeen } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -17,6 +18,7 @@ import {
   inMemoryConnectorWritesStore, sqliteConnectorSide, type ConnectorSide, type HeldRecord, type LoggedEvent,
 } from './_helpers/in-memory-connector-writes-store.js';
 import { outcomeOf, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'connector:slack';
@@ -24,7 +26,7 @@ const BANNED = 'the launch date is march third';
 const EMPTY_EVENT = 'Ev_seeded_without_a_memory';
 const PUBLIC_REPO = 'github:public:acme/demo';
 
-type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind' | 'scope' | 'content' | 'origin_project'>;
+type Row = Pick<MemoryEntry, 'id' | 'tenant_id' | 'kind' | 'scope' | 'content' | 'origin_project'>;
 type Value = ConnectorWriteOutcome | string | Row[];
 type Call = GroupCall<'connectorWrites', Value>;
 
@@ -58,7 +60,7 @@ async function seed(dir: string): Promise<Seeded> {
     rawB: createMemory('globex raw ticket text', { tenantId: TENANT_B, kind: 'raw' }),
   };
   for (const entry of Object.values(rows)) writeEntry(dir, entry, { actor: 'cli' });
-  const ctx: HippoDbContext = { hippoRoot: dir, tenantId: TENANT_A, actor: { subject: 'cli', role: 'admin' } };
+  const ctx: FullContext = apiCtx(dir, TENANT_A, { subject: 'cli', role: 'admin' });
   await reject(ctx, { value: BANNED, reason: 'wrong date' });
   markSlackEventSeen(dir, EMPTY_EVENT, null);
   return rows;
@@ -88,7 +90,7 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
 }
 
 const project = (entries: MemoryEntry[]): Row[] => entries.map((e) => ({
-  id: e.id, tenantId: e.tenantId, kind: e.kind, scope: e.scope, content: e.content, origin_project: e.origin_project,
+  id: e.id, tenant_id: e.tenant_id, kind: e.kind, scope: e.scope, content: e.content, origin_project: e.origin_project,
 }));
 const readBack = (tenantId: string, ...ids: string[]): Call => async (_g, store) => project(await store.entriesByIds(ids, tenantId));
 const fresh = (content: string, extra: Parameters<typeof createMemory>[1] = {}): MemoryEntry =>
@@ -107,7 +109,7 @@ const newEvents = (side: Side): LoggedEvent[] => side.events.filter((row) => row
 const logged = (event: ConnectorEvent, memoryId: string): LoggedEvent => (event.connector === 'slack'
   ? { connector: 'slack', eventKey: event.eventId, memoryId, deliveryId: null, eventName: null, loggedAt: NOW }
   : { connector: 'github', eventKey: event.idempotencyKey, memoryId, deliveryId: event.deliveryId, eventName: event.eventName, loggedAt: NOW });
-const remembered = (e: MemoryEntry) => ({ tenantId: e.tenantId, actor: ACTOR, op: 'remember', targetId: e.id, metadata: { kind: e.kind, scope: e.scope } });
+const remembered = (e: MemoryEntry) => ({ tenantId: e.tenant_id, actor: ACTOR, op: 'remember', targetId: e.id, metadata: { kind: e.kind, scope: e.scope } });
 const archivedRow = (id: string) => ({ tenantId: TENANT_A, actor: ACTOR, op: 'archive_raw', targetId: id, metadata: { reason: 'source deleted' } });
 const WRITTEN = { value: { outcome: 'written' } };
 
@@ -207,7 +209,7 @@ describe('ConnectorWrites.writeConnectorEntry', () => {
     expect(side.outcomes[1]).toMatchObject({ error: expect.stringMatching(/^RejectedValueError: Memory value refused/) });
     expect(side.outcomes[2]).toEqual({ error: `ConflictError: Memory ${noteB.id} belongs to another tenant` });
     expect(side.outcomes[3]).toMatchObject({ error: expect.stringMatching(/^RejectedValueError: Memory value refused/) });
-    expect(side.outcomes[4]).toMatchObject({ value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }] });
+    expect(side.outcomes[4]).toMatchObject({ value: [{ id: noteB.id, tenant_id: TENANT_B, content: noteB.content }] });
     expect(newEvents(side)).toEqual([logged(slack('Ev_taken'), ok.id)]);
     expect(side.records).toEqual([]);
     expect(added(side).map((r) => [r.op, r.targetId])).toEqual([['remember', ok.id], ['reject_refusal', bannedReplay.id], ['reject_refusal', bannedNew.id]]);
@@ -233,7 +235,7 @@ describe('ConnectorWrites.archiveConnectorEntry', () => {
       { error: 'NotFoundError: memory not found: mem_missing' },
       { error: `BadRequestError: memory ${note.id} is not raw (kind=distilled)` },
     ]);
-    expect(side.outcomes[3]).toMatchObject({ value: [{ id: rawB.id, tenantId: TENANT_B, kind: 'raw' }] });
+    expect(side.outcomes[3]).toMatchObject({ value: [{ id: rawB.id, tenant_id: TENANT_B, kind: 'raw' }] });
     expect([newEvents(side), added(side)]).toEqual([[], []]);
   });
 

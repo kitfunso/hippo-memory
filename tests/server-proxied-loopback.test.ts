@@ -78,10 +78,13 @@ describe('loopback fallback behind a reverse proxy', () => {
     try {
       expect(await send('/v1/memories?q=deploy', { 'x-forwarded-for': '203.0.113.7', 'x-request-id': 'proxied-1' })).toBe(401);
       const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[hippo] warn:'));
-      expect(warned).toHaveLength(1);
-      expect(warned[0]).toContain('requestId=proxied-1');
-      expect(warned[0]).toMatch(/proxied loopback request refused/i);
-      expect(warned[0]).toMatch(/API key/);
+      // The refused request's 401 also warns, so count the proxy line by its text.
+      const proxied = warned.filter((l) => /proxied loopback request refused/i.test(l));
+      expect(proxied).toHaveLength(1);
+      expect(warned.filter((l) => !proxied.includes(l)).every((l) => l.includes('status=401'))).toBe(true);
+      expect(proxied[0]).toContain('requestId=proxied-1');
+      expect(proxied[0]).toMatch(/proxied loopback request refused/i);
+      expect(proxied[0]).toMatch(/API key/);
     } finally {
       stderrSpy.mockRestore();
     }

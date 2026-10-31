@@ -7,9 +7,9 @@ import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search-types.js';
-import { errorMessage, log } from '../util/log.js';
-import { isJsonObject } from '../util/json.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET } from './search-types.js';
+import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
+import { isJsonObject, type JsonValue } from '../util/json.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -28,8 +28,9 @@ export interface HippoConfig {
     enabled: boolean | 'auto';  // 'auto' = use if dependency installed (local) / key present (api)
     model: string;
     hybridWeight: number;
-    /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in API embedder needing the provider's
-     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/store/embeddings/provider.ts. */
+    /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in
+     * API embedder needing the provider's
+     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/embeddings/provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
     /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost
      *  may use http). Ignored by the local provider. */
@@ -64,14 +65,16 @@ export interface HippoConfig {
   autoTraceCapture: boolean;
   /** Only promote sessions whose session_complete event is within N days. */
   autoTraceWindowDays: number;
-  /** Mid-session pinned-rule re-injection through the UserPromptSubmit hook: pinned memories are re-injected each turn within the token budget. */
+  /** Mid-session pinned-rule re-injection through the UserPromptSubmit hook: pinned memories are re-injected each
+   * turn within the token budget. */
   pinnedInject: {
     enabled: boolean;
     budget: number;
     /** Skip a block identical to the one already injected this session
      *  Default true. Needs a session id from the hook payload. */
     skipUnchanged: boolean;
-    /** Resend an unchanged block after this many consecutive skips, so long sessions still see pinned rules near the latest turn (default 10; 0 never
+    /** Resend an unchanged block after this many consecutive skips, so long sessions still see pinned rules near the
+     * latest turn (default 10; 0 never
      * resends). */
     refreshTurns: number;
     /** Gate the hook's backfill on the prompt's own content instead of the five
@@ -88,8 +91,10 @@ export interface HippoConfig {
     /** FTS candidate pool size per store before gating. Default 100. */
     promptRecallCandidates: number;
   };
-  /** Memory scope isolation (default true): ambient context (`hippo context`, the hook, /v1/context, MCP hippo_context) excludes OTHER projects' memories;
-   *  explicit recall is unaffected. False disables the ORIGIN PARTITION only: the secret veto is unconditional, and no flag re-includes secret-flagged rows. */
+  /** Memory scope isolation (default true): ambient context (`hippo context`, the hook, /v1/context, MCP hippo_context)
+   * excludes OTHER projects' memories;
+   * explicit recall is unaffected. False disables the ORIGIN PARTITION only: the secret veto is unconditional, and
+   * no flag re-includes secret-flagged rows. */
   contextProjectIsolation: boolean;
   extraction: {
     enabled: boolean | 'auto';
@@ -109,12 +114,15 @@ export interface HippoConfig {
     enabled: boolean;
   };
   /** Opt-in learned memory-value rescue veto on the sleep decay pass. Default OFF: the frozen weights
-   *  (src/consolidate/memory-value-weights.ts) only run when enabled; the rescue budget is a code constant, not user-tunable. */
+   * (src/consolidate/memory-value-weights.ts) only run when enabled; the rescue budget is a code constant, not
+   * user-tunable. */
   memoryValue: {
     enabled: boolean;
   };
-  /** Dormant memories (src/store/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the threshold there instead of deleting it
-   *  (`hippo dormant restore|forget <id>`); a faded memory the secret detector flags is always deleted. `{"enabled": false}` restores delete-on-fade. */
+  /** Dormant memories (src/store/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the
+   * threshold there instead of deleting it
+   * (`hippo dormant restore|forget <id>`); a faded memory the secret detector flags is always deleted. `{"enabled":
+   * false}` restores delete-on-fade. */
   dormant: {
     enabled: boolean;
     /** Days a dormant memory is kept before sleep deletes it for good.
@@ -177,7 +185,7 @@ export const DEFAULT_CONFIG: HippoConfig = {
   physics: { ...DEFAULT_PHYSICS_CONFIG },
   mmr: {
     enabled: true,
-    lambda: 0.7,
+    lambda: DEFAULT_MMR_LAMBDA,
   },
   search: {
     localBump: DEFAULT_LOCAL_BUMP,
@@ -306,7 +314,8 @@ function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['me
 }
 
 function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
-  // Same rule as memoryValue above: a malformed value never silently changes what sleep does; anything but a real object / boolean / number
+  // Same rule as memoryValue above: a malformed value never silently changes what sleep does; anything but a real
+  // object / boolean / number
   // warns and falls back to the default, which keeps faded memories.
   const dormantRaw = raw.dormant;
   if (dormantRaw !== undefined && !isJsonObject(dormantRaw)) {
@@ -362,7 +371,8 @@ function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
 }
 
 function defaultHalfLifeDays(raw: Partial<HippoConfig>): number {
-  // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire it.
+  // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire
+  // it.
   const days = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
   if (!Number.isFinite(days) || days <= 0) {
     log.warn(
@@ -383,7 +393,8 @@ function sharedStoreFlag(raw: Partial<HippoConfig>): boolean {
 }
 
 export function loadConfig(hippoRoot: string): HippoConfig {
-  // A caller that names no folder, as an add-on serving another store does, gets the defaults, never the working folder's config.json.
+  // A caller that names no folder, as an add-on serving another store does, gets the defaults, never the working
+  // folder's config.json.
   if (hippoRoot === '') return { ...DEFAULT_CONFIG };
   const configPath = path.join(hippoRoot, 'config.json');
   const key = path.resolve(configPath);
@@ -400,27 +411,45 @@ const PARSED_CONFIGS_MAX = 64;
 // Each path's parsed config with the stamp of the file it came from, so an unchanged file costs one stat and no parse.
 const parsedConfigs = new Map<string, { stamp: string | null; config: HippoConfig }>();
 
-/** A file's mtime and size, which an edit changes; null when it is missing or cannot be reached, as existsSync answers false. */
+/** A file's mtime and size, which an edit changes; null when it is missing or cannot be reached, as existsSync
+ * answers false. */
 function fileStamp(file: string): string | null {
   try {
     const stat = fs.statSync(file, { throwIfNoEntry: false });
     return stat === undefined ? null : `${stat.mtimeMs}:${stat.size}`;
   } catch (err) {
-    log.debug(`config: ${file} could not be reached, read as missing: ${errorMessage(err)}`);
+    const code = errorCode(err);
+    const message = `config: ${file} could not be reached, read as missing: ${errorMessage(err)}`;
+    if (code === 'EACCES' || code === 'EPERM') {
+      log.warnThenDebug(`config-unreachable:${file}:${code}`, message, { path: file, code, ...errorFields(err) });
+    }
+    // Any other refusal (ENOTDIR, ELOOP) means the path is simply not there, so only a permission refusal is told.
+    else log.debug(message, errorFields(err));
     return null;
   }
 }
 
-function parseConfigFile(configPath: string): HippoConfig {
+/** A config.json that exists must load: running on defaults would silently drop the user's settings, such as
+ * `sharedStore`. */
+function readConfigFile(configPath: string): Partial<HippoConfig> {
+  let raw: JsonValue;
   try {
-    const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return configOverDefaults(raw);
+    raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch (err) {
-    if (fs.existsSync(configPath)) {
-      log.warn(`failed to parse ${configPath}: ${errorMessage(err)}`);
-    }
-    return { ...DEFAULT_CONFIG };
+    throw new Error(
+      `${configPath} could not be loaded: ${errorMessage(err)}. Fix the file or delete it to use the defaults.`,
+      { cause: err },
+    );
   }
+  if (!isJsonObject(raw)) {
+    throw new Error(`${configPath} must hold a JSON object. Fix the file or delete it to use the defaults.`);
+  }
+  // SAFETY: an object is all the shape check proves; configOverDefaults validates each key it reads.
+  return raw as Partial<HippoConfig>;
+}
+
+function parseConfigFile(configPath: string): HippoConfig {
+  return configOverDefaults(readConfigFile(configPath));
 }
 
 function configOverDefaults(raw: Partial<HippoConfig>): HippoConfig {
@@ -473,34 +502,31 @@ const sharedStoreRoots = new Set<string>();
 // The stamp of each config.json last read as not shared: an unchanged file is not parsed again.
 const notSharedStamps = new Map<string, string>();
 
-/** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import cycle. */
+/** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import
+ * cycle. */
 function sharedStoreKey(hippoRoot: string): string {
   let real: string;
   try {
     real = fs.realpathSync.native(hippoRoot);
   } catch (err) {
-    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${errorMessage(err)}`);
+    // A folder that does not exist yet has no real path, so the resolved one stands in.
+    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${errorMessage(err)}`, errorFields(err));
     real = path.resolve(hippoRoot);
   }
   return process.platform === 'win32' ? real.toLowerCase() : real;
 }
 
 /** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process,
- *  so a broken edit while a server runs cannot turn it off. Reads only this key, so loadConfig's warnings stay loadConfig's. */
+ * so a broken edit while a server runs cannot turn it off. Reads only this key, so loadConfig's warnings stay
+ * loadConfig's. */
 export function isSharedStore(hippoRoot: string): boolean {
   const key = sharedStoreKey(hippoRoot);
   if (sharedStoreRoots.has(key)) return true;
   const configPath = path.join(path.resolve(hippoRoot), 'config.json');
   const stamp = fileStamp(configPath);
   if (stamp === null || notSharedStamps.get(configPath) === stamp) return false;
-  let raw: Partial<HippoConfig> | null;
-  try {
-    raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  } catch (err) {
-    log.warn(`failed to read ${configPath}: ${errorMessage(err)} - sharedStore read as false.`);
-    return false;
-  }
-  if (raw?.sharedStore !== true) {
+  const raw = readConfigFile(configPath);
+  if (raw.sharedStore !== true) {
     if (notSharedStamps.size >= PARSED_CONFIGS_MAX) notSharedStamps.clear();
     notSharedStamps.set(configPath, stamp);
     return false;

@@ -5,7 +5,7 @@ import * as dashboardReads from '../src/store/dashboard-reads.js';
 import * as entryReads from '../src/store/entry-reads.js';
 import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 import {
-  NOW, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
+  DASHBOARD_TOKEN, NOW, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 
 let store: TmpStore;
@@ -28,6 +28,25 @@ function breakSnapshotRebuild(): void {
     throw new Error('forced rebuild failure');
   });
 }
+
+describe('a failing API request that carries the access token', () => {
+  it('logs the bare path and never the token', async () => {
+    breakSnapshotRebuild();
+    const written: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    const reply = await get(dash.port, `/api/overview?token=${DASHBOARD_TOKEN}`);
+
+    const failure = written.filter((line) => line.includes('dashboard request failed'));
+    expect(reply.status).toBe(500);
+    expect(failure.length).toBeGreaterThan(0);
+    expect(written.some((line) => line.includes(DASHBOARD_TOKEN))).toBe(false);
+    expect(failure.some((line) => /path=\S*\/api\/overview(\s|$)/.test(line))).toBe(true);
+  });
+});
 
 describe('pin while the snapshot rebuild fails', () => {
   it('answers 200, persists the pin, and leaves the failure to the next read', async () => {

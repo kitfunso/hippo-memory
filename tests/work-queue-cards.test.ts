@@ -26,7 +26,8 @@ import { CARD_TRANSITIONS, assertCardTransition, type CardStatus } from '../src/
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { handleCard } from '../src/cli/card.js';
-import { COMMANDS, parseArgs } from '../src/cli.js';
+import { parseArgs } from '../src/cli.js';
+import { COMMANDS } from '../src/cli/verbs.js';
 import * as packageEntry from '../src/index.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];

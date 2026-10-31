@@ -8,7 +8,8 @@ const DEFAULT_RERANK_TOP_K = 50;
 const MMR_CANDIDATE_CAP = 100;
 
 /** MMR: repeatedly picks the candidate maximising lambda * relevance - (1 - lambda) * max(cos(cand, picked)).
- *  Input must be sorted by relevance; strict `>` keeps ties first-wins, so a deterministic input stays deterministic. */
+ * Input must be sorted by relevance; strict `>` keeps ties first-wins, so a deterministic input stays deterministic.
+ */
 export function mmrRerank(
   scored: SearchResult[],
   embeddingIndex: Record<string, ArrayLike<number>>,
@@ -44,7 +45,11 @@ export function mmrRerank(
   return picked;
 }
 
-function maxSimilarityToPicked(vi: ArrayLike<number> | null, picked: SearchResult[], embeddingIndex: Record<string, ArrayLike<number>>): number {
+function maxSimilarityToPicked(
+  vi: ArrayLike<number> | null,
+  picked: SearchResult[],
+  embeddingIndex: Record<string, ArrayLike<number>>,
+): number {
   let maxSim = 0;
   if (!vi) return maxSim;
   for (const p of picked) {

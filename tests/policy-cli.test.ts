@@ -5,24 +5,13 @@
 // stored as the entity name; (2) lenient parseInt on a mutating subcommand. Plus
 // the bi-temporal as-of path and version chain. Real-CLI subprocess harness.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
-interface TestEnv { cwd: string; hippoRoot: string; globalRoot: string; }
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-policy-cli-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 function extractId(output: string): string {
   const id = output.match(/#(\d+)/)?.[1];
   if (id === undefined) throw new Error(`no "#<id>" found in CLI output: ${output}`);
@@ -38,7 +27,7 @@ function run(env: TestEnv, args: string[]): string {
 
 describe('hippo policy CLI', () => {
   let env: TestEnv;
-  beforeEach(() => { env = makeEnv(); });
+  beforeEach(() => { env = makeEnv('policy-cli'); });
   afterEach(() => { rmSync(env.cwd, { recursive: true, force: true }); });
 
   it('`policy new "<name>" --text ...` records the real name, not the "new" keyword', () => {

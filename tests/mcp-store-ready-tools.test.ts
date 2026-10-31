@@ -7,7 +7,8 @@ import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { TOOLS } from '../src/mcp/tools.js';
-import { serve, type HippoStore, type MemoryEntry, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { type HippoStore, type MemoryEntry } from '../src/entry/store-kit.js';
 import { sqliteStore } from '../src/store/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { predictionMirror } from '../src/store/predictions.js';
@@ -27,16 +28,22 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-// The stub kind wraps a hippo.db store that nothing blocks, so a tool that ran would leave hippo.db behind.
-const ctxOn = (kind: string | undefined): McpContext => ({
+// The stub wraps a hippo.db store that nothing blocks, without the local files, so a tool that ran would leave hippo.db behind.
+function storeOfKind(kind: string): HippoStore {
+  return kind === 'sqlite' ? sqliteStore(root) : { ...sqliteStore(root), kind, localFiles: undefined };
+}
+
+const ctxOn = (kind: string): McpContext => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: 'mcp',
-  store: kind === undefined ? undefined : { ...sqliteStore(root), kind },
+  role: 'admin',
+  hostAdmin: true,
+  store: storeOfKind(kind),
 });
 
 // An add-on store built before the contextReads group.
-const ctxWithoutContextReads = (): McpContext => ({ hippoRoot: root, tenantId: 'default', actor: 'mcp', store: portOnlyStore(root) });
+const ctxWithoutContextReads = (): McpContext => ({ hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: portOnlyStore(root) });
 
 function listedNames(res: McpResponse | null): string[] {
   // SAFETY: src/mcp/request.ts answers tools/list with { tools: McpToolDefinition[] }.
@@ -47,7 +54,7 @@ function listedNames(res: McpResponse | null): string[] {
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
 // The stub carries every group sqliteStore sets, so the tools that name one run on it.
-const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context'];
+const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context', 'hippo_learn', 'hippo_status', 'hippo_conflicts', 'hippo_resolve'];
 const ready = declared.filter((name) => READY.includes(name));
 
 describe('store-ready MCP tools', () => {
@@ -66,8 +73,9 @@ describe('store-ready MCP tools', () => {
     expect(readdirSync(root)).toEqual([]);
   });
 
-  it.each([['the sqlite store', 'sqlite'], ['a context with no store', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
-    const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxOn(kind));
+  it.each([['the sqlite store', 'sqlite'], ['stdio, which brings no context for a list', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
+    const list = { jsonrpc: '2.0', id: 1, method: 'tools/list' } as const;
+    const res = kind === undefined ? await handleMcpRequest(list, undefined) : await handleMcpRequest(list, ctxOn(kind));
     expect(listedNames(res)).toEqual(declared);
   });
 
@@ -86,7 +94,7 @@ const PROJECT = 'proj';
 const note = (id: string): string => `${id} holds a note about the rollout`;
 const minute = (m: number): string => `2026-03-01T10:0${m}:00.000Z`;
 const row = (tenantId: string, id: string, m: number, extra: Partial<MemoryEntry>): MemoryEntry =>
-  seeded(note(id), id, minute(m), { tenantId, origin_project: PROJECT, ...extra });
+  seeded(note(id), id, minute(m), { tenant_id: tenantId, origin_project: PROJECT, ...extra });
 const raw = (tenantId: string, id: string, m: number): MemoryEntry => row(tenantId, id, m, { kind: 'raw', source_session_id: 'sess-mcp' });
 
 // serve() blocks hippo.db for a store of another kind, so a tool that still opened it would answer store_not_ported here.

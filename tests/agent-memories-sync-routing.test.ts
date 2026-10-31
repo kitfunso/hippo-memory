@@ -8,13 +8,14 @@ import { restoreDormant } from '../src/api/index.js';
 import { gitLayout } from '../src/agent-memories/git.js';
 import { containerId, containerPrefix } from '../src/agent-memories/source.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, importSessionFolder } from '../src/agent-memories/sync.js';
-import { repairProjects } from '../src/sharing/project-merge.js';
+import { repairProjectNames } from '../src/api/objects/projects.js';
+import { cliApiContext } from '../src/cli/api-context.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';
-import { deriveOriginProject } from '../src/core/project-identity.js';
+import { deriveOriginProject, isInitialized } from '../src/core/project-identity.js';
 import { autoShare } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
-import { initStore, isInitialized } from '../src/store/open.js';
+import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import {
@@ -157,7 +158,7 @@ describe('agent memory sync: routing and sharing', () => {
     writeEntry(w.global, stray);
     withDb(w.global, (db) => db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES ('default', 'c1', 's1', 'repoa', 'auto', ?, ?, ?)`)
       .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()));
-    const repair = (dryRun: boolean) => withDb(w.global, (db) => repairProjects(db, w.global, { tenantId: 'default', dryRun }));
+    const repair = (dryRun: boolean) => repairProjectNames(cliApiContext(w.global, 'default'), { dryRun });
 
     expect(repair(true).copies).toEqual([stray.id]);
     expect(liveRows(w.global).map((e) => e.id)).toEqual([stray.id]);
@@ -188,7 +189,7 @@ describe('agent memory sync: routing and sharing', () => {
     expect(agentRows(w.local)).toEqual([]);
   });
 
-  it('hippo sync never copies an agent memory row, tagged or restored, into a project store', () => {
+  it('hippo sync never copies an agent memory row, tagged or restored, into a project store', async () => {
     writeConfig(w.local, null);
     const dir = userNotes(w);
     note(dir, 'u.md', USER_NOTE);
@@ -197,7 +198,7 @@ describe('agent memory sync: routing and sharing', () => {
     const goneId = liveRows(w.global).find((e) => e.content.startsWith('This user note'))?.id ?? '';
     unlinkSync(gone);
     importForStore(w.local, opts());
-    restoreDormant(ctxFor(w.global), goneId);
+    await restoreDormant(ctxFor(w.global), goneId);
     plainRow(w.global, CONTROL, '');
 
     expect(syncGlobalToLocal(w.local, w.global)).toBe(1);
@@ -205,7 +206,7 @@ describe('agent memory sync: routing and sharing', () => {
     expect(loadAllEntries(w.local).map((e) => e.content)).toEqual([CONTROL]);
   });
 
-  it('an imported row is never auto-shared, restored or not', () => {
+  it('an imported row is never auto-shared, restored or not', async () => {
     writeConfig(w.local, null);
     const dir = projectNotes(w);
     note(dir, 'deploy.md', DEPLOY);
@@ -214,7 +215,7 @@ describe('agent memory sync: routing and sharing', () => {
     const goneId = liveRows(w.local).find((e) => e.content.startsWith('This project note'))?.id ?? '';
     unlinkSync(gone);
     importForStore(w.local, opts());
-    restoreDormant(ctxFor(w.local), goneId);
+    await restoreDormant(ctxFor(w.local), goneId);
     plainRow(w.local, CONTROL, 'proj');
 
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };

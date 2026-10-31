@@ -6,7 +6,8 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadContentsWithTag } from '../src/store/entry-reads.js';
-import { closeHippoDb, isStoreBusy, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
+import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
+import { isStoreBusy } from '../src/api/busy.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
@@ -20,6 +21,10 @@ import { compactResumeText } from '../src/api/context-render.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, type ContinuityKey } from '../src/store/sessions.js';
 import { BadRequestError, ConflictError } from '../src/core/api-errors.js';
 import type { Context } from '../src/api/types.js';
+import type { StoreReach } from '../src/store/port.js';
+
+// A server ctx carries a reach from its composition root; the ledger books nowhere without one.
+const SHARED_REACH: StoreReach = { hasLocal: true, isGlobal: false, shared: true };
 import {
   bindSessionOwner,
   captureFailureForCaller,
@@ -94,7 +99,7 @@ function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] {
 }
 
 function owned(owner: string): Context {
-  return { hippoRoot: root, tenantId: TENANT, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } };
+  return { hippoRoot: root, tenantId: TENANT, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner }, reach: SHARED_REACH };
 }
 
 /** Every session lands in the holdout arm at 10000 basis points. */
@@ -314,7 +319,7 @@ describe('compactResumeForCaller', () => {
 describe('saveCompactionItemsForCaller', () => {
   it('writes with ownerOrSubject as actor and the project as origin', () => {
     expect(postCompact(owned('alice'))).toEqual({ written: 2 });
-    const unowned: Context = { hippoRoot: root, tenantId: TENANT, actor: { subject: 'api_key:hk_carol', role: 'member' } };
+    const unowned: Context = { hippoRoot: root, tenantId: TENANT, actor: { subject: 'api_key:hk_carol', role: 'member' }, reach: SHARED_REACH };
     saveCompactionItemsForCaller(unowned, { sessionId: 'sC', project: { name: 'acme/web', legacyName: 'web' }, trigger: 'auto', items: [ITEMS[0]], requestId: 'cmp-c' });
     withDb((db) => {
       expect(writtenRows(db, 'compaction:sA')).toEqual([

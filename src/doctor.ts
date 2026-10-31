@@ -3,18 +3,21 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { findHippoStoreDir } from './core/project-identity.js';
+import { findHippoStoreDir, isInitialized } from './core/project-identity.js';
 import { getGlobalRoot } from './sharing/global-store.js';
-import { isInitialized } from './store/open.js';
 import { readStoreHealth, type StoreHealth } from './store/diagnostics.js';
 import { loadConfig } from './core/config.js';
-import { openHippoDbReadOnly, closeHippoDb, getCurrentSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from './db/index.js';
+import {
+  getCurrentSchemaVersion,
+  IncompatibleBinaryError,
+} from './db/index.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './core/compaction-timing.js';
-import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './capture/compaction-spool.js';
-import { isEmbeddingAvailable } from './store/embeddings/local.js';
+import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './capture/compaction-spool.js';
+import { isEmbeddingAvailable } from './embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
+import { readProjectTags } from './store/project-tags.js';
 import { resolveTenantId } from './store/tenant.js';
 import { errorMessage, log } from './util/log.js';
 import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
@@ -44,11 +47,16 @@ export interface DoctorReport {
 /** Inputs for {@link runDoctor}; defaults come from the process. */
 export interface DoctorOpts {
   cwd?: string;
-  /** Home directory used to find agent configuration (~/.claude unless CLAUDE_CONFIG_DIR is set, ~/.codex unless CODEX_HOME is). */
+  /**
+   * Home directory used to find agent configuration (~/.claude unless CLAUDE_CONFIG_DIR is set, ~/.codex unless
+   * CODEX_HOME is).
+   */
   home?: string;
   version: string;
   nodeVersion?: string;
   now?: Date;
+  /** Stands in for the fs the spool check reads; a test makes one call fail. */
+  spoolFs?: SpoolFs;
 }
 
 /** Minimum Node.js version hippo supports (package.json engines). */
@@ -93,7 +101,9 @@ function codexCheck(home: string): DoctorCheck {
     ['hippo compact-resume', 'resume after compaction'],
   ];
   const missing = codexHooks.filter(([marker]) => !text.includes(marker)).map(([, what]) => what);
-  if (missing.length === 0) return { id: 'codex', status: 'pass', detail: `Codex: hippo memory hooks installed. ${CODEX_TRUST_LINE}` };
+  if (missing.length === 0) {
+    return { id: 'codex', status: 'pass', detail: `Codex: hippo memory hooks installed. ${CODEX_TRUST_LINE}` };
+  }
   return {
     id: 'codex',
     status: 'warn',
@@ -110,14 +120,22 @@ const FAILURE_LOG_SCHEMA = 46;
 /** The failed-tool-call count over the last 7 days, or why it could not be read. */
 function failuresCheck(failures: StoreHealth['failures'], schemaVersion: number): DoctorCheck {
   if (failures.ok) {
-    return { id: 'failures', status: 'info', detail: `${failures.value} failed tool calls logged in 7 days (hippo failures for detail)` };
+    return {
+      id: 'failures',
+      status: 'info',
+      detail: `${failures.value} failed tool calls logged in 7 days (hippo failures for detail)`,
+    };
   }
   if (!failures.message.includes('no such table')) {
     return { id: 'failures', status: 'warn', detail: `cannot read the failure log: ${failures.message}` };
   }
   return schemaVersion < FAILURE_LOG_SCHEMA
     ? { id: 'failures', status: 'info', detail: 'no failure log yet (hippo creates it on the next write)' }
-    : { id: 'failures', status: 'warn', detail: 'the failure_log table is missing, so failed tool calls are not being logged' };
+    : {
+        id: 'failures',
+        status: 'warn',
+        detail: 'the failure_log table is missing, so failed tool calls are not being logged',
+      };
 }
 
 /** How long ago the store last slept (consolidated), or why that history could not be read. */
@@ -135,8 +153,17 @@ function sleepCheck(lastSleep: StoreHealth['lastSleep'], now: Date): DoctorCheck
   }
   const days = Math.floor((now.getTime() - when) / DAY_MS);
   return days > 7
-    ? { id: 'sleep', status: 'warn', detail: `last sleep ${days} days ago`, fix: 'hippo sleep, and check the session-end hook is installed' }
-    : { id: 'sleep', status: 'pass', detail: `last sleep ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}` };
+    ? {
+        id: 'sleep',
+        status: 'warn',
+        detail: `last sleep ${days} days ago`,
+        fix: 'hippo sleep, and check the session-end hook is installed',
+      }
+    : {
+        id: 'sleep',
+        status: 'pass',
+        detail: `last sleep ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}`,
+      };
 }
 
 interface SpoolRead {
@@ -146,51 +173,74 @@ interface SpoolRead {
 }
 
 /** Spool counts in their own try, so a spool that cannot be read never hides the database counts. */
-function readSpool(store: string, now: Date): SpoolRead {
+function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
   try {
-    return { counts: spoolCounts(store, now, REPLAY_AFTER_MS), unread: '' };
+    return { counts: spoolCounts(store, now, REPLAY_AFTER_MS, spoolFs), unread: '' };
   } catch (err) {
     return { counts: { waiting: 0, stale: 0, bad: 0 }, unread: `; spool not read: ${errorMessage(err)}` };
   }
 }
 
-/** Compaction records the PostCompact hook left unfinished and spool files a replay has not finished, which `hippo sleep` replays. */
-function compactionsCheck(compactions: StoreHealth['compactions'], store: string, now: Date): DoctorCheck {
+/**
+ * Compaction records the PostCompact hook left unfinished and spool files a replay has not finished, which `hippo
+ * sleep` replays.
+ */
+function compactionsCheck(
+  compactions: StoreHealth['compactions'],
+  store: string,
+  now: Date,
+  spoolFs?: SpoolFs,
+): DoctorCheck {
   if (!compactions.ok) {
     return compactions.message.includes('no such table')
-      ? { id: 'compactions', status: 'info', detail: 'no compaction records yet (hippo creates them on the next write)' }
+      ? {
+          id: 'compactions',
+          status: 'info',
+          detail: 'no compaction records yet (hippo creates them on the next write)',
+        }
       : { id: 'compactions', status: 'warn', detail: `cannot read the compaction records: ${compactions.message}` };
   }
   const { total, summarised, started } = compactions.value;
   const stuck = summarised + started;
-  const { counts: spool, unread } = readSpool(store, now);
+  const { counts: spool, unread } = readSpool(store, now, spoolFs);
   const spooled = spool.waiting + spool.stale + spool.bad > 0;
   const recorded = `${total} compaction${total === 1 ? '' : 's'} recorded, none stuck`;
   if (stuck === 0 && !spooled && unread === '') return { id: 'compactions', status: 'pass', detail: recorded };
   const fix = [
     stuck + spool.waiting + spool.stale > 0 ? 'hippo sleep   (replays them)' : '',
-    spool.bad > 0 ? `open the .bad files in ${path.join(store, SPOOL_DIR)}, save what you still need with hippo remember, then delete them` : '',
+    spool.bad > 0
+      ? `open the .bad files in ${path.join(store, SPOOL_DIR)}, save what you still need with hippo remember, then ` +
+        `delete them`
+      : '',
   ].filter((s) => s !== '');
-  const unfinished = stuck === 0
-    ? `${recorded} in the store`
-    : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
-  const note = spooled ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad` : '';
+  const unfinished =
+    stuck === 0
+      ? `${recorded} in the store`
+      : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes ` +
+        `(${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
+  const note = spooled
+    ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad`
+    : '';
   return { id: 'compactions', status: 'warn', detail: `${unfinished}${note}${unread}`, fix: fix.join('; ') };
 }
 
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
 function projectsCheck(globalRoot: string): DoctorCheck {
-  let db: DatabaseSyncLike | null = null;
   try {
-    db = openHippoDbReadOnly(globalRoot);
-    const r = planProjectRepair(db, globalRoot, resolveTenantId({}));
+    const r = readProjectTags(globalRoot, resolveTenantId({}), (reads) => planProjectRepair(reads, globalRoot));
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
-      r.folds.length > 0 ? `old project names that now resolve to another project: ${r.folds.map((f) => `${f.from} -> ${f.into}`).join(', ')}` : '',
-      r.collisions.length > 0
-        ? `old project names shared by several projects, folded by hand only: ${r.collisions.map((c) => `${c.name} (${c.ids.join(', ')})`).join('; ')}`
+      r.folds.length > 0
+        ? `old project names that now resolve to another project: ` +
+          `${r.folds.map((f) => `${f.from} -> ${f.into}`).join(', ')}`
         : '',
-      r.toProject.length + r.setAside.length > 0 ? `${r.toProject.length + r.setAside.length} merged memories tagged user-global` : '',
+      r.collisions.length > 0
+        ? `old project names shared by several projects, folded by hand only: ` +
+          `${r.collisions.map((c) => `${c.name} (${c.ids.join(', ')})`).join('; ')}`
+        : '',
+      r.toProject.length + r.setAside.length > 0
+        ? `${r.toProject.length + r.setAside.length} merged memories tagged user-global`
+        : '',
     ].filter((s) => s !== '');
     return found.length === 0
       ? { id: 'projects', status: 'pass', detail: 'no duplicate or out-of-date project tags in the global store' }
@@ -202,15 +252,18 @@ function projectsCheck(globalRoot: string): DoctorCheck {
       };
   } catch (err) {
     return { id: 'projects', status: 'info', detail: `project tags not checked (${errorMessage(err)})` };
-  } finally {
-    if (db !== null) closeHippoDb(db);
   }
 }
 
 function nodeCheck(node: string): DoctorCheck {
   return versionAtLeast(node, MIN_NODE)
     ? { id: 'node', status: 'pass', detail: `Node.js ${node}` }
-    : { id: 'node', status: 'fail', detail: `Node.js ${node} is older than ${MIN_NODE}`, fix: `Install Node.js ${MIN_NODE} or newer` };
+    : {
+        id: 'node',
+        status: 'fail',
+        detail: `Node.js ${node} is older than ${MIN_NODE}`,
+        fix: `Install Node.js ${MIN_NODE} or newer`,
+      };
 }
 
 interface StoreChoice {
@@ -223,7 +276,11 @@ function storeCheck(local: string | null, globalRoot: string, hasGlobal: boolean
   if (local !== null && isInitialized(local)) {
     return {
       store: local,
-      check: { id: 'store', status: 'pass', detail: `project store at ${local}${hasGlobal ? ` (global store at ${globalRoot} too)` : ''}` }
+      check: {
+        id: 'store',
+        status: 'pass',
+        detail: `project store at ${local}${hasGlobal ? ` (global store at ${globalRoot} too)` : ''}`,
+      },
     };
   }
   if (local !== null) {
@@ -264,12 +321,25 @@ function schemaCheck(have: number, want: number): DoctorCheck {
   return have === want
     ? { id: 'schema', status: 'pass', detail: `database schema v${have}` }
     : have > want
-      ? { id: 'schema', status: 'fail', detail: `database schema v${have} is newer than this hippo (v${want})`, fix: 'npm install -g hippo-memory@latest' }
-      : { id: 'schema', status: 'info', detail: `database schema v${have}; hippo migrates it to v${want} on the next write` };
+      ? {
+          id: 'schema',
+          status: 'fail',
+          detail: `database schema v${have} is newer than this hippo (v${want})`,
+          fix: 'npm install -g hippo-memory@latest',
+        }
+      : {
+          id: 'schema',
+          status: 'info',
+          detail: `database schema v${have}; hippo migrates it to v${want} on the next write`,
+        };
 }
 
 function memoriesCheck(memories: number | null, dormant: number | null): DoctorCheck {
-  const memoryCheck: DoctorCheck = { id: 'memories', status: 'info', detail: `${memories ?? '?'} memories${dormant !== null ? `, ${dormant} dormant` : ''}` };
+  const memoryCheck: DoctorCheck = {
+    id: 'memories',
+    status: 'info',
+    detail: `${memories ?? '?'} memories${dormant !== null ? `, ${dormant} dormant` : ''}`,
+  };
   if (memories === 0) {
     memoryCheck.status = 'warn';
     memoryCheck.fix = 'hippo learn --git   (seed lessons from git history)';
@@ -277,16 +347,24 @@ function memoriesCheck(memories: number | null, dormant: number | null): DoctorC
   return memoryCheck;
 }
 
-/** Whether the full-text index still matches `memories`; opening a current store no longer checks, so doctor reports and sleep repairs. */
+/**
+ * Whether the full-text index still matches `memories`; opening a current store no longer checks, so doctor reports and
+ * sleep repairs.
+ */
 function ftsCheck(fts: StoreHealth['fts']): DoctorCheck {
   if (!fts.ok) return { id: 'fts', status: 'warn', detail: `cannot read the full-text index: ${fts.message}` };
   const counts = fts.value;
-  if (counts === null) return { id: 'fts', status: 'info', detail: 'no full-text index; search uses slower LIKE matching' };
-  if (counts.memories === counts.fts) return { id: 'fts', status: 'pass', detail: `full-text index in sync (${counts.fts} rows)` };
+  if (counts === null) {
+    return { id: 'fts', status: 'info', detail: 'no full-text index; search uses slower LIKE matching' };
+  }
+  if (counts.memories === counts.fts) {
+    return { id: 'fts', status: 'pass', detail: `full-text index in sync (${counts.fts} rows)` };
+  }
   return {
     id: 'fts',
     status: 'warn',
-    detail: `full-text index out of sync: ${counts.fts} indexed rows for ${counts.memories} memories, so search can miss memories or match removed ones`,
+    detail: `full-text index out of sync: ${counts.fts} indexed rows for ${counts.memories} memories, so search can ` +
+      `miss memories or match removed ones`,
     fix: 'hippo sleep   (re-syncs the index)',
   };
 }
@@ -300,12 +378,13 @@ function tokensCheck(tokens: StoreHealth['tokens']): DoctorCheck {
   return {
     id: 'tokens',
     status: 'info',
-    detail: `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent and ${tally.tokensReread} re-read by later model calls (hippo tokens for detail)`,
+    detail: `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent ` +
+      `and ${tally.tokensReread} re-read by later model calls (hippo tokens for detail)`,
   };
 }
 
 /** Checks that read the store's database; a store that cannot be opened becomes one failed schema check. */
-function databaseChecks(store: string, now: Date): DoctorCheck[] {
+function databaseChecks(store: string, now: Date, spoolFs?: SpoolFs): DoctorCheck[] {
   let health: StoreHealth;
   try {
     health = readStoreHealth(store, {
@@ -314,12 +393,17 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
       transcriptFloor: new Date(now.getTime() - TRANSCRIPT_FILL_WINDOW_MS).toISOString(),
     });
   } catch (err) {
-    return [{
-      id: 'schema',
-      status: 'fail',
-      detail: `cannot open the database: ${errorMessage(err)}`,
-      fix: err instanceof IncompatibleBinaryError ? 'npm install -g hippo-memory@latest' : 'check file permissions on the .hippo folder',
-    }];
+    return [
+      {
+        id: 'schema',
+        status: 'fail',
+        detail: `cannot open the database: ${errorMessage(err)}`,
+        fix:
+          err instanceof IncompatibleBinaryError
+            ? 'npm install -g hippo-memory@latest'
+            : 'check file permissions on the .hippo folder',
+      },
+    ];
   }
   return [
     schemaCheck(health.schemaVersion, getCurrentSchemaVersion()),
@@ -328,7 +412,7 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
     tokensCheck(health.tokens),
     failuresCheck(health.failures, health.schemaVersion),
     sleepCheck(health.lastSleep, now),
-    compactionsCheck(health.compactions, store, now),
+    compactionsCheck(health.compactions, store, now, spoolFs),
   ];
 }
 
@@ -345,20 +429,37 @@ const CLAUDE_CODE_HOOKS: ReadonlyArray<readonly [string, string]> = [
 function claudeCodeCheck(home: string): DoctorCheck {
   const claudeDir = claudeConfigDir(home);
   if (!fs.existsSync(claudeDir)) {
-    return { id: 'claude-code', status: 'info', detail: 'Claude Code not found; other agents can use hippo over MCP (hippo mcp)' };
+    return {
+      id: 'claude-code',
+      status: 'info',
+      detail: 'Claude Code not found; other agents can use hippo over MCP (hippo mcp)',
+    };
   }
   const settings = readJson(path.join(claudeDir, 'settings.json'));
   const text = settings === null ? '' : JSON.stringify(settings);
   const viaPlugin = /hippo-memory@/.test(text);
   const missing = CLAUDE_CODE_HOOKS.filter(([marker]) => !text.includes(marker)).map(([, what]) => what);
   if (viaPlugin) {
-    return { id: 'claude-code', status: 'pass', detail: 'Claude Code: hippo plugin enabled (all hooks, including compaction and failed-tool capture)' };
+    return {
+      id: 'claude-code',
+      status: 'pass',
+      detail: 'Claude Code: hippo plugin enabled (all hooks, including compaction and failed-tool capture)',
+    };
   }
   if (missing.length === 0) {
-    return { id: 'claude-code', status: 'pass', detail: 'Claude Code: all hippo hooks installed, including compaction and failed-tool capture' };
+    return {
+      id: 'claude-code',
+      status: 'pass',
+      detail: 'Claude Code: all hippo hooks installed, including compaction and failed-tool capture',
+    };
   }
   if (missing.length === CLAUDE_CODE_HOOKS.length) {
-    return { id: 'claude-code', status: 'warn', detail: 'Claude Code found, but no hippo hooks are installed', fix: 'hippo hook install claude-code' };
+    return {
+      id: 'claude-code',
+      status: 'warn',
+      detail: 'Claude Code found, but no hippo hooks are installed',
+      fix: 'hippo hook install claude-code',
+    };
   }
   return {
     id: 'claude-code',
@@ -382,14 +483,15 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
   const hasGlobal = isInitialized(globalRoot);
   const { store, check } = storeCheck(local, globalRoot, hasGlobal);
   checks.push(check);
-  if (store !== null) checks.push(...databaseChecks(store, now));
+  if (store !== null) checks.push(...databaseChecks(store, now, opts.spoolFs));
 
   const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
   if (holdoutRateBp > 0) {
     checks.push({
       id: 'pilot',
       status: 'info',
-      detail: `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo (pilot.holdoutRateBp=${holdoutRateBp})`
+      detail: `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo ` +
+        `(pilot.holdoutRateBp=${holdoutRateBp})`,
     });
   }
   if (hasGlobal) checks.push(projectsCheck(globalRoot));
@@ -401,7 +503,9 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
   checks.push({
     id: 'embeddings',
     status: 'info',
-    detail: isEmbeddingAvailable() ? 'local embeddings available (hybrid search)' : 'embeddings not installed; recall uses BM25 (optional: hippo embed --help)'
+    detail: isEmbeddingAvailable()
+      ? 'local embeddings available (hybrid search)'
+      : 'embeddings not installed; recall uses BM25 (optional: hippo embed --help)',
   });
 
   return { ok: !checks.some((c) => c.status === 'fail'), version: opts.version, store, checks };

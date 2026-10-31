@@ -9,6 +9,7 @@
  * `bot:<bot_id>` instead. This test is the regression guard.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,16 +17,16 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
+import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../src/connectors/slack/types.js';
-import type { Context } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';
 
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
+function ctxFor(root: string): FullContext {
+  return apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 }
 
 function makeMessage(i: number, opts: Partial<SlackMessageEvent> = {}): SlackMessageEvent {

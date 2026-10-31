@@ -1,3 +1,4 @@
+import { HOUR_MS } from '../util/time.js';
 import { isSharedStore } from '../core/config.js';
 import { closeHippoDb, HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { raiseMinBinary } from '../db/meta.js';
@@ -49,10 +50,14 @@ export function continuityStamp(key: ContinuityKey): ContinuityStamp {
 
 // An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.
 function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: ContinuityKey | undefined): void {
-  if (!key && isSharedStore(hippoRoot)) throw new Error(`${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`);
+  if (!key && isSharedStore(hippoRoot)) {
+    throw new Error(
+      `${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`,
+    );
+  }
 }
 
-type SnapshotInput = {
+export type SnapshotInput = {
   task: string;
   summary: string;
   next_step: string;
@@ -61,23 +66,34 @@ type SnapshotInput = {
   scope?: string | null;
 };
 
-function insertSnapshot(db: DatabaseSyncLike, tenantId: string, snapshot: SnapshotInput, now: string, stamp: ContinuityStamp | null): number {
-  const result = db.prepare(`
-    INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at, updated_at, owner_subject, origin_project)
+function insertSnapshot(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  snapshot: SnapshotInput,
+  now: string,
+  stamp: ContinuityStamp | null,
+): number {
+  const result = db
+    .prepare(
+      `
+    INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at,
+    updated_at, owner_subject, origin_project)
     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    redactSecretsStrict(snapshot.task),
-    redactSecretsStrict(snapshot.summary),
-    redactSecretsStrict(snapshot.next_step),
-    snapshot.source ?? 'cli',
-    snapshot.session_id ?? null,
-    snapshot.scope ?? null,
-    tenantId,
-    now,
-    now,
-    stamp?.owner ?? null,
-    stamp?.origin ?? null,
-  );
+  `,
+    )
+    .run(
+      redactSecretsStrict(snapshot.task),
+      redactSecretsStrict(snapshot.summary),
+      redactSecretsStrict(snapshot.next_step),
+      snapshot.source ?? 'cli',
+      snapshot.session_id ?? null,
+      snapshot.scope ?? null,
+      tenantId,
+      now,
+      now,
+      stamp?.owner ?? null,
+      stamp?.origin ?? null,
+    );
   return Number(result.lastInsertRowid ?? 0);
 }
 
@@ -96,8 +112,10 @@ export function saveActiveTaskSnapshot(
 
   try {
     const id = withWriteScope(db, 'save_active_task', () => {
-      db.prepare(`UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}`)
-        .run(now, tenantId, ...(owned?.params ?? []));
+      db.prepare(
+        `UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ` +
+        `?${owned ? ` AND ${owned.sql}` : ''}`,
+      ).run(now, tenantId, ...(owned?.params ?? []));
       const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
       // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
       if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
@@ -148,17 +166,20 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?
   }, openStore);
 }
 
-/** Default freshness bound for AMBIENT active-task-snapshot reads: 72h rather than 48h so a Friday-evening orphan still offers continuity on Monday;
- * override via `loadFreshActiveTaskSnapshot`'s `opts.maxAgeMs`; deliberately no env knob. */
-export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * 60 * 60 * 1000;
+/** Default freshness bound for AMBIENT active-task-snapshot reads: 72h rather than 48h so a Friday-evening orphan still
+ * offers continuity on Monday; override via `loadFreshActiveTaskSnapshot`'s `opts.maxAgeMs`; deliberately no env
+ * knob. */
+export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * HOUR_MS;
 
-/** A usable session id: non-null, non-empty string; named so the owner-match rule in `loadFreshActiveTaskSnapshot` states its contract once. */
+/** A usable session id: non-null, non-empty string; named so the owner-match rule in `loadFreshActiveTaskSnapshot`
+ * states its contract once. */
 function isNonEmptySessionId(value: string | null | undefined): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
-/** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and `===`) always sees its own state;
- * all others, null ids included (null === null is no match), get it only if age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
+/** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
+ * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
+ * age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
 export function loadFreshActiveTaskSnapshot(
   hippoRoot: string,
   tenantId: string,
@@ -187,7 +208,11 @@ export function freshActiveSnapshot(
   return ageMs <= maxAgeMs ? snapshot : null;
 }
 
-export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, clearedStatus: string = 'cleared'): boolean {
+export function clearActiveTaskSnapshot(
+  hippoRoot: string,
+  tenantId: string,
+  clearedStatus: string = 'cleared',
+): boolean {
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', hippoRoot, undefined);
   const db = openStore(hippoRoot);
@@ -195,13 +220,23 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
 
   try {
     // SAFETY: active's shape matches the single `id` column selected above.
-    const active = db.prepare(`SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`).get(tenantId) as { id?: number } | undefined;
+    const active = db
+      .prepare(
+        `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
+        `LIMIT 1`,
+      )
+      .get(tenantId) as { id?: number } | undefined;
     if (!active?.id) {
       removeActiveTaskMirror(hippoRoot, tenantId);
       return false;
     }
 
-    db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(clearedStatus, now, active.id, tenantId);
+    db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(
+      clearedStatus,
+      now,
+      active.id,
+      tenantId,
+    );
     removeActiveTaskMirror(hippoRoot, tenantId);
     return true;
   } finally {
@@ -209,8 +244,8 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
   }
 }
 
-/** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on `session_id` too so an ending session can never close a
- * newer session's snapshot. Returns the number of rows closed. */
+/** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on `session_id` too so an
+ * ending session can never close a newer session's snapshot. Returns the number of rows closed. */
 export function closeTaskSnapshotsForSession(
   hippoRoot: string,
   tenantId: string,
@@ -225,16 +260,19 @@ export function closeTaskSnapshotsForSession(
   const now = new Date().toISOString();
 
   try {
-    const result = db.prepare(
-      `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
-    ).run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
+    const result = db
+      .prepare(
+        `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
+        `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
+      )
+      .run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
     return Number(result.changes ?? 0);
   } finally {
     closeHippoDb(db);
   }
 }
 
-interface SessionEventInput {
+export interface SessionEventInput {
   session_id: string;
   event_type: string;
   content: string;
@@ -245,20 +283,25 @@ interface SessionEventInput {
 }
 
 function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: SessionEventInput, now: string): number {
-  const result = db.prepare(`
-      INSERT INTO session_events(session_id, task, event_type, content, source, scope, metadata_json, tenant_id, created_at)
+  const result = db
+    .prepare(
+      `
+      INSERT INTO session_events(session_id, task, event_type, content, source, scope, metadata_json, tenant_id,
+      created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-    event.session_id,
-    event.task ?? null,
-    event.event_type,
-    event.content,
-    event.source ?? 'cli',
-    event.scope ?? null,
-    JSON.stringify(event.metadata ?? {}),
-    tenantId,
-    now,
-  );
+    `,
+    )
+    .run(
+      event.session_id,
+      event.task ?? null,
+      event.event_type,
+      event.content,
+      event.source ?? 'cli',
+      event.scope ?? null,
+      JSON.stringify(event.metadata ?? {}),
+      tenantId,
+      now,
+    );
   return Number(result.lastInsertRowid ?? 0);
 }
 
@@ -276,15 +319,24 @@ function reloadSessionEvent(db: DatabaseSyncLike, id: number): SessionEvent {
   return rowToSessionEvent(row);
 }
 
-function recentSessionEventsOldestFirst(db: DatabaseSyncLike, tenantId: string, sessionId: string, limit: number): SessionEvent[] {
+function recentSessionEventsOldestFirst(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+  limit: number,
+): SessionEvent[] {
   // SAFETY: recentRows' shape matches the nine columns named in the SELECT below.
-  const recentRows = db.prepare(`
+  const recentRows = db
+    .prepare(
+      `
       SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
       FROM session_events
       WHERE session_id = ? AND tenant_id = ?
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `).all(sessionId, tenantId, limit) as SessionEventRow[];
+    `,
+    )
+    .all(sessionId, tenantId, limit) as SessionEventRow[];
   return recentRows.map(rowToSessionEvent).reverse();
 }
 
@@ -346,7 +398,8 @@ export function listSessionEvents(
   }, openStore);
 }
 
-/** Session_ids with a `session_complete` event newer than `sinceMs`; bounds the sleep auto-promotion scan to a fixed window. */
+/** Session_ids with a `session_complete` event newer than `sinceMs`; bounds the sleep auto-promotion scan to a fixed
+ * window. */
 export function findPromotableSessions(
   hippoRoot: string,
   tenantId: string,
@@ -380,13 +433,24 @@ export function traceExistsForSession(hippoRoot: string, tenantId: string, sessi
 /** The owner a session id is bound to, or null. */
 function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
   // SAFETY: the SELECT names exactly this one TEXT column.
-  const row = db.prepare(`SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`).get(tenantId, sessionId) as { owner_subject: string } | undefined;
+  const row = db.prepare(
+    `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
+  ).get(tenantId, sessionId) as { owner_subject: string } | undefined;
   return row?.owner_subject ?? null;
 }
 
 /** Binds `sessionId` to `owner` unless a binding exists; the count is 1 when this call bound it. */
-function insertSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string, owner: string, createdAt: string): number {
-  const result = db.prepare(`INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`)
+function insertSessionOwnerAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+  owner: string,
+  createdAt: string,
+): number {
+  const result = db
+    .prepare(
+      `INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
+    )
     .run(tenantId, sessionId, owner, createdAt);
   return Number(result.changes ?? 0);
 }
@@ -423,5 +487,8 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
 /** The owner stored for the session id, binding `binding.owner` first when none is stored. */
 export function sessionOwnerOrBind(hippoRoot: string, binding: SessionOwnerBinding): string | null {
   // A bound session is the common case after the first prompt, so it must not take the write lock.
-  return onHandle(hippoRoot, (db) => selectSessionOwnerAt(db, binding.tenantId, binding.sessionId) ?? insertSessionOwner(db, binding));
+  return onHandle(
+    hippoRoot,
+    (db) => selectSessionOwnerAt(db, binding.tenantId, binding.sessionId) ?? insertSessionOwner(db, binding),
+  );
 }

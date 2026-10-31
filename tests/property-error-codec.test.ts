@@ -2,10 +2,11 @@
 import { describe, it, expect } from 'vitest';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/core/api-errors.js';
 import { RawAppendOnlyError } from '../src/core/raw-append-only.js';
-import { IncompatibleBinaryError, StoreBusyError } from '../src/db/index.js';
+import { IncompatibleBinaryError } from '../src/db/index.js';
+import { StoreBusyError } from '../src/store/port.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../src/util/http-util.js';
-import { ScopeForbiddenError } from '../src/store/recall-scope.js';
-import { RejectedValueError } from '../src/store/rejection.js';
+import { ScopeForbiddenError } from '../src/core/recall-scope.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import { decodeError, encodeError } from '../src/store/sqlite/error-codec.js';
 import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { arr, both, forAll, int, map, pick, str, type Gen } from './_helpers/property.js';
@@ -66,8 +67,8 @@ function plainFields(error: Error, dropped: readonly string[]): object {
 }
 
 describe('error codec properties', () => {
-  it('decode(encode(e)) keeps the class, message, plain fields and cause chain of every listed class', () => {
-    forAll(0xc0dec, 300, CASE, (drawn) => {
+  it('decode(encode(e)) keeps the class, message, plain fields and cause chain of every listed class', async () => {
+    await forAll(0xc0dec, 300, CASE, (drawn) => {
       const error = thrownFrom(drawn);
       // structuredClone is what a thread message does to the encoded error.
       const arrived = chain(decodeError(structuredClone(encodeError(error))));

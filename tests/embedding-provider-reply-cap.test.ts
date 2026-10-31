@@ -5,7 +5,7 @@ import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { boundPort } from './_helpers/listen.js';
-import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 
 const KEY = 'sk-reply-cap-test';
 // One input may reply with up to 64 KiB + 512 KiB; two inputs with 64 KiB + 1 MiB.

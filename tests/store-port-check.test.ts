@@ -28,6 +28,8 @@ type Counts = {
   sqliteOnlyRoutesList: string[];
   carrierFiles: number;
   carrierFilesList: string[];
+  storeFilesWithoutSql?: number;
+  storeFilesWithoutSqlList?: string[];
 };
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
 
@@ -148,7 +150,7 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it("counts routes on the loop: rows without `loop: 'off'` plus the seven routes outside the table, and reads 0 with no route table", () => {
+  it("counts routes on the loop: rows without `loop: 'off'` plus the five routes outside the table, and reads 0 with no route table", () => {
     const rows = [
       "  { method: 'GET', path: '/a', handler: a },",
       "  { method: 'GET', path: '/b', storeReady: 'base', loop: 'off', handler: b },",
@@ -157,7 +159,7 @@ describe('check-store-port.mjs', () => {
       "  { method: 'GET', path: '/e', loop: 'on', handler: e },",
     ];
     withFixture({ 'src/server/route-table.ts': `const V1_ROUTES: readonly Route[] = [\n${rows.join('\n')}\n];\n` }, null, ({ run }) => {
-      expect(list(run).routesOnLoop).toBe('10');
+      expect(list(run).routesOnLoop).toBe('8');
     });
     withFixture({ 'src/a.ts': 'export const a = 1;\n' }, null, ({ run }) => {
       expect(list(run).routesOnLoop).toBe('0');
@@ -166,16 +168,16 @@ describe('check-store-port.mjs', () => {
 
   it("fails when a row drops `loop: 'off'`, and --update locks in a row that gains it", () => {
     const table = (second: string) => `const V1_ROUTES = [\n  { method: 'GET', path: '/a', loop: 'off', handler: a },\n  { method: 'GET', path: '/b', ${second}handler: b },\n];\n`;
-    withFixture({ 'src/server/route-table.ts': table('') }, { routesWithoutStore: 2, routesOnLoop: 7 }, ({ run }) => {
+    withFixture({ 'src/server/route-table.ts': table('') }, { routesWithoutStore: 2, routesOnLoop: 5 }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('routesOnLoop: 7 -> 8');
+      expect(r.stderr).toContain('routesOnLoop: 5 -> 6');
       expect(run('--update').status).toBe(1);
     });
-    withFixture({ 'src/server/route-table.ts': table("loop: 'off', ") }, { routesWithoutStore: 2, routesOnLoop: 8 }, ({ run, baseline }) => {
+    withFixture({ 'src/server/route-table.ts': table("loop: 'off', ") }, { routesWithoutStore: 2, routesOnLoop: 6 }, ({ run, baseline }) => {
       expect(run().status).toBe(0);
       expect(run('--update').status).toBe(0);
-      expect(baseline().routesOnLoop).toBe(7);
+      expect(baseline().routesOnLoop).toBe(5);
     });
   });
 
@@ -346,21 +348,23 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('fails and names a file outside the list that calls onStore, and ignores the carrier file itself', () => {
+  it('fails and names a file outside the list that names the carrier, a file defining it included', () => {
     const use = "import { onStore } from './on-store.js';\nexport const f = (ctx: any) => onStore(ctx, () => 1);\n";
-    const files = { 'src/api/on-store.ts': 'export const onStore = andThen;\n', 'src/api/old.ts': use, 'src/api/new.ts': use };
+    const reply = 'export type R = StoreReply<object, number>;\n';
+    const files = { 'src/api/on-store.ts': 'export const onStore = andThen;\n', 'src/api/old.ts': use, 'src/api/new.ts': use, 'src/api/reply.ts': reply };
     withFixture(files, { carrierFiles: 2, carrierFilesList: ['src/api/old.ts', 'src/api/gone.ts'] }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen or onStore');
-      expect(r.stderr).not.toContain('src/api/on-store.ts');
+      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen, onStore or StoreReply');
+      expect(r.stderr).toContain('src/api/on-store.ts: not a carrier file');
+      expect(r.stderr).toContain('src/api/reply.ts: not a carrier file');
       expect(r.stderr).not.toContain('src/api/old.ts');
     });
   });
 
   it('fails and names each surface file that records a recall itself, in a route or a CLI verb', () => {
     const route = [
-      "import { noteRecall as n } from '../../api/recall-record.js';",
+      "import { noteRecall as n } from '../../api/recall/finish.js';",
       'export const f = (s: any, ctx: any) => {',
       '  s.bumpRecallStats(1);',
       "  recordTokens(ctx, 'http_recall', {});",
@@ -375,7 +379,7 @@ describe('check-store-port.mjs', () => {
         expect(r.stderr).toContain('src/server/routes/recall.ts:3 bumpRecallStats');
         expect(r.stderr).toContain('src/server/routes/recall.ts:4 recordTokens with a recall label');
         expect(r.stderr).toContain('src/cli/recall.ts:1 recordTokens with a recall label');
-        expect(r.stderr).toContain('recall-finish.ts');
+        expect(r.stderr).toContain('recall/finish.ts');
       }
     });
   });
@@ -387,9 +391,29 @@ describe('check-store-port.mjs', () => {
       'export const s = "recordTokens(ctx, \'recall\')";',
       "export const g = (ctx: any) => recordTokens(ctx, 'http_context', { note: 'recalled' });",
     ].join('\n');
-    withFixture({ 'src/api/recall-finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
+    withFixture({ 'src/api/recall/finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
+    });
+  });
+
+  it('fails and names a src/store file that runs no SQL, and passes hippo.db definition files, listed files and files that touch hippo.db', () => {
+    const files = {
+      'src/store/rows.ts': 'export interface Row { id: string }\n',
+      'src/store/sqlite/plumbing.ts': 'export const a = 1;\n',
+      'src/store/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
+      'src/store/opens.ts': "export const g = (r: string) => onHandle(r, () => 1);\n",
+      'src/store/old.ts': 'export const b = 2;\n',
+      'src/store/scope.ts': "// db.prepare('SELECT 1') in a comment is no SQL call\nexport const isPrivate = (s: string) => s.includes(':private:');\n",
+    };
+    withFixture(files, { storeFilesWithoutSql: 1, storeFilesWithoutSqlList: ['src/store/old.ts'] }, ({ run }) => {
+      expect(list(run)).toMatchObject({ storeFilesWithoutSql: '2', 'src/store/scope.ts': 'no SQL', 'src/store/old.ts': 'no SQL' });
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('storeFilesWithoutSql: 1 -> 2');
+      expect(r.stderr).toContain('src/store/scope.ts: unlisted -> under src/store, runs no SQL');
+      for (const quiet of ['rows.ts', 'plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) expect(r.stderr).not.toContain(quiet);
+      expect(run('--update').status).toBe(1);
     });
   });
 

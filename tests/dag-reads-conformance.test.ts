@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import { listAuditEventsAfter } from '../src/store/audit.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { passesScopeFilterForRecall, serve, type AuditEvent, type HippoStore, type MemoryEntry } from '../src/server.js';
+import { serve } from '../src/server.js';
+import { passesScopeFilterForRecall, type AuditEvent, type HippoStore, type MemoryEntry } from '../src/entry/store-kit.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import type { SessionRawCount, SessionRawWindow, SummaryDescendants } from '../src/store/port.js';
 import { inMemoryDagReadsStore } from './_helpers/in-memory-dag-reads-store.js';
@@ -21,7 +22,7 @@ const OWN = 'personal:private:alice';
 const at = (minute: number): string => `2026-03-01T10:${String(minute).padStart(2, '0')}:00.000Z`;
 
 function row(tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  return seeded(`${id} holds a note about the rollout`, id, at(minute), { tenantId, origin_project: 'proj', ...extra });
+  return seeded(`${id} holds a note about the rollout`, id, at(minute), { tenant_id: tenantId, origin_project: 'proj', ...extra });
 }
 
 const raw = (tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry =>

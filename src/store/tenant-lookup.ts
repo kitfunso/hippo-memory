@@ -16,14 +16,19 @@ export function selectApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOw
   // SAFETY: row's shape matches the four columns named in the SELECT.
   const row = db
     .prepare(`SELECT tenant_id, revoked_at, role, owner_subject FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as { tenant_id: string; revoked_at: string | null; role: string; owner_subject: string | null } | undefined;
+    .get(keyId) as
+    { tenant_id: string; revoked_at: string | null; role: string; owner_subject: string | null } | undefined;
   return row && { tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, ownerSubject: row.owner_subject };
 }
 
 /** Who may reach memory `id`: its tenant and scope, or undefined when no such memory exists. */
-export function selectMemoryReach(db: DatabaseSyncLike, id: string): { tenantId: string; scope: string | null } | undefined {
+export function selectMemoryReach(
+  db: DatabaseSyncLike,
+  id: string,
+): { tenantId: string; scope: string | null } | undefined {
   // SAFETY: row's shape matches the tenant_id and scope columns named in the SELECT.
-  const row = db.prepare(`SELECT tenant_id, scope FROM memories WHERE id = ?`).get(id) as { tenant_id: string; scope: string | null } | undefined;
+  const row = db.prepare(`SELECT tenant_id, scope FROM memories WHERE id = ?`).get(id) as
+    { tenant_id: string; scope: string | null } | undefined;
   return row && { tenantId: row.tenant_id, scope: row.scope };
 }
 

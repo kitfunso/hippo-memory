@@ -1,10 +1,14 @@
-/** Memory-as-Physics engine: pure math (forces, Velocity Verlet integration, physics-based scoring, cluster amplification), no I/O.
- * Memories are particles on the unit hypersphere in embedding space (384-dim); query gravity, attraction, conflict repulsion and drag act on them,
+/**
+ * Memory-as-Physics engine: pure math (forces, Velocity Verlet integration, physics-based scoring, cluster
+ * amplification), no I/O.
+ * Memories are particles on the unit hypersphere in embedding space (384-dim); query gravity, attraction, conflict
+ * repulsion and drag act on them,
  * and nearby high-scoring memories amplify each other. */
 
 import { cosineOf } from './cosine.js';
-import { isRecallBoostAblated } from './ablation.js';
-import { FALLBACK_HALF_LIFE_DAYS, type EmotionalValence } from './memory.js';
+import { evalNow, isRecallBoostAblated, strengthAblation } from './ablation.js';
+import { calculateStrength, FALLBACK_HALF_LIFE_DAYS, type EmotionalValence, type MemoryEntry } from './memory.js';
+import { DAY_MS } from '../util/time.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { comparePhysicsResultsBy } from './compare.js';
 
@@ -38,6 +42,13 @@ export interface SimulationStats {
   energy: SystemEnergy;
   substepsRun: number;
 }
+
+// Floors that stop a near-zero mass or a coincident pair from dividing a force by about zero.
+const MIN_MASS = 0.01;
+const MIN_COSINE_DISTANCE = 0.01;
+// Mass gained per doubling of the retrieval count.
+const RETRIEVAL_MASS_GAIN = 0.1;
+const NEAR_ZERO = 1e-10;
 
 export function vecDot(a: number[], b: number[]): number {
   let sum = 0;
@@ -74,7 +85,7 @@ export function vecZero(dim: number): number[] {
 /** Normalize to unit length. Returns zero vector if magnitude < epsilon. */
 export function vecNormalize(v: number[]): number[] {
   const mag = vecNorm(v);
-  if (mag < 1e-10) return vecZero(v.length);
+  if (mag < NEAR_ZERO) return vecZero(v.length);
   return vecScale(v, 1 / mag);
 }
 
@@ -93,10 +104,12 @@ const CHARGE_MAP = {
 } satisfies Record<EmotionalValence, number>;
 
 export function computeMass(strength: number, retrievalCount: number): number {
-  // EVAL-ONLY ablation (ablation.ts): under the recall-boost flag mass ignores retrieval history, which would otherwise leak strengthening into the ablated
-  // arm's physics-pool rankings (query gravity ranks by mass). Covers both init and refresh callers in physics-state.ts.
+  // EVAL-ONLY ablation (ablation.ts): under the recall-boost flag mass ignores retrieval history, which would otherwise
+  // leak strengthening into the ablated
+  // arm's physics-pool rankings (query gravity ranks by mass). Covers both init and refresh callers in
+  // physics-state.ts.
   const effectiveCount = isRecallBoostAblated() ? 0 : retrievalCount;
-  return Math.max(0.01, strength * (1 + 0.1 * Math.log2(effectiveCount + 1)));
+  return Math.max(MIN_MASS, strength * (1 + RETRIEVAL_MASS_GAIN * Math.log2(effectiveCount + 1)));
 }
 
 export function computeCharge(valence: EmotionalValence): number {
@@ -107,7 +120,10 @@ export function computeTemperature(ageDays: number, temperatureDecay: number): n
   return 1 / (ageDays * temperatureDecay + 1);
 }
 
-/** Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F = G_Q * mass * max(0, cosine(pos, query))^2. */
+/**
+ * Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F = G_Q * mass * max(0,
+ * cosine(pos, query))^2.
+ */
 export function queryGravityMagnitude(
   particle: PhysicsParticle,
   queryEmbedding: number[],
@@ -125,13 +141,17 @@ export function velocityAlignmentBonus(
   if (particle.velocity.length === 0 || particle.velocity.length !== queryEmbedding.length) return 0;
   const velMag = vecNorm(particle.velocity);
   const qNorm = vecNorm(queryEmbedding);
-  if (velMag < 1e-10 || qNorm < 1e-10) return 0;
+  if (velMag < NEAR_ZERO || qNorm < NEAR_ZERO) return 0;
   const alignment = vecDot(particle.velocity, queryEmbedding) / (velMag * qNorm);
   return Math.max(0, alignment);
 }
 
-/** Attraction force on particle i from j (consolidation-time): G_M m_i m_j max(0, cosine)^3, directed along (pos_j - pos_i) projected tangent to the unit
- * sphere at pos_i (positions are re-normalized to the sphere after integration). Adds into `out` (a fresh zero vector by default) using `diff` as scratch. */
+/**
+ * Attraction force on particle i from j (consolidation-time): G_M m_i m_j max(0, cosine)^3, directed along (pos_j -
+ * pos_i) projected tangent to the unit
+ * sphere at pos_i (positions are re-normalized to the sphere after integration). Adds into `out` (a fresh zero vector
+ * by default) using `diff` as scratch.
+ */
 export function attractionForce(
   pi: PhysicsParticle,
   pj: PhysicsParticle,
@@ -146,27 +166,33 @@ export function attractionForce(
   // Direction: from i toward j (tangent projection handled by normalization after integration)
   for (let k = 0; k < out.length; k++) diff[k] = pj.position[k] - pi.position[k];
   const norm = vecNorm(diff);
-  if (norm < 1e-10) return out;
+  if (norm < NEAR_ZERO) return out;
   const inv = 1 / norm;
   for (let k = 0; k < out.length; k++) out[k] += diff[k] * inv * magnitude;
   return out;
 }
 
-/** Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01, cosine_distance)^2, where cosine_distance = 1 - cosine_similarity. */
+/**
+ * Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01, cosine_distance)^2, where
+ * cosine_distance = 1 - cosine_similarity.
+ */
 export function repulsionForce(
   pi: PhysicsParticle,
   pj: PhysicsParticle,
   K_repulsion: number,
 ): number[] {
   const cos = cosineOf(pi.position, pj.position);
-  const dist = Math.max(0.01, 1 - cos);
+  const dist = Math.max(MIN_COSINE_DISTANCE, 1 - cos);
   const magnitude = K_repulsion * pi.mass * pj.mass / (dist * dist);
   // Direction: away from j
   const direction = vecNormalize(vecSub(pi.position, pj.position));
   return vecScale(direction, magnitude);
 }
 
-/** Drag force (consolidation-time): -drag * velocity / max(1, effectiveHalfLife), with effectiveHalfLife from the memory's current half_life_days. */
+/**
+ * Drag force (consolidation-time): -drag * velocity / max(1, effectiveHalfLife), with effectiveHalfLife from the
+ * memory's current half_life_days.
+ */
 export function dragForce(
   particle: PhysicsParticle,
   drag: number,
@@ -221,7 +247,7 @@ function computeNetForce(
 /** Acceleration of particle i: its net force divided by mass, scaled in place. */
 function computeAcceleration(i: number, particles: PhysicsParticle[], ctx: ForceContext, diff: number[]): number[] {
   const accel = computeNetForce(i, particles, ctx, diff);
-  const inv = 1 / Math.max(0.01, particles[i].mass);
+  const inv = 1 / Math.max(MIN_MASS, particles[i].mass);
   for (let k = 0; k < accel.length; k++) accel[k] *= inv;
   return accel;
 }
@@ -338,12 +364,16 @@ export function computeSystemEnergy(
   return { kinetic, potential, total: kinetic + potential };
 }
 
-/** Scores all particles against a query embedding; virtual force computation, so it does NOT modify particle positions. */
+/**
+ * Scores all particles against a query embedding; virtual force computation, so it does NOT modify particle positions.
+ */
 export function physicsScore(
   particles: PhysicsParticle[],
   queryEmbedding: number[],
   config: PhysicsConfig,
-  /** Cross-ingest-stable tie key per memoryId (typically the memory content, from a caller with entries in scope); without it ties fall to memoryId,
+  /**
+   * Cross-ingest-stable tie key per memoryId (typically the memory content, from a caller with entries in scope);
+   * without it ties fall to memoryId,
    *  which is per-instance only and lets the cluster_top_k amplification set vary across fresh ingests. */
   tieKeyOf?: (memoryId: string) => string,
 ): ScoredPhysicsResult[] {
@@ -361,7 +391,8 @@ export function physicsScore(
     };
   });
 
-  // Base-score order picks the cluster_top_k amplification SET (which mutates scores), so ties must be cross-ingest-stable
+  // Base-score order picks the cluster_top_k amplification SET (which mutates scores), so ties must be
+  // cross-ingest-stable
   // when the caller supplies a content tie key (see comparePhysicsResultsBy in compare.ts).
   const tie = tieKeyOf ? (r: ScoredPhysicsResult) => tieKeyOf(r.memoryId) : undefined;
   results.sort(comparePhysicsResultsBy((r) => r.baseScore, tie));
@@ -412,7 +443,10 @@ function applyClusterAmplification(
   }
 }
 
-/** Nudges a particle toward (good outcome) or away from (bad outcome) the query embedding; new memories respond more (temperature). Mutates in place. */
+/**
+ * Nudges a particle toward (good outcome) or away from (bad outcome) the query embedding; new memories respond more
+ * (temperature). Mutates in place.
+ */
 export function applyOutcomeFeedback(
   particle: PhysicsParticle,
   queryEmbedding: number[],
@@ -424,4 +458,27 @@ export function applyOutcomeFeedback(
   const direction = vecSub(queryEmbedding, particle.position);
   const nudge = vecScale(direction, sign * feedbackAlpha * particle.temperature);
   particle.position = vecNormalize(vecAdd(particle.position, nudge));
+}
+
+/**
+ * Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the
+ * caller must save).
+ */
+export function initializeParticle(
+  entry: MemoryEntry,
+  embedding: number[],
+  now: Date = evalNow(),
+): PhysicsParticle {
+  const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
+  const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
+
+  return {
+    memoryId: entry.id,
+    position: [...embedding], // copy: position will diverge from original embedding
+    velocity: vecZero(embedding.length),
+    mass: computeMass(strength, entry.retrieval_count),
+    charge: computeCharge(entry.emotional_valence),
+    temperature: computeTemperature(ageDays, 1.0),
+    lastSimulation: now.toISOString(),
+  };
 }

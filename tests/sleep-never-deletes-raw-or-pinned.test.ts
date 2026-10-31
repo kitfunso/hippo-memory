@@ -1,5 +1,6 @@
 // C1 + H10: sleep never auto-deletes a raw or pinned row, keeps a change made while it
 // awaits the LLM, and a dry run previews the deletes a real sleep would make.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,11 +14,13 @@ import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
-import { sleep, supersede, type Context } from '../src/api/index.js';
-import { runSleep } from '../src/api/sleep-run.js';
+import { sleep, supersede } from '../src/api/index.js';
+import { runSleep } from '../src/api/sleep/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { sleepResultLines } from '../src/cli/sleep-render.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -34,9 +37,9 @@ function newRoot(configJson?: string): string {
 }
 
 const rawRow = (content: string): MemoryEntry =>
-  createMemory7(content, { kind: 'raw', artifact_ref: 'slack://T1/C1/1.0', owner: 'user:U1' });
-const ctxFor = (hippoRoot: string): Context =>
-  ({ hippoRoot, tenantId: 'default', actor: { subject: 'sleep-test', role: 'admin' } });
+  createMemory7(content, { kind: 'raw', artifactRef: 'slack://T1/C1/1.0', owner: 'user:U1' });
+const ctxFor = (hippoRoot: string): FullContext =>
+  (apiCtx(hippoRoot, 'default', { subject: 'sleep-test', role: 'admin' }));
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const CACHE_FACT = 'the build cache lives in /var/cache/hippo on the CI runners';
 
@@ -101,7 +104,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     writeEntry(root, keeper);
     writeEntry(root, pinnedCopy);
 
-    deduplicateStore(root);
+    deduplicateStore(sqliteConsolidation(root));
 
     expect(readEntry(root, keeper.id)?.content).toBe(CACHE_FACT);
     expect(readEntry(root, pinnedCopy.id)).toMatchObject({ content: CACHE_FACT, pinned: true });
@@ -171,7 +174,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
       if (calls++ === 0) {
         writeEntry(root, { ...readEntry(root, condemned.id)!, pinned: true });
         deleteEntry(root, forgotten.id);
-        supersede(ctxFor(root), replaced.id, 'invoices are exported as parquet files on the first monday');
+        await supersede(ctxFor(root), replaced.id, 'invoices are exported as parquet files on the first monday');
       }
       return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
     });
@@ -192,7 +195,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('facts linked to a new summary keep the link, so the next sleep pays for no duplicate or rebuild', async () => {
     const root = newRoot();
     const facts = ['alice moved the deploy to friday', 'alice owns the billing service', 'alice reviews every schema change']
-      .map((text) => createMemory7(text, { layer: Layer.Semantic, dag_level: 1, tags: ['extracted', 'speaker:alice'] }));
+      .map((text) => createMemory7(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
     for (const f of facts) writeEntry(root, f);
     const fetcher = summarizer('Alice moved the deploy to Friday, owns billing and reviews schema changes.');
 
@@ -209,11 +212,11 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('a summary rebuilt during sleep keeps its new text', async () => {
     const root = newRoot();
     const summary = createMemory7('alice owns the billing service', {
-      layer: Layer.Semantic, dag_level: 2, tags: ['speaker:alice', 'dag-summary'],
+      layer: Layer.Semantic, dagLevel: 2, tags: ['speaker:alice', 'dag-summary'],
     });
     writeEntry(root, summary);
     writeEntry(root, createMemory7('alice now also runs the friday deploy', {
-      layer: Layer.Semantic, dag_level: 1, dag_parent_id: summary.id, tags: ['extracted', 'speaker:alice'],
+      layer: Layer.Semantic, dagLevel: 1, dagParentId: summary.id, tags: ['extracted', 'speaker:alice'],
     }));
     const rebuilt = 'Alice owns the billing service and runs the Friday deploy.';
 

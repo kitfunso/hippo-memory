@@ -2,7 +2,7 @@ import { envPath } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PACKAGE_ROOT } from '../core/package-root.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { HIPPO_CODEX_WRAPPER_MARKER, ensureDir } from './shared.js';
 import { homeDir, codexHomeDir } from '../util/agent-homes.js';
 import { isJsonString } from '../util/json.js';
@@ -37,10 +37,12 @@ export interface CodexWrapperMetadata {
   installMode: 'same-path' | 'cmd-shim';
   logFile: string;
   installedAt: string;
+  /** The hippo CLI the user opted in; absent in metadata written before this field. */
+  hippoCliPath?: string;
 }
 
 export interface EnsureCodexWrapperResult {
-  status: 'installed' | 'already-installed' | 'not-found' | 'source-checkout';
+  status: 'installed' | 'already-installed' | 'not-found' | 'source-checkout' | 'other-install';
   metadataPath?: string;
   realCodexPath?: string;
   commandPath?: string;
@@ -226,7 +228,7 @@ function writeExecutableFile(filePath: string, content: string): void {
     fs.chmodSync(filePath, 0o755);
   } catch (err) {
     // The mode bit means nothing on Windows; elsewhere a wrapper that is not executable breaks `codex`, so say so.
-    log.warn(`could not mark ${filePath} executable: ${errorMessage(err)}`);
+    log.warn(`could not mark ${filePath} executable: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -268,6 +270,7 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
     installMode: plan.installMode,
     logFile: paths.logFile,
     installedAt: new Date().toISOString(),
+    hippoCliPath: resolveHippoCliPath(),
   };
   writeFileAtomic(paths.metadataPath, JSON.stringify(metadata, null, 2) + '\n');
 
@@ -360,11 +363,15 @@ export function isCodexWrapperInstalled(): boolean {
  * reads as binary hijacking to security scanners.
  */
 export function repairCodexWrapperIfInstalled(hippoCliPath: string = resolveHippoCliPath()): EnsureCodexWrapperResult {
-  if (readCodexWrapperMetadata() === null) {
+  const metadata = readCodexWrapperMetadata();
+  if (metadata === null) {
     return { status: 'not-found' };
   }
+  // Only the CLI the user opted in may re-point their launcher, not an npx cache or a project dependency.
+  if (isJsonString(metadata.hippoCliPath) && !pathEquals(metadata.hippoCliPath, hippoCliPath)) {
+    return { status: 'other-install' };
+  }
   // A checkout's own `npm install` or CLI would point the user's launcher at a folder that may be deleted.
-  // SHORTCUT: any node_modules copy (npx cache, a project dependency) still repairs; record the opted-in CLI path in the metadata to close that.
   const packageDir = path.dirname(path.dirname(hippoCliPath));
   if (path.basename(path.dirname(packageDir)).toLowerCase() !== 'node_modules') {
     return { status: 'source-checkout' };

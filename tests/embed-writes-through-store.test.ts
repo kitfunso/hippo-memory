@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import type { EmbeddingProvider } from '../src/store/embeddings/provider.js';
-import { embedAll, embeddingIndexIdentity, embeddingInputText, embedMemory } from '../src/store/embeddings/index.js';
+import type { EmbeddingProvider } from '../src/embeddings/provider.js';
+import { embeddingIndexIdentity, embeddingInputText } from '../src/store/embeddings/index.js';
+import { embedAll, embedMemory } from '../src/search/embed-memories.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { loadPhysicsState } from '../src/db/physics-state.js';
-import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../src/server.js';
+import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../src/entry/store-kit.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { EMBEDDING_MODEL_META_KEY } from '../src/db/vector-store.js';
@@ -163,7 +164,7 @@ describe('embedAll with a store', () => {
     const [first] = seeded;
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
-      await memory.store.vectorWrites.writeVectors({ tenantId: first.tenantId, model: other, replaceIndex: true, rows: [{ memoryId: first.id, vector: [1, 0] }] });
+      await memory.store.vectorWrites.writeVectors({ tenantId: first.tenant_id, model: other, replaceIndex: true, rows: [{ memoryId: first.id, vector: [1, 0] }] });
       return vectorsFor('fake-a', texts);
     });
     const running = withSqliteBlocked(memory.store.kind, () => embedAll(markedFolder(), undefined, racing, memory.store));
@@ -218,7 +219,7 @@ describe('embedMemory with a store', () => {
       return true;
     });
     const store: HippoStore = portOnlyStoreWithoutVectorReads(copyOf());
-    await expect(embedMemory(markedFolder(hashedConfig()), seeded[0], undefined, store)).resolves.toBeUndefined();
+    await expect(embedMemory(markedFolder(hashedConfig()), seeded[0], undefined, store)).resolves.toBe('failed');
     expect(lines.join('')).toContain(`skipped embedding ${seeded[0].id} (the 'port-only' store has no 'vectors' group`);
   });
 });

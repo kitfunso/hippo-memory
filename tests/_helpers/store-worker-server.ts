@@ -40,7 +40,9 @@ export function newRoot(label = 'sqlite-executor'): string {
 /** A server on `root`: on the default store when `store` is absent, which is the worker-backed one. */
 export async function start(root: string, store?: HippoStore, extra: Partial<ServeOpts> = {}): Promise<ServerHandle> {
   vi.stubEnv('HIPPO_V1_RPS', '0');
-  const server = await serve(store ? { hippoRoot: root, port: 0, store, ...extra } : { hippoRoot: root, port: 0, ...extra });
+  // These runs compare route output, so neither limiter may answer first.
+  const base = { hippoRoot: root, port: 0, rateLimits: { perCaller: 'off' as const }, ...extra };
+  const server = await serve(store ? { ...base, store } : base);
   cleanups.push(async () => {
     await server.stop();
     await store?.close();

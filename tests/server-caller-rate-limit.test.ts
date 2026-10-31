@@ -4,11 +4,14 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { apiKeyVerifyStats, createApiKey, revokeApiKey, type CreateApiKeyOpts } from '../src/store/auth.js';
-import { serve, sqliteStore, StoreBusyError, type AddonRoute, type HippoStore, type ServeOpts } from '../src/server.js';
-import { subscriberKey } from '../src/server/client-ip.js';
+import { serve, type AddonRoute, type ServeOpts } from '../src/server.js';
+import { sqliteStore, StoreBusyError, type HippoStore } from '../src/entry/store-kit.js';
+import { IncomingMessage } from 'node:http';
+import { Socket } from 'node:net';
+import { clientLimitKey } from '../src/server/client-ip.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-const ENV_KEYS = ['HIPPO_V1_RPS', 'HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_REQUIRE_AUTH', 'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_STREAMS'] as const;
+const ENV_KEYS = ['HIPPO_V1_RPS', 'HIPPO_CALLER_RPS', 'HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_REQUIRE_AUTH', 'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_STREAMS'] as const;
 const saved = new Map(ENV_KEYS.map((k) => [k, process.env[k]]));
 
 const WIDE = { ratePerSec: 1000, burst: 1000 };
@@ -329,7 +332,13 @@ describe('the per-address scrypt bucket', () => {
   });
 });
 
-describe('subscriberKey', () => {
+function fromSocket(ip: string | undefined): IncomingMessage {
+  const socket = new Socket();
+  Object.defineProperty(socket, 'remoteAddress', { value: ip });
+  return new IncomingMessage(socket);
+}
+
+describe('clientLimitKey on a direct peer', () => {
   it.each([
     ['2001:db8:1:2::a', '2001:db8:1:2::/64'],
     ['2001:0DB8:0001:0002:aaaa:bbbb:cccc:dddd', '2001:db8:1:2::/64'],
@@ -338,9 +347,12 @@ describe('subscriberKey', () => {
     ['64:ff9b::192.0.2.1', '64:ff9b:0:0::/64'],
     ['::ffff:203.0.113.9', '203.0.113.9'],
     ['203.0.113.9', '203.0.113.9'],
-    ['unknown', 'unknown'],
   ])('%s keys as %s', (ip, key) => {
-    expect(subscriberKey(ip)).toBe(key);
+    expect(clientLimitKey(fromSocket(ip))).toBe(key);
+  });
+
+  it('keys a peer with no address as unknown', () => {
+    expect(clientLimitKey(fromSocket(undefined))).toBe('unknown');
   });
 });
 
@@ -383,6 +395,57 @@ describe('the per-address bucket', () => {
     await start({ perAddress: { ratePerSec: 0.5, burst: 1 } });
     expect((await recall()).status).toBe(200);
     expect(await recall()).toEqual({ status: 429, retryAfter: '2' });
+  });
+});
+
+describe('the per-caller default', () => {
+  it('is on with HIPPO_CALLER_RPS unset: a burst of 40, then 429 with Retry-After', async () => {
+    expect(process.env.HIPPO_CALLER_RPS).toBeUndefined();
+    const key = mint();
+    freezeClock();
+    await start({ perAddress: WIDE });
+    expect(await statuses(() => recall(bearer(key)), 40)).toEqual(Array(40).fill(200));
+    expect(await recall(bearer(key))).toEqual({ status: 429, retryAfter: '1' });
+  });
+
+  it("turns off with perCaller 'off'", async () => {
+    const key = mint();
+    freezeClock();
+    await start({ perCaller: 'off', perAddress: WIDE });
+    expect(await statuses(() => recall(bearer(key)), 45)).not.toContain(429);
+  });
+
+  it('turns off with HIPPO_CALLER_RPS=0', async () => {
+    process.env.HIPPO_CALLER_RPS = '0';
+    const key = mint();
+    freezeClock();
+    await start({ perAddress: WIDE });
+    expect(await statuses(() => recall(bearer(key)), 45)).not.toContain(429);
+  });
+
+  it('takes HIPPO_CALLER_RPS as the rate, with a burst of twice it', async () => {
+    process.env.HIPPO_CALLER_RPS = '1';
+    const key = mint();
+    freezeClock();
+    await start({ perAddress: WIDE });
+    expect(await statuses(() => recall(bearer(key)), 3)).toEqual([200, 200, 429]);
+  });
+
+  it.each(['-1', 'fast', 'NaN'])('refuses HIPPO_V1_RPS=%s at boot instead of turning the limit off', async (value) => {
+    process.env.HIPPO_V1_RPS = value;
+    await expect(serve({ hippoRoot: root, port: 0 })).rejects.toThrow(/HIPPO_V1_RPS/);
+  });
+
+  it('turns the per-address limit off with HIPPO_V1_RPS=0', async () => {
+    process.env.HIPPO_V1_RPS = '0';
+    process.env.HIPPO_CALLER_RPS = '0';
+    await start();
+    expect(await statuses(() => recall(bearer(mint())), 60)).not.toContain(429);
+  });
+
+  it.each(['-1', 'fast'])('refuses HIPPO_CALLER_RPS=%s at boot', async (value) => {
+    process.env.HIPPO_CALLER_RPS = value;
+    await expect(serve({ hippoRoot: root, port: 0 })).rejects.toThrow(/HIPPO_CALLER_RPS/);
   });
 });
 

@@ -18,11 +18,12 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
-import { cmdGitHubBackfill } from '../src/cli/github.js';
+import { cmdGitHubBackfill, GitHubPayloadParseError, parseParkedPayload } from '../src/cli/github.js';
 import type {
   GitHubFetcher,
   GitHubBackfillPage,
 } from '../src/connectors/github/octokit-client.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -179,7 +180,7 @@ describe('hippo github CLI', () => {
   });
 
   it('dlq list with rows prints bucket and tenant', async () => {
-    await parkInDlq(githubDlq, hippoRoot, {
+    await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
       tenantId: 'default',
       rawPayload: '{"x":1}',
       error: 'bad envelope',
@@ -195,7 +196,7 @@ describe('hippo github CLI', () => {
 
   it('dlq list reads the HIPPO_TENANT tenant, not default', async () => {
     for (const tenantId of ['default', 'acme']) {
-      await parkInDlq(githubDlq, hippoRoot, { tenantId, rawPayload: '{}', error: `err-${tenantId}`, bucket: 'unhandled' });
+      await parkInDlq(githubDlq, sqliteStore(hippoRoot), { tenantId, rawPayload: '{}', error: `err-${tenantId}`, bucket: 'unhandled' });
     }
     const r = runCli(root, ['github', 'dlq', 'list'], { HIPPO_TENANT: 'acme' });
     expect(r.status).toBe(0);
@@ -236,7 +237,7 @@ describe('hippo github CLI', () => {
 
   /** Parks one signed delivery with every column the webhook route writes, and returns the row id. */
   function parkDelivery(eventName: string, body: string, secret: string = SECRET): Promise<number> {
-    return parkInDlq(githubDlq, hippoRoot, {
+    return parkInDlq(githubDlq, sqliteStore(hippoRoot), {
       tenantId: 'default',
       rawPayload: body,
       error: 'unroutable: installation_id=99 repo=acme/repo',
@@ -362,5 +363,24 @@ describe('hippo github CLI', () => {
     expect(await ingestedOfThreeIssues('acme/widgets', max)).toBe(expected);
     const stored = loadAllEntries(hippoRoot).filter((e) => e.artifact_ref?.startsWith('github://acme/widgets/issue/'));
     expect(stored).toHaveLength(expected);
+  });
+});
+
+describe('parseParkedPayload', () => {
+  it('throws a typed error naming the command and the first 200 characters', () => {
+    const raw = `{bad${'x'.repeat(300)}`;
+    let caught: unknown;
+    try {
+      parseParkedPayload(raw);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(GitHubPayloadParseError);
+    // SAFETY: the instanceof check above proved caught is a GitHubPayloadParseError, which extends Error.
+    const message = (caught as Error).message;
+    expect(message).toContain('hippo github dlq replay');
+    expect(message).toContain(raw.slice(0, 200));
+    expect(message).not.toContain(raw.slice(0, 201));
+    expect(parseParkedPayload('{"a":1}')).toEqual({ a: 1 });
   });
 });

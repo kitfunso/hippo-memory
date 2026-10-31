@@ -8,7 +8,7 @@ The harness for [the pre-registration](../../docs/evals/2026-10-04-q3b-ranker-fl
 
 ## What it does
 
-All three arms call `retrieve()` (`src/api/recall.ts`) in process, on a real store.
+All three arms call `retrieve()` (`src/api/recall/recall.ts`) in process, on a real store.
 
 | Arm | Request |
 |---|---|

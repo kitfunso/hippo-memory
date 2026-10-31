@@ -1,12 +1,32 @@
-/** Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in knowledge-space without retrieving specific memories. */
+/**
+ * Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in knowledge-space without
+ * retrieving specific memories.
+ */
 
-import { evalNow } from './ablation.js';
+import { evalNow, strengthAblation } from './ablation.js';
 import type { MemoryEntry } from './memory.js';
 import { Layer } from './memory.js';
-import { calculateStrength } from './memory.js';
+import { calculateStrength, HIGH_SCHEMA_FIT } from './memory.js';
 import { DAY_MS } from '../util/time.js';
 
 const STATE_DECIMALS = 3;
+
+// Cut points renderAmbientSummary uses to turn the state vector into words.
+const SUMMARY_THRESHOLD = {
+  freshHigh: 0.5,
+  freshLow: 0.1,
+  skewHigh: 0.3,
+  skewLow: -0.3,
+  consolidatedHigh: 0.4,
+  consolidatedLow: 0.1,
+  extractionHigh: 0.5,
+  conflictShown: 0.1,
+  dagDepthShown: 2,
+  strengthLow: 0.3,
+  strengthHigh: 0.7,
+  entropyHigh: 0.8,
+  entropyLow: 0.3,
+} as const;
 
 export interface AmbientState {
   tagEntropy: number;
@@ -21,6 +41,9 @@ export interface AmbientState {
   dagDepth: number;
   totalMemories: number;
 }
+
+/** A memory is fresh when created within this window. */
+export const AMBIENT_FRESH_WINDOW_MS = 7 * DAY_MS;
 
 /** Row counts and sums an AmbientState is derived from; two stores' tallies add with addAmbientTallies. */
 export interface AmbientTallies {
@@ -66,7 +89,7 @@ export function isErrorTagged(tags: readonly string[]): boolean {
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
   const currentTime = now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only)
-  const sevenDaysAgo = currentTime.getTime() - 7 * DAY_MS;
+  const freshAfter = currentTime.getTime() - AMBIENT_FRESH_WINDOW_MS;
   const t: AmbientTallies = {
     total: entries.length, strengthSum: 0, fresh: 0, negative: 0, highSchemaFit: 0, errors: 0,
     semantic: 0, episodic: 0, conflicts: 0, extracted: 0, maxDagLevel: 0, tagCounts: new Map(),
@@ -74,11 +97,11 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date)
   for (const entry of entries) {
     if (entry.superseded_by) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
-    t.strengthSum += calculateStrength(entry, currentTime);
-    if (new Date(entry.created).getTime() > sevenDaysAgo) t.fresh++;
+    t.strengthSum += calculateStrength(entry, currentTime, { ablation: strengthAblation() });
+    if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
     if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') t.negative++;
     if (isErrorTagged(entry.tags)) t.errors++;
-    if (entry.schema_fit > 0.7) t.highSchemaFit++;
+    if (entry.schema_fit > HIGH_SCHEMA_FIT) t.highSchemaFit++;
     if (entry.layer === Layer.Semantic) t.semantic++;
     if (entry.layer === Layer.Episodic) t.episodic++;
     t.conflicts += entry.conflicts_with.length;
@@ -145,30 +168,33 @@ function shannonEntropy(counts: Map<string, number>, total: number): number {
 export function renderAmbientSummary(state: AmbientState): string {
   if (state.totalMemories === 0) return 'Memory state: empty store, no memories yet.';
 
+  const T = SUMMARY_THRESHOLD;
   const parts: string[] = [];
 
   parts.push(`${state.totalMemories} memories`);
 
-  if (state.recencyFreshness > 0.5) parts.push('mostly fresh (<7d)');
-  else if (state.recencyFreshness < 0.1) parts.push('mostly aged');
+  if (state.recencyFreshness > T.freshHigh) parts.push('mostly fresh (<7d)');
+  else if (state.recencyFreshness < T.freshLow) parts.push('mostly aged');
 
-  if (state.emotionalSkew > 0.3) parts.push('error-focused');
-  else if (state.emotionalSkew < -0.3) parts.push('steady operation');
+  if (state.emotionalSkew > T.skewHigh) parts.push('error-focused');
+  else if (state.emotionalSkew < T.skewLow) parts.push('steady operation');
 
-  if (state.consolidationRatio > 0.4) parts.push('well-consolidated');
-  else if (state.consolidationRatio < 0.1) parts.push('mostly episodic');
+  if (state.consolidationRatio > T.consolidatedHigh) parts.push('well-consolidated');
+  else if (state.consolidationRatio < T.consolidatedLow) parts.push('mostly episodic');
 
-  if (state.extractionCoverage > 0.5) parts.push('high extraction coverage');
+  if (state.extractionCoverage > T.extractionHigh) parts.push('high extraction coverage');
 
-  if (state.conflictIntensity > 0.1) parts.push(`${(state.conflictIntensity * 100).toFixed(0)}% conflict rate`);
+  if (state.conflictIntensity > T.conflictShown) {
+    parts.push(`${(state.conflictIntensity * 100).toFixed(0)}% conflict rate`);
+  }
 
-  if (state.dagDepth >= 2) parts.push(`DAG depth ${state.dagDepth}`);
+  if (state.dagDepth >= T.dagDepthShown) parts.push(`DAG depth ${state.dagDepth}`);
 
-  if (state.avgStrength < 0.3) parts.push('low avg strength (aging corpus)');
-  else if (state.avgStrength > 0.7) parts.push('high avg strength');
+  if (state.avgStrength < T.strengthLow) parts.push('low avg strength (aging corpus)');
+  else if (state.avgStrength > T.strengthHigh) parts.push('high avg strength');
 
-  if (state.tagEntropy > 0.8) parts.push('diverse topics');
-  else if (state.tagEntropy < 0.3) parts.push('narrow focus');
+  if (state.tagEntropy > T.entropyHigh) parts.push('diverse topics');
+  else if (state.tagEntropy < T.entropyLow) parts.push('narrow focus');
 
   return `Memory state: ${parts.join(', ')}.`;
 }

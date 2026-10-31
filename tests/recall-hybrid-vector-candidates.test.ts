@@ -11,11 +11,12 @@ import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { createMemory, type CreateMemoryOptions } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { retrieve, getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -113,7 +114,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     const s = track(seed());
     withEmbeddings(s);
     const res = await retrieve(
-      { hippoRoot: s.home, tenantId: TENANT, actor: { subject: 'cli', role: 'admin' } },
+      apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }),
       { query: QUERY, mode: 'hybrid', limit: 20 },
     );
     expect(labels(s, res.results.map((r) => r.id))).toEqual(EXPECTED.retrieveHybrid);
@@ -125,7 +126,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     const saved = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(s.global, 'absent');
     try {
-      const res = await getContext({ hippoRoot: s.home, tenantId: TENANT, actor: { subject: 'cli', role: 'admin' } }, { q: QUERY, budget: 100000 });
+      const res = await getContext(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), { q: QUERY, budget: 100000 });
       expect(labels(s, res.entries.map((e) => e.entry.id))).toEqual(EXPECTED.contextLocal);
     } finally {
       if (saved === undefined) delete process.env.HIPPO_HOME;

@@ -6,32 +6,18 @@
 // Uses the Task-6 isolation harness pattern: separate cwd tempdir, isolated
 // HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1, initStore on the
 // per-test .hippo dir. This prevents dev-machine memories from leaking in.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
-
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-b3-recall-log-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 
 function runRecall(env: TestEnv, query: string, sessionId: string, extraArgs: string[] = []) {
   return execFileSync(
@@ -51,21 +37,21 @@ function runRecall(env: TestEnv, query: string, sessionId: string, extraArgs: st
   );
 }
 
-const ctx = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
 
 describe('goal_recall_log captured from real CLI recall', () => {
   let env: TestEnv;
 
   beforeEach(() => {
-    env = makeEnv();
+    env = makeEnv('b3-recall-log');
   });
 
   afterEach(() => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('top-K boosted memories land in goal_recall_log with the active goal', () => {
-    const m1 = remember(ctx(env.hippoRoot), {
+  it('top-K boosted memories land in goal_recall_log with the active goal', async () => {
+    const m1 = await remember(ctx(env.hippoRoot), {
       content: 'lesson on auth refactor',
       tags: ['auth-rewrite'],
     });
@@ -90,8 +76,8 @@ describe('goal_recall_log captured from real CLI recall', () => {
     }
   });
 
-  it('no log row is written when no active goal matches', () => {
-    remember(ctx(env.hippoRoot), { content: 'unrelated note' });
+  it('no log row is written when no active goal matches', async () => {
+    await remember(ctx(env.hippoRoot), { content: 'unrelated note' });
     pushGoal(env.hippoRoot, {
       sessionId: 's-log-2',
       tenantId: 'default',

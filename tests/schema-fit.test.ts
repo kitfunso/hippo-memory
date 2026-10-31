@@ -134,6 +134,7 @@ describe('schemaFitInStore', () => {
     expect(schemaFitInStore(root, 'nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
   });
 
+  // A full window of rows is slow to write; a macOS runner went past the 5 s default.
   it('scores against only the newest window of rows, not the whole tenant', () => {
     const root = makeRoot('schema-fit-window');
     roots.push(root);
@@ -156,7 +157,7 @@ describe('schemaFitInStore', () => {
     const fit = schemaFitInStore(root, 'default', 'ancient ledger entry', tags);
     expect(fit).toBe(computeSchemaFit('ancient ledger entry', tags, window));
     expect(fit).not.toBe(computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')));
-  });
+  }, 30_000);
 });
 
 describe('schema_fit affects half-life', () => {
@@ -187,9 +188,9 @@ describe('schema_fit affects half-life', () => {
 
 describe('end-to-end: schema_fit flows through createMemory', () => {
   it('explicit schema_fit affects half-life in created memory', () => {
-    const highFit = createMemory('test', { schema_fit: 0.85 });
-    const lowFit = createMemory('test', { schema_fit: 0.15 });
-    const neutral = createMemory('test', { schema_fit: 0.5 });
+    const highFit = createMemory('test', { schemaFit: 0.85 });
+    const lowFit = createMemory('test', { schemaFit: 0.15 });
+    const neutral = createMemory('test', { schemaFit: 0.5 });
 
     expect(highFit.half_life_days).toBe(DEFAULT_HALF_LIFE_DAYS * 1.5);
     expect(lowFit.half_life_days).toBe(DEFAULT_HALF_LIFE_DAYS * 0.5);

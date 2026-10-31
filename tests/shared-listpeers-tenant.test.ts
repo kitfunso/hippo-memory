@@ -49,7 +49,7 @@ function makeSharedEntry(opts: { id: string; project: string; tenantId: string }
     scope: null,
     owner: null,
     artifact_ref: null,
-    tenantId: opts.tenantId,
+    tenant_id: opts.tenantId,
   };
 }
 

@@ -1,5 +1,6 @@
 // Sleep reads the store twice (before consolidation, after it) and keeps no deep copy: the
 // "as loaded" copy of a row is rebuilt from the row that was read.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,10 +9,16 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadAllEntriesWithBase } from '../src/store/entry-reads.js';
-import { runSleep } from '../src/api/sleep-run.js';
+import { runSleep } from '../src/api/sleep/sleep-run.js';
+import type { Consolidation } from '../src/store/port.js';
 import { computeAmbientState } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
-import type { Context } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
+import { countMatching, recordStatementsAsync } from './_helpers/count-statements.js';
+
+/** loadAllEntries' statement with no tenant: every full row of the store. */
+const HOST_WIDE_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`;
 
 const roots: string[] = [];
 
@@ -22,8 +29,8 @@ function newRoot(): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): Context =>
-  ({ hippoRoot, tenantId: 'default', actor: { subject: 'one-copy-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): FullContext =>
+  (apiCtx(hippoRoot, 'default', { subject: 'one-copy-test', role: 'admin' }));
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -80,9 +87,9 @@ describe('sleep reads the store once after consolidation', () => {
     writeEntry(root, junk);
 
     let loads = 0;
-    const counting = (hippoRoot: string, tenantId?: string) => {
+    const counting = (store: Consolidation) => {
       loads++;
-      return loadAllEntries(hippoRoot, tenantId);
+      return store.allEntries();
     };
     const result = await runSleep(ctxFor(root), { noShare: true }, { loadAllEntries: counting });
 
@@ -91,5 +98,25 @@ describe('sleep reads the store once after consolidation', () => {
     const after = loadAllEntries(root);
     expect(after.some((e) => e.id === junk.id)).toBe(false);
     expect(result.ambient).toEqual(computeAmbientState(after.filter((e) => !e.superseded_by)));
+  });
+
+  it('adds no whole-store read for the share phase', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-one-copy-home-'));
+    roots.push(home);
+    vi.stubEnv('HIPPO_HOME', home);
+    vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
+    _resetAblationCacheForTests();
+    const wholeReads = async (noShare: boolean): Promise<number> => {
+      const root = newRoot();
+      for (const text of ['the deploy runs on friday', 'billing is owned by alice', 'staging restarts on sunday']) {
+        writeEntry(root, createMemory(text, { tags: ['ops'] }));
+      }
+      const { result, statements } = await recordStatementsAsync(() => runSleep(ctxFor(root), { noShare }));
+      expect(result.shared).toBeUndefined();
+      return countMatching(statements, HOST_WIDE_READ);
+    };
+    const withoutShare = await wholeReads(true);
+    expect(withoutShare).toBeGreaterThan(0);
+    expect(await wholeReads(false)).toBe(withoutShare);
   });
 });

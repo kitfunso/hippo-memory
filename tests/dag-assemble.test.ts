@@ -7,17 +7,19 @@
  * non-fresh-tail items first instead of oldest-first.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSessionRawMemories } from '../src/store/entry-reads.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { assemble, type Context } from '../src/api/index.js';
+import { assemble } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:assemble', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:assemble', role: 'admin' });
 }
 
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -27,11 +29,11 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
-    source_session_id: sessionId,
+    tenantId: opts.tenant_id ?? 'default',
+    sourceSessionId: sessionId,
     tags: opts.tags ?? [],
-    dag_level: opts.dag_level ?? 0,
-    dag_parent_id: opts.dag_parent_id ?? undefined,
+    dagLevel: opts.dag_level ?? 0,
+    dagParentId: opts.dag_parent_id ?? undefined,
   });
   if (opts.created) e.created = opts.created;
   if (opts.strength !== undefined) e.strength = opts.strength;
@@ -43,10 +45,10 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
     tags: ['dag-summary'],
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
   });
   return s;
 }
@@ -67,7 +69,7 @@ describe('loadSessionRawMemories', () => {
     b.created = '2026-01-02T00:00:00.000Z';
     const c = makeRaw('third message text', 'sess-b');
     c.created = '2026-01-03T00:00:00.000Z';
-    const d = makeRaw('other tenant content', 'sess-a', { tenantId: 'other' });
+    const d = makeRaw('other tenant content', 'sess-a', { tenant_id: 'other' });
     d.created = '2026-01-04T00:00:00.000Z';
     [a, b, c, d].forEach((e) => writeEntry(root, e));
     const got = loadSessionRawMemories(root, 'sess-a', 'default');
@@ -173,7 +175,7 @@ describe('api.assemble', () => {
   });
 
   it('6. tenant isolation: rows from another tenant are not loaded', async () => {
-    const e = makeRaw('cross tenant content', 'sess-x', { tenantId: 'other' });
+    const e = makeRaw('cross tenant content', 'sess-x', { tenant_id: 'other' });
     writeEntry(root, e);
     const r = await assemble(ctxFor(root, 'default'), 'sess-x');
     expect(r.items).toEqual([]);

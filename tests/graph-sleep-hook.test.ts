@@ -10,6 +10,7 @@
  * Real SQLite (temp dirs), no mocks.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,23 +19,25 @@ import { initStore } from '../src/store/open.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
-import { saveProjectBrief, refreshBrief } from '../src/objects/project-briefs.js';
-import { runGraphRebuildTransaction, insertEntity } from '../src/store/graph-writes.js';
+import { saveProjectBrief, refreshedBrief } from '../src/objects/project-briefs.js';
+import { applyGraphOps } from '../src/store/graph-apply.js';
 import { loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph-queue.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../src/graph/extract.js';
-import { graphDelta } from '../src/graph/delta.js';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { EntityType } from '../src/store/graph-rows.js';
+import { readGraphDelta } from '../src/graph/delta.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
-import { sleep, adminActor, type Context } from '../src/api/index.js';
-import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
+import { sleep, adminActor } from '../src/api/index.js';
+import { runSleep, type SleepPhases } from '../src/api/sleep/sleep-run.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const T = 'default';
 
 interface TestCtx {
   hippoRoot: string;
-  ctx: Context;
+  ctx: FullContext;
   restore: () => void;
 }
 
@@ -47,7 +50,7 @@ function newCtx(): TestCtx {
   const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-hook-global-'));
   const origHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = globalTmp;
-  const ctx: Context = { hippoRoot, tenantId: T, actor: adminActor('test:sleep-hook') };
+  const ctx = apiCtx(hippoRoot, T, adminActor('test:sleep-hook'));
   return {
     hippoRoot,
     ctx,
@@ -74,8 +77,8 @@ describe('sleep enqueue-hook', () => {
 
   // -- Producer --------------------------------------------------------------
 
-  it('1. saveDecision enqueues one pending queue item for its tenant', () => {
-    const d = saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
+  it('1. saveDecision enqueues one pending queue item for its tenant', async () => {
+    const d = await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
     const q = pending(tc.hippoRoot);
     expect(q).toHaveLength(1);
     expect(q[0].memoryId).toBe(d.memoryId);
@@ -88,20 +91,20 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(0);
   });
 
-  it('3. coalesce: 3 decisions enqueue 3 pending items, all the same tenant', () => {
-    saveDecision(tc.hippoRoot, T, { decisionText: 'one' });
-    saveDecision(tc.hippoRoot, T, { decisionText: 'two' });
-    saveDecision(tc.hippoRoot, T, { decisionText: 'three' });
+  it('3. coalesce: 3 decisions enqueue 3 pending items, all the same tenant', async () => {
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'one' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'two' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'three' });
     const q = pending(tc.hippoRoot);
     expect(q).toHaveLength(3);
     expect(new Set(q.map((i) => i.tenantId))).toEqual(new Set([T]));
   });
 
-  it('4. close and project-brief refresh also enqueue (dirty on every graph-source mutation)', () => {
-    const d = saveDecision(tc.hippoRoot, T, { decisionText: 'to be closed' });
-    closeDecision(tc.hippoRoot, T, d.id);
-    saveProjectBrief(tc.hippoRoot, T, { repo: 'myrepo', summary: 'first' });
-    refreshBrief(tc.hippoRoot, T, 'myrepo'); // delegates to saveProjectBrief
+  it('4. close and project-brief refresh also enqueue (dirty on every graph-source mutation)', async () => {
+    const d = await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'to be closed' });
+    await closeDecision(objectsAt(tc.hippoRoot), T, d.id);
+    await saveProjectBrief(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { repo: 'myrepo', summary: 'first' });
+    await refreshedBrief(objectsAt(tc.hippoRoot), { hippoRoot: tc.hippoRoot, tenantId: T, actor: 'cli' }, 'myrepo'); // delegates to saveProjectBrief
     // save(d) + close(d) + saveBrief + refresh(->saveBrief) = 4 enqueues
     expect(pending(tc.hippoRoot).length).toBe(4);
   });
@@ -109,8 +112,8 @@ describe('sleep enqueue-hook', () => {
   // -- Consumer --------------------------------------------------------------
 
   it('5. sleep rebuilds the graph for a dirty tenant and drains its queue', async () => {
-    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
-    savePolicy(tc.hippoRoot, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
+    await savePolicy(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
     expect(pending(tc.hippoRoot).length).toBe(2);
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // not yet extracted
 
@@ -122,7 +125,7 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('6. only dirty tenants rebuild: a second sleep with no new writes reports no graph work', async () => {
-    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
     const r1 = await sleep(tc.ctx, { noShare: true });
     expect(r1.graph?.tenants).toBe(1);
     const r2 = await sleep(tc.ctx, { noShare: true }); // nothing newly dirty
@@ -131,8 +134,8 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('7. multi-tenant: two dirty tenants both rebuild + drain; entities stay tenant-isolated', async () => {
-    saveDecision(tc.hippoRoot, 'tenantA', { decisionText: 'TenantA adopts Postgres as the system of record' });
-    saveDecision(tc.hippoRoot, 'tenantB', { decisionText: 'TenantB adopts Kafka for the event streaming backbone' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, 'tenantA', { decisionText: 'TenantA adopts Postgres as the system of record' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, 'tenantB', { decisionText: 'TenantB adopts Kafka for the event streaming backbone' });
     const r = await sleep(tc.ctx, { noShare: true });
     expect(r.graph?.tenants).toBe(2);
     expect(loadEntities(tc.hippoRoot, 'tenantA', { limit: 100 }).length).toBe(1);
@@ -143,7 +146,7 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('8. dryRun: no rebuild, no drain (items stay pending), no graph field', async () => {
-    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
     const r = await sleep(tc.ctx, { dryRun: true });
     expect(r.graph).toBeUndefined();
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0);
@@ -151,12 +154,12 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('9. snapshot watermark: an item enqueued DURING the rebuild stays pending', async () => {
-    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the primary application datastore' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the primary application datastore' });
     // Inject an extractGraph that enqueues a NEW item (id > watermark) mid-rebuild.
     const phases: Partial<SleepPhases> = {
-      extractGraph: (root, tid) => {
-        if (tid === T) saveDecision(root, tid, { decisionText: 'Adopt Redis as the shared caching tier' });
-        return realExtractGraph(root, tid);
+      extractGraph: async (objects, root, tid) => {
+        if (tid === T) await saveDecision(objects, root, tid, { decisionText: 'Adopt Redis as the shared caching tier' });
+        return realExtractGraph(objects, root, tid);
       },
     };
     await runSleep(tc.ctx, { noShare: true }, phases);
@@ -167,12 +170,12 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('10. fault isolation: one tenant extract throwing leaves it pending, others drain, sleep completes', async () => {
-    saveDecision(tc.hippoRoot, 'tenantFail', { decisionText: 'TenantFail standardizes on the GraphQL API gateway' });
-    saveDecision(tc.hippoRoot, 'tenantOk', { decisionText: 'TenantOk migrates services onto the gRPC mesh' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, 'tenantFail', { decisionText: 'TenantFail standardizes on the GraphQL API gateway' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, 'tenantOk', { decisionText: 'TenantOk migrates services onto the gRPC mesh' });
     const phases: Partial<SleepPhases> = {
-      extractGraph: (root, tid) => {
+      extractGraph: (objects, root, tid) => {
         if (tid === 'tenantFail') throw new Error('boom: extract failed for tenantFail');
-        return realExtractGraph(root, tid);
+        return realExtractGraph(objects, root, tid);
       },
     };
     const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
@@ -184,8 +187,8 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('11. end-to-end: a supersede edge is built by sleep with NO manual extract', async () => {
-    const d1 = saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
-    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
+    const d1 = await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
     // No call to graph extract / extractGraph here - sleep is the only trigger.
     await sleep(tc.ctx, { noShare: true });
     const rels = loadRelations(tc.hippoRoot, T, { limit: 100 });
@@ -199,14 +202,14 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('14. P1: a tenant still rebuilds when an earlier sleep phase deletes its queued mirror (codex)', async () => {
-    const d = saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
+    const d = await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
     expect(pending(tc.hippoRoot)).toHaveLength(1);
     // Simulate dedup/audit removing the queued mirror mid-sleep: the queue row
     // FK-cascade-deletes, so a drain-TIME tenant load would drop T entirely. The
     // dirty-tenant snapshot taken before the deleting phases must still rebuild T.
     const phases: Partial<SleepPhases> = {
-      deduplicateStore: (root) => {
-        deleteEntry(root, d.memoryId!);
+      deduplicateStore: () => {
+        deleteEntry(tc.hippoRoot, d.memoryId!);
         return { removed: 1, pairs: [] };
       },
     };
@@ -216,7 +219,7 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('15. P2 fail-soft: a dirty-tenant snapshot failure does not abort core sleep (codex)', async () => {
-    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
     const phases: Partial<SleepPhases> = {
       loadPendingExtractionTenants: () => { throw new Error('boom: queue read failed'); },
     };
@@ -227,28 +230,32 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(1); // item left pending, recovered next sleep
   });
 
-  it('16. atomic rebuild: runGraphRebuildTransaction rolls back all writes on a throw (codex P2)', () => {
-    const d = saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
+  it('16. atomic rebuild: applyGraphOps rolls back all writes on a throw (codex P2)', async () => {
+    const d = await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
     // A rebuild that inserts then throws must leave NO partial graph rows: the
     // whole transaction rolls back. This is what makes extractGraph atomic, so two
     // concurrent rebuilds serialize on the write lock instead of duplicating rows.
+    const entity = (entityType: EntityType, memoryId: string) =>
+      ({ entityType, name: entityType, memoryId, sourceObject: { type: 'decision', id: d.id } as const });
+    // The second op names another tenant's memory, so its insert throws after the first one wrote.
+    const foreign = await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, 'other', { decisionText: 'Adopt Redis as a cache' });
     expect(() =>
-      runGraphRebuildTransaction(tc.hippoRoot, T, (txDb) => {
-        insertEntity(tc.hippoRoot, T, { entityType: 'policy', name: 'TempEntity', memoryId: d.memoryId! }, txDb);
-        throw new Error('mid-rebuild boom');
-      }),
-    ).toThrow('mid-rebuild boom');
+      applyGraphOps(tc.hippoRoot, T, [
+        { op: 'insertEntity', entity: entity('policy', d.memoryId!) },
+        { op: 'insertEntity', entity: entity('system', foreign.memoryId!) },
+      ], { from: 0, holdMs: Infinity }),
+    ).toThrow();
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // insert rolled back
   });
 
   it('17. a sleep stopped between graph chunks leaves the tenant pending, and the next sleep converges', async () => {
-    savePolicy(tc.hippoRoot, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    await savePolicy(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
     for (const team of ['billing', 'search', 'checkout']) {
-      saveDecision(tc.hippoRoot, T, { decisionText: `${team} adopts RetryPolicy for its outbound calls` });
+      await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: `${team} adopts RetryPolicy for its outbound calls` });
     }
     const queued = pending(tc.hippoRoot).length;
     const stopAtSecondChunk: Partial<SleepPhases> = {
-      extractGraph: (root, tid) => extractGraphChunked(root, tid, {
+      extractGraph: async (objects, root, tid) => await extractGraphChunked(objects, root, tid, {
         ...WRITE_BUDGET,
         holdMs: 0,
         pause: async () => { throw new Error('stopped between chunks'); },
@@ -264,20 +271,15 @@ describe('sleep enqueue-hook', () => {
     await sleep(tc.ctx, { noShare: true });
 
     expect(pending(tc.hippoRoot)).toHaveLength(0);
-    const desired = deriveGraph(loadGraphSources(tc.hippoRoot, T));
-    const db = openHippoDb(tc.hippoRoot);
-    try {
-      expect(graphDelta(db, T, desired)).toEqual([]);
-    } finally {
-      closeHippoDb(db);
-    }
+    const desired = deriveGraph(await loadGraphSources(objectsAt(tc.hippoRoot), T));
+    expect(readGraphDelta(tc.hippoRoot, T, desired)).toEqual([]);
     expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
   });
 
   it('18. stale ops a rebuild skipped show in the details', async () => {
-    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
+    await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
     const phases: Partial<SleepPhases> = {
-      extractGraph: (root, tid) => ({ ...realExtractGraph(root, tid), skipped: 2 }),
+      extractGraph: async (objects, root, tid) => ({ ...(await realExtractGraph(objects, root, tid)), skipped: 2 }),
     };
 
     const r = await runSleep(tc.ctx, { noShare: true }, phases);

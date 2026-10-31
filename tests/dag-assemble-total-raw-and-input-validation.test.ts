@@ -7,19 +7,22 @@
  *   P1-4: HTTP summarize_overflow accepted any non-'0' string as true.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { countSessionRawMemories } from '../src/store/entry-reads.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { assemble, type Context } from '../src/api/index.js';
+import { assemble } from '../src/api/index.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:v163', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:v163', role: 'admin' });
 }
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = createMemory(text, {
@@ -28,8 +31,8 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
-    source_session_id: sessionId,
+    tenantId: opts.tenant_id ?? 'default',
+    sourceSessionId: sessionId,
   });
   if (opts.created) e.created = opts.created;
   return e;
@@ -132,7 +135,7 @@ describe('countSessionRawMemories helper', () => {
     b.created = '2026-01-02T00:00:00.000Z';
     const c = makeRaw('row c', 'sess-B');
     c.created = '2026-01-03T00:00:00.000Z';
-    const d = makeRaw('row d cross tenant', 'sess-A', { tenantId: 'other' });
+    const d = makeRaw('row d cross tenant', 'sess-A', { tenant_id: 'other' });
     d.created = '2026-01-04T00:00:00.000Z';
     [a, b, c, d].forEach((e) => writeEntry(root, e));
     expect(countSessionRawMemories(root, 'sess-A', 'default')).toBe(2);
@@ -160,7 +163,7 @@ describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
   it('hippo_recall tool schema lists fresh_tail_session_id', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
     );
     // SAFETY: tools/list's MCP result envelope always carries result.tools
     // with each tool's JSON-schema inputSchema.properties; McpResponse.result

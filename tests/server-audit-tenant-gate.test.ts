@@ -40,6 +40,14 @@ describe('GET /v1/audit?tenant= admin gate', () => {
   const get = (qs: string, bearer: string) =>
     fetch(`${handle.url}/v1/audit${qs}`, { headers: { authorization: `Bearer ${bearer}` } });
 
+  it('GET /v1/audit answers a member key 403 and an admin key 200', async () => {
+    const refused = await get('', key('member'));
+    expect(refused.status).toBe(403);
+    // SAFETY: HttpError responses are always JSON shaped { error: string }.
+    expect(((await refused.json()) as { error: string }).error).toContain('requires admin role');
+    expect((await get('', key('admin'))).status).toBe(200);
+  });
+
   it('member reading another tenant gets 403', async () => {
     const res = await get('?tenant=other', key('member'));
     expect(res.status).toBe(403);
@@ -52,8 +60,8 @@ describe('GET /v1/audit?tenant= admin gate', () => {
     expect((await get('?tenant=__host__', key('member'))).status).toBe(403);
   });
 
-  it('member reading its own tenant, explicit or implied, gets 200', async () => {
-    const k = key('member');
+  it('a tenant admin reading its own tenant, explicit or implied, gets 200', async () => {
+    const k = key('admin');
     expect((await get('?tenant=acme', k)).status).toBe(200);
     expect((await get('', k)).status).toBe(200);
   });

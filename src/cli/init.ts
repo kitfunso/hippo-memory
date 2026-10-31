@@ -9,8 +9,10 @@ import { writeFileAtomic } from '../util/atomic-write.js';
 import { isCodexPresent } from '../hooks/shared.js';
 import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
-import { isInitialized, initStore } from '../store/open.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { initMemoryStore } from '../api/store-init.js';
+import { isInitialized } from '../core/project-identity.js';
+import { listMemories } from '../api/memories/memories.js';
+import { cliApiContext } from './api-context.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
@@ -18,9 +20,13 @@ import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
+import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
+
+// An unreadable or vanished folder is expected while scanning; any other failure is worth a line.
+const QUIET_SCAN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR']);
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
   const repos: string[] = [];
@@ -37,7 +43,16 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
         }
         if (depth < maxDepth) walk(full, depth + 1);
       }
-    } catch { /* permission denied, etc */ }
+    } catch (err) {
+      const code = errorCode(err);
+      if (!QUIET_SCAN_ERRORS.has(code)) {
+        log.warn(`repo scan skipped ${dir}`, {
+          code: code || 'unknown',
+          reason: errorMessage(err),
+          ...errorFields(err),
+        });
+      }
+    }
   }
   // Check if rootDir itself is a git repo
   if (fs.existsSync(path.join(rootDir, '.git'))) repos.push(rootDir);
@@ -46,29 +61,30 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
 }
 
 /** Creates the repo's store when absent and registers it; returns whether it already existed. */
-function initScannedRepo(repo: string, globalRoot: string): boolean {
+function initScannedRepo(repo: string, tenantId: string, globalRoot: string): boolean {
   const repoHippo = path.join(repo, '.hippo');
   const alreadyExists = isInitialized(repoHippo);
   if (!alreadyExists) {
-    initStore(repoHippo);
+    initMemoryStore(cliApiContext(repoHippo, tenantId));
   }
   registerWorkspace(globalRoot, repo);
   return alreadyExists;
 }
 
 /** Seeds one scanned repo from git history and its agents' notes, unless --no-learn. */
-function learnScannedRepo(
+async function learnScannedRepo(
   repo: string,
+  tenantId: string,
   seedDays: number,
   learn: boolean,
   machine: ReturnType<typeof currentMachine>,
   agentImport: ReturnType<typeof emptyReport>,
-): Pick<ReturnType<typeof learnFromRepo>, 'added' | 'lowInfo'> {
+): Promise<Pick<Awaited<ReturnType<typeof learnFromRepo>>, 'added' | 'lowInfo'>> {
   const repoHippo = path.join(repo, '.hippo');
   let added = 0;
   let lowInfo = 0;
   if (learn && isGitRepo(repo)) {
-    const result = learnFromRepo(repoHippo, repo, seedDays, path.basename(repo));
+    const result = await learnFromRepo(repoHippo, tenantId, repo, seedDays, path.basename(repo));
     added = result.added;
     lowInfo = result.lowInfo;
   }
@@ -80,7 +96,9 @@ function installScanHooks(repos: readonly string[]): void {
   // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff in every repo.
   const agents = detectAgentHooks(repos);
   if (agents.length === 0) {
-    console.log('   No agent config found in these repositories. Run `hippo setup` to add hooks for the agents on this machine.');
+    console.log(
+      '   No agent config found in these repositories. Run `hippo setup` to add hooks for the agents on this machine.',
+    );
   }
   installUserLevelHooks(agents, true);
 }
@@ -100,7 +118,7 @@ function printScanSummary(repoCount: number, totalLessons: number, totalLowInfo:
     '.');
 }
 
-function cmdInitScan(scanDir: string, flags: CliFlags): void {
+async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): Promise<void> {
   const resolved = path.resolve(scanDir);
   console.log(`Scanning ${resolved} for git repositories...\n`);
 
@@ -123,14 +141,17 @@ function cmdInitScan(scanDir: string, flags: CliFlags): void {
   const learn = !flags['no-learn'];
 
   for (const repo of repos) {
-    const alreadyExists = initScannedRepo(repo, globalRoot);
-    const { added, lowInfo } = learnScannedRepo(repo, seedDays, learn, machine, agentImport);
+    const alreadyExists = initScannedRepo(repo, tenantId, globalRoot);
+    const { added, lowInfo } = await learnScannedRepo(repo, tenantId, seedDays, learn, machine, agentImport);
     totalLessons += added;
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = loadAllEntries(path.join(repo, '.hippo'));
-    console.log(`  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} memories${added > 0 ? ` (+${added} from git)` : ''}`);
+    const entries = await listMemories(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
+    console.log(
+      `  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} ` +
+      `memories${added > 0 ? ` (+${added} from git)` : ''}`,
+    );
   }
 
   printScanSummary(repos.length, totalLessons, totalLowInfo);
@@ -157,11 +178,11 @@ function initGlobalOnly(flags: CliFlags): void {
   if (!flags['no-learn']) printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }));
 }
 
-function seedFromGitHistory(hippoRoot: string): void {
+async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<void> {
   if (!isGitRepo(process.cwd())) return;
   const seedDays = 30;
   console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
-  const { added, skipped } = learnFromRepo(hippoRoot, process.cwd(), seedDays);
+  const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), seedDays);
   if (added > 0) {
     console.log(`   Learned ${added} lessons from git (${skipped} duplicates skipped).`);
   } else {
@@ -169,11 +190,11 @@ function seedFromGitHistory(hippoRoot: string): void {
   }
 }
 
-export function handleInit({ hippoRoot, flags }: CommandContext): void {
+export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // Handle --scan mode
   if (flags['scan']) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
-    cmdInitScan(scanDir, flags);
+    await cmdInitScan(scanDir, tenantId, flags);
     return;
   }
 
@@ -186,7 +207,7 @@ export function handleInit({ hippoRoot, flags }: CommandContext): void {
   if (alreadyExists) {
     console.log('Already initialized at', hippoRoot);
   } else {
-    initStore(hippoRoot);
+    initMemoryStore(cliApiContext(hippoRoot, tenantId));
     console.log('Initialized Hippo at', hippoRoot);
     console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
     console.log('   Files: hippo.db stats.json');
@@ -206,13 +227,16 @@ export function handleInit({ hippoRoot, flags }: CommandContext): void {
 
   const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
-  if (!alreadyExists && learn && !flags['global']) seedFromGitHistory(hippoRoot);
+  if (!alreadyExists && learn && !flags['global']) await seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
   if (learn) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));
 }
 
-/** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
+/**
+ * Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one
+ * switch skips them all.
+ */
 function initInstallsIntegrations(flags: CliFlags): boolean {
   if (flags['no-hooks']) return false;
   if (!envSkipAutoIntegrations()) return true;
@@ -256,7 +280,8 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
     if (!hookDef) continue;
 
     const targetPath = path.resolve(dir, hookDef.file);
-    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a new AGENTS.md or CLAUDE.md.
+    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a new AGENTS.md or
+    // CLAUDE.md.
     if (!fs.existsSync(targetPath) || seen.has(targetPath)) continue;
     seen.add(targetPath);
     const existing = fs.readFileSync(targetPath, 'utf8');
@@ -281,7 +306,10 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
     console.log(`   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`);
     return;
   }
-  writeFileAtomic(filePath, `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`);
+  writeFileAtomic(
+    filePath,
+    `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`,
+  );
   console.log(`   Refreshed the ${owner} hippo block in ${name}`);
 }
 
@@ -320,7 +348,8 @@ function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
 }
 
 function installOpencodeUserPlugin(): void {
-  // opencode uses a TS plugin, not Claude Code's JSON-hook schema (see OPENCODE_PLUGIN_SOURCE in src/hooks/opencode.ts).
+  // opencode uses a TS plugin, not Claude Code's JSON-hook schema (see OPENCODE_PLUGIN_SOURCE in
+  // src/hooks/opencode.ts).
   const result = installOpencodePlugin();
   if (result.installed) {
     console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);
@@ -329,11 +358,16 @@ function installOpencodeUserPlugin(): void {
     console.log(`   Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`);
   }
   if (result.jsonRepairFailed) {
-    console.log(`   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`);
+    console.log(
+      `   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`,
+    );
   }
 }
 
-/** Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
+/**
+ * Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so
+ * re-running init adds newer hooks.
+ */
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
     // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in.
@@ -343,7 +377,8 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     // Checked first so init never creates ~/.codex on a machine without Codex.
     if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
-    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping `hippo init` in lockstep with
+    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping `hippo init` in lockstep
+    // with
     // `hippo hook install claude-code` and `hippo setup`.
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();

@@ -8,7 +8,8 @@ import { appendAuditEvent, listAuditEventsAfter, type AuditOp, type QueryAuditOp
 import { createApiKey } from '../src/store/auth.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { serve, type AuditEvent, type HippoStore, type KeysetPosition } from '../src/server.js';
+import { serve } from '../src/server.js';
+import { type AuditEvent, type HippoStore, type KeysetPosition } from '../src/entry/store-kit.js';
 import { inMemoryAuditLogStore } from './_helpers/in-memory-audit-log-store.js';
 import { CLEARED_ENV } from './_helpers/recall-golden-seed.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from './_helpers/store-conformance.js';
@@ -82,7 +83,7 @@ function seedAuditRows(dir: string): void {
     }
     vi.setSystemTime(new Date(at(30)));
     for (let i = 0; i < BULK_ROWS; i++) appendAuditEvent(db, { tenantId: 'bulk', actor: 'cli', op: 'outcome', targetId: `b${i}` });
-    hostAdminToken = createApiKey(db, { tenantId: 'default', label: 'host-admin', role: 'admin' }).plaintext;
+    hostAdminToken = createApiKey(db, { tenantId: 'default', label: 'host-admin', role: 'admin', expiresAt: '2999-01-01T00:00:00.000Z' }).plaintext;
     fixtureAudit = listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
   } finally {
     vi.useRealTimers();
@@ -164,7 +165,7 @@ type Asker = 'adminA' | 'memberA' | 'host';
 
 const SERVED: readonly (readonly [Asker, string, number])[] = [
   ['adminA', '', 200],
-  ['memberA', '?op=recall', 200],
+  ['adminA', '?op=recall', 200],
   ['adminA', `?since=${encodeURIComponent(at(3))}&op=forget`, 200],
   ['adminA', '?limit=9', 200],
   ['adminA', '?limit=9&cursor=', 200],

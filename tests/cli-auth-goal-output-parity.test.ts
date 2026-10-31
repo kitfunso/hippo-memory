@@ -10,6 +10,7 @@ import { sqliteStore } from '../src/store/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 type Flags = Record<string, string | boolean | string[]>;
 
@@ -49,11 +50,11 @@ function rows(sql: string, ...params: string[]): unknown[] {
 
 describe('hippo auth revoke, grant and ungrant (in process)', () => {
   it('prints the same bytes and exit codes and leaves the same rows', async () => {
-    const mint = (tenantId: string): api.AuthCreateResult =>
-      api.authCreate({ hippoRoot: root, tenantId, actor: api.adminActor('cli') }, { label: tenantId, role: 'member' });
-    const home = mint('default');
-    const acme = mint('acme');
-    const spare = mint('acme');
+    const mint = async (tenantId: string): Promise<api.AuthCreateResult> =>
+      await api.authCreate(apiCtx(root, tenantId, api.adminActor('cli')), { label: tenantId, role: 'member' });
+    const home = await mint('default');
+    const acme = await mint('acme');
+    const spare = await mint('acme');
     const mask = masker(/hk_[a-z2-7]{24}/g, 'key');
     mask(home.keyId); mask(acme.keyId); mask(spare.keyId);
 

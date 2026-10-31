@@ -12,7 +12,6 @@ import { stripComments } from './lib/source-text.mjs';
 export const RECALL_ONLY = [
   'rankRecall',
   'writeRecallTrace',
-  'writeRecallTraceAtRoot',
   'writeGoalRecallLog',
   'finishRecall',
   'finishRecallAt',
@@ -43,13 +42,9 @@ export const RECALL_VERB_FILES = ['cli/recall.ts', 'cli/explain.ts'];
 /** The memory writers and the store opener. A CLI verb reaches them through a root-taking function in src/api or the module that owns the rows. */
 export const STORE_WRITERS = ['writeEntry', 'deleteEntry', 'deleteEntryCore', 'batchWriteAndDelete', 'openHippoDb'];
 
-/** The CLI files that may still name some of them, each with its reason. A new entry needs one too. */
-export const STORE_WRITER_EXCEPTIONS = {
-  // Both hand their handle to src/sharing/project-merge.ts. An opener there raises check-store-port's openersOutside,
-  // and the merge cannot move into src/store, which may not import src/agent-memories.
-  'cli/projects.ts': ['openHippoDb'],
-  'cli/sleep.ts': ['openHippoDb'],
-};
+/** The CLI files that may still name some of them, each with its reason. A new entry needs one too.
+ * @type {Record<string, string[]>} */
+export const STORE_WRITER_EXCEPTIONS = {};
 
 /**
  * Returns each line of a source text that names one of `names` as an identifier, imports included.
@@ -109,7 +104,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error(`\n${hits.length} recall ranking or recording reference(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
-    console.error('\nFix: pass the input to retrieve() (src/api/recall.ts) and let it rank and record; the CLI parses flags and prints.\n');
+    console.error('\nFix: pass the input to retrieve() (src/api/recall/recall.ts) and let it rank and record; the CLI parses flags and prints.\n');
   }
   const writes = findCliStoreWrites(srcDir);
   if (writes.length > 0) {

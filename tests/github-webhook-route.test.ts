@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -421,6 +421,43 @@ describe('POST /v1/connectors/github/events', () => {
       (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42',
     );
     expect(rows.length).toBe(1);
+  });
+
+  it('14b. a signed delivery sent again under the same X-GitHub-Delivery is refused with 409; a new id passes', async () => {
+    const issueRows = () => loadAllEntries(root).filter((e) => e.kind === 'raw' && e.artifact_ref?.startsWith('github://acme/repo/issue/'));
+    const first = issueBody({ number: 50 });
+    expect((await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'))).status).toBe(200);
+
+    const replay = await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'));
+    expect({ status: replay.status, body: await replay.json() }).toEqual({ status: 409, body: { error: 'duplicate X-GitHub-Delivery' } });
+    const other = issueBody({ number: 51 });
+    expect((await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay'))).status).toBe(409);
+    expect(issueRows().map((e) => e.artifact_ref)).toEqual(['github://acme/repo/issue/50']);
+
+    const fresh = await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay-next'));
+    expect({ status: fresh.status, status_field: (await jsonAs<{ status: string }>(fresh)).status }).toEqual({ status: 200, status_field: 'ingested' });
+    expect(issueRows().map((e) => e.artifact_ref).sort()).toEqual(['github://acme/repo/issue/50', 'github://acme/repo/issue/51']);
+  });
+
+  it('14d. the same delivery replayed after a restart, which forgets every claimed id, is a stored duplicate with no new rows', async () => {
+    const issueRows = () => loadAllEntries(root).filter((e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/53');
+    const body = issueBody({ number: 53 });
+    expect((await jsonAs<{ status: string }>(await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-restart')))).status).toBe('ingested');
+    await handle.stop();
+    // A fresh module graph is a fresh process's memory: the in-memory claim on d-restart is gone.
+    vi.resetModules();
+    const restarted: typeof import('../src/server.js') = await import('../src/server.js');
+    handle = await restarted.serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+    const replay = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-restart'));
+    expect({ status: replay.status, body: await jsonAs<{ status: string }>(replay) }).toMatchObject({ status: 200, body: { status: 'duplicate' } });
+    expect(issueRows()).toHaveLength(1);
+  });
+
+  it('14c. a bad signature never claims a delivery id, so the signed delivery under that id still lands', async () => {
+    const body = issueBody({ number: 52 });
+    const forged = await postWebhook(handle.port, body, { ...defaultHeaders(body, 'issues', 'd-forged-first'), 'x-hub-signature-256': 'sha256=deadbeef' });
+    expect(forged.status).toBe(401);
+    expect((await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-forged-first'))).status).toBe(200);
   });
 
   it('15. unhandled event type with valid signature → DLQ unhandled + 200', async () => {

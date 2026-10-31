@@ -54,6 +54,9 @@ jobs:
       # Hand-spelled caught-error text in src/ may fall per file but never rise; use errorMessage().
       - name: Error text ratchet
         run: node scripts/check-error-text.mjs
+      # A log call in a catch block may fall per file but never rise without errorFields(err), so the log keeps the error class and stack.
+      - name: Caught-error log ratchet
+        run: node scripts/check-caught-error-logs.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
       - run: node scripts/check-graph-writes.mjs
@@ -62,12 +65,16 @@ jobs:
       # Files over 800 lines and functions over 50 in src/ (80 in scripts/) may shrink but never grow, and no new one may appear.
       - name: Size ratchet
         run: node scripts/check-size-ratchet.mjs
+      - name: API root-keyed store call ratchet
+        run: node scripts/check-api-root-calls.mjs
       - name: process.env read only through src/util/env.ts
         run: node scripts/check-env-reads.mjs
       - name: process.exit only in the files check-process-exit lists
         run: node scripts/check-process-exit.mjs
       - name: Every promise call in src awaited or handled
         run: node scripts/check-floating-promises.mjs
+      - name: Every api write call in src and tests awaited or returned
+        run: node scripts/check-floating-api.mjs
       - name: Store-port ratchet
         run: node scripts/check-store-port.mjs
       - name: Layer order ratchet
@@ -77,6 +84,12 @@ jobs:
       # The CLI parses flags and prints; ranking and every row a recall writes belong to retrieve().
       - name: CLI recall ranks and records only through retrieve()
         run: node scripts/check-cli-recall-writes.mjs
+      # A value-less flag arrives as `true`; hand-rolled String(flags[x]) stores that as text.
+      - name: CLI flags read only through flag-values helpers
+        run: node scripts/check-cli-flags.mjs
+      # A hand-written printError + CliExit(1) pair can drift apart; fail() prints and exits 1 in one call.
+      - name: CLI error exits go through fail()
+        run: node scripts/check-cli-fail.mjs
       - run: node scripts/check-roadmap.mjs
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
@@ -84,7 +97,7 @@ jobs:
       # Tests are type-checked so a wrong-shaped call cannot pass.
       - run: npm run typecheck:tests
       - run: node scripts/check-openclaw-dist.mjs
-      - name: Request-path timing at 10k memories
+      - name: Perf regression gate
         run: node scripts/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
       # Written to the job summary and never gated: a runner stall moves p99 with no code change. The step above gates the same request on statements, rows and store opens.
@@ -131,6 +144,7 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob --coverage.thresholds.lines=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0
         env:
           TMPDIR: /dev/shm
+          HIPPO_REQUIRE_SYMLINKS: '1'
       - name: Upload blob report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -250,6 +264,7 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }}/3
         env:
           TMPDIR: /dev/shm
+          HIPPO_REQUIRE_SYMLINKS: '1'
 
   # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
   suite:
@@ -290,11 +305,7 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
       - run: npm --prefix ui ci
-      # One file at a time, so the wall-clock budget tests do not share the runner's cores with the jsdom suites.
-      # The budgets were set on a dev machine; serial runs here still took 2.3-2.5 s against the 2.0 s layout budget.
-      - run: npm --prefix ui test -- --no-file-parallelism
-        env:
-          UI_PERF_BUDGET_SCALE: '2'
+      - run: npm --prefix ui test
       - run: npm --prefix ui run build
 
   # The Python SDK tests talk to a real `hippo serve`, so the CLI is built first.

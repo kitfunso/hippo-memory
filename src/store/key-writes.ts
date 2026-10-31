@@ -3,7 +3,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '../core/api-error
 import { appendAuditEvent, type AppendAuditOpts } from './audit.js';
 import { grantScope, insertApiKey, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { isRestrictedScope } from './recall-scope.js';
+import { isRestrictedScope } from '../core/recall-scope.js';
 import type { KeyMint, SelfKeyMint } from './port.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 
@@ -28,7 +28,13 @@ export function createSelfKeyAt(db: DatabaseSyncLike, mint: SelfKeyMint): string
     insertApiKey(db, key);
     for (const keyId of replaced) {
       revokeApiKey(db, keyId, key.createdAt);
-      appendAuditEvent(db, { tenantId: key.tenantId, actor, op: 'auth_revoke', targetId: keyId, metadata: { replacedBy: key.keyId } });
+      appendAuditEvent(db, {
+        tenantId: key.tenantId,
+        actor,
+        op: 'auth_revoke',
+        targetId: keyId,
+        metadata: { replacedBy: key.keyId },
+      });
     }
     appendAuditEvent(db, createAuditOf(mint));
     return replaced;
@@ -44,8 +50,12 @@ export interface ScopeGrantChange {
   readonly actor: string;
 }
 
-/** The key is checked under the write lock, and the change and its audit row commit together, so a failed audit write leaves the grants as they were. */
-export function changeScopeGrantAt(db: DatabaseSyncLike, { tenantId, keyId, scope, op, actor }: ScopeGrantChange): void {
+/** The key is checked under the write lock, and the change and its audit row commit together, so a failed audit write
+ * leaves the grants as they were. */
+export function changeScopeGrantAt(
+  db: DatabaseSyncLike,
+  { tenantId, keyId, scope, op, actor }: ScopeGrantChange,
+): void {
   withWriteScope(db, 'change_scope_grant', () => {
     const row = selectApiKeyOwner(db, keyId);
     if (!row || row.tenantId !== tenantId) {

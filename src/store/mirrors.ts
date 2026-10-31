@@ -2,8 +2,8 @@ import { DEFAULT_TENANT_ID } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Layer, type MemoryEntry } from '../core/memory.js';
-import { dumpFrontmatter } from './yaml.js';
-import { openHippoDb, getMeta } from '../db/index.js';
+import { dumpFrontmatter } from '../util/yaml.js';
+import { openHippoDb, getMeta, CONSOLIDATION_RUNS_KEPT } from '../db/index.js';
 import { oncePerStore } from '../db/connect.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import {
@@ -23,9 +23,16 @@ import {
   type MemoryConflictRow,
   rowToMemoryConflict,
 } from './rows.js';
-import { serializeEntry } from './markdown.js';
+import { serializeEntry } from '../core/markdown.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 
 const SCORE_DECIMALS = 3;
+
+// Mirrors are derived and rebuildable from the store, so they skip the fsyncs (the cost on Windows) and keep the
+// temp-and-rename atomicity.
+function writeMirror(file: string, text: string): void {
+  writeFileAtomic(file, text, { durable: false });
+}
 
 export function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
@@ -34,7 +41,8 @@ export function layerDir(root: string, layer: Layer): string {
 // Owner-only wherever a mirror folder is made, at open or by a writer that finds it gone.
 const MIRROR_FOLDER = { recursive: true, mode: 0o700 } as const;
 
-/** Makes the mirror folders on a store's first open in this process; a writer makes its own folder if one goes missing later. */
+/** Makes the mirror folders on a store's first open in this process; a writer makes its own folder if one goes missing
+ * later. */
 export function ensureMirrorDirectories(hippoRoot: string): void {
   oncePerStore(hippoRoot, 'mirror-folders', () => {
     for (const sub of ['buffer', 'episodic', 'semantic', 'conflicts']) {
@@ -87,7 +95,7 @@ export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snaps
   }
 
   fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
-  fs.writeFileSync(filePath, `${fm}\n\n${body.join('\n')}`, 'utf8');
+  writeMirror(filePath, `${fm}\n\n${body.join('\n')}`);
 }
 
 export function removeActiveTaskMirror(hippoRoot: string, tenantId: string): void {
@@ -132,7 +140,7 @@ export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, ev
   lines.push('');
 
   fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
-  fs.writeFileSync(filePath, `${fm}\n\n${lines.join('\n')}`, 'utf8');
+  writeMirror(filePath, `${fm}\n\n${lines.join('\n')}`);
 }
 
 function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): void {
@@ -166,7 +174,7 @@ function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): v
       '',
     ].join('\n');
 
-    fs.writeFileSync(path.join(conflictDir, filename), `${fm}\n\n${body}`, 'utf8');
+    writeMirror(path.join(conflictDir, filename), `${fm}\n\n${body}`);
   }
 
   for (const existing of fs.readdirSync(conflictDir)) {
@@ -181,7 +189,7 @@ export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void
   removeEntryMirrors(hippoRoot, entry.id);
   const dir = layerDir(hippoRoot, entry.layer);
   fs.mkdirSync(dir, MIRROR_FOLDER);
-  fs.writeFileSync(path.join(dir, `${entry.id}.md`), serializeEntry(entry), 'utf8');
+  writeMirror(path.join(dir, `${entry.id}.md`), serializeEntry(entry));
 }
 
 // Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror
@@ -195,7 +203,8 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
-/** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it can name the stuck file. */
+/** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it
+ * can name the stuck file. */
 function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
   // Layer list kept in lockstep with removeEntryMirrors.
   return [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]
@@ -203,8 +212,9 @@ function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
     .filter((file) => fs.existsSync(file));
 }
 
-/** Best-effort mirror purge: retries the unlink once (most failures are transient locks); the reaper only scans `raw_archive`,
- * so a non-raw id's second failure logs the leftover path(s) to delete by hand. Returns true if the mirror ended up purged. */
+/** Best-effort mirror purge: retries the unlink once (most failures are transient locks); the reaper only scans
+ * `raw_archive`, so a non-raw id's second failure logs the leftover path(s) to delete by hand. Returns true if the
+ * mirror ended up purged. */
 export function purgeMirrorBestEffort(
   hippoRoot: string,
   id: string,
@@ -214,7 +224,9 @@ export function purgeMirrorBestEffort(
   try {
     removeEntryMirrors(hippoRoot, id);
     return true;
-  } catch {
+  } catch (firstErr) {
+    log.debug(`${logPrefix}: mirror cleanup for ${id} failed once, retrying: ${errorMessage(firstErr)}`,
+      errorFields(firstErr));
     try {
       removeEntryMirrors(hippoRoot, id);
       return true;
@@ -243,7 +255,12 @@ export function purgeMirrorBestEffort(
  *  (the only index.json writer) and the longmemeval benchmark. */
 export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
   // SAFETY: rows' shape matches the seven columns named in the SELECT below.
-  const rows = db.prepare(`SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ASC`).all() as Array<{
+  const rows = db
+    .prepare(
+      `SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ` +
+      `ASC`,
+    )
+    .all() as Array<{
     id: string;
     created: string;
     last_retrieved: string;
@@ -274,22 +291,32 @@ export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex
 }
 
 /** The last recall's ids and its trace, the two meta keys saveIndex writes together. */
-export function readLastRecall(db: ReturnType<typeof openHippoDb>): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
-  // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent saveIndex and return a mismatched pair.
-  // SAFETY: lockstepRows' shape matches the key/value columns named above.
-  const lockstepRows = db.prepare(
-    `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
-  ).all() as Array<{ key: string; value: string }>;
+export function readLastRecall(
+  db: ReturnType<typeof openHippoDb>,
+): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
+  // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent saveIndex and return a
+  // mismatched pair. SAFETY: lockstepRows' shape matches the key/value columns named above.
+  const lockstepRows = db
+    .prepare(`SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`)
+    .all() as Array<{ key: string; value: string }>;
   const lockstep = new Map(lockstepRows.map((r) => [r.key, r.value]));
   return {
-    last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]', { table: 'meta', id: 'last_retrieval_ids', column: 'value' }),
+    last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]', {
+      table: 'meta',
+      id: 'last_retrieval_ids',
+      column: 'value',
+    }),
     last_trace_id: parseLastTraceId(lockstep.get('last_trace_id') ?? ''),
   };
 }
 
 export function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStats {
-  // SAFETY: runs' shape matches the four columns named in the SELECT above.
-  const runs = db.prepare(`SELECT timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp ASC, id ASC`).all() as ConsolidationRunRow[];
+  // SAFETY: runs' shape matches the four columns named in the SELECT below.
+  const runs = db.prepare(`
+    SELECT timestamp, decayed, merged, removed FROM (
+      SELECT id, timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT ?
+    ) ORDER BY timestamp ASC, id ASC
+  `).all(CONSOLIDATION_RUNS_KEPT) as ConsolidationRunRow[];
 
   return {
     total_remembered: Number(getMeta(db, 'total_remembered', '0')),
@@ -307,11 +334,74 @@ export function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStat
 /** Write the `index.json` mirror file for an already-derived index. Exported for
  *  `rebuildIndex` (the only index.json writer) and the longmemeval benchmark. */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
-  mirrorBestEffort('index.json', () => fs.writeFileSync(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2), 'utf8'));
+  mirrorBestEffort('index.json', () =>
+    overwriteInPlace(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2)),
+  );
 }
 
+const STATS_MIRROR_INTERVAL_MS = 1000;
+
+interface StatsMirrorState {
+  lastWrite: number;
+  pending?: LegacyStats;
+  timer?: NodeJS.Timeout;
+}
+
+const statsMirrors = new Map<string, StatsMirrorState>();
+let statsExitHookInstalled = false;
+
+function putStatsMirror(hippoRoot: string, stats: LegacyStats): void {
+  // A root removed before its deferred write has nothing left to mirror.
+  if (!fs.existsSync(hippoRoot)) return;
+  mirrorBestEffort('stats.json', () =>
+    overwriteInPlace(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2)),
+  );
+}
+
+/** Mirror `stats` to stats.json at once, or hold it and write the latest within a second of the last write; the
+ * database counters are always current. */
 export function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
-  mirrorBestEffort('stats.json', () => overwriteInPlace(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2)));
+  const key = path.resolve(hippoRoot);
+  dropIdleStatsMirrors();
+  const state = statsMirrors.get(key) ?? { lastWrite: 0 };
+  statsMirrors.set(key, state);
+  const wait = state.lastWrite + STATS_MIRROR_INTERVAL_MS - Date.now();
+  if (wait <= 0) {
+    state.lastWrite = Date.now();
+    putStatsMirror(hippoRoot, stats);
+    return;
+  }
+  state.pending = stats;
+  if (state.timer !== undefined) return;
+  if (!statsExitHookInstalled) {
+    process.on('exit', () => flushStatsMirrors());
+    statsExitHookInstalled = true;
+  }
+  state.timer = setTimeout(() => flushStatsMirrors(key), wait);
+  state.timer.unref();
+}
+
+// A root idle for a full interval needs no throttle state, so the map holds only recently written roots.
+function dropIdleStatsMirrors(): void {
+  const now = Date.now();
+  for (const [root, state] of statsMirrors) {
+    if (state.timer === undefined && state.pending === undefined && now - state.lastWrite >= STATS_MIRROR_INTERVAL_MS) {
+      statsMirrors.delete(root);
+    }
+  }
+}
+
+/** Write any held stats.json now, for one root or all; store close and process exit call it. */
+export function flushStatsMirrors(hippoRoot?: string): void {
+  const key = hippoRoot === undefined ? undefined : path.resolve(hippoRoot);
+  for (const [root, state] of statsMirrors) {
+    if (key !== undefined && root !== key) continue;
+    if (state.timer !== undefined) clearTimeout(state.timer);
+    state.timer = undefined;
+    const stats = state.pending;
+    statsMirrors.delete(root);
+    if (stats !== undefined) putStatsMirror(root, stats);
+  }
 }
 
 // A truncate waits for the file's last write to reach the disk, so a file rewritten on every recall keeps its blocks.
@@ -326,7 +416,8 @@ function overwriteInPlace(file: string, text: string): void {
   }
 }
 
-/** Mirrors are derived from SQLite and written after COMMIT, so a failed write warns instead of failing a committed change. */
+/** Mirrors are derived from SQLite and written after COMMIT, so a failed write warns instead of failing a committed
+ * change. */
 export function mirrorBestEffort(what: string, write: () => void): void {
   try {
     write();
@@ -338,24 +429,34 @@ export function mirrorBestEffort(what: string, write: () => void): void {
 export function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
   // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
-  const entries = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+  const entries = db
+    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`)
+    .all() as MemoryRow[];
   syncChangedMirrors(hippoRoot, db, entries.map(rowToEntry));
 }
 
 /** syncMirrorFiles for a pass that changed only `changed`: the other rows' markdown is already current. */
-export function syncChangedMirrors(hippoRoot: string, db: ReturnType<typeof openHippoDb>, changed: readonly MemoryEntry[]): void {
+export function syncChangedMirrors(
+  hippoRoot: string,
+  db: ReturnType<typeof openHippoDb>,
+  changed: readonly MemoryEntry[],
+): void {
   mirrorBestEffort('markdown mirrors', () => {
     for (const entry of changed) writeMarkdownMirror(hippoRoot, entry);
   });
 
   // SAFETY: conflicts' shape matches the eight columns named in the SELECT
   // above.
-  const conflicts = db.prepare(`
+  const conflicts = db
+    .prepare(
+      `
     SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
     FROM memory_conflicts
     WHERE status = 'open'
     ORDER BY updated_at DESC, id DESC
-  `).all() as MemoryConflictRow[];
+  `,
+    )
+    .all() as MemoryConflictRow[];
   mirrorBestEffort('conflict mirrors', () => writeConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict)));
 
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));

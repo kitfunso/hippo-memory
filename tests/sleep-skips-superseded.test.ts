@@ -1,4 +1,5 @@
 // Sleep never builds a new memory from a superseded one, so an old claim cannot come back as a current row.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadChildrenOfSummary, loadAllL2Summaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { supersede, type Context } from '../src/api/index.js';
+import { supersede } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];
@@ -22,8 +24,8 @@ function newRoot(): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): Context =>
-  ({ hippoRoot, tenantId: 'default', actor: { subject: 'sleep-superseded-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): FullContext =>
+  (apiCtx(hippoRoot, 'default', { subject: 'sleep-superseded-test', role: 'admin' }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -40,10 +42,10 @@ describe('sleep skips superseded rows', () => {
       writeEntry(root, createMemory(text));
     }
     const facts = ['alice moved the deploy to friday', 'alice owns the billing service', 'alice reviews every schema change', 'alice owns the oldfact payroll service']
-      .map((text) => createMemory(text, { layer: Layer.Semantic, dag_level: 1, tags: ['extracted', 'speaker:alice'] }));
+      .map((text) => createMemory(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
     for (const f of facts) writeEntry(root, f);
-    supersede(ctxFor(root), blamed.id, 'the march outage postmortem found no single person at fault');
-    supersede(ctxFor(root), facts[3]!.id, 'bob owns the payroll service');
+    await supersede(ctxFor(root), blamed.id, 'the march outage postmortem found no single person at fault');
+    await supersede(ctxFor(root), facts[3]!.id, 'bob owns the payroll service');
     const prompts: string[] = [];
     const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
       prompts.push(String(init?.body));
@@ -63,19 +65,19 @@ describe('sleep skips superseded rows', () => {
     expect(current.map((e) => e.content).join('\n')).not.toMatch(/blamed bob|oldfact/);
   });
 
-  it('as DAG rebuild and L3 profile input', () => {
+  it('as DAG rebuild and L3 profile input', async () => {
     const root = newRoot();
-    const summary = createMemory('alice runs billing and payroll', { layer: Layer.Semantic, confidence: 'inferred', dag_level: 2, tags: ['dag-summary'] });
+    const summary = createMemory('alice runs billing and payroll', { layer: Layer.Semantic, confidence: 'inferred', dagLevel: 2, tags: ['dag-summary'] });
     writeEntry(root, summary);
     const [kept, stale] = ['alice runs billing', 'alice runs payroll']
-      .map((text) => createMemory(text, { layer: Layer.Semantic, dag_level: 1, dag_parent_id: summary.id, tags: ['extracted'] }));
+      .map((text) => createMemory(text, { layer: Layer.Semantic, dagLevel: 1, dagParentId: summary.id, tags: ['extracted'] }));
     writeEntry(root, kept!);
     writeEntry(root, stale!);
-    supersede(ctxFor(root), stale!.id, 'bob runs payroll');
+    await supersede(ctxFor(root), stale!.id, 'bob runs payroll');
 
     expect(loadChildrenOfSummary(root, summary.id, 'default').map((e) => e.id)).toEqual([kept!.id]);
     expect(loadAllL2Summaries(root).map((e) => e.id)).toEqual([summary.id]);
-    supersede(ctxFor(root), summary.id, 'alice runs billing and bob runs payroll');
+    await supersede(ctxFor(root), summary.id, 'alice runs billing and bob runs payroll');
     expect(loadAllL2Summaries(root)).toEqual([]);
   });
 });

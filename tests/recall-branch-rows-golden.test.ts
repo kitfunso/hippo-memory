@@ -3,7 +3,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { serve, __resetSessionRecallHistoryHttp } from '../src/server.js';
+import { serve } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
@@ -50,11 +51,11 @@ function withPredictionId<T>(value: T, root: string): T {
   }
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   // savePrediction stamps its memory from the eval clock, so a fixed clock keeps that row's score the same on every run.
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
   _resetAblationCacheForTests();
-  templates = seedTemplates(seedPortBranches);
+  templates = await seedTemplates(seedPortBranches);
   vi.unstubAllEnvs();
   _resetAblationCacheForTests();
 });

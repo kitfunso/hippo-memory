@@ -37,9 +37,10 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { initStore } from '../../dist/store/open.js';
+import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../dist/store/sessions.js';
 import { saveSessionHandoff } from '../../dist/store/handoffs.js';
-import { remember as apiRemember, recall as apiRecall } from '../../dist/api/index.js';
+import { remember as apiRemember, retrieve as apiRetrieve } from '../../dist/api/index.js';
 
 interface CliArgs {
   storeSize: number;
@@ -176,17 +177,17 @@ function computeStats(samples: number[]): Stats {
   };
 }
 
-function measure(
+async function measure(
   home: string,
   queries: string[],
   iterations: number,
   includeContinuity: boolean,
-): number[] {
+): Promise<number[]> {
   // Warmup: 10% of iterations, discarded.
   const warmup = Math.max(5, Math.floor(iterations * 0.1));
   for (let i = 0; i < warmup; i++) {
-    apiRecall(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
+    await apiRetrieve(
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
       { query: queries[i % queries.length]!, includeContinuity },
     );
   }
@@ -195,8 +196,8 @@ function measure(
   for (let i = 0; i < iterations; i++) {
     const q = queries[i % queries.length]!;
     const t0 = performance.now();
-    apiRecall(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
+    await apiRetrieve(
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
       { query: q, includeContinuity },
     );
     samples.push(performance.now() - t0);
@@ -204,7 +205,7 @@ function measure(
   return samples;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   console.log(`[p99-recall-continuity] storeSize=${args.storeSize} queries=${args.queries}`);
 
@@ -219,7 +220,7 @@ function main(): void {
     const cluster = pick(rng, TAG_CLUSTERS);
     const content = buildContent(rng, cluster);
     apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
       { content, tags: [cluster.tag] },
     );
     if ((i + 1) % 1000 === 0) {
@@ -258,9 +259,9 @@ function main(): void {
   const queries = loadTier1Queries();
   console.log(`[p99-recall-continuity] loaded ${queries.length} tier-1 queries`);
   console.log(`[p99-recall-continuity] running baseline (continuity=false)…`);
-  const baselineSamples = measure(home, queries, args.queries, false);
+  const baselineSamples = await measure(home, queries, args.queries, false);
   console.log(`[p99-recall-continuity] running continuity-on…`);
-  const continuitySamples = measure(home, queries, args.queries, true);
+  const continuitySamples = await measure(home, queries, args.queries, true);
 
   const baseline = computeStats(baselineSamples);
   const continuity = computeStats(continuitySamples);
@@ -311,4 +312,4 @@ function main(): void {
   process.exit(gatePass ? 0 : 1);
 }
 
-main();
+await main();

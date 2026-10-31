@@ -5,7 +5,7 @@ import { cpSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
-import { getContext, type Actor, type ContextOpts, type ContextResult } from '../src/api/index.js';
+import { getContext, narrowContext, type Actor, type ContextOpts, type ContextResult } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
@@ -24,6 +24,7 @@ import { inMemoryContextStore, type InMemoryContextStore } from './_helpers/in-m
 import { portOnlyStore } from './_helpers/port-only-store.js';
 import { CLEARED_ENV, statsMirror } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B } from './_helpers/store-conformance.js';
+import { sqliteReach, sqliteStore } from '../src/store/sqlite/store.js';
 
 type Block = Exclude<keyof ContextResult, 'entries' | 'tokens'>;
 
@@ -292,11 +293,14 @@ async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedde
     if (c.shared) markSharedStore(root);
     prepare?.(root, globalRoot);
     const store = makeStore?.(root);
-    const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store };
+    const served = store ?? sqliteStore(root);
+    // A store of another kind gets no reach: the api reads it as one project with no global store.
+    const reach = served.kind === 'sqlite' ? sqliteReach(root, served) : undefined;
+    const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach };
     const opts: ContextOpts = { currentProject: PROJECT, ...c.opts };
     const result = store && store.kind !== 'sqlite'
-      ? await withSqliteBlocked(store.kind, () => getContext(ctx, opts))
-      : await getContext(ctx, opts);
+      ? await withSqliteBlocked(store.kind, async () => getContext(narrowContext(ctx, 'contextReads'), opts))
+      : await getContext(narrowContext(ctx, 'contextReads'), opts);
     await store?.close();
     return {
       result,
@@ -340,7 +344,7 @@ describe('the recall getContext records on hippo.db', () => {
 
   it('strengthens the row in the global store when the local store holds its id for another tenant', async () => {
     const copyToOtherTenant = (root: string, globalRoot: string): void => {
-      for (const entry of loadEntriesByIds(globalRoot, ['mem_g_note'], TENANT_A)) writeEntry(root, { ...entry, tenantId: TENANT_B });
+      for (const entry of loadEntriesByIds(globalRoot, ['mem_g_note'], TENANT_A)) writeEntry(root, { ...entry, tenant_id: TENANT_B });
     };
     const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: copyToOtherTenant });
     expect(idsOf(pass)).toContain('mem_g_note');
@@ -391,7 +395,7 @@ describe('getContext on a store held in memory, with hippo.db blocked', () => {
     try {
       const store = portOnlyStore(home);
       const ctx = { hippoRoot: home, tenantId: TENANT_A, actor: ADMIN, store };
-      await expect(withSqliteBlocked(store.kind, () => getContext(ctx, { currentProject: PROJECT }))).rejects.toBeInstanceOf(StoreNotPortedError);
+      await expect(withSqliteBlocked(store.kind, async () => getContext(narrowContext(ctx, 'contextReads'), { currentProject: PROJECT }))).rejects.toBeInstanceOf(StoreNotPortedError);
       expect(readdirSync(home)).toEqual([]);
     } finally {
       rmSync(home, { recursive: true, force: true });

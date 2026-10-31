@@ -7,6 +7,7 @@
  * audit_log round-trip: the actor.subject is what shows up in the audit row.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +15,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { adminActor, remember, type Actor, type Context } from '../src/api/index.js';
+import { adminActor, remember, type Actor } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('Context.actor shape', () => {
   it('Actor is {subject, role}', () => {
@@ -33,12 +35,12 @@ describe('Context.actor shape', () => {
     expect(a.role).toBe('member');
   });
 
-  it('round-trip: ctx.actor.subject lands in audit_log as actor string', () => {
+  it('round-trip: ctx.actor.subject lands in audit_log as actor string', async () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-actor-shape-'));
     initStore(home);
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
-      remember(ctx, { content: 'actor-shape-test-target' });
+      const ctx: FullContext = apiCtx(home, 'default', adminActor('cli'));
+      await remember(ctx, { content: 'actor-shape-test-target' });
 
       const db = openHippoDb(home);
       try {

@@ -18,6 +18,7 @@ import {
 import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db/index.js';
 import { listAuditEventsAfter } from '../src/store/audit.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 const EXT = 'ext.good';
 const GOOD: ResolvedBearer = { tenantId: 'ext-tenant', subject: 'user-1', role: 'member', scopes: [] };
@@ -67,10 +68,6 @@ function collect(res: Response): () => string {
   return () => buf;
 }
 
-async function waitFor(check: () => boolean, ms: number): Promise<void> {
-  const deadline = Date.now() + ms;
-  while (!check() && Date.now() < deadline) await new Promise((ok) => setTimeout(ok, 20));
-}
 
 const HEARTBEAT_MS = 50;
 
@@ -448,14 +445,14 @@ describe('exported authRevoke for add-ons', () => {
     expect(row).toMatchObject({ actor: 'system:addon:u1', targetId: member.keyId });
   });
 
-  it('refuses an admin key for a resolver admin ctx', () => {
+  it('refuses an admin key for a resolver admin ctx', async () => {
     const admin = mint('ext-tenant', 'admin');
-    expect(() => authRevoke(ctx('ext-tenant'), admin.keyId)).toThrow(ForbiddenError);
+    await expect(authRevoke(ctx('ext-tenant'), admin.keyId)).rejects.toThrow(ForbiddenError);
   });
 
-  it('treats a key in another tenant as unknown', () => {
+  it('treats a key in another tenant as unknown', async () => {
     const other = mint('other-tenant', 'member');
-    expect(() => authRevoke(ctx('ext-tenant'), other.keyId)).toThrow(/Unknown key_id/);
+    await expect(authRevoke(ctx('ext-tenant'), other.keyId)).rejects.toThrow(/Unknown key_id/);
   });
 });
 
@@ -541,16 +538,37 @@ describe('auth resolver stream', () => {
       const text = collect(res);
       state = 'down';
       // Two outage checks prove `checking` resets after a 503, so later ticks still run.
-      await waitFor(() => downCalls >= 2, 3000);
+      await waitFor(() => downCalls >= 2, { timeoutMs: 3000 });
       expect(downCalls).toBeGreaterThanOrEqual(2);
       expect(text()).not.toContain('event: closed');
       state = 'revoked';
-      await waitFor(() => text().includes('auth_revoked'), 3000);
+      await waitFor(() => text().includes('auth_revoked'), { timeoutMs: 3000 });
       ac.abort();
       expect(text()).toContain('auth_revoked');
     },
     10_000,
   );
+
+  it('logs a warning when a heartbeat tick is skipped because the resolver is down', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    process.env.MCP_SSE_HEARTBEAT_MS = '50';
+    let down = false;
+    await start((t) => {
+      if (t !== EXT) return null;
+      if (down) throw new Error('upstream down');
+      return GOOD;
+    });
+    const ac = new AbortController();
+    const res = await openStream(EXT, ac.signal);
+    expect(res.status).toBe(200);
+    const text = collect(res);
+    down = true;
+    const skipped = (): boolean => stderr.mock.calls.some((c) => String(c[0]).includes('heartbeat tick skipped'));
+    await waitFor(skipped, { timeoutMs: 3000 });
+    ac.abort();
+    expect(skipped()).toBe(true);
+    expect(text()).not.toContain('event: closed');
+  }, 10_000);
 
   it('skips a heartbeat tick while a check is still in flight', async () => {
     const auth = heldResolver(2);
@@ -563,7 +581,7 @@ describe('auth resolver stream', () => {
     const pings = (): number => text().split(': ping\n\n').length - 1;
 
     tick();
-    await waitFor(() => auth.calls() === 2, 3000);
+    await waitFor(() => auth.calls() === 2, { timeoutMs: 3000 });
     expect(auth.calls()).toBe(2);
     tick(5);
     await settle();
@@ -571,10 +589,10 @@ describe('auth resolver stream', () => {
 
     // The answer lands, so the next tick checks again.
     auth.release();
-    await waitFor(() => pings() === 2, 3000);
+    await waitFor(() => pings() === 2, { timeoutMs: 3000 });
     expect(pings()).toBe(2);
     tick();
-    await waitFor(() => auth.calls() === 3, 3000);
+    await waitFor(() => auth.calls() === 3, { timeoutMs: 3000 });
     ac.abort();
     expect(auth.calls()).toBe(3);
   });
@@ -586,7 +604,7 @@ describe('auth resolver stream', () => {
     const closed = nextRequestClosed();
     const ac = new AbortController();
     const opened = openStream(EXT, ac.signal).catch(() => undefined);
-    await waitFor(() => auth.calls() === 1, 3000);
+    await waitFor(() => auth.calls() === 1, { timeoutMs: 3000 });
     expect(auth.calls()).toBe(1);
 
     ac.abort();
@@ -618,7 +636,7 @@ describe('auth resolver stream', () => {
     expect(res.status).toBe(200);
 
     tick();
-    await waitFor(() => auth.calls() === 2, 3000);
+    await waitFor(() => auth.calls() === 2, { timeoutMs: 3000 });
     expect(auth.calls()).toBe(2);
     ac.abort();
     await closed;
@@ -665,6 +683,7 @@ describe('package surface', () => {
   });
 
   it.each(['authCreateSelf', 'AuthCreateSelfOpts', 'AuthCreateSelfResult'])('exports %s on the built server entry', (name) => {
+    // The built d.ts text is what a consumer's compiler reads, so text is the contract here.
     const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
     expect(dts).toMatch(new RegExp(`^export \\{[^}]*\\b${name}\\b`, 'm'));
   });

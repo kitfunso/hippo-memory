@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createPhysicsTable, savePhysicsState } from '../src/db/physics-state.js';
-import { pruneAuditLog } from '../src/cli/audit-prune.js';
+import { pruneAuditLog } from '../src/api/auth/audit.js';
+import { adminActor } from '../src/api/types.js';
 import { writeRecallTrace } from '../src/store/recall-trace.js';
 import { saveIndex } from '../src/store/index-and-stats.js';
 import { closePrediction, savePrediction } from '../src/store/predictions.js';
@@ -12,6 +13,7 @@ import { recordRereads, recordTokenUse } from '../src/store/token-ledger.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let root: string;
 
@@ -57,11 +59,11 @@ describe('a write scope that fails in the middle rolls back', () => {
     }
   });
 
-  it('pruneAuditLog keeps the old rows when the prune record is refused', () => {
+  it('pruneAuditLog keeps the old rows when the prune record is refused', async () => {
     const old = new Date(Date.now() - 100 * 86_400_000).toISOString();
     run(`INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('${old}', 'default', 't', 'recall', NULL, '{}')`);
     refuse('audit_log', "NEW.op = 'audit_prune'");
-    expect(() => pruneAuditLog(root, { olderThanDays: 30, tenantId: 'default' })).toThrow('refused');
+    await expect(pruneAuditLog(apiCtx(root, 'default', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow('refused');
     expect(count(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'recall'`)).toBe(1);
   });
 

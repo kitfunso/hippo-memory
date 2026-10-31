@@ -15,12 +15,15 @@ import { loadRecallSearchEntries, loadVectorCandidateEntries, recallScopeFilter 
 import { loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords } from '../src/store/candidates.js';
 import { loadAmbientTallies } from '../src/store/ambient.js';
 import { countSessionRawMemories, loadAllEntries, loadContentsWithTag } from '../src/store/entry-reads.js';
-import { canReadScope, personalScopeOf, touchableScopeSql, type ScopeActor } from '../src/store/recall-scope.js';
+import { canReadScope, personalScopeOf, type ScopeActor } from '../src/core/recall-scope.js';
+import { touchableScopeSql } from '../src/store/rule-sql.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
-import { assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
+import { briefFromReceipts } from '../src/objects/project-briefs.js';
 import { saveItems, type ItemContext } from '../src/store/compactions-record.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';
@@ -41,7 +44,7 @@ function seed(): void {
   const rows = Object.entries(SCOPES).map(([k, scope]) => mem(`zebrafish note ${k} keeps the build cache warm`, { scope, tags: [`who:${k}`, 'path:hippo'] }));
   batchWriteAndDelete(root, rows, []);
   saveEmbeddingIndex(root, Object.fromEntries(rows.map((e) => [e.id, QUERY])));
-  for (const k of ['a', 'b', 'team'] as const) writeEntry(root, mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', source_session_id: 'sess-1' }));
+  for (const k of ['a', 'b', 'team'] as const) writeEntry(root, mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', sourceSessionId: 'sess-1' }));
 }
 
 const keysOf = (entries: readonly MemoryEntry[]): string[] =>
@@ -126,9 +129,9 @@ describe('deny-only read sites', () => {
     expect(loadLatestHandoff(root, T, undefined, { scopeFilter: 'default-deny' })?.summary).toBe('team handoff');
   });
 
-  it('brief receipts: only the team row counts, though A can read its own', () => {
+  it('brief receipts: only the team row counts, though A can read its own', async () => {
     expect(keysOf(loadContextCandidates(root, T, { ownScope: OWN_A, cap: 100, now }))).toContain('a');
-    const brief = assembleBriefFromReceipts(root, T, 'hippo');
+    const brief = await briefFromReceipts(objectsAt(root), T, 'hippo');
     expect(brief.receiptCount).toBe(1);
     expect(brief.markdown).toContain('zebrafish note team');
     expect(brief.markdown).not.toContain('zebrafish note a ');
@@ -184,7 +187,7 @@ describe('admin read sites', () => {
 
   it.each<[string, LearnProfile]>([['MCP', MCP_LEARN], ['CLI', CLI_LEARN]])(
     '%s learn: another person\'s personal row never answers duplicate; a legacy row and the caller\'s own do',
-    (_, profile) => {
+    async (_, profile) => {
       fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
       const repo = path.join(dir, 'repo');
       fs.mkdirSync(repo);
@@ -195,19 +198,19 @@ describe('admin read sites', () => {
       fs.writeFileSync(path.join(repo, 'db.ts'), 'export const timeout = 30;\n');
       git('add', '.');
       git('commit', '-m', 'fix: pool timeout bumped to 30s in src/db/index.ts');
-      const ctx = { hippoRoot: root, tenantId: T, actor: { ...adminActor('learn-test'), owner: 'alice' } };
+      const ctx = apiCtx(root, T, { ...adminActor('learn-test'), owner: 'alice' });
       const run = () => learn(ctx, { repoPath: repo, days: 7, profile });
       const move = (from: string | null, to: string): void => {
         const row = loadAllEntries(root, T).find((e) => e.source === profile.source && (e.scope ?? null) === from)!;
         writeEntry(root, { ...row, scope: to });
       };
-      expect(run()).toMatchObject({ added: 1, skipped: 0 });
+      expect(await run()).toMatchObject({ added: 1, skipped: 0 });
       move(null, OWN_B);
-      expect(run()).toMatchObject({ added: 1, skipped: 0 });
+      expect(await run()).toMatchObject({ added: 1, skipped: 0 });
       move(null, SCOPES.legacy);
-      expect(run()).toMatchObject({ added: 0, skipped: 1 });
+      expect(await run()).toMatchObject({ added: 0, skipped: 1 });
       move(SCOPES.legacy, OWN_A);
-      expect(run()).toMatchObject({ added: 0, skipped: 1 });
+      expect(await run()).toMatchObject({ added: 0, skipped: 1 });
     },
   );
 });

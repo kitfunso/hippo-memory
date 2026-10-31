@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { restoreDormant, supersede } from '../src/api/index.js';
+import { restoreDormant } from '../src/api/index.js';
+import { supersedeNow } from './_helpers/supersede-now.js';
 import type { DatabaseSyncLike } from '../src/db/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
@@ -11,9 +12,8 @@ import type { ImportReport } from '../src/agent-memories/report.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { deriveOriginProject } from '../src/core/project-identity.js';
+import { deriveOriginProject, isInitialized } from '../src/core/project-identity.js';
 import { removeEntryMirrors } from '../src/store/mirrors.js';
-import { isInitialized } from '../src/store/open.js';
 import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import {
@@ -87,7 +87,7 @@ describe('agent memory sync', () => {
     expect(readEntry(w.local, old.id)?.superseded_by).toBe(now.id);
   });
 
-  it('a deleted note is set aside through the real SQL, as source-deleted, and can be restored', () => {
+  it('a deleted note is set aside through the real SQL, as source-deleted, and can be restored', async () => {
     const file = note(projectNotes(w), 'deploy.md', DEPLOY);
     sync();
     const [row] = liveRows(w.local);
@@ -102,7 +102,7 @@ describe('agent memory sync', () => {
     expect(dormant[0].tags).not.toContain('claude-code-memory');
     expect(auditCount(w.local, 'agent_memory_set_aside')).toBe(1);
 
-    expect(restoreDormant(ctxFor(w.local), row.id).id).toBe(row.id);
+    expect((await restoreDormant(ctxFor(w.local), row.id)).id).toBe(row.id);
     expect(liveRows(w.local).map((e) => e.id)).toEqual([row.id]);
   });
 
@@ -170,7 +170,7 @@ describe('agent memory sync', () => {
       // The import's first lock request: the other writer commits on its own connection, then the import goes on.
       if (sql === 'BEGIN IMMEDIATE' && !raced) {
         raced = true;
-        winners.push(supersede(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.').newId);
+        winners.push(supersedeNow(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.'));
       }
       exec.call(this, sql);
     });

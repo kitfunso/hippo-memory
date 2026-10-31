@@ -2,7 +2,7 @@
 // the quarantine records out of hippo.db once, then keeps both in memory and lands them exactly when the staged entry does.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { EntryWrites, HippoStore } from '../../src/server.js';
+import type { EntryWrites, HippoStore } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/index.js';
 import type { ConnectorEvent, ConnectorWrites } from '../../src/store/port.js';
 import { inMemoryEntryWritesStore, type InMemoryEntryWritesStore } from './in-memory-entry-writes-store.js';
@@ -112,8 +112,8 @@ export function inMemoryConnectorWritesStore(hippoRoot: string): InMemoryConnect
           // Nothing below throws, so the record and the log row land exactly when the staged entry does.
           if (quarantine) {
             const { originalScope, reason } = quarantine;
-            tx.audit.splice(rememberAt, 0, { tenantId: entry.tenantId, actor, op: 'quarantine', targetId: entry.id, metadata: { reason, originalScope } });
-            records.push({ tenantId: entry.tenantId, memoryId: entry.id, originalScope, reason, status: 'pending', quarantinedAt: new Date().toISOString() });
+            tx.audit.splice(rememberAt, 0, { tenantId: entry.tenant_id, actor, op: 'quarantine', targetId: entry.id, metadata: { reason, originalScope } });
+            records.push({ tenantId: entry.tenant_id, memoryId: entry.id, originalScope, reason, status: 'pending', quarantinedAt: new Date().toISOString() });
           }
           if (event) events.set(slot(event), logRow(event, entry.id));
         });

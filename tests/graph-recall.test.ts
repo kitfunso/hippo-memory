@@ -13,7 +13,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { loadNeighborRelations, loadEntitiesByMemoryId, loadEntitiesByIds } from '../src/store/graph-reads.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -34,7 +34,7 @@ function sr(entry: MemoryEntry, score: number): SearchResult {
 }
 /** Decision entity from a memory (entity_type 'decision' is in the enum). */
 function ent(home: string, tenant: string, m: MemoryEntry, name: string): number {
-  return insertEntity(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
+  return insertEntityAt(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
 }
 
 describe('graph-recall engine', () => {
@@ -48,7 +48,7 @@ describe('graph-recall engine', () => {
     const b = mem(home, T, 'wholly unrelated wording xyzzy plugh frobnicate');
     const ea = ent(home, T, a, 'A');
     const eb = ent(home, T, b, 'B');
-    insertRelation(home, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
+    insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
 
     // base = only A (B is lexically orthogonal, would NOT be in any candidate set).
     const base = [sr(a, 1.0)];
@@ -64,8 +64,8 @@ describe('graph-recall engine', () => {
   it('--hops 2 reaches the 2-hop node; --hops 1 does not', () => {
     const a = mem(home, T, 'aaa'); const b = mem(home, T, 'bbb'); const c = mem(home, T, 'ccc');
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B'); const ec = ent(home, T, c, 'C');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
-    insertRelation(home, T, { fromEntityId: eb, toEntityId: ec, relType: 'supersedes', memoryId: b.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ec, relType: 'supersedes', memoryId: b.id });
     const base = [sr(a, 1.0)];
 
     // b and c are reached as the `to` endpoint of supersedes edges (superseded), so
@@ -83,7 +83,7 @@ describe('graph-recall engine', () => {
     const seed = mem(home, T, 'seed'); const other = mem(home, T, 'other');
     const es = ent(home, T, seed, 'S'); const eo = ent(home, T, other, 'O');
     // Edge points O -> S; seed is the `to` endpoint. Traversal must still reach O.
-    insertRelation(home, T, { fromEntityId: eo, toEntityId: es, relType: 'supersedes', memoryId: other.id });
+    insertRelationAt(home, T, { fromEntityId: eo, toEntityId: es, relType: 'supersedes', memoryId: other.id });
     const out = graphExpandRecall([sr(seed, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
     const hit = out.find((r) => r.entry.id === other.id)!;
     expect(hit).toBeDefined();
@@ -93,8 +93,8 @@ describe('graph-recall engine', () => {
   it('visited set makes a cycle terminate without double-counting', () => {
     const a = mem(home, T, 'a'); const b = mem(home, T, 'b');
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
-    insertRelation(home, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
     const out = graphExpandRecall([sr(a, 1.0)], { hops: 3, hippoRoot: home, tenantId: T, budget: 4000, includeSuperseded: true });
     expect(out.filter((r) => r.entry.id === b.id)).toHaveLength(1);
     expect(out).toHaveLength(2); // a (base) + b (reached once)
@@ -106,7 +106,7 @@ describe('graph-recall engine', () => {
     const neighbours = ['nn1', 'nn2', 'nn3', 'nn4', 'nn5'].map((n) => {
       const m = mem(home, T, n);
       const e = ent(home, T, m, n);
-      insertRelation(home, T, { fromEntityId: es, toEntityId: e, relType: 'supersedes', memoryId: seed.id });
+      insertRelationAt(home, T, { fromEntityId: es, toEntityId: e, relType: 'supersedes', memoryId: seed.id });
       return m;
     });
     const out = graphExpandRecall([sr(seed, 1.0)], {
@@ -124,7 +124,7 @@ describe('graph-recall engine', () => {
     old.superseded_by = a.id;
     writeEntry(home, old, { actor: 'test' });
     const ea = ent(home, T, a, 'A'); const eo = ent(home, T, old, 'OLD');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: eo, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eo, relType: 'supersedes', memoryId: a.id });
     const base = [sr(a, 1.0)];
 
     const dflt = graphExpandRecall(base, { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
@@ -135,11 +135,11 @@ describe('graph-recall engine', () => {
   });
 
   it('graph-edge superseded semantics: the newer (from) endpoint shows by default; the older (to) endpoint needs --include-superseded (codex P2)', () => {
-    // old <- new : insertRelation(from=new, to=old) means "new supersedes old".
+    // old <- new : insertRelationAt(from=new, to=old) means "new supersedes old".
     const oldD = mem(home, T, 'the older decision we moved on from');
     const newD = mem(home, T, 'the current decision in force');
     const eo = ent(home, T, oldD, 'OLD'); const en = ent(home, T, newD, 'NEW');
-    insertRelation(home, T, { fromEntityId: en, toEntityId: eo, relType: 'supersedes', memoryId: newD.id });
+    insertRelationAt(home, T, { fromEntityId: en, toEntityId: eo, relType: 'supersedes', memoryId: newD.id });
 
     // Seed = the OLD decision (lexical hit). --hops reaches NEW as the `from` endpoint
     // (the current version) -> shown by DEFAULT (no --include-superseded).
@@ -159,7 +159,7 @@ describe('graph-recall engine', () => {
     const a = mem(home, T, 'seed decision');
     const future = mem(home, T, 'a future-dated linked decision');
     const ea = ent(home, T, a, 'A'); const ef = ent(home, T, future, 'F');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: ef, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ef, relType: 'supersedes', memoryId: a.id });
     // future.valid_from is "now"; ask as-of a date in the past -> it must be dropped.
     const out = graphExpandRecall([sr(a, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000, asOf: '2000-01-01' });
     expect(out.map((r) => r.entry.id)).not.toContain(future.id);
@@ -176,7 +176,7 @@ describe('graph-recall engine', () => {
     seed.valid_from = '2021-01-01T00:00:00.000Z';
     writeEntry(home, seed, { actor: 'test' });
     const es = ent(home, T, seed, 'S'); const ep = ent(home, T, pred, 'P');
-    insertRelation(home, T, { fromEntityId: es, toEntityId: ep, relType: 'supersedes', memoryId: seed.id });
+    insertRelationAt(home, T, { fromEntityId: es, toEntityId: ep, relType: 'supersedes', memoryId: seed.id });
 
     // as-of AFTER the successor became valid -> the predecessor is no longer the valid
     // version, must be DROPPED (not merely valid_from <= asOf).
@@ -196,7 +196,7 @@ describe('graph-recall engine', () => {
       const seed = mem(glob, T, 'globally-stored seed decision');
       const linked = mem(glob, T, 'a globally-stored linked predecessor');
       const es = ent(glob, T, seed, 'S'); const el = ent(glob, T, linked, 'L');
-      insertRelation(glob, T, { fromEntityId: es, toEntityId: el, relType: 'supersedes', memoryId: seed.id });
+      insertRelationAt(glob, T, { fromEntityId: es, toEntityId: el, relType: 'supersedes', memoryId: seed.id });
       const out = graphExpandRecall([sr(seed, 1.0)], { hops: 1, hippoRoot: home, globalRoot: glob, tenantId: T, budget: 4000, includeSuperseded: true });
       expect(out.map((r) => r.entry.id)).toContain(linked.id);
       expect(out.find((r) => r.entry.id === linked.id)!.graphVia).toBeDefined();
@@ -222,7 +222,7 @@ describe('graph-recall engine', () => {
     const a = mem(home, T, 'short');
     const big = mem(home, T, 'x'.repeat(8000)); // ~2000 tokens
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, big, 'B');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     // Budget already nearly consumed by the base entry; the big neighbour overflows it.
     // includeSuperseded so the exclusion under test is the BUDGET, not the superseded-endpoint drop.
     const out = graphExpandRecall([sr(a, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 10, includeSuperseded: true });
@@ -232,7 +232,7 @@ describe('graph-recall engine', () => {
   it('does not duplicate a neighbour already present in the base results (it stays a seed, untouched)', () => {
     const a = mem(home, T, 'a'); const b = mem(home, T, 'b');
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     const base = [sr(a, 1.0), sr(b, 0.9)]; // b already returned lexically -> it is a seed too
     const out = graphExpandRecall(base, { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
     expect(out.filter((r) => r.entry.id === b.id)).toHaveLength(1);
@@ -246,7 +246,7 @@ describe('graph-recall engine', () => {
     const eo = ent(home, 'other', aOther, 'O');
     // A cross-tenant relation cannot be inserted (insertRelation rejects it), so the
     // graphs are disjoint by construction. Expanding tenant T must not surface 'other'.
-    expect(() => insertRelation(home, T, { fromEntityId: ea, toEntityId: eo, relType: 'supersedes', memoryId: a.id }))
+    expect(() => insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eo, relType: 'supersedes', memoryId: a.id }))
       .toThrow(/another tenant/i);
     const out = graphExpandRecall([sr(a, 1.0)], { hops: 2, hippoRoot: home, tenantId: T, budget: 4000 });
     expect(out.map((r) => r.entry.id)).not.toContain(aOther.id);
@@ -278,8 +278,8 @@ describe('graph.ts read helpers', () => {
   it('loadNeighborRelations returns edges in BOTH directions for the frontier', () => {
     const a = mem(home, T, 'a'); const b = mem(home, T, 'b'); const c = mem(home, T, 'c');
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B'); const ec = ent(home, T, c, 'C');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id }); // A->B
-    insertRelation(home, T, { fromEntityId: ec, toEntityId: ea, relType: 'supersedes', memoryId: c.id }); // C->A
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id }); // A->B
+    insertRelationAt(home, T, { fromEntityId: ec, toEntityId: ea, relType: 'supersedes', memoryId: c.id }); // C->A
     const rels = loadNeighborRelations(home, T, [ea]); // touches A as from (A->B) and as to (C->A)
     expect(rels).toHaveLength(2);
   });

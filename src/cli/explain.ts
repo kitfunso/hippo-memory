@@ -1,37 +1,45 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
 import { confidenceFacets } from '../core/memory.js';
-import { isInitialized } from '../store/open.js';
-import { loadSearchEntries } from '../store/search-rows.js';
-import { loadIndex } from '../store/index-and-stats.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../core/config.js';
 import { dropHeldCopies } from '../util/same-text.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { cliRecallOrigin, scopeHiddenCount } from '../api/recall/rows.js';
 import { cliApiContext } from './api-context.js';
-import type { RankRecallResult } from '../api/recall-pipeline.js';
+import type { RankRecallResult } from '../api/recall/pipeline.js';
 import { printedTokens } from '../api/context-render.js';
 import { printError } from './output.js';
-import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag } from './flag-values.js';
+import {
+  parseLimitFlag,
+  parseBudgetFlag,
+  type CliFlags,
+  type CommandContext,
+  parseAsOfFlag,
+  engineFlags,
+  boolFlag,
+  stringFlagOrExit,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
-function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, query: string, tenantId: string, requested: string | undefined): void {
-  const probe = [
-    ...loadSearchEntries(hippoRoot, query, undefined, tenantId),
-    ...(globalRoot ? loadSearchEntries(globalRoot, query, undefined, tenantId) : []),
-  ];
-  // Window-capped, so the count is a floor on large stores; fine for a "why is my row missing" hint.
-  const hidden = probe.filter((e) => !api.passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
+function noteScopeHidden(
+  ctx: api.Context,
+  globalRoot: string | undefined,
+  query: string,
+  requested: string | undefined,
+): void {
+  const hidden = scopeHiddenCount(ctx, query, globalRoot, requested);
   if (hidden > 0) {
-    printError(`[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
+    printError(
+      `[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`,
+    );
   }
 }
 
@@ -40,6 +48,7 @@ interface InspectedSlot { rank?: RankRecallResult }
 
 async function cmdExplain(
   hippoRoot: string,
+  tenantId: string,
   query: string,
   flags: CliFlags
 ): Promise<void> {
@@ -51,33 +60,34 @@ async function cmdExplain(
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
-  const tenantId = resolveTenantId({});
+  const ctx = cliApiContext(hippoRoot, tenantId);
   // Explain shows what recall would see, so it applies the same scope rule.
-  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
+  const activeScope = explicitScope || detectScope();
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
-  const explainGlobalOn = isInitialized(globalRoot);
-  noteScopeHidden(hippoRoot, explainGlobalOn ? globalRoot : undefined, query, tenantId, explicitScope || undefined);
+  const origin = cliRecallOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
+  const explainGlobalOn = origin.globalOn;
+  noteScopeHidden(ctx, explainGlobalOn ? globalRoot : undefined, query, explicitScope || undefined);
 
   const config = loadConfig(hippoRoot);
   const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
-  const explainIndex = loadIndex(hippoRoot);
   const cost = (r: SearchResult): number =>
-    printedTokens(recallEntryText(r, query, false, explainGlobalOn && !explainIndex.entries[r.entry.id]));
+    printedTokens(recallEntryText(r, query, false, origin.isGlobal(r.entry.id)));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const slot: InspectedSlot = {};
   await api.retrieve(
-    cliApiContext(hippoRoot, tenantId),
+    ctx,
     {
       query,
       cliCore: {
         rank: {
           budget: entryBudget, cost, limit, includeSuperseded, asOf,
-          explicitScope, activeScope: explicitScope || detectScope(),
+          explicitScope, activeScope,
           search: { ...engine, multihop: false, explain: true },
         },
-        sources: { globalRoot: explainGlobalOn ? globalRoot : undefined },
+        sources: explainGlobalOn ? { globalRoot, globalStore: cliApiContext(globalRoot, tenantId).store } : undefined,
         inspect: (ranking) => { slot.rank = ranking; },
       },
     },
@@ -146,7 +156,8 @@ function printExplainTable(results: SearchResult[], query: string, modeUsed: str
     const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, EXPLAIN_PREVIEW_CHARS);
     const ageStr = b ? `${b.ageDays}d` : '?';
     console.log(
-      `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,
+      `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ` +
+        `${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,
     );
   }
   console.log();
@@ -166,18 +177,31 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     console.log(`    final:     ${fmt(b.final, 4)}  (post-amp, from physics scorer)`);
   } else {
     const matched = b.matchedTerms.length > 0 ? b.matchedTerms.join(', ') : '(none)';
-    console.log(`    mode:      ${b.mode}${b.mode === 'hybrid-no-vec' ? '  (no cached doc vector — run `hippo embed`)' : ''}`);
-    console.log(`    BM25:      raw=${fmt(r.bm25, 3)}  normalized=${fmt(b.normBm25, 3)}  weight=${fmt(b.bm25Weight, 2)}  matched=[${matched}]`);
+    console.log(
+      `    mode:      ${b.mode}${b.mode === 'hybrid-no-vec' ? '  (no cached doc vector — run `hippo embed`)' : ''}`,
+    );
+    console.log(
+      `    BM25:      raw=${fmt(r.bm25, 3)}  normalized=${fmt(b.normBm25, 3)}  weight=${fmt(b.bm25Weight, 2)}  matched=[${matched}]`,
+    );
     console.log(`    embedding: cosine=${fmt(b.cosine, 3)}  weight=${fmt(b.embeddingWeight, 2)}`);
-    console.log(`    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`);
+    console.log(
+      `    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`,
+    );
     console.log(`    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`);
     console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
     if (b.decisionBoost !== 1) console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
-    if (b.scopeBoost !== 1) console.log(`    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`);
+    if (b.scopeBoost !== 1) {
+      console.log(`    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`);
+    }
     if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
     if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
-    if (b.outcomeBoost !== 1) console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  (user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);
-    if (b.churnStaleMultiplier !== 1) console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);
+    if (b.outcomeBoost !== 1) {
+      console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  ` +
+        `(user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);
+    }
+    if (b.churnStaleMultiplier !== 1) {
+      console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);
+    }
     if (b.preMmrRank !== undefined && b.postMmrRank !== undefined && b.preMmrRank !== b.postMmrRank) {
       const arrow = b.postMmrRank < b.preMmrRank ? 'up' : 'down';
       console.log(`    mmr:       rank ${b.preMmrRank} -> ${b.postMmrRank}  (diversity ${arrow})`);
@@ -187,11 +211,10 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
   console.log();
 }
 
-export async function handleExplain({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleExplain({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const query = args.join(' ').trim();
   if (!query) {
-    printError('Please provide a search query.');
-    throw new CliExit(1);
+    fail('Please provide a search query.');
   }
-  await cmdExplain(hippoRoot, query, flags);
+  await cmdExplain(hippoRoot, tenantId, query, flags);
 }

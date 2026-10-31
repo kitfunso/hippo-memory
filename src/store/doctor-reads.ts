@@ -7,16 +7,29 @@ export interface CompactionCounts {
   started: number;
 }
 
-/** Compaction records in all, those with a summary whose memories never got saved, and those still without a summary; each cutoff is an ISO time. */
-export function compactionCountsAt(db: DatabaseSyncLike, stuckBefore: string, transcriptFloor: string): CompactionCounts {
+/** Compaction records in all, those with a summary whose memories never got saved, and those still without a summary;
+ * each cutoff is an ISO time. */
+export function compactionCountsAt(
+  db: DatabaseSyncLike,
+  stuckBefore: string,
+  transcriptFloor: string,
+): CompactionCounts {
   // SAFETY: COUNT aggregate row.
-  const row = db.prepare(
-    `SELECT COUNT(*) AS total,
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS total,
               COUNT(CASE WHEN status = 'summarised' AND summarised_at < ? THEN 1 END) AS summarised,
-              COUNT(CASE WHEN status = 'started' AND started_at < ? AND started_at > ? AND transcript_path IS NOT NULL THEN 1 END) AS started
+              COUNT(CASE WHEN status = 'started' AND started_at < ? AND started_at > ? AND transcript_path IS NOT NULL
+              THEN 1 END) AS started
        FROM compactions`,
-  ).get(stuckBefore, stuckBefore, transcriptFloor) as { total: number; summarised: number; started: number } | undefined;
-  return { total: Number(row?.total ?? 0), summarised: Number(row?.summarised ?? 0), started: Number(row?.started ?? 0) };
+    )
+    .get(stuckBefore, stuckBefore, transcriptFloor) as
+    { total: number; summarised: number; started: number } | undefined;
+  return {
+    total: Number(row?.total ?? 0),
+    summarised: Number(row?.summarised ?? 0),
+    started: Number(row?.started ?? 0),
+  };
 }
 
 export interface TokenTally {

@@ -12,32 +12,18 @@
 // to 1.0, hiding the lift. Knock the seed down to 0.5 with a direct UPDATE
 // before reading `before` so the boost is observable. The decay test starts
 // from 1.0 and goes to 0.85 — observable as-is.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
-
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-b3-e2e-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 
 function runRecall(env: TestEnv, query: string, sessionId: string) {
   return execFileSync(
@@ -79,21 +65,21 @@ function setStrength(root: string, memId: string, strength: number) {
   }
 }
 
-const ctx = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
 
 describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   let env: TestEnv;
 
   beforeEach(() => {
-    env = makeEnv();
+    env = makeEnv('b3-e2e');
   });
 
   afterEach(() => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('positive outcome boosts strength of memories actually recalled during goal life', () => {
-    const m = remember(ctx(env.hippoRoot), { content: 'good lesson', tags: ['rfx'] });
+  it('positive outcome boosts strength of memories actually recalled during goal life', async () => {
+    const m = await remember(ctx(env.hippoRoot), { content: 'good lesson', tags: ['rfx'] });
     const g = pushGoal(env.hippoRoot, {
       sessionId: 's-e2e-1',
       tenantId: 'default',
@@ -112,8 +98,8 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
     expect(readStrength(env.hippoRoot, m.id)).toBeGreaterThan(before);
   });
 
-  it('negative outcome decays strength', () => {
-    const m = remember(ctx(env.hippoRoot), { content: 'misleading lesson', tags: ['rfx'] });
+  it('negative outcome decays strength', async () => {
+    const m = await remember(ctx(env.hippoRoot), { content: 'misleading lesson', tags: ['rfx'] });
     const g = pushGoal(env.hippoRoot, {
       sessionId: 's-e2e-2',
       tenantId: 'default',

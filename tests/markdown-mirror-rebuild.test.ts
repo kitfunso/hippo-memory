@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { serializeEntry } from '../src/store/markdown.js';
+import { serializeEntry } from '../src/core/markdown.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 

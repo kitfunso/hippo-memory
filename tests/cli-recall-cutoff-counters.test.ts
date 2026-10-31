@@ -24,6 +24,7 @@
 // initStore + api.remember for seeding, execFileSync against dist/cli.js
 // for the recall itself (real DB, real CLI, project convention).
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,35 +33,22 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
-import { remember, type Context } from '../src/api/index.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
+import { remember } from '../src/api/index.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(prefix: string): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), `hippo-c5-${prefix}-`));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
-
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'c5-test', role: 'admin' } };
+function ctxFor(root: string): FullContext {
+  return apiCtx(root, 'default', { subject: 'c5-test', role: 'admin' });
 }
 
 /** Seed `count` distinct memories that all match `keyword`. */
-function seedMatchingMemories(env: TestEnv, keyword: string, count: number): void {
+async function seedMatchingMemories(env: TestEnv, keyword: string, count: number): Promise<void> {
   const ctx = ctxFor(env.hippoRoot);
   for (let i = 0; i < count; i++) {
-    remember(ctx, { content: `${keyword} candidate number ${i} carries unique detail ${i}` });
+    await remember(ctx, { content: `${keyword} candidate number ${i} carries unique detail ${i}` });
   }
 }
 
@@ -146,9 +134,9 @@ describe('cmdRecall candidate accounting closes', () => {
     { keyword: 'widgetgamma', seeded: 12, limit: 4 },
   ])(
     'totalCandidates == droppedPreRank + droppedByBudget + returned ($keyword, limit=$limit)',
-    ({ keyword, seeded, limit }) => {
-      env = makeEnv(keyword);
-      seedMatchingMemories(env, keyword, seeded);
+    async ({ keyword, seeded, limit }) => {
+      env = makeEnv(`c5-${keyword}`);
+      await seedMatchingMemories(env, keyword, seeded);
 
       const out = recallJson(env, keyword, limit);
       const s = out.suppressionSummary;
@@ -162,9 +150,9 @@ describe('cmdRecall candidate accounting closes', () => {
     },
   );
 
-  it('invariant also holds when nothing is truncated (droppedByBudget == 0)', () => {
-    env = makeEnv('notrunc');
-    seedMatchingMemories(env, 'widgetdelta', 5);
+  it('invariant also holds when nothing is truncated (droppedByBudget == 0)', async () => {
+    env = makeEnv('c5-notrunc');
+    await seedMatchingMemories(env, 'widgetdelta', 5);
 
     const out = recallJson(env, 'widgetdelta', 100);
     const s = out.suppressionSummary;
@@ -208,9 +196,9 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     };
     const a = mk('decision quokka about cache invalidation strategy');
     const b = mk('wholly unrelated wording xyzzy plugh frobnicate');
-    const ea = insertEntity(root, T, { entityType: 'decision', name: 'A', memoryId: a.id }).id;
-    const eb = insertEntity(root, T, { entityType: 'decision', name: 'B', memoryId: b.id }).id;
-    insertRelation(root, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
+    const ea = insertEntityAt(root, T, { entityType: 'decision', name: 'A', memoryId: a.id }).id;
+    const eb = insertEntityAt(root, T, { entityType: 'decision', name: 'B', memoryId: b.id }).id;
+    insertRelationAt(root, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
 
     // cwd is `home` so no stray local store joins the recall: this test pins
     // the SINGLE-store graph case. (A worktree cwd would silently merge its
@@ -255,9 +243,9 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
   // The measured production failure was budget/rank driven with NO --limit:
   // totalCandidates 400, returned 3, droppedByBudget 0, Cutoff line silent.
   // This is the case that must go red without the derivation fix.
-  it('reports drops when a small --budget truncates and --limit is never passed', () => {
-    env = makeEnv('budget-gap');
-    seedMatchingMemories(env, 'widgetbudget', 40);
+  it('reports drops when a small --budget truncates and --limit is never passed', async () => {
+    env = makeEnv('c5-budget-gap');
+    await seedMatchingMemories(env, 'widgetbudget', 40);
 
     const out = recallJsonBudget(env, 'widgetbudget', 40);
     const s = out.suppressionSummary;
@@ -282,9 +270,9 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('prints "Cutoff:" naming the dropped count when --limit truncates the result set', () => {
-    env = makeEnv('print-gap');
-    seedMatchingMemories(env, 'widgetepsilon', 30);
+  it('prints "Cutoff:" naming the dropped count when --limit truncates the result set', async () => {
+    env = makeEnv('c5-print-gap');
+    await seedMatchingMemories(env, 'widgetepsilon', 30);
 
     const output = recallText(env, 'widgetepsilon', 5);
 
@@ -303,9 +291,9 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
       .not.toMatch(/dropped to fit limit/);
   });
 
-  it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', () => {
-    env = makeEnv('no-print');
-    seedMatchingMemories(env, 'widgetzeta', 3);
+  it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', async () => {
+    env = makeEnv('c5-no-print');
+    await seedMatchingMemories(env, 'widgetzeta', 3);
 
     const output = recallText(env, 'widgetzeta', 100);
 

@@ -1,41 +1,65 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
 import type { DeliveryRecorder } from '../store/delivery-recorder.js';
-import { isSubagentPayload } from '../store/token-ledger.js';
+import { isSubagentPayload } from '../util/hook-payload.js';
 import { estimateTokens } from '../util/token-text.js';
 import { autoDetectContext } from '../api/context-auto.js';
-import { detectScope } from '../sharing/scope.js';
-import { bookLedgerTurn } from '../api/ledger-db.js';
+import { detectScope } from '../core/active-scope.js';
+import { bookLedgerTurn, ledgerReachOf } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 import * as api from '../api/index.js';
-import { DEFAULT_CONTEXT_BUDGET } from '../api/context.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { DEFAULT_CONTEXT_BUDGET, NO_QUERY } from '../api/context.js';
 import { cliApiContext } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
-import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
+import {
+  contextBlockLines, contextCost, crossProjectLines, handoffSectionText, settleTokens, snapshotSectionText,
+} from '../api/context-render.js';
 import {
   additionalContextOutput,
   type ContextView,
   flushDeliveryRecorder,
   hasContextData,
+  startDeliveryRecorder,
   sessionStartEnvelope,
   toRenderItems,
 } from '../api/prompt-hook.js';
-import { type CliFlags, parseLimitFlag, parseCountFlag, parseBudgetFlag, type CommandContext, flagIsTrue } from './flag-values.js';
+import {
+  type CliFlags,
+  parseLimitFlag,
+  parseCountFlag,
+  parseBudgetFlag,
+  type CommandContext,
+  flagIsTrue,
+  stringFlagOrExit,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
-import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
-import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { printSessionEvents, captureConsole } from './print.js';
+import {
+  hostSessionId,
+  hookStoreRoot,
+  hookRuntime,
+  payloadCwdRoot,
+  runHookWithStores,
+  inPilotHoldout,
+} from './hook-runtime.js';
 
 async function cmdContext(
   hippoRoot: string,
+  tenantId: string,
   args: string[],
   flags: CliFlags,
   stdinText?: string
 ): Promise<void> {
-  const rec = startDeliveryRecorder(hippoRoot, stdinText, hookRuntime(flags), flagIsTrue(flags, 'pinned-only') ? undefined : 'context');
+  const rec = startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
+    stdinText,
+    runtime: hookRuntime(flags),
+    eventType: flagIsTrue(flags, 'pinned-only') ? undefined : 'context',
+    envSessionId: hostSessionId(),
+  });
   // No try/finally: a render throw keeps its own exit code and writes no event.
-  await renderContext(hippoRoot, args, flags, stdinText, rec);
+  await renderContext(hippoRoot, tenantId, args, flags, stdinText, rec);
   flushDeliveryRecorder(rec);
 }
 
@@ -55,20 +79,28 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
       const raw = isJsonObject(payload) ? payload['prompt'] : undefined;
       if (isJsonString(sid) && sid.trim() !== '') sessionId = sid;
       if (isJsonString(raw)) prompt = raw;
-    } catch {
+    } catch (err) {
       // Malformed/non-JSON stdin: fall through to the env fallback below.
+      log.debug(`context: hook payload is not JSON: ${errorMessage(err)}`, errorFields(err));
     }
   }
   return { sessionId, prompt };
 }
 
-async function renderContext(
+interface ContextGate {
+  readonly pinnedOnly: boolean;
+  readonly session: ContextSession;
+  readonly budget: number;
+}
+
+/** Null when this call renders nothing: the pilot holdout arm, or a budget of zero. */
+function contextGate(
   hippoRoot: string,
-  args: string[],
+  resolvedTenant: string,
   flags: CliFlags,
   stdinText: string | undefined,
   rec: DeliveryRecorder | null,
-): Promise<void> {
+): ContextGate | null {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
   // and api.getContext falls back to global-only.
   const pinnedOnly = flagIsTrue(flags, 'pinned-only');
@@ -77,27 +109,41 @@ async function renderContext(
   }
 
   const session = resolveContextSession(stdinText);
-  const { currentSessionId, ledgerSessionId, payloadSessionId } = session;
+  const { currentSessionId, payloadSessionId } = session;
 
   // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no budget or content branch.
-  const resolvedTenant = resolveTenantId({});
-  if (inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, payloadSessionId !== undefined)) {
+  if (inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, { write: payloadSessionId !== undefined })) {
     rec?.disabled();
-    return;
+    return null;
   }
 
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_CONTEXT_BUDGET);
   if (budget <= 0) {
     rec?.disabled();
-    return;
+    return null;
   }
+  return { pinnedOnly, session, budget };
+}
+
+async function renderContext(
+  hippoRoot: string,
+  resolvedTenant: string,
+  args: string[],
+  flags: CliFlags,
+  stdinText: string | undefined,
+  rec: DeliveryRecorder | null,
+): Promise<void> {
+  const gate = contextGate(hippoRoot, resolvedTenant, flags, stdinText, rec);
+  if (gate === null) return;
+  const { pinnedOnly, session, budget } = gate;
+  const { ledgerSessionId, payloadSessionId } = session;
 
   // --auto shells out to git, so it stays CLI-side; api.getContext stays host-agnostic and falls back to '*'.
   const query = contextQuery(args, flags);
 
   const ctx = cliApiContext(hippoRoot, resolvedTenant);
-  const format = String(flags['format'] ?? 'markdown');
-  const framing = String(flags['framing'] ?? 'observe');
+  const format = stringFlagOrExit(flags, 'format') ?? 'markdown';
+  const framing = stringFlagOrExit(flags, 'framing') ?? 'observe';
   const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
 
   const result = await api.getContext(ctx, opts);
@@ -107,7 +153,18 @@ async function renderContext(
   }
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
-  const view: ContextView = { hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result, envelope };
+  const view: ContextView = {
+    hippoRoot,
+    tenantId: ctx.tenantId,
+    ledgerSessionId,
+    payloadSessionId,
+    pinnedOnly,
+    framing,
+    rec,
+    result,
+    reach: ledgerReachOf(ctx),
+    envelope,
+  };
   renderContextView(view, format, query);
 }
 
@@ -159,7 +216,7 @@ interface ContextOptsInput {
 
 function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOpts {
   // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
-  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const ctxExplicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const ctxActiveScope = ctxExplicitScope || detectScope();
   // --cross-project re-includes other-project memories, rendered under their own section.
   const crossProject = flagIsTrue(flags, 'cross-project');
@@ -173,8 +230,13 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     crossProject,
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
+    // JSON stays whole for the programs that parse it; every text format points to another session's state.
+    continuity: input.format === 'json' ? 'full' : 'pointer',
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
-    cost: contextCost(input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown', input.framing),
+    cost: contextCost(
+      input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown',
+      input.framing,
+    ),
     deliveryObserver: input.rec ?? undefined,
   };
 }
@@ -193,7 +255,7 @@ function renderContextJson(view: ContextView, query: string): void {
     category: r.category ?? null,
   }));
   const jsonText = JSON.stringify({
-    query: query || '*',
+    query: query || NO_QUERY,
     activeSnapshot: result.activeSnapshot ?? null,
     sessionHandoff: result.sessionHandoff ?? null,
     recentSessionEvents: result.recentEvents ?? [],
@@ -208,7 +270,7 @@ function renderContextJson(view: ContextView, query: string): void {
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
     }],
     delivery: (write) => flushDeliveryRecorder(rec, write),
-  });
+  }, view.reach);
 }
 
 /** The default format; the header figure counts the whole block, sections included, as the ledger does. */
@@ -219,10 +281,10 @@ function renderContextMarkdown(view: ContextView): void {
   const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
   const text = settleTokens((t) => captureConsole(() => {
     if (result.activeSnapshot) {
-      printActiveTaskSnapshot(result.activeSnapshot);
+      console.log(snapshotSectionText(result.activeSnapshot, result.snapshotMode ?? 'full'));
     }
     if (result.sessionHandoff) {
-      printHandoff(result.sessionHandoff);
+      console.log(handoffSectionText(result.sessionHandoff, result.handoffMode ?? 'full'));
     }
     if (result.recentEvents && result.recentEvents.length > 0) {
       printSessionEvents(result.recentEvents);
@@ -241,16 +303,16 @@ function renderContextMarkdown(view: ContextView): void {
       event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
     }],
     delivery: (write) => flushDeliveryRecorder(rec, write),
-  });
+  }, view.reach);
 }
 
 function printCrossProjectSection(items: api.ContextResultEntry[]): void {
   for (const line of crossProjectLines(items)) console.log(line);
 }
 
-export async function handleContext({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleContext({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
   const { text: stdinText } = await readHookStdin();
   const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
-  await runHookWithStores(() => cmdContext(hookStoreRoot(root), args, flags, stdinText));
+  await runHookWithStores(() => cmdContext(hookStoreRoot(root), tenantId, args, flags, stdinText));
 }

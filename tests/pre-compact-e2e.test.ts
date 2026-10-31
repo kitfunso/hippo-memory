@@ -4,7 +4,7 @@ import * as path from 'path';
 import { type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getHippoRoot } from '../src/store/open.js';
+import { getHippoRoot } from '../src/core/project-identity.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { writeSessionEndHandoff } from '../src/store/handoffs.js';
@@ -382,7 +382,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     });
 
     // Every user turn is a tool_result array, not plain text — summariseTranscript's
-    // lastPlainUserMessage derives '' for task, but the assistant text still
+    // lastTurnText derives '' for task, but the assistant text still
     // yields a non-empty summary/next_step, so this must NOT be a full skip.
     const transcriptPath = path.join(dir, 'tool-heavy.jsonl');
     fs.writeFileSync(
@@ -496,7 +496,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(runHippo(['pre-compact'], dir, env, payload).status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(snapshot!.next_step).toBe('retry the export with Authorization: [REDACTED]');
-    const handoff = writeSessionEndHandoff(hippoRoot, 'default', 'sess-old-jwt', null);
+    const handoff = writeSessionEndHandoff(hippoRoot, { tenantId: 'default', sessionId: 'sess-old-jwt', evidence: null });
     expect(handoff!.nextAction).toBe('retry the export with Authorization: [REDACTED]');
   });
 

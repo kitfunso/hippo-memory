@@ -9,6 +9,7 @@ import { EXPIRING_KEYS_MIN_BINARY } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -49,8 +50,8 @@ async function jsonOf<T>(res: Response): Promise<T> {
 }
 
 /** The host CLI's own path: it opens the store as host admin, so it needs no key to mint the first one. */
-function hostMint(role: 'admin' | 'member'): Minted {
-  return authCreate({ hippoRoot: home, tenantId: 'default', actor: adminActor('cli') }, { role, noExpiry: true });
+function hostMint(role: 'admin' | 'member'): Promise<Minted> {
+  return authCreate(apiCtx(home, 'default', adminActor('cli')), { role, noExpiry: true });
 }
 
 function send(method: string, path: string, bearer: string, body?: MintBody): Promise<Response> {
@@ -105,7 +106,7 @@ afterEach(async () => {
 
 describe('POST /v1/auth/keys defaults', () => {
   it('a mint with an empty body is a member key that expires in 90 days, in the reply and in the store', async () => {
-    const admin = hostMint('admin');
+    const admin = await hostMint('admin');
     const res = await mintOver(admin.plaintext, {});
     expect(res.status).toBe(200);
     const made = await jsonOf<Minted>(res);
@@ -119,7 +120,7 @@ describe('POST /v1/auth/keys defaults', () => {
   it('a key minted with the default expiry works on day 89 and is refused on day 91', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const start = Date.now();
-    const admin = hostMint('admin');
+    const admin = await hostMint('admin');
     const made = await jsonOf<Minted>(await mintOver(admin.plaintext, {}));
     expect((await send('GET', '/v1/memories?q=deploy', made.plaintext)).status).toBe(200);
     vi.setSystemTime(start + 89 * DAY_MS);
@@ -131,7 +132,7 @@ describe('POST /v1/auth/keys defaults', () => {
   });
 
   it('admin and no expiry are each given only when the body names them', async () => {
-    const admin = hostMint('admin');
+    const admin = await hostMint('admin');
     const asks: Array<[MintBody, string, number]> = [
       [{ role: 'admin' }, 'admin', 90],
       [{ noExpiry: true }, 'member', Number.NaN],
@@ -147,7 +148,7 @@ describe('POST /v1/auth/keys defaults', () => {
   });
 
   it('refuses an expiry it cannot honour with a 400 and mints nothing', async () => {
-    const admin = hostMint('admin');
+    const admin = await hostMint('admin');
     const refusals: Array<[MintBody, string]> = [
       [{ ttlDays: 7, noExpiry: true }, 'send ttlDays or noExpiry, not both'],
       [{ ttlDays: 0 }, 'ttlDays must be above 0 and at most 3650'],
@@ -167,7 +168,7 @@ describe('POST /v1/auth/keys defaults', () => {
   });
 
   it('writes the expiry into the audit row of the mint, null for a key that never expires', async () => {
-    const admin = hostMint('admin');
+    const admin = await hostMint('admin');
     const expiring = await jsonOf<Minted>(await mintOver(admin.plaintext, { label: 'ci' }));
     const forever = await jsonOf<Minted>(await mintOver(admin.plaintext, { label: 'ops', role: 'admin', noExpiry: true }));
     const rows = await jsonOf<AuditRow[]>(await send('GET', '/v1/audit?op=auth_create', admin.plaintext));
@@ -177,7 +178,7 @@ describe('POST /v1/auth/keys defaults', () => {
   });
 
   it('the first default mint raises the binary floor to the release that honours an expiry; a key that never expires leaves it', async () => {
-    const admin = hostMint('admin');
+    const admin = await hostMint('admin');
     await mintOver(admin.plaintext, { noExpiry: true });
     expect(floor()).toBe('1.24.0');
     await mintOver(admin.plaintext, {});
@@ -231,7 +232,7 @@ describe('hippo auth create defaults', () => {
     const zero = await create({ 'ttl-days': '0' });
     expect([zero.status, zero.stdout]).toEqual([1, '']);
     expect(zero.stderr).toContain('ttlDays must be above 0 and at most 3650');
-    const admin = hostMint('admin');
+    const admin = await hostMint('admin');
     const keys = await jsonOf<ListedKey[]>(await send('GET', '/v1/auth/keys?active=false', admin.plaintext));
     expect(keys.map((k) => k.keyId)).toEqual([admin.keyId]);
   });
@@ -268,5 +269,16 @@ describe('the first key of a store', () => {
     const first = JSON.parse(run.stdout) as Minted;
     expect(first.role).toBe('member');
     expect((await send('GET', '/v1/quarantine', first.plaintext)).status).toBe(403);
+  });
+
+  it('authCreate with no role names member, even when the host admin mints it, in the reply and in the store', async () => {
+    const minted = await authCreate(apiCtx(home, 'default', adminActor('cli')), { noExpiry: true });
+    expect(minted.role).toBe('member');
+    const db = openHippoDb(home);
+    try {
+      expect(db.prepare('SELECT role FROM api_keys WHERE key_id = ?').get<{ role: string }>(minted.keyId)?.role).toBe('member');
+    } finally {
+      closeHippoDb(db);
+    }
   });
 });

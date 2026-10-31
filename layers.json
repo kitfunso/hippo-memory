@@ -16,6 +16,7 @@
     "core": "base",
     "consolidate": "domain",
     "dashboard": "surface",
+    "embeddings": "base",
     "db": "db",
     "entry": "surface",
     "eval": "domain",
@@ -41,5 +42,14 @@
     "postinstall.ts": "surface",
     "server.ts": "surface",
     "support-bundle.ts": "surface"
+  },
+  "dbReach": {
+    "layer": "db",
+    "from": [
+      "api",
+      "mcp",
+      "server"
+    ],
+    "allowed": {}
   }
 }

@@ -1,40 +1,21 @@
-// Diffs the derived graph against the stored rows, so a rebuild writes only what changed and an entity keeps the id its relations hang on.
-import type { DatabaseSyncLike } from '../db/index.js';
-import { loadStoredGraph, storedGraphOn } from '../store/graph-reads.js';
-import type { EntityType, RelationType, SourceObjectRef, StoredEntity, StoredGraph, StoredRelation } from '../store/graph-rows.js';
+// Diffs the derived graph against the stored rows, so a rebuild writes only what changed and an entity keeps the id its
+// relations hang on.
+import { loadStoredGraph } from '../store/graph-reads.js';
+import type {
+  DesiredEntity,
+  DesiredGraph,
+  DesiredRelation,
+  GraphOp,
+  NaturalKey,
+  StoredEntity,
+  StoredGraph,
+  StoredRelation,
+} from '../store/graph-rows.js';
 
-/** What names an object-derived entity across rebuilds; v38 has no UNIQUE on it, so the diff keeps one row per key. */
-export interface NaturalKey {
-  readonly entityType: EntityType;
-  readonly sourceObject: SourceObjectRef;
-}
+export type { DesiredEntity, DesiredGraph, DesiredRelation, GraphOp, NaturalKey };
 
-export interface DesiredEntity extends NaturalKey {
-  readonly name: string;
-  readonly memoryId: string | null;
-}
-
-export interface DesiredRelation {
-  readonly from: NaturalKey;
-  readonly to: NaturalKey;
-  readonly relType: RelationType;
-  readonly memoryId: string | null;
-  readonly sourceObject: SourceObjectRef;
-}
-
-export interface DesiredGraph {
-  readonly entities: readonly DesiredEntity[];
-  readonly relations: readonly DesiredRelation[];
-}
-
-export type GraphOp =
-  | { readonly op: 'deleteEntity'; readonly id: number }
-  | { readonly op: 'updateEntity'; readonly id: number; readonly entity: DesiredEntity }
-  | { readonly op: 'insertEntity'; readonly entity: DesiredEntity }
-  | { readonly op: 'deleteRelation'; readonly id: number }
-  | { readonly op: 'insertRelation'; readonly relation: DesiredRelation };
-
-const keyText = (entityType: string, objectType: string, objectId: number): string => `${entityType}|${objectType}:${objectId}`;
+const keyText = (entityType: string, objectType: string, objectId: number): string =>
+  `${entityType}|${objectType}:${objectId}`;
 
 export function entityKey(k: NaturalKey): string {
   return keyText(k.entityType, k.sourceObject.type, k.sourceObject.id);
@@ -56,7 +37,7 @@ function provenanceOf(memoryId: string | null, kinds: MemoryKinds): string {
   return kind === undefined ? '|distilled' : `${memoryId}|${kind}`;
 }
 
-function memoryIdsOf(desired: DesiredGraph): string[] {
+export function memoryIdsOf(desired: DesiredGraph): string[] {
   const ids = new Set<string>();
   for (const row of [...desired.entities, ...desired.relations]) if (row.memoryId !== null) ids.add(row.memoryId);
   return [...ids];
@@ -77,7 +58,11 @@ interface EntityDelta {
   keptKeyById: Map<number, string>;
 }
 
-function diffEntities(stored: readonly StoredEntity[], desired: readonly DesiredEntity[], kinds: MemoryKinds): EntityDelta {
+function diffEntities(
+  stored: readonly StoredEntity[],
+  desired: readonly DesiredEntity[],
+  kinds: MemoryKinds,
+): EntityDelta {
   const wanted = firstByKey(desired, entityKey);
   const kept = new Map<string, StoredEntity>();
   const deletes: GraphOp[] = [];
@@ -91,7 +76,10 @@ function diffEntities(stored: readonly StoredEntity[], desired: readonly Desired
   for (const [key, entity] of wanted) {
     const row = kept.get(key);
     if (!row) inserts.push({ op: 'insertEntity', entity });
-    else if (row.name !== entity.name || `${row.memory_id ?? ''}|${row.source_kind}` !== provenanceOf(entity.memoryId, kinds)) {
+    else if (
+      row.name !== entity.name ||
+      `${row.memory_id ?? ''}|${row.source_kind}` !== provenanceOf(entity.memoryId, kinds)
+    ) {
       updates.push({ op: 'updateEntity', id: row.id, entity });
     }
   }
@@ -126,17 +114,19 @@ function diffRelations(
   return [...deletes, ...inserts];
 }
 
-function deltaOf(stored: StoredGraph, desired: DesiredGraph): GraphOp[] {
+/** The diff itself: pure, so the store reads the rows and this decides the ops. */
+export function diffGraph(stored: StoredGraph, desired: DesiredGraph): GraphOp[] {
   const entityDelta = diffEntities(stored.entities, desired.entities, stored.kinds);
-  return [...entityDelta.ops, ...diffRelations(stored.relations, desired.relations, entityDelta.keptKeyById, stored.kinds)];
+  return [
+    ...entityDelta.ops,
+    ...diffRelations(stored.relations, desired.relations, entityDelta.keptKeyById, stored.kinds),
+  ];
 }
 
-/** Ops that turn the stored graph into `desired`, in apply order; reads only, and keeps the lowest id per natural key. */
-export function graphDelta(db: DatabaseSyncLike, tenantId: string, desired: DesiredGraph): GraphOp[] {
-  return deltaOf(storedGraphOn(db, tenantId, memoryIdsOf(desired)), desired);
-}
-
-/** graphDelta on its own connection and outside any write lock; the apply re-checks each op against what changed since. */
+/**
+ * Ops that turn the stored graph into `desired`, in apply order; read outside any write lock, so the apply re-checks
+ * each op against what changed since. Keeps the lowest id per natural key.
+ */
 export function readGraphDelta(hippoRoot: string, tenantId: string, desired: DesiredGraph): GraphOp[] {
-  return deltaOf(loadStoredGraph(hippoRoot, tenantId, memoryIdsOf(desired)), desired);
+  return diffGraph(loadStoredGraph(hippoRoot, tenantId, memoryIdsOf(desired)), desired);
 }

@@ -67,8 +67,14 @@ def hippo_server() -> Iterator[str]:
 
     home = tempfile.mkdtemp(prefix="hippo-py-test-")
     port = _pick_free_port()
-    # The SDK tests construct a client with no key, so the server runs in keyless local mode.
-    env = {**os.environ, "HIPPO_HOME": home, "HIPPO_TENANT": "default", "HIPPO_ALLOW_KEYLESS_LOCAL": "1"}
+    # The SDK tests use a keyless client and act as the host admin, so sleep and key creation stay open.
+    env = {
+        **os.environ,
+        "HIPPO_HOME": home,
+        "HIPPO_TENANT": "default",
+        "HIPPO_ALLOW_KEYLESS_LOCAL": "1",
+        "HIPPO_KEYLESS_LOCAL_ROLE": "admin",
+    }
 
     # hippo serve requires a .hippo dir to exist. Bootstrap it via `hippo init`.
     init = subprocess.run(

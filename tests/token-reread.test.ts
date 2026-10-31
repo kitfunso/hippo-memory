@@ -14,7 +14,6 @@ import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   carryingCalls,
-  isSubagentPayload,
   lastSentState,
   readApiCalls,
   recordRereads,
@@ -25,6 +24,7 @@ import {
   type TokenSummary,
   type TokenSurface,
 } from '../src/store/token-ledger.js';
+import { isSubagentPayload } from '../src/util/hook-payload.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 const SESSION = 'sess-reread';

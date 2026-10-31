@@ -1,14 +1,16 @@
 // EntryWrites answers alike on hippo.db and on a store held in memory: the same values, the same errors, the same rows read back
 // and the same audit rows, over two tenants with personal, raw, summary and tombstoned rows.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { reject, type HippoDbContext } from '../src/api/index.js';
+import { reject } from '../src/api/index.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import type { AuditEvent } from '../src/server.js';
+import type { AuditEvent } from '../src/entry/store-kit.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { inMemoryEntryWritesStore } from './_helpers/in-memory-entry-writes-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ALICE = 'personal:private:alice';
@@ -16,7 +18,7 @@ const BANNED = 'the launch date is march third';
 const ACTOR = 'api_key:caller';
 
 /** The columns these writes change, so a row compares across stores without the fields each store fills its own way. */
-type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind' | 'scope' | 'content' | 'tags' | 'strength' | 'outcome_score' | 'outcome_positive'
+type Row = Pick<MemoryEntry, 'id' | 'tenant_id' | 'kind' | 'scope' | 'content' | 'tags' | 'strength' | 'outcome_score' | 'outcome_positive'
   | 'outcome_negative' | 'superseded_by' | 'dag_parent_id' | 'summary_dirty' | 'origin_project'>;
 type Value = string | string[] | Row[] | void;
 type Call = GroupCall<'entryWrites', Value>;
@@ -47,18 +49,18 @@ async function seed(dir: string): Promise<Seeded> {
     noteB: createMemory('globex ships on fridays', { tenantId: TENANT_B }),
     rawB: createMemory('globex raw ticket text', { tenantId: TENANT_B, kind: 'raw' }),
   };
-  const summary = a('summary of the release process', { dag_level: 2 });
+  const summary = a('summary of the release process', { dagLevel: 2 });
   // The children go in first, so the summary starts clean.
-  const child = a('release notes are drafted on mondays', { dag_parent_id: summary.id });
-  const rawChild = a('raw standup transcript about releases', { kind: 'raw', dag_parent_id: summary.id });
+  const child = a('release notes are drafted on mondays', { dagParentId: summary.id });
+  const rawChild = a('raw standup transcript about releases', { kind: 'raw', dagParentId: summary.id });
   for (const entry of [...Object.values(rows), child, rawChild, summary]) writeEntry(dir, entry, { actor: 'cli' });
-  const ctx: HippoDbContext = { hippoRoot: dir, tenantId: TENANT_A, actor: { subject: 'cli', role: 'admin' } };
+  const ctx: FullContext = apiCtx(dir, TENANT_A, { subject: 'cli', role: 'admin' });
   await reject(ctx, { value: BANNED, reason: 'wrong date' });
   return { ...rows, summary, child, rawChild };
 }
 
 const project = (entries: MemoryEntry[]): Row[] => entries.map((e) => ({
-  id: e.id, tenantId: e.tenantId, kind: e.kind, scope: e.scope, content: e.content, tags: e.tags, strength: e.strength,
+  id: e.id, tenant_id: e.tenant_id, kind: e.kind, scope: e.scope, content: e.content, tags: e.tags, strength: e.strength,
   outcome_score: e.outcome_score, outcome_positive: e.outcome_positive, outcome_negative: e.outcome_negative,
   superseded_by: e.superseded_by, dag_parent_id: e.dag_parent_id, summary_dirty: e.summary_dirty, origin_project: e.origin_project,
 }));
@@ -84,7 +86,7 @@ const supersede = (oldId: string, successor: MemoryEntry, ownScope: string | nul
   await g.supersede({ tenantId: TENANT_A, actor: ACTOR, ownScope, oldId, successor });
 };
 const dirtied = (summary: MemoryEntry) => ({ tenantId: TENANT_A, actor: ACTOR, op: 'summary_marked_dirty', targetId: summary.id, metadata: { dag_level: 2, source: 'E2' } });
-const remembered = (e: MemoryEntry) => ({ tenantId: e.tenantId, actor: ACTOR, op: 'remember', targetId: e.id, metadata: { kind: e.kind, scope: e.scope } });
+const remembered = (e: MemoryEntry) => ({ tenantId: e.tenant_id, actor: ACTOR, op: 'remember', targetId: e.id, metadata: { kind: e.kind, scope: e.scope } });
 
 beforeAll(async () => {
   fixture = seedTwoTenants();
@@ -109,24 +111,24 @@ describe('EntryWrites.writeEntry', () => {
   it('writes a new row with one remember row', async () => {
     const entry = fresh('the on-call rota lives in the wiki');
     const side = await conforms([async (g) => { await g.writeEntry({ entry, actor: ACTOR }); }, readBack(TENANT_A, entry.id)]);
-    expect(side.outcomes[1]).toEqual({ value: project([{ ...entry, summary_dirty: 0 }]) });
+    expect(side.outcomes[1]).toEqual({ value: project([{ ...entry, summary_dirty: false }]) });
     expect(added(side)).toEqual([remembered(entry)]);
   });
 
   it('marks a clean summary parent dirty once, on the first child write only', async () => {
     const { summary } = seeded;
-    const first = fresh('release branches are cut on wednesdays', { dag_parent_id: summary.id });
-    const second = fresh('release tags are signed by the lead', { dag_parent_id: summary.id });
+    const first = fresh('release branches are cut on wednesdays', { dagParentId: summary.id });
+    const second = fresh('release tags are signed by the lead', { dagParentId: summary.id });
     const write = (entry: MemoryEntry): Call => async (g) => { await g.writeEntry({ entry, actor: ACTOR }); };
     const side = await conforms([write(first), write(second), readBack(TENANT_A, summary.id)]);
     // SAFETY: the third call reads rows back, so it resolved to Row[].
-    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.summary_dirty])).toEqual([[summary.id, 1]]);
+    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.summary_dirty])).toEqual([[summary.id, true]]);
     expect(added(side)).toEqual([remembered(first), dirtied(summary), remembered(second)]);
   });
 
   it("refuses a tombstoned value in its tenant, writes a reject_refusal row, and lets another tenant store it", async () => {
     const banned = fresh(BANNED);
-    const elsewhere = { ...fresh(BANNED), tenantId: TENANT_B };
+    const elsewhere = { ...fresh(BANNED), tenant_id: TENANT_B };
     const side = await conforms([
       async (g) => { await g.writeEntry({ entry: banned, actor: ACTOR }); },
       async (g) => { await g.writeEntry({ entry: elsewhere, actor: ACTOR }); },
@@ -143,7 +145,7 @@ describe('EntryWrites.writeEntry', () => {
     const { noteB } = seeded;
     const taken = { ...fresh('acme now owns this row'), id: noteB.id };
     const side = await conforms([readBack(TENANT_B, noteB.id), async (g) => { await g.writeEntry({ entry: taken, actor: ACTOR }); }, readBack(TENANT_B, noteB.id)]);
-    expect(side.outcomes[0]).toMatchObject({ value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }] });
+    expect(side.outcomes[0]).toMatchObject({ value: [{ id: noteB.id, tenant_id: TENANT_B, content: noteB.content }] });
     expect(side.outcomes[1]).toEqual({ error: `ConflictError: Memory ${noteB.id} belongs to another tenant` });
     expect(side.outcomes[2]).toEqual(side.outcomes[0]);
     expect(added(side)).toEqual([]);

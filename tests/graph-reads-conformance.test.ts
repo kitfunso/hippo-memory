@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { AuditEvent } from '../src/store/audit.js';
-import type { ScopeActor } from '../src/store/recall-scope.js';
+import type { ScopeActor } from '../src/core/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../src/store/port.js';
 import {
   BULK_TENANT, HELD_SCOPE, inMemoryGraphReadsStore, MANY, seededAt, seedGraphRows, SOLO_TENANT, type SeededGraph,
@@ -58,7 +58,7 @@ async function readIds(calls: readonly Call[]): Promise<RowIds[]> {
 
 beforeAll(async () => {
   fixture = seedTwoTenants();
-  g = seedGraphRows(fixture.dir);
+  g = await seedGraphRows(fixture.dir);
   const { e } = g;
   newest = {
     entities: [e.anchored, e.shared, e.lone, e.twinOpen, e.twinHeld, e.mine, e.secret, e.spoke2, e.spoke1, e.hub],

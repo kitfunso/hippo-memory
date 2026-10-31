@@ -11,12 +11,14 @@
  * (`private-secret-marker-N` etc.) makes the no-scope denial check greppable.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, recall, type Context } from '../src/api/index.js';
-import { ingestEvent, type IngestEvent, type IngestResult } from '../src/connectors/github/ingest.js';
+import { remember, retrieve } from '../src/api/index.js';
+import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
+import type { IngestResult } from '../src/connectors/ingest.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import { resolveTenantForGitHub } from '../src/connectors/github/tenant-routing.js';
@@ -28,6 +30,8 @@ import type {
 } from '../src/connectors/github/types.js';
 import { randomUUID } from 'node:crypto';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // The one case ingests 200 webhook events, each its own write to a real store.
 vi.setConfig({ testTimeout: 90_000 });
@@ -211,11 +215,7 @@ function buildDeliveryStream(): GeneratedDelivery[] {
   return out;
 }
 
-const ctxFor = (root: string, tenantId = 'default'): Context => ({
-  hippoRoot: root,
-  tenantId,
-  actor: { subject: 'connector:github', role: 'admin' },
-});
+const ctxFor = (root: string, tenantId = 'default'): FullContext => (apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' }));
 
 function rawCount(root: string): number {
   const db = openHippoDb(root);
@@ -330,7 +330,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     expect(privateDelivery).toBeDefined();
     const privateMarker = privateDelivery!.markerText;
 
-    const noScope = recall(ctx, { query: privateMarker });
+    const noScope = await retrieve(ctx, { query: privateMarker });
     // Default-deny: no private-repo content surfaces to a no-scope caller.
     // Since v1.25.0 the private exclusion runs in SQL BEFORE the candidate
     // window (codex review P2: post-window filtering let private rows starve
@@ -348,7 +348,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       }
     }
 
-    const withScope = recall(ctx, { query: privateMarker, scope: SCOPE_PRIVATE });
+    const withScope = await retrieve(ctx, { query: privateMarker, scope: SCOPE_PRIVATE });
     expect(withScope.results.length).toBeGreaterThan(0);
     expect(withScope.results.some((r) => r.content.includes(privateMarker))).toBe(true);
 
@@ -377,7 +377,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       db.prepare(
         `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('99999', 'tenant-known', new Date().toISOString());
-      const resolved = await resolveTenantForGitHub(root, { installationId: 'unknown-99' });
+      const resolved = await resolveTenantForGitHub(sqliteStore(root), { installationId: 'unknown-99' });
       expect(resolved).toBeNull();
     } finally {
       closeHippoDb(db);
@@ -386,7 +386,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     // ---- (9) Cross-scope leak negative test (generic private filter) -----
     // Insert a synthetic memory under acme:private:demo (NOT a github source).
     // The Task 0 generic-private filter should still hide it from no-scope recall.
-    remember(ctx, {
+    await remember(ctx, {
       content: 'cross-scope-canary-payload-1234',
       kind: 'raw',
       scope: 'acme:private:demo',
@@ -394,13 +394,13 @@ describe('GitHub connector — 200-event smoke test', () => {
       artifactRef: 'acme://demo/secret/1',
       tags: ['source:acme'],
     });
-    const canaryNoScope = recall(ctx, { query: 'cross-scope-canary-payload-1234' });
+    const canaryNoScope = await retrieve(ctx, { query: 'cross-scope-canary-payload-1234' });
     // v1.25.0: same rationale as section (6) — the SQL pre-window exclusion
     // makes a denied-only match behave like a no-match query (fallback rows
     // possible); assert the intent (the canary payload never surfaces), not
     // the distinguishable-empty shape.
     expect(canaryNoScope.results.some((r) => r.content.includes('cross-scope-canary-payload-1234'))).toBe(false);
-    const canaryScoped = recall(ctx, {
+    const canaryScoped = await retrieve(ctx, {
       query: 'cross-scope-canary-payload-1234',
       scope: 'acme:private:demo',
     });

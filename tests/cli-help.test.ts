@@ -6,9 +6,9 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { COMMANDS, parseArgs, runCli, usageText, verbUsage } from '../src/cli.js';
-import { VERB_FLAGS, type VerbFlags } from '../src/cli/flags.js';
-import { VERB_USAGE } from '../src/cli/usage.js';
+import { parseArgs, runCli, usageText, verbUsage } from '../src/cli.js';
+import type { VerbFlags } from '../src/cli/flags.js';
+import { COMMANDS } from '../src/cli/verbs.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
@@ -27,7 +27,33 @@ const ISOLATED_KEYS = ['HOME', 'USERPROFILE', 'HIPPO_HOME', 'HIPPO_SKIP_AUTO_INT
 const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void> }>(COMMANDS)
   .map(([verb, spec]) => [verb, vi.spyOn(spec, 'run').mockImplementation(() => undefined)] as const);
 
-interface CommandRow { readonly usage: readonly string[]; readonly flags: VerbFlags }
+interface CommandRow { readonly flags: VerbFlags }
+// Pinned rather than read from the rows, so a row that gains or loses --dry-run fails here first.
+const DRY_RUN_VERBS = ['audit', 'capture', 'dedup', 'forget', 'import', 'invalidate', 'refine', 'setup', 'sleep'];
+// Declared flags the help does not name yet: document one, then delete it here; the list may only shrink.
+const UNDOCUMENTED = new Map(Object.entries({
+  remember: ['artifact-ref', 'extract', 'force', 'kind', 'layer', 'owner', 'scope'],
+  recall: ['classic', 'equal-sources', 'layer', 'limit', 'local-bump', 'outcome', 'physics', 'scope'],
+  drill: ['depth'],
+  explain: ['as-of', 'equal-sources', 'include-superseded', 'local-bump', 'scope'],
+  eval: ['baseline', 'save-baseline', 'suite'],
+  trace: ['outcome', 'session', 'source', 'steps', 'tag', 'task'],
+  sleep: ['log-file'],
+  'session-end': ['dry-run', 'format', 'no-learn', 'no-share', 'session-id', 'transcript'],
+  'pre-compact': ['format'],
+  'capture-error': ['format'],
+  snapshot: ['id'],
+  session: ['outcome', 'session', 'summary'],
+  handoff: ['id'],
+  forget: ['dry-run'],
+  context: ['cross-project', 'limit', 'runtime', 'scope'],
+  embed: ['global', 'reset-physics'],
+  sync: ['cross-project'],
+  peers: ['all-tenants'],
+  graph: ['entity', 'format', 'json', 'open', 'out'],
+}));
+const namesOf = (flags: VerbFlags): string[] =>
+  [...(flags.switches ?? []), ...(flags.values ?? []), ...(flags.numbers ?? []), ...(flags.lists ?? [])];
 interface HelpDirs { readonly cwd: string; readonly home: string; readonly store: string }
 let dirs: HelpDirs;
 let full: InProcessResult;
@@ -79,14 +105,6 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     expect([...VERBS].sort()).toMatchSnapshot();
   });
 
-  it.for(Object.entries<CommandRow>(COMMANDS))('%s takes its help blocks and flags from its own key', ([verb, spec]) => {
-    const usage: Readonly<Record<string, readonly string[]>> = VERB_USAGE;
-    const flags: Readonly<Record<string, VerbFlags>> = VERB_FLAGS;
-    expect(spec.usage).toEqual(usage[verb] ?? []);
-    if (usage[verb]) expect(spec.usage).toBe(usage[verb]);
-    expect(spec.flags).toBe(flags[verb]);
-  });
-
   it.for([{ args: [] }, { args: ['-h'] }, { args: ['help'] }, { args: ['--help'] }])('hippo $args prints the same full usage', async ({ args }) => {
     const res = await run(args);
     expect(pick(res)).toEqual(full);
@@ -108,16 +126,19 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     expect(pinned(res)).toMatchSnapshot();
   });
 
-  it('every verb row calls a handle<Verb> entry and never a cmd<Name>', () => {
+  it('every verb row names a handle<Verb> export and never a cmd<Name>', () => {
     // Read from source: the spies above replaced each run function.
-    const source = readFileSync(resolve(__dirname, '..', 'src', 'cli.ts'), 'utf8');
-    const table = source.slice(source.indexOf('export const VERB_HANDLERS = {'), source.indexOf('} satisfies Record<VerbName'));
-    const runs = table.split('\n').filter((line) => /^\s+run:/.test(line));
-    expect(runs).toHaveLength(Object.keys(COMMANDS).length);
-    for (const run of runs) {
-      expect(run).toMatch(/\bhandle[A-Z]\w*\(/);
-      expect(run).not.toMatch(/\bcmd[A-Z]/);
-    }
+    const dir = resolve(__dirname, '..', 'src', 'cli', 'verbs');
+    const rowCall = /\bverb\(\(\) => import\('[^']+'\), '(\w+)'/g;
+    const names = readdirSync(dir).flatMap((file) => [...readFileSync(join(dir, file), 'utf8').matchAll(rowCall)].map((m) => m[1]));
+    expect(names).toHaveLength(Object.keys(COMMANDS).length);
+    expect(names.filter((name) => !/^handle[A-Z]/.test(name))).toEqual([]);
+  });
+
+  it.for(VERBS)('hippo %s --dry-run runs the verb only where its row honours the flag', async (verb) => {
+    const res = await run([verb, '--dry-run']);
+    expect([res.ran, res.written]).toEqual([DRY_RUN_VERBS.includes(verb) ? [verb] : [], []]);
+    if (res.ran.length === 0) expect([res.status, res.stderr]).toEqual([2, expect.stringContaining(`hippo ${verb} has no --dry-run`)]);
   });
 
   it('hippo init -h prints the init block and installs nothing', async () => {
@@ -168,6 +189,16 @@ describe('built CLI', () => {
 describe('usage blocks', () => {
   it('every verb but the internal __ workers has its own block', () => {
     expect(VERBS.filter((verb) => !verb.startsWith('__') && verbUsage(verb) === null)).toEqual([]);
+  });
+
+  it.for(Object.entries<CommandRow>(COMMANDS).filter(([verb]) => !verb.startsWith('__')))('%s help names every flag the verb declares and no other', async ([verb, spec]) => {
+    const subHelp: string[] = [];
+    // One at a time: each run captures the process's stdout.
+    for (const sub of SUBCOMMANDS.filter(([own]) => own === verb)) subHelp.push((await run([...sub, '--help'])).stdout);
+    const named = new Set([...[verbUsage(verb), ...subHelp].join('\n').matchAll(/--([a-z][a-z0-9-]*)/g)].map((m) => m[1]));
+    const declared = namesOf(spec.flags);
+    expect({ missing: declared.filter((name) => !named.has(name)).sort(), undeclared: [...named].filter((name) => !declared.includes(name)) })
+      .toEqual({ missing: UNDOCUMENTED.get(verb) ?? [], undeclared: [] });
   });
 
   it('a block holds only its verb, and an alias prints its verb block', () => {

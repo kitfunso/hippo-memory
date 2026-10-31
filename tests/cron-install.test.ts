@@ -44,6 +44,7 @@ describe.skipIf(process.platform === 'win32')('hippo init installs the daily run
         HOME: tmp,
         USERPROFILE: tmp,
         HIPPO_HOME: hippoHome,
+        HIPPO_SKIP_SCHEDULE: '',
         FAKE_CRON_STATE: state,
         FAKE_CRON_LOG: log,
       },

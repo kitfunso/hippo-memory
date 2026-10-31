@@ -1,15 +1,24 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
-import { loadAllEntries } from '../store/entry-reads.js';
-import type { MemoryEntry } from '../core/memory.js';
+import { truncateWithEllipsis } from '../util/ellipsize.js';
+import { DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import * as api from '../api/index.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
+import { listMemories } from '../api/memories/memories.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, parseBudgetFlag, type CommandContext, flagIsTrue, stringFlag, numberFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  parseBudgetFlag,
+  type CommandContext,
+  flagIsTrue,
+  stringFlag,
+  numberFlag,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { captureConsole } from './print.js';
 import { CONTENT_PREVIEW_CHARS } from '../util/token-text.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const TREE_CHILD_PREVIEW_CHARS = 70;
 const TREE_LEAF_PREVIEW_CHARS = 60;
@@ -17,9 +26,9 @@ const DAG_HEAD_CHARS = 120;
 const DAG_SUMMARY_PREVIEW_CHARS = 200;
 const DAG_CHILD_PREVIEW_CHARS = 100;
 
-export function handleDag({ hippoRoot, flags }: CommandContext): void {
+export async function handleDag({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const entries = loadAllEntries(hippoRoot);
+  const entries = await listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
   const isStats = flagIsTrue(flags, 'stats');
 
   const byLevel = new Map<number, number>();
@@ -28,7 +37,7 @@ export function handleDag({ hippoRoot, flags }: CommandContext): void {
   for (const entry of entries) {
     const level = entry.dag_level ?? 0;
     byLevel.set(level, (byLevel.get(level) ?? 0) + 1);
-    if (level === 1 && !entry.dag_parent_id) unlinked++;
+    if (level === DAG_LEVEL.extracted && !entry.dag_parent_id) unlinked++;
   }
 
   if (isStats) {
@@ -48,10 +57,21 @@ function printDagStats(byLevel: ReadonlyMap<number, number>, unlinked: number): 
   console.log(`  Unlinked facts: ${unlinked}`);
 }
 
+function groupByParent(entries: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
+  const byParent = new Map<string, MemoryEntry[]>();
+  for (const e of entries) {
+    if (!e.dag_parent_id) continue;
+    const list = byParent.get(e.dag_parent_id) ?? [];
+    list.push(e);
+    byParent.set(e.dag_parent_id, list);
+  }
+  return byParent;
+}
+
 function printDagTree(entries: readonly MemoryEntry[]): void {
   // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at top level.
-  const profiles = entries.filter((e) => e.dag_level === 3);
-  const l2List = entries.filter((e) => e.dag_level === 2);
+  const profiles = entries.filter((e) => e.dag_level === DAG_LEVEL.entity);
+  const l2List = entries.filter((e) => e.dag_level === DAG_LEVEL.topic);
   const orphanL2 = l2List.filter((e) => !e.dag_parent_id);
   const childL2ByProfile = new Map<string, typeof l2List>();
   for (const l2 of l2List) {
@@ -60,6 +80,8 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
     list.push(l2);
     childL2ByProfile.set(l2.dag_parent_id, list);
   }
+
+  const childrenByParent = groupByParent(entries);
 
   if (profiles.length === 0 && orphanL2.length === 0) {
     console.log('No DAG summaries yet. Run `hippo sleep` with ANTHROPIC_API_KEY set.');
@@ -76,7 +98,7 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
       const l2Tags = l2.tags.filter((t) => t !== 'dag-summary').join(', ');
       console.log(`   └─ 📌 ${l2.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
       if (l2Tags) console.log(`      [${l2Tags}]`);
-      const facts = entries.filter((e) => e.dag_parent_id === l2.id);
+      const facts = childrenByParent.get(l2.id) ?? [];
       for (const f of facts) {
         console.log(`      └─ ${f.content.slice(0, TREE_LEAF_PREVIEW_CHARS)}`);
       }
@@ -88,7 +110,7 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
     const summaryTags = summary.tags.filter((t) => t !== 'dag-summary').join(', ');
     console.log(`\n📌 ${summary.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
     if (summaryTags) console.log(`   [${summaryTags}]`);
-    const children = entries.filter((e) => e.dag_parent_id === summary.id);
+    const children = childrenByParent.get(summary.id) ?? [];
     for (const child of children) {
       console.log(`   └─ ${child.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
     }
@@ -102,9 +124,8 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
   const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = flags['no-summarize-older'] !== true;
   const scope = stringFlag(flags, 'scope') || undefined;
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId,
+  const ctx: api.ContextWith<'dagReads'> = {
+    ...cliApiContext(hippoRoot, tenantId),
     actor: api.adminActor('cli:assemble'),
   };
   const opts: api.AssembleOpts = {};
@@ -138,14 +159,13 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
   let depth: number | undefined;
   if (rawDepth !== undefined) {
     if (!Number.isInteger(rawDepth) || rawDepth < 1 || rawDepth > 10) {
-      printError(`--depth must be an integer between 1 and 10 (got ${flags['depth']})`);
+      printError(`--depth must be an integer between 1 and 10 (got ${stringFlag(flags, 'depth')})`);
       throw new CliExit(2);
     }
     depth = rawDepth;
   }
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId,
+  const ctx: api.ContextWith<'dagReads'> = {
+    ...cliApiContext(hippoRoot, tenantId),
     actor: api.adminActor('cli:drill'),
   };
   const opts: api.DrillDownOpts = {};
@@ -168,19 +188,19 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     console.log(JSON.stringify(r, null, 2));
     return;
   }
-  console.log(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`);
-  console.log(`  ${r.summary.content.slice(0, DAG_SUMMARY_PREVIEW_CHARS)}${r.summary.content.length > DAG_SUMMARY_PREVIEW_CHARS ? '…' : ''}`);
+  console.log(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants` +
+    `${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`);
+  console.log(`  ${truncateWithEllipsis(r.summary.content, DAG_SUMMARY_PREVIEW_CHARS, '…')}`);
   console.log(`\nChildren (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
   for (const c of r.children) {
-    console.log(`  [L${c.dagLevel}] ${c.id} — ${c.content.slice(0, DAG_CHILD_PREVIEW_CHARS)}${c.content.length > DAG_CHILD_PREVIEW_CHARS ? '…' : ''}`);
+    console.log(`  [L${c.dagLevel}] ${c.id} — ${truncateWithEllipsis(c.content, DAG_CHILD_PREVIEW_CHARS, '…')}`);
   }
 }
 
 export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const summaryId = args[0];
   if (!summaryId) {
-    printError('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
-    throw new CliExit(1);
+    fail('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
   }
   await cmdDrillDown(hippoRoot, tenantId, summaryId, flags);
 }
@@ -188,8 +208,7 @@ export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandC
 export async function handleAssemble({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
-    printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
-    throw new CliExit(1);
+    fail('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
   }
   await cmdAssemble(hippoRoot, tenantId, sessionId, flags);
 }

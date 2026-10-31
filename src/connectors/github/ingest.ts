@@ -1,11 +1,11 @@
 // GitHub event ingest, once per idempotency key. The key comes from the event's own content, never from the unsigned
-// X-GitHub-Delivery header, so a replay cannot get past it by rotating the delivery id. The pre-check is only the fast path:
-// the store logs the key in the memory's own transaction, which is what holds when two workers race.
+// X-GitHub-Delivery header, so a replay cannot get past it by rotating the delivery id. The pre-check is only the fast
+// path: the store logs the key in the memory's own transaction, which is what holds when two workers race.
 
-import { remember, type Context, type RememberOpts } from '../../api/index.js';
-import { requireGroup, storeFor } from '../../store/index.js';
+import type { RememberOpts } from '../../api/index.js';
+import type { ConnectorContext } from '../store.js';
 import type { ConnectorEvent } from '../../store/port.js';
-import { RejectedValueError } from '../../store/rejection.js';
+import { rememberWithEventLog, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
   issueEventToRememberOpts,
@@ -19,13 +19,6 @@ import type {
   GitHubPullRequestEvent,
   GitHubPullRequestReviewCommentEvent,
 } from './types.js';
-
-export type IngestStatus = 'ingested' | 'duplicate' | 'skipped' | 'skipped_duplicate';
-
-export interface IngestResult {
-  status: IngestStatus;
-  memoryId: string | null;
-}
 
 /** Discriminated union of the four event shapes V1 ingests; eventName MUST equal the X-GitHub-Event header,
  *  since computeIdempotencyKey folds it into the dedupe key. */
@@ -86,44 +79,24 @@ function eventUpdatedAt(event: IngestEvent): string | null {
   }
 }
 
-export async function ingestEvent(ctx: Context, input: IngestInput): Promise<IngestResult> {
-  const events = requireGroup(storeFor(ctx), 'connectorEvents');
+export async function ingestEvent(ctx: ConnectorContext, input: IngestInput): Promise<IngestResult> {
+  const events = ctx.store.connectorEvents;
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
     eventUpdatedAt(input.event),
   );
-  const event: ConnectorEvent = { connector: 'github', idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName };
+  const event: ConnectorEvent = {
+    connector: 'github',
+    idempotencyKey,
+    deliveryId: input.deliveryId,
+    eventName: input.event.eventName,
+  };
 
   // Fast path: pre-check. Avoids running the transform / opening a write tx
   // for the common already-seen case (GitHub auto-retries with the same body).
   const seen = await events.eventRecord(event);
   if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
-  const opts = transformEvent(input.event);
-
-  if (!opts) {
-    // Empty body: no memory to write, but mark seen so a retry returns 'duplicate' instead of re-running the transform.
-    await events.markEventSeen(event);
-    return { status: 'skipped', memoryId: null };
-  }
-
-  try {
-    return await rememberWithEventLog(ctx, event, opts);
-  } catch (e) {
-    if (e instanceof RejectedValueError) {
-      // A tombstone hit is a PERMANENT skip, never DLQ-retried: mark the key seen like the empty-body
-      // branch above so a GitHub retry of the same delivery acks as done, not error.
-      await events.markEventSeen(event);
-      return { status: 'skipped', memoryId: null };
-    }
-    throw e;
-  }
-}
-
-async function rememberWithEventLog(ctx: Context, event: ConnectorEvent, opts: RememberOpts): Promise<IngestResult> {
-  // No `|| 'connector:github'` fallback: the caller always builds ctx with the connector subject (same as slack/ingest.ts).
-  const result = await remember(ctx, { ...opts, untrusted: true, event });
-  // Another worker logged this key between the pre-check and the write: its memory stands and ours was not stored.
-  if (result.duplicate) return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
-  return { status: 'ingested', memoryId: result.id };
+  // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the transform.
+  return rememberWithEventLog(ctx, event, transformEvent(input.event));
 }

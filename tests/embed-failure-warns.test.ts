@@ -6,7 +6,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { embedMemory } from '../src/store/embeddings/index.js';
+import { embedMemory } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
@@ -35,6 +35,10 @@ afterEach(() => {
 
 function warnings(): string[] {
   return errorSpy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('embedding failed'));
+}
+
+function summaries(): string[] {
+  return errorSpy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('more embedding errors'));
 }
 
 async function write(content: string): Promise<void> {
@@ -75,15 +79,56 @@ describe('embedMemory provider failure', () => {
   it('warns once and resolves when the config names an unknown provider', async () => {
     // A fresh module, since the test above already spent this process's one warning.
     vi.resetModules();
-    const fresh = await import('../src/store/embeddings/index.js');
+    const fresh = await import('../src/search/embed-memories.js');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
     const entry = createMemory('a memory under a typo in the provider name', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
 
-    await expect(fresh.embedMemory(root, entry)).resolves.toBeUndefined();
-    await expect(fresh.embedMemory(root, entry)).resolves.toBeUndefined();
+    await expect(fresh.embedMemory(root, entry)).resolves.toBe('failed');
+    await expect(fresh.embedMemory(root, entry)).resolves.toBe('failed');
 
     expect(warnings()).toHaveLength(1);
     expect(warnings()[0]).toContain("[hippo] warn: embedding failed (config): Unknown embeddings.provider 'opneai'");
+  });
+
+  it('warns again for a different failure after the first one', async () => {
+    vi.resetModules();
+    const fresh = await import('../src/search/embed-memories.js');
+    const config = path.join(root, 'config.json');
+    const entry = createMemory('a memory that meets two different failures', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(root, entry);
+
+    fs.writeFileSync(config, JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
+    await fresh.embedMemory(root, entry);
+    fs.writeFileSync(config, JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('bad key', { status: 401 })));
+    await fresh.embedMemory(root, entry);
+    await fresh.embedMemory(root, entry);
+
+    expect(warnings()).toHaveLength(2);
+    expect(warnings()[0]).toContain('embedding failed (config)');
+    expect(warnings()[1]).toContain('embedding failed (openai)');
+  });
+
+  it('counts later failures and reports the count once the interval has passed', async () => {
+    vi.resetModules();
+    const fresh = await import('../src/search/embed-memories.js');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('bad key', { status: 401 })));
+      const entry = createMemory('a memory that keeps failing', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+      writeEntry(root, entry);
+      await fresh.embedMemory(root, entry);
+      await fresh.embedMemory(root, entry);
+      await fresh.embedMemory(root, entry);
+      expect(summaries()).toEqual([]);
+      vi.setSystemTime(Date.now() + 61_000);
+      await fresh.embedMemory(root, entry);
+      expect(warnings()).toHaveLength(1);
+      expect(summaries()).toHaveLength(1);
+      expect(summaries()[0]).toContain('3 more embedding errors from openai');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -6,13 +6,13 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import { loadConfig } from '../src/core/config.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
-import { rankRecall, type RankRecallOpts } from '../src/api/recall-pipeline.js';
+import { rankRecall, type RankRecallOpts } from '../src/api/recall/pipeline.js';
 import type { SearchResult } from '../src/core/search-types.js';
 
 const TENANT = 'default';

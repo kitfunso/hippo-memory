@@ -1,43 +1,111 @@
-// The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote hook route's call).
-// promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts);
-// the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
-import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
+// The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
+// hook route's call). promptHookContext copies the CLI's getContext flags (cli/context.ts) bar `continuity`: the CLI
+// points for text formats; this prints whole unless its caller opts in. Parity: tests/prompt-hook-context.test.ts.
+import {
+  getContext, type Context, type ContextResult, type ContextResultEntry, type ContextWith, type ContinuityMode,
+} from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { isSharedStore, loadConfig } from '../core/config.js';
-import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
-import type { DeliveryRecorder } from '../store/delivery-recorder.js';
-import { MAX_ID_LEN } from '../util/http-util.js';
+import { type HippoConfig, isSharedStore, loadConfig } from '../core/config.js';
+import {
+  contextBlockLines,
+  contextCost,
+  crossProjectLines,
+  handoffSectionText,
+  sessionTrailText,
+  settleTokens,
+  snapshotSectionText,
+} from './context-render.js';
+import {
+  createDeliveryRecorder,
+  type DeliveryEventType,
+  type DeliveryFault,
+  type DeliveryRecorder,
+} from '../store/delivery-recorder.js';
+import type { HookRuntime } from '../core/capture-contract.js';
+import { realpathOrResolve } from '../util/real-path.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerLastSent, noteLedgerRowSkipped } from './ledger-db.js';
+import { bookLedgerTurn, ledgerLastSent, ledgerReachOf, ledgerRoot, type LedgerReach } from './ledger-db.js';
+import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
+import { sessionPilotArm } from './pilot-arm.js';
+import type { PilotArm } from '../store/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
 import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
-import {
-  hookPayloadString,
-  isSubagentPayload,
-  shouldSkipUnchanged,
-  type TokenSurface,
-  type TokenUse,
-} from '../store/token-ledger.js';
+import { shouldSkipUnchanged, type TokenSurface, type TokenUse } from '../store/token-ledger.js';
+import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { DEFAULT_CONTEXT_BUDGET } from './context.js';
 
-/** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a no-op. */
+/** What a hook's delivery row says about the call it records. */
+export interface DeliveryStart {
+  stdinText: string | undefined;
+  runtime: HookRuntime;
+  eventType?: DeliveryEventType;
+  /** The host's own session id from its environment, used when the payload names none. */
+  envSessionId: string | undefined;
+  /** Passed through to the recorder; only tests set it. */
+  fault?: DeliveryFault;
+}
+
+/** A delivery recorder for a hook on `ctx.hippoRoot` when the ledger store enables one, else null; never throws. */
+export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): DeliveryRecorder | null {
+  try {
+    // The same store the token ledger writes to, so its config governs both.
+    const root = ledgerRoot(ctx.hippoRoot, ledgerReachOf(ctx));
+    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
+    return createDeliveryRecorder({
+      root,
+      storeHash: blockHash(realpathOrResolve(root)),
+      // ledgerRoot falls back to the global root only when the primary is not initialized.
+      writeStore: root !== ctx.hippoRoot || ctx.reach?.isGlobal === true ? 'global' : 'local',
+      tenantId: ctx.tenantId,
+      stdinText: start.stdinText,
+      envSessionId: start.envSessionId,
+      runtime: start.runtime === 'copilot' ? 'copilot' : undefined,
+      eventType: start.eventType,
+      fault: start.fault,
+    });
+  } catch (error) {
+    log.warn(`delivery ledger skipped: ${errorMessage(error)}`, errorFields(error));
+    return null;
+  }
+}
+
+/** A recorder for `hippo capture-error`, only when the failure log and the ledger are one store, so `failure_id` never
+ * points into another. */
+export function startToolFailureRecorder(
+  ctx: Context,
+  start: Omit<DeliveryStart, 'eventType'>,
+): DeliveryRecorder | null {
+  try {
+    const root = ledgerRoot(ctx.hippoRoot, ledgerReachOf(ctx));
+    if (root === null || realpathOrResolve(root) !== realpathOrResolve(ctx.hippoRoot)) return null;
+    return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
+  } catch (error) {
+    log.warn(`delivery ledger skipped: ${errorMessage(error)}`, errorFields(error));
+    return null;
+  }
+}
+
+/** With `write`, stores on the token ledger's connection (same
+ * store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
   if (rec === null) return;
   try {
     rec.flush(write ?? ((input) => writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
-    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
   }
 }
 
 /** What one render needs once api.getContext has answered. */
 export interface ContextView {
   readonly hippoRoot: string;
+  /** The caller's Context config, else the folder's config.json is read. */
+  readonly config?: HippoConfig;
   readonly tenantId: string;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
@@ -45,19 +113,22 @@ export interface ContextView {
   readonly framing: string;
   readonly rec: DeliveryRecorder | null;
   readonly result: ContextResult;
-  /** Ledger rows stay in `hippoRoot`, never the global store; see promptHookContext. */
-  readonly sharedStore?: boolean;
+  /** Where the ledger rows go; a shared store's reach has no global store, see promptHookContext. */
+  readonly reach: LedgerReach;
   /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule;
-   *  a string or null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have shown. */
+   *  a string or null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere
+   *  may never have shown. */
   readonly printedHash?: string | null;
   /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
   readonly envelope?: HookEnvelope;
 }
 
-/** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the nested one VS Code Local reads. */
+/** `copilot-session-start` is the Copilot harness's top-level reply,
+ * `vscode-session-start` the nested one VS Code Local reads. */
 export type HookEnvelope = 'user-prompt-submit' | 'copilot-session-start' | 'vscode-session-start';
 
-/** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a camelCase `sessionId`, which only the Copilot harness sends. */
+/** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a camelCase `sessionId`, which
+ * only the Copilot harness sends. */
 export function sessionStartEnvelope(stdinText: string | undefined): HookEnvelope {
   return hookPayloadString(stdinText, 'sessionId') !== null ? 'copilot-session-start' : 'vscode-session-start';
 }
@@ -91,9 +162,35 @@ export function toRenderItems(entries: ContextResultEntry[]): RenderItem[] {
   return entries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
 }
 
-/** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins, recent-N) and a never-skipped recall block. */
+/** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins,
+ * recent-N) and a never-skipped recall block. */
 export function additionalContextOutput(view: ContextView): string {
   return renderAdditionalContext(view).stdout;
+}
+
+function renderStaticBlock(
+  view: ContextView,
+  staticItems: RenderItem[],
+  staticCrossEntries: ContextResultEntry[],
+): string {
+  const { result, framing } = view;
+  return settleTokens((t) =>
+    [
+      ...(result.activeSnapshot ? [snapshotSectionText(result.activeSnapshot, result.snapshotMode ?? 'full')] : []),
+      ...(result.sessionHandoff ? [handoffSectionText(result.sessionHandoff, result.handoffMode ?? 'full')] : []),
+      ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
+      // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
+      ...(staticItems.length > 0 ? contextBlockLines(staticItems, t, framing, { showStrength: false }) : []),
+      ...crossProjectLines(staticCrossEntries),
+    ].join('\n'),
+  );
+}
+
+function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['framing']): string {
+  if (recallItems.length === 0) return '';
+  return settleTokens((t) =>
+    contextBlockLines(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' }).join('\n'),
+  );
 }
 
 function renderAdditionalContext(view: ContextView): RenderedContext {
@@ -103,24 +200,16 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
   const staticItems = toRenderItems(staticEntries);
   const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
 
-  const staticBlock = settleTokens((t) => [
-    ...(result.activeSnapshot ? [snapshotText(result.activeSnapshot)] : []),
-    ...(result.sessionHandoff ? [handoffText(result.sessionHandoff)] : []),
-    ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
-    // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
-    ...(staticItems.length > 0 ? contextBlockLines(staticItems, t, framing, { showStrength: false }) : []),
-    ...crossProjectLines(staticCrossEntries),
-  ].join('\n'));
-  const recallBlock = recallItems.length > 0
-    ? settleTokens((t) => contextBlockLines(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' }).join('\n'))
-    : '';
+  const staticBlock = renderStaticBlock(view, staticItems, staticCrossEntries);
+  const recallBlock = renderRecallBlock(recallItems, framing);
   if (!staticBlock.trim() && !recallBlock.trim()) {
     rec?.delivered({ state: 'empty' });
     return NOTHING_RENDERED;
   }
 
   const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
-  const sendStatic = staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
+  const sendStatic =
+    staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
 
   const finalStatic = sendStatic ? staticBlock : '';
   const additionalContext = finalStatic && recallBlock
@@ -141,19 +230,29 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
     staticReused,
   });
   if (finalStatic || recallBlock) {
-    recordAdditionalContextRows(view, surface, { text: finalStatic, items: staticItems.length }, { text: recallBlock, items: recallItems.length });
+    recordAdditionalContextRows(
+      view,
+      surface,
+      { text: finalStatic, items: staticItems.length },
+      { text: recallBlock, items: recallItems.length },
+    );
   }
   return { stdout, staticHash: finalStatic ? blockHash(finalStatic) : null };
 }
 
 /** True, after booking the skip row, when the hook may omit a static block this session already holds. */
-function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlock: string, recallBlock: string, staticCount: number): boolean {
+function skipUnchangedStatic(
+  view: ContextView,
+  surface: TokenSurface,
+  staticBlock: string,
+  recallBlock: string,
+  staticCount: number,
+): boolean {
   const { hippoRoot, payloadSessionId, rec } = view;
-  const ledgerOpts = { sharedStore: view.sharedStore };
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
-  const injectCfg = loadConfig(hippoRoot).pinnedInject;
+  const injectCfg = (view.config ?? loadConfig(hippoRoot)).pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
   const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
     ? injectCfg.refreshTurns
@@ -162,7 +261,7 @@ function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlo
   const staticHash = blockHash(staticBlock);
   // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
-  const last = ledgerLastSent(hippoRoot, view.tenantId, payloadSessionId, surface, ledgerOpts);
+  const last = ledgerLastSent(hippoRoot, view.tenantId, payloadSessionId, surface, view.reach);
   if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
   bookLedgerTurn(hippoRoot, {
     uses: [{
@@ -173,23 +272,36 @@ function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlo
       rec?.delivered({ state: 'reused', staticHash, staticReused: true });
       flushDeliveryRecorder(rec, write);
     },
-  }, ledgerOpts);
+  }, view.reach);
   return true;
 }
 
 interface InjectedBlock { readonly text: string; readonly items: number }
 
-/** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not break the hook. */
-function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, staticPart: InjectedBlock, recallPart: InjectedBlock): void {
+/** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not
+ * break the hook. */
+function recordAdditionalContextRows(
+  view: ContextView,
+  surface: TokenSurface,
+  staticPart: InjectedBlock,
+  recallPart: InjectedBlock,
+): void {
   const row = (part: InjectedBlock, on: TokenSurface): TokenUse => ({
     tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: on, event: 'inject',
     items: part.items, tokens: estimateTokens(part.text), hash: blockHash(part.text),
   });
-  bookLedgerTurn(view.hippoRoot, {
-    uses: [...(staticPart.text ? [row(staticPart, surface)] : []), ...(recallPart.text ? [row(recallPart, 'hook_recall')] : [])],
-    onRowError: noteLedgerRowSkipped,
-    delivery: (write) => flushDeliveryRecorder(view.rec, write),
-  }, { sharedStore: view.sharedStore });
+  bookLedgerTurn(
+    view.hippoRoot,
+    {
+      uses: [
+        ...(staticPart.text ? [row(staticPart, surface)] : []),
+        ...(recallPart.text ? [row(recallPart, 'hook_recall')] : []),
+      ],
+      onRowError: noteLedgerRowSkipped,
+      delivery: (write) => flushDeliveryRecorder(view.rec, write),
+    },
+    view.reach,
+  );
 }
 
 // The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two drift.
@@ -200,31 +312,37 @@ const HOOK_FRAMING = 'observe';
 // blockHash's shape (token-ledger.ts).
 const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
 
-/** The project a hook caller runs in: its id, the folder name its older rows carry, and any other names it resolves to. */
+/** The project a hook caller runs in: its id, the folder name
+ * its older rows carry, and any other names it resolves to. */
 export interface CallerProject {
   readonly name: string;
   readonly legacyName: string;
   readonly aliases?: readonly string[];
 }
 
-interface PromptHookRequest {
+export interface PromptHookRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
   readonly payload?: Readonly<Record<string, JsonValue>>;
-  /** The staticHash of the last reply whose stdout the caller printed in this session; absent, the block is always sent. */
+  /** The staticHash of the last reply whose stdout the caller
+   * printed in this session; absent, the block is always sent. */
   readonly printedHash?: string;
 }
 
-interface PromptHookOpts {
+export interface PromptHookOpts {
   /** The store serves many people, so the caller is not its owner: no global store, no user-global recent rows,
    *  task state only for the caller's own owner and project, and no ledger rows outside this store. */
   readonly sharedStore?: true;
+  /** Default 'full': a pointer names a command that cannot reach this store, so the caller opts in. */
+  readonly continuity?: ContinuityMode;
 }
 
 /** The caps on a hook caller's session id and project names, so a caller other than an HTTP route is bounded too. */
 export function assertCallerIds(sessionId: string, project: CallerProject): void {
   const { name, legacyName, aliases = [] } = project;
-  if (aliases.length > MAX_PROJECT_ALIASES) throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  if (aliases.length > MAX_PROJECT_ALIASES) {
+    throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  }
   if ([sessionId, name, legacyName, ...aliases].some((v) => v.length > MAX_ID_LEN)) {
     throw new BadRequestError(`session id and project names: at most ${MAX_ID_LEN} characters each`);
   }
@@ -237,21 +355,25 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for its project.
- * Omits an unchanged static block only when `printedHash` matches; `arm` is the ledger arm (`hippo` or `holdout`, null at rate 0); a holdout gets empty stdout.
- * `staticHash` is the hash to echo back (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
- * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
+/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read
+ * on `ctx`'s store for its project. Omits an unchanged static block only when `printedHash` matches; `arm` is the
+ * ledger arm (`hippo` or `holdout`, null at rate 0); a holdout gets empty stdout. `staticHash` is the hash to echo back
+ * (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
+ * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before
+ * any arm is booked. */
 export async function promptHookContext(
-  ctx: Context, req: PromptHookRequest, opts: PromptHookOpts = {},
+  ctx: ContextWith<'contextReads'>, req: PromptHookRequest, opts: PromptHookOpts = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
-  if (sharedStore || isSharedStore(ctx.hippoRoot)) assertCallerProject(req.project);
+  const sharedByReach = ctx.reach ? ctx.reach.shared : isSharedStore(ctx.hippoRoot);
+  if (sharedStore || sharedByReach) assertCallerProject(req.project);
   // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
-  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, { sharedStore, ownTenantOnly: true });
+  const reach = ledgerReachOf(ctx, sharedStore);
+  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, { reach, ownTenantOnly: true });
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
   const result = await getContext(ctx, {
@@ -264,11 +386,13 @@ export async function promptHookContext(
     prompt: isJsonString(prompt) ? prompt : undefined,
     cost: contextCost('additional-context', HOOK_FRAMING),
     sharedStore,
+    continuity: opts.continuity ?? 'full',
   });
   const rendered = hasContextData(result)
     ? renderAdditionalContext({
-        hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId: ledgerSessionId,
-        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, sharedStore, printedHash: req.printedHash ?? null,
+        hippoRoot: ctx.hippoRoot, config: ctx.config, tenantId: ctx.tenantId, ledgerSessionId,
+        payloadSessionId: ledgerSessionId, pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, reach,
+        printedHash: req.printedHash ?? null,
       })
     : NOTHING_RENDERED;
   // A sub-agent's output is not the session's, so its caller must not record it as printed.

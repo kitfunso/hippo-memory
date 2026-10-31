@@ -8,8 +8,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, CHURN_STALE_TAG, type MemoryEntry } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import { search } from '../src/search/bm25-search.js';
@@ -109,9 +109,9 @@ function seedStore(): string {
   saveEmbeddingIndex(root, { ...VECTORS, ...OUTSIDE_VECTORS });
   saveStoredEmbeddingModel(root, resolveEmbeddingProvider(root).id);
   const entity = (memoryId: string): number =>
-    insertEntity(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId }).id;
+    insertEntityAt(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId }).id;
   for (const [from, to] of [['z2', 'c1'], ['x1', 'd4'], ['d1', 'd3']]) {
-    insertRelation(root, TENANT, { fromEntityId: entity(from), toEntityId: entity(to), relType: 'supersedes', memoryId: from });
+    insertRelationAt(root, TENANT, { fromEntityId: entity(from), toEntityId: entity(to), relType: 'supersedes', memoryId: from });
   }
   const db = openHippoDb(root);
   try {

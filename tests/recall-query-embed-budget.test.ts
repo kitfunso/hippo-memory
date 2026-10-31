@@ -7,15 +7,17 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { embedMemory, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { embedMemory } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
 import { retrieve } from '../src/api/index.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { embedQueryBy } from '../src/search/vector.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -45,7 +47,7 @@ function seedStore(): string {
 }
 
 async function recall(root: string): Promise<string[]> {
-  const reply = await retrieve({ hippoRoot: root, tenantId: TENANT, actor: { subject: 'cli', role: 'admin' } }, { query: QUERY, mode: 'hybrid', limit: 20 });
+  const reply = await retrieve(apiCtx(root, TENANT, { subject: 'cli', role: 'admin' }), { query: QUERY, mode: 'hybrid', limit: 20 });
   return reply.results.map((r) => r.content);
 }
 
@@ -182,7 +184,7 @@ describe("a recall's query embedding", () => {
     expect(given).toEqual([deadline]);
   });
 
-  it('does not hold the in-process provider to the deadline, which no signal can stop', async () => {
+  it('keeps a vector that arrives after the deadline, as a loaded in-process model gives one', async () => {
     const local: EmbeddingProvider = { kind: 'local', model: 'in-process', id: 'in-process', isAvailable: () => true, embed: async () => [[1, 0]] };
 
     expect(await embedQueryBy(AbortSignal.abort(), local, QUERY)).toEqual([1, 0]);

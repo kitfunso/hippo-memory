@@ -1,20 +1,24 @@
 // Every automatic delete (sleep's dedupe, audit and consolidation flush, and the automatic deleteEntry that `hippo audit --fix`
 // also calls) leaves a memory that backs a decision, incident or other object in place: deleting it would null the object's link.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, type Context } from '../src/api/index.js';
-import { auditMemories } from '../src/store/audit.js';
+import { sleep } from '../src/api/index.js';
+import { auditMemories } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { saveDecision } from '../src/objects/decisions.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
-import { saveIncident } from '../src/objects/incidents.js';
+import { openIncident } from '../src/objects/incidents.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry, memoriesBackingObjects } from '../src/store/delete-and-batch.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 const roots: string[] = [];
 
@@ -30,7 +34,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-const ctxFor = (hippoRoot: string): Context => ({ hippoRoot, tenantId: 'default', actor: { subject: 'object-memories-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): FullContext => (apiCtx(hippoRoot, 'default', { subject: 'object-memories-test', role: 'admin' }));
 
 function run(root: string, sql: string, ...params: string[]): void {
   const db = openHippoDb(root);
@@ -52,14 +56,14 @@ function linkOf(root: string, table: string, objectId: number): string | null {
 }
 
 const SAVERS = [
-  ['decision', 'decisions', (root: string) => saveDecision(root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', 'incidents', (root: string) => saveIncident(root, 'default', { incidentText: 'the billing cron charged twice on the 1st' })],
+  ['decision', 'decisions', async (root: string) => await saveDecision(objectsAt(root), root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
+  ['incident', 'incidents', async (root: string) => await openIncident(objectsAt(root), root, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
 ] as const;
 
 describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
   it('outlives a stronger copy of its text through sleep dedupe, and the link holds', async () => {
     const root = newRoot();
-    const object = save(root);
+    const object = await save(root);
     const backing = readEntry(root, object.memoryId!)!;
     const copy = { ...createMemory(backing.content), strength: 1, retrieval_count: 9 };
     writeEntry(root, copy);
@@ -75,7 +79,7 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
 
   it('outlives the sleep quality audit when its text reads as junk, and only warns', async () => {
     const root = newRoot();
-    const object = save(root);
+    const object = await save(root);
     run(root, `UPDATE memories SET content = 'nope' WHERE id = ?`, object.memoryId!);
 
     const backingSet = memoriesBackingObjects(root);
@@ -89,18 +93,18 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
     expect(linkOf(root, table, object.id)).toBe(object.memoryId);
   });
 
-  it('is refused by an automatic delete and removed by an explicit one', () => {
+  it('is refused by an automatic delete and removed by an explicit one', async () => {
     const root = newRoot();
-    const object = save(root);
+    const object = await save(root);
 
     expect(deleteEntry(root, object.memoryId!, { automatic: true })).toBe(false);
     expect(readEntry(root, object.memoryId!)).not.toBeNull();
     expect(deleteEntry(root, object.memoryId!)).toBe(true);
   });
 
-  it('is skipped by the consolidation flush, as a delete and as a dormant move', () => {
+  it('is skipped by the consolidation flush, as a delete and as a dormant move', async () => {
     const root = newRoot();
-    const object = save(root);
+    const object = await save(root);
     const plain = createMemory('the staging cluster restarts on sundays');
     writeEntry(root, plain);
     const backing = readEntry(root, object.memoryId!)!;
@@ -121,6 +125,6 @@ it('control: a plain weaker copy is still removed by dedupe', () => {
   writeEntry(root, keeper);
   writeEntry(root, copy);
 
-  expect(deduplicateStore(root).removed).toBe(1);
+  expect(deduplicateStore(sqliteConsolidation(root)).removed).toBe(1);
   expect(readEntry(root, copy.id)).toBeNull();
 });

@@ -1,8 +1,9 @@
 // The row fields `api.remember` and `api.supersede` take from a caller in this process reach the row,
 // and a client that sends the same fields over HTTP or MCP changes nothing.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, remember, supersede, type HippoDbContext } from '../src/api/index.js';
+import { adminActor, remember, supersede } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createApiKey } from '../src/store/auth.js';
@@ -10,6 +11,7 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NOTE = 'the billing service retries a failed charge three times';
 const NEWER = 'the billing service retries a failed charge five times';
@@ -26,11 +28,11 @@ const LOCAL = {
 };
 
 let root: string;
-let ctx: HippoDbContext;
+let ctx: FullContext;
 
 beforeEach(() => {
   root = makeRoot('local-write-options', { config: { embeddings: { enabled: false }, autoSleep: { enabled: false } } });
-  ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('cli') };
+  ctx = apiCtx(root, 'default', adminActor('cli'));
 });
 
 afterEach(() => {
@@ -50,8 +52,8 @@ function settable(entry: MemoryEntry) {
 }
 
 describe('in process', () => {
-  it('api.remember stores each field of the local group', () => {
-    const { id } = remember(ctx, {
+  it('api.remember stores each field of the local group', async () => {
+    const { id } = await remember(ctx, {
       content: NOTE,
       local: { layer: Layer.Semantic, pinned: true, confidence: 'inferred', source: 'import', schemaFit: 0.9, traceOutcome: 'success', sourceSessionId: 'sess-9' },
     });
@@ -61,21 +63,21 @@ describe('in process', () => {
     });
   });
 
-  it('weaken starts the row at its strength and multiplies the half-life, never below one day', () => {
-    const plain = row(remember(ctx, { content: NOTE }).id);
-    const weak = row(remember(ctx, { content: NEWER, local: { weaken: { strength: 0.3, halfLifeFactor: 0.5 } } }).id);
-    const floored = row(remember(ctx, { content: `${NEWER} again`, local: { weaken: { strength: 0.3, halfLifeFactor: 0.0001 } } }).id);
+  it('weaken starts the row at its strength and multiplies the half-life, never below one day', async () => {
+    const plain = row((await remember(ctx, { content: NOTE })).id);
+    const weak = row((await remember(ctx, { content: NEWER, local: { weaken: { strength: 0.3, halfLifeFactor: 0.5 } } })).id);
+    const floored = row((await remember(ctx, { content: `${NEWER} again`, local: { weaken: { strength: 0.3, halfLifeFactor: 0.0001 } } })).id);
     expect(weak.strength).toBe(0.3);
     expect(weak.half_life_days).toBe(plain.half_life_days * 0.5);
     expect(floored.half_life_days).toBe(1);
   });
 
-  it('api.supersede overrides replace the old row\'s layer, tags and pin, and without them the successor keeps all three', () => {
-    const seed = (content: string) => remember(ctx, { content, tags: ['billing'], local: { pinned: true } }).id;
-    const kept = row(supersede(ctx, seed(NOTE), NEWER).newId);
+  it('api.supersede overrides replace the old row\'s layer, tags and pin, and without them the successor keeps all three', async () => {
+    const seed = async (content: string) => (await remember(ctx, { content, tags: ['billing'], local: { pinned: true } })).id;
+    const kept = row((await supersede(ctx, await seed(NOTE), NEWER)).newId);
     expect(settable(kept)).toMatchObject({ layer: 'episodic', tags: ['billing'], pinned: true });
 
-    const changed = row(supersede(ctx, seed(`${NOTE} a day`), `${NEWER} a day`, { layer: Layer.Semantic, tags: ['paging'], pinned: false }).newId);
+    const changed = row((await supersede(ctx, await seed(`${NOTE} a day`), `${NEWER} a day`, { layer: Layer.Semantic, tags: ['paging'], pinned: false })).newId);
     expect(settable(changed)).toMatchObject({ layer: 'semantic', tags: ['paging'], pinned: false });
   });
 });

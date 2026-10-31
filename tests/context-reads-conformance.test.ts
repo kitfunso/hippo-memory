@@ -5,7 +5,7 @@ import { listAuditEventsAfter } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import type {
   AmbientCandidateRequest, AmbientLoadResult, AmbientStoreFilter, AmbientTallies, AuditEvent, ContinuityKey, MemoryEntry,
-} from '../src/server.js';
+} from '../src/entry/store-kit.js';
 import { CONTEXT_NOW, OWN_SCOPE, OWNER, PROJECT, seedContextRows } from './_helpers/context-fixture.js';
 import { inMemoryContextStore } from './_helpers/in-memory-context-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from './_helpers/store-conformance.js';

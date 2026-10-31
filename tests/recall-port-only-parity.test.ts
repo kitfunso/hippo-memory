@@ -2,7 +2,9 @@
 // store that answers only through the port; the replies and the rows written must match.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore } from '../src/server.js';
+import { serve } from '../src/server.js';
+import { sqliteStore, type HippoStore } from '../src/entry/store-kit.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { markSharedStore } from '../src/core/config.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
@@ -97,8 +99,8 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
 }
 
 // Seeding three stores row by row ran past the 30 s hook default on windows-latest CI.
-beforeAll(() => {
-  templates = seedTemplates((root) => {
+beforeAll(async () => {
+  templates = await seedTemplates((root) => {
     seedPortBranches(root);
     // A shared store reads only the caller's keyed snapshot, and MCP's loopback caller owns by its subject.
     const key = { owner: 'localhost:cli', project: [PROJECT] };

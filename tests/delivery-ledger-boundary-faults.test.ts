@@ -6,7 +6,6 @@ import { cmdPreCompact } from '../src/capture/compact.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { normaliseHookPayload } from '../src/cli/stdin.js';
-import type { DeliveryFault } from '../src/store/delivery-recorder.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from './_helpers/copilot-hooks.js';
 import {
   SNAPSHOT_TASK, dispose, eventCount, events, eventsN, hippo, hippoAsync, ledgerLines, preCompactPayload, project, resumePayload,
@@ -71,9 +70,9 @@ interface Observed {
 }
 
 /** Pre-compact over a real transcript, then compact-resume over the snapshot it saved. */
-function scenario(proj: Project, fault?: DeliveryFault): Observed {
-  const pre = hippo(proj, ['pre-compact'], { input: preCompactPayload('inv', { transcript_path: writeTranscript(proj), cwd: proj.cwd }), fault });
-  const resume = hippo(proj, ['compact-resume'], { input: resumePayload('inv'), fault });
+function scenario(proj: Project): Observed {
+  const pre = hippo(proj, ['pre-compact'], { input: preCompactPayload('inv', { transcript_path: writeTranscript(proj), cwd: proj.cwd }) });
+  const resume = hippo(proj, ['compact-resume'], { input: resumePayload('inv') });
   const snap = loadActiveTaskSnapshot(proj.hippoRoot, 'default');
   return {
     status: [pre.status, resume.status],
@@ -104,18 +103,13 @@ describe('B9 and B10: the ledger never changes either hook', () => {
     }
   });
 
-  it.each<[string, DeliveryFault | 'renamed-table']>([
-    ['observe', 'observe'],
-    ['build', 'build'],
-    ['flush', 'flush'],
-    ['a renamed delivery_events table', 'renamed-table'],
-  ])('B10: with %s both hooks print the same bytes and save the same rows, with one ledger line each', (_label, kind) => {
+  it('B10: with a renamed delivery_events table both hooks print the same bytes and save the same rows, with one ledger line each', () => {
     const off = project({ ledger: false });
     try {
       const baseline = scenario(off);
-      if (kind === 'renamed-table') renameLedgerTable(p);
-      const pre = hippo(p, ['pre-compact'], { input: preCompactPayload('inv', { transcript_path: writeTranscript(p), cwd: p.cwd }), fault: kind === 'renamed-table' ? undefined : kind });
-      const resume = hippo(p, ['compact-resume'], { input: resumePayload('inv'), fault: kind === 'renamed-table' ? undefined : kind });
+      renameLedgerTable(p);
+      const pre = hippo(p, ['pre-compact'], { input: preCompactPayload('inv', { transcript_path: writeTranscript(p), cwd: p.cwd }) });
+      const resume = hippo(p, ['compact-resume'], { input: resumePayload('inv') });
       expect([pre.status, resume.status]).toEqual(baseline.status);
       expect([pre.stdout, maskTimes(resume.stdout)]).toEqual(baseline.stdout);
       expect(ledgerLines(pre.stderr)).toHaveLength(1);

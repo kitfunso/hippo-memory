@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { blockHash, estimateTokens } from '../src/util/token-text.js';
+import { DELIVERY_LEDGER_VERSION } from '../src/store/delivery-recorder.js';
 import { copilotPayload } from './_helpers/copilot-hooks.js';
 import {
   PROMPT_HOOK, SNAPSHOT_TASK, dispose, eventCount, eventsN, hippo, hippoAsync, hippoNoWorker, installCopilotHooksFile, preCompactPayload,
@@ -27,7 +28,7 @@ describe('what one boundary hook call records', () => {
     expect(r.stdout).not.toBe('');
     const [e] = eventsN(p, 'b1', 1);
     expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
-      .toEqual(['pre-compact', 'claude-code', 'hook', 'payload', 1, 'sent', 3]);
+      .toEqual(['pre-compact', 'claude-code', 'hook', 'payload', 1, 'sent', DELIVERY_LEDGER_VERSION]);
     expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
     expect([e.candidates, e.considered_count, e.emitted_count, e.rejected_count]).toEqual([[], 0, 0, 0]);
   });
@@ -136,13 +137,50 @@ describe('what one boundary hook call records', () => {
   });
 });
 
+describe('I3: the ledger changes nothing a boundary hook prints or exits with', () => {
+  let off: Project;
+
+  beforeEach(() => {
+    off = project({ ledger: false });
+  });
+
+  afterEach(() => {
+    dispose(off);
+  });
+
+  // The snapshot's Updated line carries the real save time, which differs between two saves.
+  const maskClock = (out: string): string => out.replace(/^- Updated: .*$/m, '- Updated: <time>');
+
+  it('I3: pre-compact, compact-resume and session-end give the same stdout and status off and on', () => {
+    const sid = 'i3';
+    const steps: Array<[string, (t: Project) => ReturnType<typeof hippo>]> = [
+      ['pre-compact', (t) => hippo(t, ['pre-compact'], { input: preCompactPayload(sid, { transcript_path: writeTranscript(t) }) })],
+      ['compact-resume', (t) => {
+        // The resume freshness check reads the real clock, so the snapshot is saved just before the call.
+        saveSnapshot(t, sid);
+        return hippo(t, ['compact-resume'], { input: resumePayload(sid) });
+      }],
+      ['session-end', (t) => hippoNoWorker(t, ['session-end'], { input: sessionEndPayload(sid) })],
+    ];
+    for (const [hook, call] of steps) {
+      const on = call(p);
+      const plain = call(off);
+      expect([on.status, plain.status], `${hook}: ${on.stderr}${plain.stderr}`).toEqual([0, 0]);
+      if (hook !== 'session-end') expect(on.stdout, hook).not.toBe('');
+      expect(maskClock(on.stdout), hook).toBe(maskClock(plain.stdout));
+    }
+    expect(eventsN(p, sid, 3).map((e) => e.event_type)).toEqual(['pre-compact', 'compact-resume', 'session-end']);
+    expect(eventCount(off)).toBe(0);
+  });
+});
+
 describe('what one session-end hook call records', () => {
   it('E1: a Claude Code SessionEnd payload leaves one empty boundary row and prints nothing', () => {
     const r = hippoNoWorker(p, ['session-end'], { input: sessionEndPayload('e1') });
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'e1', 1);
     expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
-      .toEqual(['session-end', 'claude-code', 'hook', 'payload', 1, 'empty', 3]);
+      .toEqual(['session-end', 'claude-code', 'hook', 'payload', 1, 'empty', DELIVERY_LEDGER_VERSION]);
     expect([e.emitted_hash, e.injected_tokens, e.prompt_hash, e.query_hash, e.recall_trace_id, e.candidates])
       .toEqual([null, 0, null, null, null, []]);
   });

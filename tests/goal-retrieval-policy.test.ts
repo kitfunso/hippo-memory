@@ -10,31 +10,17 @@
 // Real DB, real CLI subprocess. Same isolation harness as Task 6
 // (cwd tempdir, separate HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1)
 // to keep dev-machine memories from leaking into tests.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
-import { remember, type Context } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
-
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-b3-pol-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 
 function recallCli(
   env: TestEnv,
@@ -67,21 +53,21 @@ describe('retrieval policy', () => {
   let env: TestEnv;
 
   beforeEach(() => {
-    env = makeEnv();
+    env = makeEnv('b3-pol');
   });
 
   afterEach(() => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('error-prioritized policy ranks error-tagged > non-error within same goal', () => {
-    const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'note one about auth refactor', tags: ['auth-rewrite'] });
-    remember(ctx, {
+  it('error-prioritized policy ranks error-tagged > non-error within same goal', async () => {
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    await remember(ctx, { content: 'note one about auth refactor', tags: ['auth-rewrite'] });
+    await remember(ctx, {
       content: 'lesson learned during auth refactor: bare except handler caused a bug',
       tags: ['auth-rewrite', 'error'],
     });
-    remember(ctx, { content: 'note two about auth refactor', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'note two about auth refactor', tags: ['auth-rewrite'] });
 
     pushGoal(env.hippoRoot, {
       sessionId: 's-p1',
@@ -94,9 +80,9 @@ describe('retrieval policy', () => {
     expect(top[0].content).toContain('lesson learned');
   });
 
-  it('final multiplier never exceeds 3.0x even with extreme policy weights', () => {
-    const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
+  it('final multiplier never exceeds 3.0x even with extreme policy weights', async () => {
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    await remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
 
     // Baseline: no session → no boost.
     const base = recallCli(env, 'high-error lesson', '');

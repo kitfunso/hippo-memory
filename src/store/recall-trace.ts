@@ -1,13 +1,15 @@
-/** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results` and `recall_trace_outcomes`.
- * One trace row per recall on api.recall, api.getContext and CLI cmdRecall: the (query, shown, outcome) triple the learned components train on.
- * All writes are fail-soft: a failed trace write is logged to stderr and swallowed, never breaking the surrounding call. */
+/** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results` and
+ * `recall_trace_outcomes`. One trace row per recall on api.recall, api.getContext and CLI cmdRecall: the (query, shown,
+ * outcome) triple the learned components train on. All writes are fail-soft: a failed trace write is logged to stderr
+ * and swallowed, never breaking the surrounding call. */
 
-import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { RerankStep } from '../core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
 import { blockHash } from '../util/token-text.js';
+import { placeholders } from '../util/sql.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {
@@ -18,7 +20,7 @@ export interface RecallTraceResultInput {
   rerankSteps?: RerankStep[];
 }
 
-/** Input to `writeRecallTrace` / `writeRecallTraceAtRoot`. */
+/** Input to `writeRecallTrace`. */
 export interface RecallTraceInput {
   tenantId: string;
   sessionId?: string | null;
@@ -33,8 +35,9 @@ export interface RecallTraceInput {
   results: RecallTraceResultInput[];
 }
 
-/** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step embeds goal tag text) and would leak
- * user content into `rerank_json`; an allowlist, so any future free-form field is dropped too. */
+/** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step
+ * embeds goal tag text) and would leak user content into `rerank_json`; an allowlist, so any future free-form field is
+ * dropped too. */
 function sanitizeRerankSteps(
   steps: RerankStep[],
 ): Array<Pick<RerankStep, 'stage' | 'multiplier' | 'scoreBefore' | 'scoreAfter'>> {
@@ -46,15 +49,16 @@ function sanitizeRerankSteps(
   }));
 }
 
-/** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to stderr and returns null on failure.
- * api.recall/getContext reach this via `finishRecallAt` on their own handle; CLI cmdRecall uses `writeRecallTraceAtRoot` (its audit handle is closed). */
+/** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to
+ * stderr and returns null on failure. api.recall/getContext reach this via `finishRecallAt` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
     const queryHash = blockHash(input.query);
     const ts = new Date().toISOString();
     return withWriteScope(db, 'write_recall_trace', () => {
       const insertTrace = db.prepare(`
-        INSERT INTO recall_traces (ts, tenant_id, session_id, pipeline, query_hash, query_length, result_count, explain_mode)
+        INSERT INTO recall_traces (ts, tenant_id, session_id, pipeline, query_hash, query_length, result_count,
+        explain_mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const traceResult = insertTrace.run(
@@ -92,24 +96,6 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
   }
 }
 
-/** Short-lived connection at `root`: writes the trace, closes; returns the id or null (fail-soft). For CLI cmdRecall; api.recall must reuse its open handle.
- * LOCKSTEP: never touches `last_trace_id`, which advances only in the same `saveIndex` write as `last_retrieval_ids`; the caller sets it from the id. */
-export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): number | null {
-  let db: DatabaseSyncLike;
-  try {
-    db = openHippoDb(root);
-  } catch (error) {
-    rethrowIfSqliteBlocked(error);
-    log.error(`recall trace connection failed: ${errorMessage(error)}`, errorFields(error));
-    return null;
-  }
-  try {
-    return writeRecallTrace(db, input);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 /** Input to `recordTraceOutcome`. */
 export interface RecordTraceOutcomeInput {
   traceId: number;
@@ -119,8 +105,9 @@ export interface RecordTraceOutcomeInput {
   memoryIds: string[];
 }
 
-/** Record an outcome against a trace; call ONLY with ids from last-retrieval state or an SDK `traceId`, never from api.outcome (stale-trace mislink).
- * Skips (log.warn) unless the trace is in `input.tenantId`; keeps only memoryIds it returned. Own table so `pruneAuditLog` cannot erase training data. */
+/** Record an outcome against a trace; call ONLY with ids from last-retrieval state or an SDK `traceId`, never from
+ * api.outcome (stale-trace mislink). Skips (log.warn) unless the trace is in `input.tenantId`; keeps only memoryIds it
+ * returned. Own table so `pruneAuditLog` cannot erase training data. */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
     // SAFETY: row shape matches the single `tenant_id` column named in the
@@ -154,19 +141,53 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
   }
 }
 
-/** Pruned on write, counted back from the event's ts capped at the real clock, so a far-future fake time spares real rows. */
+/** Pruned on write, counted back from the event's ts capped at the real clock, so a far-future fake time spares real
+ * rows. */
 export const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 /** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
 export const DELIVERY_LEDGER_WAIT_MS = 50;
-/** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire twice. */
+/** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire
+ * twice. */
 export const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
 
 const DELIVERY_EVENT_COLUMNS = [
-  'ts', 'ledger_version', 'tenant_id', 'runtime', 'event_type', 'surface', 'store_hash', 'write_store', 'project_hash',
-  'session_id', 'session_state', 'host_turn_id', 'turn_seq', 'duplicate_of', 'prompt_hash', 'prompt_length', 'query_hash',
-  'recall_trace_id', 'block_state', 'prompt_recall', 'considered_count', 'filtered_count', 'selected_count', 'emitted_count',
-  'rejected_count', 'rejected_unlisted', 'sections_shown', 'sections_dropped', 'budget_tokens', 'selected_tokens',
-  'injected_tokens', 'static_hash', 'recall_hash', 'emitted_hash', 'elapsed_ms',
+  'ts',
+  'ledger_version',
+  'tenant_id',
+  'runtime',
+  'event_type',
+  'surface',
+  'store_hash',
+  'write_store',
+  'project_hash',
+  'session_id',
+  'session_state',
+  'host_turn_id',
+  'turn_seq',
+  'duplicate_of',
+  'prompt_hash',
+  'prompt_length',
+  'query_hash',
+  'recall_trace_id',
+  'block_state',
+  'prompt_recall',
+  'considered_count',
+  'filtered_count',
+  'selected_count',
+  'emitted_count',
+  'rejected_count',
+  'rejected_unlisted',
+  'sections_shown',
+  'sections_dropped',
+  'budget_tokens',
+  'selected_tokens',
+  'injected_tokens',
+  'static_hash',
+  'recall_hash',
+  'emitted_hash',
+  'elapsed_ms',
+  'tool_use_id',
+  'failure_id',
 ] as const;
 
 /** One stored `delivery_candidates` row. */
@@ -222,6 +243,8 @@ export interface DeliveryEventRow {
   recall_hash: string | null;
   emitted_hash: string | null;
   elapsed_ms: number;
+  tool_use_id: string | null;
+  failure_id: number | null;
   candidates: DeliveryCandidateRow[];
 }
 
@@ -236,7 +259,20 @@ function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput):
   return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
 }
 
+function findDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // Without a call id a time window would merge parallel failures, so two such fires stay two rows.
+  if (input.toolUseId === undefined || input.toolUseId === null) return null;
+  // SAFETY: a single `id` column, undefined when no row matches.
+  const row = db.prepare(`
+    SELECT id FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND tool_use_id = ? AND turn_seq IS NOT NULL
+    ORDER BY id LIMIT 1
+  `).get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as { id: number } | undefined;
+  return row?.id ?? null;
+}
+
 function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  if (input.eventType === 'tool-failure') return findDuplicateToolFailure(db, input);
   // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
   if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
@@ -250,11 +286,16 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
   }
   if (input.promptHash === null) return null;
   // SAFETY: rows carry exactly the `id` and `ts` columns selected.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT id, ts FROM delivery_events
-    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND prompt_hash = ? AND host_turn_id IS NULL AND turn_seq IS NOT NULL
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND prompt_hash = ? AND host_turn_id IS NULL AND turn_seq
+    IS NOT NULL
     ORDER BY id
-  `).all(input.tenantId, input.sessionId, input.eventType, input.promptHash) as Array<{ id: number; ts: string }>;
+  `,
+    )
+    .all(input.tenantId, input.sessionId, input.eventType, input.promptHash) as Array<{ id: number; ts: string }>;
   const at = Date.parse(input.ts);
   // Absolute difference: two hook processes can commit out of ts order.
   return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
@@ -269,7 +310,73 @@ function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
   return (row.m ?? 0) + 1;
 }
 
-/** One event plus its candidates in one write transaction, then prune; fail-soft. The caller must not hold a transaction on `db`. */
+function deliveryEventValues(input: DeliveryEventInput, turnSeq: number | null, duplicateOf: number | null) {
+  return [
+    input.ts,
+    DELIVERY_LEDGER_VERSION,
+    input.tenantId,
+    input.runtime,
+    input.eventType,
+    input.surface,
+    input.storeHash,
+    input.writeStore,
+    input.projectHash,
+    input.sessionId,
+    input.sessionState,
+    input.hostTurnId,
+    turnSeq,
+    duplicateOf,
+    input.promptHash,
+    input.promptLength,
+    input.queryHash,
+    input.recallTraceId,
+    input.blockState,
+    input.promptRecall ? 1 : 0,
+    input.consideredCount,
+    input.filteredCount,
+    input.selectedCount,
+    input.emittedCount,
+    input.rejectedCount,
+    input.rejectedUnlisted,
+    input.sectionsShown,
+    input.sectionsDropped,
+    input.budgetTokens,
+    input.selectedTokens,
+    input.injectedTokens,
+    input.staticHash,
+    input.recallHash,
+    input.emittedHash,
+    Math.round(input.elapsedMs),
+    input.toolUseId ?? null,
+    input.failureId ?? null,
+  ];
+}
+
+function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: DeliveryEventInput): void {
+  const insertCandidate = db.prepare(`
+    INSERT INTO delivery_candidates (event_id, tenant_id, memory_id, source_store, pool, stage, outcome, reason,
+    cand_rank, score, tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const c of input.candidates) {
+    insertCandidate.run(
+      eventId,
+      input.tenantId,
+      c.memoryId,
+      c.sourceStore,
+      c.pool,
+      c.stage,
+      c.outcome,
+      c.reason,
+      c.rank,
+      c.score,
+      c.tokens,
+    );
+  }
+}
+
+/** One event plus its candidates in one write transaction, then prune; fail-soft. The caller must not hold a
+ * transaction on `db`. */
 export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   try {
     return withWriteScope(db, 'write_delivery_event', () => {
@@ -277,43 +384,31 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
       const isTurn = input.sessionId !== null && (input.sessionState === 'payload' || input.sessionState === 'env');
       const duplicateOf = isTurn ? findDuplicateTurn(db, input) : null;
       const turnSeq = isTurn && duplicateOf === null ? nextTurnSeq(db, input) : null;
-      const values = [
-        input.ts, DELIVERY_LEDGER_VERSION, input.tenantId, input.runtime, input.eventType, input.surface, input.storeHash,
-        input.writeStore, input.projectHash, input.sessionId, input.sessionState, input.hostTurnId, turnSeq, duplicateOf,
-        input.promptHash, input.promptLength, input.queryHash, input.recallTraceId, input.blockState, input.promptRecall ? 1 : 0,
-        input.consideredCount, input.filteredCount, input.selectedCount, input.emittedCount, input.rejectedCount,
-        input.rejectedUnlisted, input.sectionsShown, input.sectionsDropped, input.budgetTokens, input.selectedTokens,
-        input.injectedTokens, input.staticHash, input.recallHash, input.emittedHash, Math.round(input.elapsedMs),
-      ];
+      const values = deliveryEventValues(input, turnSeq, duplicateOf);
       const eventId = Number(db.prepare(`
         INSERT INTO delivery_events (${DELIVERY_EVENT_COLUMNS.join(', ')})
-        VALUES (${DELIVERY_EVENT_COLUMNS.map(() => '?').join(', ')})
+        VALUES (${placeholders(DELIVERY_EVENT_COLUMNS.length)})
       `).run(...values).lastInsertRowid);
-      const insertCandidate = db.prepare(`
-        INSERT INTO delivery_candidates (event_id, tenant_id, memory_id, source_store, pool, stage, outcome, reason, cand_rank, score, tokens)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      for (const c of input.candidates) {
-        insertCandidate.run(eventId, input.tenantId, c.memoryId, c.sourceStore, c.pool, c.stage, c.outcome, c.reason, c.rank, c.score, c.tokens);
-      }
+      insertDeliveryCandidates(db, eventId, input);
       const pruneFrom = Math.min(Date.parse(input.ts), Date.now());
       const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
       db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
       return eventId;
     });
   } catch (error) {
-    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
 }
 
-/** Write on the request's handle, or a short-lived one, waiting at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock. Fail-soft. */
+/** Write on the request's handle, or a short-lived one, waiting at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock.
+ * Fail-soft. */
 export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput): number | null {
   let db: DatabaseSyncLike;
   try {
     db = openHippoDb(root);
   } catch (error) {
-    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
   try {
@@ -323,7 +418,8 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
   }
 }
 
-/** On a caller's open handle, which saves a second open and close per turn; the handle's own lock wait comes back after. */
+/** On a caller's open handle, which saves a second open and close per turn; the handle's own lock wait comes back
+ * after. */
 export function writeDeliveryEventOnHandle(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   const prior = Math.trunc(Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout));
   db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
@@ -334,10 +430,16 @@ export function writeDeliveryEventOnHandle(db: DatabaseSyncLike, input: Delivery
   }
 }
 
-/** A session's delivery events in write order, each with its candidate rows; `sessionId` null reads session-less events. */
-export function readDeliveryEvents(db: DatabaseSyncLike, tenantId: string, sessionId: string | null): DeliveryEventRow[] {
+/** A session's delivery events in write order, each with its candidate rows; `sessionId` null reads session-less
+ * events. */
+export function readDeliveryEvents(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string | null,
+): DeliveryEventRow[] {
   // SAFETY: SELECT * over delivery_events returns exactly the columns DeliveryEventRow names, less `candidates`.
-  const events = db.prepare(`SELECT * FROM delivery_events WHERE tenant_id = ? AND session_id IS ? ORDER BY id`)
+  const events = db
+    .prepare(`SELECT * FROM delivery_events WHERE tenant_id = ? AND session_id IS ? ORDER BY id`)
     .all(tenantId, sessionId) as Array<Omit<DeliveryEventRow, 'candidates'>>;
   const candidates = db.prepare(`
     SELECT * FROM delivery_candidates WHERE event_id = ?

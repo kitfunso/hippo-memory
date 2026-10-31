@@ -80,7 +80,7 @@ describe('captureSessionTexts', () => {
     const rows = loadAllEntries(root, 't1');
     expect(rows.map((r) => r.content).sort()).toEqual([...ITEMS].sort());
     for (const r of rows) {
-      expect(r).toMatchObject({ source: 'capture', tenantId: 't1', origin_project: 'acme-web', source_session_id: 'sess-1' });
+      expect(r).toMatchObject({ source: 'capture', tenant_id: 't1', origin_project: 'acme-web', source_session_id: 'sess-1' });
     }
     expect(auditActors('remember', 't1')).toEqual([ACTOR, ACTOR, ACTOR]);
     expect(loadAllEntries(root)).toHaveLength(3);
@@ -105,7 +105,7 @@ describe('captureSessionTexts', () => {
   it('writes under the context tenant whatever else the request carries', () => {
     const smuggled = { ...req(TEXTS), global: true, tenantId: undefined, dryRun: true };
     expect(captureSessionTexts(ctxFor(root, 't9'), smuggled).captured).toBe(3);
-    expect(loadAllEntries(root).map((r) => r.tenantId)).toEqual(['t9', 't9', 't9']);
+    expect(loadAllEntries(root).map((r) => r.tenant_id)).toEqual(['t9', 't9', 't9']);
   });
 
   it('throws on an empty project name and writes nothing', () => {

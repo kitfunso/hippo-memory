@@ -4,7 +4,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
+import { serve } from '../src/server.js';
+import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/entry/store-kit.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { markSharedStore } from '../src/core/config.js';
@@ -55,7 +57,7 @@ const HIDDEN: readonly SeedRow[] = [
   seedRow('mem_x_archived', 'archived rollout plan', 10, NEAR, { kind: 'archived' }),
   seedRow('mem_x_superseded', 'old rollout plan', 11, NEAR, { superseded_by: 'mem_l_api' }),
   seedRow('mem_x_private', 'private rollout token', 12, NEAR, { scope: 'slack:private:C1' }),
-  ...Array.from({ length: 50 }, (_, i) => seedRow(`mem_o_${String(i).padStart(2, '0')}`, QUERY, 13, NEAR, { tenantId: 'other' })),
+  ...Array.from({ length: 50 }, (_, i) => seedRow(`mem_o_${String(i).padStart(2, '0')}`, QUERY, 13, NEAR, { tenant_id: 'other' })),
 ];
 const HIDDEN_IDS = [...HIDDEN.map((r) => r.entry.id), ORPHAN];
 
@@ -291,8 +293,8 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
       expect(viaViews).toHaveLength(2000);
       expect(viaViews[0]![0]).toBe(PLANTED);
       expect(viaViews[0]![2]).toBeGreaterThan(0.999);
-      expect((await resolveVectorArm(QUERY, entries, { hippoRoot: root, store: views })).embeddingIndex[PLANTED]).toBeInstanceOf(Float32Array);
-      expect((await resolveVectorArm(QUERY, entries, { hippoRoot: root, store: copies })).embeddingIndex[PLANTED]).toBeInstanceOf(Array);
+      expect((await resolveVectorArm(QUERY, entries, { root, store: views }, {})).embeddingIndex[PLANTED]).toBeInstanceOf(Float32Array);
+      expect((await resolveVectorArm(QUERY, entries, { root, store: copies }, {})).embeddingIndex[PLANTED]).toBeInstanceOf(Array);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

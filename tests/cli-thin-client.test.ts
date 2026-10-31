@@ -8,6 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { boundPort } from './_helpers/listen.js';
+import { waitFor } from './_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
 /**
@@ -58,44 +59,34 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
   // gate is racy because writePidfile fires synchronously before the listen
   // ack returns to userland; combine with a real health probe to be safe.
   const pidfilePath = join(workspace, '.hippo', 'server.pid');
-  const deadline = Date.now() + 10_000;
-  let ready = false;
   let port = 0;
-  while (Date.now() < deadline) {
+  await waitFor(async () => {
     if (child.exitCode !== null) {
       throw new Error(
         `hippo serve exited early (code=${child.exitCode}). stdout=${stdoutBuf} stderr=${stderrBuf}`,
       );
     }
-    if (existsSync(pidfilePath)) {
-      port = pidfilePort(pidfilePath);
-      try {
-        const res = await fetch(`http://127.0.0.1:${port}/health`);
-        if (res.status === 200) { ready = true; break; }
-      } catch { /* server not up yet */ }
+    if (!existsSync(pidfilePath)) return false;
+    port = pidfilePort(pidfilePath);
+    try {
+      return (await fetch(`http://127.0.0.1:${port}/health`)).status === 200;
+    } catch {
+      return false; // server not up yet
     }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  if (!ready) {
+  }, { timeoutMs: 10_000, intervalMs: 100, what: 'server ready' }).catch((err: Error) => {
     child.kill('SIGKILL');
-    throw new Error(`server did not become ready within 10s. stdout=${stdoutBuf} stderr=${stderrBuf}`);
-  }
+    throw new Error(`${err.message}. stdout=${stdoutBuf} stderr=${stderrBuf}`);
+  });
 
   const stop = async (): Promise<void> => {
     if (child.exitCode !== null) return;
     child.kill('SIGTERM');
     // Windows doesn't actually deliver SIGTERM; fall back to SIGKILL after a beat.
-    const stopDeadline = Date.now() + 3_000;
-    while (Date.now() < stopDeadline && child.exitCode === null) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    await waitFor(() => child.exitCode !== null, { timeoutMs: 3_000, intervalMs: 50 }).catch(() => undefined);
     if (child.exitCode === null) child.kill('SIGKILL');
     // Wait for the pidfile to be cleared OR for the process to be gone, then
     // best-effort wipe so the next spawn starts clean.
-    const wipeDeadline = Date.now() + 2_000;
-    while (Date.now() < wipeDeadline && existsSync(pidfilePath)) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    await waitFor(() => !existsSync(pidfilePath), { timeoutMs: 2_000, intervalMs: 50 }).catch(() => undefined);
     if (existsSync(pidfilePath)) {
       try { rmSync(pidfilePath); } catch { /* ignore */ }
     }
@@ -465,7 +456,8 @@ describe('cli thin-client mode', () => {
     // connection-refused — the exact branch that calls removePidfileIfOwned.
     const stub = createServer((req, res) => {
       if (req.url === '/health') {
-        res.writeHead(200, { 'content-type': 'application/json' });
+        // connection: close, so the command request opens a fresh socket and is refused instead of reusing a dying one.
+        res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
         res.end(JSON.stringify({
           ok: true, version: '0.0.0', started_at: startedAt, pid: process.pid,
         }));
@@ -537,7 +529,7 @@ describe('cli thin-client mode', () => {
     // forget and --archive however the server died.
     const stub = createServer((req, res) => {
       if (req.url === '/health') {
-        res.writeHead(200, { 'content-type': 'application/json' });
+        res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
         res.end(JSON.stringify({
           ok: true, version: '0.0.0', started_at: startedAt, pid: process.pid,
         }));

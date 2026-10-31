@@ -7,12 +7,14 @@ import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { pushGoal } from '../../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { closePrediction, savePrediction } from '../../src/store/predictions.js';
 import type { RecallResult } from '../../src/api/index.js';
+import { flushStatsMirrors } from '../../src/store/mirrors.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 export const SESSION = 'golden-session';
@@ -76,7 +78,7 @@ function seedLocal(root: string): string {
     seeded('deploy target was the old staging cluster', 'mem_p_old', '2026-01-02T00:00:00.000Z', { superseded_by: 'mem_p_new' }),
     seeded('deploy target is the new staging cluster in eu west', 'mem_p_new', '2026-01-25T00:00:00.000Z'),
     seeded('deploy goal work: migrate the rollout scripts to the new runner', 'mem_p_goal', '2026-01-15T00:00:00.000Z', { retrieval_count: 3 }, { tags: ['goal-alpha'] }),
-    seeded('deploy trace: ran the canary and promoted it', 'mem_p_trace', '2026-01-22T00:00:00.000Z', {}, { layer: Layer.Trace, trace_outcome: 'success' }),
+    seeded('deploy trace: ran the canary and promoted it', 'mem_p_trace', '2026-01-22T00:00:00.000Z', {}, { layer: Layer.Trace, traceOutcome: 'success' }),
     seeded('unrelated note about lunch options near the office', 'mem_p_noise', '2026-01-21T00:00:00.000Z'),
   ];
   for (let i = 0; i < 6; i++) {
@@ -129,14 +131,24 @@ function pinUpdatedAt(root: string): void {
 export interface Templates { dir: string; goalId: string }
 
 /** Seeds the three template stores once per file; `extendLocal` adds rows to the local store before the stamps are pinned. */
-export function seedTemplates(extendLocal?: (root: string) => void): Templates {
-  const dir = mkdtempSync(join(tmpdir(), 'hippo-parity-template-'));
-  const goalId = seedLocal(join(dir, 'local'));
-  extendLocal?.(join(dir, 'local'));
-  seedWide(join(dir, 'wide'));
-  seedGlobal(join(dir, 'global'));
-  for (const kind of ['local', 'wide', 'global']) pinUpdatedAt(join(dir, kind));
-  return { dir, goalId };
+export async function seedTemplates(extendLocal?: (root: string) => void | Promise<void>): Promise<Templates> {
+  // Rows made by createMemory (the prediction mirror) take evalNow, so a real-clock seed drifts against recall at FAKE_NOW.
+  const prior = process.env.HIPPO_FAKE_NOW;
+  process.env.HIPPO_FAKE_NOW = FAKE_NOW;
+  _resetAblationCacheForTests();
+  try {
+    const dir = mkdtempSync(join(tmpdir(), 'hippo-parity-template-'));
+    const goalId = seedLocal(join(dir, 'local'));
+    await extendLocal?.(join(dir, 'local'));
+    seedWide(join(dir, 'wide'));
+    seedGlobal(join(dir, 'global'));
+    for (const kind of ['local', 'wide', 'global']) pinUpdatedAt(join(dir, kind));
+    return { dir, goalId };
+  } finally {
+    if (prior === undefined) delete process.env.HIPPO_FAKE_NOW;
+    else process.env.HIPPO_FAKE_NOW = prior;
+    _resetAblationCacheForTests();
+  }
 }
 
 export interface Store { home: string; root: string; globalRoot: string; goalId: string }
@@ -183,6 +195,7 @@ export function rowsOf(root: string) {
 
 /** The stats.json mirror the SQLite store rewrites after each counter bump, or null before the first. */
 export function statsMirror(root: string): string | null {
+  flushStatsMirrors(root);
   const file = join(root, 'stats.json');
   return existsSync(file) ? readFileSync(file, 'utf8') : null;
 }

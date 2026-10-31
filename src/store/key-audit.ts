@@ -6,7 +6,8 @@ import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { KeyRevoke } from './port.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 
-/** The revoke and its audit row commit together, so a failed audit write leaves the key live and the caller sees the error. */
+/** The revoke and its audit row commit together, so a failed audit write leaves the key live and the caller sees the
+ * error. */
 export function revokeKeyAt(db: DatabaseSyncLike, revoke: KeyRevoke): string {
   return withWriteScope(db, 'revoke_api_key', () => {
     const row = selectApiKeyOwner(db, revoke.keyId);
@@ -20,6 +21,7 @@ export function revokeKeyAt(db: DatabaseSyncLike, revoke: KeyRevoke): string {
 
 export function auditHighIdAt(db: DatabaseSyncLike): number {
   // SAFETY: the SELECT names one column, seq; `.get` returns undefined before audit_log's first row.
-  const row = db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'audit_log'").get() as { seq: number } | undefined;
+  const row = db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'audit_log'").get() as
+    { seq: number } | undefined;
   return row?.seq ?? 0;
 }

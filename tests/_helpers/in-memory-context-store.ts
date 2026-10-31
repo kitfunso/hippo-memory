@@ -1,13 +1,14 @@
 // A store other than hippo.db for the ContextReads group: it copies the rows getContext reads out of hippo.db, then answers
-// each read from memory with the rules hippo-memory/server exports, so a test shows another store can match hippo.db's SQL.
+// each read from memory with the rules hippo-memory/store-kit exports, so a test shows another store can match hippo.db's SQL.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/core/handoff.js';
 import {
-  ftsTermParts, passesScopeFilterForRecall, rarestFtsQuery, SECRET_TAGS, tallyAmbientEntries, withSqliteAllowed,
-  type AmbientCandidateRequest, type AmbientLoadResult, type AuditEvent, type ContextReads, type ContinuityKey, type HippoStore,
-  type MemoryEntry, type RecentOrigins, type SessionHandoff, type VectorReads,
-} from '../../src/server.js';
+  ftsTermParts, passesScopeFilterForRecall, rarestFtsQuery, SECRET_TAGS, tallyAmbientEntries, type AmbientCandidateRequest,
+  type AmbientLoadResult, type AuditEvent, type ContextReads, type ContinuityKey, type HippoStore, type MemoryEntry,
+  type RecentOrigins, type SessionHandoff, type VectorReads,
+} from '../../src/entry/store-kit.js';
+import { withSqliteAllowed } from '../../src/db/open.js';
 import { HANDOFF_COLUMNS } from '../../src/store/handoffs.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
 import { assertTenantId } from '../../src/store/tenant.js';
@@ -136,17 +137,22 @@ function recentRows(live: readonly MemoryRow[], needed: number, admit: (e: Memor
     : newest;
   const window = Math.max(needed * 4, 32);
   const drifted = live.some((r) => [...r.created].length !== 24 || !/z$/i.test(r.created));
-  if (!drifted) {
-    const windowed = newest.slice(0, window).map(rowToEntry);
-    const kept = windowed.filter(keep);
-    if (kept.length >= needed || windowed.length < window) return kept;
-    if (origins) {
-      const ownWindow = own.slice(0, window).map(rowToEntry);
-      const ownKept = ownWindow.filter(keep);
-      if (ownKept.length >= needed || ownWindow.length < window) return ownKept;
-    }
+  if (drifted) return own.map(rowToEntry).filter(keep);
+  const windowed = newest.slice(0, window).map(rowToEntry);
+  let kept = windowed.filter(keep);
+  if (kept.length >= needed || windowed.length < window) return kept;
+  if (origins) {
+    const ownWindow = own.slice(0, window).map(rowToEntry);
+    kept = ownWindow.filter(keep);
+    if (kept.length >= needed || ownWindow.length < window) return kept;
   }
-  return own.map(rowToEntry).filter(keep);
+  // Keyset pages past the window, each four times the last, until enough rows are kept.
+  for (let start = window, size = window * 4; kept.length < needed; start += size, size *= 4) {
+    const page = own.slice(start, start + size).map(rowToEntry);
+    kept = [...kept, ...page.filter(keep)];
+    if (page.length < size) break;
+  }
+  return kept;
 }
 
 export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {

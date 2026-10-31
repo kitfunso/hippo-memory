@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../src/index.js';
 import { strengthBucket } from '../src/consolidate/dedupe.js';
-import { sleep } from '../src/api/sleep.js';
+import { initStore } from '../src/store/open.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -44,6 +45,7 @@ describe('package entry re-exports strengthBucket', () => {
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'index.js')));
     expect(out.type).toBe('function');
     expect(out.one).toBe(100);
+    // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
     expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/consolidate\/dedupe\.js';$/m);
   });
@@ -51,9 +53,25 @@ describe('package entry re-exports strengthBucket', () => {
 
 // An add-on runs consolidation in its own process; adminActor stays internal because sleep reads only actor.subject.
 describe('package entry re-exports sleep', () => {
-  it('src/index.ts exposes the same function api/sleep.ts defines, and not adminActor', () => {
-    expect(entry.sleep).toBe(sleep);
+  it('src/index.ts exposes sleep and not adminActor', () => {
+    expect(entry).toHaveProperty('sleep');
     expect('adminActor' in entry).toBe(false);
+  });
+
+  it('runs a Context that carries no store on hippo.db under its root', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-entry-sleep-'));
+    const origHippoHome = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = home;
+    try {
+      initStore(home);
+      const result = await entry.sleep({ hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, { dryRun: true });
+      expect(result.dryRun).toBe(true);
+      expect(result.active).toBe(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
+      else delete process.env.HIPPO_HOME;
+    }
   });
 
   it('the built package resolves sleep by name and ships its option and result types', () => {
@@ -64,10 +82,31 @@ describe('package entry re-exports sleep', () => {
     const out = importBuiltEntry<{ type: string; admin: boolean }>(script);
     expect(out.type).toBe('function');
     expect(out.admin).toBe(false);
+    // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export \{ sleep, type SleepOpts, type SleepResult \} from '\.\/api\/sleep\.js';$/m);
+    expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
+    // The published signature takes the public Context, which may carry no store.
+    expect(dts).toMatch(/^export declare function sleep\(ctx: Context, opts\?: SleepOpts\): Promise<SleepResult>;$/m);
     // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.
-    expect(readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep.d.ts'), 'utf-8')).not.toMatch(/__phases|SleepPhases/);
+    expect(readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8')).not.toMatch(/__phases|SleepPhases/);
+  });
+});
+
+// The test seams live on their own subpath; a seam leaking back into /server or the root would ship test hooks to production callers.
+describe('hippo-memory/testing', () => {
+  it('resolves through the package exports map to dist/entry/testing.js and holds every reset seam', () => {
+    const script = [
+      "const url = import.meta.resolve('hippo-memory/testing');",
+      "const m = await import('hippo-memory/testing');",
+      "const server = await import('hippo-memory/server');",
+      'console.log(JSON.stringify({ url, names: Object.keys(m).sort(), onServer: Object.keys(server).some((n) => /^_+reset/.test(n)) }));',
+    ].join('\n');
+    const out = importBuiltEntry<{ url: string; names: string[]; onServer: boolean }>(script);
+    expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.js')));
+    expect(out.names.every((n) => /^_+reset\w+/.test(n))).toBe(true);
+    expect(out.names).toContain('__resetSessionRecallHistoryHttp');
+    expect(out.onServer).toBe(false);
+    expect(existsSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.d.ts'))).toBe(true);
   });
 });
 
@@ -107,12 +146,12 @@ describe('published runtime exports', () => {
       generateId getEmbedding getGlobalRoot graphExpandRecall
       heartbeatCard hybridSearch
       importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault initGlobal initStore isCardStatus isEmbeddingAvailable isHandoffOutcome
-      listAuditEventsAfter listCards listMemoryConflicts listPeers listSessionEvents loadActiveTaskSnapshot loadAllEntries loadCard loadCardComments loadCardDeps loadCardRuns loadEmbeddingIndex loadFreshActiveTaskSnapshot loadHandoffById loadIndex loadLatestHandoff loadLatestHandoffForCard loadRecallSearchEntries loadSearchEntries loadSessionDecayContext
+      listAuditEventsAfter listCards listMemoryConflicts listPeers listSessionEvents loadActiveTaskSnapshot loadAllEntries loadCard loadCardComments loadCardDeps loadCardRuns loadEmbeddingIndex loadFreshActiveTaskSnapshot loadHandoffById loadIndex loadLatestHandoff loadLatestHandoffForCard loadRecallEntries loadSearchEntries loadSessionDecayContext
       markRetrieved multihopSearch
       openHippoDb openHippoDbReadOnly
       partitionLessons physicsSearch promoteToGlobal
       queryAuditEvents
-      readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched
+      readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched runWatchedLine
       saveActiveTaskSnapshot saveEmbeddingIndex saveSessionHandoff search searchBoth searchBothHybrid shareMemory sleep stampHandoffOutcome strengthBucket syncGlobalToLocal
       temporalBoost textOverlap tokenize transferScore
       wmClear wmFlush wmPush wmRead writeEntry writeSessionEndHandoff",
@@ -124,29 +163,17 @@ describe('published runtime exports', () => {
       resolveProjectIdentity",
         "./server": "BadRequestError
       ConflictError
-      EMBEDDING_MODEL_META_KEY
       ForbiddenError
       HttpError
       LOOPBACK_HOST_HEADER
       NotFoundError
-      OTHER_STORE_MARKER OtherStoreFolderError
-      RECALL_DEFAULT_DENY_SCOPES RejectedValueError
-      SECRET_TAGS StoreBusyError
-      __resetSessionRecallHistoryHttp
       authCreate authCreateSelf authRevoke
-      bindSessionOwner bufferToFloat32
+      bindSessionOwner bindSessionOwnerOn
       captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
-      decodeVector
-      encodeVector entryAfterOutcome
-      float32ToBuffer ftsTermParts
-      hasGroup
-      isCrossSite isLoopback isReservedActor isSharedStore
-      ownScopeTouches ownerOrSubject
-      passesScopeFilterForRecall preCompactForCaller promptHookContext
-      rankVectorRows rarestFtsQuery rejectionDigest replacesIndex
-      saveCompactionItemsForCaller serve sessionEndHandoffForCaller sqliteStore
-      tallyAmbientEntries
-      withSqliteAllowed",
+      isCrossSite isLoopback isReservedActor
+      ownerOrSubject
+      preCompactForCaller promptHookContext
+      saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
         "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
       WORKING_STATE_CAPS
       collectHandoffEvidence collectSessionTurns compactSummaryBody
@@ -155,6 +182,23 @@ describe('published runtime exports', () => {
       parseCompactionItems
       scrubForSharing sessionTail
       transcriptWorkingState",
+        "./store-kit": "EMBEDDING_MODEL_META_KEY
+      OTHER_STORE_MARKER
+      RECALL_DEFAULT_DENY_SCOPES RejectedValueError
+      SECRET_TAGS StoreBusyError
+      bufferToFloat32
+      decodeVector
+      encodeVector entryAfterOutcome
+      float32ToBuffer ftsTermParts
+      hasGroup
+      isSharedStore
+      narrowStore
+      ownScopeTouches
+      passesScopeFilterForRecall
+      rankVectorRows rarestFtsQuery rejectionDigest replacesIndex
+      sqliteStore
+      tallyAmbientEntries",
+        "./testing": "__resetSessionRecallHistoryHttp _resetAblationCacheForTests _resetLossAversionRatioCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests",
       }
     `);
   });

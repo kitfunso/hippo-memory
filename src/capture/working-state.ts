@@ -1,4 +1,5 @@
-// A session's working state read from its transcript tail, with no store in the imports, so a hook with no store can derive it.
+// A session's working state read from its transcript tail, with no store in the imports, so a hook with no store can
+// derive it.
 import * as fs from 'fs';
 import type { TaskSnapshot } from '../store/rows.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
@@ -13,7 +14,10 @@ const PRE_COMPACT_SUMMARY_CAP = 2000;
 const PRE_COMPACT_NEXT_STEP_CAP = 500;
 const TRIM_MARKER = '[...earlier turns trimmed]\n';
 
-/** The longest each field of {@link transcriptWorkingState} can be, so a check of a sent working state imports these instead of copying them. */
+/**
+ * The longest each field of {@link transcriptWorkingState} can be, so a check of a sent working state imports these
+ * instead of copying them.
+ */
 export const WORKING_STATE_CAPS = {
   task: PRE_COMPACT_TASK_CAP,
   summary: PRE_COMPACT_SUMMARY_CAP + TRIM_MARKER.length,
@@ -26,16 +30,29 @@ export type WorkingState = Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'>;
 export function fitWorkingState(state: WorkingState): WorkingState {
   return {
     task: truncateCodePointSafe(state.task, WORKING_STATE_CAPS.task),
-    // Only past the cap, since re-trimming a summary that fits would drop its head again; the cut keeps the newest turns.
-    summary: state.summary.length > WORKING_STATE_CAPS.summary ? truncateKeepNewest(state.summary, PRE_COMPACT_SUMMARY_CAP) : state.summary,
+    // Only past the cap, since re-trimming a summary that fits would drop its head again; the cut keeps the newest
+    // turns.
+    summary:
+      state.summary.length > WORKING_STATE_CAPS.summary
+        ? truncateKeepNewest(state.summary, PRE_COMPACT_SUMMARY_CAP)
+        : state.summary,
     next_step: truncateCodePointSafe(state.next_step, WORKING_STATE_CAPS.next_step),
   };
 }
 
-/** Each empty field falls back to `existing`'s, since a tool-heavy tail derives no task; null when all are empty, so blanks never replace a snapshot.
+/**
+ * Each empty field falls back to `existing`'s, since a tool-heavy tail derives no task; null when all are empty, so
+ * blanks never replace a snapshot.
  *  Never across sessions: another session's task saved under this id would pass compact-resume's session check. */
-export function mergeWorkingState(derived: WorkingState, existing: TaskSnapshot | null, sessionId: string | null): WorkingState | null {
-  const fallback = existing !== null && (existing.session_id === null || sessionId === null || existing.session_id === sessionId) ? existing : null;
+export function mergeWorkingState(
+  derived: WorkingState,
+  existing: TaskSnapshot | null,
+  sessionId: string | null,
+): WorkingState | null {
+  const fallback =
+    existing !== null && (existing.session_id === null || sessionId === null || existing.session_id === sessionId)
+      ? existing
+      : null;
   const merged = {
     task: derived.task || (fallback?.task ?? ''),
     summary: derived.summary || (fallback?.summary ?? ''),
@@ -44,7 +61,10 @@ export function mergeWorkingState(derived: WorkingState, existing: TaskSnapshot 
   return merged.task || merged.summary || merged.next_step ? merged : null;
 }
 
-/** Keeps the LAST maxChars behind a trim marker, aligned to a nearby line start: the summary runs oldest first, so a head cap would drop the newest working state. */
+/**
+ * Keeps the LAST maxChars behind a trim marker, aligned to a nearby line start: the summary runs oldest first, so a
+ * head cap would drop
+ * the newest working state. */
 export function truncateKeepNewest(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   let start = text.length - maxChars;
@@ -55,8 +75,18 @@ export function truncateKeepNewest(text: string, maxChars: number): string {
   return TRIM_MARKER + text.slice(start);
 }
 
-/** Most recent plain-text user message in a JSONL tail, from a Claude Code or a Copilot transcript. */
-function lastPlainUserMessage(jsonl: string): string {
+type LineFlags = Parameters<typeof humanUserText>[0];
+type LineMessage = Parameters<typeof humanUserText>[1];
+
+/**
+ * Newest main-agent `role` turn in a JSONL tail, from a Claude Code or a Copilot transcript; `textOf` reads a Claude
+ * Code line, '' when it has no text.
+ */
+function lastTurnText(
+  jsonl: string,
+  role: 'user' | 'assistant',
+  textOf: (entry: LineFlags, message: LineMessage) => string,
+): string {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   for (let i = lines.length - 1; i >= 0; i--) {
     let entry: unknown;
@@ -68,55 +98,42 @@ function lastPlainUserMessage(jsonl: string): string {
     if (!isObjectLike(entry)) continue;
     if (!('type' in entry)) continue;
     const copilot = copilotTurn(entry);
-    if (copilot?.role === 'user') return copilot.text;
-    if (entry.type !== 'user') continue;
-    // An isMeta user line holds an earlier compact summary and an isSidechain one is a sub-agent turn; neither is the human's task.
-    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
+    if (copilot?.role === role) return copilot.text;
+    if (entry.type !== role) continue;
+    // An isMeta line holds an earlier compact summary and an isSidechain one is a sub-agent turn; neither is this
+    // session's own.
+    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) {
+      continue;
+    }
     const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
     if (!message) continue;
-    const text = humanUserText(entry, message);
+    const text = textOf(entry, message);
     if (text) return text;
   }
   return '';
 }
 
-/** Last assistant text block in a JSONL tail (skips thinking + tool_use, same as summariseTranscript). */
-function lastAssistantTextBlock(jsonl: string): string {
-  const lines = jsonl.split('\n').filter((l) => l.trim());
-  for (let i = lines.length - 1; i >= 0; i--) {
-    let entry: unknown;
-    try {
-      entry = JSON.parse(lines[i]);
-    } catch {
-      continue; // the tail read can start mid-line; skip the torn fragment
-    }
-    if (!isObjectLike(entry)) continue;
-    if (!('type' in entry)) continue;
-    const copilot = copilotTurn(entry);
-    if (copilot?.role === 'assistant') return copilot.text;
-    if (entry.type !== 'assistant') continue;
-    // Same meta/sidechain guard as lastPlainUserMessage: sub-agent turns
-    // (isSidechain) are not this session's next step.
-    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
-    const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
-    if (!message) continue;
-    const content = 'content' in message ? message.content : undefined;
-    if (!Array.isArray(content)) continue;
-    for (let j = content.length - 1; j >= 0; j--) {
-      const block = content[j];
-      if (isObjectLike(block)) {
-        const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
-        if (isStringValue(blockText) && blockText.trim()) {
-          return blockText.trim();
-        }
-      }
-    }
+/** The last text block of an assistant message, skipping thinking and tool_use blocks (as summariseTranscript does). */
+function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
+  const content = message.content;
+  if (!Array.isArray(content)) return '';
+  for (let j = content.length - 1; j >= 0; j--) {
+    const block = content[j];
+    if (!isObjectLike(block)) continue;
+    const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+    if (isStringValue(blockText) && blockText.trim()) return blockText.trim();
   }
   return '';
 }
 
-/** A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null with a logged reason when nothing is derivable. */
-export function transcriptWorkingState(transcriptPath: string, log: (message: string) => void): Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null {
+/**
+ * A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null
+ * with a logged
+ * reason when nothing is derivable. */
+export function transcriptWorkingState(
+  transcriptPath: string,
+  log: (message: string) => void,
+): Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null {
   let tail = '';
   let rawTask = '';
   let rawNextStep = '';
@@ -125,10 +142,12 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
     // megabytes back: grow the window a bounded number of times until both turns are in it.
     const size = fs.statSync(transcriptPath).size;
     for (const cap of [PRE_COMPACT_TAIL_BYTES, PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
-      if (cap > PRE_COMPACT_TAIL_BYTES) log(`tail window grown to ${cap} bytes (last ${rawTask ? 'assistant' : 'user'} turn is further back)`);
+      if (cap > PRE_COMPACT_TAIL_BYTES) {
+        log(`tail window grown to ${cap} bytes (last ${rawTask ? 'assistant' : 'user'} turn is further back)`);
+      }
       tail = readTranscriptTail(transcriptPath, cap);
-      rawTask = lastPlainUserMessage(tail);
-      rawNextStep = lastAssistantTextBlock(tail);
+      rawTask = lastTurnText(tail, 'user', humanUserText);
+      rawNextStep = lastTurnText(tail, 'assistant', lastTextBlock);
       if ((rawTask && rawNextStep) || size <= cap) break;
     }
   } catch (err) {

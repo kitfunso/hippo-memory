@@ -10,7 +10,9 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-import { recall, remember } from '../src/api/index.js';
+import { cliStdioHost } from '../src/cli/api-context.js';
+import { retrieve, remember, narrowContext } from '../src/api/index.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 interface Connection { location(): string | null }
 type ConnectionMethod = (this: Connection, ...args: never[]) => void;
@@ -81,8 +83,8 @@ beforeAll(async () => {
   // Boot opens the held connection, so every count below is the requests' own.
   // An add-on route that runs two api helpers, as a hook route does.
   const addon: AddonRoute = { path: '/v1/test/remember-then-recall', handler: async ({ ctx }) => {
-    remember(ctx, { content: 'the release train leaves every second Wednesday' });
-    return { total: recall(ctx, { query: 'release train' }).total };
+    await remember(narrowContext(ctx, 'entryWrites'), { content: 'the release train leaves every second Wednesday' });
+    return { total: (await retrieve(ctx, { query: 'release train' })).total };
   } };
   server = await serve({ hippoRoot: root, port: 0, routes: [addon] });
 });
@@ -108,8 +110,8 @@ describe('store opens per request', () => {
     expect(await opensDuring(() => call('POST', '/mcp', recallOverMcp))).toEqual({});
   });
 
-  it('an add-on route opens the store once across the api helpers it runs', async () => {
-    expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({ local: 1 });
+  it('an add-on route that runs two api helpers opens no connection on the server thread', async () => {
+    expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({});
   });
 
   it('concurrent recalls and a write among them open no connection on the server thread', async () => {
@@ -132,10 +134,11 @@ describe('store opens per request', () => {
 });
 
 describe('stdio MCP tool calls', () => {
-  it('interleaved calls each open and close their own handle', async () => {
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp' };
+  it('interleaved calls each open and close their own handle, in the scope the stdio host gives each frame', async () => {
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, store: sqliteStore(root) };
     const reply = (id: number, query: string) =>
-      handleMcpRequest({ ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } }, ctx);
+      cliStdioHost.runRequest(() =>
+        handleMcpRequest({ ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } }, ctx));
     let replies: Array<McpResponse | null> = [];
     const counts = await opensDuring(async () => {
       replies = await Promise.all([reply(1, 'rollback'), reply(2, 'deploy'), reply(3, 'staging')]);

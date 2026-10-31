@@ -7,7 +7,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpDir: string;
 beforeEach(() => {
@@ -18,19 +19,19 @@ afterEach(() => {
 });
 
 describe('api.recall continuity flag', () => {
-  it('defaults to no continuity block (hot path)', () => {
+  it('defaults to no continuity block (hot path)', async () => {
     initStore(tmpDir);
     writeEntry(tmpDir, createMemory('test memory about widgets', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
-    const result = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const result = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'widgets' },
     );
     expect(result.continuity).toBeUndefined();
     expect(result.continuityTokens).toBeUndefined();
   });
 
-  it('includes snapshot, handoff, and recent events when includeContinuity=true', () => {
+  it('includes snapshot, handoff, and recent events when includeContinuity=true', async () => {
     initStore(tmpDir);
     writeEntry(tmpDir, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     saveActiveTaskSnapshot(tmpDir, 'default', {
@@ -54,8 +55,8 @@ describe('api.recall continuity flag', () => {
       source: 'test',
     });
 
-    const result = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const result = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'deploys', includeContinuity: true },
     );
     expect(result.continuity).toBeDefined();
@@ -65,12 +66,12 @@ describe('api.recall continuity flag', () => {
     expect(result.continuityTokens).toBeGreaterThan(0);
   });
 
-  it('returns continuity block with nulls/empty when no continuity state exists', () => {
+  it('returns continuity block with nulls/empty when no continuity state exists', async () => {
     initStore(tmpDir);
     writeEntry(tmpDir, createMemory('lonely memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
-    const result = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const result = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'lonely', includeContinuity: true },
     );
     expect(result.continuity).toBeDefined();
@@ -80,7 +81,7 @@ describe('api.recall continuity flag', () => {
     expect(result.continuityTokens).toBe(0);
   });
 
-  it('does not surface another tenant continuity', () => {
+  it('does not surface another tenant continuity', async () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
       task: 'A secret',
@@ -103,8 +104,8 @@ describe('api.recall continuity flag', () => {
       source: 'test',
     });
 
-    const result = recall(
-      { hippoRoot: tmpDir, tenantId: 'tenantB', actor: { subject: 'test', role: 'admin' } },
+    const result = await retrieve(
+      apiCtx(tmpDir, 'tenantB', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     expect(result.continuity!.activeSnapshot).toBeNull();
@@ -113,7 +114,7 @@ describe('api.recall continuity flag', () => {
   });
 
   // codex P2: do not resurrect a stale handoff when the active snapshot is gone.
-  it('does not surface a handoff from a session with no active snapshot', () => {
+  it('does not surface a handoff from a session with no active snapshot', async () => {
     initStore(tmpDir);
     saveSessionHandoff(tmpDir, 'default', {
       version: 1,
@@ -123,8 +124,8 @@ describe('api.recall continuity flag', () => {
       artifacts: [],
     });
 
-    const result = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const result = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     expect(result.continuity!.activeSnapshot).toBeNull();
@@ -133,7 +134,7 @@ describe('api.recall continuity flag', () => {
 
   // v1.2: scope column ships on task_snapshots. Default-deny rule must reject
   // private-scope continuity for no-scope callers; explicit-scope match works.
-  it('default-deny scope rule excludes private-scope continuity for no-scope callers', () => {
+  it('default-deny scope rule excludes private-scope continuity for no-scope callers', async () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'private task',
@@ -144,14 +145,14 @@ describe('api.recall continuity flag', () => {
       scope: 'slack:private:Csecret',
     });
 
-    const noScopeResult = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const noScopeResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     expect(noScopeResult.continuity!.activeSnapshot).toBeNull();
 
-    const scopedResult = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const scopedResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true, scope: 'slack:private:Csecret' },
     );
     expect(scopedResult.continuity!.activeSnapshot?.task).toBe('private task');
@@ -160,7 +161,7 @@ describe('api.recall continuity flag', () => {
   // codex v1.2 round 2 P1: loadLatestHandoff SELECTs were missing the scope
   // column even after the writer set it. Without scope on the loaded row,
   // a private handoff would surface to no-scope callers.
-  it('loadLatestHandoff returns scope on the row, default-deny rejects private', () => {
+  it('loadLatestHandoff returns scope on the row, default-deny rejects private', async () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Public anchor',
@@ -178,8 +179,8 @@ describe('api.recall continuity flag', () => {
       scope: 'slack:private:Csecret',
     });
 
-    const noScopeResult = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const noScopeResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     // Snapshot is public-scope (null) so it surfaces. Handoff is private,
@@ -187,8 +188,8 @@ describe('api.recall continuity flag', () => {
     expect(noScopeResult.continuity!.activeSnapshot?.task).toBe('Public anchor');
     expect(noScopeResult.continuity!.sessionHandoff).toBeNull();
 
-    const scopedResult = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const scopedResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true, scope: 'slack:private:Csecret' },
     );
     // Note: snapshot has scope=null and won't match 'slack:private:Csecret'
@@ -199,7 +200,7 @@ describe('api.recall continuity flag', () => {
   // codex v1.2 round 1 P0: explicit scope must EXACT-match, not allow-all.
   // The v1.1.0 filter was `opts.scope || isPublic` which let any explicit
   // scope see every continuity row regardless of that row's scope.
-  it('explicit scope is exact-match, not allow-all (cross-scope leak guard)', () => {
+  it('explicit scope is exact-match, not allow-all (cross-scope leak guard)', async () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'C1 task',
@@ -211,21 +212,21 @@ describe('api.recall continuity flag', () => {
     });
 
     // Caller asks for C2 → must NOT see C1 snapshot.
-    const c2Result = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const c2Result = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true, scope: 'slack:private:C2' },
     );
     expect(c2Result.continuity!.activeSnapshot).toBeNull();
 
     // Caller asks for C1 exactly → DOES see C1 snapshot.
-    const c1Result = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const c1Result = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true, scope: 'slack:private:C1' },
     );
     expect(c1Result.continuity!.activeSnapshot?.task).toBe('C1 task');
   });
 
-  it('reports continuityTokens with Math.ceil(len/4) accounting', () => {
+  it('reports continuityTokens with Math.ceil(len/4) accounting', async () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'aaaa',
@@ -235,22 +236,22 @@ describe('api.recall continuity flag', () => {
       source: 'test',
     });
 
-    const result = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const result = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     // 4 + 4 + 4 chars at Math.ceil(len/4) = 1+1+1 = 3
     expect(result.continuityTokens).toBe(3);
   });
 
-  it('counts outcome, targetRuntime and cardId toward continuityTokens', () => {
+  it('counts outcome, targetRuntime and cardId toward continuityTokens', async () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'aaaa', summary: 'bbbb', next_step: 'cccc',
       session_id: 'sess-1', source: 'test',
     });
-    const before = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const before = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
 
@@ -258,8 +259,8 @@ describe('api.recall continuity flag', () => {
       version: 1, sessionId: 'sess-1', summary: 'handoff', artifacts: [],
       outcome: 'success', targetRuntime: 'node', cardId: 'CARD-1',
     });
-    const after = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+    const after = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     expect(after.continuityTokens!).toBeGreaterThan(before.continuityTokens!);

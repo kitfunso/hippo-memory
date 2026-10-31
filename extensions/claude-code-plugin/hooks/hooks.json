@@ -5,14 +5,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo context --auto --budget 1500 2>/dev/null || echo 'No hippo store found. Run: hippo init'"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "hippo last-sleep || true",
             "timeout": 5
           }

@@ -8,28 +8,12 @@
 // form both record the correct text. Uses the real-CLI subprocess harness
 // (isolated cwd .hippo + HIPPO_HOME + HIPPO_SKIP_AUTO_INTEGRATIONS) like goal-cli.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
-
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-incident-cli-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 
 function run(env: TestEnv, args: string[]): string {
   return execFileSync('node', [CLI, ...args], {
@@ -48,7 +32,7 @@ function run(env: TestEnv, args: string[]): string {
 describe('hippo incident CLI', () => {
   let env: TestEnv;
   beforeEach(() => {
-    env = makeEnv();
+    env = makeEnv('incident-cli');
   });
   afterEach(() => {
     rmSync(env.cwd, { recursive: true, force: true });

@@ -1,5 +1,6 @@
 // An imported agent memory (a tool's tag and a source starting with that tool's prefix) is kept for good: never auto-deleted,
 // decayed away or made dormant. The tag alone is not enough, since merge copies source tags onto rows sourced 'consolidation'.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,10 +18,12 @@ import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
-import { auditMemory } from '../src/store/audit.js';
+import { auditMemory } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { NO_MERGE_TAGS } from '../src/sharing/share.js';
-import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api/index.js';
+import { forget, listDormant, sleep, supersede } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 // Each case commits rows to a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -44,7 +47,7 @@ function newRoot(configJson?: string): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): HippoDbContext => ({ hippoRoot, tenantId: 'default', actor: { subject: 'keep-rule-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): FullContext => (apiCtx(hippoRoot, 'default', { subject: 'keep-rule-test', role: 'admin' }));
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const keptRow = (content: string): MemoryEntry => createMemory7(content, { tags: [TAG], source: KEPT_SOURCE });
 const okFetcher = () => vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }));
@@ -214,7 +217,7 @@ describe('sleep with decay forced', () => {
     expect(readEntry(root, kept.id)).not.toBeNull();
     expect(readEntry(root, merged.id)).toBeNull();
     expect(readEntry(root, plain.id)).toBeNull();
-    expect(listDormant(ctxFor(root)).map((m) => m.id).sort()).toEqual(name === 'dormant on' ?[merged.id, plain.id].sort() : []);
+    expect((await listDormant(ctxFor(root))).map((m) => m.id).sort()).toEqual(name === 'dormant on' ?[merged.id, plain.id].sort() : []);
   });
 
   it('with the learned memory-value rescue on, the kept row still stays active and never goes dormant', async () => {
@@ -226,7 +229,7 @@ describe('sleep with decay forced', () => {
     await consolidate(root, { now: sixtyDaysOn() });
 
     expect(readEntry(root, kept.id)).not.toBeNull();
-    expect(listDormant(ctxFor(root)).map((m) => m.id)).not.toContain(kept.id);
+    expect((await listDormant(ctxFor(root))).map((m) => m.id)).not.toContain(kept.id);
   });
 
   it('a kept row survives a second sleep further on', async () => {
@@ -263,7 +266,7 @@ describe('a memory saved from a compaction fades like any other', () => {
 
     await consolidate(root, { now: sixtyDaysOn() });
     expect(readEntry(root, faded.id)).toBeNull();
-    expect(listDormant(ctxFor(root)).map((m) => m.id)).toEqual([faded.id]);
+    expect((await listDormant(ctxFor(root))).map((m) => m.id)).toEqual([faded.id]);
   });
 });
 
@@ -279,7 +282,7 @@ describe('dedupe and audit leave a kept row alone', () => {
     writeEntry(root, keeper);
     writeEntry(root, copy);
 
-    deduplicateStore(root);
+    deduplicateStore(sqliteConsolidation(root));
 
     expect(readEntry(root, keeper.id)).not.toBeNull();
     expect(readEntry(root, copy.id) !== null).toBe(survives);
@@ -302,32 +305,32 @@ describe('dedupe and audit leave a kept row alone', () => {
 });
 
 describe('forget and supersede still work on a kept row', () => {
-  it('forget removes it', () => {
+  it('forget removes it', async () => {
     const root = newRoot();
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
 
-    expect(forget(ctxFor(root), kept.id)).toEqual({ ok: true, id: kept.id });
+    expect(await forget(ctxFor(root), kept.id)).toEqual({ ok: true, id: kept.id });
     expect(readEntry(root, kept.id)).toBeNull();
   });
 
-  it('supersede chains it to a new row', () => {
+  it('supersede chains it to a new row', async () => {
     const root = newRoot();
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
 
-    const result = supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
+    const result = await supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
 
     expect(readEntry(root, kept.id)?.superseded_by).toBe(result.newId);
     expect(readEntry(root, result.newId)?.content).toBe('the release train leaves on tuesdays now');
   });
 
-  it('the superseded old version stops being kept in both the function and the SQL, and its successor is kept', () => {
+  it('the superseded old version stops being kept in both the function and the SQL, and its successor is kept', async () => {
     const root = newRoot();
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
 
-    const { newId } = supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
+    const { newId } = await supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
 
     expect(canAutoDelete(readEntry(root, kept.id)!)).toBe(true);
     expect(canAutoDelete(readEntry(root, newId)!)).toBe(false);

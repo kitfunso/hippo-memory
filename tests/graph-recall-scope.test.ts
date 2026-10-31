@@ -17,7 +17,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
@@ -41,7 +41,7 @@ function sr(entry: MemoryEntry, score: number): SearchResult {
   return { entry, score, bm25: score, cosine: 0, tokens: estimateTokens(entry.content) };
 }
 function ent(home: string, tenant: string, m: MemoryEntry, name: string): number {
-  return insertEntity(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
+  return insertEntityAt(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
 }
 function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
   return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
@@ -60,7 +60,7 @@ describe('graph-recall scope parity', () => {
     const ePriv = ent(home, T, priv, 'PRIV');
     // priv is the `from` endpoint (reached direction 'from'), so it is not treated as a
     // superseded endpoint and would surface by default absent the scope fix.
-    insertRelation(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
+    insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
     const out = graphExpandRecall([sr(seed, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
     expect(out.map((r) => r.entry.id)).not.toContain(priv.id);
@@ -71,7 +71,7 @@ describe('graph-recall scope parity', () => {
     const priv = mem(home, T, 'wholly unrelated private wording xyzzy plugh frobnicate', { scope: 'slack:private:dm1' });
     const eSeed = ent(home, T, seed, 'SEED');
     const ePriv = ent(home, T, priv, 'PRIV');
-    insertRelation(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
+    insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
     const out = graphExpandRecall([sr(seed, 1.0)], {
       hops: 1, hippoRoot: home, tenantId: T, budget: 4000,
@@ -87,8 +87,8 @@ describe('graph-recall scope parity', () => {
     const eSeed = ent(home, T, seed, 'SEED');
     const eNull = ent(home, T, nullNeighbor, 'NULLN');
     const ePriv = ent(home, T, privNeighbor, 'PRIVN');
-    insertRelation(home, T, { fromEntityId: eNull, toEntityId: eSeed, relType: 'supersedes', memoryId: nullNeighbor.id });
-    insertRelation(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: privNeighbor.id });
+    insertRelationAt(home, T, { fromEntityId: eNull, toEntityId: eSeed, relType: 'supersedes', memoryId: nullNeighbor.id });
+    insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: privNeighbor.id });
 
     const out = graphExpandRecall([sr(seed, 1.0)], {
       hops: 1, hippoRoot: home, tenantId: T, budget: 4000,
@@ -104,7 +104,7 @@ describe('graph-recall scope parity', () => {
     const legacy = mem(home, T, 'wholly unrelated legacy wording xyzzy plugh quux', { scope: 'unknown:legacy' });
     const eSeed = ent(home, T, seed, 'SEED');
     const eLegacy = ent(home, T, legacy, 'LEGACY');
-    insertRelation(home, T, { fromEntityId: eLegacy, toEntityId: eSeed, relType: 'supersedes', memoryId: legacy.id });
+    insertRelationAt(home, T, { fromEntityId: eLegacy, toEntityId: eSeed, relType: 'supersedes', memoryId: legacy.id });
 
     const out = graphExpandRecall([sr(seed, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
     expect(out.map((r) => r.entry.id)).not.toContain(legacy.id);
@@ -118,7 +118,7 @@ describe('graph-recall scope parity', () => {
       const priv = mem(glob, T, 'globally-stored private linked wording xyzzy plugh', { scope: 'slack:private:dm1' });
       const eSeed = ent(glob, T, seed, 'SEED');
       const ePriv = ent(glob, T, priv, 'PRIV');
-      insertRelation(glob, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
+      insertRelationAt(glob, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
       const out = graphExpandRecall([sr(seed, 1.0)], {
         hops: 1, hippoRoot: home, globalRoot: glob, tenantId: T, budget: 4000,
@@ -138,9 +138,9 @@ describe('graph-recall scope parity', () => {
     const eNull = ent(home, T, nullNeighbor, 'NULLN');
     const eDm1 = ent(home, T, dm1, 'DM1');
     const eDm2 = ent(home, T, dm2, 'DM2');
-    insertRelation(home, T, { fromEntityId: eNull, toEntityId: eSeed, relType: 'supersedes', memoryId: nullNeighbor.id });
-    insertRelation(home, T, { fromEntityId: eDm1, toEntityId: eSeed, relType: 'supersedes', memoryId: dm1.id });
-    insertRelation(home, T, { fromEntityId: eDm2, toEntityId: eSeed, relType: 'supersedes', memoryId: dm2.id });
+    insertRelationAt(home, T, { fromEntityId: eNull, toEntityId: eSeed, relType: 'supersedes', memoryId: nullNeighbor.id });
+    insertRelationAt(home, T, { fromEntityId: eDm1, toEntityId: eSeed, relType: 'supersedes', memoryId: dm1.id });
+    insertRelationAt(home, T, { fromEntityId: eDm2, toEntityId: eSeed, relType: 'supersedes', memoryId: dm2.id });
 
     const out = graphExpandRecall([sr(seed, 1.0)], {
       hops: 1, hippoRoot: home, tenantId: T, budget: 4000,
@@ -173,7 +173,7 @@ describe('graph-recall scope parity: CLI e2e', () => {
     const priv = mem(hippoDir, T, 'wholly unrelated private wording frobnicate zapzap', { scope: 'slack:private:dm1' });
     const eSeed = ent(hippoDir, T, seed, 'SEED');
     const ePriv = ent(hippoDir, T, priv, 'PRIV');
-    insertRelation(hippoDir, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
+    insertRelationAt(hippoDir, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
     const denied = hippo(cliHome, env, 'recall', 'graphhopscope', '--hops', '1', '--limit', '10');
     expect(denied).toContain('decision alpha');

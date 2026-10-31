@@ -3,7 +3,7 @@ import { estimateTokens } from '../util/token-text.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { compareScoredResults } from '../core/compare.js';
 import { bm25Score, buildCorpus, entryText } from './bm25.js';
 import { currentEntries } from './as-of.js';
@@ -22,7 +22,23 @@ export interface SearchOptions {
   asOf?: string;
 }
 
-/** Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge. */
+type Corpus = ReturnType<typeof buildCorpus>;
+
+// Keyed on the caller's array so multihop's two passes share one build;
+// the pool identity check keeps a mutated array honest.
+const corpusCache = new WeakMap<MemoryEntry[], { pool: MemoryEntry[]; corpus: Corpus }>();
+
+function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
+  const hit = corpusCache.get(entries);
+  if (hit && hit.pool.length === pool.length && hit.pool.every((e, i) => e === pool[i])) return hit.corpus;
+  const corpus = buildCorpus(pool.map(entryText));
+  corpusCache.set(entries, { pool: pool.slice(), corpus });
+  return corpus;
+}
+
+/**
+ * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge.
+ */
 export function search(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const pool = currentEntries(entries, options);
@@ -30,7 +46,7 @@ export function search(query: string, entries: MemoryEntry[], options: SearchOpt
   const queryTerms = tokenize(query);
   if (queryTerms.length === 0) return [];
 
-  const corpus = buildCorpus(pool.map(entryText));
+  const corpus = corpusFor(entries, pool);
   const ctx: BoostContext = {
     now,
     pathTags: extractPathTags(process.cwd()),
@@ -49,5 +65,10 @@ export function search(query: string, entries: MemoryEntry[], options: SearchOpt
     scored.push({ entry: pool[i], score, bm25, cosine: 0, tokens: estimateTokens(pool[i].content) });
   }
   scored.sort(compareScoredResults);
-  return fitBudget(withDagChildren(dedupeExtracted(scored), pool), options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
+  return fitBudget(
+    withDagChildren(dedupeExtracted(scored), pool),
+    options.budget ?? DEFAULT_RECALL_BUDGET,
+    options.minResults ?? 1,
+    options.cost,
+  );
 }

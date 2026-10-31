@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from '../src/cli/scheduler.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 describe('Windows daily task', () => {
   it('runs the runner under a headless console', () => {
@@ -18,7 +19,8 @@ describe('Windows daily task', () => {
     expect(quoteInsideWindowsArg('C:\\a\\b')).toBe('C:\\a\\b');
   });
 
-  it.skipIf(process.platform !== 'win32')('creates a task whose quoted && command runs intact', async () => {
+  // It creates and runs a real scheduled task, so only on a throwaway CI machine, never a developer's.
+  it.skipIf(process.platform !== 'win32' || !process.env.CI)('creates a task whose quoted && command runs intact', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hippo sched '));
     const name = `hippo-test-headless-${process.pid}`;
     const schtasks = (...args: string[]) => execFileSync('schtasks', args, { encoding: 'utf-8', windowsHide: true });
@@ -29,7 +31,7 @@ describe('Windows daily task', () => {
       expect(schtasks('/query', '/tn', name, '/xml')).toContain('<Command>conhost.exe</Command>');
       schtasks('/run', '/tn', name);
       const out = join(dir, 'out.txt');
-      for (let i = 0; i < 50 && !existsSync(out); i++) await new Promise((r) => setTimeout(r, 200));
+      await waitFor(() => existsSync(out), { timeoutMs: 10_000, intervalMs: 200, what: 'the scheduled task output' });
       expect(readFileSync(out, 'utf8').trim()).toBe('ran');
     } finally {
       if (created) schtasks('/delete', '/tn', name, '/f');

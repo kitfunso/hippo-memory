@@ -94,6 +94,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "idx_customer_notes_tenant_status_created",
+      "sql": "CREATE INDEX idx_customer_notes_tenant_status_created ON customer_notes(tenant_id, status, created_at DESC, id DESC)",
+      "type": "index",
+    },
+    {
       "name": "idx_decisions_memory",
       "sql": "CREATE INDEX idx_decisions_memory
           ON decisions(memory_id) WHERE memory_id IS NOT NULL
@@ -108,8 +113,20 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "idx_decisions_tenant_status_created",
+      "sql": "CREATE INDEX idx_decisions_tenant_status_created ON decisions(tenant_id, status, created_at DESC, id DESC)",
+      "type": "index",
+    },
+    {
       "name": "idx_delivery_events_session",
       "sql": "CREATE INDEX idx_delivery_events_session ON delivery_events(tenant_id, session_id, id)",
+      "type": "index",
+    },
+    {
+      "name": "idx_delivery_events_tool_call",
+      "sql": "CREATE UNIQUE INDEX idx_delivery_events_tool_call
+        ON delivery_events(tenant_id, session_id, tool_use_id)
+        WHERE tool_use_id IS NOT NULL AND turn_seq IS NOT NULL",
       "type": "index",
     },
     {
@@ -208,6 +225,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "idx_incidents_tenant_status_created",
+      "sql": "CREATE INDEX idx_incidents_tenant_status_created ON incidents(tenant_id, status, created_at DESC, id DESC)",
+      "type": "index",
+    },
+    {
       "name": "idx_memories_created_drift",
       "sql": "CREATE INDEX idx_memories_created_drift
           ON memories(tenant_id) WHERE superseded_by IS NULL AND (length(created) <> 24 OR created NOT LIKE '%Z')",
@@ -244,6 +266,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "sql": "CREATE INDEX idx_memories_source_session_id
         ON memories(source_session_id) WHERE source_session_id IS NOT NULL
       ",
+      "type": "index",
+    },
+    {
+      "name": "idx_memories_source_tenant_created",
+      "sql": "CREATE INDEX idx_memories_source_tenant_created ON memories(source, tenant_id, created, id)",
       "type": "index",
     },
     {
@@ -291,6 +318,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "idx_policies_tenant_status_created",
+      "sql": "CREATE INDEX idx_policies_tenant_status_created ON policies(tenant_id, status, created_at DESC, id DESC)",
+      "type": "index",
+    },
+    {
       "name": "idx_predictions_memory",
       "sql": "CREATE INDEX idx_predictions_memory
           ON predictions(memory_id) WHERE memory_id IS NOT NULL
@@ -319,6 +351,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "idx_processes_tenant_status_created",
+      "sql": "CREATE INDEX idx_processes_tenant_status_created ON processes(tenant_id, status, created_at DESC, id DESC)",
+      "type": "index",
+    },
+    {
       "name": "idx_project_briefs_memory",
       "sql": "CREATE INDEX idx_project_briefs_memory
           ON project_briefs(memory_id) WHERE memory_id IS NOT NULL
@@ -337,6 +374,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "sql": "CREATE INDEX idx_project_briefs_tenant_status
           ON project_briefs(tenant_id, status)
         ",
+      "type": "index",
+    },
+    {
+      "name": "idx_project_briefs_tenant_status_created",
+      "sql": "CREATE INDEX idx_project_briefs_tenant_status_created ON project_briefs(tenant_id, status, created_at DESC, id DESC)",
       "type": "index",
     },
     {
@@ -454,6 +496,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "sql": "CREATE INDEX idx_skills_tenant_status
           ON skills(tenant_id, status)
         ",
+      "type": "index",
+    },
+    {
+      "name": "idx_skills_tenant_status_created",
+      "sql": "CREATE INDEX idx_skills_tenant_status_created ON skills(tenant_id, status, created_at DESC, id DESC)",
       "type": "index",
     },
     {
@@ -834,7 +881,7 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
           recall_hash       TEXT,
           emitted_hash      TEXT,
           elapsed_ms        INTEGER NOT NULL DEFAULT 0
-        )",
+        , tool_use_id TEXT, failure_id INTEGER)",
       "type": "table",
     },
     {
@@ -2048,6 +2095,6 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "trigger",
     },
   ],
-  "userVersion": 54,
+  "userVersion": 56,
 }
 `;

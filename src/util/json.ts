@@ -25,7 +25,10 @@ export function isJsonObjectLiteral(value: JsonValue | undefined): value is { [k
   return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
 }
 
-/** Windows PowerShell 5.1 saves JSON with a UTF-8 byte order mark that JSON.parse rejects, so one leading mark is dropped. */
+/**
+ * Windows PowerShell 5.1 saves JSON with a UTF-8 byte order mark that JSON.parse rejects, so one leading mark is
+ * dropped.
+ */
 export function readJsonFile(file: string): JsonValue {
   const text = fs.readFileSync(file, 'utf8');
   return JSON.parse(text.codePointAt(0) === 0xfeff ? text.slice(1) : text);

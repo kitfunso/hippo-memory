@@ -31,7 +31,10 @@ export function recordStatements<T>(fn: () => T): StatementLog<T> {
   const tally = { rows: 0 };
   const spies = spyOnStatements(statements, tally);
   try {
-    return { result: fn(), statements, rowsRead: tally.rows };
+    const result = fn();
+    // A Promise here would drop every statement run after its first await.
+    if (result instanceof Promise) throw new Error('recordStatements got a Promise; use recordStatementsAsync');
+    return { result, statements, rowsRead: tally.rows };
   } finally {
     for (const spy of spies) spy.mockRestore();
   }

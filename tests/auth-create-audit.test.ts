@@ -4,21 +4,19 @@
  * Closes the v1.12.3 CHANGELOG-flagged deferral. Mirrors auth_revoke audit
  * coverage (already locked in tests/audit.test.ts and the M1 fix history).
  */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCreate, authRevoke, adminActor, type HippoDbContext } from '../src/api/index.js';
+import { authCreate, authRevoke, adminActor } from '../src/api/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-create-audit-'));
-  const ctx: HippoDbContext = {
-    hippoRoot: tmpDir,
-    tenantId,
-    actor: adminActor('cli'),
-  };
+  const ctx: FullContext = apiCtx(tmpDir, tenantId, adminActor('cli'));
   return {
     ctx,
     tmpDir,
@@ -51,10 +49,10 @@ function getAuditRows(hippoRoot: string, tenantId: string, op: 'auth_create' | '
 }
 
 describe('auth_create audit emit', () => {
-  it('authCreate emits one auth_create audit row with label + role metadata', () => {
+  it('authCreate emits one auth_create audit row with label + role metadata', async () => {
     const t = newCtx();
     try {
-      const result = authCreate(t.ctx, { label: 'cli', role: 'admin' });
+      const result = await authCreate(t.ctx, { label: 'cli', role: 'admin' });
 
       const rows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_create');
       expect(rows.length).toBe(1);
@@ -67,10 +65,10 @@ describe('auth_create audit emit', () => {
     }
   });
 
-  it('authCreate with default role logs role=member in audit metadata', () => {
+  it('authCreate with default role logs role=member in audit metadata', async () => {
     const t = newCtx();
     try {
-      authCreate(t.ctx, { label: 'no-role-passed' });
+      await authCreate(t.ctx, { label: 'no-role-passed' });
       const rows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_create');
       expect(rows.length).toBe(1);
       expect(rows[0].metadata.role).toBe('member');
@@ -79,10 +77,10 @@ describe('auth_create audit emit', () => {
     }
   });
 
-  it('authCreate with role=member logs role=member in audit metadata', () => {
+  it('authCreate with role=member logs role=member in audit metadata', async () => {
     const t = newCtx();
     try {
-      authCreate(t.ctx, { label: 'reporter', role: 'member' });
+      await authCreate(t.ctx, { label: 'reporter', role: 'member' });
       const rows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_create');
       expect(rows.length).toBe(1);
       expect(rows[0].metadata.role).toBe('member');
@@ -92,10 +90,10 @@ describe('auth_create audit emit', () => {
     }
   });
 
-  it('authCreate with no label logs label=null (not "undefined" string)', () => {
+  it('authCreate with no label logs label=null (not "undefined" string)', async () => {
     const t = newCtx();
     try {
-      authCreate(t.ctx, {});
+      await authCreate(t.ctx, {});
       const rows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_create');
       expect(rows.length).toBe(1);
       expect(rows[0].metadata.label).toBeNull();
@@ -104,10 +102,10 @@ describe('auth_create audit emit', () => {
     }
   });
 
-  it('audit metadata MUST NOT contain plaintext key (security invariant)', () => {
+  it('audit metadata MUST NOT contain plaintext key (security invariant)', async () => {
     const t = newCtx();
     try {
-      const result = authCreate(t.ctx, { label: 'security-check' });
+      const result = await authCreate(t.ctx, { label: 'security-check' });
       const rows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_create');
       expect(rows.length).toBe(1);
       // The full JSON-stringified metadata must not contain the plaintext
@@ -120,11 +118,11 @@ describe('auth_create audit emit', () => {
     }
   });
 
-  it('mint + revoke pair: 1 auth_create row + 1 auth_revoke row, both targetId match', () => {
+  it('mint + revoke pair: 1 auth_create row + 1 auth_revoke row, both targetId match', async () => {
     const t = newCtx();
     try {
-      const mint = authCreate(t.ctx, { label: 'mint-then-revoke' });
-      authRevoke(t.ctx, mint.keyId);
+      const mint = await authCreate(t.ctx, { label: 'mint-then-revoke' });
+      await authRevoke(t.ctx, mint.keyId);
 
       const createRows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_create');
       const revokeRows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_revoke');

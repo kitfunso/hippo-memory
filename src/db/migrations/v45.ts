@@ -3,8 +3,10 @@ import type { Migration } from './types.js';
 export const v45: Migration = {
     version: 45,
     up: (db) => {
-      // Token ledger (src/store/token-ledger.ts): one row per block of memory text handed to an agent; `event` is inject, skip, reset (compaction) or reread.
-      // block_hash lets the per-prompt hook skip an unchanged block; rows past retention are pruned on write. Additive: no min_compatible_binary bump.
+      // Token ledger (src/store/token-ledger.ts): one row per block of memory text handed to an agent; `event` is
+      // inject, skip, reset (compaction) or reread.
+      // block_hash lets the per-prompt hook skip an unchanged block; rows past retention are pruned on write. Additive:
+      // no min_compatible_binary bump.
       db.exec(`
         CREATE TABLE IF NOT EXISTS token_ledger (
           id         INTEGER PRIMARY KEY AUTOINCREMENT,

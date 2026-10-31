@@ -1,4 +1,5 @@
 // The personal-memories plan's lane T walk, written from the plan alone: one shared-store server, callers A, B and an unowned admin.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -11,7 +12,7 @@ import { captureSessionTexts } from '../src/capture/session-texts.js';
 import { handleRecall } from '../src/cli/recall.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { insertEntity } from '../src/store/graph-writes.js';
+import { insertEntityAt } from './_helpers/graph-seed.js';
 import type { JsonValue } from '../src/util/json.js';
 import { Layer, generateId, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
@@ -25,6 +26,7 @@ import { initStore } from '../src/store/open.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const A_SCOPE = 'personal:private:oid-a';
 const B_SCOPE = 'personal:private:oid-b';
@@ -67,10 +69,10 @@ function mint(label: string, role: 'admin' | 'member', ownerSubject?: string, ro
   }
 }
 
-function ctxOf(who: Who): api.Context {
+function ctxOf(who: Who): FullContext {
   const subject = `api_key:${keys[who].keyId}`;
-  if (who === 'ADM') return { hippoRoot: store, tenantId: 'default', actor: { subject, role: 'admin' } };
-  return { hippoRoot: store, tenantId: 'default', actor: { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' } };
+  if (who === 'ADM') return apiCtx(store, 'default', { subject, role: 'admin' });
+  return apiCtx(store, 'default', { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' });
 }
 
 async function http(token: string | null, method: string, route: string, body?: JsonValue, extra: Record<string, string> = {}, base = handle!.url): Promise<Reply> {
@@ -146,7 +148,7 @@ beforeAll(async () => {
   initStore(store);
   fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true, pinnedInject: { promptRecall: true } }));
   keys = { A: mint('walk-a', 'member', 'oid-a'), B: mint('walk-b', 'member', 'oid-b'), ADM: mint('walk-adm', 'admin') };
-  handle = await serve({ hippoRoot: store, host: '127.0.0.1', port: 0, authResolver: resolver });
+  handle = await serve({ hippoRoot: store, host: '127.0.0.1', port: 0, authResolver: resolver, keylessLocalRole: 'admin' });
 
   const alpha = { name: 'alpha' };
   ids.aZircon = await post(keys.A.plaintext, { content: ZIRCON, personal: true, project: alpha });
@@ -156,13 +158,13 @@ beforeAll(async () => {
   ids.teamTeal = await post(keys.B.plaintext, { content: TEAL, project: alpha });
 
   const summary = seedRow('umberline rollup for the walk session', A_SCOPE, '',
-    { layer: Layer.Semantic, dag_level: 2, confidence: 'inferred', tags: ['dag-summary'] }, { descendant_count: 1 });
+    { layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred', tags: ['dag-summary'] }, { descendant_count: 1 });
   ids.summary = summary.id;
   ids.child = seedRow('the umberline ledger closed at noon', A_SCOPE, '', {
-    layer: Layer.Episodic, kind: 'raw', confidence: 'observed', dag_level: 1, dag_parent_id: summary.id, source_session_id: SESSION,
+    layer: Layer.Episodic, kind: 'raw', confidence: 'observed', dagLevel: 1, dagParentId: summary.id, sourceSessionId: SESSION,
   }).id;
   ids.teamRaw = seedRow('the tealraw ledger opened at nine', null, 'alpha',
-    { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', source_session_id: SESSION }).id;
+    { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', sourceSessionId: SESSION }).id;
 });
 
 afterAll(async () => {
@@ -388,14 +390,14 @@ describe('personal memories walk (plan lane T)', () => {
     }
 
     // The admin resolves with the CLI on a shared store, which runs this.
-    expect(resolveConflict(store, teamPair, t2, false, 'default', { rejectLoserValue: true, rejectedBy: 'walk' })).not.toBeNull();
+    expect(resolveConflict(store, { conflictId: teamPair, keepId: t2, tenantId: 'default' }, { rejectLoserValue: true, rejectedBy: 'walk' })).not.toBeNull();
     expect(readEntry(store, t1)).toBeFalsy();
     expect(readEntry(store, p1)?.content).toBe(off);
   });
 
   it('line 9: GET /v1/graph shows the entity from A\'s row to A only', async () => {
-    insertEntity(store, 'default', { entityType: 'system', name: 'ZirconKettle', memoryId: ids.aZircon });
-    insertEntity(store, 'default', { entityType: 'system', name: 'TealHarbour', memoryId: ids.teamZircon });
+    insertEntityAt(store, 'default', { entityType: 'system', name: 'ZirconKettle', memoryId: ids.aZircon });
+    insertEntityAt(store, 'default', { entityType: 'system', name: 'TealHarbour', memoryId: ids.teamZircon });
     const names = async (who: Who): Promise<string[]> => {
       const r = await http(keys[who].plaintext, 'GET', '/v1/graph');
       expect(r.status, r.text).toBe(200);
@@ -420,8 +422,8 @@ describe('personal memories walk (plan lane T)', () => {
   });
 
   it('line 11: api.authGrant of A\'s scope is 400, and a resolver scope list naming it opens nothing (F8)', async () => {
-    expect(() => api.authGrant(ctxOf('ADM'), keys.B.keyId, A_SCOPE)).toThrow(BadRequestError);
-    expect(api.authGrant(ctxOf('ADM'), keys.B.keyId, 'slack:private:C9')).toEqual({ ok: true });
+    await expect(api.authGrant(ctxOf('ADM'), keys.B.keyId, A_SCOPE)).rejects.toThrow(BadRequestError);
+    expect(await api.authGrant(ctxOf('ADM'), keys.B.keyId, 'slack:private:C9')).toEqual({ ok: true });
 
     const scoped = `q=zircon&scope=${encodeURIComponent(A_SCOPE)}`;
     expect((await recallIds(SIGNIN_A, scoped)).ids).toContain(ids.aZircon);
@@ -433,7 +435,7 @@ describe('personal memories walk (plan lane T)', () => {
 
   it('line 12: GET /v1/memories?scope=slack:private:C1 reads for a granted member and ADM, unchanged', async () => {
     const granted = mint('walk-c', 'member');
-    api.authGrant(ctxOf('ADM'), granted.keyId, 'slack:private:C1');
+    await api.authGrant(ctxOf('ADM'), granted.keyId, 'slack:private:C1');
     const slack = seedRow('the kowalskiwharf payroll rollout starts thursday', 'slack:private:C1', null);
     const route = `q=kowalskiwharf&scope=${encodeURIComponent('slack:private:C1')}`;
     for (const token of [granted.plaintext, keys.ADM.plaintext]) {
@@ -445,7 +447,10 @@ describe('personal memories walk (plan lane T)', () => {
   });
 
   it('line 13: GET /v1/audit names A\'s write by actor and memory id and holds no row text', async () => {
-    for (const who of ['A', 'B', 'ADM'] as const) {
+    for (const who of ['A', 'B'] as const) {
+      expect((await http(keys[who].plaintext, 'GET', '/v1/audit?op=remember&limit=1000')).status, who).toBe(403);
+    }
+    for (const who of ['ADM'] as const) {
       const r = await http(keys[who].plaintext, 'GET', '/v1/audit?op=remember&limit=1000');
       expect(r.status, `${who}: ${r.text}`).toBe(200);
       expect(r.text, who).not.toContain('zircon-kettle');

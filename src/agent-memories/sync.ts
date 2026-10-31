@@ -1,22 +1,20 @@
-// Runs the adapters and routes each container to its store: the project pass, the user pass and their call sites (plan designs 2, 8, 11).
+// Runs the adapters and routes each container to its store: the project pass, the user pass and their call sites (plan
+// designs 2, 8, 11).
 import { processEnv } from '../util/env.js';
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { errorMessage } from '../util/log.js';
 import { loadConfig } from '../core/config.js';
-import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { namesFoldedInto } from '../sharing/project-merge.js';
-import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
+import { namesFoldedInto } from './project-folds.js';
+import {
+  isGlobalStoreRoot, isInitialized, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity,
+} from '../core/project-identity.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';
-import { removeEntryMirrors } from '../store/mirrors.js';
-import { initStore, isInitialized } from '../store/open.js';
-import { writeEntryMirrors } from '../store/entry-writes.js';
-import { selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../store/entry-reads.js';
-import { updateStats } from '../store/index-and-stats.js';
-import { resolveTenantId } from '../store/tenant.js';
-import { setAsideRow, syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
+import type { AgentImport, ImportTarget } from '../store/port/agent-import.js';
+// The one store import: these entries are the import's composition root for the SQLite store.
+import { sqliteAgentImport } from '../store/sqlite/agent-import.js';
+import { syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
 import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
 import { codexAdapter } from './codex.js';
 import { copilotAdapter } from './copilot.js';
@@ -26,10 +24,24 @@ import { openclawAdapter } from './openclaw.js';
 import { qwenCodeAdapter } from './qwen-code.js';
 import { addTally, emptyReport, mergeReports, toolReport, type ImportReport, type ToolReport } from './report.js';
 import { containerId, containerPrefix, splitSource } from './source.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, isToolId, toolSourcePrefix, type AgentMemoryTool, type ToolId } from '../core/agent-memory-tools.js';
+import {
+  AGENT_MEMORY_SOURCE_PREFIX,
+  AGENT_MEMORY_TOOLS,
+  isToolId,
+  toolSourcePrefix,
+  type AgentMemoryTool,
+  type ToolId,
+} from '../core/agent-memory-tools.js';
 import type { Adapter, AdapterContext, Listing, Scope } from './types.js';
 
-export const ADAPTERS: readonly Adapter[] = [claudeCodeAdapter, codexAdapter, geminiAdapter, copilotAdapter, openclawAdapter, qwenCodeAdapter];
+export const ADAPTERS: readonly Adapter[] = [
+  claudeCodeAdapter,
+  codexAdapter,
+  geminiAdapter,
+  copilotAdapter,
+  openclawAdapter,
+  qwenCodeAdapter,
+];
 
 /** Overrides config because `hippo init` creates the store in the same command that imports (plan design 11). */
 export const TOOLS_ENV = 'HIPPO_AGENT_MEMORY_TOOLS';
@@ -68,7 +80,10 @@ interface Pass {
   readonly handover: boolean;
 }
 
-/** init, sleep, `import --agents` and the daily runner: a local store gets its project pass then the user pass; the global store the user pass only. */
+/**
+ * init, sleep, `import --agents` and the daily runner: a local store gets its project pass then the user pass; the
+ * global store the user pass only.
+ */
 export function importForStore(hippoRoot: string, opts: SyncOptions): ImportReport {
   if (isGlobalStoreRoot(hippoRoot)) return importUserMemories(hippoRoot, opts);
   const report = importProjectMemories(hippoRoot, opts);
@@ -79,19 +94,39 @@ export function importForStore(hippoRoot: string, opts: SyncOptions): ImportRepo
 /** A local store's project pass with legacy adoption; `init --scan` runs it per repository and the user pass once. */
 export function importProjectMemories(hippoRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, { projectRoot: path.dirname(hippoRoot) });
-  return runPass({
-    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined,
-    legacyOrigins: [], handover: true,
-  }, opts);
+  return runPass(
+    sqliteAgentImport,
+    {
+      scope: 'project',
+      target: hippoRoot,
+      invoking: hippoRoot,
+      list: (a) => a.list(ctx, 'project'),
+      legacy: true,
+      originProject: undefined,
+      legacyOrigins: [],
+      handover: true,
+    },
+    opts,
+  );
 }
 
 /** Every tool's user-level memory into the global store, created on demand, with no origin. */
 export function importUserMemories(invokingRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, {});
-  return runPass({
-    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '',
-    legacyOrigins: [], handover: false,
-  }, opts);
+  return runPass(
+    sqliteAgentImport,
+    {
+      scope: 'user',
+      target: resolveGlobalRootDir(),
+      invoking: invokingRoot,
+      list: (a) => a.list(ctx, 'user'),
+      legacy: false,
+      originProject: '',
+      legacyOrigins: [],
+      handover: false,
+    },
+    opts,
+  );
 }
 
 /** Session end in a folder with no store of its own: the session's project into the
@@ -99,7 +134,7 @@ export function importUserMemories(invokingRoot: string, opts: SyncOptions): Imp
 export function importAtSessionEnd(cwd: string, transcriptPath: string | undefined, opts: SyncOptions): ImportReport {
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
-  const report = runPass({
+  const report = runPass(sqliteAgentImport, {
     scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false,
     ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
   }, opts);
@@ -110,14 +145,20 @@ export function importAtSessionEnd(cwd: string, transcriptPath: string | undefin
 
 /** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at
  * home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
-export function importSessionFolder(hippoRoot: string, transcriptPath: string, cwd: string | null, opts: SyncOptions): ImportReport {
+export function importSessionFolder(
+  hippoRoot: string,
+  transcriptPath: string,
+  cwd: string | null,
+  opts: SyncOptions,
+): ImportReport {
   const project = transcriptNotesProject(transcriptPath, cwd, opts.machine);
   if (project === null) return emptyReport();
-  // A project store takes its own project's notes; another project's, or home's, go to the global store, which parts them by origin.
+  // A project store takes its own project's notes; another project's, or home's, go to the global store, which parts
+  // them by origin.
   const own = isGlobalStoreRoot(hippoRoot) || project.name === resolveProjectIdentity(path.dirname(hippoRoot)).name;
   const target = own ? hippoRoot : resolveGlobalRootDir();
   const ctx = context(opts.machine, {});
-  return runPass({
+  return runPass(sqliteAgentImport, {
     scope: 'project', target, invoking: hippoRoot, legacy: false, ...projectOrigins(project), handover: false,
     list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
   }, opts);
@@ -131,16 +172,28 @@ function context(machine: Machine, extra: Pick<AdapterContext, 'projectRoot'>): 
   return { home: machine.home, env: machine.env, platform: machine.platform, ...extra };
 }
 
-/** The variable when set (empty or `none` is off); else the tools both the invoking and the target store's config allow. */
+/**
+ * The variable when set (empty or `none` is off); else the tools both the invoking and the target store's config allow.
+ */
 export function allowedTools(env: Machine['env'], invoking: string, target: string, warnings: string[]): Set<ToolId> {
   const fromEnv = env[TOOLS_ENV];
   if (fromEnv !== undefined) {
-    const listed = fromEnv.trim().toLowerCase() === 'none' ? [] : fromEnv.split(',').map((t) => t.trim()).filter((t) => t !== '');
+    const listed =
+      fromEnv.trim().toLowerCase() === 'none'
+        ? []
+        : fromEnv
+            .split(',')
+            .map((t) => t.trim())
+            .filter((t) => t !== '');
     return knownTools(listed, TOOLS_ENV, warnings);
   }
   const mine = configuredTools(invoking, warnings);
   const theirs = configuredTools(target, warnings);
-  return new Set(AGENT_MEMORY_TOOLS.map((t) => t.id).filter((id) => (mine === null || mine.has(id)) && (theirs === null || theirs.has(id))));
+  return new Set(
+    AGENT_MEMORY_TOOLS.map((t) => t.id).filter(
+      (id) => (mine === null || mine.has(id)) && (theirs === null || theirs.has(id)),
+    ),
+  );
 }
 
 function configuredTools(root: string, warnings: string[]): Set<ToolId> | null {
@@ -151,13 +204,19 @@ function configuredTools(root: string, warnings: string[]): Set<ToolId> | null {
 function knownTools(ids: readonly string[], where: string, warnings: string[]): Set<ToolId> {
   const out = new Set<ToolId>();
   for (const id of ids) {
-    if (isToolId(id)) out.add(id);
-    else warnings.push(`${where}: unknown agent memory tool "${id}" ignored (known: ${AGENT_MEMORY_TOOLS.map((t) => t.id).join(', ')})`);
+    if (isToolId(id)) {
+      out.add(id);
+    } else {
+      warnings.push(
+        `${where}: unknown agent memory tool "${id}" ignored (known: ` +
+        `${AGENT_MEMORY_TOOLS.map((t) => t.id).join(', ')})`,
+      );
+    }
   }
   return out;
 }
 
-function runPass(pass: Pass, opts: SyncOptions): ImportReport {
+function runPass(ai: AgentImport, pass: Pass, opts: SyncOptions): ImportReport {
   const report = emptyReport();
   const allowed = allowedTools(opts.machine.env, pass.invoking, pass.target, report.warnings);
   const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) => listSafely(a, pass, report));
@@ -165,14 +224,16 @@ function runPass(pass: Pass, opts: SyncOptions): ImportReport {
   let store: OpenStore | null = null;
   let synced: ContainerWork[] = [];
   try {
-    store = openTarget(pass.target, hasItems, opts);
+    store = openTarget(ai, pass.target, hasItems, opts);
     if (store !== null) synced = syncStore(pass, listings, store, opts, report);
   } catch (err) {
-    report.warnings.push(`agent memories not synced into ${pass.target}: ${isSqliteBusy(err) ? 'the store was busy' : errorMessage(err)}`);
+    report.warnings.push(
+      `agent memories not synced into ${pass.target}: ${ai.isBusy(err) ? 'the store was busy' : errorMessage(err)}`,
+    );
   } finally {
-    store?.close();
+    store?.target.close();
   }
-  if (pass.handover && !opts.dryRun) handOver(synced, path.dirname(pass.target), opts, report);
+  if (pass.handover && !opts.dryRun) handOver(ai, synced, path.dirname(pass.target), opts, report);
   return report;
 }
 
@@ -189,59 +250,71 @@ function listSafely(adapter: Adapter, pass: Pass, report: ImportReport): Listing
   if (!tool.homes.includes(listing.home)) tool.homes.push(listing.home);
   report.warnings.push(...listing.warnings.map((w) => `${tool.label}: ${w}`));
   for (const c of listing.containers) {
-    tool.containers.push({ scope: c.scope, path: c.path, store: pass.target, items: c.items.length, readable: c.readable });
+    tool.containers.push({
+      scope: c.scope,
+      path: c.path,
+      store: pass.target,
+      items: c.items.length,
+      readable: c.readable,
+    });
     report.warnings.push(...c.warnings.map((w) => `${tool.label}: ${w}`));
   }
   return [listing];
 }
 
 interface OpenStore {
-  readonly db: DatabaseSyncLike;
-  readonly root: string;
+  readonly ai: AgentImport;
+  readonly target: ImportTarget;
   readonly global: boolean;
-  close(): void;
 }
 
-/** A store that does not exist yet is created only when there is something to put in it; a dry run plans against an empty stand-in. */
-function openTarget(target: string, hasItems: boolean, opts: SyncOptions): OpenStore | null {
+/**
+ * A store that does not exist yet is created only when there is something to put in it; a dry run plans against an
+ * empty stand-in.
+ */
+function openTarget(ai: AgentImport, target: string, hasItems: boolean, opts: SyncOptions): OpenStore | null {
   const global = isGlobalStoreRoot(target);
   if (!isInitialized(target)) {
-    if (opts.dryRun) return emptyStandIn(global);
+    if (opts.dryRun) return { ai, target: ai.openStandIn(), global };
     if (!hasItems) return null;
-    initStore(target);
+    ai.create(target);
   }
-  const db = openHippoDb(target, { busyWaitMs: opts.busyWaitMs });
-  return { db, root: target, global, close: () => closeHippoDb(db) };
+  return { ai, target: ai.open(target, { busyWaitMs: opts.busyWaitMs }), global };
 }
 
-function emptyStandIn(global: boolean): OpenStore {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
-  // Its folder is deleted at close, so a request scope must not keep the file open past that.
-  const db = outsideRequestStores(() => openHippoDb(root));
+function storeSession(
+  pass: Pass,
+  store: OpenStore,
+  opts: SyncOptions,
+  legacy: LegacyWork | null,
+): StoreSession {
   return {
-    db, root, global,
-    close: () => {
-      closeHippoDb(db);
-      fs.rmSync(root, { recursive: true, force: true });
-    },
-  };
-}
-
-function syncStore(pass: Pass, listings: readonly Listing[], store: OpenStore, opts: SyncOptions, report: ImportReport): ContainerWork[] {
-  const tenantId = resolveTenantId({});
-  const legacy = pass.legacy ? legacyWork(store.db, tenantId, listings) : null;
-  const session: StoreSession = {
-    db: store.db,
-    hippoRoot: store.root,
-    tenantId,
-    baseHalfLifeDays: loadConfig(store.root).defaultHalfLifeDays,
+    target: store.target,
+    tenantId: store.target.tenantId,
+    baseHalfLifeDays: loadConfig(store.target.root).defaultHalfLifeDays,
     originProject: pass.originProject,
-    isDuplicate: duplicateCheck(store, tenantId, [pass.originProject ?? '', ...pass.legacyOrigins], legacy?.adopted ?? new Set()),
+    isDuplicate: duplicateCheck(
+      store,
+      [pass.originProject ?? '', ...pass.legacyOrigins],
+      legacy?.adopted ?? new Set(),
+    ),
     dryRun: opts.dryRun === true,
   };
+}
+
+function syncStore(
+  pass: Pass,
+  listings: readonly Listing[],
+  store: OpenStore,
+  opts: SyncOptions,
+  report: ImportReport,
+): ContainerWork[] {
+  const legacy = pass.legacy ? legacyWork(store.target, listings) : null;
+  const session = storeSession(pass, store, opts, legacy);
   // A project's rows in the global store are parted by origin: a worktree and its main checkout share a Claude folder.
-  const partition = store.global && pass.scope === 'project' ? pass.originProject ?? '' : null;
-  const earlier = partition === null || partition === '' ? [] : earlierNames(store.db, tenantId, partition, pass.legacyOrigins);
+  const partition = store.global && pass.scope === 'project' ? (pass.originProject ?? '') : null;
+  const earlier =
+    partition === null || partition === '' ? [] : earlierNames(store.target, partition, pass.legacyOrigins);
   const synced: ContainerWork[] = [];
   let remembered = 0;
   for (const listing of listings) {
@@ -252,25 +325,38 @@ function syncStore(pass: Pass, listings: readonly Listing[], store: OpenStore, o
         out.tally.unreadable++;
         continue;
       }
-      const work = containerWork(tool, container, { platform: opts.machine.platform, legacy, origin: partition ?? '', earlier });
-      const outcome = syncOne(session, work, out, report);
+      const work = containerWork(tool, container, {
+        platform: opts.machine.platform,
+        legacy,
+        origin: partition ?? '',
+        earlier,
+      });
+      const outcome = syncOne(store.ai, session, work, { out, report });
       if (outcome === null) continue;
       synced.push(work);
       remembered += outcome.tally.imported + outcome.tally.replaced;
-      if (!session.dryRun) afterCommit(store.root, outcome, report);
+      if (!session.dryRun) afterCommit(store.target, outcome, report);
     }
-    if (session.dryRun) out.unlisted += unlistedRows(store.db, tenantId, {
-      tool, scope: pass.scope, listing, platform: opts.machine.platform, partition: partition === null ? null : [partition, ...earlier],
-    });
+    if (session.dryRun) {
+      out.unlisted += unlistedRows(store.target, {
+        tool,
+        scope: pass.scope,
+        listing,
+        platform: opts.machine.platform,
+        partition: partition === null ? null : [partition, ...earlier],
+      });
+    }
   }
-  if (remembered > 0 && !session.dryRun) bumpRemembered(store.root, remembered, report);
+  if (remembered > 0 && !session.dryRun) bumpRemembered(store.target, remembered, report);
   return synced;
 }
 
 /** The legacy names plus every name a merge or repair folded into the project; the audit read runs once per pass. */
-function earlierNames(db: DatabaseSyncLike, tenantId: string, id: string, legacyOrigins: readonly string[]): string[] {
+function earlierNames(target: ImportTarget, id: string, legacyOrigins: readonly string[]): string[] {
   const names = [id, ...legacyOrigins];
-  return [...legacyOrigins, ...namesFoldedInto(db, tenantId, names)].filter((n) => n !== '' && n !== id);
+  return [...legacyOrigins, ...namesFoldedInto(target.projectTagReads(), names)].filter(
+    (n) => n !== '' && n !== id,
+  );
 }
 
 interface ContainerWorkOptions {
@@ -280,11 +366,16 @@ interface ContainerWorkOptions {
   readonly earlier: readonly string[];
 }
 
-function containerWork(tool: AgentMemoryTool, container: ContainerWork['container'], options: ContainerWorkOptions): ContainerWork {
+function containerWork(
+  tool: AgentMemoryTool,
+  container: ContainerWork['container'],
+  options: ContainerWorkOptions,
+): ContainerWork {
   const { platform, legacy, origin, earlier } = options;
   const none = new Map<string, readonly MemoryEntry[]>();
   const own = tool.id === 'claude-code' ? legacy?.byContainer.get(container.path) : undefined;
-  const prefixOf = (name: string): string => containerPrefix(tool.id, containerId(container.path, container.scope, platform, name));
+  const prefixOf = (name: string): string =>
+    containerPrefix(tool.id, containerId(container.path, container.scope, platform, name));
   return {
     tool,
     container,
@@ -295,14 +386,22 @@ function containerWork(tool: AgentMemoryTool, container: ContainerWork['containe
   };
 }
 
-/** Null when the container was skipped: a busy store waits for the next sync, any other failure is a warning and the sync goes on. */
-function syncOne(session: StoreSession, work: ContainerWork, out: ToolReport, report: ImportReport): ContainerOutcome | null {
+/**
+ * Null when the container was skipped: a busy store waits for the next sync, any other failure is a warning and the
+ * sync goes on.
+ */
+function syncOne(
+  ai: AgentImport,
+  session: StoreSession,
+  work: ContainerWork,
+  { out, report }: { readonly out: ToolReport; readonly report: ImportReport },
+): ContainerOutcome | null {
   try {
     const outcome = syncContainer(session, work);
     addTally(out.tally, outcome.tally);
     return outcome;
   } catch (err) {
-    if (isSqliteBusy(err)) {
+    if (ai.isBusy(err)) {
       out.tally.busy++;
       report.warnings.push(`${out.label}: ${work.container.path} skipped, the store was busy`);
     } else {
@@ -312,11 +411,15 @@ function syncOne(session: StoreSession, work: ContainerWork, out: ToolReport, re
   }
 }
 
-function afterCommit(root: string, outcome: Pick<ContainerOutcome, 'mirror' | 'purge'>, report: ImportReport): void {
-  for (const entry of outcome.mirror) writeEntryMirrors(root, entry);
+function afterCommit(
+  target: ImportTarget,
+  outcome: Pick<ContainerOutcome, 'mirror' | 'purge'>,
+  report: ImportReport,
+): void {
+  for (const entry of outcome.mirror) target.writeMirror(entry);
   for (const id of outcome.purge) {
     try {
-      removeEntryMirrors(root, id);
+      target.removeMirror(id);
     } catch (err) {
       // rebuildIndex would bring the row back live, and the next sync sets it aside again.
       report.warnings.push(`mirror of ${id} not removed: ${errorMessage(err)}`);
@@ -324,29 +427,42 @@ function afterCommit(root: string, outcome: Pick<ContainerOutcome, 'mirror' | 'p
   }
 }
 
-function bumpRemembered(root: string, remembered: number, report: ImportReport): void {
+function bumpRemembered(target: ImportTarget, remembered: number, report: ImportReport): void {
   try {
-    updateStats(root, { remembered });
+    target.bumpRemembered(remembered);
   } catch (err) {
     report.warnings.push(`remembered counter not updated: ${errorMessage(err)}`);
   }
 }
 
-/** Design 6: only text stored by another path counts, and in the global store only rows visible where the new row goes. */
-function duplicateCheck(store: OpenStore, tenantId: string, origins: readonly string[], adopted: ReadonlySet<string>): (text: string) => boolean {
+/**
+ * Design 6: only text stored by another path counts, and in the global store only rows visible where the new row goes.
+ */
+function duplicateCheck(
+  store: OpenStore,
+  origins: readonly string[],
+  adopted: ReadonlySet<string>,
+): (text: string) => boolean {
   let keys: Set<string> | null = null;
   return (text) => {
-    keys ??= otherPathKeys(store, tenantId, origins, adopted);
+    keys ??= otherPathKeys(store, origins, adopted);
     return keys.has(duplicateKey(text));
   };
 }
 
-function otherPathKeys(store: OpenStore, tenantId: string, origins: readonly string[], adopted: ReadonlySet<string>): Set<string> {
-  const rows = selectRowsOutsideSourcePrefixAt(store.db, tenantId, AGENT_MEMORY_SOURCE_PREFIX, store.global ? origins : null);
+function otherPathKeys(
+  store: OpenStore,
+  origins: readonly string[],
+  adopted: ReadonlySet<string>,
+): Set<string> {
+  const rows = store.target.rowsOutsideSourcePrefix(AGENT_MEMORY_SOURCE_PREFIX, store.global ? origins : null);
   return new Set(rows.filter((r) => !adopted.has(r.id)).flatMap(heldTextKeys));
 }
 
-/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder); `partition` limits it to one project's names. */
+/**
+ * Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder); `partition`
+ * limits it to one project's names.
+ */
 interface UnlistedRowsOptions {
   readonly tool: AgentMemoryTool;
   readonly scope: Scope;
@@ -355,31 +471,44 @@ interface UnlistedRowsOptions {
   readonly partition: readonly string[] | null;
 }
 
-function unlistedRows(db: DatabaseSyncLike, tenantId: string, options: UnlistedRowsOptions): number {
+function unlistedRows(target: ImportTarget, options: UnlistedRowsOptions): number {
   const { tool, scope, listing, platform, partition } = options;
-  const listed = listing.containers.flatMap((c) => (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, platform, name))));
-  return selectLiveEntriesBySourcePrefix(db, tenantId, `${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`)
+  const listed = listing.containers.flatMap((c) =>
+    (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, platform, name))),
+  );
+  return target
+    .liveBySourcePrefix(`${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`)
     .filter((row) => row.tags.includes(tool.tag) && !listed.some((p) => row.source.startsWith(p)))
     .filter((row) => partition === null || partition.includes(row.origin_project ?? '')).length;
 }
 
-/** Design 2's handover: rows the store-less hook path left in the global store, under this project's origin, for containers its store now syncs. */
-function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: SyncOptions, report: ImportReport): void {
+/**
+ * Design 2's handover: rows the store-less hook path left in the global store, under this project's origin, for
+ * containers its store now syncs.
+ */
+function handOver(
+  ai: AgentImport,
+  synced: readonly ContainerWork[],
+  projectRoot: string,
+  opts: SyncOptions,
+  report: ImportReport,
+): void {
   const globalRoot = resolveGlobalRootDir();
   if (synced.length === 0 || !isInitialized(globalRoot)) return;
-  let db: DatabaseSyncLike | undefined;
+  let target: ImportTarget | undefined;
   try {
-    db = openHippoDb(globalRoot, { busyWaitMs: opts.busyWaitMs });
-    const tenantId = resolveTenantId({});
+    target = ai.open(globalRoot, { busyWaitMs: opts.busyWaitMs });
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
     // Names folded into this project's in the global store were its rows too.
     const names = projectNames(resolveProjectIdentity(projectRoot));
-    const origins = [...new Set([...names, ...namesFoldedInto(db, tenantId, names), ''])];
-    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, { origins, platform: opts.machine.platform, report });
+    const origins = [...new Set([...names, ...namesFoldedInto(target.projectTagReads(), names), ''])];
+    for (const work of synced) handOverContainer(target, work, { origins, platform: opts.machine.platform, report });
   } catch (err) {
-    report.warnings.push(`global copies not handed over: ${isSqliteBusy(err) ? 'the global store was busy' : errorMessage(err)}`);
+    report.warnings.push(
+      `global copies not handed over: ${ai.isBusy(err) ? 'the global store was busy' : errorMessage(err)}`,
+    );
   } finally {
-    if (db) closeHippoDb(db);
+    target?.close();
   }
 }
 
@@ -389,25 +518,32 @@ interface HandOverContainerOptions {
   readonly report: ImportReport;
 }
 
-function handOverContainer(db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, options: HandOverContainerOptions): void {
+function handOverContainer(
+  target: ImportTarget,
+  work: ContainerWork,
+  options: HandOverContainerOptions,
+): void {
   const { origins, platform, report } = options;
   // A note the local pass could not read has no local row yet, so its global copy stays until it does.
   const unread = new Set(work.container.skipped);
   const mirror: MemoryEntry[] = [];
   const purge: string[] = [];
-  withWriteScope(db, 'hand_over_container', () => {
+  target.inContainer('hand_over_container', false, (tx) => {
     for (const origin of origins) {
-      const prefix = containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, platform, origin));
-      for (const row of selectLiveEntriesBySourcePrefix(db, tenantId, prefix)) {
+      const prefix = containerPrefix(
+        work.tool.id,
+        containerId(work.container.path, work.container.scope, platform, origin),
+      );
+      for (const row of tx.liveBySourcePrefix(target.tenantId, prefix)) {
         if (!row.tags.includes(work.tool.tag) || unread.has(splitSource(row.source, prefix).key)) continue;
-        const result = setAsideRow(db, work.tool.tag, row, 'handover');
+        const result = tx.setAside(work.tool.tag, row, 'handover');
         if (result.kind === 'untagged') mirror.push(result.entry);
         else purge.push(result.id);
       }
     }
   });
   toolReport(report, work.tool.id).tally.handedOver += mirror.length + purge.length;
-  afterCommit(root, { mirror, purge }, report);
+  afterCommit(target, { mirror, purge }, report);
 }
 
 function toolOf(id: ToolId): AgentMemoryTool {

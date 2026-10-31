@@ -1,18 +1,18 @@
-import { isRecallBoostAblated } from '../core/ablation.js';
+import { isRecallBoostAblated, strengthAblation } from '../core/ablation.js';
 import { MemoryEntry, Layer, createMemory, markRetrieved } from '../core/memory.js';
-import { findPromotableSessions, traceExistsForSession, listSessionEvents } from '../store/sessions.js';
-import { rejectionDigest } from '../store/rejection.js';
+import { rejectionDigest } from '../core/rejection-digest.js';
+import type { SessionEvent } from '../store/rows.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
-import { resolveTenantId } from '../store/tenant.js';
-import { reportAuditWriteFailure } from '../store/audit.js';
-import { commonDerivationScope } from '../store/recall-scope.js';
+import { envTenant } from '../util/env.js';
+import { commonDerivationScope } from '../core/recall-scope.js';
 import { log } from '../util/log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 
-// 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no trace (idempotent via source_session_id)
+// 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no
+// trace (idempotent via source_session_id)
 // is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics.
 export function promoteSessionTraces(run: SleepRun): void {
   const { result } = run;
@@ -22,8 +22,8 @@ export function promoteSessionTraces(run: SleepRun): void {
   const sinceMs = run.now.getTime() - windowDays * DAY_MS;
   // Auto-trace runs single-tenant (the env-resolved tenant); consolidating
   // every tenant needs a per-tenant loop layered on top of this.
-  const consolidationTenant = resolveTenantId({});
-  const promotable = findPromotableSessions(run.hippoRoot, consolidationTenant, sinceMs);
+  const consolidationTenant = envTenant();
+  const promotable = run.store.promotableSessions(consolidationTenant, sinceMs);
 
   for (const session of promotable) {
     const built = sessionTrace(run, consolidationTenant, session.session_id);
@@ -44,7 +44,8 @@ export function promoteSessionTraces(run: SleepRun): void {
 
   if (result.promotedTraces > 0) {
     result.details.push(
-      `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed session${result.promotedTraces === 1 ? '' : 's'}`
+      `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed ` +
+      `session${result.promotedTraces === 1 ? '' : 's'}`,
     );
   }
   if (tracesSkippedRejected > 0) {
@@ -57,11 +58,15 @@ export function promoteSessionTraces(run: SleepRun): void {
 type TraceOutcome = 'success' | 'failure' | 'partial';
 
 /** The trace a completed session renders to, or null when it already has one or cannot be promoted. */
-function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: string): { trace: MemoryEntry; outcome: TraceOutcome } | null {
+function sessionTrace(
+  run: SleepRun,
+  consolidationTenant: string,
+  sessionId: string,
+): { trace: MemoryEntry; outcome: TraceOutcome } | null {
   // Idempotency: skip if a trace for this session already exists.
-  if (traceExistsForSession(run.hippoRoot, consolidationTenant, sessionId)) return null;
+  if (run.store.traceExists(consolidationTenant, sessionId)) return null;
 
-  const events = listSessionEvents(run.hippoRoot, consolidationTenant, {
+  const events = run.store.sessionEvents(consolidationTenant, {
     session_id: sessionId,
     limit: 1000,
   });
@@ -86,8 +91,8 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
     renderTraceContent({ task: summary, steps, outcome }),
     {
       layer: Layer.Trace,
-      trace_outcome: outcome,
-      source_session_id: sessionId,
+      traceOutcome: outcome,
+      sourceSessionId: sessionId,
       tags: ['auto-promoted'],
       source: 'auto-promote',
       scope: sessionScope.scope,
@@ -101,7 +106,9 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
 }
 
 /** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
-function sessionEnding(events: ReturnType<typeof listSessionEvents>): { outcome: TraceOutcome; summary: string } | null {
+function sessionEnding(
+  events: readonly SessionEvent[],
+): { outcome: TraceOutcome; summary: string } | null {
   const completeEvent = events.find((e) => e.event_type === 'session_complete');
   if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
 
@@ -123,37 +130,35 @@ function sessionEnding(events: ReturnType<typeof listSessionEvents>): { outcome:
 // sleep; check the tombstone under the entry's own stamped tenantId, never a guessed one.
 function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): boolean {
   const traceDigest = rejectionDigest(trace.content);
-  const tombstone = run.tombstones.find(trace.tenantId, traceDigest);
+  const tombstone = run.tombstones.find(trace.tenant_id, traceDigest);
   if (!tombstone) return false;
-  try {
-    run.tombstones.audit({
-      tenantId: trace.tenantId,
-      actor: 'sleep',
-      op: 'reject_refusal',
-      metadata: {
-        digest: traceDigest,
-        reason: tombstone.reason,
-        sourceSessionId: sessionId,
-      },
-    });
-  } catch (error) {
-    reportAuditWriteFailure('reject_refusal', String(error));
-  }
+  run.tombstones.auditOrCount({
+    tenantId: trace.tenant_id,
+    actor: 'sleep',
+    op: 'reject_refusal',
+    metadata: {
+      digest: traceDigest,
+      reason: tombstone.reason,
+      sourceSessionId: sessionId,
+    },
+  });
   return true;
 }
 
-// 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal and idle time,
+// 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal
+// and idle time,
 // then applying the `markRetrieved` strengthening, so important memories don't fade.
 export function replayPass(run: SleepRun): void {
   const { survivors, now } = run;
   const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
-  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences the whole pass;
+  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences
+  // the whole pass;
   // persisting unmutated entries anyway would still refresh updated_at and mirrors.
   if (!(replayCount > 0 && survivors.length > 0 && !isRecallBoostAblated())) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
   const picked = sampleForReplay(survivors, replayCount, now, seed);
   if (picked.length === 0) return;
-  const rehearsed = markRetrieved(picked, now);
+  const rehearsed = markRetrieved(picked, now, { ablation: strengthAblation() });
   const rehearsedById = new Map(rehearsed.map((e) => [e.id, e]));
   // Update survivors in place so downstream passes see rehearsed state.
   for (let i = 0; i < survivors.length; i++) {

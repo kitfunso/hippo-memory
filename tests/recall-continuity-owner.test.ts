@@ -1,9 +1,10 @@
 // Recall's continuity block on a shared store is the caller's own task state, keyed by owner and project, or empty.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
@@ -11,6 +12,7 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const P = { name: 'p', legacyName: 'p' } as const;
 const EMPTY = { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
@@ -18,7 +20,7 @@ const EMPTY = { activeSnapshot: null, sessionHandoff: null, recentSessionEvents:
 let home: string;
 let handle: ServerHandle | undefined;
 
-const ctx = (owner: string): Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } });
+const ctx = (owner: string): FullContext => (apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner }));
 
 function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
@@ -40,12 +42,12 @@ describe('continuity on a shared store', () => {
     home = makeRoot('recall-continuity-owner', { config: { sharedStore: true } });
   });
 
-  it('A and B recall with a project each see only their own continuity', () => {
+  it('A and B recall with a project each see only their own continuity', async () => {
     const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sa', summary: 'alice handoff' }, { owner: 'alice', project: ['p'] });
     const b = saveActiveTaskSnapshot(home, 'default', snap('bob task', 'sb'), { owner: 'bob', project: ['p'] });
-    const forA = recall(ctx('alice'), { query: 'anything', includeContinuity: true, project: P }).continuity;
-    const forB = recall(ctx('bob'), { query: 'anything', includeContinuity: true, project: P }).continuity;
+    const forA = (await retrieve(ctx('alice'), { query: 'anything', includeContinuity: true, project: P })).continuity;
+    const forB = (await retrieve(ctx('bob'), { query: 'anything', includeContinuity: true, project: P })).continuity;
     expect(forA?.activeSnapshot?.id).toBe(a.id);
     expect(forA?.sessionHandoff?.summary).toBe('alice handoff');
     expect(forB?.activeSnapshot?.id).toBe(b.id);
@@ -64,8 +66,8 @@ describe('continuity on a shared store', () => {
     }
     const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
     writeEntry(home, createMemory('the deploy script lives in ops/deploy.sh'));
-    expect(recall(ctx('alice'), { query: 'deploy', includeContinuity: true, project: P }).continuity?.activeSnapshot?.id).toBe(a.id);
-    expect(recall(ctx('alice'), { query: 'deploy', includeContinuity: true }).continuity).toEqual(EMPTY);
+    expect((await retrieve(ctx('alice'), { query: 'deploy', includeContinuity: true, project: P })).continuity?.activeSnapshot?.id).toBe(a.id);
+    expect((await retrieve(ctx('alice'), { query: 'deploy', includeContinuity: true })).continuity).toEqual(EMPTY);
 
     const db = openHippoDb(home);
     const key = (() => { try { return createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'alice' }); } finally { closeHippoDb(db); } })();
@@ -97,11 +99,11 @@ describe('continuity on a local store', () => {
     home = makeRoot('recall-continuity-local');
   });
 
-  it('local store: continuity unchanged', () => {
+  it('local store: continuity unchanged', async () => {
     saveActiveTaskSnapshot(home, 'default', snap('older task', 's0'));
     const newest = saveActiveTaskSnapshot(home, 'default', snap('local task', 's1'));
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'local handoff' });
-    const block = recall(ctx('alice'), { query: 'anything', includeContinuity: true }).continuity;
+    const block = (await retrieve(ctx('alice'), { query: 'anything', includeContinuity: true })).continuity;
     expect(block?.activeSnapshot?.id).toBe(newest.id);
     expect(block?.sessionHandoff?.summary).toBe('local handoff');
   });

@@ -2,14 +2,18 @@
 
 ## Layers
 
-Six layers, lowest first: base (pure helpers and core types), db (SQLite connection and schema), store (persistence and embeddings), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
+Six layers, lowest first: base (pure helpers, core types, embedding providers), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
 A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it against `.layers-baseline.json`.
 
 ## Store port
 
-### Sync core, async port
+### Async port
 
-node:sqlite is synchronous, and the store port is async so another store can do I/O. `authCreate`, `authCreateSelf` and `authRevoke` from `./server` return a value when the context has no store and a Promise when it has one. `importVault` from `.` is synchronous and calls `remember` and `archiveRaw` with no store. `Reply<T>` and `andThen` in `src/api/on-store.ts` carry that for exactly these functions and what they call. Every other operation is async and goes through `storeFor(ctx)`. Removing the carrier means making those published functions async, which is a breaking change. `scripts/check-store-port.mjs` counts the files that use the carrier so the list cannot grow.
+node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. A store group the store lacks gives `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
+
+### What lives in src/store
+
+A file belongs in `src/store` only if it runs SQL on hippo.db, holds or opens a handle, or is one of the row-shape, SQL-text and adapter files named in `DB_DEFINITION_FILES` in `scripts/check-store-port.mjs`. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live in `src/core`, `src/util` and `src/embeddings`. The same script pins `storeFilesWithoutSqlList`, the files still under `src/store` that run no SQL, so a new pure helper filed there fails CI.
 
 ## Test-only exports
 
@@ -50,7 +54,7 @@ Env caching follows the house pattern (see `getLossAversionRatio` in `memory.ts`
 
 `serve(opts)` boots the HTTP daemon on host:port and writes the pidfile under `hippoRoot`. It refuses non-loopback hosts at boot unless `HIPPO_REQUIRE_AUTH=1` is set.
 
-The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks in `PUBLIC_ROUTES` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
+Every `/v1` row in `V1_ROUTES` declares its `auth` need, and dispatch runs that gate before the handler. The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks whose rows declare `webhook-signature` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
 
 Under `HIPPO_ALLOW_KEYLESS_LOCAL=1` the keyless fallback inside `buildContextWithAuth` admits unauthenticated requests from a loopback remote address, unless they carry `Forwarded`, `X-Forwarded-For`/`-Host`/`-Proto`, `X-Real-IP`, `Cf-Connecting-Ip`, `True-Client-Ip` or `Fly-Client-Ip` (these mark a same-host proxy and get a 401 like any keyless remote request). So binding to a non-loopback host needs `HIPPO_REQUIRE_AUTH=1`, which wins over that opt-in and forces every request (loopback or not) through Bearer-token validation. Without it, a non-loopback bind could expose the DB to the network with no auth, so boot fails fast instead.
 
@@ -64,10 +68,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `AssembleResult.truncated`: With v1.6.2's NEWEST-cap semantics, the items[] array represents the freshest tail of the session
 - `assemble`: F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than localeCompare and chronological by virtue of the timestamp invariant documented in src/core/memory.ts above MemoryEntry.
 
-### src/api/audit.ts
+### src/api/auth/audit.ts
 - `auditList`: Read-only — no audit emit (matches A5: cmdAuditList does not record a 'recall'-style read event).
+- `pruneAuditLog`: Audit log retention pruning (v1.12.9), moved here from `src/cli/audit-prune.ts`, which keeps only the `--older-than` parser.
+- `pruneAuditLog`: Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR); the prune should be opt-in per tenant and emit its own audit trail event."
+- `pruneAuditLog` tenant: Required, taken from `ctx.tenantId`; prune is always tenant-scoped per the A5 v2 design.
 
-### src/api/auth.ts
+### src/api/auth/auth.ts
 - `AuthCreateOpts.role`: v1.12.3: authorization role for the new key. Defaults to `'admin'` for back-compat with v1.12.0-v1.12.2 (the api_keys.role column DEFAULT also resolves to 'admin' if omitted from the INSERT).
 - `AuthCreateResult.role`: v1.12.3: the role bound to the new key (admin | member).
 - `authList`: Read-only — no audit emit (matches A5).
@@ -89,25 +96,25 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `ambientSecretAdmit`: v39 S4: the secret half of the ambient policy on its own, for callers that apply their own scope rule.
 - `loadAmbientEntries`: DF3's quality floor runs on the recent-N slice AFTER this load, so the load counts by it too, or it stops short of a store whose newest rows are junk.
 
-### src/api/dormant.ts
+### src/api/sleep/dormant.ts
 - `restoreDormant`: A restore is a labelled "forgot it, then needed it" event: the signal a learned lifecycle (ROADMAP LC3) trains on.
 
-### src/api/forget.ts
+### src/api/memories/forget.ts
 - `reject / unreject` (section banner): AT1: reject and unreject, docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
 
-### src/api/outcome.ts
+### src/api/memories/outcome.ts
 - `outcome`: `opts.traceId` (LC1, docs/plans/2026-08-02-lc1-recall-trace-persistence.md): OPTIONAL additive opt so a programmatic caller can link this outcome to the recall_traces row it judges.
 - `outcome`: if (good && updated.tags.includes(CHURN_STALE_TAG)) { // FE2: a good outcome reconfirms the entry
 - `outcome`: LC1: link the outcome to its trace, recording only the ids actually credited (post tenant-filtering, matches appliedIds).
 - `outcomeForLastRecall` (section banner): outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
 
-### src/api/promote.ts
+### src/api/memories/promote.ts
 - `PromoteResult`: Note: `promoteToGlobal` does not currently take a tenantId override — it reads the entry from the local root via `readEntry` (no tenant filter) and preserves the entry's existing tenantId on the global side. Task 4 may tighten this once writeEntry/readEntry thread tenant context.
 - `SupersedeResult`: Mirrors `cmdSupersede` in cli.ts (without flag-driven layer/tag/pin overrides — A1 keeps the API minimal; the CLI handler will continue to handle those flags and pass the resolved values once Task 4 lands).
 - `ArchiveRawOpts`: We DO NOT emit a second audit event here to avoid double-emitting the archive_raw op (unlike Task 1 remember/forget where the underlying helpers hardcode actor='cli').
 - `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.
 
-### src/api/recall-types.ts
+### src/api/recall/types.ts
 - `RecallOpts.scorerWindow`: F3 (v1.7.0): scorer-window opt-in. When set, `loadSearchEntries` loads up to `scorerWindow` candidates. When undefined (default), the existing behaviour is preserved: store-internal 200-row default, which every release before v1.7.0 silently relied on.
 - `RecallOpts.scorerWindow`: **Input is library-only at v1.7.0.** Transport exposure for the input planned for v1.7.1 alongside the deferred-queue items that need a wider candidate pool (e.g. mean-of-children summary re-rank).
 - `RecallOpts.summarizeOverflow`: v1.5.0 DAG-aware recall. Set to false to disable and get the pre-v1.5 strict-limit behaviour.
@@ -131,25 +138,25 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallResult.anchoringHint`: v0.33 / J1 (v1.13.2) — recall-recurrence anchoring hint. Populated when api.recall's `opts.recallHistory` snapshot + the just-computed top-1 satisfy R1 (query_repeat) or R2 (memory_dominance).
 - `RecallResult.availabilityHint`: v1.13.x / J2 — availability/recency-bias hint.
 - `RecallSuppressionSummary`: v1.12.13 / C5 — WYSIATI cutoff transparency (Track C Pineal Gland, C5).
-- `RecallSuppressionSummary.suppressedByInterference`: v0.33 / J1 (v1.13.2): incremented by 1 PER PIPELINE when that pipeline's own R2 memory_dominance verdict fires (via the J1 anchoring detector — see `detectAnchoring()` in src/api/recall-history.ts).
+- `RecallSuppressionSummary.suppressedByInterference`: v0.33 / J1 (v1.13.2): incremented by 1 PER PIPELINE when that pipeline's own R2 memory_dominance verdict fires (via the J1 anchoring detector — see `detectAnchoring()` in src/api/recall/finish.ts).
 - `RecallSuppressionSummary.suppressedByInterference`: Future B4-depth work may add additional sources (e.g. vlPFC inhibition scores). No `interference_suppression` table is built — the v1.12.13 doc that referenced one was speculative; J1 uses caller-side in-memory rings instead.
 
-### src/api/recall.ts
+### src/api/recall/recall.ts
 - `recall`: **api.recall does NOT mutate `index.last_retrieval_ids`** (v1.11.5 contract lock).
 - `retrieve`: Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock).
 
-### src/api/remember.ts
+### src/api/memories/remember.ts
 - `RememberOpts.event`: Took the place of `afterWrite`, the hook ingestion connectors (E1.3+) used to stamp idempotency rows atomically with the memory row on its database handle. The store's `connectorWrites` group now writes the event log row and a flagged row's quarantine record in the memory's transaction.
 - `RememberOpts.untrusted`: CD5: connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this.
 
-### src/api/sleep.ts
+### src/api/sleep/sleep.ts
 - `sleep` (section banner): sleep (extracted from cmdSleepCore Phase 2-6 — Task 4 of the api.ts refactor)
 - `SleepResult.secretSkipped`: v1.25.0: count of memories the auto-share secret veto withheld this sleep
 - `SleepResult.rejectedSkipped`: AT1: count of auto-share candidates the GLOBAL store's rejection tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md plan §3 — copy paths must not let one rejected candidate abort the batch).
 - `SleepResult.graph`: E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt this sleep.
 - `sleep`: Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI maintenance op invoked by the operator. Episode B (v1.11.4) exposed this over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard in the handler plus serve()'s boot-time host check). The TODOS.md per-tenant scoping follow-up remains open for the day non-loopback serving lands — at that point the route will need an admin-role gate OR api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
-- `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies. Since the serve autoSleep change it lives in `src/api/sleep-run.ts`, so the package root's declarations never name it.
-- `runSleep` (`src/api/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleep` calls it with none.
+- `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies. Since the serve autoSleep change it lives in `src/api/sleep/sleep-run.ts`, so the package root's declarations never name it.
+- `runSleep` (`src/api/sleep/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleep` calls it with none.
 - `sleep`: v1.11.5: phase counters for the consolidate audit emit (in finally).
 
 ### src/api/tokens.ts
@@ -159,11 +166,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/api/types.ts
 - `Actor`: Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1. Before v1.12.0, Context.actor was a bare string. v1.12.0 promotes it to an object carrying both the audit-log subject (formerly the string itself) and a role for /v1/sleep admin gating. Audit helpers continue accepting `string` — callers pass `ctx.actor.subject`.
 - `Actor.scopes`: EI2: restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors.
-
-### src/cli/audit-prune.ts
-- (module header): Audit log retention pruning (v1.12.9).
-- (module header): Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR) — the prune should be opt-in per tenant and emit its own audit trail event."
-- `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
 
 ### src/store/audit.ts
 - `audit log primitives` (section banner): A5 audit log primitives (append-only mutation trail)
@@ -239,7 +241,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleDag`: Orphan L2 summaries (no L3 parent) at top level — pre-E5 default shape.
 - `cmdDrillDown`: v0.30 / E5: --depth N walks N levels down (default 1, hard cap 10). L4 fold: reject out-of-range explicitly (no silent clamp).
 
-### src/cli/decisions.ts
+### src/cli/predictions.ts
 - `prediction banner`: E2 prediction first-class object (v0.31) docs/plans/2026-05-26-e2-prediction-object.md
 - `predictBaserate`: J3 reference-class / planning-fallacy detector
 
@@ -484,15 +486,15 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/db/migrations/v53.ts
 - migration v53: Self-service keys. `api_keys` gains `owner_subject` (the auth-resolver subject that minted the key for itself) and `expires_at`, plus a partial index on live keys per (tenant, owner) for the per-subject cap.
 - migration v53: Does not touch `min_compatible_binary`. A store with no expiring key is safe for an older binary, so it keeps its floor and every binary that shares it keeps working.
-- `authCreate` (src/api/auth.ts): A mint that names no role is a member key and one that names no expiry lasts 90 days; `role: 'admin'`, `ttlDays` and `noExpiry` ask for anything else (`--role admin`, `--ttl-days`, `--no-expiry` on the CLI). The first key of a store gets no wider role: the host CLI opens the store as host admin with no key, so `hippo auth create --role admin` always works. A default mint writes `expires_at`, so it raises the floor as below.
-- `authCreateSelf` (src/api/auth.ts): The first write of a non-null `expires_at` raises `min_compatible_binary` to `EXPIRING_KEYS_MIN_BINARY` (src/util/version.ts), in the same transaction as the key, and never lowers a higher floor. A binary older than that ignores `expires_at` and would keep honouring expired keys, so it must refuse the store from then on.
+- `authCreate` (src/api/auth/auth.ts): A mint that names no role is a member key and one that names no expiry lasts 90 days; `role: 'admin'`, `ttlDays` and `noExpiry` ask for anything else (`--role admin`, `--ttl-days`, `--no-expiry` on the CLI). The first key of a store gets no wider role: the host CLI opens the store as host admin with no key, so `hippo auth create --role admin` always works. A default mint writes `expires_at`, so it raises the floor as below.
+- `authCreateSelf` (src/api/auth/auth.ts): The first write of a non-null `expires_at` raises `min_compatible_binary` to `EXPIRING_KEYS_MIN_BINARY` (src/util/version.ts), in the same transaction as the key, and never lowers a higher floor. A binary older than that ignores `expires_at` and would keep honouring expired keys, so it must refuse the store from then on.
 - `EXPIRING_KEYS_MIN_BINARY`: Names the first release that ships schema v53, set by hand in that release. `scripts/check-expiring-keys-floor.mjs` runs on `npm version`, `prepublishOnly` and CI: it fails when the constant is above `package.json`'s version, when a tag `v<constant>` exists whose migration index lacks v53, or when no such tag exists and the constant is not `package.json`'s version (the release being cut). Until that release the constant equals the dev version, so a dev build never locks itself out.
 - Way back: to let an older binary open a store again, revoke every key that has an `expires_at` (`hippo auth list --all` shows the expires column; `hippo auth revoke <key_id>`), then lower the floor to what it was before, 1.24.0 on most stores (set by v39): `UPDATE meta SET value = '1.24.0' WHERE key = 'min_compatible_binary'`. A revoked key is safe because every binary honours `revoked_at`.
 
 ### src/db/migrations/v54.ts
 - migration v54: Owner task state. `task_snapshots`, `session_handoffs` and `failure_log` gain nullable `owner_subject` and `origin_project`. `compactions` and `failure_log` gain a nullable `request_id`, with a partial unique index on (tenant, request id), so a retried call finds the row it wrote the first time. New table `session_owners` holds (tenant, session id, owner).
 - migration v54: No backfill and no floor raise. Rows from before v54 keep NULL owners, so no owner read ever returns them. A store nobody writes owner rows to stays open to older binaries.
-- `session_owners` (src/api/session-owners.ts): The first owner to write for a session id holds it. `bindSessionOwner` reads the row first, so a session already bound takes no write lock. Another owner on the same session id gets `ConflictError`, and the message names no owner. Each new bind prunes bindings older than 90 days in every tenant. There is no owner erase path yet; when one lands it must delete the owner's rows here too.
+- `session_owners` (src/api/auth/session-owners.ts): The first owner to write for a session id holds it. `bindSessionOwner` reads the row first, so a session already bound takes no write lock. Another owner on the same session id gets `ConflictError`, and the message names no owner. Each new bind prunes bindings older than 90 days in every tenant. There is no owner erase path yet; when one lands it must delete the owner's rows here too.
 - `TASK_OWNER_MIN_BINARY` (src/util/version.ts): The floor a store takes on its first session bind or its first owner snapshot, raised in the same transaction and never lowered. An older binary supersedes snapshots across the whole tenant, so it would close other people's rows; it must refuse the store from then on. It names the first release that ships v54, set by hand in that release. `scripts/check-expiring-keys-floor.mjs` checks it beside `EXPIRING_KEYS_MIN_BINARY`, and fails on a checkout with no tags, where every tag check would pass by finding nothing.
 - Owner keying: On a shared store, snapshot and handoff reads and writes take a `ContinuityKey`: the caller's owner (`ownerOrSubject`, the key's owner or else its id) and its project names. The session trail is read only for the session of the caller's own snapshot. `recordFailure` stamps the owner and project when it is given them. A keyed save supersedes only that owner's rows in that project and writes no mirror file. A key with no owner or no project matches nothing on a read and throws on a write, so it never falls back to the tenant's newest row. Recall's continuity block and `getContext`'s task state use the same key, so a developer's next session picks up their own handoff. A local store passes no key and keeps its SQL and mirror files as before.
 
@@ -500,11 +502,12 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - module header: E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
 - module header: Mirrors the v0.31 predictions pattern (src/predictions.ts).
 
-### src/store/embeddings/provider.ts
+### src/embeddings/provider.ts
 - module header: Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
 - module header: Local provider `id` is the BARE model string. (Historical note: this originally guaranteed NO identity change on upgrade; since the embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`, `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one forced reindex on their next embed-touching operation — deliberate, because their vectors were computed over path-contaminated text.)
 
-### src/store/embeddings/index.ts
+### src/search/embed-memories.ts
+- module header: provider selection, the API-key check and vector computation moved here from src/store/embeddings/index.ts, which keeps only the stored index identity (src/store/port.ts VectorWrites: core computes each vector, the store only keeps it).
 - `embedMemory`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 
@@ -728,14 +731,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `archiveRawMemory`: v0.30 / E2 — DAG live-coupling: archive of a child under a level-2 summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark commits atomically with the archive. row.dag_parent_id was fetched via SELECT * at L28 (schema v28 includes it).
 - `archiveRawMemory`: afterArchive hook (v0.39 commit 3): connector-level idempotency markers (e.g. slack_event_log) must commit atomically with the archive itself.
 
-### src/api/recall-history.ts
+### src/api/recall/finish.ts
 - `module header`: J1 anchoring detector (recall-recurrence) — pure module. Implements two detection rules from ROADMAP-RESEARCH.md L546: R1 query_repeat ... R2 memory_dominance ...
 - `module header`: Per the plan v3 architectural decision: each pipeline (api.recall via HTTP, cmdRecall, MCP hippo_recall) owns its OWN ring buffer Map keyed by (tenant, session).
 - `module header`: Plan: docs/plans/2026-05-26-j1-anchoring-detector.md. Composes with J3.2: AnchoringHint + PlanningFallacyHint are independent signals; both can fire on the same recall.
 - `RecallHistoryEntry` / `DetectAnchoringOpts` / `detectAnchoring`: rule labels R1 (query_repeat) and R2 (memory_dominance) renamed to their reason strings in comments.
 - `hashQueryText`: Token sort + dedup means semantically-equivalent queries with reordered words collide intentionally (the roadmap's "semantically-distinct" v1 uses textual normalization; embedding-based distinctness is J1-v2).
 
-### src/store/recall-scope.ts
+### src/core/recall-scope.ts
 - `module header`: v1.25.0 — recall-side scope predicates, extracted from api.ts into a leaf module so shared.ts (which api.ts imports) can apply the same default-deny rule to searchBothHybrid's internal candidate loads without an import cycle. Mirrors the v39 `project-identity.ts` precedent.
 - `isPrivateScope`: v1.2.1: source-agnostic private-scope detector.
 - `passesScopeFilterForRecall`: @internal v1.7.2 — exported for test parity with `RECALL_DEFAULT_DENY_SCOPES` (single-source-of-truth verification).
@@ -953,7 +956,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallScopeFilter`: 'default-deny' — exclude scopes in `RECALL_DEFAULT_DENY_SCOPES` (T2).
 - `RecallScopeFilter`: 'default-deny-or-exact' (v1.25.0) — the default-admitted set PLUS rows whose scope equals `value`. This is the CLI `--scope` semantics: the flag predates the envelope column as a TAG-boost ranking hint (`scope:<v>` tags, HIPPO_SCOPE), so an explicit flag must UNLOCK the named envelope scope in addition to the normal set rather than narrow the result to it — narrowing would return zero rows for every tag-scoped workflow (envelope scope NULL). Strictly safer than the pre-v1.25.0 CLI behavior (no filter at all): other private scopes and quarantine buckets stay denied.
 - `RecallScopeFilter`: @internal v1.7.2 — internal SQL-builder shape; not on the public API surface (not re-exported from `src/index.ts`). Subject to change.
-- `loadSearchRows`: `_forceLikePathForTests(true)` forces the LIKE-fallback path here only; nothing in the environment can switch it. Read at the read-call site so writes (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using `isFtsAvailable` and never skip FTS index sync. Lets tests exercise the LIKE branch without poisoning the on-disk FTS state.
+- `loadSearchRows`: no switch forces the LIKE-fallback path; nothing in the environment or the API can. A part-word query (`kapp` for `kappa`) misses FTS5's whole-word tokens and reaches the LIKE branch, which is how tests exercise it without poisoning the on-disk FTS state.
 - `searchPredicates`: v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall. `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT (src/store/raw-archive.ts:56): UPDATE kind = 'archived' immediately followed by DELETE, both inside one savepoint that commits or rolls back atomically. SQLite atomicity guarantees no concurrent reader sees the intermediate state. This filter is defensive-only against: (a) future bugs that drop the SAVEPOINT, (b) future bugs that introduce kind='archived' as a persisted state, (c) external direct-SQL writes that bypass archiveRawMemory. tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set; when unset, we have no WHERE yet, so the archived clause needs both AND and WHERE forms. The "tenant-only" path always has WHERE (from tenant or we synthesize one).
 - `selectLikeCandidates`: tests the newest `LIKE_WINDOW_ROWS` (2,000) admitted rows, never the whole store. The window is read newest first by `created` through `idx_memories_tenant_created` when a tenant is given and by rowid when none is, with tenant, archived, scope and superseded filters inside it so another tenant's rows cannot fill it. A store at or under the window returns exactly what the unbounded statement did. Measured at 10,000 rows, two terms, no match: 8.6 ms and every tenant row tested before, 1.5 ms and 2,000 rows after; an FTS5 hit on a common term costs 14 ms on the same store. A part-word match older than the window is missed; an FTS5 trigram index would cover the whole store and is a schema change.
 - `loadVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/db/vector-store.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.

@@ -7,7 +7,8 @@ import { closeHippoDb } from '../src/db/index.js';
 import { initStore, openStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { passesScopeFilterForRecall, scopeAdmitSql } from '../src/store/recall-scope.js';
+import { passesScopeFilterForRecall } from '../src/core/recall-scope.js';
+import { scopeAdmitSql } from '../src/store/rule-sql.js';
 
 const OWN_A = 'personal:private:a';
 const SCOPES: ReadonlyArray<string | null> = [

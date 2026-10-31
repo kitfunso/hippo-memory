@@ -14,18 +14,20 @@
  *   - graph-recall.ts:248  graph-hop ordering (hops asc, then score desc)
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { compareEntryIdentity, type EntryIdentity } from '../src/core/compare.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -36,17 +38,17 @@ function safeRmSync(p: string): void {
 // ---------------------------------------------------------------------------
 
 describe('api.ts:833 DAG substitution ordering', () => {
-  function ctxFor(root: string, tenantId: string = 'default'): Context {
-    return { hippoRoot: root, tenantId, actor: { subject: 'test:tiebreak', role: 'admin' } };
+  function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+    return apiCtx(root, tenantId, { subject: 'test:tiebreak', role: 'admin' });
   }
   function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     return createMemory(text, {
       layer: Layer.Buffer,
       tags: opts.tags ?? [],
       confidence: 'observed',
-      dag_level: opts.dag_level ?? 0,
-      dag_parent_id: opts.dag_parent_id ?? undefined,
-      tenantId: opts.tenantId ?? 'default',
+      dagLevel: opts.dag_level ?? 0,
+      dagParentId: opts.dag_parent_id ?? undefined,
+      tenantId: opts.tenant_id ?? 'default',
       kind: opts.kind ?? 'distilled',
     });
   }
@@ -55,8 +57,8 @@ describe('api.ts:833 DAG substitution ordering', () => {
       layer: Layer.Semantic,
       tags: opts.tags ?? ['dag-summary'],
       confidence: 'inferred',
-      dag_level: 2,
-      tenantId: opts.tenantId ?? 'default',
+      dagLevel: 2,
+      tenantId: opts.tenant_id ?? 'default',
     });
   }
 
@@ -64,7 +66,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
   beforeEach(() => { root = makeRoot('dag-tiebreak'); });
   afterEach(() => safeRmSync(root));
 
-  it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', () => {
+  it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', async () => {
     // Every leaf under both topics tokenizes to the SAME 4-term bag ("alpha
     // zulu topic event") — the numeric/letter suffix ("a-0", "b-3", ...) is
     // stripped by tokenize()'s length>1 filter (hyphen splits it into two
@@ -96,7 +98,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
     // maxSub = max(1, ceil(limit * 0.3)) = 1 at limit=1, so only the WINNING
     // (highest overflow count) summary is substituted — a clean single-slot
     // assertion instead of inspecting relative order in a longer list.
-    const r = recall(ctxFor(root), { query: 'alpha zulu topic event', limit: 1 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha zulu topic event', limit: 1 });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBe(1);
     expect(summaries[0].id).toBe(summaryB.id); // topic B (6 overflow) beats topic A (2 overflow)
@@ -184,7 +186,7 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     return { entry, score, bm25: score, cosine: 0, tokens: estimateTokens(entry.content) };
   }
   function ent(home: string, tenant: string, m: MemoryEntry, name: string): number {
-    return insertEntity(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
+    return insertEntityAt(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
   }
 
   let home: string;
@@ -206,12 +208,12 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     const c = mem(home, T, 'zzz hop one neighbor right of origin');
     const eb = ent(home, T, b, 'B');
     const ec = ent(home, T, c, 'C');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id });
 
     const d = mem(home, T, 'mmm hop two neighbor reached via b');
     const ed = ent(home, T, d, 'D');
-    insertRelation(home, T, { fromEntityId: eb, toEntityId: ed, relType: 'supersedes', memoryId: b.id });
+    insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ed, relType: 'supersedes', memoryId: b.id });
 
     const base = [sr(a, 1.0)];
     const out = graphExpandRecall(base, {

@@ -1,4 +1,5 @@
-// hippo.db's vector reads. Async only: the nearest-row scan yields between chunks, so a store worker awaits these where it runs every other method to its end.
+// hippo.db's vector reads. Async only: the nearest-row scan yields between chunks, so a store worker awaits these where
+// it runs every other method to its end.
 import { loadPhysicsState } from '../../db/physics-state.js';
 import { onHandle } from '../open.js';
 import type { VectorReads } from '../port.js';

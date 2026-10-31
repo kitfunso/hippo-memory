@@ -10,7 +10,8 @@ import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
-import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../src/db/physics-state.js';
+import { loadPhysicsState, savePhysicsState } from '../src/db/physics-state.js';
+import { refreshParticleProperties } from '../src/core/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../src/core/physics.js';
 
 // One merge case builds and consolidates five separate stores.

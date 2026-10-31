@@ -17,6 +17,7 @@ import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { extractGraph, MAX_REFERENCES_PER_OBJECT } from '../src/graph/extract.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const T = 'default';
 /** All `references` edges in a tenant's graph. */
@@ -32,10 +33,10 @@ describe('cross-object references (Pass 3 name-match)', () => {
   beforeEach(() => { home = makeRoot('graph-xobj'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
-  it('a decision whose text names a policy emits one references edge (decision -> policy), sourced from the decision memory', () => {
-    const pol = savePolicy(home, T, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
-    const dec = saveDecision(home, T, { decisionText: 'We adopt RetryPolicy for all services' });
-    const r = extractGraph(home, T);
+  it('a decision whose text names a policy emits one references edge (decision -> policy), sourced from the decision memory', async () => {
+    const pol = await savePolicy(objectsAt(home), home, T, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
+    const dec = await saveDecision(objectsAt(home), home, T, { decisionText: 'We adopt RetryPolicy for all services' });
+    const r = await extractGraph(objectsAt(home), home, T);
     expect(r.references).toBe(1);
     const edges = refs(home);
     expect(edges).toHaveLength(1);
@@ -48,75 +49,75 @@ describe('cross-object references (Pass 3 name-match)', () => {
     void pol;
   });
 
-  it('no self-edge (an object whose own name appears in its own text)', () => {
-    savePolicy(home, T, { policyName: 'SelfRef', policyText: 'SelfRef governs SelfRef itself' });
-    extractGraph(home, T);
+  it('no self-edge (an object whose own name appears in its own text)', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'SelfRef', policyText: 'SelfRef governs SelfRef itself' });
+    await extractGraph(objectsAt(home), home, T);
     expect(refs(home)).toHaveLength(0);
   });
 
-  it('word-boundary: a policy named Cache does not match the substring in "cached"', () => {
-    savePolicy(home, T, { policyName: 'Cache', policyText: 'caching config' });
-    saveDecision(home, T, { decisionText: 'the system cached results last week' });
-    extractGraph(home, T);
+  it('word-boundary: a policy named Cache does not match the substring in "cached"', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'Cache', policyText: 'caching config' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'the system cached results last week' });
+    await extractGraph(objectsAt(home), home, T);
     expect(refs(home)).toHaveLength(0);
   });
 
-  it('MIN_NAME_LEN: a sub-4-char name is not a target', () => {
-    saveCustomerNote(home, T, { customer: 'Abc', note: 'short name customer' });
-    saveDecision(home, T, { decisionText: 'we onboarded Abc this quarter' });
-    extractGraph(home, T);
+  it('MIN_NAME_LEN: a sub-4-char name is not a target', async () => {
+    await saveCustomerNote(objectsAt(home), home, T, { customer: 'Abc', note: 'short name customer' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'we onboarded Abc this quarter' });
+    await extractGraph(objectsAt(home), home, T);
     expect(refs(home)).toHaveLength(0); // 'Abc' (3 chars) is below MIN_REF_NAME_LEN
   });
 
-  it('MAX_NAME_LEN: a long prose decision is a source but never a target', () => {
+  it('MAX_NAME_LEN: a long prose decision is a source but never a target', async () => {
     const longText = 'Adopt the new microservices event-driven architecture with sagas and CQRS for the order domain';
     expect(longText.length).toBeGreaterThan(80);
-    saveDecision(home, T, { decisionText: longText });
-    saveDecision(home, T, { decisionText: `${longText} - refined further` });
-    extractGraph(home, T);
+    await saveDecision(objectsAt(home), home, T, { decisionText: longText });
+    await saveDecision(objectsAt(home), home, T, { decisionText: `${longText} - refined further` });
+    await extractGraph(objectsAt(home), home, T);
     // The second decision's text contains the first's full text verbatim, but the first's
     // name is > MAX_REF_NAME_LEN, so it is not a target -> no references edge.
     expect(refs(home)).toHaveLength(0);
   });
 
-  it('ambiguity guard: a name shared by two entities (policy + customer) emits no edge', () => {
-    savePolicy(home, T, { policyName: 'Shared', policyText: 'a policy' });
-    saveCustomerNote(home, T, { customer: 'Shared', note: 'a customer' });
-    saveDecision(home, T, { decisionText: 'this references Shared somehow' });
-    extractGraph(home, T);
+  it('ambiguity guard: a name shared by two entities (policy + customer) emits no edge', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'Shared', policyText: 'a policy' });
+    await saveCustomerNote(objectsAt(home), home, T, { customer: 'Shared', note: 'a customer' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'this references Shared somehow' });
+    await extractGraph(objectsAt(home), home, T);
     expect(refs(home)).toHaveLength(0); // 'shared' maps to 2 entities -> dropped from index
   });
 
   it('per-source cap: a decision naming many policies is capped at MAX_REFERENCES_PER_OBJECT', async () => {
     const names = Array.from({ length: MAX_REFERENCES_PER_OBJECT + 5 }, (_, i) => `PolicyNum${String(i).padStart(3, '0')}`);
     // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(() => {
-      for (const n of names) savePolicy(home, T, { policyName: n, policyText: 'x' });
+    await withSharedStoreHandles(async () => {
+      for (const n of names) await savePolicy(objectsAt(home), home, T, { policyName: n, policyText: 'x' });
     });
-    saveDecision(home, T, { decisionText: `a decision that mentions ${names.join(' and ')}` });
-    extractGraph(home, T);
+    await saveDecision(objectsAt(home), home, T, { decisionText: `a decision that mentions ${names.join(' and ')}` });
+    await extractGraph(objectsAt(home), home, T);
     expect(refs(home).length).toBe(MAX_REFERENCES_PER_OBJECT);
   });
 
-  it('idempotent: re-running extractGraph yields the same references (no duplication)', () => {
-    savePolicy(home, T, { policyName: 'CacheTtl', policyText: 'ttl 60s' });
-    saveDecision(home, T, { decisionText: 'tune CacheTtl down' });
-    const r1 = extractGraph(home, T);
-    const r2 = extractGraph(home, T);
+  it('idempotent: re-running extractGraph yields the same references (no duplication)', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'CacheTtl', policyText: 'ttl 60s' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'tune CacheTtl down' });
+    const r1 = await extractGraph(objectsAt(home), home, T);
+    const r2 = await extractGraph(objectsAt(home), home, T);
     expect(r1.references).toBe(1);
     expect(r2.references).toBe(1);
     expect(refs(home)).toHaveLength(1);
   });
 
-  it('a forgotten (null memory_id) source STILL emits its edge, anchored to the E2 object (v38 provenance)', () => {
-    savePolicy(home, T, { policyName: 'AlphaPolicy', policyText: 'p' });
-    const dec = saveDecision(home, T, { decisionText: 'uses AlphaPolicy heavily' });
+  it('a forgotten (null memory_id) source STILL emits its edge, anchored to the E2 object (v38 provenance)', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'AlphaPolicy', policyText: 'p' });
+    const dec = await saveDecision(objectsAt(home), home, T, { decisionText: 'uses AlphaPolicy heavily' });
     // Delete the decision's mirror memory -> ON DELETE SET NULL nulls memory_id, but the
     // decision row stays active and authoritative. v38 anchors the entity to the E2 object,
     // so the forgotten-mirror decision is STILL a Pass-3 source (provenance = the object,
     // not the decaying mirror). This is the whole point of the graph/E2 provenance fix.
     deleteEntry(home, dec.memoryId!);
-    expect(() => extractGraph(home, T)).not.toThrow();
+    await extractGraph(objectsAt(home), home, T);
     const edges = refs(home);
     expect(edges).toHaveLength(1); // forgotten-mirror decision still references AlphaPolicy
     const decEnt = entByName(home, 'uses AlphaPolicy heavily')!;
@@ -125,19 +126,19 @@ describe('cross-object references (Pass 3 name-match)', () => {
     expect(edges[0].toEntityId).toBe(polEnt.id);
   });
 
-  it('a supersedes pair is not ALSO given a references edge (name-containment artifact)', () => {
-    const d1 = saveDecision(home, T, { decisionText: 'Adopt Postgres' });
-    saveDecision(home, T, { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
-    const r = extractGraph(home, T);
+  it('a supersedes pair is not ALSO given a references edge (name-containment artifact)', async () => {
+    const d1 = await saveDecision(objectsAt(home), home, T, { decisionText: 'Adopt Postgres' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
+    const r = await extractGraph(objectsAt(home), home, T);
     expect(r.references).toBe(0);              // d2's name contains d1's, but they supersede
     expect(r.relations).toBe(1);               // only the supersedes edge
     expect(refs(home)).toHaveLength(0);
   });
 
-  it('a project_brief source (repo/summary text) referencing a policy emits an edge (project -> policy)', () => {
-    savePolicy(home, T, { policyName: 'GreenPolicy', policyText: 'carbon-aware scheduling' });
-    saveProjectBrief(home, T, { repo: 'myrepo', summary: 'this service enforces GreenPolicy across jobs' });
-    const r = extractGraph(home, T);
+  it('a project_brief source (repo/summary text) referencing a policy emits an edge (project -> policy)', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'GreenPolicy', policyText: 'carbon-aware scheduling' });
+    await saveProjectBrief(objectsAt(home), home, T, { repo: 'myrepo', summary: 'this service enforces GreenPolicy across jobs' });
+    const r = await extractGraph(objectsAt(home), home, T);
     expect(r.references).toBe(1);
     const projEnt = entByName(home, 'myrepo')!;
     const polEnt = entByName(home, 'GreenPolicy')!;
@@ -147,50 +148,50 @@ describe('cross-object references (Pass 3 name-match)', () => {
     expect(edges[0].toEntityId).toBe(polEnt.id);
   });
 
-  it('superseded TARGET is excluded: a name belonging to a superseded policy is not referenced (codex)', () => {
-    const p1 = savePolicy(home, T, { policyName: 'OldPol', policyText: 'v1' });
-    savePolicy(home, T, { policyName: 'NewPol', policyText: 'v2', supersedesPolicyId: p1.id });
-    saveDecision(home, T, { decisionText: 'we still cite OldPol but adopt NewPol' });
-    extractGraph(home, T);
+  it('superseded TARGET is excluded: a name belonging to a superseded policy is not referenced (codex)', async () => {
+    const p1 = await savePolicy(objectsAt(home), home, T, { policyName: 'OldPol', policyText: 'v1' });
+    await savePolicy(objectsAt(home), home, T, { policyName: 'NewPol', policyText: 'v2', supersedesPolicyId: p1.id });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'we still cite OldPol but adopt NewPol' });
+    await extractGraph(objectsAt(home), home, T);
     const edges = refs(home);
     expect(edges).toHaveLength(1); // only the active NewPol, not the superseded OldPol
     expect(entByName(home, 'NewPol')!.id).toBe(edges[0].toEntityId);
   });
 
-  it('superseded SOURCE is excluded: a superseded decision emits no references (codex)', () => {
-    savePolicy(home, T, { policyName: 'LivePolicy', policyText: 'p' });
-    const d1 = saveDecision(home, T, { decisionText: 'd1 leans on LivePolicy' });
-    saveDecision(home, T, { decisionText: 'd2 supersedes the prior call', supersedesDecisionId: d1.id });
-    extractGraph(home, T);
+  it('superseded SOURCE is excluded: a superseded decision emits no references (codex)', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'LivePolicy', policyText: 'p' });
+    const d1 = await saveDecision(objectsAt(home), home, T, { decisionText: 'd1 leans on LivePolicy' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'd2 supersedes the prior call', supersedesDecisionId: d1.id });
+    await extractGraph(objectsAt(home), home, T);
     expect(refs(home)).toHaveLength(0); // d1 (superseded source) skipped; d2 names nothing
   });
 
-  it('longest-match: a prefix name does not shadow a longer entity name (codex)', () => {
-    savePolicy(home, T, { policyName: 'postgres', policyText: 'a' });
-    savePolicy(home, T, { policyName: 'postgres pro', policyText: 'b' });
-    saveDecision(home, T, { decisionText: 'migrate to postgres pro this quarter' });
-    extractGraph(home, T);
+  it('longest-match: a prefix name does not shadow a longer entity name (codex)', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'postgres', policyText: 'a' });
+    await savePolicy(objectsAt(home), home, T, { policyName: 'postgres pro', policyText: 'b' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'migrate to postgres pro this quarter' });
+    await extractGraph(objectsAt(home), home, T);
     const edges = refs(home);
     expect(edges).toHaveLength(1);
     expect(entByName(home, 'postgres pro')!.id).toBe(edges[0].toEntityId); // longest, not 'postgres'
   });
 
-  it('a source naming two distinct targets emits two references edges', () => {
-    savePolicy(home, T, { policyName: 'PolicyAlpha', policyText: 'a' });
-    savePolicy(home, T, { policyName: 'PolicyBeta', policyText: 'b' });
-    saveDecision(home, T, { decisionText: 'balance PolicyAlpha against PolicyBeta carefully' });
-    const r = extractGraph(home, T);
+  it('a source naming two distinct targets emits two references edges', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'PolicyAlpha', policyText: 'a' });
+    await savePolicy(objectsAt(home), home, T, { policyName: 'PolicyBeta', policyText: 'b' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'balance PolicyAlpha against PolicyBeta carefully' });
+    const r = await extractGraph(objectsAt(home), home, T);
     expect(r.references).toBe(2);
     const tgts = new Set(refs(home).map((e) => e.toEntityId));
     expect(tgts.has(entByName(home, 'PolicyAlpha')!.id)).toBe(true);
     expect(tgts.has(entByName(home, 'PolicyBeta')!.id)).toBe(true);
   });
 
-  it('tenant isolation: a name in another tenant object is never matched', () => {
-    savePolicy(home, 'tenantA', { policyName: 'TenantAPolicy', policyText: 'p' });
-    saveDecision(home, 'tenantB', { decisionText: 'mentions TenantAPolicy from another tenant' });
-    extractGraph(home, 'tenantA');
-    extractGraph(home, 'tenantB');
+  it('tenant isolation: a name in another tenant object is never matched', async () => {
+    await savePolicy(objectsAt(home), home, 'tenantA', { policyName: 'TenantAPolicy', policyText: 'p' });
+    await saveDecision(objectsAt(home), home, 'tenantB', { decisionText: 'mentions TenantAPolicy from another tenant' });
+    await extractGraph(objectsAt(home), home, 'tenantA');
+    await extractGraph(objectsAt(home), home, 'tenantB');
     expect(refs(home, 'tenantB')).toHaveLength(0); // cross-tenant name never matched (per-tenant index)
     expect(refs(home, 'tenantA')).toHaveLength(0);
   });

@@ -99,16 +99,19 @@ export function str(alphabet: string, min: number, max: number): Gen<string> {
 // A check that still fails after this many tries is reported as it stands.
 const SHRINK_BUDGET = 600;
 
-function failureOf<T>(check: (value: T) => void, value: T): Error | null {
+/** A check may be async, so a property can write to and read from a real store on each run. */
+type Check<T> = (value: T) => void | Promise<void>;
+
+async function failureOf<T>(check: Check<T>, value: T): Promise<Error | null> {
   try {
-    check(value);
+    await check(value);
     return null;
   } catch (thrown) {
     return thrown instanceof Error ? thrown : new Error(String(thrown));
   }
 }
 
-function shrink<T>(start: Sample<T>, startError: Error, check: (value: T) => void) {
+async function shrink<T>(start: Sample<T>, startError: Error, check: Check<T>) {
   let sample = start;
   let error = startError;
   let budget = SHRINK_BUDGET;
@@ -116,7 +119,7 @@ function shrink<T>(start: Sample<T>, startError: Error, check: (value: T) => voi
     moved = false;
     for (const candidate of sample.smaller()) {
       if (budget-- <= 0) break;
-      const failed = failureOf(check, candidate.value);
+      const failed = await failureOf(check, candidate.value);
       if (failed === null) continue;
       sample = candidate;
       error = failed;
@@ -134,13 +137,13 @@ function show<T>(value: T): string {
 }
 
 /** Runs `check` on `runs` inputs drawn from `gen`; a throw fails the property, naming the seed, the run and the smallest input that still fails. */
-export function forAll<T>(seed: number, runs: number, gen: Gen<T>, check: (value: T) => void): void {
+export async function forAll<T>(seed: number, runs: number, gen: Gen<T>, check: Check<T>): Promise<void> {
   const rng = mulberry32(seed);
   for (let run = 0; run < runs; run++) {
     const drawn = gen(rng);
-    const first = failureOf(check, drawn.value);
+    const first = await failureOf(check, drawn.value);
     if (first === null) continue;
-    const { sample, error } = shrink(drawn, first, check);
+    const { sample, error } = await shrink(drawn, first, check);
     throw new Error(`property failed (seed ${seed}, run ${run}); smallest failing input: ${show(sample.value)}\n${error.message}`, { cause: error });
   }
 }

@@ -1,26 +1,26 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
-import { graphRows } from '../../api/graph.js';
+import { graphEntityOf, graphRows } from '../../api/objects/graph.js';
 import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
-import type { MemoryKind } from '../../core/memory.js';
+import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
-import { MAX_ENTITY_NAME_LEN } from '../../store/graph-rows.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
-import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import { sleepInChild } from '../sleep-offload.js';
-import type { RouteRequest } from '../types.js';
-import { getCallerProject, getString, getStringArray, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import type { AuthedRouteRequest } from '../types.js';
+import {
+  getCallerProject,
+  getString,
+  getStringArray,
+  isSetMember,
+  parseJsonBody,
+  parseListLimit,
+  validateIdSegment,
+} from '../validation.js';
 import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
-const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
-  'raw',
-  'distilled',
-  'superseded',
-  'archived',
-]);
+const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
 
 // POST /v1/memories
-export async function handleCreateMemory({ req, res, opts }: RouteRequest): Promise<void> {
-  const ctx = await buildContextWithAuth(req, opts);
+export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest<'entryWrites'>): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content');
   if (!content) {
@@ -49,24 +49,20 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
 }
 
 // GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
-export async function handleGetGraph({ req, res, opts, query }: RouteRequest): Promise<void> {
-  const entityRaw = query.get('entity');
-  // Cap at the graph entity-name cap (512), not the id-shaped 256, so a valid
-  // long decision/policy name remains focusable over HTTP.
-  if (entityRaw !== null && entityRaw.length > MAX_ENTITY_NAME_LEN) {
-    throw new HttpError(400, `entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
-  }
+export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest<'graphReads'>): Promise<void> {
+  const entity = graphEntityOf(query.get('entity'));
   const limit = parseListLimit(query.get('limit'));
-  const ctx = await buildContextWithAuth(req, opts);
-  const rows = await graphRows(ctx, { entity: entityRaw ?? undefined, limit });
+  const rows = await graphRows(ctx, { entity, limit });
   sendJson(res, 200, graphModelOf(rows));
   return;
 }
 
 // /v1/memories/:id/* and DELETE /v1/memories/:id
-export async function handleArchiveMemory({ req, res, opts }: RouteRequest, archiveMatch: Record<string, string>): Promise<void> {
+export async function handleArchiveMemory(
+  { req, res, ctx }: AuthedRouteRequest<'entryWrites'>,
+  archiveMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(archiveMatch.id!, 'memory id');
-  const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   const reason = getString(body, 'reason');
   if (!reason) {
@@ -77,9 +73,11 @@ export async function handleArchiveMemory({ req, res, opts }: RouteRequest, arch
   return;
 }
 
-export async function handleSupersedeMemory({ req, res, opts }: RouteRequest, supersedeMatch: Record<string, string>): Promise<void> {
+export async function handleSupersedeMemory(
+  { req, res, ctx }: AuthedRouteRequest<'entryWrites'>,
+  supersedeMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(supersedeMatch.id!, 'memory id');
-  const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content');
   if (!content) {
@@ -90,26 +88,31 @@ export async function handleSupersedeMemory({ req, res, opts }: RouteRequest, su
   return;
 }
 
-export async function handlePromoteMemory({ req, res, opts }: RouteRequest, promoteMatch: Record<string, string>): Promise<void> {
+export async function handlePromoteMemory(
+  { res, ctx }: AuthedRouteRequest<'localFiles'>,
+  promoteMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(promoteMatch.id!, 'memory id');
-  const ctx = await buildContextWithAuth(req, opts);
   const result = promote(ctx, promoteMatch.id!);
   sendJson(res, 200, result);
   return;
 }
 
-export async function handleForgetMemory({ req, res, opts }: RouteRequest, idMatch: Record<string, string>): Promise<void> {
+export async function handleForgetMemory(
+  { res, ctx }: AuthedRouteRequest<'entryWrites'>,
+  idMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(idMatch.id!, 'memory id');
-  const ctx = await buildContextWithAuth(req, opts);
   const result = await forget(ctx, idMatch.id!);
   sendJson(res, 200, result);
   return;
 }
 
-// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it falls back to the last-recall path (api.outcomeForLastRecall)
-// and returns {applied, ids}, so callers can tell "no recent recall" from "all ids skipped". Each applied id writes one audit_log row (op='outcome').
-export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Promise<void> {
-  const ctx = await buildContextWithAuth(req, opts);
+// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it falls back to the last-recall
+// path (api.outcomeForLastRecall)
+// and returns {applied, ids}, so callers can tell "no recent recall" from "all ids skipped". Each applied id writes one
+// audit_log row (op='outcome').
+export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest<'entryWrites'>): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const good = body['good'];
   if (!isJsonBoolean(good)) {
@@ -125,8 +128,9 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
     if (!idsRaw.every(isNonEmptyId)) {
       throw new HttpError(400, 'ids must be an array of non-empty strings');
     }
-    // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite.
-    // Checked BEFORE buildContextWithAuth so attack traffic does not pay the api-key lookup.
+    // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite. Auth runs
+    // first, so only a caller with a key
+    // reaches it.
     if (idsRaw.length > 1000) {
       throw new HttpError(400, 'ids exceeds 1000-id cap');
     }
@@ -136,28 +140,17 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
     const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    // The last recall's ids live in hippo.db alone, so a client of another store must send the ids its recall returned.
-    if (ctx.store !== undefined && ctx.store.kind !== 'sqlite') throw new HttpError(501, 'this store keeps no last recall: send the ids your recall returned');
     const result = await outcomeForLastRecall(ctx, good);
     sendJson(res, 200, result);
   }
   return;
 }
 
-// POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE hippoRoot, cross-tenant by design, so the
-// loopback-only guard is the trust boundary; non-loopback serving must also zero cross-tenant counters. Body {dry_run?, no_share?}; returns SleepResult JSON.
-export async function handleSleep({ req, res, opts }: RouteRequest): Promise<void> {
-  // Defensive per-request loopback guard using isLoopback(), so future mapped/IPv6/NAT64 forms flow through without drift;
-  // serve()'s boot-time host check is the primary trust boundary.
-  if (!isLoopback(req.socket.remoteAddress)) {
-    throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
-  }
-  // Admin-role gate, forward-defensive: loopback fallback is admin by default and Bearer callers carry an explicit role from the api_keys row;
-  // when non-loopback serving lands, this gate is the real auth boundary on host-wide sleep.
-  const sleepCtx = await buildContextWithAuth(req, opts);
-  // Sleep consolidates every tenant under hippoRoot, so it is a cross-tenant action.
-  assertCrossTenantAdmin(sleepCtx, '/v1/sleep');
-  const body = await parseJsonBody(req, sleepCtx);
+// POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
+// hippoRoot, cross-tenant by design, so the
+// row's host-admin-local gate is the trust boundary. Body {dry_run?, no_share?}; returns SleepResult JSON.
+export async function handleSleep({ req, res, ctx }: AuthedRouteRequest<'localFiles'>): Promise<void> {
+  const body = await parseJsonBody(req, ctx);
   const dryRunRaw = body['dry_run'];
   if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {
     throw new HttpError(400, 'dry_run must be a boolean');
@@ -166,8 +159,7 @@ export async function handleSleep({ req, res, opts }: RouteRequest): Promise<voi
   if (noShareRaw !== undefined && !isJsonBoolean(noShareRaw)) {
     throw new HttpError(400, 'no_share must be a boolean');
   }
-  // sleepCtx already built above for the admin-role gate; reuse.
-  const result = await sleepInChild(sleepCtx, {
+  const result = await sleepInChild(ctx, {
     dryRun: dryRunRaw === true,
     noShare: noShareRaw === true,
   });

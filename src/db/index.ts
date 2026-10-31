@@ -2,9 +2,6 @@
 export type { DatabaseSyncLike } from './sqlite.js';
 export {
   isSqliteBusy,
-  isStoreBusy,
-  StoreBusyError,
-  STORE_BUSY_MESSAGE,
   execWithBusyRetry,
   withReadSnapshot,
   withTrialScope,
@@ -12,7 +9,7 @@ export {
   withWriteScopeOr
 } from './busy.js';
 export { getSchemaVersion, getMeta, setMeta, isFtsAvailable } from './meta.js';
-export { countTableRows, pruneConsolidationRuns } from './tables.js';
+export { countTableRows, pruneConsolidationRuns, CONSOLIDATION_RUNS_KEPT } from './tables.js';
 export { getCurrentSchemaVersion, IncompatibleBinaryError, ftsRowCounts, repairFtsDrift } from './migrate.js';
 export {
   getHippoDbPath,
@@ -26,7 +23,6 @@ export {
   withSqliteAllowed,
   withSqliteOffLoop,
   outsideSqliteOffLoop,
-  rethrowIfSqliteBlocked,
   OTHER_STORE_MARKER,
   openHippoDb,
   openHippoDbReadOnly,

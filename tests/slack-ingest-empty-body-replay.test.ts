@@ -20,13 +20,10 @@ import { initStore } from '../src/store/open.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { adminActor } from '../src/api/index.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function ctx(hippoRoot: string) {
-  return {
-    hippoRoot,
-    tenantId: 'default',
-    actor: adminActor('test:slack-ingest-empty-body'),
-  };
+  return apiCtx(hippoRoot, 'default', adminActor('test:slack-ingest-empty-body'));
 }
 
 const channel: ChannelMeta = { id: 'C01', is_private: false };

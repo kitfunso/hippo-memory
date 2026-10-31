@@ -2,7 +2,6 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { closeHippoDb } from '../db/index.js';
 import { duplicateKey } from '../util/same-text.js';
-import { embedMemory } from './embeddings/index.js';
 import { writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
@@ -19,12 +18,20 @@ export interface CaptureItem {
 
 export interface CaptureWriteOpts {
   readonly actor?: string;
-  /** No stats and no embedding, since embedding runs a model in a server process. */
+  /** No stats, as in a server process. */
   readonly lean: boolean;
+  /** Called with each captured entry after its write, so the caller can embed it; the store never picks a provider. */
+  readonly onCaptured?: (entry: MemoryEntry) => void;
 }
 
-/** One outcome per item, in order. `keys` holds the texts already stored and gains each one written, so a repeat inside the batch is skipped. */
-export function writeCapturedItems(hippoRoot: string, items: readonly CaptureItem[], keys: Set<string>, opts: CaptureWriteOpts): CapturedOutcome[] {
+/** One outcome per item, in order. `keys` holds the texts already stored and gains each one written, so a repeat inside
+ * the batch is skipped. */
+export function writeCapturedItems(
+  hippoRoot: string,
+  items: readonly CaptureItem[],
+  keys: Set<string>,
+  opts: CaptureWriteOpts,
+): CapturedOutcome[] {
   const db = openStore(hippoRoot);
   try {
     return items.map((item) => {
@@ -38,7 +45,7 @@ export function writeCapturedItems(hippoRoot: string, items: readonly CaptureIte
       writeEntryMirrors(hippoRoot, stamped);
       if (!opts.lean) updateStatsOn(db, hippoRoot, { remembered: 1 });
       keys.add(duplicateKey(item.content)); // within-batch dedup
-      if (!opts.lean) void embedMemory(hippoRoot, entry);
+      opts.onCaptured?.(entry);
       return 'captured';
     });
   } finally {

@@ -9,11 +9,12 @@ import { SqliteBlockedError, withSqliteBlocked } from '../src/db/index.js';
 import { recordTokens } from '../src/api/index.js';
 import { recordMcpTokens } from '../src/mcp/request.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
-import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import { resolveIndexedEmbeddingModel } from '../src/store/embeddings/index.js';
 import { resolveVectorArm } from '../src/search/vector.js';
+import { sqliteStore } from '../src/store/index.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 
@@ -24,21 +25,18 @@ type Row = readonly [string, RegExp, (root: string) => Promise<string>, string];
 
 const ROWS: readonly Row[] = [
   ['api/tokens.ts recordTokens', /recordTokens/, async (root) => {
-    await recordTokens({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, 'http_recall', { items: 1, tokens: 1 });
+    await recordTokens(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), 'http_recall', { items: 1, tokens: 1 });
     return 'returned';
   }, 'returned'],
   ['mcp/request.ts recordMcpTokens', /recordMcpTokens/, async (root) => {
-    await recordMcpTokens('hippo_context', 'memory text', { hippoRoot: root, tenantId: 'default', actor: 'mcp' });
+    await recordMcpTokens('hippo_context', 'memory text', { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) });
     return 'returned';
   }, 'returned'],
   ['store/entry-writes.ts strengthenRetrieved', /strengthenRetrieved/,
     async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`, 'found 0'],
-  ['recall-trace.ts writeRecallTraceAtRoot', /writeRecallTraceAtRoot/, async (root) => String(writeRecallTraceAtRoot(root, {
-    tenantId: 'default', sessionId: null, pipeline: 'mcp', query: 'deploy', results: [],
-  })), 'null'],
   ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(resolveIndexedEmbeddingModel(root, {})), 'null'],
   ['search/vector.ts resolveVectorArm', /fillVectorArm/,
-    async (root) => `embeddings ${(await resolveVectorArm('deploy', [], { hippoRoot: root })).useEmbeddings}`, 'embeddings false'],
+    async (root) => `embeddings ${(await resolveVectorArm('deploy', [], { root, store: sqliteStore(root) }, {})).useEmbeddings}`, 'embeddings false'],
   ['search/physics-search.ts physicsQueryVector', /physicsQueryVector/,
     async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root })), 'ranked 1'],
   ['search/physics-search.ts withVectorCandidates', /withVectorCandidates/, async (root) => ranked(await physicsSearch('deploy', [entry], {

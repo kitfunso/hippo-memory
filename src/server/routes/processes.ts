@@ -1,14 +1,22 @@
 // /v1/processes routes.
 import { MAX_PROCESS_STEP_LEN, MAX_PROCESS_STEPS, PROCESS, type SaveProcessOpts } from '../../objects/processes.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
-import { buildContextWithAuth } from '../auth.js';
-import type { RouteRequest } from '../types.js';
+import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
-import { saveFor } from '../../api/objects.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { saveFor } from '../../api/objects/objects.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  optionalString,
+  requiredString,
+  supersedeRoute,
+  type VersionedRouteConfig,
+} from './object-routes.js';
 
-// HTTP-boundary validation for an untrusted process `steps` body; saveProcess re-validates and trims, this is the fail-fast 400 gate.
+// HTTP-boundary validation for an untrusted process `steps` body; saveProcess re-validates and trims, this is the
+// fail-fast 400 gate.
 function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
@@ -44,14 +52,22 @@ const processRoutes: VersionedRouteConfig<'process', SaveProcessOpts> = {
     }
     const changeSummary = optionalString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
     const description = optionalString(body, 'description', MAX_SHORT_FIELD_LEN);
-    return (existing, id) => ({ processName: existing.processName, steps, description, changeSummary, supersedesProcessId: id });
+    return (existing, id) => ({
+      processName: existing.processName,
+      steps,
+      description,
+      changeSummary,
+      supersedesProcessId: id,
+    });
   },
 };
 
-// Routes: /v1/processes (create, list, show, supersede, close), mirroring /v1/decisions; supersede creates a new version that reuses the predecessor's name.
-// DoS caps: processName/description/changeSummary MAX_SHORT_FIELD_LEN, steps MAX_PROCESS_STEPS x MAX_PROCESS_STEP_LEN (validateProcessStepsBody).
-export async function handleCreateProcess(rr: RouteRequest): Promise<void> {
-  const ctx = await buildContextWithAuth(rr.req, rr.opts);
+// Routes: /v1/processes (create, list, show, supersede, close), mirroring /v1/decisions; supersede creates a new
+// version that reuses the predecessor's name.
+// DoS caps: processName/description/changeSummary MAX_SHORT_FIELD_LEN, steps MAX_PROCESS_STEPS x MAX_PROCESS_STEP_LEN
+// (validateProcessStepsBody).
+export async function handleCreateProcess(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+  const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
   const process = await saveFor(ctx, PROCESS, {
     processName: requiredString(body, 'processName', { max: MAX_SHORT_FIELD_LEN }),
@@ -61,18 +77,18 @@ export async function handleCreateProcess(rr: RouteRequest): Promise<void> {
   sendJson(rr.res, 201, { process });
 }
 
-export function handleListProcesses(rr: RouteRequest): Promise<void> {
+export function handleListProcesses(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   return listRoute(processRoutes, rr);
 }
 
-export function handleSupersedeProcess(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleSupersedeProcess(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return supersedeRoute(processRoutes, rr, match);
 }
 
-export function handleCloseProcess(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleCloseProcess(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return closeRoute(processRoutes, rr, match);
 }
 
-export function handleGetProcess(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleGetProcess(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return getRoute(processRoutes, rr, match);
 }

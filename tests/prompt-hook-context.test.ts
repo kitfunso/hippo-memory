@@ -1,4 +1,5 @@
 // promptHookContext answers a store-less laptop's per-prompt hook with the bytes the local hook would print.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -8,15 +9,16 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { adminActor, type Context } from '../src/api/index.js';
+import { adminActor } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
-import { MAX_ID_LEN } from '../src/util/http-util.js';
-import { hashArm } from '../src/api/pilot-arm.js';
+import { MAX_ID_LEN } from '../src/util/limits.js';
+import { hashArm } from '../src/store/pilot-arm.js';
 import { resolveProjectIdentity } from '../src/core/project-identity.js';
-import { promptHookContext } from '../src/api/prompt-hook.js';
+import { promptHookContext, type PromptHookOpts } from '../src/api/prompt-hook.js';
 import { HIPPO_PINNED_INJECT_COMMAND } from '../src/hooks/shared.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const REPO = path.resolve(__dirname, '..');
 // The command Claude Code runs on every prompt, so a change to its flags fails the parity case below.
@@ -59,7 +61,7 @@ function pin(store: string, content: string, origin: string): void {
   writeEntry(store, { ...createMemory(content), pinned: true, origin_project: origin });
 }
 
-const ctxFor = (store: string): Context => ({ hippoRoot: store, tenantId: 'default', actor: adminActor('prompt-hook-test') });
+const ctxFor = (store: string): FullContext => (apiCtx(store, 'default', adminActor('prompt-hook-test')));
 
 function ledger(store: string, where: string): LedgerRow[] {
   const db = openHippoDb(store);
@@ -117,6 +119,11 @@ describe('promptHookContext', () => {
     expect(expected[0]).toContain('Active Task Snapshot');
     expect(expected[0]).toContain('Prompt-Relevant Memory');
     expect(expected[1]).toContain('Release train');
+    // 'parity' saved the snapshot, so it reads the whole text; 'parity-recent' is another session and reads a pointer.
+    expect(expected[0]).toContain('half done');
+    expect(expected[0]).not.toContain('hippo session latest');
+    expect(expected[1]).toContain('run `hippo session latest --id=parity`');
+    expect(expected[1]).not.toContain('half done');
     for (const out of expected) {
       expect(out).toContain('rollback plan');
       expect(out).toContain('remote-named rows');
@@ -127,8 +134,22 @@ describe('promptHookContext', () => {
     expect(project).toMatchObject({ name: 'acme-proj', legacyName: 'proj', aliases: ['github.com/acme/proj', 'proj'] });
     const ctx = ctxFor(srvStore);
     const staticHash = expect.stringMatching(BLOCK_HASH_RE);
-    expect(await promptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt })).toEqual({ arm: null, stdout: expected[0], staticHash });
-    expect(await promptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt })).toEqual({ arm: null, stdout: expected[1], staticHash });
+    // The local hook points to another session's snapshot, so the remote route needs the opt-in to match it byte for byte.
+    const pointers: PromptHookOpts = { continuity: 'pointer' };
+    expect(await promptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt }, pointers)).toEqual({ arm: null, stdout: expected[0], staticHash });
+    expect(await promptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt }, pointers)).toEqual({ arm: null, stdout: expected[1], staticHash });
+  });
+
+  it("prints another session's snapshot whole unless the caller opts in to the pointer", async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' });
+    const ask = (opts?: PromptHookOpts) => promptHookContext(ctxFor(store), { sessionId: 'reader', project: PROJECT_P }, opts);
+    const whole = await ask();
+    expect(whole.stdout).toContain('half done');
+    expect(whole.stdout).not.toContain('hippo session latest');
+    const pointer = await ask({ continuity: 'pointer' });
+    expect(pointer.stdout).toContain('run `hippo session latest --id=owner`');
+    expect(pointer.stdout).not.toContain('half done');
   });
 
   it('prints the task state when no pin or memory is there to pick, as the local hook does', async () => {
@@ -137,8 +158,13 @@ describe('promptHookContext', () => {
     saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'state-only' });
     const payload: HookPayload = { session_id: 'state-only', hook_event_name: 'UserPromptSubmit' };
     const out = await promptHookContext(ctxFor(store), { sessionId: 'state-only', project: PROJECT_P, payload });
+    // The saving session reads it whole; the local hook, for another session, reads a pointer.
     expect(out.stdout).toContain('Active Task Snapshot');
-    expect(localHook(dir, { ...payload, session_id: 'state-only-cli' })).toContain('Active Task Snapshot');
+    expect(out.stdout).toContain('half done');
+    const local = localHook(dir, { ...payload, session_id: 'state-only-cli' });
+    expect(local).toContain('Active Task Snapshot');
+    expect(local).toContain('run `hippo session latest --id=state-only`');
+    expect(local).not.toContain('half done');
   });
 
   it('rate 10000: books a holdout arm row and prints nothing, as the local holdout does', async () => {
@@ -153,7 +179,7 @@ describe('promptHookContext', () => {
 
   it('books the holdout arm row under the caller tenant, never the default one', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
-    const ctx: Context = { hippoRoot: store, tenantId: 't1', actor: adminActor('prompt-hook-test') };
+    const ctx: FullContext = apiCtx(store, 't1', adminActor('prompt-hook-test'));
     expect(await promptHookContext(ctx, { sessionId: 'h-t1', project: PROJECT_P })).toEqual({ arm: 'holdout', ...NOTHING });
     expect(ledger(store, `event = 'arm'`).map((r) => [r.session_id, r.tenant_id])).toEqual([['h-t1', 't1']]);
   });
@@ -271,7 +297,7 @@ describe('promptHookContext', () => {
   it('books a caller arm row even when another tenant already holds that session id', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     for (const tenantId of ['t-a', 't-b']) {
-      const ctx: Context = { hippoRoot: store, tenantId, actor: adminActor('prompt-hook-test') };
+      const ctx: FullContext = apiCtx(store, tenantId, adminActor('prompt-hook-test'));
       expect((await promptHookContext(ctx, { sessionId: 'same-id', project: PROJECT_P })).arm).toBe('holdout');
     }
     expect(ledger(store, `event = 'arm'`).map((r) => r.tenant_id)).toEqual(['t-a', 't-b']);
@@ -330,7 +356,7 @@ describe('promptHookContext on a shared store', () => {
     pin(store, 'PINNED: always check the rollback plan', 'p');
     saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' }, { owner: 'prompt-hook-test', project: ['p'] });
     expect((await ask(store, 'someone-else', false)).stdout).toContain('Active Task Snapshot');
-    const otherCtx: Context = { ...ctxFor(store), actor: { subject: 'api_key:hk_other', role: 'member' } };
+    const otherCtx: FullContext = { ...ctxFor(store), actor: { subject: 'api_key:hk_other', role: 'member' } };
     const other = await promptHookContext(otherCtx, { sessionId: 'someone-else-shared', project: PROJECT_P }, SHARED);
     expect(other.stdout).toContain('rollback plan');
     expect(other.stdout).not.toContain('Active Task Snapshot');

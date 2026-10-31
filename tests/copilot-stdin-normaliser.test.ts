@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { normaliseHookPayload } from '../src/cli/stdin.js';
-import { hookPayloadSessionId } from '../src/store/token-ledger.js';
+import { hookPayloadSessionId } from '../src/util/hook-payload.js';
 import { createDeliveryRecorder, type DeliveryEventInput, type DeliveryRuntime } from '../src/store/delivery-recorder.js';
 import { readClaudeCodePreCompact } from '../src/core/capture-contract.js';
 import { lessonFromFailure, payloadString } from '../src/capture/failure-reading.js';

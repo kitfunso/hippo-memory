@@ -59,8 +59,8 @@ function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, old: ReadonlyMap<st
   const byTenant = new Map<string, Record<string, number>>();
   for (const e of move.entries) {
     // One record per tenant, filled in place: copying it per row made the write grow with the square of the store.
-    let record = byTenant.get(e.tenantId);
-    if (!record) byTenant.set(e.tenantId, (record = {}));
+    let record = byTenant.get(e.tenant_id);
+    if (!record) byTenant.set(e.tenant_id, (record = {}));
     record[e.id] = old.get(e.id)!;
   }
   for (const [tenantId, oldHalfLives] of byTenant) {

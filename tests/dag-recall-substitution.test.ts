@@ -7,19 +7,21 @@
  * substitutions, scope/tenant filtered, and reversible via Task 3 drillDown.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:recall-sub', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:recall-sub', role: 'admin' });
 }
 
 function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -28,10 +30,10 @@ function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     layer: Layer.Buffer,
     tags: opts.tags ?? [],
     confidence: 'observed',
-    dag_level: opts.dag_level ?? 0,
-    dag_parent_id: opts.dag_parent_id ?? undefined,
+    dagLevel: opts.dag_level ?? 0,
+    dagParentId: opts.dag_parent_id ?? undefined,
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
     kind: opts.kind ?? 'distilled',
   });
   return e;
@@ -43,9 +45,9 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     layer: Layer.Semantic,
     tags: opts.tags ?? ['dag-summary'],
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
   });
   return s;
 }
@@ -55,17 +57,17 @@ describe('DAG-aware recall substitution', () => {
   beforeEach(() => { root = makeRoot('dag-sub'); });
   afterEach(() => safeRmSync(root));
 
-  it('1. no DAG, no substitution', () => {
+  it('1. no DAG, no substitution', async () => {
     // 30 leaves, no parent summary. limit=10 should return 10 with no isSummary marker.
     for (let i = 0; i < 30; i++) {
       writeEntry(root, makeLeaf(`alpha bravo charlie ${i}`));
     }
-    const r = recall(ctxFor(root), { query: 'alpha bravo charlie', limit: 10 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha bravo charlie', limit: 10 });
     expect(r.results.length).toBe(10);
     expect(r.results.every((it) => !it.isSummary)).toBe(true);
   });
 
-  it('2. limit tight, summary substitutes for overflow', () => {
+  it('2. limit tight, summary substitutes for overflow', async () => {
     // 1 summary + 12 children. limit=5 means 7 children overflow; summary
     // should be appended.
     const summary = makeSummary('topic alpha rollup', { tags: ['dag-summary', 'topic:alpha'] });
@@ -78,7 +80,7 @@ describe('DAG-aware recall substitution', () => {
       }));
     }
 
-    const r = recall(ctxFor(root), { query: 'alpha detail event', limit: 5 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha detail event', limit: 5 });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBe(1);
     expect(summaries[0].id).toBe(summary.id);
@@ -86,7 +88,7 @@ describe('DAG-aware recall substitution', () => {
     expect(summaries[0].descendantCount).toBe(12);
   });
 
-  it('3. private summary not surfaced when query has no scope', () => {
+  it('3. private summary not surfaced when query has no scope', async () => {
     const summary = makeSummary('private topic', { scope: 'slack:private:CSEC' });
     writeEntry(root, summary);
     for (let i = 0; i < 8; i++) {
@@ -98,27 +100,27 @@ describe('DAG-aware recall substitution', () => {
     }
     // No scope passed; default-deny should drop the leaves AND prevent
     // the summary from being substituted in.
-    const r = recall(ctxFor(root), { query: 'secret payroll detail', limit: 3 });
+    const r = await retrieve(ctxFor(root), { query: 'secret payroll detail', limit: 3 });
     expect(r.results.every((it) => !it.isSummary)).toBe(true);
   });
 
-  it('4. cross-tenant summary not loaded', () => {
-    const summary = makeSummary('other tenant topic', { tenantId: 'other' });
+  it('4. cross-tenant summary not loaded', async () => {
+    const summary = makeSummary('other tenant topic', { tenant_id: 'other' });
     writeEntry(root, summary);
     for (let i = 0; i < 6; i++) {
       writeEntry(root, makeLeaf(`alpha cross tenant ${i}`, {
         dag_level: 1,
         dag_parent_id: summary.id,
-        tenantId: 'other',
+        tenant_id: 'other',
       }));
     }
     // Recall as default tenant: nothing should match (entries belong to other),
     // and even if loadEntriesByIds saw the parent ID, tenant filter blocks it.
-    const r = recall(ctxFor(root, 'default'), { query: 'alpha cross tenant', limit: 3 });
+    const r = await retrieve(ctxFor(root, 'default'), { query: 'alpha cross tenant', limit: 3 });
     expect(r.results).toHaveLength(0);
   });
 
-  it('5. substitution count capped at ceil(limit * 0.3)', () => {
+  it('5. substitution count capped at ceil(limit * 0.3)', async () => {
     // 5 separate summaries, each with 3 overflowing children. limit=10.
     // ceil(10 * 0.3) = 3. Only 3 summaries should be substituted.
     for (let s = 0; s < 5; s++) {
@@ -136,13 +138,13 @@ describe('DAG-aware recall substitution', () => {
     for (let i = 0; i < 10; i++) {
       writeEntry(root, makeLeaf(`alpha unrelated padding ${i}`));
     }
-    const r = recall(ctxFor(root), { query: 'alpha topic event', limit: 10 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha topic event', limit: 10 });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBeLessThanOrEqual(3);
     expect(summaries.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('6. summarizeOverflow:false disables substitution', () => {
+  it('6. summarizeOverflow:false disables substitution', async () => {
     const summary = makeSummary('topic gamma', { tags: ['dag-summary'] });
     summary.descendant_count = 6;
     writeEntry(root, summary);
@@ -152,12 +154,12 @@ describe('DAG-aware recall substitution', () => {
         dag_parent_id: summary.id,
       }));
     }
-    const r = recall(ctxFor(root), { query: 'gamma detail', limit: 3, summarizeOverflow: false });
+    const r = await retrieve(ctxFor(root), { query: 'gamma detail', limit: 3, summarizeOverflow: false });
     expect(r.results.length).toBe(3);
     expect(r.results.every((it) => !it.isSummary)).toBe(true);
   });
 
-  it('7. parent already in baseSlice is not duplicated as a substitution', () => {
+  it('7. parent already in baseSlice is not duplicated as a substitution', async () => {
     // Parent summary itself matches the query strongly and ranks in the top
     // limit. Substitution must NOT add it again.
     const summary = makeSummary('shared keyword summary marker', { tags: ['dag-summary', 'topic:shared'] });
@@ -169,7 +171,7 @@ describe('DAG-aware recall substitution', () => {
         dag_parent_id: summary.id,
       }));
     }
-    const r = recall(ctxFor(root), { query: 'shared keyword summary marker', limit: 2 });
+    const r = await retrieve(ctxFor(root), { query: 'shared keyword summary marker', limit: 2 });
     const summaryHits = r.results.filter((it) => it.id === summary.id);
     expect(summaryHits.length).toBe(1);
   });

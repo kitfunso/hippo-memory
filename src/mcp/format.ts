@@ -1,12 +1,13 @@
 // Text the MCP recall and context tools print, and what each printed piece costs the token budget.
 
+import { truncateWithEllipsis } from '../util/ellipsize.js';
 import type { SearchResult } from '../core/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { confidenceLabel } from '../core/memory.js';
 import type { ContextCost, ContinuityBlock, RecallResult, RecallResultItem } from '../api/index.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
 import { printedTokens } from '../api/context-render.js';
-import { detectAnchoring } from '../api/recall-history.js';
+import { detectAnchoring } from '../api/recall/finish.js';
 import { detectAvailabilityBias } from '../api/availability.js';
 import { estimateTokens } from '../util/token-text.js';
 
@@ -29,7 +30,7 @@ function handoffLines(h: SessionHandoff): string[] {
 
 function trailLines(events: readonly SessionEvent[]): string[] {
   return events.map((e) => {
-    const preview = e.content.length > MCP_PREVIEW_CHARS ? e.content.slice(0, MCP_PREVIEW_CHARS) + '…' : e.content;
+    const preview = truncateWithEllipsis(e.content, MCP_PREVIEW_CHARS, '…');
     return `- [${e.event_type}] ${preview}`;
   });
 }
@@ -126,8 +127,9 @@ export function trailPiece(events: readonly SessionEvent[]): string {
 export const contextCost: ContextCost = {
   entry: memoryCost,
   fixed: (budget) => memoriesReserve(budget),
-  snapshot: (s) => estimateTokens(snapshotPiece(s)),
-  handoff: (h) => estimateTokens(handoffPiece(h)),
+  // hippo_context passes no continuity opt-in, so the mode is always 'full' and the full piece is the price.
+  snapshot: (s, _mode) => estimateTokens(snapshotPiece(s)),
+  handoff: (h, _mode) => estimateTokens(handoffPiece(h)),
   trail: (events) => estimateTokens(trailPiece(events)),
 };
 
@@ -137,7 +139,7 @@ export function tailSection(rows: RecallResultItem[]): string {
   const lines: string[] = ['', '## Fresh tail / substituted summaries'];
   for (const r of rows) {
     const tag = r.isSummary ? '[summary]' : '[tail]';
-    const head = r.content.length > MCP_PREVIEW_CHARS ? r.content.slice(0, MCP_PREVIEW_CHARS) + '…' : r.content;
+    const head = truncateWithEllipsis(r.content, MCP_PREVIEW_CHARS, '…');
     if (r.isSummary && r.substitutedFor && r.substitutedFor.length > 0) {
       lines.push(`- ${tag} ${r.id} (covers ${r.substitutedFor.length} rows): ${head}`);
     } else {
@@ -151,11 +153,13 @@ export function tailSection(rows: RecallResultItem[]): string {
 export function planningSection(r: RecallResult): string {
   if (r.planningFallacyHint) {
     const h = r.planningFallacyHint;
-    return `## Planning fallacy hint\nClass: ${h.classTag}\n${h.baserateSummary}\n(detected: ${JSON.stringify(h.detectedPhrase)})\n\n---\n\n`;
+    return `## Planning fallacy hint\nClass: ${h.classTag}\n${h.baserateSummary}\n(detected: ` +
+      `${JSON.stringify(h.detectedPhrase)})\n\n---\n\n`;
   }
   if (r.planningFallacyWatching) {
     const w = r.planningFallacyWatching;
-    return `## Planning fallacy watch\nReason: ${w.reason}\n${w.suggestion}\n(detected: ${JSON.stringify(w.detectedPhrase)})\n\n---\n\n`;
+    return `## Planning fallacy watch\nReason: ${w.reason}\n${w.suggestion}\n(detected: ` +
+      `${JSON.stringify(w.detectedPhrase)})\n\n---\n\n`;
   }
   return '';
 }

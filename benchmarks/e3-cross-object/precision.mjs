@@ -11,40 +11,42 @@ import { saveCustomerNote } from '../../dist/objects/customer-notes.js';
 import { saveProjectBrief } from '../../dist/objects/project-briefs.js';
 import { loadEntities, loadRelations } from '../../dist/store/graph-reads.js';
 import { extractGraph } from '../../dist/graph/extract.js';
+import { sqliteStore } from '../../dist/store/sqlite/store.js';
 
 const home = mkdtempSync(join(tmpdir(), 'hippo-e3-xobj-'));
 mkdirSync(join(home, '.hippo'), { recursive: true });
 initStore(home);
 const T = 'default';
+const objects = sqliteStore(home).objects;
 const intended = new Set(); // `${srcName}=>${tgtName}` genuine references
 
-function decRef(text, srcName, tgtName) { saveDecision(home, T, { decisionText: text }); if (tgtName) intended.add(`${srcName}=>${tgtName}`); }
+async function decRef(text, srcName, tgtName) { await saveDecision(objects, home, T, { decisionText: text }); if (tgtName) intended.add(`${srcName}=>${tgtName}`); }
 
 // Targets (policies/customers/projects with identifiable names)
-savePolicy(home, T, { policyName: 'RetryBudget', policyText: 'cap retries' });
-savePolicy(home, T, { policyName: 'CacheTTL', policyText: 'ttl 30s' });
-savePolicy(home, T, { policyName: 'DataRetention', policyText: 'delete after 90d' });
-saveCustomerNote(home, T, { customer: 'Northwind', note: 'enterprise tier' });
-saveProjectBrief(home, T, { repo: 'billing-svc', summary: 'invoicing service' });
+await savePolicy(objects, home, T, { policyName: 'RetryBudget', policyText: 'cap retries' });
+await savePolicy(objects, home, T, { policyName: 'CacheTTL', policyText: 'ttl 30s' });
+await savePolicy(objects, home, T, { policyName: 'DataRetention', policyText: 'delete after 90d' });
+await saveCustomerNote(objects, home, T, { customer: 'Northwind', note: 'enterprise tier' });
+await saveProjectBrief(objects, home, T, { repo: 'billing-svc', summary: 'invoicing service' });
 // A GENERIC-WORD entity name trap (plan-eng LOW): a customer literally named "Core".
-saveCustomerNote(home, T, { customer: 'Core', note: 'a customer literally named Core' });
+await saveCustomerNote(objects, home, T, { customer: 'Core', note: 'a customer literally named Core' });
 
 // GENUINE references (8): decisions/briefs that name a target.
-decRef('We adopt RetryBudget to cap retry storms', 'We adopt RetryBudget to cap retry storms', 'RetryBudget');
-decRef('Lower CacheTTL to reduce staleness', 'Lower CacheTTL to reduce staleness', 'CacheTTL');
-decRef('DataRetention now applies to audit logs too', 'DataRetention now applies to audit logs too', 'DataRetention');
-decRef('Onboard Northwind onto the new plan', 'Onboard Northwind onto the new plan', 'Northwind');
-decRef('Migrate billing-svc to the shared queue', 'Migrate billing-svc to the shared queue', 'billing-svc');
-decRef('RetryBudget and CacheTTL must both be tuned together', 'RetryBudget and CacheTTL must both be tuned together', 'RetryBudget');
+await decRef('We adopt RetryBudget to cap retry storms', 'We adopt RetryBudget to cap retry storms', 'RetryBudget');
+await decRef('Lower CacheTTL to reduce staleness', 'Lower CacheTTL to reduce staleness', 'CacheTTL');
+await decRef('DataRetention now applies to audit logs too', 'DataRetention now applies to audit logs too', 'DataRetention');
+await decRef('Onboard Northwind onto the new plan', 'Onboard Northwind onto the new plan', 'Northwind');
+await decRef('Migrate billing-svc to the shared queue', 'Migrate billing-svc to the shared queue', 'billing-svc');
+await decRef('RetryBudget and CacheTTL must both be tuned together', 'RetryBudget and CacheTTL must both be tuned together', 'RetryBudget');
 intended.add('RetryBudget and CacheTTL must both be tuned together=>CacheTTL'); // 2-target decision
-saveProjectBrief(home, T, { repo: 'audit-svc', summary: 'enforces DataRetention on every write' });
+await saveProjectBrief(objects, home, T, { repo: 'audit-svc', summary: 'enforces DataRetention on every write' });
 intended.add('audit-svc=>DataRetention');
 
 // DECOYS (should NOT match): word-boundary near-miss + generic prose.
-decRef('the team is retrying flaky steps', 'd-retry', null);   // "retry" not a name; "retrying" != RetryBudget
-decRef('we refactored the core scheduler module', 'd-core', null); // "core" the generic word -> FALSE if it matches the "Core" customer
+await decRef('the team is retrying flaky steps', 'd-retry', null);   // "retry" not a name; "retrying" != RetryBudget
+await decRef('we refactored the core scheduler module', 'd-core', null); // "core" the generic word -> FALSE if it matches the "Core" customer
 
-const r = extractGraph(home, T);
+const r = await extractGraph(objects, home, T);
 const ents = loadEntities(home, T, { limit: 1000 });
 const nameById = new Map(ents.map((e) => [e.id, e.name]));
 const edges = loadRelations(home, T, { limit: 1000 }).filter((x) => x.relType === 'references');

@@ -8,6 +8,7 @@ import { DashboardConnection, loadDashboardRows, type DashboardRow, type Dashboa
 import type { MemoryConflict } from '../store/rows.js';
 import type { Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints } from './dashboard-types.js';
 import { DAY_MS } from '../util/time.js';
+import { round1 } from '../util/format.js';
 
 export { DAY_MS };
 export const LAYERS: readonly Layer[] = ['buffer', 'episodic', 'semantic', 'trace'];
@@ -209,10 +210,6 @@ function cutHead(content: string): CutHead {
   return { head: content.slice(0, end), truncated: true };
 }
 
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
 interface ProjectDraft {
   summary: ProjectSummary;
   members: number[];
@@ -376,8 +373,8 @@ export interface SnapshotService {
   invalidate(): void;
   /** Id of the most recent build, which is what a client holding the last response still has. */
   currentId(): number;
-  /** Ids with a vector as of the last build (a direct read before any build), so a detail read never rescans the vector table. */
-  embeddedIds(): ReadonlySet<string> | null;
+  /** Whether a row of the last build's tenant had a vector at that build (a point read before any build), so a detail read never scans vectors. */
+  isEmbedded(id: string): boolean;
   close(): void;
 }
 
@@ -405,7 +402,7 @@ class SnapshotCacheService implements SnapshotService {
     this.lastId += 1;
     highestIssuedId = Math.max(highestIssuedId, this.lastId);
     // After loadDashboardRows, whose writable open has run any pending migration and legacy embeddings.json import.
-    this.lastEmbeddedIds = this.connection.embeddedIds();
+    this.lastEmbeddedIds = this.connection.embeddedIds(tenantId);
     return buildSnapshot({
       id: this.lastId,
       tenantId,
@@ -440,10 +437,10 @@ class SnapshotCacheService implements SnapshotService {
     return this.lastId;
   }
 
-  embeddedIds(): ReadonlySet<string> | null {
-    if (this.lastEmbeddedIds !== undefined) return this.lastEmbeddedIds;
+  isEmbedded(id: string): boolean {
+    if (this.lastEmbeddedIds !== undefined) return this.lastEmbeddedIds?.has(id) ?? false;
     this.connection.dataVersion();
-    return this.connection.embeddedIds();
+    return this.connection.hasVector(id);
   }
 
   close(): void {

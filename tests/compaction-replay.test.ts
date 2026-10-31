@@ -107,6 +107,15 @@ describe('replay of records a killed hook left', () => {
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
   });
 
+  it('logs a stalled record with malformed items and still replays the others', () => {
+    seed(s.hippoRoot, { id: 'cmp-bad', status: 'summarised', startedMinutesAgo: 40, summarisedMinutesAgo: 30, items: ITEMS, session: 's-bad' });
+    seed(s.hippoRoot, { id: 'cmp-good', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json' WHERE id = 'cmp-bad'`);
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
+    expect(compactionMemories(s.hippoRoot).map((r) => r.content).sort()).toEqual([...ITEMS].sort());
+    expect(logs.join('\n')).toContain('replay of cmp-bad failed');
+  });
+
   it('leaves a record that is under 10 minutes old to its own hook', () => {
     seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 5, summarisedMinutesAgo: 1, items: ITEMS });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);

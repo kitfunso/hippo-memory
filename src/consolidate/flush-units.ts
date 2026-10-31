@@ -1,4 +1,5 @@
-// Splits sleep's queued writes, deletes and dormant moves into components that must each commit whole, so the flush can commit in short transactions.
+// Splits sleep's queued writes, deletes and dormant moves into components that must each commit whole, so the flush can
+// commit in short transactions.
 import type { MemoryEntry } from '../core/memory.js';
 import type { DormantMove } from '../store/dormant.js';
 import type { FlushComponent, LoadedRows } from '../store/delete-and-batch.js';
@@ -46,7 +47,10 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
   return find;
 }
 
-/** [child, parent] per queued op on a child whose DAG parent the run removes: the parent-dirty mark otherwise lands after the parent is gone. */
+/**
+ * [child, parent] per queued op on a child whose DAG parent the run removes: the parent-dirty mark otherwise lands
+ * after the parent is gone.
+ */
 // SHORTCUT: a removed parent and all its changed children commit as one component, so
 // one hold can pass holdMs by a family's size; split by child if a family grows large.
 export function familyUnits(

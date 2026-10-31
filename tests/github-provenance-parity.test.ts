@@ -7,6 +7,7 @@
  * dropping the `user:github:<login>` owner stamp and slipping past CI.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,12 +15,12 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
-import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
+import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
 } from '../src/connectors/github/types.js';
-import type { Context } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',
@@ -28,8 +29,8 @@ const PUBLIC_REPO = {
   name: 'public-repo',
 } as const;
 
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:github', role: 'admin' } };
+function ctxFor(root: string): FullContext {
+  return apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
 }
 
 function makeIssue(i: number): IngestEvent {

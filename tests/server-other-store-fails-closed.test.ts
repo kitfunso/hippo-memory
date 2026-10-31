@@ -4,12 +4,15 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { randomBytes, scryptSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db/index.js';
-import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
+import { closeHippoDb, openHippoDb, SqliteBlockedError } from '../src/db/index.js';
+import { STORE_BUSY_MESSAGE } from '../src/store/port.js';
+import { rethrowIfSqliteBlocked, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
+import { mapApiError } from '../src/api/error-reply.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
-import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore } from '../src/entry/store-kit.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { requireVectorReads } from '../src/search/vector.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
@@ -104,6 +107,7 @@ describe('serve() under a store that is not hippo.db', () => {
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     root = mkdtempSync(join(tmpdir(), 'hippo-other-store-'));
     handle = await serve({
       hippoRoot: root, port: 0, store, routes: [
@@ -121,7 +125,8 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('answers 501 on every unported /v1 route and both connectors, and never runs the handler', async () => {
-    const routes = [...unportedV1Routes(), 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];
+    const routes = unportedV1Routes();
+    expect(routes).toEqual(expect.arrayContaining(['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events']));
     expect(routes).toHaveLength(63);
     for (const route of routes) {
       const [method, path] = route.split(' ');
@@ -157,7 +162,6 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('a bad key on the store-ready /v1/memories and a missing key on /mcp are still a 401', async () => {
-    // /v1/memories parses its query before it checks the key, so q keeps a parse error from answering first.
     const wrong = await fetch(`${handle.url}/v1/memories?q=deploy`, { headers: bearer(newKey()) });
     expect(wrong.status).toBe(401);
     vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
@@ -266,6 +270,7 @@ describe('serve() under a store that has the predictions group', () => {
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     memory = inMemoryPredictionsStore(fixture.dir);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
@@ -327,6 +332,7 @@ describe('serve() under a store that has the quarantine group', () => {
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     adminB = seedQuarantineRecords(fixture.dir);
     memory = inMemoryQuarantineStore(fixture.dir);
@@ -395,8 +401,9 @@ describe('serve() under a store that has the graphReads group', () => {
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    graph = seedGraphRows(fixture.dir);
+    graph = await seedGraphRows(fixture.dir);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: inMemoryGraphReadsStore(fixture.dir).store });
   });
 
@@ -484,6 +491,7 @@ describe('serve() under a store that has the objects group', () => {
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     memory = inMemoryObjectsStore(fixture.dir);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
@@ -591,6 +599,7 @@ describe('serve() under another store reads its folder as shared, though no conf
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     root = mkdtempSync(join(tmpdir(), 'hippo-other-store-shared-'));
     handle = await serve({ hippoRoot: root, port: 0, store });
   });
@@ -636,6 +645,7 @@ describe('a store without the vector reads, under an embedding provider', () => 
 
   beforeEach(() => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     vi.stubEnv('HIPPO_HOME', join(root, 'no-global-store'));
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
   });

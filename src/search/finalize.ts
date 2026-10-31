@@ -40,7 +40,12 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
 }
 
 // Skip-and-continue, with the first minResults kept whatever they cost; one loop so every engine spends alike.
-export function fitBudget<T extends SearchResult>(ordered: T[], budget: number, minResults: number, cost?: ResultCost): T[] {
+export function fitBudget<T extends SearchResult>(
+  ordered: T[],
+  budget: number,
+  minResults: number,
+  cost?: ResultCost,
+): T[] {
   const results: T[] = [];
   let used = 0;
   for (const r of ordered) {

@@ -3,18 +3,25 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MemoryEntry } from '../core/memory.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { listMemories } from '../api/memories/memories.js';
+import { cliApiContext } from './api-context.js';
 import { loadConfig } from '../core/config.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
-import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
+import {
+  runFeatureEval,
+  formatResult,
+  resultToBaseline,
+  detectRegressions,
+  type EvalBaseline,
+} from '../eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, numberFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, numberFlag, stringFlagOrExit } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const HIT_TOP_K = 10;
 const MAX_FAILING_SHOWN = 10;
@@ -23,20 +30,22 @@ const MAX_MISSED_SHOWN = 4;
 const QUERY_PREVIEW_CHARS = 60;
 const MAX_DELTAS_SHOWN = 5;
 
-/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus file. */
+/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus
+ * file. */
 async function cmdEval(
   hippoRoot: string,
+  tenantId: string,
   corpusPath: string | null,
   flags: CliFlags
 ): Promise<void> {
   const asJson = boolFlag(flags, 'json');
   const minMrr = numberFlag(flags, 'min-mrr') ?? null;
-  const comparePath = flags['compare'] ? String(flags['compare']) : null;
+  const comparePath = stringFlagOrExit(flags, 'compare') || null;
 
   // Suite mode doesn't need an initialized store
   if (!flags['suite']) requireInit(hippoRoot);
 
-  const entries = flags['suite'] ? [] : loadAllEntries(hippoRoot);
+  const entries = flags['suite'] ? [] : await listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
 
   if (flags['bootstrap']) {
     writeBootstrapCorpus(entries, flags);
@@ -57,8 +66,7 @@ async function cmdEval(
   }
 
   if (minMrr !== null && summary.meanMrr < minMrr) {
-    printError(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
-    throw new CliExit(1);
+    fail(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
   }
 
   if (comparePath) printEvalCompare(summary, comparePath, asJson);
@@ -88,7 +96,7 @@ async function runCorpusEval(
 
 /** Bootstrap mode: emit a synthetic corpus built from the store's own memories. */
 function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
-  const outPath = flags['out'] ? String(flags['out']) : null;
+  const outPath = stringFlagOrExit(flags, 'out') || null;
   const max = numberFlag(flags, 'max-cases') ?? 50;
   const corpus = bootstrapCorpus(entries, max);
   const payload = JSON.stringify({ cases: corpus }, null, 2);
@@ -103,7 +111,7 @@ function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
 
 /** Suite mode: run the built-in feature eval (no corpus file needed, no init needed). */
 async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean, minMrr: number | null): Promise<void> {
-  const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
+  const baselinePath = stringFlagOrExit(flags, 'baseline') || path.join(hippoRoot, 'eval-baseline.json');
   let baseline: EvalBaseline | undefined;
   try {
     baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
@@ -140,13 +148,11 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
 /** Loads the corpus file, exiting with the usage line or the read error when there is none to score. */
 function readCorpus(corpusPath: string | null): EvalCase[] {
   if (!corpusPath) {
-    printError('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
-    throw new CliExit(1);
+    fail('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
   }
 
   if (!fs.existsSync(corpusPath)) {
-    printError(`Corpus file not found: ${corpusPath}`);
-    throw new CliExit(1);
+    fail(`Corpus file not found: ${corpusPath}`);
   }
 
   let cases: EvalCase[];
@@ -155,8 +161,7 @@ function readCorpus(corpusPath: string | null): EvalCase[] {
     cases = Array.isArray(raw) ? raw : raw.cases;
     if (!Array.isArray(cases)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
   } catch (err) {
-    printError(`Failed to read corpus: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Failed to read corpus: ${errorMessage(err)}`);
   }
   return cases;
 }
@@ -178,7 +183,9 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
       const hitTop10 = c.returnedIds.slice(0, HIT_TOP_K).filter((id) => expectedSet.has(id));
       const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, HIT_TOP_K).includes(id));
       console.log();
-      console.log(`[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`);
+      console.log(
+        `[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`,
+      );
       console.log(`  query: ${c.case.query}`);
       console.log(`  top 3: ${c.returnedIds.slice(0, TOP_IDS_SHOWN).join(', ') || '(none)'}`);
       if (missed.length > 0) {
@@ -202,15 +209,13 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
 
 function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boolean): void {
   if (!fs.existsSync(comparePath)) {
-    printError(`Baseline file not found: ${comparePath}`);
-    throw new CliExit(1);
+    fail(`Baseline file not found: ${comparePath}`);
   }
   let baseline: EvalSummary;
   try {
     baseline = JSON.parse(fs.readFileSync(comparePath, 'utf8'));
   } catch (err) {
-    printError(`Failed to parse baseline: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Failed to parse baseline: ${errorMessage(err)}`);
   }
   const cmp = compareSummaries(baseline, summary);
 
@@ -245,7 +250,7 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   }
 }
 
-export async function handleEval({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleEval({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const corpusPath = args[0] ? String(args[0]) : null;
-  await cmdEval(hippoRoot, corpusPath, flags);
+  await cmdEval(hippoRoot, tenantId, corpusPath, flags);
 }

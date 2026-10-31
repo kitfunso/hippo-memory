@@ -7,6 +7,7 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
 vi.setConfig({ testTimeout: 30_000 });
@@ -24,7 +25,7 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    ctx,
+    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot) },
   );
 }
 
@@ -67,6 +68,25 @@ describe('mcp hippo_context scope filter', () => {
       expect(text).toContain('parity trail event');
       expect(text).toContain('Found 2 memories:');
       expect(text).not.toContain('lives in the wiki');
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("prints another session's snapshot and handoff whole, never as a pointer", async () => {
+    // hippo_recall reads continuity by a different rule, so a pointer here could name a row it cannot return.
+    saveActiveTaskSnapshot(home, 'default', { task: 'Other session task', summary: 'other snapshot summary', next_step: 'other next step', session_id: 'sess-other', source: 'test' });
+    saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sess-other', summary: 'other handoff summary', nextAction: 'other handoff next action' });
+
+    const cwd = process.cwd();
+    process.chdir(home);
+    try {
+      const text = extractText(await callTool(6, 'hippo_context', { budget: 4000 }, { hippoRoot: home, tenantId: 'default', actor: 'mcp' }));
+      expect(text).toContain('other snapshot summary');
+      expect(text).toContain('other handoff summary');
+      expect(text).toContain('other handoff next action');
+      expect(text).not.toContain('hippo session latest');
+      expect(text).not.toContain('hippo handoff latest');
     } finally {
       process.chdir(cwd);
     }

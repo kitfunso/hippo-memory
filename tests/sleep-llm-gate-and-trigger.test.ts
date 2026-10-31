@@ -1,6 +1,7 @@
 // H3, H11, L2: sleep calls the LLM only when allowed and never with a secret in the
 // prompt, auto-sleep counts only what arrived since the last sleep, and remember
 // honours the configured half-life.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { countCreatedSinceLastSleep } from '../src/store/index-and-stats.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];
@@ -75,6 +77,41 @@ describe('the sleep LLM gate', () => {
     expect(errSpy).toHaveBeenCalled();
   });
 
+  describe('a failing extraction call', () => {
+    const TOPICS = ['the release train leaves every second thursday', 'the staging cluster restarts at noon', 'invoices are exported as csv on fridays'];
+
+    function rootWithCandidates(): string {
+      const root = newRoot();
+      for (const topic of TOPICS) writeEntry(root, createMemory(topic));
+      return root;
+    }
+
+    it('stops the pass at the first one every later call would repeat, and says how many it skipped', async () => {
+      const root = rootWithCandidates();
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const fetcher = llmReturning(() => new Response('{"type":"error","error":{"type":"authentication_error"}}', { status: 401 }));
+
+      const result = await consolidate(root, { fetcher });
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      const details = result.details.join('\n');
+      expect(details).toMatch(/extraction: HTTP 401: .*authentication_error/);
+      expect(details).toContain(`2 of ${TOPICS.length} candidates skipped`);
+    });
+
+    it('keeps going past a rate limit, which the next call can clear', async () => {
+      const root = rootWithCandidates();
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const fetcher = llmReturning(() => new Response('{"type":"error"}', { status: 429, headers: { 'retry-after': '0' } }));
+
+      const result = await consolidate(root, { fetcher });
+
+      // Three attempts per candidate: the retry policy's own, and no candidate skipped.
+      expect(fetcher).toHaveBeenCalledTimes(3 * TOPICS.length);
+      expect(result.details.join('\n')).not.toContain('candidates skipped');
+    });
+  });
+
   it('test workers start with no provider keys', () => {
     for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'HIPPO_LLM_RERANKER_URL']) {
       expect(process.env[k] ?? '').toBe('');
@@ -105,10 +142,10 @@ describe('the auto-sleep trigger', () => {
 });
 
 describe('the configured base half-life', () => {
-  it('api.remember uses defaultHalfLifeDays from config.json', () => {
+  it('api.remember uses defaultHalfLifeDays from config.json', async () => {
     const root = newRoot(JSON.stringify({ defaultHalfLifeDays: 14 }));
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    const { id } = remember(ctx, { content: 'the on-call rotation hands over every tuesday' });
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+    const { id } = await remember(ctx, { content: 'the on-call rotation hands over every tuesday' });
     expect(readEntry(root, id)?.half_life_days).toBe(14);
   });
 });

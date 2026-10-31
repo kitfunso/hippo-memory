@@ -7,8 +7,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadCorrectionEntries, loadRawEntries } from '../src/store/report-reads.js';
-import { buildCorrectionLatency } from '../src/cli/correction-latency.js';
-import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
+import { buildCorrectionLatency } from '../src/api/correction-latency.js';
+import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import { physicsEnergyText } from '../src/cli/status.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
@@ -33,10 +33,10 @@ function at(entry: MemoryEntry, iso: string): MemoryEntry {
 }
 
 function seed(): void {
-  const raw = at(createMemory('slack: tier moved to 120', { kind: 'raw', owner: 'user:keith', artifact_ref: 'slack://a/1' }), '2026-04-01T10:00:00.000Z');
+  const raw = at(createMemory('slack: tier moved to 120', { kind: 'raw', owner: 'user:keith', artifactRef: 'slack://a/1' }), '2026-04-01T10:00:00.000Z');
   const rawGap = at(createMemory('slack: owner and ref missing', { kind: 'raw' }), '2026-04-01T11:00:00.000Z');
   const oldFact = at(createMemory('belief: tier is 100'), '2026-03-15T00:00:00.000Z');
-  const newFact = at(createMemory('belief: tier is 120', { extracted_from: raw.id }), '2026-04-01T10:30:00.000Z');
+  const newFact = at(createMemory('belief: tier is 120', { extractedFrom: raw.id }), '2026-04-01T10:30:00.000Z');
   oldFact.superseded_by = newFact.id;
   const oldManual = at(createMemory('belief: seats are 5'), '2026-03-16T00:00:00.000Z');
   const newManual = at(createMemory('belief: seats are 6'), '2026-04-02T00:00:00.000Z');

@@ -1,7 +1,7 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
 import { envAnthropicApiKey } from '../util/env.js';
-import { evalNow } from '../core/ablation.js';
+import { evalNow, strengthAblation } from '../core/ablation.js';
 import * as fs from 'fs';
 import {
   calculateStrength,
@@ -13,15 +13,14 @@ import {
   type MemoryEntry,
 } from '../core/memory.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories.js';
+import { getMemory } from '../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
-import { isInitialized } from '../store/open.js';
-import { listMemoryConflicts } from '../store/conflicts.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { isInitialized } from '../core/project-identity.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
 import { extractPathTags } from '../search/path-context.js';
-import { detectScope } from '../sharing/scope.js';
-import { assertClientScope } from '../store/recall-scope.js';
+import { detectScope } from '../core/active-scope.js';
+import { assertClientScope } from '../core/recall-scope.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
@@ -30,10 +29,19 @@ import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit, runViaServerIfAvailable } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isOneOf, stringFlag, stringListFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  type CommandContext,
+  boolFlag,
+  flagIsTrue,
+  isOneOf,
+  stringFlag,
+  stringFlagOrExit,
+  stringListFlag,
+} from './flag-values.js';
 import { DAY_MS } from '../util/time.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const PARENT_PREVIEW_CHARS = 70;
 const DETAIL_CONTENT_CHARS = 160;
@@ -55,7 +63,7 @@ function rememberTags(
   for (const pt of extractPathTags(cwd)) {
     if (!all.includes(pt)) all.push(pt);
   }
-  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || detectScope();
   if (activeScope) {
     const scopeTag = `scope:${activeScope}`;
@@ -79,12 +87,12 @@ type UserVisibleKind = (typeof USER_VISIBLE_KINDS)[number];
 function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   const kindFlagRaw = stringFlag(flags, 'kind');
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
-  // 'raw' is reserved for ingestion connectors (deletions go through archiveRawMemory); the append-only trigger aborts forget/consolidate on raw rows,
-  // so exposing --kind raw would create unforgettable memories. 'archived' is an internal sentinel set only in that transaction.
+  // 'raw' is reserved for ingestion connectors (deletions go through archiveRawMemory); the append-only trigger aborts
+  // forget/consolidate on raw rows, so exposing --kind raw would create unforgettable memories. 'archived' is an
+  // internal sentinel set only in that transaction.
   if (kindFlag !== undefined && !isOneOf(USER_VISIBLE_KINDS, kindFlag)) {
     printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`);
-    printError(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
-    throw new CliExit(1);
+    fail(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
   }
   return kindFlag;
 }
@@ -101,8 +109,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const ownerRaw = stringFlag(flags, 'owner') ?? null;
   const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
   if (!ownerCheck.ok) {
-    printError(ownerCheck.message);
-    throw new CliExit(1);
+    fail(ownerCheck.message);
   }
   if (ownerCheck.message) printError(ownerCheck.message);
   const owner = ownerCheck.value ?? null;
@@ -131,7 +138,7 @@ async function cmdRemember(
   const envelope = parseRememberEnvelope(flags);
 
   const ctx = cliApiContext(targetRoot, tenantId);
-  const outcome = api.rememberLocally(ctx, {
+  const outcome = await api.rememberLocally(ctx, {
     content: text,
     kind: envelope.kind,
     scope: envelope.scope ?? undefined,
@@ -161,7 +168,10 @@ async function cmdRemember(
 function printRemembered(entry: MemoryEntry, useGlobal: boolean): void {
   const prefix = useGlobal ? '[global] ' : '';
   console.log(`${prefix}Remembered [${entry.id}]`);
-  console.log(`   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | Confidence: ${entry.confidence}`);
+  console.log(
+    `   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | ` +
+      `Confidence: ${entry.confidence}`,
+  );
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
   for (const w of vetSecrets(entry.content, entry.tags, false).warnings) printError(`Warning: ${w}`);
@@ -179,9 +189,16 @@ function supersedeTags(flags: CliFlags): string[] | undefined {
 }
 
 /** The api's conflict text differs by which writer lost; the row itself names its successor either way. */
-async function alreadySupersededLine(hippoRoot: string, oldId: string, tenantId: string, conflict: ConflictError): Promise<string> {
+async function alreadySupersededLine(
+  hippoRoot: string,
+  oldId: string,
+  tenantId: string,
+  conflict: ConflictError,
+): Promise<string> {
   const by = (await getMemory(cliApiContext(hippoRoot, tenantId), oldId))?.superseded_by;
-  return by ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.` : `Error: ${conflict.message}`;
+  return by
+    ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.`
+    : `Error: ${conflict.message}`;
 }
 
 function parseLayerFlag(flags: CliFlags): Layer | undefined {
@@ -189,8 +206,7 @@ function parseLayerFlag(flags: CliFlags): Layer | undefined {
   if (raw === undefined) return undefined;
   const layer = Object.values(Layer).find((l) => l === raw);
   if (layer === undefined) {
-    printError(`Invalid --layer: "${raw}". Must be one of: ${Object.values(Layer).join(', ')}`);
-    throw new CliExit(1);
+    fail(`Invalid --layer: "${raw}". Must be one of: ${Object.values(Layer).join(', ')}`);
   }
   return layer;
 }
@@ -213,7 +229,7 @@ async function cmdSupersede(
 
   let newId: string;
   try {
-    ({ newId } = api.supersede(cliApiContext(hippoRoot, tenantId), oldId, newContent, overrides));
+    ({ newId } = await api.supersede(cliApiContext(hippoRoot, tenantId), oldId, newContent, overrides));
   } catch (err) {
     if (err instanceof NotFoundError) printError(`Error: memory ${oldId} not found.`);
     else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
@@ -228,44 +244,39 @@ function parseStepsOrExit(stepsJson: string): ReturnType<typeof parseSteps> {
   try {
     return parseSteps(stepsJson);
   } catch (err) {
-    printError(errorMessage(err));
-    throw new CliExit(1);
+    fail(errorMessage(err));
   }
 }
 
 function traceTags(flags: CliFlags): string[] {
-  const rawTags = flags['tag'];
-  return Array.isArray(rawTags)
-    ? rawTags.map((t) => String(t))
-    : rawTags !== undefined
-      ? [String(rawTags)]
-      : [];
+  return stringListFlag(flags, 'tag') ?? [];
 }
 
-function cmdTraceRecord(
+async function cmdTraceRecord(
   hippoRoot: string,
   tenantId: string,
   flags: CliFlags,
-): void {
+): Promise<void> {
   requireInit(hippoRoot);
 
-  const task = String(flags['task'] ?? '').trim();
-  const stepsJson = String(flags['steps'] ?? '').trim();
-  const outcome = String(flags['outcome'] ?? '').trim();
+  const task = stringFlagOrExit(flags, 'task') ?? '';
+  const stepsJson = stringFlagOrExit(flags, 'steps') ?? '';
+  const outcome = stringFlagOrExit(flags, 'outcome') ?? '';
   const validOutcomes = ['success', 'failure', 'partial'] as const;
 
   if (!task || !stepsJson || !outcome) {
-    printError('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
-    throw new CliExit(1);
+    fail(
+      'Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> ' +
+        '[--session <id>] [--tag <t>]',
+    );
   }
   if (!isOneOf(validOutcomes, outcome)) {
-    printError(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
-    throw new CliExit(1);
+    fail(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
   }
 
   const steps = parseStepsOrExit(stepsJson);
 
-  const sessionId = String(flags['session'] ?? '').trim() || null;
+  const sessionId = stringFlagOrExit(flags, 'session') || null;
   const tags = traceTags(flags);
 
   const content = renderTraceContent({
@@ -274,12 +285,12 @@ function cmdTraceRecord(
     outcome,
   });
 
-  const { id } = api.remember(cliApiContext(hippoRoot, tenantId), {
+  const { id } = await api.remember(cliApiContext(hippoRoot, tenantId), {
     content,
     tags,
     local: {
       layer: Layer.Trace,
-      source: String(flags['source'] ?? 'cli'),
+      source: stringFlagOrExit(flags, 'source') ?? 'cli',
       traceOutcome: outcome,
       sourceSessionId: sessionId,
     },
@@ -306,8 +317,7 @@ async function cmdTrace(
     sourceLabel = 'global';
   }
   if (!entry) {
-    printError(`Memory not found: ${id}`);
-    throw new CliExit(1);
+    fail(`Memory not found: ${id}`);
   }
 
   const t: TraceView = {
@@ -330,9 +340,9 @@ type TraceView = ReturnType<typeof traceStats> & Awaited<ReturnType<typeof trace
 
 function traceStats(entry: MemoryEntry) {
   const now = evalNow();
-  const strength = calculateStrength(entry, now);
+  const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
   const halfLife = entry.half_life_days;
-  const rewardFactor = calculateRewardFactor(entry);
+  const rewardFactor = calculateRewardFactor(entry, strengthAblation());
   const effHalfLife = halfLife * rewardFactor;
   const createdMs = new Date(entry.created).getTime();
   const ageDays = (now.getTime() - createdMs) / DAY_MS;
@@ -343,7 +353,7 @@ function traceStats(entry: MemoryEntry) {
 
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
-    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS));
+    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), { ablation: strengthAblation() });
   return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
 }
 
@@ -354,13 +364,16 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
   for (const pid of parents) {
     const p = (await getMemory(cliApiContext(hippoRoot, tenantId), pid))
       ?? (isInitialized(globalRoot) ? await getMemory(cliApiContext(globalRoot, tenantId), pid) : null);
-    parentPreviews.push({ id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' });
+    parentPreviews.push({
+      id: pid,
+      content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)',
+    });
   }
 
   // Open conflicts involving this memory.
   const allConflicts = [
-    ...listMemoryConflicts(hippoRoot, 'open', tenantId),
-    ...(isInitialized(globalRoot) ? listMemoryConflicts(globalRoot, 'open', tenantId) : []),
+    ...(await api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open')),
+    ...(isInitialized(globalRoot) ? await api.listConflicts(cliApiContext(globalRoot, tenantId), 'open') : []),
   ];
   const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
   return { parentPreviews, myConflicts };
@@ -397,12 +410,16 @@ function printTraceJson(t: TraceView): void {
 }
 
 function printTraceText(t: TraceView): void {
-  const { entry, id, sourceLabel, conf, ageDays, strength, projectedAt, halfLife, rewardFactor, effHalfLife, sinceLast } = t;
+  const { entry, id, sourceLabel, conf, ageDays, strength, projectedAt } = t;
+  const { halfLife, rewardFactor, effHalfLife, sinceLast } = t;
   const { parentPreviews, myConflicts } = t;
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
-  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${entry.content.length > DETAIL_CONTENT_CHARS ? '...' : ''}`);
-  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: yes' : ''}`);
+  const ellipsis = entry.content.length > DETAIL_CONTENT_CHARS ? '...' : '';
+  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${ellipsis}`);
+  const starred = entry.starred ? '  Starred: ' + 'yes' : '';
+  const pinned = entry.pinned ? 'yes' : 'no';
+  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${pinned}${starred}`);
   console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);
   console.log(`Created:   ${entry.created}  (${fmt(ageDays, 1)} days ago)`);
   console.log();
@@ -410,7 +427,9 @@ function printTraceText(t: TraceView): void {
   console.log(`  now:        ${fmt(strength, 3)}`);
   console.log(`  in 30 days: ${fmt(projectedAt(30), 3)}`);
   console.log(`  in 90 days: ${fmt(projectedAt(90), 3)}`);
-  console.log(`  half-life:  ${fmt(halfLife, 1)}d (stored) x ${fmt(rewardFactor, 2)} reward = ${fmt(effHalfLife, 1)}d effective`);
+  console.log(
+    `  half-life:  ${fmt(halfLife, 1)}d (stored) x ${fmt(rewardFactor, 2)} reward = ${fmt(effHalfLife, 1)}d effective`,
+  );
   console.log();
   console.log(`Retrieval:`);
   console.log(`  count:      ${entry.retrieval_count}`);
@@ -442,11 +461,11 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
     text = args.join(' ').trim();
   }
   if (!text || text.length < 3) {
-    printError('Memory content too short (minimum 3 characters).');
-    throw new CliExit(1);
+    fail('Memory content too short (minimum 3 characters).');
   }
-  // Thin-client routing: simple `remember` calls go over HTTP so the daemon stays the single writer; rich flags need the direct path.
-  // The salience gate is not in richFlag and the route does not apply it, so a routed remember stores what a direct one would skip.
+  // Thin-client routing: simple `remember` calls go over HTTP so the daemon stays the single writer; rich flags need
+  // the direct path. The salience gate is not in richFlag and the route does not apply it, so a routed remember stores
+  // what a direct one would skip.
   const richFlag =
     flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
     flags['observed'] || flags['inferred'] || flags['verified'] ||
@@ -463,8 +482,7 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
   const thinOwnerRaw = stringFlag(flags, 'owner');
   const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
   if (!thinOwnerCheck.ok) {
-    printError(thinOwnerCheck.message);
-    throw new CliExit(1);
+    fail(thinOwnerCheck.message);
   }
   if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
   return runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
@@ -486,8 +504,7 @@ export async function handleSupersede({ hippoRoot, tenantId, args, flags }: Comm
   const oldId = args[0];
   const newContent = args.slice(1).join(' ').trim();
   if (!oldId || !newContent) {
-    printError('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
-    throw new CliExit(1);
+    fail('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
   }
   await cmdSupersede(hippoRoot, tenantId, oldId, newContent, flags);
 }
@@ -495,12 +512,11 @@ export async function handleSupersede({ hippoRoot, tenantId, args, flags }: Comm
 export async function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0] ? String(args[0]) : '';
   if (sub === 'record') {
-    cmdTraceRecord(hippoRoot, tenantId, flags);
+    await cmdTraceRecord(hippoRoot, tenantId, flags);
     return;
   }
   if (!sub) {
-    printError('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
-    throw new CliExit(1);
+    fail('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
   }
   await cmdTrace(hippoRoot, tenantId, sub, flags);
 }

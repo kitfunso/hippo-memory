@@ -1,7 +1,9 @@
-// A served store's WAL is checkpointed on a worker thread: the fsync calls of a checkpoint would otherwise stall every request on the event loop.
+// A served store's WAL is checkpointed on a worker thread: the fsync calls of a checkpoint would otherwise stall every
+// request on the event loop.
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 
 // WAL pages at which a connection checkpoints inside its own commit.
 const INLINE_CHECKPOINT_PAGES = 100;
@@ -23,7 +25,7 @@ const WORKER_SOURCE = `
 const { parentPort, workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(workerData.dbPath);
-db.exec('PRAGMA busy_timeout = 5000');
+db.exec('PRAGMA busy_timeout = ${DEFAULT_BUSY_WAIT_MS}');
 db.exec('PRAGMA synchronous = NORMAL');
 const pass = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
 parentPort.on('message', (message) => {
@@ -58,7 +60,20 @@ export function autoCheckpointPages(dbPath: string): number {
   return backgrounded.has(path.resolve(dbPath)) ? BACKSTOP_CHECKPOINT_PAGES : INLINE_CHECKPOINT_PAGES;
 }
 
-/** Checkpoints `dbPath` off the calling thread until `stop()`; the worker starts with the first checkpoint that is due. */
+/** An explicit execArgv keeps the parent's loaders out of the
+ * worker and silences its repeat of the node:sqlite warning. */
+function newCheckpointWorker(key: string): Worker {
+  const started = new Worker(WORKER_SOURCE, {
+    eval: true,
+    execArgv: ['--no-warnings'],
+    workerData: { dbPath: key, maxPasses: MAX_PASSES },
+  });
+  started.unref();
+  return started;
+}
+
+/** Checkpoints `dbPath` off the calling thread until `stop()`;
+ * the worker starts with the first checkpoint that is due. */
 export function startWalCheckpointer(dbPath: string): WalCheckpointer {
   const key = path.resolve(dbPath);
   let worker: Worker | undefined;
@@ -74,16 +89,18 @@ export function startWalCheckpointer(dbPath: string): WalCheckpointer {
     backgrounded.delete(key);
   };
   const spawn = (): Worker => {
-    // An explicit execArgv keeps the parent's loaders out of the worker and silences its repeat of the node:sqlite warning.
-    const started = new Worker(WORKER_SOURCE, { eval: true, execArgv: ['--no-warnings'], workerData: { dbPath: key, maxPasses: MAX_PASSES } });
-    started.unref();
+    const started = newCheckpointWorker(key);
     started.on('message', (settled: boolean) => {
       running = false;
       due = settled ? RESPONSES_PER_CHECKPOINT : RESPONSES_PER_RETRY;
     });
     started.on('error', (err) => {
       end();
-      log.warn(`background checkpoint of ${key} stopped (${errorMessage(err)}); each connection checkpoints inside its own commit again`);
+      log.warn(
+        `background checkpoint of ${key} stopped (${errorMessage(err)}); ` +
+          `each connection checkpoints inside its own commit again`,
+        errorFields(err),
+      );
     });
     exited = new Promise<void>((resolve) => { started.once('exit', () => resolve()); });
     return started;

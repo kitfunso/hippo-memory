@@ -1901,7 +1901,7 @@ exports[`hippo refine (verb function, injected fetcher, no model) > a failed mod
 "$ refineStore -> 0
 --- stdout
 --- stderr
-[hippo] warn: refine: API answered HTTP 500 ts=<ts>
+[hippo] warn: refine: API answered HTTP 500: {"content":[{"text":"ignored"}]} ts=<ts>
 --- result
 {
  "scanned": 2,
@@ -3040,7 +3040,7 @@ exports[`hippo watch (built CLI, no server) > no command > output 1`] = `
 "$ hippo watch -> 1
 --- stdout
 --- stderr
-Usage: hippo watch "<command>"
+Usage: hippo watch -- <command> [args...], or hippo watch --shell "<command line>"
 "
 `;
 

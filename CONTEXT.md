@@ -70,11 +70,18 @@ tokens, and whether it was sent or skipped as unchanged. Counts only, never the 
 _Avoid_: usage log, telemetry, cost log
 
 **Delivery ledger**:
-The optional record of the per-prompt hook and the two compaction hooks (`pre-compact` and
-`compact-resume`): one event per call, and for a prompt call one row per candidate memory,
-saying whether it was emitted, reused or rejected and why.
-Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
+The optional record of the per-prompt hook, an agent's `hippo context` call, the two compaction
+hooks (`pre-compact` and `compact-resume`), `session-end` and each failure `capture-error` logs: one event per call, and for a
+prompt or context call one row per candidate memory, saying whether it was emitted, reused or
+rejected and why. Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
 _Avoid_: delivery log, trace, telemetry
+
+**Delivery class**:
+What happened to one lesson in one session, read from the delivery ledger and the host
+transcript: not written, not retrieved, rejected, delivery unconfirmed, delivered with application
+unknown, applied but wrong, or applied with a supporting outcome. A case the evidence cannot
+decide is `indeterminate`, with a reason. Application comes only from a label, never from delivery.
+_Avoid_: delivery status, outcome (an outcome is one of the label's signals)
 
 **Failure log**:
 Every failed tool call the capture-error hook sees, stored as a memory or not: outcome, session,
@@ -138,7 +145,7 @@ _Avoid_: auth plugin, identity provider
 A fixed GET `/v1/` path that `serve()`'s caller pairs with a JSON value (`publicJson`). Anyone can read it, with no key and
 under any store, so it must hold nothing secret. The value is serialized once at boot and may be at most 64 KiB; a path a
 core GET route already serves is refused at boot.
-_Avoid_: public route (`PUBLIC_ROUTES` holds the signed connector webhooks), open endpoint, metadata route
+_Avoid_: public route (the signed connector webhooks are the `webhook-signature` rows of `V1_ROUTES`), open endpoint, metadata route
 
 **Key owner**:
 The auth-resolver subject that minted a self-service API key for itself. A member signed in
@@ -258,6 +265,22 @@ The JSONL file Claude Code writes for one delegated agent, in the parent session
 folder and apart from the parent's own transcript. Each turn ends in a text-only message that goes
 back to the parent; the last one is its final report. Session-end capture reads only the parent's.
 _Avoid_: sidechain log, child transcript
+
+**Task snapshot**:
+One session's current task, summary and next step, saved by `hippo pre-compact` or `hippo snapshot
+save`. A store holds one active snapshot (one per owner and project on a shared store).
+_Avoid_: working state, active task (as a name for the row)
+
+**Session handoff**:
+What a session leaves for the one after it: summary, next action, artifacts and constraints. Session
+end writes one from the transcript; `hippo handoff create` writes one by hand.
+_Avoid_: handover, session summary
+
+**Continuity pointer**:
+The one line the per-prompt hook and the text formats of `hippo context` print in place of another
+session's task snapshot or session handoff. It names the command that prints the full text. A
+session's own snapshot and handoff print whole, as do JSON, MCP and shared stores.
+_Avoid_: stub, teaser, short handoff
 
 ### Support
 

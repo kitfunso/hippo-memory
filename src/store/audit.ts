@@ -1,4 +1,4 @@
-import { canAutoDelete, type MemoryEntry } from '../core/memory.js';
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { JsonObject } from './working-memory.js';
 import { log } from '../util/log.js';
@@ -6,84 +6,6 @@ import { blockHash } from '../util/token-text.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
-import {
-  automaticDefect, hasNoSpecificity, isFragment, isReleaseCommitNoise, substantiveWordCount,
-} from '../core/memory-quality.js';
-
-export type AuditSeverity = 'warning' | 'error';
-
-export interface AuditIssue {
-  memoryId: string;
-  content: string;
-  severity: AuditSeverity;
-  reason: string;
-}
-
-export interface AuditResult {
-  total: number;
-  issues: AuditIssue[];
-  clean: number;
-}
-
-export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue | null {
-  const issue = classifyMemory(entry);
-  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never auto-removed, so it can only warn.
-  if (issue?.severity === 'error' && (!canAutoDelete(entry) || backsObject)) {
-    const why = entry.pinned ? 'pinned' : entry.kind === 'raw' ? 'raw' : backsObject ? 'backs an object' : 'keep rule';
-    return { ...issue, severity: 'warning', reason: `${issue.reason} (${why}, kept)` };
-  }
-  return issue;
-}
-
-function classifyMemory(entry: MemoryEntry): AuditIssue | null {
-  const content = entry.content.trim();
-
-  if (content.length < 3) {
-    return { memoryId: entry.id, content, severity: 'error', reason: 'too short (< 3 chars)' };
-  }
-
-  if (content.length < 10) {
-    return { memoryId: entry.id, content, severity: 'error', reason: 'too short (< 10 chars)' };
-  }
-
-  if (isReleaseCommitNoise(content)) {
-    return { memoryId: entry.id, content, severity: 'error', reason: 'release/commit noise, not a useful memory' };
-  }
-
-  if (isFragment(content)) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: 'sentence fragment — lacks context' };
-  }
-
-  const substantive = substantiveWordCount(content);
-  if (substantive < 2) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: `only ${substantive} substantive word(s) — too vague` };
-  }
-
-  if (content.length < 40 && hasNoSpecificity(content)) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: 'no specific details (names, paths, numbers, code)' };
-  }
-
-  const reason = automaticDefect(entry);
-  if (reason !== null) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: `automatic memory defect: ${reason}` };
-  }
-
-  return null;
-}
-
-/** `backing`: ids of memories that back an object (store.memoriesBackingObjects). */
-export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<string>): AuditResult {
-  const issues: AuditIssue[] = [];
-  for (const entry of entries) {
-    const issue = auditMemory(entry, backing.has(entry.id));
-    if (issue) issues.push(issue);
-  }
-  return {
-    total: entries.length,
-    issues,
-    clean: entries.length - issues.length,
-  };
-}
 
 // The one list of audit ops: the AuditOp type, `hippo audit list --op` and GET /v1/audit?op= all read it.
 export const AUDIT_OPS = [
@@ -108,7 +30,8 @@ export const AUDIT_OPS = [
   'recall_autodebias_hint_no_class_match', // telemetry: forward-claim detected, no class scored
   'recall_autodebias_hint_tiebreak', // telemetry: forward-claim detected, two or more classes tied
   'recall_anchor_detected_query_repeat', // emitted by the anchoring detector when the same query returns the same top-1
-  'recall_anchor_detected_memory_dominance', // emitted by the anchoring detector when one memory wins top-1 across distinct queries
+  // emitted by the anchoring detector when one memory wins top-1 across distinct queries
+  'recall_anchor_detected_memory_dominance',
   'recall_anchor_skipped_no_session', // telemetry: no sessionId, so ring tracking was skipped
   'recall_availability_detected', // emitted when the availability/recency-bias hint fires
   'decision_create', // emitted by saveDecision
@@ -163,8 +86,8 @@ export interface AppendAuditOpts {
   metadata?: unknown;
 }
 
-// node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a replacer.
-// `JsonValueWithBigInt` keeps `any` out of this boundary and stays assignable as a JSON.stringify replacer.
+// node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a
+// replacer. `JsonValueWithBigInt` keeps `any` out of this boundary and stays assignable as a JSON.stringify replacer.
 type JsonValueWithBigInt = JsonValue | bigint;
 
 function isBigIntValue(value: JsonValueWithBigInt): value is bigint {
@@ -260,11 +183,12 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): Au
   }
   const after = keysetAfter('ts', 'id', opts.after);
   // One past the route's 10000 cap: GET /v1/audit reads a row ahead to tell whether another page exists.
-  const limit = Math.max(1, Math.min(opts.limit ?? 100, 10001));
+  const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_LIST_LIMIT, 10001));
   // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(
-      `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC LIMIT ?`,
+      `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC ` +
+      `LIMIT ?`,
     )
     .all(...params, ...after.params, limit) as AuditRow[];
   return rows.map(rowToAuditEvent);
@@ -320,7 +244,8 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
   return Number(result.changes ?? 0);
 }
 
-/** Latest time each target got a good outcome, from the audit rows, read on a handle of its own; unlike queryAuditEvents it has no row cap. */
+/** Latest time each target got a good outcome, from the audit rows, read on a handle of its own; unlike
+ * queryAuditEvents it has no row cap. */
 export function confirmedOutcomeTimes(hippoRoot: string, tenantId: string): Map<string, string> {
   const db = openHippoDb(hippoRoot);
   try {
@@ -382,7 +307,8 @@ export interface FailedAuditEvent {
   error: unknown;
 }
 
-/** Appends each event as its own write on one handle, so a row that fails drops only itself. Returns the rows that failed, for the caller to report. */
+/** Appends each event as its own write on one handle, so a row that fails drops only itself. Returns the rows that
+ * failed, for the caller to report. */
 export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {
   const db = openHippoDb(hippoRoot);
   try {
@@ -410,7 +336,8 @@ export interface AuditPrune {
   dryRun: boolean;
 }
 
-/** Deletes a tenant's audit rows older than the cutoff and records the prune in the same write scope, so neither lands alone; returns the row count. */
+/** Deletes a tenant's audit rows older than the cutoff and records the prune in the same write scope, so neither lands
+ * alone; returns the row count. */
 export function pruneAuditRows(hippoRoot: string, prune: AuditPrune): number {
   const { tenantId, cutoff, actor, olderThanDays } = prune;
   const db = openHippoDb(hippoRoot);
@@ -419,7 +346,12 @@ export function pruneAuditRows(hippoRoot: string, prune: AuditPrune): number {
     return withWriteScope(db, 'audit_prune', () => {
       const count = deleteAuditBefore(db, tenantId, cutoff);
       // Written after the delete with ts = now, so the cutoff just applied cannot take it.
-      appendAuditEvent(db, { tenantId, actor, op: 'audit_prune', metadata: { cutoff, count, dryRun: false, olderThanDays } });
+      appendAuditEvent(db, {
+        tenantId,
+        actor,
+        op: 'audit_prune',
+        metadata: { cutoff, count, dryRun: false, olderThanDays },
+      });
       return count;
     });
   } finally {

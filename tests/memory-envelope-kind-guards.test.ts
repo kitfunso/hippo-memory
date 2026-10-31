@@ -142,7 +142,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
       kind: 'raw',
       scope: 'team:eng',
       owner: 'user:42',
-      artifact_ref: 'slack://team/channel/1700000000.123',
+      artifactRef: 'slack://team/channel/1700000000.123',
     });
     expect(e.kind).toBe('raw');
     expect(e.scope).toBe('team:eng');

@@ -118,8 +118,8 @@ function seedEveryCase(): void {
   row('not-a-date', { confidence: 'inferred' });
   // JavaScript reads this date and SQLite's julianday does not, so only a JavaScript tally scores the row.
   row('Wed, 01 Apr 2026 00:00:00 GMT');
-  const otherA = row(daysAgo(90), { confidence: 'verified', tenantId: 'other' });
-  const otherB = row(daysAgo(20), { layer: Layer.Buffer, half_life_days: 1, tenantId: 'other' });
+  const otherA = row(daysAgo(90), { confidence: 'verified', tenant_id: 'other' });
+  const otherB = row(daysAgo(20), { layer: Layer.Buffer, half_life_days: 1, tenant_id: 'other' });
   const boosted = row(daysAgo(2), { layer: Layer.Semantic, emotional_valence: 'critical', retrieval_count: 5, outcome_positive: 2 });
   row(daysAgo(45), { confidence: 'stale', half_life_days: 30, superseded_by: boosted });
   replaceDetectedConflicts(root, [
@@ -129,7 +129,7 @@ function seedEveryCase(): void {
   ], NOW);
   const resolved = listMemoryConflicts(root).find((c) => c.reason === 'resolved below');
   if (!resolved) throw new Error('fixture conflict missing');
-  resolveConflict(root, resolved.id, fresh);
+  resolveConflict(root, { conflictId: resolved.id, keepId: fresh });
   saveStoredVectors(root, [[fresh, [1, 2, 3, 4]], [otherA, [4, 3, 2, 1]], ['orphan', [0, 1, 0, 1]]], 'm');
   updateStats(root, { remembered: 5, recalled: 3, forgotten: 1 });
   appendConsolidationRun(root, { timestamp: daysAgo(2), decayed: 1, merged: 0, removed: 0 });

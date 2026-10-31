@@ -1,4 +1,5 @@
-// PostCompact for a caller on another machine: the items it parsed become rows under its owner and project, and a retried request id writes nothing twice.
+// PostCompact for a caller on another machine: the items it parsed become rows under its owner and project, and a
+// retried request id writes nothing twice.
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../util/compaction-items.js';
@@ -26,12 +27,24 @@ export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsReque
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
   // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's growth.
-  if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
+  if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) {
+    throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
+  }
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
-  const written = saveCallerItems(ctx.hippoRoot, ctx.tenantId, {
-    sessionId: req.sessionId, trigger: req.trigger, requestId: req.requestId, project: req.project.name, items: scrubCompactionItems(req.items),
-    owner: key.owner, origins: key.project,
-  }, (message) => log.info(`post-compact: ${message}`));
+  const written = saveCallerItems(
+    ctx.hippoRoot,
+    ctx.tenantId,
+    {
+      sessionId: req.sessionId,
+      trigger: req.trigger,
+      requestId: req.requestId,
+      project: req.project.name,
+      items: scrubCompactionItems(req.items),
+      owner: key.owner,
+      origins: key.project,
+    },
+    (message) => log.info(`post-compact: ${message}`),
+  );
   return { written };
 }

@@ -5,15 +5,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
-import { writeEntry } from '../store/entry-writes.js';
-import { loadAllEntries, readEntry } from '../store/entry-reads.js';
+import { writeEntriesSkippingRejected, writeEntry } from '../store/entry-writes.js';
+import {
+  loadAllEntries,
+  loadEntriesWithSignals,
+  loadEntryTextKeys,
+  readEntry,
+  type EntrySignals,
+} from '../store/entry-reads.js';
 import { tallySources } from '../store/candidates.js';
-import { isPersonalScope } from '../store/recall-scope.js';
+import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
-import { RejectedValueError } from '../store/rejection.js';
-import { embedMemory, embedAll } from '../store/embeddings/index.js';
+import { embedMemory, embedAll } from '../search/embed-memories.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';
@@ -44,13 +49,25 @@ export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
   return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
 }
 
-/** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict detection keeps its own list. */
+/** Tags whose rows sleep keeps as written: never merged, never
+ * sent to LLM extraction. Conflict detection keeps its own list. */
 export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   'extracted',
   'session-digest',
   COMPACTION_MEMORY_TAG,
   ...AGENT_MEMORY_TAGS,
 ]);
+
+/** The transfer score a memory needs before sleep or `hippo share --auto` copies it to the global store. */
+export const AUTO_SHARE_MIN_SCORE = 0.6;
+
+/** Every trait that lifts transferScore above 0.5 or makes autoShare skip a row before scoring it. */
+const AUTO_SHARE_SIGNALS: EntrySignals = {
+  tags: [...TRANSFERABLE_TAGS, ...NEVER_AUTO_SHARE_TAGS],
+  sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX,
+  minRetrievals: 3,
+  valences: ['negative', 'critical'],
+};
 
 /** Estimate how well a memory would transfer to other projects.
  *  Returns 0..1 where >0.5 = good candidate for sharing. */
@@ -84,33 +101,21 @@ export function shareMemory(
   id: string,
   options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {}
 ): MemoryEntry | null {
-  // tenantId is optional for single-tenant callers (autoShare passes only `{ force: true }`); MCP/REST hosts MUST pass it so tenant A cannot share
+  // tenantId is optional for single-tenant callers (autoShare passes only `{ force: true }`); MCP/REST hosts MUST pass
+  // it so tenant A cannot share
   // tenant B's memory to global (readEntry returns null on a cross-tenant lookup).
   const entry = readEntry(localRoot, id, options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  assertShareable(entry, id);
-
-  const score = transferScore(entry);
-  if (score < 0.3 && !options.force) return null;
+  const globalEntry = toGlobalEntry(localRoot, entry, options.force === true);
+  if (!globalEntry) return null;
 
   initGlobal();
   const globalRoot = getGlobalRoot();
-
-  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as no project.
-  const fallbackName = path.basename(path.resolve(localRoot, '..'));
-  const originName = entry.origin_project ?? fallbackOrigin(localRoot);
-  const label = originName === '' ? fallbackName : (originName ?? '');
-  const globalEntry: MemoryEntry = {
-    ...entry,
-    id: generateId('g'),
-    source: `shared:${label}:${new Date().toISOString()}`,
-    origin_project: originName,
-  };
-
   writeEntry(globalRoot, globalEntry);
 
-  // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites the whole index per call.
+  // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
+  // the whole index per call.
   if (!options.skipEmbed) {
     void embedMemory(globalRoot, globalEntry);
   }
@@ -118,8 +123,30 @@ export function shareMemory(
   return globalEntry;
 }
 
+/** The global copy of a local row, or null when its transfer score is too low and `force` is off; throws when the
+ * row may not be shared. */
+function toGlobalEntry(localRoot: string, entry: MemoryEntry, force: boolean): MemoryEntry | null {
+  assertShareable(entry, entry.id);
+
+  const score = transferScore(entry);
+  if (score < 0.3 && !force) return null;
+
+  // The label keeps the folder name for a user-global row; a NULL
+  // row gets `shared::`, which originFromSource reads as no project.
+  const fallbackName = path.basename(path.resolve(localRoot, '..'));
+  const originName = entry.origin_project ?? fallbackOrigin(localRoot);
+  const label = originName === '' ? fallbackName : (originName ?? '');
+  return {
+    ...entry,
+    id: generateId('g'),
+    source: `shared:${label}:${new Date().toISOString()}`,
+    origin_project: originName,
+  };
+}
+
 function assertShareable(entry: MemoryEntry, id: string): void {
-  // Secret veto: secrets never reach the global store, even with --force; throw loudly, since a silent null reads as "low transfer score" and invites retries.
+  // Secret veto: secrets never reach the global store, even with --force; throw loudly, since a silent null reads as
+  // "low transfer score" and invites retries.
   const secret = detectSecret(entry);
   if (secret.flagged) {
     throw new BadRequestError(
@@ -131,15 +158,19 @@ function assertShareable(entry: MemoryEntry, id: string): void {
   // A quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
   if (isQuarantineScope(entry.scope)) {
     throw new BadRequestError(
-      `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
+      `Refusing to share ${id}: it is quarantined pending review. ` +
+        `Approve it first via 'hippo quarantine approve ${id}'.`,
     );
   }
   if (isPersonalScope(entry.scope ?? null)) {
-    throw new BadRequestError(`Refusing to share ${id}: it is a personal memory and stays with its owner on this server.`);
+    throw new BadRequestError(
+      `Refusing to share ${id}: it is a personal memory and stays with its owner on this server.`,
+    );
   }
 }
 
-/** List all projects that contributed memories to the global store, parsed from 'shared:<project>:' or 'promoted:<path>' sources.
+/** List all projects that contributed memories to the global store, parsed from 'shared:<project>:' or
+ * 'promoted:<path>' sources.
  *  `tenantId` filters to one tenant; undefined is host-wide (legacy callers: CLI standalone, dashboard). */
 export function listPeers(
   globalRoot?: string,
@@ -182,9 +213,16 @@ export function listPeers(
 
 type AutoShareStats = { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
 
-function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>, minScore: number, stats: AutoShareStats | undefined): boolean {
+function isAutoShareCandidate(
+  entry: MemoryEntry,
+  globalContentSet: Set<string>,
+  minScore: number,
+  stats: AutoShareStats | undefined,
+): boolean {
   // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on one.
-  if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry)) return false;
+  if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry)) {
+    return false;
+  }
   // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
   if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
     if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;
@@ -196,7 +234,8 @@ function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>,
   // Skip if already shared (same text apart from spacing)
   if (globalContentSet.has(duplicateKey(entry.content))) return false;
 
-  // Secret veto, checked LAST so the stats counter only counts rows it withheld (a row failing the score or dedupe gate was never going to share).
+  // Secret veto, checked LAST so the stats counter only counts rows it withheld (a row failing the score or dedupe gate
+  // was never going to share).
   // shareMemory would throw here; filtering keeps the sleep pipeline fail-safe.
   if (detectSecret(entry).flagged) {
     if (stats) stats.secretSkipped++;
@@ -206,37 +245,40 @@ function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>,
   return true;
 }
 
-// Rejection containment: shareMemory -> writeEntry can throw RejectedValueError against the GLOBAL store tombstones and abort the autoShare sleep phase.
-// Catch per item like syncGlobalToLocal; writeEntry already audits reject_refusal before rethrowing, so count and continue.
-function shareCandidates(localRoot: string, candidates: readonly MemoryEntry[], stats: AutoShareStats | undefined): MemoryEntry[] {
+// A row the GLOBAL store's rejection tombstones refuse is audited and skipped, so it cannot abort the autoShare sleep
+// phase.
+// The candidates are rows already held, written in one transaction; the caller embeds once via embedAll() afterwards.
+function shareCandidates(
+  localRoot: string,
+  globalRoot: string,
+  candidates: readonly MemoryEntry[],
+  stats: AutoShareStats | undefined,
+): MemoryEntry[] {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
-  for (const entry of candidates) {
-    try {
-      // skipEmbed: batching invariant, this is a batch producer, so it embeds
-      // once via embedAll() below rather than once per row inside shareMemory.
-      const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
-      if (result) shared.push(result);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        rejectedSkipped++;
-        if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + 1;
+  writeEntriesSkippingRejected(globalRoot, (put) => {
+    for (const entry of candidates) {
+      const globalEntry = toGlobalEntry(localRoot, entry, true);
+      if (!globalEntry) continue;
+      if (put(globalEntry)) {
+        shared.push(globalEntry);
         continue;
       }
-      throw err;
+      rejectedSkipped++;
+      if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + 1;
     }
-  }
+  });
 
   if (rejectedSkipped > 0) {
-    log.warn(
-      `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
-    );
+    log.warn(`autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`);
   }
   return shared;
 }
 
-/** Auto-share local memories with high transfer scores, not already global and without a NEVER_AUTO_SHARE_TAGS tag; `options.tenantId` scopes the LOCAL read.
- *  `options.stats` is an opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped` rejection refusals (0 under `dryRun`). */
+/** Auto-share local memories with high transfer scores, not already global and without a NEVER_AUTO_SHARE_TAGS tag;
+ * `options.tenantId` scopes the LOCAL read.
+ * `options.stats` is an opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped`
+ * rejection refusals (0 under `dryRun`). */
 export function autoShare(
   localRoot: string,
   options: {
@@ -246,23 +288,26 @@ export function autoShare(
     stats?: AutoShareStats;
   } = {},
 ): MemoryEntry[] {
-  const { minScore = 0.6, dryRun = false } = options;
+  const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
 
-  const localEntries = loadAllEntries(localRoot, options.tenantId);
+  // A row with none of these signals scores at most 0.5, so above that
+  // bar only signal rows can share or count as never-auto-share skips.
+  const localEntries = minScore > 0.5
+    ? loadEntriesWithSignals(localRoot, AUTO_SHARE_SIGNALS, options.tenantId)
+    : loadAllEntries(localRoot, options.tenantId);
   initGlobal();
   const globalRoot = getGlobalRoot();
   // Host-wide read. The global store IS the union across all tenants;
   // per-tenant filtering on the global root would defeat the purpose.
-  const globalEntries = loadAllEntries(globalRoot);
+  const globalContentSet = storedTextKeys(loadEntryTextKeys(globalRoot));
 
-  // Build set of global content hashes to avoid duplicates
-  const globalContentSet = storedTextKeys(globalEntries);
-
-  const candidates = localEntries.filter((entry) => isAutoShareCandidate(entry, globalContentSet, minScore, options.stats));
+  const candidates = localEntries.filter((entry) =>
+    isAutoShareCandidate(entry, globalContentSet, minScore, options.stats),
+  );
 
   if (dryRun) return candidates;
 
-  const shared = shareCandidates(localRoot, candidates, options.stats);
+  const shared = shareCandidates(localRoot, globalRoot, candidates, options.stats);
 
   if (shared.length > 0) {
     void embedAll(globalRoot).catch((err) => logEmbedAllFailure('autoShare', err));

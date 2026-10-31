@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { blockHash, estimateTokens } from '../src/util/token-text.js';
+import { DELIVERY_LEDGER_VERSION } from '../src/store/delivery-recorder.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -29,14 +30,17 @@ function seedFacts(target: Project): void {
   });
 }
 
-const run = (target: Project, args: string[], sessionId: string | null = 'ctx-1') =>
-  hippo(target, ['context', ...args], { env: { HIPPO_FAKE_NOW: FAKE_NOW, ...(sessionId === null ? {} : { CLAUDE_CODE_SESSION_ID: sessionId }) } });
+function run(target: Project, args: string[], sessionId: string | null = 'ctx-1') {
+  const env: NodeJS.ProcessEnv = { HIPPO_FAKE_NOW: FAKE_NOW };
+  if (sessionId !== null) env.CLAUDE_CODE_SESSION_ID = sessionId;
+  return hippo(target, ['context', ...args], { env });
+}
 
 interface TraceRow { id: number; query_hash: string }
 
 function contextTraces(target: Project): TraceRow[] {
-  // SAFETY: the SELECT names exactly the two TraceRow columns.
-  return tableRows(target, `SELECT id, query_hash FROM recall_traces WHERE pipeline = 'context' ORDER BY id`) as unknown as TraceRow[];
+  return tableRows(target, `SELECT id, query_hash FROM recall_traces WHERE pipeline = 'context' ORDER BY id`)
+    .map((r) => ({ id: Number(r.id), query_hash: String(r.query_hash) }));
 }
 
 function traceResultIds(target: Project, traceId: number): string[] {
@@ -59,7 +63,7 @@ describe('what one hippo context call records', () => {
     expect(r.stdout).toContain('rollback plan');
     const [e] = eventsN(p, 'ctx-1', 1);
     expect([e.event_type, e.surface, e.runtime, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
-      .toEqual(['context', 'context', 'unknown', 'env', 1, 'sent', 3]);
+      .toEqual(['context', 'context', 'unknown', 'env', 1, 'sent', DELIVERY_LEDGER_VERSION]);
     expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
     const [trace] = contextTraces(p);
     expect([e.recall_trace_id, e.query_hash]).toEqual([trace.id, trace.query_hash]);
@@ -173,5 +177,40 @@ describe('the ledger changes nothing a context call prints', () => {
     expect(on.stdout).not.toBe('');
     expect(on.stdout).toBe(plain.stdout);
     expect([eventCount(p), eventCount(off)]).toEqual([1, 0]);
+  });
+
+  const resultRows = (target: Project) => tableRows(target, `SELECT t.id AS trace_id, r.memory_id, r.result_rank, r.score
+    FROM recall_trace_results r JOIN recall_traces t ON t.id = r.trace_id WHERE t.pipeline = 'context' ORDER BY t.id, r.result_rank`);
+  const retrievalCounts = (target: Project) => tableRows(target, 'SELECT id, retrieval_count FROM memories ORDER BY id');
+
+  it('I1: a query in both formats prints the same bytes and leaves the same trace results and retrieval counts', () => {
+    for (const args of [[...QUERY], [...QUERY, '--format', 'json']]) {
+      const on = run(p, args);
+      const plain = run(off, args);
+      expect([on.status, plain.status], on.stderr + plain.stderr).toEqual([0, 0]);
+      expect(on.stdout).not.toBe('');
+      expect(on.stdout).toBe(plain.stdout);
+    }
+    const rows = resultRows(off);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(resultRows(p)).toEqual(rows);
+    expect(retrievalCounts(p)).toEqual(retrievalCounts(off));
+    expect([eventCount(p), eventCount(off)]).toEqual([2, 0]);
+  });
+
+  it('I2: a query that matches nothing prints the same output in both formats and writes the same empty traces', () => {
+    const miss = ['zzqxv', 'wplmk'];
+    const printed = [miss, [...miss, '--format', 'json']].map((args) => {
+      const on = run(p, args);
+      const plain = run(off, args);
+      expect([on.status, plain.status], on.stderr + plain.stderr).toEqual([0, 0]);
+      expect(on.stdout).toBe(plain.stdout);
+      return on.stdout;
+    });
+    expect(printed[0]).toBe('');
+    const traces = (target: Project) => tableRows(target, `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id`);
+    expect(traces(off)).toHaveLength(2);
+    expect(traces(p)).toEqual(traces(off));
+    expect(retrievalCounts(p)).toEqual(retrievalCounts(off));
   });
 });

@@ -280,7 +280,24 @@ describe('computeFit (real fixture)', () => {
     expect(() => buildScorers(CONFIG.FEATURES, weights)).not.toThrow();
     const rows = readJsonl(featuresPathFor(QUESTIONS[0].question_id));
     // SAFETY: computeFit returns one numeric weight per FIT_DIMS entry (asserted above); the inferred type is {}.
-    expect(() => evaluateStore(rows, [0.3], weights as Record<string, number>)).not.toThrow();
+    type Scored = { N: number; goldCount: number; perScorer: Record<string, Record<number, { retention: number; keepN: number }>> };
+    // SAFETY: evaluateStore is untyped .mjs; this is the shape its return statement builds.
+    const fitted = evaluateStore(rows, [0.3], weights as Record<string, number>) as Scored;
+    // SAFETY: same return shape, without the weights.
+    const unfitted = evaluateStore(rows, [0.3]) as Scored;
+    expect(fitted.N).toBe(rows.length);
+    expect(fitted.goldCount).toBeGreaterThan(0);
+    // The fitted run adds exactly the 'weighted' scorer to the unfitted set.
+    expect(Object.keys(fitted.perScorer).sort()).toEqual([...Object.keys(unfitted.perScorer), 'weighted'].sort());
+    for (const [name, byBudget] of Object.entries(fitted.perScorer)) {
+      const { retention, keepN } = byBudget[0.3];
+      expect(Number.isFinite(retention), name).toBe(true);
+      expect(retention, name).toBeGreaterThanOrEqual(0);
+      expect(retention, name).toBeLessThanOrEqual(1);
+      expect(keepN, name).toBe(Math.ceil(0.3 * rows.length));
+    }
+    // Scorers the fit does not touch score the same with or without weights.
+    expect(fitted.perScorer.recency[0.3].retention).toBe(unfitted.perScorer.recency[0.3].retention);
   });
 });
 

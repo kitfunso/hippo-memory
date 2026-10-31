@@ -7,19 +7,21 @@
  * are enforced on both the summary and its children.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { drillDown, type Context } from '../src/api/index.js';
+import { drillDown } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:drill', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:drill', role: 'admin' });
 }
 
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -28,9 +30,9 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     layer: Layer.Semantic,
     tags: opts.tags ?? ['dag-summary'],
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
   });
 }
 
@@ -39,10 +41,10 @@ function makeChild(text: string, parentId: string, opts: Partial<MemoryEntry> = 
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     confidence: 'observed',
-    dag_level: opts.dag_level ?? 1,
-    dag_parent_id: parentId,
+    dagLevel: opts.dag_level ?? 1,
+    dagParentId: parentId,
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
   });
 }
 
@@ -79,7 +81,7 @@ describe('drillDown', () => {
     const leaf = createMemory('leaf body', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
-      dag_level: 0,
+      dagLevel: 0,
       tenantId: 'default',
     });
     writeEntry(root, leaf);
@@ -91,9 +93,9 @@ describe('drillDown', () => {
   it('returns failure=not_found when summary belongs to another tenant (v1.6.4 collapse)', async () => {
     // Cross-tenant intentionally collapses into not_found — distinguishing
     // would leak existence to unauthorised tenants.
-    const s = makeSummary('other tenant topic', { tenantId: 'other' });
+    const s = makeSummary('other tenant topic', { tenant_id: 'other' });
     writeEntry(root, s);
-    writeEntry(root, makeChild('detail', s.id, { tenantId: 'other' }));
+    writeEntry(root, makeChild('detail', s.id, { tenant_id: 'other' }));
     const r = await drillDown(ctxFor(root, 'default'), s.id);
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_found');

@@ -27,6 +27,7 @@ import { installSignalHandlers } from '../util/crash-handlers.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from '../server/lifecycle.js';
 import { printError } from '../cli/output.js';
 import { PACKAGE_ROOT } from '../core/package-root.js';
+import { DAY_MS } from '../util/time.js';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -155,7 +156,7 @@ function handleRead(ctx: RouteContext, segments: string[]): boolean {
     const entry = readEntry(hippoRoot, parseMemoryId(a), tenantId);
     if (entry === null || !isLiveMemory(entry)) return sendOrNotFound(res, null);
     const snapshotId = snapshots.get(tenantId, fresh).id;
-    const embedded = snapshots.embeddedIds()?.has(entry.id) ?? false;
+    const embedded = snapshots.isEmbedded(entry.id);
     return sendOrNotFound(res, buildMemoryDetail(hippoRoot, tenantId, entry, { snapshotId, nowMs: ctx.now(), embedded }));
   }
   if (head === 'search' && segments.length === 2) {
@@ -172,7 +173,7 @@ function handleRead(ctx: RouteContext, segments: string[]): boolean {
 }
 
 // Names the action only; nothing runs until the cross-site, content-type and body guards pass.
-function matchAction(segments: string[]): ((hippoRoot: string, tenantId: string, body: ActionBody) => ActionResult) | null {
+function matchAction(segments: string[]): ((hippoRoot: string, tenantId: string, body: ActionBody) => ActionResult | Promise<ActionResult>) | null {
   const [, head, id, verb] = segments;
   if (segments.length !== 4 || id === undefined) return null;
   if (head === 'memory' && verb === 'pin') return (root, tenant, body) => pinMemory(root, tenant, id, body);
@@ -199,11 +200,11 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
   }
   const body = await readActionBody(req);
   const tenantId = resolveTenantId({});
-  const result = action(hippoRoot, tenantId, body);
+  const result = await action(hippoRoot, tenantId, body);
   if (result.changed) snapshots.invalidate();
   if (result.entry) {
     // The write is committed, so a rebuild failure must not turn it into a 500: the next read rebuilds.
-    const embedded = snapshots.embeddedIds()?.has(result.entry.id) ?? false;
+    const embedded = snapshots.isEmbedded(result.entry.id);
     const detail = buildMemoryDetail(hippoRoot, tenantId, result.entry, { snapshotId: snapshots.currentId(), nowMs: ctx.now(), embedded });
     jsonResponse(res, detail, result.status);
   } else {
@@ -301,6 +302,9 @@ function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, url:
   return true;
 }
 
+// A browser that restores its session keeps a cookie with no Max-Age for good; no Secure, since this server speaks plain HTTP on loopback only.
+const DASHBOARD_COOKIE_MAX_AGE_S = DAY_MS / 1000;
+
 /** True when the request may proceed; false when this already answered it (redirect off the token URL, or 401). */
 function admitDashboardRequest(
   req: http.IncomingMessage,
@@ -312,7 +316,7 @@ function admitDashboardRequest(
   // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate tokens.
   const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
   if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
-    res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+    res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DASHBOARD_COOKIE_MAX_AGE_S}`);
     if (leaveTokenUrl(req, res, url)) return false;
   } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
     res.writeHead(401, { 'Content-Type': 'text/plain' });
@@ -326,7 +330,7 @@ function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerRespo
   const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
   // A cut-short response is logged even for a client fault; a bare 400 is not.
   if (res.headersSent || !clientFault) {
-    log.error('dashboard request failed', { ...errorFields(err), error: errorMessage(err), path: req.url });
+    log.error('dashboard request failed', { ...errorFields(err), error: errorMessage(err), path: (req.url ?? '/').split('?')[0] });
   }
   if (res.headersSent) {
     res.end();
@@ -343,9 +347,20 @@ function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerRespo
   jsonResponse(res, { error: 'Internal error' }, 500);
 }
 
-function printDashboardBanner(boundPort: number, token: string, distUiDir: string | null): void {
+const DASHBOARD_URL_FILE = 'dashboard.url';
+
+function printDashboardBanner(hippoRoot: string, boundPort: number, token: string, distUiDir: string | null): void {
   // The banner is the `hippo dashboard` command's printed result, so it stays on stdout.
-  console.log(`Hippo Dashboard running at http://localhost:${boundPort}/?token=${token}`);
+  const url = `http://localhost:${boundPort}/?token=${token}`;
+  if (process.stdout.isTTY) {
+    console.log(`Hippo Dashboard running at ${url}`);
+  } else {
+    // Captured stdout lands in logs, so the token goes to an owner-only file, created fresh so its mode holds.
+    const file = path.join(hippoRoot, DASHBOARD_URL_FILE);
+    fs.rmSync(file, { force: true });
+    fs.writeFileSync(file, `${url}\n`, { flag: 'wx', mode: 0o600 });
+    console.log(`Hippo Dashboard running at http://localhost:${boundPort}/ (open the URL with its token from ${file})`);
+  }
   if (distUiDir !== null) console.log(`Serving React UI from ${distUiDir}`);
   console.log('Press Ctrl+C to stop.');
 }
@@ -436,7 +451,7 @@ export function serveDashboard(
   server.listen(port, '127.0.0.1', () => {
     // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.
     const boundPort = (server.address() as AddressInfo).port;
-    printDashboardBanner(boundPort, token, hasDistUi ? distUiDir : null);
+    printDashboardBanner(hippoRoot, boundPort, token, hasDistUi ? distUiDir : null);
   });
 
   return server;

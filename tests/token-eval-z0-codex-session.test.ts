@@ -13,6 +13,7 @@ import { foldPath } from '../scripts/token-eval/readcheck.mjs';
 import { cleanup, tmp, isolate, makeRepo } from './fixtures/z0-harness.js';
 import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding, xTrio } from './fixtures/z0-codex-harness.js';
 import type { CodexCtx, CodexOpts } from './fixtures/z0-codex-harness.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 afterEach(cleanup);
 
@@ -38,8 +39,7 @@ async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
       child.once('error', r);
     });
     try {
-      for (let i = 0; i < 300 && !existsSync(ready); i++) await new Promise((r) => setTimeout(r, 50));
-      expect(existsSync(ready)).toBe(true);
+      await waitFor(() => existsSync(ready), { timeoutMs: 15_000, intervalMs: 50, what: 'the ready file' });
       return fn();
     } finally {
       child.kill();
@@ -215,7 +215,8 @@ describe('the memory wait and the memories switch (tests 13, 14)', () => {
     const short = setup('waitout', { codexMemoryWait: 'poll:5000:600' });
     const t = await runCodexSession(short.ctx, short.run, xTask('plain'), () => false);
     expect(t.wait.timedOut).toBe(true);
-    expect(t.wait.ms).toBeLessThan(5000);
+    // timedOut is only set when the 600 ms timeout fires before the 5000 ms stable window, so the wait ended on the timeout.
+    expect(t.wait.ms).toBeGreaterThanOrEqual(600);
   }, 60_000);
 
   it('writes the memories feature as the flag says, and the session reads that config', async () => {

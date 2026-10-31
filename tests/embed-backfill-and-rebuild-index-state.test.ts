@@ -7,10 +7,12 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import { closeHippoDb, getMeta, openHippoDb } from '../src/db/index.js';
-import { initializeParticle, loadPhysicsState, savePhysicsState } from '../src/db/physics-state.js';
+import { loadPhysicsState, savePhysicsState } from '../src/db/physics-state.js';
+import { initializeParticle } from '../src/core/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../src/db/vector-store.js';
-import { embedAll, embeddingIndexIdentity, embeddingInputText, embedMemory } from '../src/store/embeddings/index.js';
-import type { EmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { embeddingIndexIdentity, embeddingInputText } from '../src/store/embeddings/index.js';
+import { embedAll, embedMemory } from '../src/search/embed-memories.js';
+import type { EmbeddingProvider } from '../src/embeddings/provider.js';
 import { loadAllEntries, loadAllEntryIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
@@ -153,7 +155,7 @@ describe('embedAll backfill on hippo.db', () => {
     const embedded = new Set(before.vectors.map((v) => v.memory_id));
     const pending = entries.filter((e) => !embedded.has(e.id));
     expect([entries.length, before.vectors.length, pending.length]).toEqual([ROWS, 180, 120]);
-    expect(new Set(pending.map((e) => e.tenantId))).toEqual(new Set(TENANTS));
+    expect(new Set(pending.map((e) => e.tenant_id))).toEqual(new Set(TENANTS));
 
     const calls: string[][] = [];
     expect(await embedAll(root, undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(120);
@@ -188,15 +190,15 @@ describe('a model identity change on hippo.db', () => {
     expect([state.vectors.length, state.particles.length]).toEqual([ROWS, ROWS]);
   }, SLOW);
 
-  it('embedAll and embedMemory end in the same state through the configured provider', async () => {
+  it('embedAll rebuilds a 300-row index, and embedMemory leaves it alone past the inline reindex cap', async () => {
     const [viaAll, viaOne] = [copyOf(indexedOld), copyOf(indexedOld)];
     useHashedServer(viaAll);
     useHashedServer(viaOne);
-    expect(await embedAll(viaAll)).toBe(ROWS);
+    const before = indexOn(viaOne);
     await embedMemory(viaOne, loadAllEntries(viaOne)[7]);
-    const expected = rebuiltState(viaAll, HASHED_ID, hashedServerVector);
-    expect(indexOn(viaAll)).toEqual(expected);
-    expect(indexOn(viaOne)).toEqual(expected);
+    expect(indexOn(viaOne)).toEqual(before);
+    expect(await embedAll(viaAll)).toBe(ROWS);
+    expect(indexOn(viaAll)).toEqual(rebuiltState(viaAll, HASHED_ID, hashedServerVector));
   }, SLOW);
 
   it('keeps the old vectors, identity and particles when the provider fails part way through the rebuild', async () => {
@@ -241,7 +243,7 @@ describe('rows held while embedding hippo.db', () => {
     const index = loadEmbeddingIndex(root);
     const log = recordStatements(() => resetStoredParticles(root, ids, index));
     const { particles } = indexOn(root);
-    const tenantOf = new Map(loadAllEntries(root).map((e) => [e.id, e.tenantId]));
+    const tenantOf = new Map(loadAllEntries(root).map((e) => [e.id, e.tenant_id]));
     expect([ids.length, log.result, particles.length]).toEqual([ROWS, 180, 180]);
     expect(particles.map((p) => p.memoryId)).toEqual(Object.keys(index).sort());
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));

@@ -1,4 +1,4 @@
-// serve({ autoSleep: false }): a host-tenant remember over POST /mcp never starts consolidation in the server process.
+// serve({ autoSleep: false }): a host-tenant remember over POST /mcp never starts consolidation; unset, it runs in a child, never in the server process.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -66,6 +66,23 @@ describe('serve autoSleep option', () => {
   it('the option unset adds one consolidation run past the threshold', async () => {
     const { root, url, key } = await startServer(undefined);
     for (const note of NOTES) await remember(url, key, note);
-    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
+    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
+  });
+
+  it('runs the consolidation in a child process under the sleep deadline, not on the server event loop', async () => {
+    // Only the child runner has a deadline, so a 1 ms one stops the run before it commits; in process it would finish.
+    vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', '1');
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { root, url, key } = await startServer(undefined);
+      for (const note of NOTES) await remember(url, key, note);
+      await vi.waitFor(() => {
+        const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
+        expect(lines.some((l) => l.includes('auto-sleep consolidate failed') && l.includes('did not finish within 1 ms'))).toBe(true);
+      }, { timeout: 20_000 });
+      expect(sleepRuns(root)).toBe(0);
+    } finally {
+      stderr.mockRestore();
+    }
   });
 });

@@ -1,12 +1,11 @@
 // Session context assembly under a token budget.
 
-import { requireGroup, storeFor } from '../store/index.js';
 import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../store/recall-scope.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import { classifyOriginProject, projectNames } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
-import type { Context } from './types.js';
+import type { ContextWith } from './types.js';
 
 const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;
@@ -58,7 +57,8 @@ export interface AssembleResult {
   sessionId: string;
   items: AssembledContextItem[];
   tokens: number;
-  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`, so "session has N msgs" stays accurate for a windowed items[]. */
+  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`,
+   * so "session has N msgs" stays accurate for a windowed items[]. */
   totalRaw: number;
   summarized: number;
   evicted: number;
@@ -66,10 +66,11 @@ export interface AssembleResult {
   truncated: boolean;
 }
 
-/** Chronological context window for a session; over budget, evicts the lowest-strength non-fresh-tail item first (fresh tail is never evicted).
+/** Chronological context window for a session; over budget, evicts the lowest-strength non-fresh-tail item first (fresh
+ *  tail is never evicted).
  * Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(
-  ctx: Context,
+  ctx: ContextWith<'dagReads'>,
   sessionId: string,
   opts: AssembleOpts = {},
 ): Promise<AssembleResult> {
@@ -119,10 +120,15 @@ interface ScopedRaws {
   truncated: boolean;
 }
 
-async function loadScopedRaws(ctx: Context, sessionId: string, opts: AssembleOpts, own: string | undefined): Promise<ScopedRaws> {
+async function loadScopedRaws(
+  ctx: ContextWith<'dagReads'>,
+  sessionId: string,
+  opts: AssembleOpts,
+  own: string | undefined,
+): Promise<ScopedRaws> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
   const origins = opts.project ? projectNames(opts.project) : undefined;
-  const dag = requireGroup(storeFor(ctx), 'dagReads');
+  const dag = ctx.store.dagReads;
   const rows = await dag.sessionRawEntries({ tenantId: ctx.tenantId, sessionId, cap: rowCap, origins });
   const truncated = rows.length === rowCap;
   // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
@@ -133,7 +139,13 @@ async function loadScopedRaws(ctx: Context, sessionId: string, opts: AssembleOpt
   if (truncated) {
     // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
     // caller cannot infer private rows by comparing totalRaw to items.length.
-    totalRaw = await dag.sessionRawCount({ tenantId: ctx.tenantId, sessionId, scope: opts.scope, ownScope: own, origins });
+    totalRaw = await dag.sessionRawCount({
+      tenantId: ctx.tenantId,
+      sessionId,
+      scope: opts.scope,
+      ownScope: own,
+      origins,
+    });
   } else {
     totalRaw = scoped.length;
   }
@@ -166,7 +178,7 @@ interface SubstitutedOlder {
 }
 
 async function substituteSummaries(
-  ctx: Context,
+  ctx: ContextWith<'dagReads'>,
   olderRows: MemoryEntry[],
   scope: string | undefined,
   own: string | undefined,
@@ -185,7 +197,7 @@ async function substituteSummaries(
     (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
   );
   const parents = eligibleParentIds.length > 0
-    ? (await storeFor(ctx).entriesByIds(eligibleParentIds, ctx.tenantId))
+    ? (await ctx.store.entriesByIds(eligibleParentIds, ctx.tenantId))
         .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
         .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope, own))
         .filter((p) => !project || classifyOriginProject(p.origin_project, project) !== 'cross-project')

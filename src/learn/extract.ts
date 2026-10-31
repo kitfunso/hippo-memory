@@ -1,9 +1,14 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../core/memory.js';
-import { writeEntry } from '../store/entry-writes.js';
+import type { LocalFiles } from '../store/port/local-files.js';
+import { localFilesAt } from './roots.js';
 import { loadConfig } from '../core/config.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
-import { describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
+import {
+  type AnthropicMessageFailure,
+  describeMessageFailure,
+  sendAnthropicMessage,
+} from '../util/anthropic-messages.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorMessage, log } from '../util/log.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
@@ -19,17 +24,22 @@ export interface ExtractOptions {
   apiKey: string;
   model?: string;
   fetcher?: typeof fetch;
-  /** Told why a call produced nothing, so callers can surface it instead of guessing. */
-  onError?: (msg: string) => void;
+  /**
+   * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the API call
+   * itself failed.
+   */
+  onError?: (msg: string, failure?: AnthropicMessageFailure) => void;
 }
 
-const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. Extract 1-8 standalone factual statements that would be useful to remember later.
+const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. ` +
+`Extract 1-8 standalone factual statements that would be useful to remember later.
 
 Rules:
 - Each fact must be a complete, standalone sentence
 - Include the speaker's name in every fact (e.g. "Alice prefers..." not "She prefers...")
 - Preserve specific details: names, numbers, dates, paths, IDs
-- Return a JSON array of objects with: content (string), tags (array of "speaker:X" and "topic:Y" strings), valence ("neutral", "positive", "negative", or "critical")
+- Return a JSON array of objects with: content (string), tags (array of "speaker:X" and "topic:Y" strings), ` +
+`valence ("neutral", "positive", "negative", or "critical")
 - Return an empty array [] for small talk with no extractable facts
 - Output ONLY the JSON array, no preamble or explanation
 
@@ -51,7 +61,7 @@ export async function extractFacts(
     fetcher: opts.fetcher,
   });
   if (!reply.ok) {
-    opts.onError?.(describeMessageFailure(reply.failure));
+    opts.onError?.(describeMessageFailure(reply.failure), reply.failure);
     return [];
   }
 
@@ -86,14 +96,16 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
       !item ||
       !isJsonString(item.content) ||
       item.content.length < 3
-    )
+    ) {
       continue;
+    }
 
     const itemTags = item.tags;
     const tags = Array.isArray(itemTags)
       ? itemTags.filter((t) => isJsonString(t))
       : [];
-    // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the four literal strings of EmotionalValence.
+    // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the four literal strings
+    // of EmotionalValence.
     const valence: EmotionalValence = isJsonString(item.valence) && validValences.has(item.valence)
       ? (item.valence as EmotionalValence)
       : 'neutral';
@@ -106,11 +118,12 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
 
-export function storeExtractedFacts(
-  hippoRoot: string,
-  source: MemoryEntry,
-  facts: ExtractedFact[],
-): MemoryEntry[] {
+export function storeExtractedFacts(hippoRoot: string, source: MemoryEntry, facts: ExtractedFact[]): MemoryEntry[] {
+  return storeFacts(localFilesAt(hippoRoot), source, facts);
+}
+
+/** storeExtractedFacts into the store `files` names. */
+function storeFacts(files: LocalFiles, source: MemoryEntry, facts: ExtractedFact[]): MemoryEntry[] {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
     ...neverAutoShareTags([source]),
@@ -118,7 +131,7 @@ export function storeExtractedFacts(
 
   const entries: MemoryEntry[] = [];
   let rejected = 0;
-  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
+  const baseHalfLifeDays = loadConfig(files.hippoRoot).defaultHalfLifeDays;
 
   for (const fact of facts) {
     const defect = certainDefect(fact.content);
@@ -128,9 +141,10 @@ export function storeExtractedFacts(
     }
     const entry = buildExtractedEntry(fact, source, inheritedTags, baseHalfLifeDays);
 
-    // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it (reject_refusal), so skip and count.
+    // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it
+    // (reject_refusal), so skip and count.
     try {
-      writeEntry(hippoRoot, entry);
+      files.learning.writeEntry(entry);
     } catch (err) {
       if (err instanceof RejectedValueError) {
         rejected++;
@@ -158,14 +172,14 @@ function buildExtractedEntry(
   return { ...createMemory(fact.content, {
     layer: Layer.Semantic,
     tags,
-    emotional_valence: fact.valence,
+    emotionalValence: fact.valence,
     confidence: 'inferred',
     source: source.source,
-    extracted_from: source.id,
+    extractedFrom: source.id,
     scope: source.scope,
     // Without it createMemory stamps 'default', and extracted facts leave
     // the tenant of the episodic memory they were extracted from.
-    tenantId: source.tenantId,
+    tenantId: source.tenant_id,
     baseHalfLifeDays,
   }), origin_project: source.origin_project };
 }

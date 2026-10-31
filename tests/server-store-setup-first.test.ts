@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { getHippoDbPath, getMeta } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import type { ServerHandle } from '../src/server.js';
-import { serializeEntry } from '../src/store/markdown.js';
+import { serializeEntry } from '../src/core/markdown.js';
 import { HALF_LIFE_BASE_META_KEY } from '../src/store/open.js';
 import { createSqliteExecutor } from '../src/store/sqlite/executor.js';
 import { cleanups, execOn, get, holdWriteLock, newRoot, onDb, post, removeLater, start, undoAll } from './_helpers/store-worker-server.js';
@@ -36,7 +36,8 @@ async function recalled(server: ServerHandle, query: string): Promise<string[]> 
 describe('a root with no hippo.db', () => {
   it('answers its first request, a read, from a reader, after the writer recorded what a new store records', async () => {
     const root = bareRoot();
-    const server = await start(root);
+    // GET /v1/quarantine is an admin route, so this machine's keyless caller opts in to admin.
+    const server = await start(root, undefined, { keylessLocalRole: 'admin' });
 
     const graph = await get(server, '/v1/graph');
 

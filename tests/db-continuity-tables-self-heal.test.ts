@@ -303,23 +303,23 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
 
       const env = { ...process.env, HIPPO_SESSION_ID: 'sess-heal' };
 
-      expect(() => {
-        execFileSync(process.execPath, [CLI_PATH, 'context', '--pinned-only', '--budget', '1500'], {
-          cwd: projectDir,
-          env,
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-      }).not.toThrow();
+      const runContext = (...args: string[]): string => execFileSync(process.execPath, [CLI_PATH, 'context', ...args, '--budget', '1500'], {
+        cwd: projectDir,
+        env,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const pinned = runContext('--pinned-only');
+      const auto = runContext('--auto');
 
-      expect(() => {
-        execFileSync(process.execPath, [CLI_PATH, 'context', '--auto', '--budget', '1500'], {
-          cwd: projectDir,
-          env,
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-      }).not.toThrow();
+      const healed = openHippoDb(hippoDir);
+      try {
+        expect(tableNames(healed)).toEqual(expect.arrayContaining(['session_handoffs', 'session_events']));
+      } finally {
+        closeHippoDb(healed);
+      }
+      // The saved task is the one row the context block can only print if the store was readable.
+      expect(pinned + auto).toContain('Resume the current branch cleanly');
     } finally {
       rmSync(projectDir, { recursive: true, force: true });
     }
