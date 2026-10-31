@@ -97,12 +97,16 @@ export function tierFunctionParams(root = '.') {
   const repos = sf && checker.getSymbolAtLocation(sf)?.exports?.get(REPOS);
   if (repos === undefined) return unread(`${TIER_DOOR}:1 exports no ${REPOS}`);
   const [build] = checker.getTypeOfSymbol(repos).getCallSignatures();
-  const sites = checker
-    .getPropertiesOfType(checker.getReturnTypeOfSignature(build))
-    .flatMap((repo) =>
-      checker
-        .getPropertiesOfType(checker.getTypeOfSymbol(repo))
-        .flatMap((method) => methodHits(checker, inSrc, root, `${repo.name}.${method.name}`, method)),
-    );
+  const tier = build === undefined ? [] : checker.getPropertiesOfType(checker.getReturnTypeOfSignature(build));
+  const methods = tier.flatMap((repo) =>
+    checker.getPropertiesOfType(checker.getTypeOfSymbol(repo)).map((method) => ({ repo, method })),
+  );
+  // An `any` or empty return reads as a tier with nothing to check, which in hippo-memory means the scan is blind.
+  if (methods.length === 0 && isHippoRepo(root)) {
+    return unread(`${TIER_DOOR}:1 ${REPOS}() returns ${tier.length} repositories and no method the checker can read`);
+  }
+  const sites = methods.flatMap(({ repo, method }) =>
+    methodHits(checker, inSrc, root, `${repo.name}.${method.name}`, method),
+  );
   return { sites, unread: [] };
 }

@@ -191,6 +191,25 @@ describe('check-store-port.mjs', () => {
     expect(r.stderr).toBe(UNREAD('src/store/sqlite/hippo-db.ts is missing'));
   });
 
+  it("fails in hippo-memory's own folder when hippoDbRepos returns any or a tier with no methods", () => {
+    const pkg = { 'package.json': '{ "name": "hippo-memory" }\n' };
+    const typedAny = runOn({
+      ...pkg,
+      'src/store/sqlite/hippo-db.ts': 'export function hippoDbRepos(): any { return {}; }\n',
+    });
+    const noMethods = runOn({
+      ...pkg,
+      'src/store/sqlite/hippo-db.ts': 'export function hippoDbRepos() { return { rows: {} }; }\n',
+    });
+    expect([typedAny.status, noMethods.status]).toEqual([1, 1]);
+    expect(typedAny.stderr).toBe(
+      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos() returns 0 repositories and no method the checker can read'),
+    );
+    expect(noMethods.stderr).toBe(
+      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos() returns 1 repositories and no method the checker can read'),
+    );
+  });
+
   it('fails a tier door that exports no hippoDbRepos under the same heading', () => {
     const r = runOn({ 'src/store/sqlite/hippo-db.ts': 'export function otherRepos() { return {}; }\n' });
     expect(r.status).toBe(1);
