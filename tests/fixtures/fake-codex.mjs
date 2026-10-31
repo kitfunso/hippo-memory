@@ -97,10 +97,17 @@ function shellCall(cmd, output) {
 
 const readCall = (p) => shellCall(`cat ${JSON.stringify(p)}`, read(p) ?? `cat: ${p}: No such file or directory\nProcess exited with code 1`);
 
+/** A file at an earlier thread's rollout path, since the read check skips a path that names nothing; plain text, so only the path check fires. */
+function pastRollout() {
+  const past = path.join(HOME, 'sessions', 'past-rollout.jsonl');
+  if (!fs.existsSync(past)) write(past, 'an earlier thread\n');
+  return past;
+}
+
 /** A second thread's rollout: CHILD (parent set), MEMGEN (internal source), STRAY (source exec, no parent). */
 function sideRollout(kind) {
   const id = randomUUID();
-  const past = path.join(HOME, 'sessions', 'past-rollout.jsonl');
+  const past = pastRollout();
   const extra = kind === 'child' ? { parent_thread_id: threadId, source: { subagent: { thread_spawn: {} } }, thread_source: 'subagent' }
     : kind === 'memgen' ? { source: process.env.FAKE_CODEX_INTERNAL_SOURCE || 'z0-memgen' } : { source: 'exec' };
   const lines = [meta(id, extra), ...readCall(past)];
@@ -137,6 +144,11 @@ function hang(lines) {
   process.exit(0);
 }
 
+// Hook output as Codex 0.153.4 writes it: a developer message tagged in its metadata.
+const hookMessage = (text) => line('response_item', {
+  type: 'message', role: 'developer', internal_chat_message_metadata_passthrough: { content_item_kinds: ['hooks.additional_context'] }, content: [{ type: 'input_text', text }],
+});
+
 /** The work the prompt asks for, as rollout lines; files are changed for real. */
 function work() {
   const lines = [];
@@ -144,10 +156,11 @@ function work() {
   if (has('FIX')) fs.writeFileSync('lib.js', 'module.exports.add = (a, b) => a + b;\n');
   const lesson = has('LESSON_OK') ? 'ok' : has('LESSON_BAD') ? 'bad' : null;
   if (lesson) fs.writeFileSync('lesson.txt', `${lesson}\n`);
+  if (has('READ_PAST')) lines.push(...readCall(pastRollout()));
   for (const m of prompt.matchAll(/^READ:(.+)$/gm)) lines.push(...readCall(fill(m[1].trim())));
   // {B64:...} lets a hook context hold a key phrase the apply prompt may not spell out.
   const unb64 = (text) => text.replace(/\{B64:([^}]+)\}/g, (_, b64) => Buffer.from(b64, 'base64').toString('utf8'));
-  for (const m of prompt.matchAll(/^HOOKCTX:(.+)$/gm)) lines.push(line('response_item', { type: 'message', role: 'developer', z0_fake_hook: true, content: [{ type: 'input_text', text: unb64(m[1]) }] }));
+  for (const m of prompt.matchAll(/^HOOKCTX:(.+)$/gm)) lines.push(hookMessage(unb64(m[1])));
   if (has('MCP_TOOL')) lines.push(line('response_item', { type: 'function_call', name: 'mcp__codex_app__list_threads', call_id: 'mcp-1', arguments: '{}' }));
   if (has('PRINT_AUTH')) {
     const auth = read(AUTH) ?? '';
@@ -177,7 +190,7 @@ function hookLines() {
     const r = spawnSync((process.platform === 'win32' && h.commandWindows) || h.command, { shell: true, input: payload, encoding: 'utf8' });
     // A hook with nothing to add prints nothing; any other output must parse, so a broken hook fails the session.
     const said = r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput?.additionalContext : null;
-    return said ? [line('response_item', { type: 'message', role: 'developer', z0_fake_hook: true, content: [{ type: 'input_text', text: said }] })] : [];
+    return said ? [hookMessage(said)] : [];
   });
 }
 

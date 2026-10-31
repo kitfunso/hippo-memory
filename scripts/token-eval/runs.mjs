@@ -8,6 +8,7 @@ import { stubBaseCommit, assertNoInstructionLinks, STUB_CLAUDE_MD, X3_STUB } fro
 import { codexContext, writeCodexHome } from './codex.mjs';
 import { lessonIndex } from './lessons.mjs';
 import { assertNoPhraseInStub } from './leaks.mjs';
+import { hippoBuild, refuseOffPins, claudePinned, codexPinned } from './pins.mjs';
 
 // Loading or validating a tasks file never needs dist/; only a real run does.
 let hippoLib = null;
@@ -97,15 +98,16 @@ export async function openContext(opts) {
   const ctx = {
     outDir, passEnv, claude, records: [], fakeHome: outDir, hookHome: path.join(outDir, 'hook-home'), cacheDir: path.join(outDir, 'repo-cache'),
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
-    limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
+    limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 8 * 96, log: opts.log ?? console.log,
     lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
     ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'), canaries: opts.canaries ?? [], foreignDirs: [], leakedRuns: new Map(),
-    operatorEnv: { ...process.env },
+    operatorEnv: { ...process.env }, hippoBuild: hippoBuild(),
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
   const warmDir = path.join(outDir, 'warmup');
   const warmEnv = armEnv('A0', { ...runDirs(warmDir, '', '', 0), claudeConfig: path.join(warmDir, 'claude-config') }, process.env, { passEnv });
   ctx.claudeVersion = sh(`${claude} --version`, outDir, warmEnv).stdout.trim() || null;
+  refuseOffPins(opts.pins, claudePinned(ctx), ctx);
   if (warmup) {
     // One unrecorded call, so the first recorded run does not alone pay the cold prompt-cache write.
     fs.mkdirSync(warmEnv.CLAUDE_CONFIG_DIR, { recursive: true });
@@ -113,7 +115,7 @@ export async function openContext(opts) {
     sh(`${claude} ${warmArgs.join(' ')}`, warmDir, warmEnv, 10 * 60_000, 'Reply with the single word OK.');
   }
   // Last, so a refused step above leaves no login copy; runAll closes the vault in its catch and after runSteps, and a screen never opens it.
-  if ((opts.arms ?? []).some((a) => armSet(a) === 'X')) Object.assign(ctx, codexContext(opts, process.env));
+  if ((opts.arms ?? []).some((a) => armSet(a) === 'X')) Object.assign(ctx, codexContext(opts, process.env, (tools) => refuseOffPins(opts.pins, codexPinned(tools), ctx)));
   return ctx;
 }
 

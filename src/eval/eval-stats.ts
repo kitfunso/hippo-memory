@@ -268,14 +268,20 @@ export type Family<T> = readonly T[];
 /** One repository's families; a task with no lesson is a family of one. */
 export type Repository<T> = readonly Family<T>[];
 
-/** An {@link Estimate} with a two-sided p-value from the same resamples. */
+/** An {@link Estimate} with a two-sided p-value, from bootstrap resamples or from a t test over repositories. */
 export interface TestedEstimate extends Estimate {
-  /** 2 x min(share <= null, share >= null), capped at 1; NaN with fewer than two repositories. */
+  /** Bootstrap: 2 x min(share <= null, share >= null) of the resamples, capped at 1. t test: the two-sided Student t p.
+   *  NaN with fewer than two repositories. */
   readonly p: number;
-  /** Non-finite resamples, dropped; `iterations + dropped` is the number requested. */
+  /** Non-finite resamples, dropped; `iterations + dropped` is the number requested. Both are 0 for a t test. */
   readonly dropped: number;
   /** The null the p-value tested against; {@link verdict} reads its sides from here. */
   readonly nullValue: number;
+  /** Degrees of freedom of a t test (a fixed-repository test gives a fractional Satterthwaite value);
+   *  absent on a bootstrap. */
+  readonly df?: number;
+  /** Standard error of a t test; absent on a bootstrap. */
+  readonly se?: number;
 }
 
 /** Options for {@link twoLevelBootstrap}. */
@@ -284,17 +290,21 @@ export interface TwoLevelOpts extends BootstrapOpts {
   readonly iterations?: number;
   /** Value the p-value tests against: 0 for differences, 1 for ratios. Default 0. */
   readonly nullValue?: number;
+  /** Keep every repository in place and resample families inside each: the stratified twin of a
+   *  fixed-repository t test. Default false. */
+  readonly fixedRepositories?: boolean;
 }
 
-function notANumber(nullValue: number, dropped: number): TestedEstimate {
+/** The result with nothing to test: estimate, bounds and p all NaN. */
+export function notANumber(nullValue: number, dropped: number): TestedEstimate {
   const nan = Number.NaN;
   return { estimate: nan, low: nan, high: nan, p: nan, iterations: 0, dropped, nullValue };
 }
 
-function resampleUnits<T>(repos: readonly Repository<T>[], rand: () => number): T[] {
+function resampleUnits<T>(repos: readonly Repository<T>[], rand: () => number, fixedRepositories: boolean): T[] {
   const units: T[] = [];
   for (let i = 0; i < repos.length; i++) {
-    const repo = repos[Math.floor(rand() * repos.length)]!;
+    const repo = fixedRepositories ? repos[i]! : repos[Math.floor(rand() * repos.length)]!;
     for (let j = 0; j < repo.length; j++) {
       for (const unit of repo[Math.floor(rand() * repo.length)]!) units.push(unit);
     }
@@ -330,7 +340,7 @@ export function twoLevelBootstrap<T>(
   const rand = seededRandom(opts.seed ?? 1);
   const samples: number[] = [];
   for (let b = 0; b < requested; b++) {
-    const value = statistic(resampleUnits(kept, rand));
+    const value = statistic(resampleUnits(kept, rand, opts.fixedRepositories ?? false));
     if (Number.isFinite(value)) samples.push(value);
   }
   const dropped = requested - samples.length;

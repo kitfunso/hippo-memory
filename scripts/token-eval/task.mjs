@@ -10,7 +10,7 @@ import {
 } from './records.mjs';
 import { hippoInit, storeLeaks, storeEntries, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
 import { findLeaks, storedAt, shownAtStart, capturedBy, holds } from './leaks.mjs';
-import { runSession, resumeSession } from './turns.mjs';
+import { runSession, resumeSession, requestLogs } from './turns.mjs';
 import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, WorkspaceGitError, FIRST_REF, STALE_REF, FINAL_CHECK_REF } from './checks.mjs';
 import { saveGrading, surfaceText } from './grading.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
@@ -58,7 +58,7 @@ function baseFields(ctx, run, step) {
   const { t, role } = step;
   const base = {
     schema: 'z0-record/1', set: role.set, tool: step.driver.tool, repo: run.s.repo, taskId: t.id, cluster: run.s.cluster, sequence: run.s.id,
-    position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: step.driver === CODEX_DRIVER ? ctx.codexModel : ctx.model, claudeVersion: ctx.claudeVersion,
+    position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: step.driver === CODEX_DRIVER ? ctx.codexModel : ctx.model, claudeVersion: ctx.claudeVersion, ...ctx.hippoBuild,
     startedAt: new Date().toISOString(), baseCommit: null, kind: role.kind, familyId: role.familyId, lessonSource: role.lessonSource,
     applyIndex: role.applyIndex, afterReversal: role.afterReversal, tasksSinceTeach: role.tasksSinceTeach,
   };
@@ -78,7 +78,7 @@ function ancestorFiles(ctx, run, name) {
 
 const ancestorHits = (ctx, run, t) => ancestorFiles(ctx, run, `${t.id}.ancestor.txt`).length > 0;
 
-/** Every runner write before the session, then Z0_PRE_COMMIT over all of it and the surface snapshot; `failed` when setup failed. */
+/** Every runner write before the session, then CHECK_PRE_COMMIT over all of it and the surface snapshot; `failed` when setup failed. */
 function stageTask(ctx, run, step) {
   const { t } = step;
   const work = run.dirs.work;
@@ -111,7 +111,7 @@ function stageTask(ctx, run, step) {
   return stage;
 }
 
-/** The session-1 usage-limit reset: the checkout, every memory surface and every runner write back, without rerunning init, and a fresh Z0_PRE_COMMIT. */
+/** The session-1 usage-limit reset: the checkout, every memory surface and every runner write back, without rerunning init, and a fresh CHECK_PRE_COMMIT. */
 function resetTask(ctx, run, t, stage) {
   const work = run.dirs.work;
   const again = stage.prepare().setup;
@@ -123,22 +123,26 @@ function resetTask(ctx, run, t, stage) {
   // The cut-off attempt's transcript stays (prereg 113), so it must never be taken for the rerun's.
   stage.transcriptsBefore = new Set(listTranscripts(projectsOf(run)));
   stage.ancestors ||= ancestorHits(ctx, run, t);
-  ctx.log(`${cellName(run, t)}: Z0_PRE_COMMIT rebuilt after the usage-limit reset`);
+  ctx.log(`${cellName(run, t)}: CHECK_PRE_COMMIT rebuilt after the usage-limit reset`);
 }
 
 /** Run every lesson check through one door, so a broken checker is kept once and never read as a verdict. */
 function checker(ctx, run, t, stage, sessionIds) {
   const state = { error: null, calls: [] };
-  state.check = (lesson, hold = state.calls.length ? null : FIRST_REF) => {
+  state.check = (lesson, hold = state.calls.length ? null : FIRST_REF, since = null) => {
     const work = run.dirs.work;
     const postCommit = stage.fault ? null : guarded(run, t, stage, () => stateCommit(work, stage.pre));
     if (!postCommit) return null;
     if (hold) guarded(run, t, stage, () => holdPre(work, postCommit, hold));
     if (stage.fault) return null;
-    const commands = stage.adapter.commandLog(stage.filesOf(sessionIds));
-    state.calls.push({ lessonId: lesson.id, post: postCommit, commands });
+    const files = stage.filesOf(sessionIds);
+    const commands = stage.adapter.commandLog(files);
+    const perFile = new Map(files.map((f) => [f, stage.adapter.commandLog([f])]));
+    // What each transcript gained since the call `since`, so a subagent file listed after the main one never shifts the boundary.
+    const resumeCommands = since ? files.flatMap((f) => perFile.get(f).slice(since.perFile.get(f)?.length ?? 0)) : null;
+    state.calls.push({ lessonId: lesson.id, post: postCommit, commands, perFile, resumeCommands });
     try {
-      return guarded(run, t, stage, () => runCheck(lesson, { work, env: childEnv(run.env), preCommit: stage.pre, postCommit, commands, scratch: path.join(run.dirs.root, 'scratch') }));
+      return guarded(run, t, stage, () => runCheck(lesson, { work, env: childEnv(run.env), preCommit: stage.pre, postCommit, commands, resumeCommands, scratch: path.join(run.dirs.root, 'scratch') }));
     } catch (err) {
       if (!(err instanceof CheckerError)) throw err;
       writeLog(run, `${t.id}.checker.txt`, `${err.message}\n${err.stderr}`);
@@ -165,7 +169,7 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
     const own = c.calls.filter((x) => x.lessonId === lesson.id);
     const stale = old ? c.calls.find((x) => x.lessonId === old.id) : undefined;
     return {
-      staleLesson: old, firstPost: own[0]?.post ?? null, commandsFirst: own[0]?.commands ?? null, commandsFinal: own.at(-1)?.commands ?? null,
+      staleLesson: old, firstPost: own[0]?.post ?? null, commandsFirst: own[0]?.commands ?? null, commandsFinal: own.at(-1)?.commands ?? null, commandsResume: own.at(-1)?.resumeCommands ?? null,
       finalChecked: own.length > 1, finalCheckPost: own.at(-1)?.post ?? null, stalePost: stale?.post ?? null, commandsStale: stale?.commands ?? null,
     };
   };
@@ -205,7 +209,7 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const resumeId = resume.result?.session_id ?? fresh;
   if (resumeId && !sessionIds.includes(resumeId)) sessionIds.push(resumeId);
   // Prereg 165: a timed-out resume is graded on the state at the kill.
-  const final = (resume.result || timedOut) && !c.error ? c.check(lesson, FINAL_CHECK_REF) : first;
+  const final = (resume.result || timedOut) && !c.error ? c.check(lesson, FINAL_CHECK_REF, c.calls[0]) : first;
   const main = findTranscript(projectsOf(run), sessionIds[0]);
   const grew = Boolean(fresh) || (main !== null && fs.statSync(main).size > resume.bytesBefore);
   // Decision 7: a timed-out teach resume delivered the lesson once its transcript grew past the teach message.
@@ -271,9 +275,11 @@ function pricing(run, session, resume, sessionIds) {
 /** G1 over session 1, plus the resume: every teach resumes, so its resume hits void; only a failing apply does, so its are only kept. */
 function resumeAwareVoid(ctx, run, step, stage, sessionIds, resume) {
   const { first, extra } = turnSegments(run, sessionIds, resume);
-  const g1 = sessionVoid(ctx, run, step, { files: first, ownIds: sessionIds, delivery: stage.delivery });
-  if (!resume) return g1;
-  const g2 = sessionVoid(ctx, run, step, { files: extra, ownIds: sessionIds, delivery: stage.resumeDelivery ?? [] });
+  const g1 = sessionVoid(ctx, run, step, { files: first, ownIds: sessionIds, delivery: stage.delivery, requestLogs: requestLogs(run, step.t.id, 'session') });
+  // A resume cut off at the plan limit left only request logs, which still count for canaries.
+  const resumeLogs = requestLogs(run, step.t.id, 'resume');
+  if (!resume && !resumeLogs.length) return g1;
+  const g2 = sessionVoid(ctx, run, step, { files: resume ? extra : [], ownIds: sessionIds, delivery: resume ? stage.resumeDelivery ?? [] : [], requestLogs: resumeLogs });
   if (step.role.kind !== 'teach') return { ...g1, resumeVoidHits: g2.voidHits.length ? g2.voidHits : undefined };
   const hits = byPrecedence([...g1.voidHits, ...g2.voidHits]);
   return { void: hits[0]?.reason ?? null, voidHits: hits };

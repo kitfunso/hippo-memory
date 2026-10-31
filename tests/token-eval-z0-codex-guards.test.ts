@@ -1,6 +1,6 @@
 // Z0 set X gates through runAll: G1 reads and hook text, G3 in Codex state, the X2 chain, and the rollout classes (E6 plan tests 17-19, 25).
 import { describe, it, expect, afterEach } from 'vitest';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, makeRepo, find, tmp } from './fixtures/z0-harness.js';
 import { xRun, xTrio, xIsolate, xRecords, xLimit } from './fixtures/z0-codex-harness.js';
@@ -16,8 +16,10 @@ describe('G1 on a Codex apply (test 17)', () => {
   it('voids a past rollout and the operator\'s .codex, passes memories/ and the run\'s own ~, and reads hook text and quoted rollouts', async () => {
     const { out, home, op } = xIsolate('g1');
     const operatorAgents = fwd(join(home, '.codex', 'AGENTS.md'));
+    mkdirSync(join(home, '.codex'), { recursive: true });
+    writeFileSync(operatorAgents, 'operator rules\n');
     const prompts = {
-      'a-xa': ['READ:{CODEX_HOME}/sessions/past-rollout.jsonl', 'READ:{CODEX_HOME}/memories/notes.md', `READ:${operatorAgents}`, 'READ:~/.codex/AGENTS.md'].join('\n'),
+      'a-xa': ['READ_PAST', 'READ:{CODEX_HOME}/memories/notes.md', `READ:${operatorAgents}`, 'READ:~/.codex/AGENTS.md'].join('\n'),
       'a-xb': 'READ:old.jsonl\nHOOKCTX:<!-- hippo:start --> hint',
     };
     const r = makeRepo({ 'old.jsonl': `${JSON.stringify({ type: 'session_meta', payload: { id: 'old-thread' } })}\n` });

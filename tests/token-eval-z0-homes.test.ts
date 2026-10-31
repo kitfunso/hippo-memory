@@ -85,6 +85,7 @@ const PARENT = {
   claude_code_subagent_model: 'm',
   HIPPO_SESSION_ID: 's',
   CLAUDE_CODE_OAUTH_TOKEN: 'tok',
+  NoDefaultCurrentDirectoryInExePath: '1',
 };
 
 describe('armEnv and childEnv', () => {
@@ -101,7 +102,7 @@ describe('armEnv and childEnv', () => {
     for (const arm of ARMS) {
       const env = armEnv(arm, { ...run, seed: 2 }, base);
       expect(env.KEEP_ME).toBe('k');
-      for (const k of ['anthropic_api_key', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'AWS_BEARER_TOKEN_BEDROCK', 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', 'CLAUDECODE', 'claude_code_subagent_model', 'HIPPO_SESSION_ID']) {
+      for (const k of ['anthropic_api_key', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'AWS_BEARER_TOKEN_BEDROCK', 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', 'CLAUDECODE', 'claude_code_subagent_model', 'HIPPO_SESSION_ID', 'NoDefaultCurrentDirectoryInExePath']) {
         expect(env, `${arm} ${k}`).not.toHaveProperty(k);
       }
       expect(env.CLAUDE_CONFIG_DIR).toBe(run.claudeConfig);

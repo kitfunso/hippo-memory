@@ -7,7 +7,7 @@ import { agentGit } from '../scripts/token-eval/checks.mjs';
 import { readerDiff } from '../scripts/token-eval/grading.mjs';
 import { runCli as analyze } from '../scripts/token-eval/z0-analyze.mjs';
 import { checkerIdentity } from '../scripts/token-eval/checker-identity.mjs';
-import { equalShares, fillStrata, kappa, parseLabels, seededOrder, wilson } from '../scripts/token-eval/g5-draw.mjs';
+import { equalShares, fillStrata, kappa, parseLabels, seededOrder, shellSegments, visibleCommand, wilson } from '../scripts/token-eval/g5-draw.mjs';
 import { assertCheckersJudged, pairDiff } from '../scripts/token-eval/reader-sample.mjs';
 import { listGrades, writeRegraded } from '../scripts/token-eval/regrade.mjs';
 import { g5 } from '../scripts/token-eval/z0-gates.mjs';
@@ -107,6 +107,27 @@ describe('reader sample draw', () => {
     expect(pairsOf(s.out)[0]).toMatchObject({ file: 'p01', droppedCommands: 1 });
   });
 
+  it('splits a final pair\'s commands at the follow-up, saved or past a prefix first list, and refuses a save with neither (24c)', () => {
+    const cell: Cell = { arm: 'A0', position: 0, kind: 'teach', first: 'fail', final: 'pass', finalChecked: true, commands: ['npx vitest run'], resume: ['npm test'] };
+    for (const saved of [true, false]) {
+      const s = synthOut([cell]);
+      const file = join(gradeDir(s.out, 'A0'), 't0.grade.json');
+      const { commandsResume: _, ...old } = readJson(file);
+      if (!saved) writeFileSync(file, JSON.stringify(old));
+      expect(draw(s.out, s.tasks)).toMatchObject({ code: 0 });
+      const body = (which: string) => readFileSync(join(s.out, 'g5', 'reader-r1', `${pairsOf(s.out).find((p) => p.pairId.endsWith(`:${which}`))!.file}.md`), 'utf8');
+      expect(body('final')).toContain('## Commands the agent ran\n```sh\nnpx vitest run\n```\n\n\n## Commands after the follow-up message\n```sh\nnpm test\n```\n');
+      expect(body('final')).toContain('Judge the commands after the follow-up');
+      expect(body('first')).toContain('## Commands the agent ran\n```sh\nnpx vitest run\n```\n');
+      expect(body('first')).not.toContain('follow-up');
+    }
+    const s = synthOut([cell]);
+    const file = join(gradeDir(s.out, 'A0'), 't0.grade.json');
+    const { commandsResume: _, ...old } = readJson(file);
+    writeFileSync(file, JSON.stringify({ ...old, commandsFinal: ['npm test'] }));
+    expect(draw(s.out, s.tasks)).toMatchObject({ code: 1, stderr: expect.stringContaining('not a prefix') });
+  });
+
   it('drops every command that names an instruction or memory file, and the reader diff leaves those files out (24b)', () => {
     const commands = ['npm test', 'cat AGENTS.md', 'ls .claude\\rules', 'cat sub/CLAUDE.local.md', 'cat AGENTS.override.md', 'head MEMORY.md'];
     const s = synthOut([{ arm: 'A0', position: 0, commands }]);
@@ -134,6 +155,28 @@ describe('reader sample draw', () => {
     const diff: string = agentGit(repo, (rgit: (a: string[], cwd: string) => string) => readerDiff(rgit, repo, from, to));
     expect(diff).toContain('lib.js');
     for (const f of files.slice(1)) expect(diff).not.toContain(f);
+  });
+
+  it('cuts only the memory segments of a chained command, so a build run after a memory call stays in the pair (24c, R4)', () => {
+    const commands = [
+      'cd w; hippo remember "a; b && c" --error 2>&1 | grep -v x; npm run build 2>&1 | tail -15',
+      'npm test || hippo outcome --bad',
+      "cat <<EOF > notes.txt\nkeep; this\nEOF\nhippo recall z",
+      'x=$(hippo recall y; echo z) && npx vitest run',
+      'hippo context --auto | head -40',
+      'echo "unterminated; hippo',
+    ];
+    expect(commands.map(visibleCommand)).toEqual([
+      'cd w; npm run build 2>&1 | tail -15', 'npm test', 'cat <<EOF > notes.txt\nkeep; this\nEOF', 'npx vitest run', null, null,
+    ]);
+    expect(shellSegments("python - <<'EOF'\nprint(1); print(2)\nEOF\nnpm test")?.map((s) => s.before)).toEqual(['', '\n']);
+    const s = synthOut([{ arm: 'A2', position: 0, commands }]);
+    expect(draw(s.out, s.tasks)).toMatchObject({ code: 0 });
+    const text = readFileSync(join(s.out, 'g5', 'reader-r1', 'p01.md'), 'utf8');
+    expect(text).toContain('npm run build 2>&1 | tail -15');
+    expect(text).toContain('keep; this');
+    for (const bad of ['hippo', 'remember', 'outcome', 'recall', 'context']) expect(text).not.toContain(bad);
+    expect(pairsOf(s.out)[0]).toMatchObject({ droppedCommands: 2 });
   });
 
   it('keeps a pair that names the run name as a plain word, since every arm shares it; only its path forms are forbidden (25b)', () => {
