@@ -50,8 +50,11 @@ export interface RelevanceRequest {
 /** Redacted query plus numbered, redacted, truncated candidates. Shared with CLEF so both arms see matched input. */
 export function buildRelevanceRequest(query: string, head: readonly SearchResult[]): RelevanceRequest {
   // Strict: this text leaves the machine, so Bearer, Basic-auth and JWT shapes go too.
-  const lines = head.map((r, i) => `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`);
-  const state = `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
+  const lines = head.map(
+    (r, i) => `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`,
+  );
+  const state = `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's ` +
+    `project store:\n\n${lines.join('\n\n')}`;
   const questions: RelevanceRequest['questions'] = {};
   for (let i = 1; i <= head.length; i++) {
     questions[`c${i}`] = {

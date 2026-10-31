@@ -15,6 +15,7 @@
  *   6. AT5 paired case: reject removes a value from recall, permanently.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -38,13 +39,14 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { importEntries } from '../src/importers/core.js';
 import { importVault } from '../src/importers/vault.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-function ctx(hippoRoot: string, tenantId: string = 'default'): api.HippoDbContext {
-  return { hippoRoot, tenantId, actor: { subject: 'cli', role: 'admin' } };
+function ctx(hippoRoot: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(hippoRoot, tenantId, { subject: 'cli', role: 'admin' });
 }
 
 describe('case 1: acceptance (roadmap-verbatim)', () => {

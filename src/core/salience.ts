@@ -1,4 +1,6 @@
-/** Salience gate: decides at memory creation whether content is stored at full strength, starts weakened, or is skipped. */
+/**
+ * Salience gate: decides at memory creation whether content is stored at full strength, starts weakened, or is skipped.
+ */
 
 import type { MemoryEntry } from './memory.js';
 import { textOverlap } from '../util/tokenize.js';
@@ -28,6 +30,9 @@ const NOVEL_ERROR_SCORE = 0.9;
 const NOVEL_BASE_SCORE = 0.5;
 const STRUCTURED_TAGS_BONUS = 0.15;
 const LENGTH_BONUS = 0.1;
+// A novel memory earns LENGTH_BONUS past each of these lengths in characters.
+const LONG_CONTENT_CHARS = 100;
+const VERY_LONG_CONTENT_CHARS = 300;
 
 const DEFAULTS: Required<SalienceOptions> = {
   recentWindow: 20,
@@ -67,7 +72,8 @@ export function computeSalience(
       if (recentErrors >= opts.maxRepeatErrors) {
         return {
           decision: 'start_weak',
-          reason: `repeat_error (${recentErrors} recent errors, overlap ${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
+          reason: `repeat_error (${recentErrors} recent errors, overlap ` +
+            `${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
           score: REPEAT_ERROR_SCORE,
         };
       }
@@ -108,8 +114,8 @@ function scoreNovel(trimmed: string, tags: string[]): SalienceResult {
 
   let score = NOVEL_BASE_SCORE;
   if (hasStructuredTags) score += STRUCTURED_TAGS_BONUS;
-  if (trimmed.length > 100) score += LENGTH_BONUS;
-  if (trimmed.length > 300) score += LENGTH_BONUS;
+  if (trimmed.length > LONG_CONTENT_CHARS) score += LENGTH_BONUS;
+  if (trimmed.length > VERY_LONG_CONTENT_CHARS) score += LENGTH_BONUS;
 
   return { decision: 'store', reason: 'novel', score: Math.min(score, 1.0) };
 }

@@ -10,11 +10,11 @@
  * 2's HWM stays NULL — so a rerun resumes correctly.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import type { Context } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -24,15 +24,12 @@ import {
   type GitHubFetcher,
   type GitHubBackfillPage,
 } from '../src/connectors/github/octokit-client.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const REPO = 'acme/demo';
 const TENANT = 'default';
 
-const ctx = (root: string): Context => ({
-  hippoRoot: root,
-  tenantId: TENANT,
-  actor: { subject: 'connector:github', role: 'admin' },
-});
+const ctx = (root: string): FullContext => (apiCtx(root, TENANT, { subject: 'connector:github', role: 'admin' }));
 
 interface CursorRow {
   issues_hwm: string | null;

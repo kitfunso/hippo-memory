@@ -21,13 +21,18 @@ export function recallEntryText(r: SearchResult, query: string, showWhy: boolean
   const bars = Math.round(e.strength * 10);
   const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
   const lines = [
-    `--- ${e.id} [${e.layer}] ${confLabel}${isGlobal ? ' [global]' : ''}${e.superseded_by ? ' [superseded]' : ''}${graphMark} ` +
+    `--- ${e.id} [${e.layer}] ` +
+    `${confLabel}${isGlobal ? ' [global]' : ''}${e.superseded_by ? ' [superseded]' : ''}${graphMark} ` +
       `score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`,
-    `    [${'█'.repeat(bars)}${'░'.repeat(10 - bars)}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`,
+    `    [${'█'.repeat(bars)}${'░'.repeat(10 - bars)}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ` +
+    `${e.retrieval_count}x`,
   ];
   if (showWhy) {
     const explanation = explainMatch(query, r);
-    lines.push(`    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`, `    reason: ${explanation.reason}`);
+    lines.push(
+      `    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`,
+      `    reason: ${explanation.reason}`,
+    );
     const env = explanation.envelope;
     if (env) {
       lines.push(`    kind: ${env.kind}`);
@@ -41,7 +46,10 @@ export function recallEntryText(r: SearchResult, query: string, showWhy: boolean
     if (r.rerankTrace && r.rerankTrace.length > 0) {
       const parts = [`base ${fmt(r.rerankTrace[0].scoreBefore, 3)}`];
       for (const step of r.rerankTrace) {
-        parts.push(`${step.stage}${step.multiplier !== undefined ? ` x${fmt(step.multiplier, 2)}` : ''}`, fmt(step.scoreAfter, 3));
+        parts.push(
+          `${step.stage}${step.multiplier !== undefined ? ` x${fmt(step.multiplier, 2)}` : ''}`,
+          fmt(step.scoreAfter, 3),
+        );
       }
       lines.push(`    ranking: ${parts.join(' -> ')}`);
     }

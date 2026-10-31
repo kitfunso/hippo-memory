@@ -10,18 +10,31 @@ import {
 
 const WORKERS = 4;
 const NOTES = 40;
+// Each worker signals it is loaded, then blocks until all have, so a run that serialised the workers would time out here.
 const WORKER = `
-const [, , syncUrl, root, home, startAt] = process.argv;
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const [, , syncUrl, root, home, barrier, index, total] = process.argv;
 const { importForStore } = await import(syncUrl);
-await new Promise((done) => setTimeout(done, Math.max(0, Number(startAt) - Date.now())));
+mkdirSync(barrier, { recursive: true });
+const arrivedAt = Date.now();
+writeFileSync(join(barrier, 'ready-' + index), '');
+const pause = new Int32Array(new SharedArrayBuffer(4));
+const everyoneHere = () => Array.from({ length: Number(total) }, (_, i) => existsSync(join(barrier, 'ready-' + i))).every(Boolean);
+while (!everyoneHere()) {
+  if (Date.now() - arrivedAt > 20000) throw new Error('barrier timed out: the other workers never started');
+  Atomics.wait(pause, 0, 0, 2);
+}
 const report = importForStore(root, { machine: { home, env: {}, platform: process.platform } });
 const imported = report.tools.reduce((n, t) => n + t.tally.imported, 0);
-process.stdout.write(JSON.stringify({ imported, warnings: report.warnings }));
+process.stdout.write(JSON.stringify({ imported, warnings: report.warnings, arrivedAt, doneAt: Date.now() }));
 `;
 
 interface WorkerOut {
   readonly imported: number;
   readonly warnings: string[];
+  readonly arrivedAt: number;
+  readonly doneAt: number;
 }
 
 interface Finished {
@@ -48,14 +61,16 @@ function runWorker(args: readonly string[]): Promise<Finished> {
   });
 }
 
-/** Every worker waits for one shared start time after loading, so the imports overlap. */
+/** Every worker waits at a barrier until all are loaded, then the imports overlap; the timestamps prove it. */
 async function race(roots: readonly string[]): Promise<WorkerOut[]> {
   writeFileSync(join(w.dir, 'worker.mjs'), WORKER, 'utf8');
-  const startAt = String(Date.now() + 2000);
-  const done = await Promise.all(roots.map((root) => runWorker([distUrl('agent-memories/sync.js'), root, w.home, startAt])));
+  const barrier = join(w.dir, 'barrier');
+  const done = await Promise.all(roots.map((root, i) => runWorker([distUrl('agent-memories/sync.js'), root, w.home, barrier, String(i), String(roots.length)])));
   for (const d of done) expect(d.code, d.stderr).toBe(0);
-  // SAFETY: the worker prints one JSON object with these two fields.
-  return done.map((d) => JSON.parse(d.stdout) as WorkerOut);
+  // SAFETY: the worker prints one JSON object with these fields.
+  const outs = done.map((d) => JSON.parse(d.stdout) as WorkerOut);
+  expect(Math.max(...outs.map((o) => o.arrivedAt)), 'a worker finished before the last one started').toBeLessThanOrEqual(Math.min(...outs.map((o) => o.doneAt)));
+  return outs;
 }
 
 describe('agent memory sync: concurrent first imports', () => {

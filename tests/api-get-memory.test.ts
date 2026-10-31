@@ -1,9 +1,10 @@
 // getMemory replaces readEntry in CLI verbs, so it must answer exactly what readEntry answers for every kind of row an id can name.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { getMemory } from '../src/api/memories.js';
-import { archiveRaw } from '../src/api/promote.js';
-import { adminActor, type Context } from '../src/api/types.js';
+import { getMemory } from '../src/api/memories/memories.js';
+import { archiveRaw } from '../src/api/memories/promote.js';
+import { adminActor } from '../src/api/types.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { readEntry } from '../src/store/entry-reads.js';
@@ -11,6 +12,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openStore } from '../src/store/open.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const TENANT = 'acme';
 const roots: string[] = [];
@@ -25,8 +27,8 @@ function root(): string {
   return made;
 }
 
-function ctxAt(hippoRoot: string): Context {
-  return { hippoRoot, tenantId: TENANT, actor: adminActor('test') };
+function ctxAt(hippoRoot: string): FullContext {
+  return apiCtx(hippoRoot, TENANT, adminActor('test'));
 }
 
 function seed(hippoRoot: string, id: string, options: Partial<CreateMemoryOptions> = {}, fields: Partial<MemoryEntry> = {}): MemoryEntry {

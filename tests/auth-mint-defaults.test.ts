@@ -9,6 +9,7 @@ import { EXPIRING_KEYS_MIN_BINARY } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -50,7 +51,7 @@ async function jsonOf<T>(res: Response): Promise<T> {
 
 /** The host CLI's own path: it opens the store as host admin, so it needs no key to mint the first one. */
 function hostMint(role: 'admin' | 'member'): Promise<Minted> {
-  return authCreate({ hippoRoot: home, tenantId: 'default', actor: adminActor('cli') }, { role, noExpiry: true });
+  return authCreate(apiCtx(home, 'default', adminActor('cli')), { role, noExpiry: true });
 }
 
 function send(method: string, path: string, bearer: string, body?: MintBody): Promise<Response> {
@@ -271,7 +272,7 @@ describe('the first key of a store', () => {
   });
 
   it('authCreate with no role names member, even when the host admin mints it, in the reply and in the store', async () => {
-    const minted = await authCreate({ hippoRoot: home, tenantId: 'default', actor: adminActor('cli') }, { noExpiry: true });
+    const minted = await authCreate(apiCtx(home, 'default', adminActor('cli')), { noExpiry: true });
     expect(minted.role).toBe('member');
     const db = openHippoDb(home);
     try {

@@ -33,14 +33,20 @@ function withoutAnalysis(text: string): string {
   }
 }
 
-/** `text` minus its trailing run of `*`, `:` and spaces; read from the end, as a `+$` pattern retries the run from each character. */
+/**
+ * `text` minus its trailing run of `*`, `:` and spaces; read from the end, as a `+$` pattern retries the run from each
+ * character.
+ */
 function withoutHeadingTrailer(text: string): string {
   let end = text.length;
   while (end > 0 && HEADING_TRAILER.test(text[end - 1])) end--;
   return text.slice(0, end);
 }
 
-/** The <summary> body of a PostCompact compact_summary with any <analysis> block removed; the whole text trimmed when there is no <summary> tag. */
+/**
+ * The <summary> body of a PostCompact compact_summary with any <analysis> block removed; the whole text trimmed when
+ * there is no <summary> tag.
+ */
 export function compactSummaryBody(compactSummary: string): string {
   const text = withoutAnalysis(compactSummary);
   const open = text.lastIndexOf('<summary>');

@@ -10,6 +10,8 @@ import { createApiKey, revokeApiKey } from '../src/store/auth.js';
 import { remember as apiRemember } from '../src/api/index.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { log } from '../src/util/log.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // v0.39 commit 5 — Server hardening regressions:
 //   - Fix 5.3: /mcp/stream heartbeat re-validates bearer; MCP_SSE_MAX_AGE_SEC
@@ -286,19 +288,19 @@ describe('server hardening', () => {
   it('MCP recall with no scope hides slack:private:* memories (default-deny)', async () => {
     // Seed a private slack memory + a regular memory under the same tenant.
     await apiRemember(
-      { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
+      apiCtx(root, 'default', { subject: 'cli', role: 'admin' }),
       {
         content: 'private-slack-canary should not surface in default recall',
         scope: 'slack:private:CSECRET',
       },
     );
     await apiRemember(
-      { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
+      apiCtx(root, 'default', { subject: 'cli', role: 'admin' }),
       { content: 'public-canary should surface in default recall' },
     );
 
     // Call MCP recall with no scope.
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:t:test' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:t:test', store: sqliteStore(root) };
     const res = await handleMcpRequest(
       {
         jsonrpc: '2.0',

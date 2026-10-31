@@ -1,19 +1,22 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { execFileSync, spawn, type SpawnOptions } from 'child_process';
+import { execFileSync, spawn, type ChildProcess, type SpawnOptions } from 'child_process';
 import { spawnArgv } from '../util/spawn-argv.js';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
-import { loadAllEntries } from '../store/entry-reads.js';
-import { textOverlap } from '../util/tokenize.js';
+import type { Learning } from '../store/port/learning.js';
+import { localFilesAt } from './roots.js';
+import { textOverlap, tokenize } from '../util/tokenize.js';
 import { assessAutomaticMemory } from '../core/memory-quality.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 
 const AUTOLEARN_TEXT_CHARS = 500;
 const AUTOLEARN_TAG_CHARS = 30;
+const MAX_LESSON_CHARS = 500;
 
-/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and tags through remember. */
+/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and
+ * tags through remember. */
 export function captureError(
   exitCode: number,
   stderr: string,
@@ -22,7 +25,7 @@ export function captureError(
 ): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
   const clean = redactSecretsStrict(stderr);
-  const wasTruncated = clean.length > 500;
+  const wasTruncated = clean.length > AUTOLEARN_TEXT_CHARS;
   const truncated = clean.slice(0, AUTOLEARN_TEXT_CHARS).trim();
   const suffix = wasTruncated ? ' [truncated]' : '';
   // Strip leading env var assignments (KEY=val or key=val) before the actual command name
@@ -52,7 +55,8 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
 
   // Patterns that indicate a lesson to learn from
   // Covers: fix, revert, bug, error, hotfix, refactor, perf, chore, breaking, deprecate
-  const prefixes = customPatterns?.join('|') ?? 'fix|revert|bug|error|hotfix|bugfix|refactor|perf|chore|breaking|deprecate';
+  const prefixes =
+    customPatterns?.join('|') ?? 'fix|revert|bug|error|hotfix|bugfix|refactor|perf|chore|breaking|deprecate';
   const patterns = [
     new RegExp(`^[a-f0-9]+\\s+(${prefixes})(\\(.+?\\))?:?\\s+(.+)`, 'i'),
     new RegExp(`^(${prefixes})(\\(.+?\\))?:?\\s+(.+)`, 'i'),
@@ -74,7 +78,7 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
       if (m) {
         // For conventional commits: use group 3 (message after prefix), group 2, or full match
         const lesson = (m[3] ?? m[2] ?? m[0]).trim();
-        if (lesson.length > 5 && lesson.length < 500) {
+        if (lesson.length > 5 && lesson.length < MAX_LESSON_CHARS) {
           lessons.push(lesson);
         }
         break;
@@ -86,7 +90,8 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
   return [...new Set(lessons)];
 }
 
-/** Split parsed lessons into ones worth storing and low-information ones; kept out of `extractLessons` so that published parser's output cannot change.
+/** Split parsed lessons into ones worth storing and low-information ones; kept out of `extractLessons` so that
+ * published parser's output cannot change.
  *  Order is preserved in both arrays, and both hold lessons with secret shapes redacted. */
 export function partitionLessons(lessons: string[]) {
   const kept: string[] = [];
@@ -101,24 +106,39 @@ export function partitionLessons(lessons: string[]) {
   return { kept, dropped };
 }
 
+// Never matches a real tag; the exact textOverlap re-check drops any row the content filter let through.
+const NO_TAG = '~no-such-tag~';
+
+/** Rows that can pass the overlap test: those sharing a token with the lesson. Falls back to every row when every row
+ * can match (no tokens, or a threshold below zero). */
+function candidateEntries(learning: Learning, lesson: string, threshold: number, tenantId?: string): MemoryEntry[] {
+  const tokens = tokenize(lesson);
+  if (tokens.length === 0 || threshold < 0) {
+    return learning.allEntries(tenantId);
+  }
+  return learning.entriesMentioning(tokens, NO_TAG, tenantId);
+}
+
 /** Check if a substantially similar memory already exists: true if overlap > threshold (default 0.7).
- *  `tenantId` applies only on the root-string overload; a pre-loaded MemoryEntry[] is already scoped, so it is ignored there. */
+ * `tenantId` applies only on the root-string overload; a pre-loaded MemoryEntry[] is already scoped, so it is
+ * ignored there. */
 export function deduplicateLesson(
   hippoRootOrEntries: string | MemoryEntry[],
   lesson: string,
   threshold = 0.7,
   tenantId?: string,
 ): boolean {
-  const entries = Array.isArray(hippoRootOrEntries)
-    ? hippoRootOrEntries
-    : loadAllEntries(hippoRootOrEntries, tenantId);
+  if (Array.isArray(hippoRootOrEntries)) return overlapsAny(hippoRootOrEntries, lesson, threshold);
+  return isDuplicateLesson(localFilesAt(hippoRootOrEntries).learning, lesson, threshold, tenantId);
+}
 
-  for (const entry of entries) {
-    const overlap = textOverlap(lesson, entry.content);
-    if (overlap > threshold) return true;
-  }
+/** deduplicateLesson against the memories `learning` holds. */
+function isDuplicateLesson(learning: Learning, lesson: string, threshold = 0.7, tenantId?: string): boolean {
+  return overlapsAny(candidateEntries(learning, lesson, threshold, tenantId), lesson, threshold);
+}
 
-  return false;
+function overlapsAny(entries: readonly MemoryEntry[], lesson: string, threshold: number): boolean {
+  return entries.some((entry) => textOverlap(lesson, entry.content) > threshold);
 }
 
 /** The most stderr `runWatched` returns; the terminal still gets all of it. */
@@ -136,21 +156,36 @@ export class RunWatchedTimeoutError extends Error {
 }
 
 export interface RunWatchedOptions {
-  /** Join argv with spaces and run it as one shell command line; only for text the caller wrote itself. */
+  /** Join argv with spaces and run it as one shell command line; kept for 2.x callers, new code uses runWatchedLine. */
   shell?: boolean;
 }
 
-/** Run argv[0] with the rest as its arguments and no shell, so `;`, `&` and `$()` reach it literally; stderr streams live.
- *  Returns: { exitCode, stderr } with only the last 64 KiB of stderr; rejects with RunWatchedTimeoutError past `deadlineMs`. */
+/** Run argv[0] with the rest as its arguments and no shell, so `;`, `&` and `$()` reach it literally; stderr streams
+ * live.
+ * Returns: { exitCode, stderr } with only the last 64 KiB of stderr; rejects with RunWatchedTimeoutError past
+ * `deadlineMs`. */
 export function runWatched(
   argv: readonly string[],
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
   opts: RunWatchedOptions = {},
 ): Promise<{ exitCode: number; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const options: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
-    const child = opts.shell ? spawn(argv.join(' '), { ...options, windowsHide: true, shell: true }) : spawnArgv(argv, options);
+  if (opts.shell) return runWatchedLine(argv.join(' '), deadlineMs);
+  return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs);
+}
 
+/** Run `line` as one shell command line, for text the caller wrote itself (`hippo watch --shell`); same result and
+ * deadline as runWatched. */
+export function runWatchedLine(
+  line: string,
+  deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
+): Promise<{ exitCode: number; stderr: string }> {
+  return watchChild(spawn(line, { ...WATCHED_SPAWN_OPTIONS, windowsHide: true, shell: true }), deadlineMs);
+}
+
+const WATCHED_SPAWN_OPTIONS: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
+
+function watchChild(child: ChildProcess, deadlineMs: number): Promise<{ exitCode: number; stderr: string }> {
+  return new Promise((resolve, reject) => {
     let tail = Buffer.alloc(0);
 
     child.stderr?.on('data', (chunk: Buffer) => {
@@ -159,7 +194,8 @@ export function runWatched(
       process.stderr.write(chunk);
     });
 
-    // SHORTCUT: kills the direct child only (the shell or cmd.exe when there is one); on Windows a grandchild can outlive it.
+    // SHORTCUT: kills the direct child only (the shell or cmd.exe when there is one); on Windows a grandchild can
+    // outlive it.
     // A process-tree kill is the upgrade path.
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
@@ -190,7 +226,8 @@ export function isGitRepo(cwd: string): boolean {
     });
     return raw.trim() === 'true';
   } catch (err) {
-    log.debug(`autolearn: not a git repo: ${errorMessage(err)}`);
+    // Asking git about a folder that is no repo is the probe itself, so a failure is the expected answer.
+    log.debug(`autolearn: not a git repo: ${errorMessage(err)}`, errorFields(err));
     return false;
   }
 }
@@ -204,7 +241,7 @@ export function fetchGitLog(cwd: string, days: number): string {
     ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     return raw;
   } catch (err) {
-    log.debug(`autolearn: git log unavailable: ${errorMessage(err)}`);
+    log.warn(`autolearn: git log unavailable: ${errorMessage(err)}`, errorFields(err));
     return '';
   }
 }

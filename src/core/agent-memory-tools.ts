@@ -14,6 +14,9 @@ export type ToolId = AgentMemoryTool['id'];
 
 export const AGENT_MEMORY_SOURCE_PREFIX = 'agent-memory:';
 
+/** The actor on every row and audit event the agent-memories import writes. */
+export const SYNC_ACTOR = 'agent-memories';
+
 /** Every imported row of a tool has a source starting with this. */
 export function toolSourcePrefix(id: ToolId): string {
   return `${AGENT_MEMORY_SOURCE_PREFIX}${id}:`;

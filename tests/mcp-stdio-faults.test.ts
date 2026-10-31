@@ -109,7 +109,8 @@ function crashScript(failure: string): string {
   const file = path.join(tmpHome, `crash-${procs.length}.mjs`);
   fs.writeFileSync(file, [
     `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
-    'startStdioLoop();',
+    `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/cli/api-context.js')).href)});`,
+    'startStdioLoop(cliStdioHost);',
     `setTimeout(() => { ${failure} }, 50);`,
   ].join('\n'));
   return file;

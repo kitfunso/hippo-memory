@@ -33,13 +33,13 @@ function storeOfKind(kind: string): HippoStore {
   return kind === 'sqlite' ? sqliteStore(root) : { ...sqliteStore(root), kind, localFiles: undefined };
 }
 
-const ctxOn = (kind: string | undefined): McpContext => ({
+const ctxOn = (kind: string): McpContext => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: 'mcp',
   role: 'admin',
   hostAdmin: true,
-  store: kind === undefined ? undefined : storeOfKind(kind),
+  store: storeOfKind(kind),
 });
 
 // An add-on store built before the contextReads group.
@@ -54,7 +54,7 @@ function listedNames(res: McpResponse | null): string[] {
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
 // The stub carries every group sqliteStore sets, so the tools that name one run on it.
-const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context', 'hippo_learn'];
+const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context', 'hippo_learn', 'hippo_status', 'hippo_conflicts', 'hippo_resolve'];
 const ready = declared.filter((name) => READY.includes(name));
 
 describe('store-ready MCP tools', () => {
@@ -73,8 +73,9 @@ describe('store-ready MCP tools', () => {
     expect(readdirSync(root)).toEqual([]);
   });
 
-  it.each([['the sqlite store', 'sqlite'], ['a context with no store', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
-    const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxOn(kind));
+  it.each([['the sqlite store', 'sqlite'], ['stdio, which brings no context for a list', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
+    const list = { jsonrpc: '2.0', id: 1, method: 'tools/list' } as const;
+    const res = kind === undefined ? await handleMcpRequest(list, undefined) : await handleMcpRequest(list, ctxOn(kind));
     expect(listedNames(res)).toEqual(declared);
   });
 

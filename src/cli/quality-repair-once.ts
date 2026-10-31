@@ -1,9 +1,9 @@
 // Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs no command.
 
 import * as path from 'path';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { repairMemoryQualityOnce } from '../api/audit.js';
+import { repairMemoryQualityOnce } from '../api/auth/audit.js';
 import { cliApiContext } from './api-context.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and runs again next time. */
@@ -26,10 +26,13 @@ export async function repairQualityOnceAt(root: string, tenantId: string): Promi
     const review = result.issues.filter((issue) => issue.disposition === 'review').length;
     if (review > 0) {
       const lead = moved > 0 ? `  ${review} more` : `Checked old automatic memories once after the upgrade: ${review}`;
-      console.log(`${lead} ${review === 1 ? 'looks' : 'look'} doubtful and ${review === 1 ? 'was' : 'were'} kept; hippo audit repair${scope} lists them.`);
+      console.log(
+        `${lead} ${review === 1 ? 'looks' : 'look'} doubtful and ${review === 1 ? 'was' : 'were'} kept; hippo audit ` +
+        `repair${scope} lists them.`,
+      );
     }
     for (const warning of result.warnings) log.warn(warning);
   } catch (err) {
-    log.warn(`memory quality repair skipped, tried again next time: ${errorMessage(err)}`);
+    log.warn(`memory quality repair skipped, tried again next time: ${errorMessage(err)}`, errorFields(err));
   }
 }

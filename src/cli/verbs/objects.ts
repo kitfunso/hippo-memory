@@ -1,6 +1,6 @@
 // First-class object, server, goal and auth verbs, in `hippo help` order.
 
-import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../api/auth.js';
+import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../api/auth/auth.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../../server/defaults.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
@@ -230,8 +230,13 @@ export const OBJECT_VERBS = {
   }),
   auth: verb(() => import('../auth.js'), 'handleAuth', {
     scoped: true,
-    flags: { switches: ['all', 'global', 'json', 'no-expiry'], values: ['label', 'role', 'tenant'], numbers: ['ttl-days'] },
-    usage: [`
+    flags: {
+      switches: ['all', 'global', 'json', 'no-expiry'],
+      values: ['label', 'role', 'tenant'],
+      numbers: ['ttl-days'],
+    },
+    usage: [
+      `
   auth <sub>               Manage API keys (A5 stub auth)
     auth create            Mint a new API key (plaintext shown ONCE)
       --label <s>          Optional human label

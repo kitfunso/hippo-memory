@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../src/index.js';
 import { strengthBucket } from '../src/consolidate/dedupe.js';
-import { sleep } from '../src/api/sleep.js';
+import { initStore } from '../src/store/open.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -44,6 +45,7 @@ describe('package entry re-exports strengthBucket', () => {
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'index.js')));
     expect(out.type).toBe('function');
     expect(out.one).toBe(100);
+    // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
     expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/consolidate\/dedupe\.js';$/m);
   });
@@ -51,9 +53,25 @@ describe('package entry re-exports strengthBucket', () => {
 
 // An add-on runs consolidation in its own process; adminActor stays internal because sleep reads only actor.subject.
 describe('package entry re-exports sleep', () => {
-  it('src/index.ts exposes the same function api/sleep.ts defines, and not adminActor', () => {
-    expect(entry.sleep).toBe(sleep);
+  it('src/index.ts exposes sleep and not adminActor', () => {
+    expect(entry).toHaveProperty('sleep');
     expect('adminActor' in entry).toBe(false);
+  });
+
+  it('runs a Context that carries no store on hippo.db under its root', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-entry-sleep-'));
+    const origHippoHome = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = home;
+    try {
+      initStore(home);
+      const result = await entry.sleep({ hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, { dryRun: true });
+      expect(result.dryRun).toBe(true);
+      expect(result.active).toBe(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
+      else delete process.env.HIPPO_HOME;
+    }
   });
 
   it('the built package resolves sleep by name and ships its option and result types', () => {
@@ -64,10 +82,13 @@ describe('package entry re-exports sleep', () => {
     const out = importBuiltEntry<{ type: string; admin: boolean }>(script);
     expect(out.type).toBe('function');
     expect(out.admin).toBe(false);
+    // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export \{ sleep, type SleepOpts, type SleepResult \} from '\.\/api\/sleep\.js';$/m);
+    expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
+    // The published signature takes the public Context, which may carry no store.
+    expect(dts).toMatch(/^export declare function sleep\(ctx: Context, opts\?: SleepOpts\): Promise<SleepResult>;$/m);
     // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.
-    expect(readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep.d.ts'), 'utf-8')).not.toMatch(/__phases|SleepPhases/);
+    expect(readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8')).not.toMatch(/__phases|SleepPhases/);
   });
 });
 
@@ -130,7 +151,7 @@ describe('published runtime exports', () => {
       openHippoDb openHippoDbReadOnly
       partitionLessons physicsSearch promoteToGlobal
       queryAuditEvents
-      readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched
+      readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched runWatchedLine
       saveActiveTaskSnapshot saveEmbeddingIndex saveSessionHandoff search searchBoth searchBothHybrid shareMemory sleep stampHandoffOutcome strengthBucket syncGlobalToLocal
       temporalBoost textOverlap tokenize transferScore
       wmClear wmFlush wmPush wmRead writeEntry writeSessionEndHandoff",
@@ -147,7 +168,7 @@ describe('published runtime exports', () => {
       LOOPBACK_HOST_HEADER
       NotFoundError
       authCreate authCreateSelf authRevoke
-      bindSessionOwner
+      bindSessionOwner bindSessionOwnerOn
       captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
       isCrossSite isLoopback isReservedActor
       ownerOrSubject
@@ -171,6 +192,7 @@ describe('published runtime exports', () => {
       float32ToBuffer ftsTermParts
       hasGroup
       isSharedStore
+      narrowStore
       ownScopeTouches
       passesScopeFilterForRecall
       rankVectorRows rarestFtsQuery rejectionDigest replacesIndex

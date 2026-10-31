@@ -1,14 +1,16 @@
 // `hippo recall` keeps the planning-fallacy hint when no memory matches, as HTTP and MCP do.
 // A prediction outlives its mirror memory, so forgetting the mirrors leaves the class resolvable with nothing to recall.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleRecall } from '../src/cli/recall.js';
-import { forget, type Context } from '../src/api/index.js';
+import { forget } from '../src/api/index.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const QUERY = 'the migration effort will take 3 days';
 const DETECTED = '[detected: "will take 3 days"]';
@@ -27,7 +29,7 @@ async function seedBaserateWithNoMemories(): Promise<void> {
     const p = savePrediction(root, 'default', { classTag: 'migration-effort', claimText: `migration effort estimate ${estimate} days`, estimateValue: estimate });
     closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: actual });
   }
-  const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   for (const entry of loadAllEntries(root)) await forget(ctx, entry.id);
   expect(loadAllEntries(root)).toEqual([]);
 }

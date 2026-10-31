@@ -15,6 +15,7 @@ import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 type HippoRecallToolArgs = {
   query: string;
@@ -77,7 +78,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
 
   it('prepends "## Planning fallacy hint" block when query matches forward-claim AND class resolves', async () => {
     seedBaserate(home);
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
     expect(text).toContain('## Planning fallacy hint');
@@ -89,7 +90,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
 
   it('does NOT prepend the hint block when query has no forward-claim phrase', async () => {
     seedBaserate(home);
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
     const res = await callTool(1, 'hippo_recall', { query: 'show me the auth flow' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Planning fallacy hint');
@@ -98,7 +99,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
   it('does NOT prepend the hint block when HIPPO_AUTODEBIAS=off', async () => {
     seedBaserate(home);
     process.env.HIPPO_AUTODEBIAS = 'off';
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Planning fallacy hint');

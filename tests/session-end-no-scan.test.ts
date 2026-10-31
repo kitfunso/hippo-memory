@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getHippoRoot } from '../src/core/project-identity.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 // OpenCode's idle hook runs `hippo session-end` with no payload. An empty stdin
 // must not read as a manual run: session-end never scans ~/.claude/projects.
@@ -23,23 +24,8 @@ function runHippo(
   return hippoRun(args, { cwd, env, input });
 }
 
-function sleepMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// A throw from check() counts as "not yet", so a WAL lock held by the worker is retried.
-async function waitUntil(check: () => boolean, timeoutMs = 25_000, intervalMs = 50): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      if (check()) return;
-    } catch {
-      // not yet
-    }
-    await sleepMs(intervalMs);
-  }
-  throw new Error(`condition not met within ${timeoutMs}ms`);
-}
+// The detached worker is a real process: a throw while it holds the WAL lock counts as "not yet", and the bound is generous under load.
+const WORKER_WAIT = { timeoutMs: 25_000, intervalMs: 50, retryOnThrow: true } as const;
 
 describe('session-end with no payload never scans other projects', () => {
   let dir: string;
@@ -73,15 +59,15 @@ describe('session-end with no payload never scans other projects', () => {
     const logFile = path.join(dir, 'session-end-no-payload.log');
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, '').status).toBe(0);
 
-    await waitUntil(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes(WORKER_DONE));
+    await waitFor(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes(WORKER_DONE), { ...WORKER_WAIT, what: 'the worker skip line in the log' });
     const logText = fs.readFileSync(logFile, 'utf8');
     expect(logText).toContain('skip capture: no transcript for this session');
 
     let contents: string[] = [];
-    await waitUntil(() => {
+    await waitFor(() => {
       contents = loadAllEntries(getHippoRoot(dir)).map((e) => e.content);
       return true;
-    });
+    }, { ...WORKER_WAIT, what: 'the store readable' });
     expect(contents.filter((c) => c.includes(MARKER))).toEqual([]);
   });
 });

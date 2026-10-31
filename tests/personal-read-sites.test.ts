@@ -18,10 +18,12 @@ import { countSessionRawMemories, loadAllEntries, loadContentsWithTag } from '..
 import { canReadScope, personalScopeOf, type ScopeActor } from '../src/core/recall-scope.js';
 import { touchableScopeSql } from '../src/store/rule-sql.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
-import { assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
+import { briefFromReceipts } from '../src/objects/project-briefs.js';
 import { saveItems, type ItemContext } from '../src/store/compactions-record.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';
@@ -42,7 +44,7 @@ function seed(): void {
   const rows = Object.entries(SCOPES).map(([k, scope]) => mem(`zebrafish note ${k} keeps the build cache warm`, { scope, tags: [`who:${k}`, 'path:hippo'] }));
   batchWriteAndDelete(root, rows, []);
   saveEmbeddingIndex(root, Object.fromEntries(rows.map((e) => [e.id, QUERY])));
-  for (const k of ['a', 'b', 'team'] as const) writeEntry(root, mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', source_session_id: 'sess-1' }));
+  for (const k of ['a', 'b', 'team'] as const) writeEntry(root, mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', sourceSessionId: 'sess-1' }));
 }
 
 const keysOf = (entries: readonly MemoryEntry[]): string[] =>
@@ -127,9 +129,9 @@ describe('deny-only read sites', () => {
     expect(loadLatestHandoff(root, T, undefined, { scopeFilter: 'default-deny' })?.summary).toBe('team handoff');
   });
 
-  it('brief receipts: only the team row counts, though A can read its own', () => {
+  it('brief receipts: only the team row counts, though A can read its own', async () => {
     expect(keysOf(loadContextCandidates(root, T, { ownScope: OWN_A, cap: 100, now }))).toContain('a');
-    const brief = assembleBriefFromReceipts(root, T, 'hippo');
+    const brief = await briefFromReceipts(objectsAt(root), T, 'hippo');
     expect(brief.receiptCount).toBe(1);
     expect(brief.markdown).toContain('zebrafish note team');
     expect(brief.markdown).not.toContain('zebrafish note a ');
@@ -196,7 +198,7 @@ describe('admin read sites', () => {
       fs.writeFileSync(path.join(repo, 'db.ts'), 'export const timeout = 30;\n');
       git('add', '.');
       git('commit', '-m', 'fix: pool timeout bumped to 30s in src/db/index.ts');
-      const ctx = { hippoRoot: root, tenantId: T, actor: { ...adminActor('learn-test'), owner: 'alice' } };
+      const ctx = apiCtx(root, T, { ...adminActor('learn-test'), owner: 'alice' });
       const run = () => learn(ctx, { repoPath: repo, days: 7, profile });
       const move = (from: string | null, to: string): void => {
         const row = loadAllEntries(root, T).find((e) => e.source === profile.source && (e.scope ?? null) === from)!;

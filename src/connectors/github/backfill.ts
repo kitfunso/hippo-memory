@@ -1,8 +1,8 @@
-/** Paginated backfill of the GitHub issues, issue-comments and PR-review-comments streams, each with its own high-water mark (HWM).
- *  An HWM is persisted only after its stream fully drains, so a crash in stream 2 leaves stream 1 committed and stream 2 resumes from its prior HWM.
+/** Paginated backfill of the GitHub issues, issue-comments and PR-review-comments streams, each with its own HWM.
+ *  An HWM (high-water mark) is saved only after its stream fully drains, so a crash in stream 2 keeps stream 1.
  *  `repository.private` is left undefined (REST lists omit it), so scopeFromRepository falls through to private. */
 
-import type { Context } from '../../api/index.js';
+import type { ConnectorContext } from '../store.js';
 import { readCursors, seedCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
@@ -14,6 +14,7 @@ import type {
   GitHubSender,
 } from './types.js';
 import { type JsonValue, isJsonObject } from '../../util/json.js';
+import { MINUTE_MS } from '../../util/time.js';
 
 const API = 'https://api.github.com';
 
@@ -104,8 +105,8 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
   return isGitHubUser(x.user);
 }
 
-/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so the caller leaves the HWM unchanged.
- *  Callers MUST NOT advance the HWM when drained=false, or a capped run would skip the unfetched tail. */
+/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so the caller leaves the
+ * HWM unchanged. Callers MUST NOT advance the HWM when drained=false, or a capped run would skip the unfetched tail. */
 interface DrainStreamOptions {
   readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
   readonly fetcher: GitHubFetcher;
@@ -115,7 +116,7 @@ interface DrainStreamOptions {
 }
 
 async function drainStream(
-  ctx: Context,
+  ctx: ConnectorContext,
   url0: string,
   options: DrainStreamOptions,
 ): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null; drained: boolean }> {
@@ -160,9 +161,10 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
-// A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole window.
+// A reset hours away must fail the run for a later rerun; sleeping
+// through it would hold the process for the whole window.
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
-const MAX_RATE_LIMIT_WAIT_MS = 10 * 60 * 1000;
+const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 
 async function fetchPagePastRateLimit(options: DrainStreamOptions, url: string): Promise<GitHubBackfillPage> {
   const { fetcher, token, sleep } = options;
@@ -244,7 +246,7 @@ function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepositor
 
 /** Drains one stream, then persists its HWM only when the stream ran to the end. */
 async function backfillStream(
-  ctx: Context,
+  ctx: ConnectorContext,
   opts: BackfillOpts,
   sleep: (ms: number) => Promise<void>,
   stream: { url: string; column: HwmColumn; toIngestEvent: (item: JsonValue) => IngestEvent | null },
@@ -264,7 +266,7 @@ async function backfillStream(
 }
 
 export async function backfillRepo(
-  ctx: Context,
+  ctx: ConnectorContext,
   opts: BackfillOpts,
 ): Promise<BackfillResult> {
   const sleep =

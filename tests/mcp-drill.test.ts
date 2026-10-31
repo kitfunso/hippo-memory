@@ -12,6 +12,7 @@ import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 type DrillArgs = { summary_id: string; depth?: number };
 
@@ -32,7 +33,7 @@ async function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { ...ctx, role: 'admin', hostAdmin: true },
+    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot) },
   );
 }
 
@@ -63,7 +64,7 @@ describe('mcp hippo_drill', () => {
   it('hippo_drill is registered in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
     );
     // SAFETY: `tools/list` responses always carry `result.tools` as the
     // catalogue array; each entry at minimum has its registered `name`.
@@ -77,7 +78,7 @@ describe('mcp hippo_drill', () => {
       layer: Layer.Semantic,
       tags: ['dag-summary', 'topic:alpha'],
       confidence: 'inferred',
-      dag_level: 2,
+      dagLevel: 2,
     });
     summary.descendant_count = 3;
     writeEntry(home, summary);
@@ -85,8 +86,8 @@ describe('mcp hippo_drill', () => {
       const c = createMemory(`alpha detail event ${i}`, {
         layer: Layer.Episodic,
         confidence: 'observed',
-        dag_level: 1,
-        dag_parent_id: summary.id,
+        dagLevel: 1,
+        dagParentId: summary.id,
       });
       writeEntry(home, c);
     }
@@ -106,7 +107,7 @@ describe('mcp hippo_drill', () => {
     const leaf = createMemory('plain leaf body', {
       layer: Layer.Buffer,
       confidence: 'observed',
-      dag_level: 0,
+      dagLevel: 0,
     });
     writeEntry(home, leaf);
     const res = await callTool(3, 'hippo_drill', { summary_id: leaf.id }, {
@@ -123,7 +124,7 @@ describe('mcp hippo_drill', () => {
       layer: Layer.Semantic,
       tags: ['dag-summary'],
       confidence: 'inferred',
-      dag_level: 2,
+      dagLevel: 2,
       tenantId: 'other',
     });
     writeEntry(home, summary);

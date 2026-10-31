@@ -8,7 +8,13 @@ import { tableColumns } from '../db/tables.js';
 import { assertBinaryCompatible } from '../db/migrate.js';
 import { insertDormantRow, listDormantSnapshots } from './dormant.js';
 import { calculateStrength, canAutoDelete, type MemoryEntry } from '../core/memory.js';
-import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from '../core/memory-quality.js';
+import {
+  assessAutomaticMemory,
+  BUNDLE_HEADER,
+  isAutomaticEntry,
+  isCertainReason,
+  type AutomaticMemoryDefect,
+} from '../core/memory-quality.js';
 import { heldTexts } from '../util/same-text.js';
 import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from './delete-and-batch.js';
 import { selectAllEntries, selectPreviewRows } from './entry-reads.js';
@@ -16,7 +22,8 @@ import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 
-/** One automatic row with a defect. `set-aside` moves to dormant storage on apply, `review` is listed only, `protected` is kept. */
+/** One automatic row with a defect. `set-aside` moves to dormant storage on apply, `review` is listed only, `protected`
+ * is kept. */
 export interface QualityRepairIssue {
   readonly id: string;
   readonly reason: string;
@@ -24,7 +31,8 @@ export interface QualityRepairIssue {
   readonly protection?: string;
 }
 
-/** One tenant's plan; `supported` is false, with `blockers` naming each gap, when the schema cannot be changed safely. */
+/** One tenant's plan; `supported` is false, with `blockers` naming each gap, when the schema cannot be changed
+ * safely. */
 export interface QualityRepairResult {
   readonly root: string;
   readonly schema: number;
@@ -52,7 +60,9 @@ function capabilityBlockers(db: DatabaseSyncLike): string[] {
     if (columns.size === 0) blockers.push(`missing table: ${table}`);
     else for (const column of required) if (!columns.has(column)) blockers.push(`missing column: ${table}.${column}`);
   }
-  if (blockers.some((blocker) => blocker === 'missing table: meta' || blocker.startsWith('missing column: meta.'))) return blockers;
+  if (blockers.some((blocker) => blocker === 'missing table: meta' || blocker.startsWith('missing column: meta.'))) {
+    return blockers;
+  }
   assertBinaryCompatible(db);
   if (getMeta(db, 'fts5_available', '0') === '1') {
     const columns = tableColumns(db, 'memories_fts');
@@ -83,7 +93,10 @@ function fromAutomaticParents(entry: MemoryEntry, rows: ReadonlyMap<string, Memo
   });
 }
 
-function contentIssue(entry: MemoryEntry, rows: ReadonlyMap<string, MemoryEntry>): Omit<QualityRepairIssue, 'id'> | null {
+function contentIssue(
+  entry: MemoryEntry,
+  rows: ReadonlyMap<string, MemoryEntry>,
+): Omit<QualityRepairIssue, 'id'> | null {
   if (structured(entry) || !isAutomaticEntry(entry)) return null;
   // Only a bundle header marks parts; a refined row keeps its lead line, so it is judged whole.
   if (!BUNDLE_HEADER.test(entry.content)) {
@@ -92,10 +105,16 @@ function contentIssue(entry: MemoryEntry, rows: ReadonlyMap<string, MemoryEntry>
   }
   const texts = heldTexts({ ...entry, source: 'consolidation' });
   if (texts.length === 0) return { reason: 'derived bundle has no safely parsed constituents', disposition: 'review' };
-  const reasons = texts.map((text) => assessAutomaticMemory(text).reason).filter((reason): reason is AutomaticMemoryDefect => reason !== null);
+  const reasons = texts
+    .map((text) => assessAutomaticMemory(text).reason)
+    .filter((reason): reason is AutomaticMemoryDefect => reason !== null);
   if (reasons.length === 0) return null;
-  const certain = reasons.length === texts.length && reasons.every(isCertainReason) && fromAutomaticParents(entry, rows);
-  return { reason: `derived constituents: ${[...new Set(reasons)].join('; ')}`, disposition: certain ? 'set-aside' : 'review' };
+  const certain =
+    reasons.length === texts.length && reasons.every(isCertainReason) && fromAutomaticParents(entry, rows);
+  return {
+    reason: `derived constituents: ${[...new Set(reasons)].join('; ')}`,
+    disposition: certain ? 'set-aside' : 'review',
+  };
 }
 
 function planRows(db: DatabaseSyncLike, tenantId: string) {
@@ -109,9 +128,13 @@ function planRows(db: DatabaseSyncLike, tenantId: string) {
     const issue = contentIssue(entry, rows);
     if (issue === null) continue;
     const kept = protection(entry, backing);
-    issues.push(kept === undefined ? { id: entry.id, ...issue } : { id: entry.id, ...issue, disposition: 'protected', protection: kept });
+    issues.push(
+      kept === undefined
+        ? { id: entry.id, ...issue }
+        : { id: entry.id, ...issue, disposition: 'protected', protection: kept },
+    );
   }
-  return { total: entries.length, issues };
+  return { total: entries.length, issues, all };
 }
 
 function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
@@ -120,42 +143,70 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
   const rows = selectPreviewRows(db, columns, tenantId);
   const issues = rows.flatMap((row): QualityRepairIssue[] => {
     const tags = parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' });
-    const provenance = { ...row, source: row.source ?? '', confidence: row.confidence ?? 'observed', dag_level: row.dag_level ?? 0, tags };
+    const provenance = {
+      ...row,
+      source: row.source ?? '',
+      confidence: row.confidence ?? 'observed',
+      dag_level: row.dag_level ?? 0,
+      tags,
+    };
     if (!isAutomaticEntry(provenance)) return [];
     const { reason } = assessAutomaticMemory(row.content);
-    return reason === null ? [] : [{ id: row.id, reason, disposition: 'review', protection: 'unsupported schema; no changes permitted' }];
+    return reason === null
+      ? []
+      : [{ id: row.id, reason, disposition: 'review', protection: 'unsupported schema; no changes permitted' }];
   });
   return { total: rows.length, issues };
 }
 
-function initialResult(db: DatabaseSyncLike, root: string, tenantId: string): QualityRepairResult {
+/** The plan plus the tenant rows it was read from, so the apply step does not read them again. */
+function plannedResult(db: DatabaseSyncLike, root: string, tenantId: string) {
   const blockers = capabilityBlockers(db);
   const schema = pragmaUserVersion(db);
-  const plan = blockers.length > 0 ? unsupportedPreview(db, tenantId) : planRows(db, tenantId);
-  return {
+  const plan = blockers.length > 0 ? { ...unsupportedPreview(db, tenantId), all: [] } : planRows(db, tenantId);
+  const result: QualityRepairResult = {
     root, schema, supported: blockers.length === 0, blockers,
     total: plan.total,
     issues: plan.issues, appliedIds: [], backup: null, warnings: [],
   };
+  return { result, all: plan.all };
 }
 
-// No rejection record, as in project repair: the writers refuse these defects themselves, and a record would also refuse a person's copy.
+// No rejection record, as in project repair: the writers refuse these defects themselves, and a record would also
+// refuse a person's copy.
 function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, now: Date, backup: string): boolean {
   const actor = 'quality-repair';
   if (deleteEntryCore(db, entry.id, { actor, automatic: true, suppressForgetAudit: true }) === null) return false;
-  insertDormantRow(db, { entry, strength: calculateStrength(entry, now), reason: 'quality-repair', dormantAt: now.toISOString() });
+  insertDormantRow(db, {
+    entry,
+    strength: calculateStrength(entry, now),
+    reason: 'quality-repair',
+    dormantAt: now.toISOString(),
+  });
   if (getMeta(db, 'fts5_available', '0') === '1' && ftsRowExists(db, entry.id)) {
     throw new Error(`Quality repair could not remove the full-text row for ${entry.id}`);
   }
-  appendAuditEvent(db, { tenantId: entry.tenant_id, actor, op: 'quality_repair', targetId: entry.id, metadata: { reason, backup } });
+  appendAuditEvent(db, {
+    tenantId: entry.tenant_id,
+    actor,
+    op: 'quality_repair',
+    targetId: entry.id,
+    metadata: { reason, backup },
+  });
   return true;
 }
 
-function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup: string, doneKey?: string): QualityRepairResult {
+function applyPlan(
+  db: DatabaseSyncLike,
+  root: string,
+  tenantId: string,
+  backup: string,
+  doneKey?: string,
+): QualityRepairResult {
   return withWriteScope(db, 'quality_repair_apply', () => {
-    const result = initialResult(db, root, tenantId);
+    const { result, all } = plannedResult(db, root, tenantId);
     if (!result.supported) throw new Error(`Quality repair capability changed: ${result.blockers.join('; ')}`);
-    const entries = new Map(selectAllEntries(db, tenantId).map((entry) => [entry.id, entry]));
+    const entries = new Map(all.map((entry) => [entry.id, entry]));
     const appliedIds: string[] = [];
     const warnings: string[] = [];
     const now = new Date();
@@ -169,11 +220,19 @@ function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup:
   });
 }
 
-function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; apply?: boolean; doneKey?: string }): QualityRepairResult {
-  const initial = withTrialScope(db, 'quality_repair_plan', () => initialResult(db, root, opts.tenantId));
-  if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) return initial;
+function repairOn(
+  db: DatabaseSyncLike,
+  root: string,
+  opts: { tenantId: string; apply?: boolean; doneKey?: string },
+): QualityRepairResult {
+  const initial = withTrialScope(db, 'quality_repair_plan', () => plannedResult(db, root, opts.tenantId).result);
+  if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) {
+    return initial;
+  }
   db.exec('PRAGMA foreign_keys = ON');
-  const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, root, opts.tenantId, backup, opts.doneKey));
+  const result = withBackup(db, root, 'before-quality-repair', (backup) =>
+    applyPlan(db, root, opts.tenantId, backup, opts.doneKey),
+  );
   const warnings = [...result.warnings];
   for (const id of result.appliedIds) {
     if (purgeMirrorBestEffort(root, id, false, 'quality repair')) continue;
@@ -182,14 +241,19 @@ function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; 
   return { ...result, warnings };
 }
 
-/** Preview by default; apply backs the database up, then moves certain defects to dormant storage, without running migrations. */
-export function repairAutomaticMemories(root: string, opts: { tenantId: string; apply?: boolean }): QualityRepairResult {
+/** Preview by default; apply backs the database up, then moves certain defects to dormant storage, without running
+ * migrations. */
+export function repairAutomaticMemories(
+  root: string,
+  opts: { tenantId: string; apply?: boolean },
+): QualityRepairResult {
   return withUnmigratedDb(root, !opts.apply, (db) => repairOn(db, root, opts));
 }
 
 const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
 
-/** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command; null once done. */
+/** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command;
+ * null once done. */
 export function repairQualityOnce(root: string, tenantId: string): QualityRepairResult | null {
   return withUnmigratedDb(root, false, (db) => {
     if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;

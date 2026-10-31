@@ -1,6 +1,6 @@
 /** `hippo audit list --op` and GET /v1/audit?op= accept a real op and reject an unknown one. */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -18,7 +18,6 @@ describe('audit op filter', () => {
   let home: string;
   let hippoRoot: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-audit-op-'));
@@ -27,16 +26,11 @@ describe('audit op filter', () => {
     initStore(hippoRoot);
     // writeEntry appends a 'remember' audit row, so an accepted op has a row to return.
     writeEntry(hippoRoot, createMemory('audit op filter seed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
   });
 
   afterEach(() => {
-    if (origHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = origHippoHome;
-    }
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });

@@ -14,7 +14,10 @@ function parseHookPayload(stdinText: string | undefined): { [key: string]: JsonV
 }
 
 /** A hook payload's non-empty `session_id`, or null; with `requiredSource`, also null when its `source` differs. */
-export function hookPayloadSessionId(stdinText: string | undefined, requiredSource: string | null = null): string | null {
+export function hookPayloadSessionId(
+  stdinText: string | undefined,
+  requiredSource: string | null = null,
+): string | null {
   const payload = parseHookPayload(stdinText);
   const sessionId = payload?.session_id;
   if (!payload || !isJsonString(sessionId) || sessionId.trim() === '') return null;
@@ -28,7 +31,9 @@ export function hookPayloadString(stdinText: string | undefined, field: string):
   return isJsonString(value) ? value : null;
 }
 
-/** Whether a hook fired inside a sub-agent, the only payload with `agent_id` (https://code.claude.com/docs/en/hooks#common-input-fields).
+/**
+ * Whether a hook fired inside a sub-agent, the only payload with `agent_id`
+ * (https://code.claude.com/docs/en/hooks#common-input-fields).
  *  Its `session_id` is the parent's, so a sub-agent's blocks and compactions must not count as the parent's. */
 export function isSubagentPayload(stdinText: string | undefined): boolean {
   const agentId = parseHookPayload(stdinText)?.agent_id;

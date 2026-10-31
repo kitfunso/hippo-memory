@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { FullContext } from './_helpers/api-ctx.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -9,10 +10,11 @@ import {
   VerifiedKeyCache,
   type VerifiedApiKey,
 } from '../src/store/auth.js';
-import { authRevoke, authGrant, type Context } from '../src/api/index.js';
+import { authRevoke, authGrant } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { sqliteStore } from '../src/store/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 /** Scrypt runs and store lookups made by `fn` alone. */
 async function counted<T>(fn: () => Promise<T>) {
@@ -40,7 +42,7 @@ describe('verified API key cache', () => {
   const mint = (role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } =>
     onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'cache-test', role }));
 
-  const adminCtx = (): Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } });
+  const adminCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }));
 
   beforeEach(() => {
     home = makeRoot('key-cache');
@@ -82,7 +84,7 @@ describe('verified API key cache', () => {
   it('an in-process scope grant shows on the next verify', async () => {
     const key = mint();
     expect((await verify(key.plaintext))!.scopes).toEqual([]);
-    authGrant(adminCtx(), key.keyId, 'slack:private:C123');
+    await authGrant(adminCtx(), key.keyId, 'slack:private:C123');
     expect((await verify(key.plaintext))!.scopes).toEqual(['slack:private:C123']);
   });
 
@@ -216,7 +218,7 @@ describe('VerifiedKeyCache', () => {
     expect([cache.has('hash-b', 'hk_b.s'), cache.has('hash-a', 'hk_a.s'), cache.has('hash-c', 'hk_c.s')]).toEqual([false, true, true]);
   });
 
-  it('a wrong secret misses without evicting the proved one', () => {
+  it('a wrong secret misses without evicting the proved one', async () => {
     const cache = new VerifiedKeyCache(2);
     cache.add('hash-a', 'hk_a.s');
     expect(cache.has('hash-a', 'hk_a.wrong')).toBe(false);
@@ -227,21 +229,18 @@ describe('VerifiedKeyCache', () => {
 describe('bearer requests through the server', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('key-cache');
     globalHome = makeRoot('key-cache');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = origHippoHome;
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });

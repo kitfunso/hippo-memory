@@ -1,6 +1,8 @@
 import { envGstackSkill, envOpenclawSkill, envScope } from '../util/env.js';
 
-/** Detect the current operational scope from env (HIPPO_SCOPE > GSTACK_SKILL > OPENCLAW_SKILL); returns the name without prefix, or null.
+/**
+ * Detect the current operational scope from env (HIPPO_SCOPE > GSTACK_SKILL > OPENCLAW_SKILL); returns the name without
+ * prefix, or null.
  *  Pure env reads, no I/O, so it is safe on hot paths such as the UserPromptSubmit hook. */
 export function detectScope(): string | null {
   const explicit = envScope();

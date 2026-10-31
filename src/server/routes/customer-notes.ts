@@ -1,10 +1,23 @@
 // /v1/customer-notes routes.
-import { CUSTOMER_NOTE, MAX_CHANGE_SUMMARY_LEN, MAX_CUSTOMER_LEN, type SaveCustomerNoteOpts } from '../../objects/customer-notes.js';
+import {
+  CUSTOMER_NOTE,
+  MAX_CHANGE_SUMMARY_LEN,
+  MAX_CUSTOMER_LEN,
+  type SaveCustomerNoteOpts,
+} from '../../objects/customer-notes.js';
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { saveFor } from '../../api/objects.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { saveFor } from '../../api/objects/objects.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  optionalString,
+  requiredString,
+  supersedeRoute,
+  type VersionedRouteConfig,
+} from './object-routes.js';
 
 const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = {
   noun: 'customer note',
@@ -19,9 +32,10 @@ const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = 
   },
 };
 
-// Routes: customer notes under /v1/customer-notes (create, list, show, supersede, close), mirroring /v1/project-briefs. The store validates and throws;
+// Routes: customer notes under /v1/customer-notes (create, list, show, supersede, close), mirroring /v1/project-briefs.
+// The store validates and throws;
 // the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
-export async function handleCreateCustomerNote(rr: AuthedRouteRequest): Promise<void> {
+export async function handleCreateCustomerNote(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
   const customerNote = await saveFor(ctx, CUSTOMER_NOTE, {
@@ -31,18 +45,18 @@ export async function handleCreateCustomerNote(rr: AuthedRouteRequest): Promise<
   sendJson(rr.res, 201, { note: customerNote });
 }
 
-export function handleListCustomerNotes(rr: AuthedRouteRequest): Promise<void> {
+export function handleListCustomerNotes(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   return listRoute(noteRoutes, rr);
 }
 
-export function handleSupersedeCustomerNote(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleSupersedeCustomerNote(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return supersedeRoute(noteRoutes, rr, match);
 }
 
-export function handleCloseCustomerNote(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleCloseCustomerNote(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return closeRoute(noteRoutes, rr, match);
 }
 
-export function handleGetCustomerNote(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleGetCustomerNote(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return getRoute(noteRoutes, rr, match);
 }

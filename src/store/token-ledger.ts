@@ -1,6 +1,7 @@
-/** Token ledger: one row per block of memory text sent to an agent on any surface, with its token cost; the input for the token-savings evals.
- * Backs inject-only-on-change: the hook records a `skip` when the block hash matches the session's last; `reread` rows cover {@link REREAD_SURFACES} blocks.
- * Counts use {@link estimateTokens} (chars / 4); rows never hold content or query text. Writes are best-effort: a ledger failure must not break recall. */
+/** Token ledger: one row per block of memory text sent to an agent on any surface, with its token cost; the input for
+ * the token-savings evals. Backs inject-only-on-change: the hook records a `skip` when the block hash matches the
+ * session's last; `reread` rows cover {@link REREAD_SURFACES} blocks. Counts use {@link estimateTokens} (chars / 4);
+ * rows never hold content or query text. Writes are best-effort: a ledger failure must not break recall. */
 import { open } from 'node:fs/promises';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
@@ -12,8 +13,8 @@ import {
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
-/** Where a block was sent: `hook`/`hook_recall` (per-prompt hook), `compact_resume`, `context`/`recall` (CLI), `mcp_*`, `http_*`,
- * and `pilot` (session pilot arm row, src/api/pilot-arm.ts; not a send, so in no surface list). */
+/** Where a block was sent: `hook`/`hook_recall` (per-prompt hook), `compact_resume`, `context`/`recall` (CLI), `mcp_*`,
+ * `http_*`, and `pilot` (session pilot arm row, src/api/pilot-arm.ts; not a send, so in no surface list). */
 export type TokenSurface =
   | 'hook'
   | 'hook_recall'
@@ -33,11 +34,13 @@ export const TOKEN_SURFACES: readonly TokenSurface[] = [
   'http_recall', 'http_context', 'http_assemble',
 ];
 
-/** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry one session id. */
+/** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry
+ * one session id. */
 export const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
 
-/** What happened to a block: `inject` (sent), `skip` (identical to the last injected block), `reset` (host compacted, next must send), `reread` (tokens
- * later calls read again, booked at session end), `arm` (pilot assignment; `block_hash` is `hippo` or `holdout`, `items` the holdout rate in bp). */
+/** What happened to a block: `inject` (sent), `skip` (identical to the last injected block), `reset` (host compacted,
+ * next must send), `reread` (tokens later calls read again, booked at session end), `arm` (pilot assignment;
+ * `block_hash` is `hippo` or `holdout`, `items` the holdout rate in bp). */
 export type TokenEvent = 'inject' | 'skip' | 'reset' | 'reread' | 'arm';
 
 /** Rows older than this are pruned on write. */
@@ -85,7 +88,8 @@ export interface LastSent {
   skipsSince: number;
 }
 
-/** The last block this session injected on `surface`, or null if none, a `reset` came after it, or there is no session id (the caller then always injects). */
+/** The last block this session injected on `surface`, or null if none, a `reset` came after it, or there is no session
+ * id (the caller then always injects). */
 export function lastSentState(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -99,8 +103,8 @@ export function lastSentState(
   return { hash: anchor.block_hash, skipsSince: Number(skips?.n ?? 0) };
 }
 
-/** Whether a block identical to the session's last injection should be skipped; `refreshTurns` resends it after that many consecutive skips so a long
- * session still sees its pinned rules, 0 never resends. */
+/** Whether a block identical to the session's last injection should be skipped; `refreshTurns` resends it after that
+ * many consecutive skips so a long session still sees its pinned rules, 0 never resends. */
 export function shouldSkipUnchanged(last: LastSent | null, hash: string, refreshTurns: number): boolean {
   if (!last || last.hash !== hash) return false;
   if (refreshTurns > 0 && last.skipsSince >= refreshTurns) return false;
@@ -118,7 +122,8 @@ export interface TokenSurfaceSummary {
   skipped: number;
   /** Tokens those skipped blocks would have cost. */
   tokensAvoided: number;
-  /** Tokens of these blocks that later model calls read again, from sessions that have ended; 0 off {@link REREAD_SURFACES}. */
+  /** Tokens of these blocks that later model calls read again, from sessions that have ended; 0 off {@link
+   * REREAD_SURFACES}. */
   tokensReread: number;
   /** Distinct session ids seen (rows without one are not counted). */
   sessions: number;
@@ -181,7 +186,8 @@ interface ModelTagged {
   model?: unknown;
 }
 
-/** Claude Code writes its own API errors and limit notices as assistant lines from this model; no model call made them. */
+/** Claude Code writes its own API errors and limit notices as assistant lines from this model; no model call made
+ * them. */
 export function isSyntheticMessage(message: ModelTagged): boolean {
   return message.model === '<synthetic>';
 }
@@ -197,8 +203,8 @@ export interface SessionTokens {
   injections: number;
 }
 
-/** Ledger totals per session id since `sinceIso`, across surfaces; hook rows carry the host's session id (the transcript file name), so they join to its
- * usage records. */
+/** Ledger totals per session id since `sinceIso`, across surfaces; hook rows carry the host's session id (the
+ * transcript file name), so they join to its usage records. */
 export function tokensBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionTokens[] {
   return sessionTokenRows(db, tenantId, sinceIso).map((r) => ({
     sessionId: r.session_id,
@@ -265,7 +271,8 @@ export async function readApiCalls(transcriptPath: string): Promise<TranscriptCa
 
 /** Calls that carried a block sent at `at` (epoch ms): every later call in the first later call's context window. */
 export function carryingCalls(calls: readonly ApiCall[], at: number): ApiCall[] {
-  // Windows come from file order, not boundary timestamps: the compact-resume block is booked before its boundary's timestamp.
+  // Windows come from file order, not boundary timestamps: the compact-resume block is booked before its boundary's
+  // timestamp.
   const first = calls.find((call) => call.at > at);
   if (!first) return [];
   return calls.filter((call) => call.at > at && call.compactions === first.compactions);
@@ -279,15 +286,26 @@ interface RereadDay {
   tokens: number;
 }
 
-/** Replace a session's `reread` rows in `hippoRoot`'s store, one per {@link REREAD_SURFACES} surface and UTC day; returns the tokens booked. */
-export function recordRereads(hippoRoot: string, tenantId: string, sessionId: string, calls: readonly ApiCall[]): number {
+/** Replace a session's `reread` rows in `hippoRoot`'s store, one per {@link REREAD_SURFACES} surface and UTC day;
+ * returns the tokens booked. */
+export function recordRereads(
+  hippoRoot: string,
+  tenantId: string,
+  sessionId: string,
+  calls: readonly ApiCall[],
+): number {
   return onHandle(hippoRoot, (db) => {
     return replaceRereadRows(db, tenantId, sessionId, calls);
   });
 }
 
 /** One transaction, so a refused row leaves the session's earlier re-read rows in place. */
-function replaceRereadRows(db: DatabaseSyncLike, tenantId: string, sessionId: string, calls: readonly ApiCall[]): number {
+function replaceRereadRows(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+  calls: readonly ApiCall[],
+): number {
   return withWriteScope(db, 'record_rereads', () => {
     const rows = injectedBlocks(db, tenantId, sessionId, REREAD_SURFACES);
     const days = new Map<string, RereadDay>();
@@ -298,7 +316,8 @@ function replaceRereadRows(db: DatabaseSyncLike, tenantId: string, sessionId: st
     };
     for (const row of rows) {
       const sentAt = Date.parse(row.ts);
-      // Dated by when the calls happened, so a --days window counts re-reads in it; the empty send-day row keeps the session in coverage.
+      // Dated by when the calls happened, so a --days window counts re-reads in it; the empty send-day row keeps the
+      // session in coverage.
       add(row.surface, sentAt, 0, 0);
       // The first carrying call is the send itself; every later one is a re-read.
       for (const call of carryingCalls(calls, sentAt).slice(1)) add(row.surface, call.at, 1, Number(row.tokens));
@@ -306,7 +325,13 @@ function replaceRereadRows(db: DatabaseSyncLike, tenantId: string, sessionId: st
     deleteRereadRows(db, tenantId, sessionId);
     for (const day of days.values()) {
       recordTokenUse(db, {
-        tenantId, sessionId, surface: day.surface, event: 'reread', items: day.rereads, tokens: day.tokens, now: new Date(day.at).toISOString(),
+        tenantId,
+        sessionId,
+        surface: day.surface,
+        event: 'reread',
+        items: day.rereads,
+        tokens: day.tokens,
+        now: new Date(day.at).toISOString(),
       });
     }
     return [...days.values()].reduce((sum, day) => sum + day.tokens, 0);

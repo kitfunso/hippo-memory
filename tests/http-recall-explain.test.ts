@@ -8,23 +8,25 @@
  * Real SQLite store + real server, no mocks.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { remember, type Context, type RecallResult } from '../src/api/index.js';
+import { remember, type RecallResult } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 let handle: ServerHandle;
-let ctx: Context;
+let ctx: FullContext;
 
 beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), 'hippo-a7-http-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });
   initStore(home);
-  ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+  ctx = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
   await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
   await remember(ctx, { content: 'auth UI polish notes', tags: ['ui'] });
   handle = await serve({ hippoRoot: home, port: 0 });

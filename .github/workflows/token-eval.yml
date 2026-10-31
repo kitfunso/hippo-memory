@@ -1,14 +1,15 @@
 # The slow token-eval harness tests (EVAL_TESTS in vitest.config.ts), kept out of ci.yml's shards because they take a quarter of its Windows time.
-# A PR that touches src or the harness runs them here, beside ci.yml, so a src change that breaks the harness shows before merge.
+# Every push to master or next/2.0 runs them, and so does a PR that touches src or the harness, so a src change that breaks the harness cannot skip them.
 # npm-publish.yml calls this workflow on the tagged commit and publishes only when it passes.
 name: Token eval
 
 on:
   push:
-    branches: [master]
+    branches: [master, next/2.0]
   pull_request:
     paths:
       - 'src/**'
+      - 'bin/**'
       - 'scripts/token-eval/**'
       - 'tests/token-eval*'
       - 'tests/fixtures/fake-claude.mjs'
@@ -27,7 +28,7 @@ on:
 permissions:
   contents: read
 
-# A new push to a PR cancels the run for the commit it replaced. On master a started run finishes and only the newest waiting run is kept.
+# A new push to a PR cancels the run for the commit it replaced. On master and next/2.0 a started run finishes and only the newest waiting run is kept.
 concurrency:
   group: token-eval-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

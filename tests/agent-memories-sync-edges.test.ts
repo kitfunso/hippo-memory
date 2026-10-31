@@ -75,9 +75,9 @@ describe('agent memory sync: the Added list', () => {
     expect(auditCount(w.local, 'agent_memory_restore')).toBe(1);
   });
 
-  it('a restored set-aside row is left alone while the note stays gone', () => {
+  it('a restored set-aside row is left alone while the note stays gone', async () => {
     const id = importThenDelete();
-    restoreDormant(ctxFor(w.local), id);
+    await restoreDormant(ctxFor(w.local), id);
 
     for (let i = 0; i < 2; i++) {
       expect(claude(sync())).toMatchObject({ setAside: 0, untagged: 0, retagged: 0, imported: 0 });
@@ -113,11 +113,11 @@ describe('agent memory sync: the Added list', () => {
     expect(readEntry(w.local, older.id)?.superseded_by).toBe(newest.id);
   });
 
-  it('a restore after a rewrite survives two syncs', () => {
+  it('a restore after a rewrite survives two syncs', async () => {
     const a = importThenDelete();
     note(dir, 'deploy.md', B);
     expect(claude(sync()).imported).toBe(1);
-    restoreDormant(ctxFor(w.local), a);
+    await restoreDormant(ctxFor(w.local), a);
 
     for (let i = 0; i < 2; i++) {
       expect(claude(sync())).toMatchObject({ unchanged: 1, setAside: 0, replaced: 0, imported: 0 });

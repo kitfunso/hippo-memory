@@ -62,6 +62,25 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     env.cleanup();
   });
 
+  function recordOptedInCli(cliPath: string): void {
+    const metadataPath = resolveCodexWrapperPaths().metadataPath;
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    metadata.hippoCliPath = cliPath;
+    fs.writeFileSync(metadataPath, JSON.stringify(metadata), 'utf8');
+  }
+
+  // Opts in, then lets a Codex update overwrite the wrapper, as the repair tests need.
+  function clobberedLauncher(): string {
+    const realBin = path.join(env.home, 'real-bin');
+    const realCodex = path.join(realBin, 'codex.cmd');
+    fs.mkdirSync(realBin, { recursive: true });
+    fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
+    process.env.PATH = realBin;
+    expect(ensureCodexWrapperInstalled().status).toBe('installed');
+    fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
+    return realCodex;
+  }
+
   it('wraps a cmd launcher in place and records backup metadata', () => {
     const realCodex = path.join(env.home, 'real-bin', 'codex.cmd');
     fs.mkdirSync(path.dirname(realCodex), { recursive: true });
@@ -84,6 +103,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     expect(metadata.realCodexPath).toBe(result.backupPath);
     expect(metadata.commandPath).toBe(realCodex);
     expect(metadata.installMode).toBe('same-path');
+    expect(metadata.hippoCliPath).toBe(HIPPO_JS);
   });
 
   it('uses a codex.cmd shim when the detected launcher is an exe', () => {
@@ -162,9 +182,30 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
 
     const installedCli = path.join(env.home, 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js');
+    recordOptedInCli(installedCli);
     const result = repairCodexWrapperIfInstalled(installedCli);
 
     expect(result.status).toBe('installed');
+    expect(fs.readFileSync(realCodex, 'utf8')).toContain('codex-run');
+  });
+
+  it('repair-only ensure leaves the launcher alone when another install of hippo runs it', () => {
+    const realCodex = clobberedLauncher();
+    const otherCli = path.join(env.home, 'proj', 'node_modules', 'hippo-memory', 'bin', 'hippo.js');
+
+    expect(repairCodexWrapperIfInstalled(otherCli).status).toBe('other-install');
+    expect(fs.readFileSync(realCodex, 'utf8')).toContain('updated real codex');
+  });
+
+  it('repair-only ensure still repairs metadata written before the CLI path was recorded', () => {
+    const realCodex = clobberedLauncher();
+    const metadataPath = resolveCodexWrapperPaths().metadataPath;
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    delete metadata.hippoCliPath;
+    fs.writeFileSync(metadataPath, JSON.stringify(metadata), 'utf8');
+    const otherCli = path.join(env.home, 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js');
+
+    expect(repairCodexWrapperIfInstalled(otherCli).status).toBe('installed');
     expect(fs.readFileSync(realCodex, 'utf8')).toContain('codex-run');
   });
 

@@ -20,6 +20,7 @@ import type { GoalStackBoostOpts } from '../src/search/goal-boost.js';
 import { sessionGoalBoost } from './_helpers/session-goal-boost.js';
 import { remember } from '../src/api/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 interface ScoredRow { entry: MemoryEntry; score: number; }
 
@@ -102,7 +103,7 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
   it('writes one goal_recall_log row per (boosted_memory, goal) -- INSERT OR IGNORE on repeat', async () => {
     const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     // Memory must exist locally so the FK-safe INSERT path fires.
-    const m = await remember({ hippoRoot, tenantId, actor: { subject: 'test', role: 'admin' } }, {
+    const m = await remember(apiCtx(hippoRoot, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'fix auth bug',
       tags: ['fix-auth'],
     });

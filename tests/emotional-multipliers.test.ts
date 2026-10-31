@@ -26,6 +26,7 @@
  * Project rule: always use real DB for tests.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
@@ -38,8 +39,9 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
 } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { retrieve, type Context } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const ENV_KEY = 'HIPPO_LOSS_AVERSION_RATIO';
 // One instant for every entry age and strength call: two real-clock reads a pause apart moved a ratio past its tolerance.
@@ -62,7 +64,7 @@ function makeEntry(valence: EmotionalValence, opts: Partial<MemoryEntry> = {}): 
     layer: Layer.Buffer,
     kind: 'raw',
     tenantId: 'default',
-    emotional_valence: valence,
+    emotionalValence: valence,
   });
   e.last_retrieved = fiveDaysAgo;
   e.half_life_days = 3;
@@ -280,18 +282,14 @@ describe('behavioral: env=0 ranking effect', () => {
         layer: Layer.Buffer,
         kind: 'raw',
         tenantId: 'default',
-        emotional_valence: valence,
+        emotionalValence: valence,
       });
       e.last_retrieved = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
       e.half_life_days = 3;
       e.strength = calculateStrength(e, NOW);
       writeEntry(root, e);
     }
-    const ctx: Context = {
-      hippoRoot: root,
-      tenantId: 'default',
-      actor: { subject: 'test:j5-behavioral', role: 'admin' },
-    };
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'test:j5-behavioral', role: 'admin' });
     const result = await retrieve(ctx, { query: 'shared ranking keyword variant test' });
     expect(result.results.length).toBeGreaterThanOrEqual(4);
     // Locate the 4 seeded entries via their content marker and read the
@@ -322,7 +320,7 @@ describe('behavioral: env=0 ranking effect', () => {
       layer: Layer.Buffer,
       kind: 'raw',
       tenantId: 'default',
-      emotional_valence: 'negative',
+      emotionalValence: 'negative',
     });
     // Force an aged last_retrieved so the stored strength stays unclamped
     // and the env-driven multiplier difference is visible.
@@ -334,11 +332,7 @@ describe('behavioral: env=0 ranking effect', () => {
     // is aged so the stored value matches our test intent).
     baselineEntry.strength = calculateStrength(baselineEntry, NOW);
     writeEntry(root2, baselineEntry);
-    const ctx2: Context = {
-      hippoRoot: root2,
-      tenantId: 'default',
-      actor: { subject: 'test:j5-behavioral-baseline', role: 'admin' },
-    };
+    const ctx2: FullContext = apiCtx(root2, 'default', { subject: 'test:j5-behavioral-baseline', role: 'admin' });
     const baselineResult = await retrieve(ctx2, { query: 'shared ranking keyword variant test' });
     const baselineNeg = baselineResult.results.find((r) => r.content.includes('variant negative test'))?.strength;
     expect(baselineNeg).toBeDefined();

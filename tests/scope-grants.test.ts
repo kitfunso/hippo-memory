@@ -1,5 +1,6 @@
 /** Scope grants (ROADMAP Part VIII EI2): a member key reads a restricted scope
  *  only after an explicit grant. Real HTTP server, real SQLite, no mocks. */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,11 +13,13 @@ import { createApiKey, readApiKeyRecord } from '../src/store/auth.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { refreshBrief } from '../src/objects/project-briefs.js';
+import { refreshedBrief } from '../src/objects/project-briefs.js';
 import { extractGraph } from '../src/graph/extract.js';
 import * as api from '../src/api/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -95,9 +98,9 @@ describe('scope grants over HTTP', () => {
 
   it('a grant admits the named scope over HTTP and MCP, other restricted scopes stay denied, ungrant revokes it', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
 
-    api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
     const scoped = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
     expect(scoped.status).toBe(200);
@@ -116,7 +119,7 @@ describe('scope grants over HTTP', () => {
     const otherDenied = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(OTHER_PRIVATE_SCOPE)}`, member.plaintext);
     expect(otherDenied.status).toBe(403);
 
-    api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     const afterUngrant = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
     expect(afterUngrant.status).toBe(403);
   });
@@ -164,24 +167,24 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('a member actor cannot grant', () => {
+  it('a member actor cannot grant', async () => {
     const member = mintKey(home, 'member');
-    const memberCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: `api_key:${member.keyId}`, role: 'member' } };
-    expect(() => api.authGrant(memberCtx, member.keyId, PRIVATE_SCOPE)).toThrow(api.ForbiddenError);
-    expect(() => api.authUngrant(memberCtx, member.keyId, PRIVATE_SCOPE)).toThrow(api.ForbiddenError);
+    const memberCtx: FullContext = apiCtx(home, 'default', { subject: `api_key:${member.keyId}`, role: 'member' });
+    await expect(api.authGrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(api.ForbiddenError);
+    await expect(api.authUngrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(api.ForbiddenError);
   });
 
-  it('rejects a key belonging to another tenant', () => {
+  it('rejects a key belonging to another tenant', async () => {
     const other = mintKey(home, 'member', 'other-tenant');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    expect(() => api.authGrant(adminCtx, other.keyId, PRIVATE_SCOPE)).toThrow(/Unknown key_id/);
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
+    await expect(api.authGrant(adminCtx, other.keyId, PRIVATE_SCOPE)).rejects.toThrow(/Unknown key_id/);
   });
 
   it('rejects a grant on a revoked key', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     await api.authRevoke(adminCtx, member.keyId);
-    expect(() => api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE)).toThrow(/revoked/);
+    await expect(api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(/revoked/);
   });
 
   it('CLI grant runs in the key\'s own tenant', () => {
@@ -197,17 +200,17 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     }
   });
 
-  it('rejects an unrestricted scope', () => {
+  it('rejects an unrestricted scope', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    expect(() => api.authGrant(adminCtx, member.keyId, 'slack:public:general')).toThrow();
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
+    await expect(api.authGrant(adminCtx, member.keyId, 'slack:public:general')).rejects.toThrow();
   });
 
   it('writes auth_grant / auth_ungrant audit rows', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
-    api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
+    await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
     const grants = await api.auditList(adminCtx, { op: 'auth_grant' });
     expect(grants.some((e) => e.targetId === member.keyId)).toBe(true);
@@ -215,11 +218,11 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     expect(ungrants.some((e) => e.targetId === member.keyId)).toBe(true);
   });
 
-  it('grantScope is idempotent and the key record reflects it', () => {
+  it('grantScope is idempotent and the key record reflects it', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
-    api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
+    await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     const db = openHippoDb(home);
     try {
       expect((readApiKeyRecord(db, member.keyId)?.scopes ?? [])).toEqual([PRIVATE_SCOPE]);
@@ -243,13 +246,13 @@ describe('supersede keeps the old row\'s scope', () => {
   it('api.supersede: the successor of a private row stays in that scope', async () => {
     const old = createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, scope: PRIVATE_SCOPE });
     writeEntry(home, old);
-    const ctx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
+    const ctx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     const result = await api.supersede(ctx, old.id, 'kowalski payroll rollout moved to friday');
     const successor = readEntry(home, result.newId, 'default');
     expect(successor?.scope).toBe(PRIVATE_SCOPE);
   });
 
-  it('CLI supersede: the successor of a private row stays in that scope', () => {
+  it('CLI supersede: the successor of a private row stays in that scope', async () => {
     const cliHome = mkdtempSync(join(tmpdir(), 'hippo-scope-grants-cli-'));
     try {
       const env = { HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
@@ -290,8 +293,8 @@ describe('graph view carries no private receipt text', () => {
     writeEntry(home, { ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }), scope: PRIVATE_SCOPE });
     writeEntry(home, { ...createMemory('testrepo release notes went out today', { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }), scope: null });
 
-    refreshBrief(home, 'default', 'testrepo');
-    extractGraph(home, 'default');
+    await refreshedBrief(objectsAt(home), { hippoRoot: home, tenantId: 'default', actor: 'cli' }, 'testrepo');
+    await extractGraph(objectsAt(home), home, 'default');
 
     const res = await fetch(`${handle.url}/v1/graph`, { headers: { authorization: `Bearer ${member.plaintext}` } });
     expect(res.status).toBe(200);

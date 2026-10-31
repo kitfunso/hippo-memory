@@ -1,9 +1,10 @@
 // A personal write lands in the caller's own scope with origin '', and no client, vault or CLI can type a personal scope.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { remember, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { remember, type Actor } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { createApiKey } from '../src/store/auth.js';
 import { handleRemember } from '../src/cli/remember.js';
@@ -14,13 +15,14 @@ import type { JsonValue } from '../src/util/json.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NO_OWNER_TEXT = 'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
 
 let root: string;
 
-function ctxFor(actor: Actor): HippoDbContext {
-  return { hippoRoot: root, tenantId: 'default', actor };
+function ctxFor(actor: Actor): FullContext {
+  return apiCtx(root, 'default', actor);
 }
 
 const ownerA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };

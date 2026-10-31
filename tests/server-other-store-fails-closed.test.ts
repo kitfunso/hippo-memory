@@ -403,7 +403,7 @@ describe('serve() under a store that has the graphReads group', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    graph = seedGraphRows(fixture.dir);
+    graph = await seedGraphRows(fixture.dir);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: inMemoryGraphReadsStore(fixture.dir).store });
   });
 

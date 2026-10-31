@@ -6,17 +6,19 @@
  *   #3 AssembleOpts.scope parity with recall (authorised access to private)
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSessionRawMemories } from '../src/store/entry-reads.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { assemble, type Context } from '../src/api/index.js';
+import { assemble } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:assemble-v161', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:assemble-v161', role: 'admin' });
 }
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = createMemory(text, {
@@ -26,7 +28,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     kind: 'raw',
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
-    source_session_id: sessionId,
+    sourceSessionId: sessionId,
   });
   if (opts.created) e.created = opts.created;
   return e;

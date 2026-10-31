@@ -456,7 +456,8 @@ describe('cli thin-client mode', () => {
     // connection-refused — the exact branch that calls removePidfileIfOwned.
     const stub = createServer((req, res) => {
       if (req.url === '/health') {
-        res.writeHead(200, { 'content-type': 'application/json' });
+        // connection: close, so the command request opens a fresh socket and is refused instead of reusing a dying one.
+        res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
         res.end(JSON.stringify({
           ok: true, version: '0.0.0', started_at: startedAt, pid: process.pid,
         }));
@@ -528,7 +529,7 @@ describe('cli thin-client mode', () => {
     // forget and --archive however the server died.
     const stub = createServer((req, res) => {
       if (req.url === '/health') {
-        res.writeHead(200, { 'content-type': 'application/json' });
+        res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
         res.end(JSON.stringify({
           ok: true, version: '0.0.0', started_at: startedAt, pid: process.pid,
         }));

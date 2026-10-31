@@ -1,5 +1,6 @@
 // The one module in src/ that reads process.env; scripts/check-env-reads.mjs fails CI on any other read.
-// Accessors read at call time, so a test that sets a variable between cases, or a HIPPO_HOME switch mid-process, still holds.
+// Accessors read at call time, so a test that sets a variable between cases, or a HIPPO_HOME switch mid-process, still
+// holds.
 
 function raw(name: string): string | undefined {
   return process.env[name];
@@ -31,7 +32,10 @@ function trimmed(name: string): string | undefined {
   return raw(name)?.trim() || undefined;
 }
 
-/** The whole environment, for code that takes it as an injectable map (agent-memory machines, owner checks, support bundles). */
+/**
+ * The whole environment, for code that takes it as an injectable map (agent-memory machines, owner checks, support
+ * bundles).
+ */
 export function processEnv(): NodeJS.ProcessEnv {
   return process.env;
 }
@@ -110,13 +114,18 @@ export function envLogJson(): boolean { return raw('HIPPO_LOG_FORMAT')?.trim().t
 
 // Server.
 export function envPort(): string | undefined { return raw('HIPPO_PORT'); }
-/** How long a client waits for a running server's /health before writing to the store directly; server-detect.ts holds the default. */
+/**
+ * How long a client waits for a running server's /health before writing to the store directly; server-detect.ts holds
+ * the default.
+ */
 export function envHealthProbeMs(): number | undefined { return positiveInt('HIPPO_HEALTH_PROBE_MS'); }
 export function envRequireAuth(): boolean { return isOne('HIPPO_REQUIRE_AUTH'); }
 /** `1` lets a request made on this machine in with no key; HIPPO_REQUIRE_AUTH=1 wins over it. */
 export function envAllowKeylessLocal(): boolean { return isOne('HIPPO_ALLOW_KEYLESS_LOCAL'); }
 /** The role a keyless local request gets: `admin` (host admin) only when asked for by name, else `member`. */
-export function envKeylessLocalRole(): 'admin' | 'member' { return trimmed('HIPPO_KEYLESS_LOCAL_ROLE')?.toLowerCase() === 'admin' ? 'admin' : 'member'; }
+export function envKeylessLocalRole(): 'admin' | 'member' {
+  return trimmed('HIPPO_KEYLESS_LOCAL_ROLE')?.toLowerCase() === 'admin' ? 'admin' : 'member';
+}
 /** `1` lets a non-loopback bind start without TLS, for TLS that ends at a proxy in front. */
 export function envAllowCleartext(): boolean { return isOne('HIPPO_ALLOW_CLEARTEXT'); }
 export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
@@ -129,7 +138,10 @@ export function envSleepTimeoutMs(): number | undefined { return positiveInt('HI
 /** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP
  * request before its timeout error; 0 for no deadline; util/request-scope.ts holds the default. */
 export function envRequestDeadlineMs(): number | undefined { return nonNegativeInt('HIPPO_REQUEST_DEADLINE_MS'); }
-/** How many store calls may wait for one worker thread before the next is refused; store/sqlite/executor.ts holds the default. */
+/**
+ * How many store calls may wait for one worker thread before the next is refused; store/sqlite/executor.ts holds the
+ * default.
+ */
 export function envStoreQueueMax(): number | undefined { return positiveInt('HIPPO_STORE_QUEUE_MAX'); }
 /** How long the daily runner lets one child `hippo` step run; cli/setup.ts holds the default. */
 export function envDailyStepTimeoutMs(): number | undefined { return positiveInt('HIPPO_DAILY_STEP_TIMEOUT_MS'); }
@@ -150,25 +162,66 @@ export function envLlmTimeoutMs(): number | undefined { return positiveInt('HIPP
 export function envTypesafeApiKey(): string | undefined { return trimmed('TYPESAFE_API_KEY'); }
 export function envJevTimeoutMs(): number | undefined { return positiveInt('HIPPO_JEV_TIMEOUT_MS'); }
 export function envJevModel(): string | undefined { return raw('HIPPO_JEV_MODEL'); }
-/** How long a recall waits for an API provider to embed its query before ranking on BM25 alone; search/vector.ts holds the default. */
-export function envQueryEmbedTimeoutMs(): number | undefined { return positiveInt('HIPPO_QUERY_EMBED_TIMEOUT_MS'); }
-export function envLlmRerankerUrl(): string | undefined { return raw('HIPPO_LLM_RERANKER_URL'); }
-export function envLlmRerankerKey(): string | undefined { return raw('HIPPO_LLM_RERANKER_KEY'); }
-export function envLlmRerankerModel(): string | undefined { return raw('HIPPO_LLM_RERANKER_MODEL'); }
-export function envLlmRerankerTimeoutMs(): number | undefined { return positiveInt('HIPPO_LLM_RERANKER_TIMEOUT_MS'); }
-export function envClefEndpoint(): string | undefined { return raw('HIPPO_CLEF_ENDPOINT')?.trim(); }
-export function envClefEndpointToken(): string | undefined { return raw('HIPPO_CLEF_ENDPOINT_TOKEN')?.trim() || undefined; }
-export function envClefTimeoutMs(): string | undefined { return raw('HIPPO_CLEF_TIMEOUT_MS'); }
-export function envCloudflareAccountId(): string { return raw('CLOUDFLARE_ACCOUNT_ID')?.trim() ?? ''; }
-export function envCloudflareApiToken(): string { return raw('CLOUDFLARE_API_TOKEN')?.trim() ?? ''; }
+/**
+ * How long a recall waits for an API provider to embed its query before ranking on BM25 alone; search/vector.ts holds
+ * the default.
+ */
+export function envQueryEmbedTimeoutMs(): number | undefined {
+  return positiveInt('HIPPO_QUERY_EMBED_TIMEOUT_MS');
+}
+export function envLlmRerankerUrl(): string | undefined {
+  return raw('HIPPO_LLM_RERANKER_URL');
+}
+export function envLlmRerankerKey(): string | undefined {
+  return raw('HIPPO_LLM_RERANKER_KEY');
+}
+export function envLlmRerankerModel(): string | undefined {
+  return raw('HIPPO_LLM_RERANKER_MODEL');
+}
+export function envLlmRerankerTimeoutMs(): number | undefined {
+  return positiveInt('HIPPO_LLM_RERANKER_TIMEOUT_MS');
+}
+export function envClefEndpoint(): string | undefined {
+  return raw('HIPPO_CLEF_ENDPOINT')?.trim();
+}
+export function envClefEndpointToken(): string | undefined {
+  return raw('HIPPO_CLEF_ENDPOINT_TOKEN')?.trim() || undefined;
+}
+export function envClefTimeoutMs(): string | undefined {
+  return raw('HIPPO_CLEF_TIMEOUT_MS');
+}
+export function envCloudflareAccountId(): string {
+  return raw('CLOUDFLARE_ACCOUNT_ID')?.trim() ?? '';
+}
+export function envCloudflareApiToken(): string {
+  return raw('CLOUDFLARE_API_TOKEN')?.trim() ?? '';
+}
 
 // Connectors.
-export function envSlackBotToken(): string | undefined { return raw('SLACK_BOT_TOKEN'); }
-export function envSlackTeamId(): string | undefined { return raw('SLACK_TEAM_ID'); }
-export function envSlackSigningSecret(): string | undefined { return raw('SLACK_SIGNING_SECRET'); }
-export function envSlackSigningSecretPrevious(): string | undefined { return raw('SLACK_SIGNING_SECRET_PREVIOUS'); }
-export function envSlackAllowUnknownTeamFallback(): boolean { return isOne('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK'); }
-export function envGitHubToken(): string | undefined { return raw('GITHUB_TOKEN'); }
-export function envGitHubWebhookSecret(): string | undefined { return raw('GITHUB_WEBHOOK_SECRET'); }
-export function envGitHubWebhookSecretPrevious(): string | undefined { return raw('GITHUB_WEBHOOK_SECRET_PREVIOUS'); }
-export function envGitHubAllowUnknownInstallationFallback(): boolean { return isOne('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK'); }
+export function envSlackBotToken(): string | undefined {
+  return raw('SLACK_BOT_TOKEN');
+}
+export function envSlackTeamId(): string | undefined {
+  return raw('SLACK_TEAM_ID');
+}
+export function envSlackSigningSecret(): string | undefined {
+  return raw('SLACK_SIGNING_SECRET');
+}
+export function envSlackSigningSecretPrevious(): string | undefined {
+  return raw('SLACK_SIGNING_SECRET_PREVIOUS');
+}
+export function envSlackAllowUnknownTeamFallback(): boolean {
+  return isOne('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK');
+}
+export function envGitHubToken(): string | undefined {
+  return raw('GITHUB_TOKEN');
+}
+export function envGitHubWebhookSecret(): string | undefined {
+  return raw('GITHUB_WEBHOOK_SECRET');
+}
+export function envGitHubWebhookSecretPrevious(): string | undefined {
+  return raw('GITHUB_WEBHOOK_SECRET_PREVIOUS');
+}
+export function envGitHubAllowUnknownInstallationFallback(): boolean {
+  return isOne('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK');
+}

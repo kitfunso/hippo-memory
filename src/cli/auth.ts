@@ -7,7 +7,7 @@ import { printError } from './output.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands
@@ -17,8 +17,7 @@ import { CliExit } from './exit.js';
 function roleFlagOrExit(flags: CliFlags): 'admin' | 'member' | undefined {
   const roleFlag = stringFlag(flags, 'role');
   if (roleFlag !== undefined && roleFlag !== 'admin' && roleFlag !== 'member') {
-    printError(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
-    throw new CliExit(1);
+    fail(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
   }
   return roleFlag;
 }
@@ -41,19 +40,18 @@ async function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: 
   const ttlDays = ttlFlag === undefined ? undefined : Number(ttlFlag);
   const noExpiry = boolFlag(flags, 'no-expiry');
 
-  // The CLI's --tenant flag is the only legitimate cross-tenant override
-  // (admin minting a key for another tenant from the local machine). It
-  // flows through ctx.tenantId, NOT through opts — authCreate's opts no
-  // longer accepts a tenantId field, so the HTTP layer cannot smuggle a
-  // body.tenantId across.
+  // The CLI's --tenant flag is the only legitimate cross-tenant
+  // override (admin minting a key for another tenant from the
+  // local machine). It flows through ctx.tenantId, NOT through
+  // opts — authCreate's opts no longer accepts a tenantId field,
+  // so the HTTP layer cannot smuggle a body.tenantId across.
   const ctx = cliApiContext(root, tenantFlag ?? defaultTenantId);
   let result: api.AuthCreateResult;
   try {
     result = await api.authCreate(ctx, { label: labelFlag, role, ttlDays, noExpiry: noExpiry || undefined });
   } catch (err) {
     if (!(err instanceof api.BadRequestError)) throw err;
-    printError(`hippo auth create: ${err.message} (--ttl-days, --no-expiry).`);
-    throw new CliExit(1);
+    fail(`hippo auth create: ${err.message} (--ttl-days, --no-expiry).`);
   }
   noteMintDefaults(role !== undefined, ttlFlag !== undefined || noExpiry);
 
@@ -110,12 +108,15 @@ function cmdAuthList(hippoRoot: string, tenantId: string, flags: CliFlags): void
 }
 
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-async function keyContext(root: string, tenantId: string, keyId: string): Promise<api.HippoDbContext> {
+async function keyContext(
+  root: string,
+  tenantId: string,
+  keyId: string,
+): Promise<api.ContextWith<'keyAudit' | 'keyGrants'>> {
   const hostCtx = cliApiContext(root, tenantId);
   const keyTenant = await api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
-    printError(`Unknown key_id: ${keyId}`);
-    throw new CliExit(1);
+    fail(`Unknown key_id: ${keyId}`);
   }
   return { ...hostCtx, tenantId: keyTenant };
 }
@@ -126,8 +127,7 @@ async function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string,
   try {
     revokedAt = (await api.authRevoke(ctx, keyId)).revokedAt;
   } catch (err) {
-    printError(`Error: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Error: ${errorMessage(err)}`);
   }
   if (flags['json']) {
     console.log(JSON.stringify({ keyId, revokedAt }));
@@ -136,15 +136,22 @@ async function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string,
   console.log(`Revoked ${keyId} at ${revokedAt}`);
 }
 
-/** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
-async function cmdAuthScopeGrant(hippoRoot: string, tenantId: string, keyId: string, scope: string, grant: boolean, flags: CliFlags): Promise<void> {
+/** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks
+ * live in one place. */
+async function cmdAuthScopeGrant(
+  hippoRoot: string,
+  tenantId: string,
+  keyId: string,
+  scope: string,
+  grant: boolean,
+  flags: CliFlags,
+): Promise<void> {
   const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   try {
-    if (grant) api.authGrant(ctx, keyId, scope);
-    else api.authUngrant(ctx, keyId, scope);
+    if (grant) await api.authGrant(ctx, keyId, scope);
+    else await api.authUngrant(ctx, keyId, scope);
   } catch (err) {
-    printError(`Error: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Error: ${errorMessage(err)}`);
   }
   if (flags['json']) {
     console.log(JSON.stringify({ keyId, scope, granted: grant }));
@@ -156,8 +163,7 @@ async function cmdAuthScopeGrant(hippoRoot: string, tenantId: string, keyId: str
 export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (!sub) {
-    printError('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
-    throw new CliExit(1);
+    fail('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
   }
   const subArgs = args.slice(1);
   switch (sub) {
@@ -170,8 +176,7 @@ export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandCo
     case 'revoke': {
       const keyId = subArgs[0];
       if (!keyId) {
-        printError('Usage: hippo auth revoke <key_id>');
-        throw new CliExit(1);
+        fail('Usage: hippo auth revoke <key_id>');
       }
       await cmdAuthRevoke(hippoRoot, tenantId, keyId, flags);
       return;
@@ -180,14 +185,12 @@ export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandCo
     case 'ungrant': {
       const [keyId, scope] = subArgs;
       if (!keyId || !scope) {
-        printError(`Usage: hippo auth ${sub} <key_id> <scope>`);
-        throw new CliExit(1);
+        fail(`Usage: hippo auth ${sub} <key_id> <scope>`);
       }
       await cmdAuthScopeGrant(hippoRoot, tenantId, keyId, scope, sub === 'grant', flags);
       return;
     }
     default:
-      printError(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke | grant | ungrant.`);
-      throw new CliExit(1);
+      fail(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke | grant | ungrant.`);
   }
 }

@@ -11,6 +11,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { captureError } from '../src/learn/autolearn.js';
 import { recordTokenUse, type TokenSurface } from '../src/store/token-ledger.js';
 import { query, Store, type ExtraState, type Row } from './_helpers/cli-parity-store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CASE_MS = 180_000;
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -49,7 +50,7 @@ describe('hippo watch (built CLI, no server)', () => {
     const s = new Store();
     scripts(s);
     const value = captureError(3, STDERR, 'node fail.js').content;
-    await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value, reason: 'wrong' });
+    await reject(apiCtx(s.root, 'default', adminActor('cli')), { value, reason: 'wrong' });
     s.settle();
     s.run('watch', 'node', 'fail.js');
     s.expectPinned();

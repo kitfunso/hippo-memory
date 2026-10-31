@@ -1,5 +1,5 @@
 // A hippo root holding the other-store marker refuses every hippo.db open, from the CLI as from a request, and never creates the file.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -87,6 +87,20 @@ describe('the other-store marker', () => {
     write();
     expect(refusal(() => openHippoDb(root)).storeKind).toBe('unknown');
     expect(dbFiles()).toEqual([]);
+  });
+
+  it('tells an unreadable marker at warn, with the error class', () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      mkdirSync(marker);
+      refusal(() => openHippoDb(root));
+      const told = stderr.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('is unreadable'));
+      expect(told).toHaveLength(1);
+      expect(told[0]).toContain('[hippo] warn: ');
+      expect(told[0]).toContain('errorClass=Error');
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
   it('without a marker, both opens work as before', () => {

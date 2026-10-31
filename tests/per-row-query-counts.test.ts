@@ -1,4 +1,6 @@
 // Store passes that walk many rows open the store once and read rows in chunked IN lists, so query counts stay flat as rows grow.
+import { cliRequest } from '../src/cli/api-context.js';
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -10,14 +12,14 @@ import { writeEntry, strengthenRetrieved } from '../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
-import { adminActor, type HippoDbContext } from '../src/api/types.js';
-import { learn, CLI_LEARN } from '../src/api/learn.js';
+import { readEntry, loadAllEntries, loadEntriesByIds } from '../src/store/entry-reads.js';
+import { adminActor } from '../src/api/types.js';
+import { learn, CLI_LEARN } from '../src/api/sleep/learn.js';
 import { handleRemember } from '../src/cli/remember.js';
 import { cmdCapture } from '../src/capture/command.js';
-import { outcome } from '../src/api/outcome.js';
-import { quarantineList } from '../src/api/quarantine.js';
-import { drillDown } from '../src/api/drill-down.js';
+import { outcome } from '../src/api/memories/outcome.js';
+import { quarantineList } from '../src/api/auth/quarantine.js';
+import { drillDown } from '../src/api/objects/drill-down.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { recordQuarantine } from '../src/store/quarantine.js';
 import { importEntries } from '../src/importers/core.js';
@@ -31,6 +33,9 @@ import { buildMemoryDetail } from '../src/dashboard/dashboard-queries.js';
 import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { writeSessionDigest } from '../src/capture/session-digest.js';
+import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -48,8 +53,8 @@ function freshRoot(label: string): string {
   return root;
 }
 
-function ctxFor(root: string): HippoDbContext {
-  return { hippoRoot: root, tenantId: 'default', actor: adminActor('test:query-count') };
+function ctxFor(root: string): FullContext {
+  return apiCtx(root, 'default', adminActor('test:query-count'));
 }
 
 function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -290,7 +295,7 @@ describe('deduplicateStore', () => {
       const root = freshRoot('qc-dedupe');
       const originals = rows(n, 'dedupe');
       seed(root, [...originals, ...originals.map((e) => memory(e.content))]);
-      const { result, statements } = recordStatements(() => deduplicateStore(root));
+      const { result, statements } = recordStatements(() => deduplicateStore(sqliteConsolidation(root)));
       expect(result.removed).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
@@ -340,7 +345,8 @@ describe('learn', () => {
     const root = freshRoot('qc-learn');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
     seed(root, [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
-    const { result, statements } = await recordStatementsAsync(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN }));
+    const { result, statements } = await recordStatementsAsync(() =>
+      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN })));
     return { root, result, statements, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
   }
 
@@ -464,7 +470,7 @@ describe('buildDag', () => {
       seed(root, facts);
       const mirrorsRewritten = ageMirrors(root);
       const fetcher: typeof fetch = async () => new Response(JSON.stringify({ content: [{ text: 'alice keeps the zephyrine cache warm across every deploy' }] }), { status: 200 });
-      const { result, statements } = await recordStatementsAsync(() => buildDag(root, facts, { apiKey: 'test-key', fetcher }));
+      const { result, statements } = await recordStatementsAsync(() => buildDag(sqliteSyncStore(root).localFiles, facts, { apiKey: 'test-key', fetcher }));
       expect(result).toMatchObject({ summariesCreated: 1, factsLinked: n });
       const stored = loadAllEntries(root);
       const parentId = stored.find((e) => e.dag_level === 2)?.id;
@@ -543,7 +549,7 @@ describe('hippo_status', () => {
       ]);
       const { result, rowsRead } = await recordStatementsAsync(() => handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
-        { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1' },
+        { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1', store: sqliteStore(root) },
       ));
       const reply = JSON.stringify(result);
       expect(reply).toContain(`Memories: ${n} (1 pinned, 1 errors)`);
@@ -581,12 +587,12 @@ describe('an id-list read of one tenant', () => {
     const ids = entries.map((e) => e.id);
     const { result, statements } = await recordStatementsAsync(async () => {
       await outcome(ctxFor(root), ids, true);
-      return { held: heldIdLookup(root, 'default', ids)(ids[0]), listed: loadEntriesByIds(root, ids, 'default').length };
+      return { held: (await sqliteStore(root).entriesByIds(ids, 'default')).some((e) => e.id === ids[0]), listed: loadEntriesByIds(root, ids, 'default').length };
     });
     expect(result).toEqual({ held: true, listed: 10 });
 
     const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
-    expect(idReads).toHaveLength(3);
+    expect(idReads).toHaveLength(2);
     const db = openStore(root);
     try {
       for (const sql of idReads) {

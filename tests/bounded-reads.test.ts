@@ -10,8 +10,10 @@ import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { openHippoDb } from '../src/db/index.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../src/consolidate/dag.js';
-import { countAllMemories } from '../src/api/memories.js';
+import { countAllMemories } from '../src/api/memories/memories.js';
 import { adminActor } from '../src/api/types.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 const roots: string[] = [];
 
@@ -79,7 +81,7 @@ describe('rebuildDirtySummaries', () => {
   function seededDirty(n: number): string {
     const root = newRoot('bounded-dirty');
     const summaries = Array.from({ length: n }, (_, i) => ({
-      ...createMemory(`summary ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, tags: ['dag-summary'], dag_level: 2 }),
+      ...createMemory(`summary ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, tags: ['dag-summary'], dagLevel: 2 }),
       latest_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
     }));
     writeEntriesTogether(root, summaries);
@@ -99,7 +101,7 @@ describe('rebuildDirtySummaries', () => {
       const root = seededDirty(n);
       const newest = loadAllDirtySummaries(root).slice(0, 3).map((e) => e.id);
       expect(loadAllDirtySummaries(root, 3).map((e) => e.id)).toEqual(newest);
-      const { result, rowsRead } = await recordStatementsAsync(() => rebuildDirtySummaries(root, { apiKey: 'k', fetcher, cap: 2 }));
+      const { result, rowsRead } = await recordStatementsAsync(() => rebuildDirtySummaries(sqliteConsolidation(root), { apiKey: 'k', fetcher, cap: 2 }));
       expect(result).toMatchObject({ attempted: 2, capped: true });
       read.push(rowsRead);
     }
@@ -108,15 +110,16 @@ describe('rebuildDirtySummaries', () => {
 });
 
 describe('countAllMemories', () => {
-  it('counts every tenant\'s rows without reading them', () => {
-    const read = [10, 200].map((n) => {
+  it('counts every tenant\'s rows without reading them', async () => {
+    const read: number[] = [];
+    for (const n of [10, 200]) {
       const root = newRoot('bounded-count');
       writeEntriesTogether(root, [...padding(n), memory('acme row', { tenant_id: 'acme' })]);
-      const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test:count') };
-      const { result, rowsRead } = recordStatements(() => countAllMemories(ctx));
+      const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test:count'), store: sqliteStore(root) };
+      const { result, rowsRead } = await recordStatementsAsync(() => countAllMemories(ctx));
       expect(result).toBe(n + 1);
-      return rowsRead;
-    });
+      read.push(rowsRead);
+    }
     expect(read[1]).toBe(read[0]);
   });
 });

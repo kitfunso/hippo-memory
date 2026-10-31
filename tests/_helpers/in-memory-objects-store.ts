@@ -223,6 +223,10 @@ export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
       hits.sort((a, b) => byBytes(b.created, a.created) || byBytes(b.id, a.id));
       return hits.slice(0, limit).map((m) => ({ id: m.id, created: m.created, source: m.source, content: m.content }));
     },
+    async objectIdByMemory(tenantId, kind, status, memoryId) {
+      const hits = [...tableOf(kind).values()].filter((r) => r.tenantId === tenantId && r.status === status && r.memoryId === memoryId);
+      return hits.reduce<number | null>((best, r) => (best === null || r.id > best ? r.id : best), null);
+    },
   };
 
   const store: InMemoryObjectsStore['store'] = {

@@ -1,5 +1,8 @@
-/** EVAL-ONLY ablation switches (HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS, HIPPO_FAKE_NOW): each cuts ONE mechanism (outcome also replayPriority bias).
- * Not a production surface. Env is read once per process; tests that mutate these vars MUST call _resetAblationCacheForTests() in beforeEach AND afterEach. See
+/**
+ * EVAL-ONLY ablation switches (HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS, HIPPO_FAKE_NOW): each cuts ONE mechanism
+ * (outcome also replayPriority bias).
+ * Not a production surface. Env is read once per process; tests that mutate these vars MUST call
+ * _resetAblationCacheForTests() in beforeEach AND afterEach. See
  * docs/ARCHITECTURE.md#srccoreablationts. */
 
 import {
@@ -27,7 +30,11 @@ export interface StrengthAblation {
 }
 
 /** Production scoring: nothing ablated. Core falls back to this, so it never reads the environment. */
-export const NO_STRENGTH_ABLATION: StrengthAblation = Object.freeze({ decay: false, recallBoost: false, outcomeSlow: false });
+export const NO_STRENGTH_ABLATION: StrengthAblation = Object.freeze({
+  decay: false,
+  recallBoost: false,
+  outcomeSlow: false,
+});
 
 let _cache: AblationFlags | undefined;
 let _strengthCache: StrengthAblation | undefined;
@@ -81,7 +88,10 @@ export function evalRecencyScaleDays(): number | null {
   return readFlags().recencyDays;
 }
 
-/** The default `now` for lifecycle computations: HIPPO_FAKE_NOW when set and parseable, else the real clock; an explicit `now` parameter always wins. */
+/**
+ * The default `now` for lifecycle computations: HIPPO_FAKE_NOW when set and parseable, else the real clock; an explicit
+ * `now` parameter always wins.
+ */
 export function evalNow(): Date {
   const ms = readFlags().fakeNowMs;
   return ms === null ? new Date() : new Date(ms);

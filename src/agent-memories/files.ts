@@ -13,7 +13,8 @@ export type TextFile =
 /** A file's text, or why it was skipped: empty, too big, holds a NUL byte (not text), or unreadable. */
 export function readTextFile(file: string): TextFile {
   try {
-    // O_NONBLOCK opens a FIFO at once, for the file check to turn away; Windows has no such flag and the OR adds nothing.
+    // O_NONBLOCK opens a FIFO at once, for the file check to turn away; Windows has no such flag and the OR adds
+    // nothing.
     const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
     try {
       return readOpenTextFile(file, fd);

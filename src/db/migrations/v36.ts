@@ -81,7 +81,8 @@ const TRG_CUSTOMER_NOTES_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v36: Migration = {
     version: 36,
     up: (db) => {
-      // customer_note first-class object: a note on a customer, superseding like v35 project_briefs; `customer` is a free-form id (no FK: no entities table).
+      // customer_note first-class object: a note on a customer, superseding like v35 project_briefs; `customer` is a
+      // free-form id (no FK: no entities table).
       // Many notes per customer, each its own supersede chain. Column names were checked against SQLite reserved words.
       if (!tableExists(db, 'customer_notes')) {
         db.exec(CUSTOMER_NOTES_TABLE);

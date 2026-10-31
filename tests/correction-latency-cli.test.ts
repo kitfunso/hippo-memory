@@ -62,7 +62,7 @@ describe('hippo correction-latency CLI', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'user:keith',
-        artifact_ref: 'slack://team/eng/1714600200.001',
+        artifactRef: 'slack://team/eng/1714600200.001',
       }),
       '2026-04-01T10:00:00.000Z',
     );
@@ -73,7 +73,7 @@ describe('hippo correction-latency CLI', () => {
       '2026-03-15T00:00:00.000Z',
     );
     const newFact = withCreated(
-      createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extracted_from: raw.id }),
+      createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extractedFrom: raw.id }),
       '2026-04-01T10:30:00.000Z',
     );
     oldFact.superseded_by = newFact.id;

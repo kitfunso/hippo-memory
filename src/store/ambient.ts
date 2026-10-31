@@ -4,7 +4,8 @@ import { SECRET_TAGS } from '../util/secret-detect.js';
 import { onHandle, openStore } from './open.js';
 import { jsonList } from './candidates.js';
 import { originInSql } from '../core/project-identity.js';
-import { AMBIENT_FRESH_WINDOW_MS, HIGH_SCHEMA_FIT_ABOVE, isErrorTagged, type AmbientTallies } from '../core/ambient.js';
+import { AMBIENT_FRESH_WINDOW_MS, isErrorTagged, type AmbientTallies } from '../core/ambient.js';
+import { HIGH_SCHEMA_FIT } from '../core/memory.js';
 import { placeholders } from '../util/sql.js';
 
 /** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */
@@ -19,7 +20,8 @@ export interface AmbientStoreFilter {
   now: Date;
 }
 
-// SHORTCUT: mirrors loadContextCandidates' WHERE (request-path snapshots pin the match); share it once store.ts is split.
+// SHORTCUT: mirrors loadContextCandidates' WHERE (request-path snapshots pin the match); share it once store.ts is
+// split.
 function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {
   const where = ['tenant_id = ?', `COALESCE(superseded_by, '') = ''`, `COALESCE(kind, '') != 'archived'`];
   const params: string[] = [tenantId];
@@ -38,12 +40,14 @@ function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {
   return { where, params };
 }
 
-/** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot match. */
+/** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot
+ * match. */
 function secretTaggedSql() {
   const tags = [...SECRET_TAGS];
   return {
     sql: `((${tags.map(() => 'tags_json LIKE ?').join(' OR ')})
-      AND EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE lower(value) IN (${placeholders(tags.length)})))`,
+      AND EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE lower(value) IN
+      (${placeholders(tags.length)})))`,
     params: [...tags.map((t) => `%"${t}"%`), ...tags],
   };
 }
@@ -72,11 +76,13 @@ export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: 
       FROM memories
       WHERE ${where.join(' AND ')}
         AND ((${originInSql(filter.currentProject)} AND origin_project != '') OR NOT ${secret.sql})`,
-    ).get(freshAfter, HIGH_SCHEMA_FIT_ABOVE, ...params, ...filter.currentProject, ...secret.params) as
+    ).get(freshAfter, HIGH_SCHEMA_FIT, ...params, ...filter.currentProject, ...secret.params) as
       Record<Exclude<keyof AmbientTallies, 'tagCounts' | 'errors'>, number | bigint> & { tagLists: string };
     const tagCounts = new Map<string, number>();
     let errors = 0;
-    const lists = /* SAFETY: jsonList yields an array per row, joined into one array */ JSON.parse(row.tagLists) as unknown[][];
+    const lists = /* SAFETY: jsonList yields an array per row, joined into one array */ JSON.parse(
+      row.tagLists,
+    ) as unknown[][];
     for (const raw of lists) {
       const tags = raw.map((item) => String(item));
       for (const tag of tags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);

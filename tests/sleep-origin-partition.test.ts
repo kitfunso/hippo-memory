@@ -14,6 +14,8 @@ import { detectConflicts } from '../src/consolidate/conflicts.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
 import { storeExtractedFacts } from '../src/learn/extract.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 let home: string;
 beforeEach(() => {
@@ -61,7 +63,7 @@ describe('sleep partitions by origin project', () => {
     writeEntry(home, inProject(createMemory(text, { layer: Layer.Semantic }), 'proj-c'));
     writeEntry(home, inProject(createMemory(text, { layer: Layer.Semantic }), 'proj-c'));
 
-    expect(deduplicateStore(home).removed).toBe(1);
+    expect(deduplicateStore(sqliteConsolidation(home)).removed).toBe(1);
     expect(live().map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
   });
 
@@ -88,19 +90,19 @@ describe('sleep partitions by origin project', () => {
 
   it('the DAG summarises facts and summaries within a project, and each summary stays in that project', async () => {
     const facts = ['proj-b', 'proj-c'].flatMap((origin) => ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
-      inProject(createMemory(`${c} in ${origin}`, { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] }), origin)));
+      inProject(createMemory(`${c} in ${origin}`, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }), origin)));
     for (const f of facts) writeEntry(home, f);
 
-    expect((await buildDag(home, facts, { apiKey: 'k', fetcher: fetcher('alice files, notes and closes tickets') })).summariesCreated).toBe(2);
+    expect((await buildDag(sqliteSyncStore(home).localFiles, facts, { apiKey: 'k', fetcher: fetcher('alice files, notes and closes tickets') })).summariesCreated).toBe(2);
     const l2s = live().filter((e) => e.dag_level === 2);
     expect(l2s.map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
 
     const more = ['proj-b', 'proj-c'].map((origin) => inProject(createMemory(`alice owns the API layer in ${origin}`, {
-      layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dag_level: 2,
+      layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2,
     }), origin));
     for (const l2 of more) writeEntry(home, l2);
 
-    expect((await buildEntityProfiles(home, [...l2s, ...more], { apiKey: 'k', fetcher: fetcher('alice is the typed-python API owner') })).profilesCreated).toBe(2);
+    expect((await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...l2s, ...more], { apiKey: 'k', fetcher: fetcher('alice is the typed-python API owner') })).profilesCreated).toBe(2);
     expect(live().filter((e) => e.dag_level === 3).map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
   });
 });

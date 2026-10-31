@@ -9,6 +9,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CASE_MS = 180_000;
 const SPAWN_MS = 60_000;
@@ -164,7 +165,7 @@ describe('hippo remember (built CLI, no server)', () => {
 
   it('a rejected value is refused', async () => {
     const s = new Store();
-    await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
+    await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
     s.settle();
     s.run('remember', 'the billing service retries a failed charge nine times');
     s.expectPinned();
@@ -205,7 +206,7 @@ describe('hippo supersede (built CLI, no server)', () => {
 
   it('new content that is a rejected value', async () => {
     const s = new Store();
-    await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
+    await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
     s.settle();
     s.run('remember', 'the billing service retries a failed charge three times');
     s.run('supersede', s.lastId(), 'the billing service retries a failed charge nine times');
@@ -215,7 +216,7 @@ describe('hippo supersede (built CLI, no server)', () => {
   it("another person's personal row", async () => {
     const s = new Store();
     const owner = { subject: 'api_key:hk_a', role: 'member', owner: 'a' } as const;
-    const { id } = await remember({ hippoRoot: s.root, tenantId: 'default', actor: owner }, { content: 'my own note about the billing retry count', personal: true });
+    const { id } = await remember(apiCtx(s.root, 'default', owner), { content: 'my own note about the billing retry count', personal: true });
     s.settle();
     s.run('supersede', id, 'a newer note about the billing retry count');
     s.expectPinned();

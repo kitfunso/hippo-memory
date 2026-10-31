@@ -11,25 +11,30 @@ import { type ContinuityKey, freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } 
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
+import { isPointerSafeId } from '../util/session-id.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
-import { getGlobalRoot } from '../sharing/global-store.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { isSharedStore, loadConfig } from '../core/config.js';
+import { isSharedStore } from '../core/config.js';
+import { configOf } from './config-of.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import {
-  resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, isInitialized, projectId, projectNames, type ProjectRef,
+  resolveProjectIdentity,
+  classifyOriginProject,
+  projectId,
+  projectNames,
+  type ProjectRef,
 } from '../core/project-identity.js';
 import { promptTokens } from '../core/prompt-recall.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isSessionDigestRow } from '../core/session-digest-row.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
-import { hasGroup, requireGroup, sqliteStore, type HippoStore } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
+import { hasGroup, type StoreWith } from '../store/index.js';
+import type { StoreReach } from '../store/port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
   finiteOr,
@@ -41,14 +46,16 @@ import {
   type ContextPools,
   type ContextSource,
 } from './context-select.js';
-import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
-import { strengthenOf } from './recall-record.js';
-import { type Context, ownerOrSubject } from './types.js';
+import type { ContextOpts, ContextResult, ContextResultEntry, ContinuityMode } from './context-types.js';
+import { strengthenOf } from './recall/finish.js';
+import { tokenPurse } from './recall/render.js';
+import { type Context, type ContextWith, type StoreContext, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
-/** The single ambient-injection admission policy, shared by getContext and the CLI ambient-state summary so they cannot drift.
- * Secret veto is unconditional (flagged rows inject only in their own project); private scopes need `exactScope`, other projects `includeCrossProject`. */
+/** The single ambient-injection admission policy, shared by getContext and the CLI ambient-state summary so they cannot
+ * drift. Secret veto is unconditional (flagged rows inject only in their own project); private scopes need
+ * `exactScope`, other projects `includeCrossProject`. */
 function ambientAdmitEntry(
   e: MemoryEntry,
   currentProject: ProjectRef,
@@ -62,7 +69,8 @@ function ambientAdmitEntry(
   return classifyOriginProject(e.origin_project, currentProject) !== 'cross-project';
 }
 
-/** The secret half of the ambient policy alone, for callers with their own scope rule: a flagged row is admitted only inside its owning project. */
+/** The secret half of the ambient policy alone, for callers with their own scope rule: a flagged row is admitted only
+ * inside its owning project. */
 export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
   if (!detectSecret(e).flagged) return true;
   const origin = e.origin_project;
@@ -72,6 +80,9 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): 
 
 /** Tokens a context block may use when the caller sets no budget; the hook command and the CLI default match it. */
 export const DEFAULT_CONTEXT_BUDGET = 1500;
+
+// The plan's query when the caller gave none: context then ranks by strength instead of searching.
+export const NO_QUERY = '*';
 
 /** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
 const CONTEXT_CANDIDATE_CAP = 2000;
@@ -91,11 +102,12 @@ interface RecentRequest {
 }
 
 /** A store's base search and context reads; a store without the group throws StoreNotPortedError. */
-function sourceOf(store: HippoStore): ContextSource {
-  return { store, reads: requireGroup(store, 'contextReads') };
+function sourceOf(store: StoreWith<'contextReads'>): ContextSource {
+  return { store, reads: store.contextReads };
 }
 
-/** What one store's ambient read is asked for. `recent`, `recall` and `onQualityDrop` apply to the pinned-only branch alone. */
+/** What one store's ambient read is asked for. `recent`, `recall`
+ * and `onQualityDrop` apply to the pinned-only branch alone. */
 interface LoadAmbientEntriesOptions {
   readonly pinnedOnly: boolean;
   readonly recent: RecentRequest;
@@ -108,7 +120,11 @@ interface LoadAmbientEntriesOptions {
 }
 
 // The pinned-only branch needs pins and recent-N candidates, not the corpus.
-async function loadAmbientEntries(source: ContextSource, tenantId: string, options: LoadAmbientEntriesOptions): Promise<AmbientLoadResult> {
+async function loadAmbientEntries(
+  source: ContextSource,
+  tenantId: string,
+  options: LoadAmbientEntriesOptions,
+): Promise<AmbientLoadResult> {
   const { pinnedOnly, recent, admit, recheck, window, recall, onQualityDrop } = options;
   const ownTenant = (e: MemoryEntry): boolean => e.tenant_id === tenantId;
   if (!pinnedOnly) {
@@ -133,8 +149,14 @@ async function loadAmbientEntries(source: ContextSource, tenantId: string, optio
     onQualityDrop?.(e);
     return false;
   };
-  const loaded = await source.reads.ambientCandidates(tenantId, { recentNeeded: recent.needed, admit: admitAmbient, recall, origins: recent.origins });
-  // Pins and recent rows reach core only through the store's own call to admit, so core applies it again with the tenant.
+  const loaded = await source.reads.ambientCandidates(tenantId, {
+    recentNeeded: recent.needed,
+    admit: admitAmbient,
+    recall,
+    origins: recent.origins,
+  });
+  // Pins and recent rows reach core only through the store's own
+  // call to admit, so core applies it again with the tenant.
   const entries = loaded.entries.filter((e) => ownTenant(e) && recheck(e));
   return loaded.recall ? { entries, recall: loaded.recall.filter(ownTenant) } : { entries };
 }
@@ -143,15 +165,18 @@ async function loadAmbientEntries(source: ContextSource, tenantId: string, optio
 interface TaskSections {
   activeSnapshot: TaskSnapshot | null;
   shownSnapshot: TaskSnapshot | null;
+  snapshotMode: ContinuityMode;
   shownHandoff: SessionHandoff | null;
+  handoffMode: ContinuityMode;
   shownEvents: SessionEvent[];
   left: number;
 }
 
-/** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit row for non-pinned, non-'*' queries.
- * Returns an empty result when there are no memories, snapshot, handoff or recent events. CLI rendering stays in `cli.ts`. */
+/** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit
+ * row for non-pinned, non-'*' queries. Returns an empty result when there are no memories, snapshot, handoff or recent
+ * events. CLI rendering stays in `cli.ts`. */
 export async function getContext(
-  ctx: Context,
+  ctx: ContextWith<'contextReads'>,
   opts: ContextOpts = {},
 ): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
@@ -160,18 +185,18 @@ export async function getContext(
     return { entries: [], tokens: 0 };
   }
 
-  const plan = planContext(ctx, opts, sourceOf(storeFor(ctx)));
+  const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
   const admission = ambientAdmission(opts, plan, sections.shownHandoff);
   const pools = await loadPools(ctx, plan, admission, promptRecallRequest(opts, plan));
   const noSections = !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
-  if (!plan.promptRecallPending && pools.local.entries.length === 0 && pools.global.entries.length === 0 && noSections) {
+  if (nothingToInject(plan, pools, noSections)) {
     return { entries: [], tokens: 0 };
   }
 
   const picked = plan.pinnedOnly
     ? selectPinned(opts, plan, sections.left, pools, admission)
-    : plan.query === '*'
+    : plan.query === NO_QUERY
       ? selectStrongest(plan, sections.left, pools)
       : await selectBySearch(ctx, plan, sections.left, pools, admission);
   if (picked === null) {
@@ -191,59 +216,86 @@ export async function getContext(
     ? { items, ambientState: undefined }
     : await recordRetrieval(ctx, opts, plan, items, sections.activeSnapshot);
 
-  return {
-    entries: recorded.items,
-    tokens,
-    activeSnapshot: sections.shownSnapshot ?? undefined,
-    sessionHandoff: sections.shownHandoff ?? undefined,
-    recentEvents: sections.shownEvents.length > 0 ? sections.shownEvents : undefined,
-    ambientState: recorded.ambientState,
-  };
+  return contextResult(recorded, tokens, sections);
+}
+
+type AmbientPools = Awaited<ReturnType<typeof loadPools>>;
+
+function nothingToInject(plan: ContextPlan, pools: AmbientPools, noSections: boolean): boolean {
+  return (
+    !plan.promptRecallPending && pools.local.entries.length === 0 && pools.global.entries.length === 0 && noSections
+  );
 }
 
 const isolationWarned = new Set<string>();
 
-/** A laptop config copied onto a team store must not open every member's rows to every prompt, so the flag loses there. */
+/** A laptop config copied onto a team store must not open every
+ * member's rows to every prompt, so the flag loses there. */
 function warnIsolationIgnored(hippoRoot: string): void {
   if (isolationWarned.has(hippoRoot)) return;
   isolationWarned.add(hippoRoot);
-  log.warn(`${hippoRoot}: "contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.`);
+  log.warn(
+    `${hippoRoot}: "contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.`,
+  );
 }
 
 /** Which stores this read can draw on, and what kind the primary one is. */
 function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
   const other = hasGroup(local.store, 'localFiles') ? undefined : local.store;
-  // Global memories do not establish a project boundary for task state.
-  const hasLocal = other !== undefined || isInitialized(ctx.hippoRoot);
-  const globalRoot = getGlobalRoot();
+  // No reach means an integrator's own store: one project, no global store beside it.
+  const reach: StoreReach =
+    ctx.reach ?? { hasLocal: true, isGlobal: false, shared: isSharedStore(ctx.hippoRoot) };
   // The store's own flag counts too, so no surface can read a shared store as its owner.
-  const sharedStore = opts.sharedStore === true || isSharedStore(ctx.hippoRoot);
+  const sharedStore = opts.sharedStore === true || reach.shared;
   // A store serving many people is not its operator's, so the operator's own global store stays out.
-  const hasGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
-  const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
-  return { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal };
+  const hasGlobal = !sharedStore && other === undefined && reach.global !== undefined;
+  // Global memories do not establish a project boundary for task state.
+  return {
+    other,
+    hasLocal: other !== undefined || reach.hasLocal,
+    globalRoot: reach.global?.root ?? '',
+    sharedStore,
+    hasGlobal,
+    primaryIsGlobal: reach.isGlobal,
+  };
+}
+
+/** The operator's global store, which planContext proved present before it set hasGlobal. */
+function globalSource(ctx: Context): ContextSource {
+  const global = ctx.reach?.global;
+  if (global === undefined) throw new Error('hasGlobal without a global store in reach');
+  return sourceOf(global.store);
 }
 
 /** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
 function entryPricer(cost: ContextOpts['cost'], currentProject: ContextPlan['currentProject']): ContextPlan['price'] {
-  return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
-    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject) })
-    : estimateTokens(entry.content);
+  return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number =>
+    cost
+      ? cost.entry({
+          entry,
+          isGlobal,
+          promptRecall,
+          origin: entry.origin_project ?? null,
+          category: classifyOriginProject(entry.origin_project, currentProject),
+        })
+      : estimateTokens(entry.content);
 }
 
 function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
   const pinnedOnly = opts.pinnedOnly === true;
   const { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts, local);
-  const query = (opts.q ?? '').trim() || '*';
+  const query = (opts.q ?? '').trim() || NO_QUERY;
 
   // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are
   // excluded unless the caller asks for them (crossProject) or isolation is disabled.
-  const config = loadConfig(ctx.hippoRoot);
+  const config = configOf(ctx);
   const isolationEnabled = config.contextProjectIsolation !== false;
   const currentProject =
     opts.currentProject ?? resolveProjectIdentity(process.cwd());
   // A caller with no project reads every row as its own; on a shared store those rows are other people's.
-  if (sharedStore && projectId(currentProject).trim() === '') throw new BadRequestError('a shared store needs the caller\'s project');
+  if (sharedStore && projectId(currentProject).trim() === '') {
+    throw new BadRequestError("a shared store needs the caller's project");
+  }
   if (sharedStore && !isolationEnabled) warnIsolationIgnored(ctx.hippoRoot);
   const includeCrossProject = opts.crossProject === true || (!isolationEnabled && !sharedStore);
 
@@ -286,7 +338,11 @@ function promptRecallRequest(opts: ContextOpts, plan: ContextPlan): AmbientRecal
     ? Array.from(promptTokens(opts.prompt ?? ''))
     : [];
   return promptRecallTerms.length > 0
-    ? { terms: promptRecallTerms, limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, 100, 1)), ownScope: plan.ownScope }
+    ? {
+        terms: promptRecallTerms,
+        limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, 100, 1)),
+        ownScope: plan.ownScope,
+      }
     : undefined;
 }
 
@@ -294,7 +350,11 @@ function promptRecallRequest(opts: ContextOpts, plan: ContextPlan): AmbientRecal
 function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): number {
   const { config, cost, obs, pinnedOnly, promptRecallPending } = plan;
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
-  obs?.facts({ projectName: projectId(plan.currentProject), budgetTokens: blockBudget, promptRecall: promptRecallPending });
+  obs?.facts({
+    projectName: projectId(plan.currentProject),
+    budgetTokens: blockBudget,
+    promptRecall: promptRecallPending,
+  });
   if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
   if (!pinnedOnly) obs?.queried(plan.query);
   return cost
@@ -318,7 +378,8 @@ const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] 
 async function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPlan): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
   const { store, reads } = plan.local;
-  // On a shared store task state is one person's, keyed by owner and project so it follows them into their next session.
+  // On a shared store task state is one person's, keyed by owner
+  // and project so it follows them into their next session.
   const key: ContinuityKey | null = plan.sharedStore
     ? { owner: ownerOrSubject(ctx.actor), project: projectNames(plan.currentProject) }
     : null;
@@ -328,39 +389,91 @@ async function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPl
   // The block's handoff and events are the raw snapshot's session's, so they stand only while that snapshot is fresh.
   if (snapshot?.session_id) return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
   // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an older eligible one.
-  return { snapshot, handoff: await reads.unfinishedHandoff(ctx.tenantId, SNAPSHOT_AMBIENT_MAX_AGE_MS, key), events: [] };
+  return {
+    snapshot,
+    handoff: await reads.unfinishedHandoff(ctx.tenantId, SNAPSHOT_AMBIENT_MAX_AGE_MS, key),
+    events: [],
+  };
 }
 
-// Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry is.
-async function loadTaskSections(ctx: Context, opts: ContextOpts, plan: ContextPlan, startLeft: number): Promise<TaskSections> {
+// Sections print ahead of the memories, so they are paid first;
+// one that does not fit is dropped, as an oversize entry is.
+async function loadTaskSections(
+  ctx: Context,
+  opts: ContextOpts,
+  plan: ContextPlan,
+  startLeft: number,
+): Promise<TaskSections> {
   const { exactScope, ownScope, cost } = plan;
-  let left = startLeft;
-  const pays = (tokens: number): boolean => {
-    if (tokens > left) return false;
-    left -= tokens;
-    return true;
-  };
+  const { pays, left } = tokenPurse(startLeft);
   const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
   const raw = await loadRawTaskState(ctx, opts, plan);
   // The same envelope rule ambientAdmitEntry applies to memory rows.
-  const activeSnapshot = raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
-  const sessionHandoff = raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
-  const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
-  const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
-  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
-  const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
+  const activeSnapshot =
+    raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
+  const sessionHandoff =
+    raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
+  const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.session_id, 'pointer');
+  const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId, 'full');
+  const shownSnapshot =
+    activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot, snapshotMode))) ? activeSnapshot : null;
+  const shownHandoff =
+    sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff, handoffMode))) ? sessionHandoff : null;
+  // The pointer's command prints the snapshot session's events, so they drop only when that pointer is shown.
+  const recentSessionEvents = shownSnapshot !== null && snapshotMode === 'pointer'
+    ? []
+    : raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
+  const shownEvents =
+    recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
   plan.obs?.sections(
     Number(shownSnapshot !== null) + Number(shownHandoff !== null) + Number(shownEvents.length > 0),
-    Number(activeSnapshot !== shownSnapshot) + Number(sessionHandoff !== shownHandoff) + Number(recentSessionEvents.length !== shownEvents.length),
+    Number(activeSnapshot !== shownSnapshot) +
+      Number(sessionHandoff !== shownHandoff) +
+      Number(recentSessionEvents.length !== shownEvents.length),
   );
-  return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left };
+  return { activeSnapshot, shownSnapshot, snapshotMode, shownHandoff, handoffMode, shownEvents, left: left() };
+}
+
+// The command must return this reader's row, so own, shared-store, unsafe-id print whole; no id: `hippo snapshot show`.
+function continuityModeFor(
+  opts: ContextOpts, plan: ContextPlan, sessionId: string | null | undefined, noIdMode: ContinuityMode,
+): ContinuityMode {
+  if (opts.continuity !== 'pointer' || plan.sharedStore) return 'full';
+  if (!sessionId) return noIdMode;
+  return sessionId === opts.currentSessionId || !isPointerSafeId(sessionId) ? 'full' : 'pointer';
+}
+
+// The mode is left out of a full print, so every reader's result reads as before.
+function pointerModes(s: TaskSections): Pick<ContextResult, 'snapshotMode' | 'handoffMode'> {
+  const modes: Pick<ContextResult, 'snapshotMode' | 'handoffMode'> = {};
+  if (s.shownSnapshot && s.snapshotMode === 'pointer') modes.snapshotMode = 'pointer';
+  if (s.shownHandoff && s.handoffMode === 'pointer') modes.handoffMode = 'pointer';
+  return modes;
+}
+
+function contextResult(recorded: RecordedRetrieval, tokens: number, s: TaskSections): ContextResult {
+  return {
+    entries: recorded.items,
+    tokens,
+    activeSnapshot: s.shownSnapshot ?? undefined,
+    sessionHandoff: s.shownHandoff ?? undefined,
+    ...pointerModes(s),
+    recentEvents: s.shownEvents.length > 0 ? s.shownEvents : undefined,
+    ambientState: recorded.ambientState,
+  };
 }
 
 function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
   const ambientAdmit = (e: MemoryEntry): boolean => {
-    // A printed handoff already carries the session's closing message, which its digest would print a second time.
-    if (transcriptHandoffSession !== null && e.source_session_id === transcriptHandoffSession && isSessionDigestRow(e)) return false;
+    // A shown handoff, whole or as a pointer, stands for the session's closing message; its command prints it.
+    if (
+      transcriptHandoffSession !== null &&
+      e.source_session_id === transcriptHandoffSession &&
+      isSessionDigestRow(e)
+    ) {
+      return false;
+    }
     return ambientAdmitEntry(e, plan.currentProject, plan.includeCrossProject, plan.exactScope, plan.ownScope);
   };
   const ownSessionId = opts.currentSessionId || '';
@@ -369,14 +482,16 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
     ownSessionId !== '' &&
     e.source_session_id === ownSessionId &&
     e.tags.includes(COMPACTION_MEMORY_TAG);
-  // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
+  // Superseded rows never inject; which rows reach ambientAdmitEntry
+  // matters because it regex-scans content for secrets.
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
   // The two-store search has always ranked a session's own compaction items; only the local search drops them.
   const bothStoresAdmit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
   return { ambientAdmit, admit, bothStoresAdmit };
 }
 
-/** Origins the recent backfill may read past its first window; on a shared store, only the caller's own project rows. */
+/** Origins the recent backfill may read past its first window;
+ * on a shared store, only the caller's own project rows. */
 function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
   if (plan.sharedStore) return { names: projectNames(plan.currentProject).filter((n) => n !== ''), userGlobal: false };
   return plan.originProject && { names: plan.originProject, userGlobal: true };
@@ -390,7 +505,7 @@ async function loadPools(
 ): Promise<ContextPools> {
   const { obs, pinnedOnly, primaryIsGlobal, hasGlobal, exactScope, ownScope } = plan;
   const recent: RecentRequest = { needed: plan.includeRecent, origins: recentOrigins(plan) };
-  const searches = plan.query !== '*' && !pinnedOnly;
+  const searches = plan.query !== NO_QUERY && !pinnedOnly;
   const searchesBoth = searches && hasGlobal && !primaryIsGlobal;
   const poolAdmit = searchesBoth ? admission.bothStoresAdmit : admission.admit;
   const loadAdmit = obs ? obs.watchAdmit(poolAdmit) : poolAdmit;
@@ -412,9 +527,13 @@ async function loadPools(
   const local: AmbientLoadResult = plan.hasLocal
     ? await loadAmbientEntries(plan.local, ctx.tenantId, { ...read, onQualityDrop: qualityDrop(primaryIsGlobal) })
     : { entries: [] };
-  const global: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? await loadAmbientEntries(sourceOf(sqliteStore(plan.globalRoot)), ctx.tenantId, { ...read, onQualityDrop: qualityDrop(true) })
-    : { entries: [] };
+  const global: AmbientLoadResult =
+    hasGlobal && !primaryIsGlobal
+      ? await loadAmbientEntries(globalSource(ctx), ctx.tenantId, {
+          ...read,
+          onQualityDrop: qualityDrop(true),
+        })
+      : { entries: [] };
   return { local, global };
 }
 
@@ -428,7 +547,7 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   const { obs } = plan;
   // Ranking reports nothing itself, so its results are offered here and the cuts below can name what they drop.
   if (!plan.pinnedOnly && obs) {
-    const pool = plan.query === '*' ? 'strength' : 'search';
+    const pool = plan.query === NO_QUERY ? 'strength' : 'search';
     obs.offer(picked.filter((r) => r.isGlobal !== true).map((r) => r.entry), false, pool);
     obs.offer(picked.filter((r) => r.isGlobal === true).map((r) => r.entry), true, pool);
   }
@@ -438,12 +557,14 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
     obs?.dropMissing(selected.map((r) => r.entry), cut.map((r) => r.entry), 'limit', 'limit');
     selected = cut;
   }
-  const heldDropped = dropHeldCopies(selected, (r) => r.entry); // after the last cut, so a merged row that was cut hides nothing
+  // After the last cut, so a merged row that was cut hides nothing.
+  const heldDropped = dropHeldCopies(selected, (r) => r.entry);
   obs?.dropMissing(selected.map((r) => r.entry), heldDropped.map((r) => r.entry), 'limit', 'duplicate');
   selected = heldDropped;
   const tokens = selected.reduce((sum, r) => sum + r.tokens, 0);
 
-  // Every returned entry carries its origin and how it relates to the active project, so renderers can mark cross-project rows.
+  // Every returned entry carries its origin and how it relates to
+  // the active project, so renderers can mark cross-project rows.
   selected = selected.map((r) => ({
     ...r,
     origin: r.entry.origin_project ?? null,
@@ -454,7 +575,7 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
 }
 
 // Never touches the index, so it cannot desync last_retrieval_ids from last_trace_id.
-async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextPlan): Promise<void> {
+async function traceEmptyContext(ctx: StoreContext, opts: ContextOpts, plan: ContextPlan): Promise<void> {
   // No snapshot in this branch, so the caller's own id is the only session to stamp.
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
@@ -466,10 +587,10 @@ async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextP
   };
   // The empty reply is already decided, so a lost trace is logged and the call still answers.
   try {
-    await storeFor(ctx).finishRecall({ goalLog: [], audit: [], trace });
+    await ctx.store.finishRecall({ goalLog: [], audit: [], trace });
   } catch (error) {
     rethrowIfSqliteBlocked(error);
-    log.error(`recall trace write failed: ${errorMessage(error)}`);
+    log.error(`recall trace write failed: ${errorMessage(error)}`, errorFields(error));
   }
 }
 
@@ -480,7 +601,7 @@ interface RecordedRetrieval {
 
 /** Strengthens and marks the returned rows, then writes the trace and index together. */
 async function recordRetrieval(
-  ctx: Context,
+  ctx: StoreContext,
   opts: ContextOpts,
   plan: ContextPlan,
   selected: ContextResultEntry[],
@@ -502,7 +623,7 @@ async function recordRetrieval(
   };
   const writes = { goalLog: [], audit: [], trace, strengthen: strengthenOf(ctx, retrievedIds) };
   // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the recall without one.
-  const store = storeFor(ctx);
+  const store = ctx.store;
   const traceId = store.lastRecall
     ? await store.lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
     : await store.finishRecall(writes).then(() => null);
@@ -530,7 +651,7 @@ async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<Ambien
   };
   const sources = [
     ...(plan.hasLocal ? [plan.local.reads] : []),
-    ...(plan.hasGlobal && !plan.primaryIsGlobal ? [sourceOf(sqliteStore(plan.globalRoot)).reads] : []),
+    ...(plan.hasGlobal && !plan.primaryIsGlobal ? [globalSource(ctx).reads] : []),
   ];
   const tallies: AmbientTallies[] = [];
   for (const reads of sources) tallies.push(await reads.ambientTallies(ctx.tenantId, filter));

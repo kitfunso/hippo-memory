@@ -7,19 +7,21 @@
  * substitutions, scope/tenant filtered, and reversible via Task 3 drillDown.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { retrieve, type Context } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:recall-sub', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:recall-sub', role: 'admin' });
 }
 
 function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -28,8 +30,8 @@ function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     layer: Layer.Buffer,
     tags: opts.tags ?? [],
     confidence: 'observed',
-    dag_level: opts.dag_level ?? 0,
-    dag_parent_id: opts.dag_parent_id ?? undefined,
+    dagLevel: opts.dag_level ?? 0,
+    dagParentId: opts.dag_parent_id ?? undefined,
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
     kind: opts.kind ?? 'distilled',
@@ -43,7 +45,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     layer: Layer.Semantic,
     tags: opts.tags ?? ['dag-summary'],
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
   });

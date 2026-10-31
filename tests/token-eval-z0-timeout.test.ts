@@ -1,10 +1,11 @@
 // Z0 session timeouts with the fake Claude Code (prereg 165): a graded record priced from its transcript, never a plan limit.
 // Costs nothing; each HANG waits out a short session timeout.
 import { describe, it, expect, afterEach } from 'vitest';
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { transcriptUsage, assistantTurns } from '../scripts/token-eval/records.mjs';
 import { validateCorpus } from './fixtures/z0-contract.js';
+import { waitFor } from './_helpers/wait-for.js';
 import {
   cleanup, tmp, isolate, makeRepo, task, plain, oneLesson, spec, run, readRecords, readPlan, rawResult, logLines, find,
 } from './fixtures/z0-harness.js';
@@ -114,10 +115,8 @@ describe('a session that runs out of time (prereg 165)', () => {
     expect(existsSync(tick)).toBe(true);
     const pid = Number(readFileSync(join(out, 'grandchild.pid'), 'utf8'));
     try {
-      const before = statSync(tick).size;
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      expect(statSync(tick).size).toBe(before);
-      expect(alive(pid)).toBe(false);
+      // The kill can return before the process table drops the grandchild, so wait for the death instead of a fixed pause.
+      await waitFor(() => !alive(pid), { what: `grandchild ${pid} dead`, timeoutMs: 10_000 });
     } finally {
       if (alive(pid)) process.kill(pid, 'SIGKILL');
     }

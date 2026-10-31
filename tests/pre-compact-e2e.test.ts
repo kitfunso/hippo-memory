@@ -382,7 +382,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     });
 
     // Every user turn is a tool_result array, not plain text — summariseTranscript's
-    // lastPlainUserMessage derives '' for task, but the assistant text still
+    // lastTurnText derives '' for task, but the assistant text still
     // yields a non-empty summary/next_step, so this must NOT be a full skip.
     const transcriptPath = path.join(dir, 'tool-heavy.jsonl');
     fs.writeFileSync(

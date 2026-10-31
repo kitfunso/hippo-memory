@@ -1,19 +1,12 @@
 // The global store: where it lives, creating it, and copying a local memory into it.
 
-import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import * as fs from 'fs';
-import { MemoryEntry, generateId } from '../core/memory.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { resolveGlobalRootDir } from '../core/project-identity.js';
 import { initStore } from '../store/open.js';
-import { writeEntryWithHook } from '../store/entry-writes.js';
-import { readEntry } from '../store/entry-reads.js';
-import { isPersonalScope } from '../core/recall-scope.js';
-import { fallbackOrigin, resolveGlobalRootDir } from '../core/project-identity.js';
-import { isSharedStore } from '../core/config.js';
-import { detectSecret } from '../util/secret-detect.js';
-import { isQuarantineScope } from '../trust/quarantine.js';
+import { copyToGlobal } from '../store/sqlite/global-promote.js';
+import type { PromoteOptions } from '../store/port/promotion.js';
 import { embedMemory } from '../search/embed-memories.js';
-import type { DatabaseSyncLike } from '../db/index.js';
-import { appendAuditEvent } from '../store/audit.js';
 
 /** Returns the path to the global Hippo store.
  *  Resolution order: $HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo/ */
@@ -34,55 +27,16 @@ export function initGlobal(): void {
   }
 }
 
-export interface PromoteOptions {
-  actor?: string;
-  tenantId?: string;
-  /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own transaction. */
-  auditAs?: { tenantId: string; actor: string };
-}
+export type { PromoteOptions };
 
 /** Copies a local memory to the global store and returns the copy, which gets a new `g_` id so it cannot collide. */
 export function promoteToGlobal(localRoot: string, id: string, opts?: PromoteOptions): MemoryEntry {
-  const entry = readEntry(localRoot, id, opts?.tenantId);
-  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
-
-  // Same quarantine veto as shareMemory; a promoted copy would have no quarantine record to review.
-  if (isQuarantineScope(entry.scope)) {
-    throw new BadRequestError(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
-  }
-  if (isPersonalScope(entry.scope ?? null)) {
-    throw new BadRequestError(`Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`);
-  }
-
-  // Secret producer veto: promote is a producer path to the global store
-  // exactly like shareMemory - same hard rule.
-  const promoteSecret = detectSecret(entry);
-  if (promoteSecret.flagged) {
-    throw new BadRequestError(
-      `Refusing to promote ${id} to the global store: content matches secret material (${promoteSecret.reason}). ` +
-      `Secrets stay in their owning project's store.`,
-    );
-  }
-
-  initGlobal();
-  const globalRoot = getGlobalRoot();
-
-  // A project store's NULL row gets its folder back; a shared store's folder is no caller's project, so NULL stays and the label names no path.
-  const globalEntry: MemoryEntry = {
-    ...entry,
-    id: generateId('g'),
-    source: isSharedStore(localRoot) ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
-    origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
-  };
-
-  const { auditAs } = opts ?? {};
-  const promoteRow = auditAs && ((db: DatabaseSyncLike, globalId: string): void => {
-    appendAuditEvent(db, { tenantId: auditAs.tenantId, actor: auditAs.actor, op: 'promote', targetId: globalId, metadata: { sourceId: id } });
-  });
-  writeEntryWithHook(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: promoteRow });
-
-  // Fire-and-forget: embedMemory gates on availability and never rejects.
-  void embedMemory(globalRoot, globalEntry);
-
+  const globalEntry = copyToGlobal(localRoot, id, opts);
+  embedGlobalCopy(globalEntry);
   return globalEntry;
+}
+
+/** Fire-and-forget: embedMemory gates on availability and never rejects. */
+export function embedGlobalCopy(globalEntry: MemoryEntry): void {
+  void embedMemory(getGlobalRoot(), globalEntry);
 }

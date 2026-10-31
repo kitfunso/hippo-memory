@@ -1,4 +1,5 @@
-// Tells the server thread when a write job may have committed, so a job stopped before that point is known to have saved nothing.
+// Tells the server thread when a write job may have committed, so a job stopped before that point is known to have
+// saved nothing.
 import type { DatabaseSyncLike } from '../../db/index.js';
 
 const ROLLS_BACK_PART = /^\s*ROLLBACK\s+TO\b/i;

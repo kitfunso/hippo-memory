@@ -11,7 +11,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
-import { rankRecall, type RankRecallCtx, type RankRecallOpts } from '../src/api/recall-pipeline.js';
+import { rankRecall, type RankRecallCtx, type RankRecallOpts } from '../src/api/recall/pipeline.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
 
 let home: string;
@@ -61,7 +61,7 @@ describe('rankRecall', () => {
     writeEntry(hippoRoot, seeded('private deploy token rotation', 'mem_rank_private', {}, { scope: 'slack:private:C1' }));
     writeEntry(hippoRoot, seeded('deploy target was the old cluster', 'mem_rank_old', { superseded_by: 'mem_rank_plain' }));
     writeEntry(hippoRoot, seeded('deploy goal work on the runner', 'mem_rank_goal', {}, { tags: ['goal-alpha'] }));
-    writeEntry(hippoRoot, seeded('deploy trace: promoted the canary', 'mem_rank_trace', {}, { layer: Layer.Trace, trace_outcome: 'success' }));
+    writeEntry(hippoRoot, seeded('deploy trace: promoted the canary', 'mem_rank_trace', {}, { layer: Layer.Trace, traceOutcome: 'success' }));
   });
 
   afterEach(() => {

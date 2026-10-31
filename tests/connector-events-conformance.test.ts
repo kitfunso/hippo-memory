@@ -54,11 +54,11 @@ let copies = 0;
 
 function seed(dir: string): Seeded {
   const rows = {
-    message: createMemory('raw slack line about the outage', { tenantId: TENANT_A, kind: 'raw', artifact_ref: MESSAGE_REF }),
-    messageB: createMemory('globex raw slack line under the same ref', { tenantId: TENANT_B, kind: 'raw', artifact_ref: MESSAGE_REF }),
-    onlyB: createMemory('a raw comment only globex holds', { tenantId: TENANT_B, kind: 'raw', artifact_ref: ONLY_B_REF }),
-    note: createMemory('a distilled note under the comment ref', { tenantId: TENANT_A, artifact_ref: COMMENT_REF }),
-    commentB: createMemory('globex raw comment under the comment ref', { tenantId: TENANT_B, kind: 'raw', artifact_ref: COMMENT_REF }),
+    message: createMemory('raw slack line about the outage', { tenantId: TENANT_A, kind: 'raw', artifactRef: MESSAGE_REF }),
+    messageB: createMemory('globex raw slack line under the same ref', { tenantId: TENANT_B, kind: 'raw', artifactRef: MESSAGE_REF }),
+    onlyB: createMemory('a raw comment only globex holds', { tenantId: TENANT_B, kind: 'raw', artifactRef: ONLY_B_REF }),
+    note: createMemory('a distilled note under the comment ref', { tenantId: TENANT_A, artifactRef: COMMENT_REF }),
+    commentB: createMemory('globex raw comment under the comment ref', { tenantId: TENANT_B, kind: 'raw', artifactRef: COMMENT_REF }),
   };
   for (const entry of Object.values(rows)) writeEntry(dir, entry, { actor: 'cli' });
   markSlackEventSeen(dir, 'Ev_empty', null);
@@ -205,7 +205,7 @@ describe('ConnectorEvents.deletionTarget', () => {
 });
 
 describe('ConnectorEvents.archiveDeletedArtifact', () => {
-  const fresh = (content: string): MemoryEntry => createMemory(content, { tenantId: TENANT_A, kind: 'raw', artifact_ref: COMMENT_REF });
+  const fresh = (content: string): MemoryEntry => createMemory(content, { tenantId: TENANT_A, kind: 'raw', artifactRef: COMMENT_REF });
   const remembered = (e: MemoryEntry) => ({ tenantId: TENANT_A, actor: ACTOR, op: 'remember', targetId: e.id, metadata: { kind: 'raw', scope: e.scope } });
   const archivedRow = (e: MemoryEntry) => ({ tenantId: TENANT_A, actor: ACTOR, op: 'archive_raw', targetId: e.id, metadata: { reason: REASON } });
 

@@ -8,8 +8,8 @@ import {
   loadPhysicsState,
   savePhysicsState,
   resetAllPhysicsState,
-  refreshParticleProperties,
 } from '../src/db/physics-state.js';
+import { refreshParticleProperties } from '../src/core/particle-refresh.js';
 import { float32ToBuffer, bufferToFloat32 } from '../src/util/vector-codec.js';
 import { initializeParticle } from '../src/core/physics.js';
 import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../src/store/vector-index.js';

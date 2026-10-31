@@ -2,7 +2,7 @@
 
 Date: 2026-10-05
 Status: accepted
-Links: `src/memory-quality.ts` (`isAutomaticEntry`, `isReusable`, `isWorthSurfacing`); `src/quality-repair.ts`; `src/api/dormant.ts` `restoreDormant`; CONTEXT.md "Automatic memory"
+Links: `src/memory-quality.ts` (`isAutomaticEntry`, `isReusable`, `isWorthSurfacing`); `src/quality-repair.ts`; `src/api/sleep/dormant.ts` `restoreDormant`; CONTEXT.md "Automatic memory"
 
 ## Context
 The quality gate from #493 refuses fragments, raw tool output and build chatter. Its checks are regexes, and at build time they flagged 4 of 5 ordinary hand-written rules.

@@ -1,4 +1,5 @@
-// Hand-written for the JSON Schema subset the hippo tool definitions use, so the MCP server needs no validator dependency.
+// Hand-written for the JSON Schema subset the hippo tool definitions use, so the MCP server needs no validator
+// dependency.
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
 
@@ -37,7 +38,8 @@ function isArgNumber(v: ToolArgValue): v is number {
 
 const NUMERIC_STRING = /^-?\d+(\.\d+)?$/;
 
-// LLM clients often send numbers as strings, and the handlers Number-coerce, so "4000" counts as 4000 while "12abc" does not.
+// LLM clients often send numbers as strings, and the handlers Number-coerce, so "4000" counts as 4000 while "12abc"
+// does not.
 function asNumber(v: ToolArgValue): number | null {
   if (isArgNumber(v)) return v;
   if (isArgString(v) && NUMERIC_STRING.test(v.trim())) return Number(v.trim());
@@ -80,7 +82,10 @@ function checkProperty(name: string, schema: ToolPropertySchema, raw: ToolArgVal
   return null;
 }
 
-/** One message per violation; undeclared properties pass, and `checkedDownstream` names keep the API layer's own error contract. */
+/**
+ * One message per violation; undeclared properties pass, and `checkedDownstream` names keep the API layer's own error
+ * contract.
+ */
 export function validateToolArgs(
   schema: ToolInputSchema,
   args: Readonly<Record<string, ToolArgValue>>,

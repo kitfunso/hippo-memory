@@ -83,6 +83,7 @@ function unexplained429s(file: string, text: string): string[] {
 
 describe('every 429 in core src', () => {
   it('is an HttpError with a Retry-After value, a status comparison, or a comment', () => {
+    // A lint-style scan: no request reaches an unwritten 429, so the source text is the only place to check it.
     const files = readdirSync(join(repoRoot, 'src'), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts'));
     const texts = files.map((file) => ({ file, text: readFileSync(join(repoRoot, 'src', file), 'utf8') }));
     expect(texts.some(({ text }) => /HttpError\(\s*429\b/.test(text))).toBe(true);

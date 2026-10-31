@@ -10,9 +10,10 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { mergedText } from '../src/util/same-text.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
+import { sqliteReach, sqliteStore } from '../src/store/sqlite/store.js';
 
 // Newest first, as git log prints them.
 const COMMIT_SUBJECTS = [
@@ -45,7 +46,7 @@ function localRow(i: number): MemoryEntry {
     layer: i % 3 === 0 ? Layer.Semantic : Layer.Episodic,
     tags: i % 8 === 0 ? ['error'] : i % 29 === 9 ? ['secret'] : [`t${i % 4}`],
     pinned: i % 25 === 0,
-    emotional_valence: i % 9 === 0 ? 'negative' : 'neutral',
+    emotionalValence: i % 9 === 0 ? 'negative' : 'neutral',
     scope: i % 17 === 3 ? 'slack:private:c1' : i % 19 === 4 ? 'unknown:legacy' : i % 13 === 5 ? 'team:x' : null,
     tenantId: i % 15 === 14 ? 'acme' : 'default',
   });
@@ -133,11 +134,18 @@ describe('request-path output on a fixed store', () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
+  const mcpCtx = (): McpContext => {
+    const store = sqliteStore(localRoot);
+    return {
+      hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store,
+      reach: sqliteReach(localRoot, store),
+    };
+  };
   type ToolArgs = { scope?: string };
   const call = (name: string, args: ToolArgs = {}): Promise<McpResponse | null> =>
     handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      mcpCtx(),
     );
 
   const toolCases: Array<[string, ToolArgs]> = [

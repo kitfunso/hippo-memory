@@ -13,11 +13,12 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { markRetrieved } from '../src/core/memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { remember, getContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 
 function ctx() {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' as const } };
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' as const });
 }
 
 beforeEach(() => {

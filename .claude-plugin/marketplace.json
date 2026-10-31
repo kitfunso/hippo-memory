@@ -12,7 +12,7 @@
       "name": "hippo-memory",
       "source": "./extensions/claude-code-plugin",
       "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "homepage": "https://github.com/kitfunso/hippo-memory",
       "license": "MIT"
     }

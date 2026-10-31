@@ -1,14 +1,18 @@
 // Sleep's tombstone checks run on one handle for the whole pass, owned here so no stage holds a raw one.
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
-import { type AppendAuditOpts, appendAuditEvent } from './audit.js';
+import { type AppendAuditOpts, appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { findRejectedValue, type RejectedValueRow } from './rejection.js';
+import { errorMessage } from '../util/log.js';
 
-/** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed once. */
+/** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed
+ * once. */
 export interface TombstoneChecks {
   /** The tenant's tombstone for `digest`; null when there is none, and always under dryRun. */
   find(tenantId: string, digest: string): RejectedValueRow | null;
   /** One audit row on the same handle; nothing under dryRun. */
   audit(event: AppendAuditOpts): void;
+  /** `audit`, with a failed write logged and counted instead of thrown, for a refusal that stands without its row. */
+  auditOrCount(event: AppendAuditOpts): void;
   close(): void;
 }
 
@@ -29,6 +33,13 @@ export function lazyTombstoneChecks(hippoRoot: string, dryRun: boolean): Tombsto
     audit(event) {
       const db = opened();
       if (db) appendAuditEvent(db, event);
+    },
+    auditOrCount(event) {
+      try {
+        this.audit(event);
+      } catch (error) {
+        reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
+      }
     },
     close() {
       if (handle) closeHippoDb(handle);

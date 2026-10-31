@@ -14,9 +14,12 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
-import { saveProjectBrief, assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
+import { saveProjectBrief, briefFromReceipts } from '../src/objects/project-briefs.js';
 import { derivationScope, commonDerivationScope } from '../src/core/recall-scope.js';
 import { placeholders } from '../src/util/sql.js';
+import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 function tmpHome(prefix: string = 'hippo-derived-scope-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -108,7 +111,7 @@ describe('dedupe partitions by restricted scope', () => {
       writeEntry(home, { ...priv, strength: 0.9 });
       writeEntry(home, { ...pub, strength: 0.1 });
 
-      expect(deduplicateStore(home).removed).toBe(0);
+      expect(deduplicateStore(sqliteConsolidation(home)).removed).toBe(0);
       expect(loadAllEntries(home).map((e) => e.scope).sort()).toEqual([null, 'slack:private:C1'].sort());
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -176,15 +179,15 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     try {
       initStore(home);
       const privFacts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
-        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'], scope: 'slack:private:C1' }),
+        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'], scope: 'slack:private:C1' }),
       );
       const pubFacts = ['alice shipped P', 'alice reviewed Q', 'alice merged R'].map((c) =>
-        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'], scope: null }),
+        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'], scope: null }),
       );
       for (const f of [...privFacts, ...pubFacts]) writeEntry(home, f);
 
       const fetcher = makeOkFetcher('synthetic-scope-partitioned-summary');
-      const result = await buildDag(home, [...privFacts, ...pubFacts], { apiKey: 'test-key', fetcher });
+      const result = await buildDag(sqliteSyncStore(home).localFiles, [...privFacts, ...pubFacts], { apiKey: 'test-key', fetcher });
 
       expect(result.candidateClusters).toBe(2);
       expect(result.summariesCreated).toBe(2);
@@ -224,7 +227,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       initStore(home);
       const makeL2 = (content: string, scope: string | null) => createMemory(content, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dag_level: 2, scope,
+        layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2, scope,
       });
       const privL2s = [
         'alice prefers python type hints privately',
@@ -239,7 +242,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       for (const l2 of [...privL2s, ...pubL2s]) writeEntry(home, l2);
 
       const fetcher = makeOkFetcher('synthetic-scope-partitioned-profile');
-      const result = await buildEntityProfiles(home, [...privL2s, ...pubL2s], { apiKey: 'k', fetcher });
+      const result = await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...privL2s, ...pubL2s], { apiKey: 'k', fetcher });
 
       expect(result.profilesCreated).toBe(2);
       expect(result.l2sLinked).toBe(6);
@@ -309,16 +312,16 @@ describe('assembleBriefFromReceipts excludes restricted receipts', () => {
     return mem.id;
   }
 
-  it('quotes the public receipt only, excluding a slack:private and a mixed-case Slack:Private receipt', () => {
+  it('quotes the public receipt only, excluding a slack:private and a mixed-case Slack:Private receipt', async () => {
     const home = tmpHome();
     try {
       initStore(home);
-      saveProjectBrief(home, 'default', { repo: 'hippo', summary: 'seed' });
+      await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'hippo', summary: 'seed' });
       addReceipt(home, 'hippo', 'the public deploy went out on schedule', null);
       addReceipt(home, 'hippo', 'the private incident channel discussed the outage', 'slack:private:C1');
       addReceipt(home, 'hippo', 'another restricted note in mixed case', 'Slack:Private:C9');
 
-      const { markdown, receiptCount } = assembleBriefFromReceipts(home, 'default', 'hippo');
+      const { markdown, receiptCount } = await briefFromReceipts(objectsAt(home), 'default', 'hippo');
 
       expect(receiptCount).toBe(1);
       expect(markdown).toContain('the public deploy went out on schedule');

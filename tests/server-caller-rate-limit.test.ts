@@ -431,6 +431,18 @@ describe('the per-caller default', () => {
     expect(await statuses(() => recall(bearer(key)), 3)).toEqual([200, 200, 429]);
   });
 
+  it.each(['-1', 'fast', 'NaN'])('refuses HIPPO_V1_RPS=%s at boot instead of turning the limit off', async (value) => {
+    process.env.HIPPO_V1_RPS = value;
+    await expect(serve({ hippoRoot: root, port: 0 })).rejects.toThrow(/HIPPO_V1_RPS/);
+  });
+
+  it('turns the per-address limit off with HIPPO_V1_RPS=0', async () => {
+    process.env.HIPPO_V1_RPS = '0';
+    process.env.HIPPO_CALLER_RPS = '0';
+    await start();
+    expect(await statuses(() => recall(bearer(mint())), 60)).not.toContain(429);
+  });
+
   it.each(['-1', 'fast'])('refuses HIPPO_CALLER_RPS=%s at boot', async (value) => {
     process.env.HIPPO_CALLER_RPS = value;
     await expect(serve({ hippoRoot: root, port: 0 })).rejects.toThrow(/HIPPO_CALLER_RPS/);

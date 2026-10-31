@@ -8,17 +8,19 @@
  *           validation on every :id path segment.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { drillDown, type Context } from '../src/api/index.js';
+import { drillDown } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:v164', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:v164', role: 'admin' });
 }
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {
@@ -26,7 +28,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     layer: Layer.Semantic,
     tags: ['dag-summary'],
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
   });
@@ -57,7 +59,7 @@ describe('drillDown discriminated outcome', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
-      dag_level: 0,
+      dagLevel: 0,
     });
     writeEntry(root, leaf);
     const r = await drillDown(ctxFor(root), leaf.id);
@@ -81,7 +83,7 @@ describe('drillDown discriminated outcome', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
-      dag_level: 0,
+      dagLevel: 0,
       scope: 'slack:private:CSEC',
     });
     writeEntry(root, leaf);
@@ -111,7 +113,7 @@ describe('HTTP /v1/recall/drill status mapping', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
-      dag_level: 0,
+      dagLevel: 0,
     });
     writeEntry(home, leaf);
     const res = await fetch(`${handle.url}/v1/recall/drill/${leaf.id}`);

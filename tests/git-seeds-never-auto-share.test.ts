@@ -1,7 +1,7 @@
 // Memories seeded from git history never reach the global store on their own;
 // a hand-run share or promote of one still does. Real stores and the real CLI.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,6 +17,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
@@ -28,14 +30,12 @@ describe('git-learned rows and the global store', () => {
   let tmp: string;
   let hippoRoot: string;
   let seed: MemoryEntry;
-  let origHippoHome: string | undefined;
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'hippo-gitshare-'));
     hippoRoot = join(tmp, 'proj', '.hippo');
     initStore(hippoRoot);
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = join(tmp, 'global');
+    vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     // The tags learnFromRepo gives every seed.
     seed = createMemory(SEED, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error', 'git-learned'], source: 'git-learn', tenantId: 'default' });
     writeEntry(hippoRoot, seed);
@@ -44,8 +44,7 @@ describe('git-learned rows and the global store', () => {
   });
 
   afterEach(() => {
-    if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-    else delete process.env.HIPPO_HOME;
+    vi.unstubAllEnvs();
     rmSync(tmp, { recursive: true, force: true });
   });
 
@@ -59,7 +58,7 @@ describe('git-learned rows and the global store', () => {
 
   it('sleep with autoShareOnSleep on does not copy the git-learned row', async () => {
     expect(loadConfig(hippoRoot).autoShareOnSleep).toBe(true);
-    const result = await sleep({ hippoRoot, tenantId: 'default', actor: adminActor('test:gitshare') }, {});
+    const result = await sleep(apiCtx(hippoRoot, 'default', adminActor('test:gitshare')), {});
     expect(result.shared).toBe(1);
     expect(globalContents()).toEqual([ORDINARY]);
   });
@@ -94,13 +93,13 @@ describe('git-learned rows and the global store', () => {
     const facts = storeExtractedFacts(hippoRoot, seed, [1, 2, 3, 4, 5, 6].map((n): ExtractedFact => (
       { content: `Upload fact ${n}: the storage token can expire mid-transfer.`, tags: ['topic:upload'], valence: 'neutral' }
     ))).map((f) => ({ ...f, dag_level: 1 }));
-    await buildDag(hippoRoot, facts.slice(0, 3), { apiKey: 'test', fetcher });
-    await buildDag(hippoRoot, facts.slice(3), { apiKey: 'test', fetcher });
+    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(0, 3), { apiKey: 'test', fetcher });
+    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(3), { apiKey: 'test', fetcher });
     const summaries = loadAllEntries(hippoRoot).filter((e) => e.dag_level === 2);
     expect(summaries).toHaveLength(2);
     for (const s of summaries) expect(s.tags).toContain('git-learned');
 
-    await buildEntityProfiles(hippoRoot, summaries, { apiKey: 'test', fetcher });
+    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, summaries, { apiKey: 'test', fetcher });
     const profiles = loadAllEntries(hippoRoot).filter((e) => e.dag_level === 3);
     expect(profiles).toHaveLength(1);
     expect(profiles[0].tags).toContain('git-learned');

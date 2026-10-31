@@ -1,13 +1,30 @@
-// hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind the shared save writes, its insert values and audit keys.
-// A status column carries a CHECK constraint, so a row declares it as the kind's status union.
+// hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind the shared save
+// writes, its insert values and audit keys. A status column carries a CHECK constraint, so a row declares it as the
+// kind's status union.
 import type { AuditOp } from '../audit.js';
 import { isJsonString } from '../../util/json.js';
 import { warnDamagedColumn } from '../../util/stored-json.js';
 import type { JsonObject } from '../working-memory.js';
 import type { SourceObjectType } from '../graph-rows.js';
 import type {
-  BriefStatus, CustomerNote, Decision, DecisionStatus, Incident, IncidentStatus, NoteStatus, ObjectByKind, ObjectFields, ObjectKind,
-  Policy, PolicyStatus, Process, ProcessStatus, ProjectBrief, SavableKind, Skill, SkillStatus,
+  BriefStatus,
+  CustomerNote,
+  Decision,
+  DecisionStatus,
+  Incident,
+  IncidentStatus,
+  NoteStatus,
+  ObjectByKind,
+  ObjectFields,
+  ObjectKind,
+  Policy,
+  PolicyStatus,
+  Process,
+  ProcessStatus,
+  ProjectBrief,
+  SavableKind,
+  Skill,
+  SkillStatus,
 } from '../../core/object-types.js';
 
 interface HeadRow {
@@ -159,21 +176,44 @@ function parseSteps(raw: string, id: number): string[] {
   }
 }
 
-const rowToProcess = (row: ProcessRow): Process => (
-  { ...head(row), processName: row.process_name, description: row.description, steps: parseSteps(row.steps, row.id), ...versionedTail(row) }
-);
+const rowToProcess = (row: ProcessRow): Process => ({
+  ...head(row),
+  processName: row.process_name,
+  description: row.description,
+  steps: parseSteps(row.steps, row.id),
+  ...versionedTail(row),
+});
 
-const rowToPolicy = (row: PolicyRow): Policy => (
-  { ...head(row), policyName: row.policy_name, policyText: row.policy_text, validFrom: row.valid_from, validTo: row.valid_to, ...versionedTail(row) }
-);
+const rowToPolicy = (row: PolicyRow): Policy => ({
+  ...head(row),
+  policyName: row.policy_name,
+  policyText: row.policy_text,
+  validFrom: row.valid_from,
+  validTo: row.valid_to,
+  ...versionedTail(row),
+});
 
-const rowToSkill = (row: SkillRow): Skill => (
-  { ...head(row), skillName: row.skill_name, instructions: row.instructions, trigger: row.trigger_text, ...versionedTail(row) }
-);
+const rowToSkill = (row: SkillRow): Skill => ({
+  ...head(row),
+  skillName: row.skill_name,
+  instructions: row.instructions,
+  trigger: row.trigger_text,
+  ...versionedTail(row),
+});
 
-const rowToProjectBrief = (row: ProjectBriefRow): ProjectBrief => ({ ...head(row), repo: row.repo, summary: row.summary, ...versionedTail(row) });
+const rowToProjectBrief = (row: ProjectBriefRow): ProjectBrief => ({
+  ...head(row),
+  repo: row.repo,
+  summary: row.summary,
+  ...versionedTail(row),
+});
 
-const rowToCustomerNote = (row: CustomerNoteRow): CustomerNote => ({ ...head(row), customer: row.customer, note: row.note, ...versionedTail(row) });
+const rowToCustomerNote = (row: CustomerNoteRow): CustomerNote => ({
+  ...head(row),
+  customer: row.customer,
+  note: row.note,
+  ...versionedTail(row),
+});
 
 interface RowSpec<K extends ObjectKind> {
   readonly table: string;
@@ -185,7 +225,8 @@ interface RowSpec<K extends ObjectKind> {
   readonly closeOp: AuditOp;
   /** The one column a list may filter by equality. */
   readonly filterColumn?: string;
-  /** Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the object's graph rows. */
+  /** Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the object's graph
+   * rows. */
   readonly graphType?: SourceObjectType;
 }
 
@@ -195,12 +236,14 @@ export type ColumnValue = string | number | null;
 interface InsertSpec<K extends SavableKind> {
   readonly createOp: AuditOp;
   readonly supersedeOp: AuditOp;
-  /** A versioned table has `version` and `change_summary`: a successor takes its predecessor's version plus one and the caller's change note. */
+  /** A versioned table has `version` and `change_summary`: a successor takes its predecessor's version plus one and the
+   * caller's change note. */
   readonly versioned: boolean;
   /** The kind's own columns, in the order `values` fills them. */
   readonly columns: readonly string[];
   readonly values: (w: ObjectFields[K]) => readonly ColumnValue[];
-  /** The create audit's keys after the id, in the order they are stored: ids, counts and flags, never the object's text. */
+  /** The create audit's keys after the id, in the order they are stored: ids, counts and flags, never the object's
+   * text. */
   readonly createMeta: (w: ObjectFields[K], version: number) => JsonObject;
   /** Keys the supersede audit stores after its own. */
   readonly supersedeMeta?: (w: ObjectFields[K]) => JsonObject;

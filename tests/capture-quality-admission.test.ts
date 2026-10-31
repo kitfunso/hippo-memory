@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { FullContext } from './_helpers/api-ctx.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,13 +7,14 @@ import { cmdCapture } from '../src/capture/command.js';
 import { extractFromText, extractFromTexts } from '../src/capture/extract.js';
 import { sessionTail, summariseSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../src/learn/autolearn.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
 import { initStore, openStore } from '../src/store/open.js';
 import { closeHippoDb } from '../src/db/index.js';
 import { gatedWrite } from '../src/store/gated-write.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const captureTurns = (turns: readonly SessionTurn[]) => {
   const { users, assistants } = sessionTail(turns);
@@ -132,8 +134,7 @@ describe('capture retains complete supported assertions', () => {
 describe('automatic quality does not govern manual or trusted import storage', () => {
   let scratch: string;
   let root: string;
-  let priorHome: string | undefined;
-  let ctx: Context;
+  let ctx: FullContext;
 
   beforeEach(() => {
     scratch = mkdtempSync(join(tmpdir(), 'hippo-quality-context-'));
@@ -141,14 +142,12 @@ describe('automatic quality does not govern manual or trusted import storage', (
     initStore(root);
     const global = join(scratch, 'global');
     initStore(global);
-    priorHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = global;
-    ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    vi.stubEnv('HIPPO_HOME', global);
+    ctx = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   });
 
   afterEach(() => {
-    if (priorHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = priorHome;
+    vi.unstubAllEnvs();
     rmSync(scratch, { recursive: true, force: true });
   });
 

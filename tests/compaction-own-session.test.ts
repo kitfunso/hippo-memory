@@ -1,5 +1,6 @@
 // A session's own compaction items never inject back into it; another session and explicit recall still see them.
 // Real SQLite stores in tmp dirs, no mocks.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,8 +15,9 @@ import {
 } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { getContext, retrieve, type Context } from '../src/api/index.js';
+import { getContext, retrieve } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';
@@ -24,7 +26,7 @@ const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 
 let tmpRoot: string;
 let local: string;
-let ctx: Context;
+let ctx: FullContext;
 
 const minute = (base: number, i: number): string => new Date(Date.UTC(2026, base, 1, 0, i)).toISOString();
 
@@ -62,7 +64,7 @@ beforeEach(() => {
   initStore(local);
   initStore(globalRoot);
   vi.stubEnv('HIPPO_HOME', globalRoot);
-  ctx = { hippoRoot: local, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {

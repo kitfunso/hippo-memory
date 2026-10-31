@@ -4,6 +4,7 @@
  * docs/plans/2026-08-15-at1-rejected-value-tombstone.md
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -19,6 +20,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import * as api from '../src/api/index.js';
 import { RejectedValueError } from '../src/core/api-errors.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpDir: string;
 
@@ -27,8 +29,8 @@ beforeEach(() => {
   initStore(tmpDir);
 });
 
-function ctx(tenantId: string = 'default'): api.Context {
-  return { hippoRoot: tmpDir, tenantId, actor: { subject: 'cli', role: 'admin' } };
+function ctx(tenantId: string = 'default'): FullContext {
+  return apiCtx(tmpDir, tenantId, { subject: 'cli', role: 'admin' });
 }
 
 describe('api.reject / api.unreject / listRejectionsForTenant', () => {
@@ -64,7 +66,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
   it('reject purges the trace-layer markdown mirror (P1 fix: removeEntryMirrors previously skipped Layer.Trace)', async () => {
     const trace = createMemory('trace: read config.ts -> rotated the deploy key -> success', {
       layer: Layer.Trace,
-      trace_outcome: 'success',
+      traceOutcome: 'success',
     });
     writeEntry(tmpDir, trace);
     const mirrorPath = path.join(tmpDir, Layer.Trace, `${trace.id}.md`);

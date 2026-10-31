@@ -10,6 +10,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/core/api-errors.js';
 import { mapApiError } from '../src/api/error-reply.js';
+import { StoreBusyError } from '../src/store/port.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE } from '../src/util/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -43,6 +44,7 @@ describe('mapApiError maps by class, never by message', () => {
     [new HttpError(418, 'teapot'), 418],
     [new BodyTooLargeError('request body exceeds 1MB'), 413],
     [new BodyTimeoutError('request body not received within 10000 ms'), 408],
+    [new StoreBusyError(), 503],
   ];
   it.each(typed)('%s keeps its own message at %i', (err, status) => {
     expect(mapApiError(err)).toEqual({ status, message: err.message });

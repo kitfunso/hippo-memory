@@ -19,14 +19,13 @@ describe('dashboard local access token', () => {
   let hippoRoot: string;
   let server: Server | undefined;
   let port: number;
-  const prevHippoHome = process.env.HIPPO_HOME;
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-dash-token-'));
     hippoRoot = join(home, '.hippo');
     mkdirSync(hippoRoot, { recursive: true });
     initStore(hippoRoot);
-    process.env.HIPPO_HOME = join(home, '.hippo-global');
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     server = serveDashboard(hippoRoot, 0, TOKEN);
     port = await boundPort(server);
   });
@@ -34,8 +33,7 @@ describe('dashboard local access token', () => {
   afterEach(async () => {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     server = undefined;
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -56,6 +54,11 @@ describe('dashboard local access token', () => {
 
     const again = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } });
     expect(again.status).toBe(200);
+  });
+
+  it('bounds the cookie to one day, so a browser that restores its session does not keep the token forever', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/overview?token=${TOKEN}`);
+    expect(res.headers.get('set-cookie')).toMatch(/; Max-Age=86400(;|$)/);
   });
 
   it('answers a page load that carries the token with the cookie and a 303 to the same address without it, never to another host', async () => {

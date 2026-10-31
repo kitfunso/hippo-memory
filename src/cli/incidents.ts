@@ -2,11 +2,14 @@
 
 import { extractPathTags } from '../search/path-context.js';
 import * as incidentsModule from '../objects/incidents.js';
+import { objectsOf } from '../api/objects/objects.js';
+import type { Objects } from '../store/port.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, isStringFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, type ObjectNames } from './object-verbs.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const INCIDENT: ObjectNames = { cmd: 'incident', noun: 'Incident', idLabel: 'incident' };
 
@@ -17,18 +20,18 @@ function printIncidentRow(inc: incidentsModule.Incident): void {
   if (inc.context) console.log(`    context: ${inc.context}`);
 }
 
-function incidentList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  listObjects(flags, {
+function incidentList(objects: Objects, tenantId: string, flags: CliFlags): Promise<void> {
+  return listObjects(flags, {
     plural: 'incidents',
     states: incidentsModule.VALID_INCIDENT_STATES,
-    load: (opts) => incidentsModule.loadIncidents(hippoRoot, tenantId, opts),
+    load: (opts) => incidentsModule.loadIncidents(objects, tenantId, opts),
     printRow: printIncidentRow,
   });
 }
 
-function incidentGet(hippoRoot: string, tenantId: string, args: string[]): void {
+async function incidentGet(objects: Objects, tenantId: string, args: string[]): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo incident get <id>', INCIDENT.idLabel);
-  const incident = foundOrExit(incidentsModule.loadIncidentById(hippoRoot, tenantId, id), INCIDENT.noun, id);
+  const incident = foundOrExit(await incidentsModule.loadIncidentById(objects, tenantId, id), INCIDENT.noun, id);
   console.log(`Incident #${incident.id}`);
   console.log(`  status: ${incident.status}`);
   console.log(`  text: ${incident.incidentText}`);
@@ -43,42 +46,47 @@ function incidentGet(hippoRoot: string, tenantId: string, args: string[]): void 
   console.log(`  created: ${incident.createdAt}`);
 }
 
-function incidentResolve(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function incidentResolve(objects: Objects, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo incident resolve <id> --resolution "<text>"', INCIDENT.idLabel);
   const resolutionRaw = stringFlag(flags, 'resolution');
   if (!resolutionRaw?.trim()) {
-    printError('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
-    throw new CliExit(1);
+    fail('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
   }
-  const resolved = incidentsModule.resolveIncident(hippoRoot, tenantId, id, resolutionRaw);
+  const resolved = await incidentsModule.resolveOpenIncident(objects, tenantId, id, resolutionRaw, 'cli');
   console.log(`Incident #${resolved.id} resolved.`);
 }
 
-function incidentClose(hippoRoot: string, tenantId: string, args: string[]): void {
-  closeObject(args, INCIDENT, (id) => incidentsModule.closeIncident(hippoRoot, tenantId, id));
+function incidentClose(objects: Objects, tenantId: string, args: string[]): Promise<void> {
+  return closeObject(args, INCIDENT, (id) => incidentsModule.closeIncident(objects, tenantId, id));
 }
 
-export function handleIncident({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleIncident({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  if (subcommand === 'list') return incidentList(hippoRoot, tenantId, flags);
-  if (subcommand === 'get') return incidentGet(hippoRoot, tenantId, args);
-  if (subcommand === 'resolve') return incidentResolve(hippoRoot, tenantId, args, flags);
-  if (subcommand === 'close') return incidentClose(hippoRoot, tenantId, args);
+  const objects = objectsOf(cliApiContext(hippoRoot, tenantId));
+  if (subcommand === 'list') return incidentList(objects, tenantId, flags);
+  if (subcommand === 'get') return incidentGet(objects, tenantId, args);
+  if (subcommand === 'resolve') return incidentResolve(objects, tenantId, args, flags);
+  if (subcommand === 'close') return incidentClose(objects, tenantId, args);
 
   // Default subcommand is open (create): accept both `incident open "<text>"` and bare `incident "<text>"`;
   // for the `open` keyword the text is args[1], otherwise args[0] is the text.
-  incidentCreate(hippoRoot, tenantId, subcommand === 'open' ? (args[1] ?? '') : subcommand, flags);
+  await incidentCreate(objects, hippoRoot, tenantId, subcommand === 'open' ? (args[1] ?? '') : subcommand, flags);
 }
 
-function incidentCreate(hippoRoot: string, tenantId: string, incidentText: string, flags: CliFlags): void {
+async function incidentCreate(
+  objects: Objects,
+  hippoRoot: string,
+  tenantId: string,
+  incidentText: string,
+  flags: CliFlags,
+): Promise<void> {
   if (!incidentText) {
     printError('Usage: hippo incident "<incident>" [--context "<details>"] [--link <memory-id>]...');
     printError('       hippo incident list [--status open|resolved|closed|all] [--limit N]');
     printError('       hippo incident get <id>');
     printError('       hippo incident resolve <id> --resolution "<text>"');
-    printError('       hippo incident close <id>');
-    throw new CliExit(1);
+    fail('       hippo incident close <id>');
   }
   const context = nonEmptyStringFlag(flags, 'context');
   // --link is a repeatable flag (collected into an array by parseArgs). A
@@ -90,17 +98,16 @@ function incidentCreate(hippoRoot: string, tenantId: string, incidentText: strin
   } else if (isStringFlag(linkRaw)) {
     linkedMemoryIds = [linkRaw];
   } else if (linkRaw === true) {
-    printError('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
-    throw new CliExit(1);
+    fail('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
   }
 
   const incidentPathTags = extractPathTags(process.cwd());
-  const created = incidentsModule.saveIncident(hippoRoot, tenantId, {
+  const created = await incidentsModule.openIncident(objects, hippoRoot, tenantId, {
     incidentText,
     context,
     linkedMemoryIds,
     extraTags: incidentPathTags,
-  });
+  }, 'cli');
 
   console.log(`Incident recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);

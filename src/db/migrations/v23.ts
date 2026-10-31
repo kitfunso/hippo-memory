@@ -4,7 +4,8 @@ import type { Migration } from './types.js';
 export const v23: Migration = {
     version: 23,
     up: (db) => {
-      // task_snapshots: add scope so all three continuity tables carry it; self-heal partial-init stores via CREATE TABLE IF NOT EXISTS.
+      // task_snapshots: add scope so all three continuity tables carry it; self-heal partial-init stores via CREATE
+      // TABLE IF NOT EXISTS.
       db.exec(`
         CREATE TABLE IF NOT EXISTS task_snapshots (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,8 +23,10 @@ export const v23: Migration = {
       if (!tableHasColumn(db, 'task_snapshots', 'scope')) {
         db.exec(`ALTER TABLE task_snapshots ADD COLUMN scope TEXT`);
       }
-      // Quarantine pre-existing continuity rows with NULL scope as 'unknown:legacy' so the recall default-deny filter excludes them for no-scope callers;
-      // new rows legitimately carry NULL. UPDATE only tables that exist (v22 healing is skipped on some paths); WHERE scope IS NULL keeps it idempotent.
+      // Quarantine pre-existing continuity rows with NULL scope as 'unknown:legacy' so the recall default-deny filter
+      // excludes them for no-scope callers;
+      // new rows legitimately carry NULL. UPDATE only tables that exist (v22 healing is skipped on some paths); WHERE
+      // scope IS NULL keeps it idempotent.
       if (tableExists(db, 'task_snapshots')) {
         db.exec(`UPDATE task_snapshots SET scope = 'unknown:legacy' WHERE scope IS NULL`);
       }

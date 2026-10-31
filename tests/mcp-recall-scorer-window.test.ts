@@ -18,6 +18,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { RecallContractError } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 function callTool(
   name: string,
@@ -31,7 +32,7 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { ...ctx, role: 'admin', hostAdmin: true },
+    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot) },
   );
 }
 

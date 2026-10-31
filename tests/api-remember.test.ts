@@ -1,23 +1,21 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('api.remember', () => {
   it('persists a memory and returns its envelope', async () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-api-rem-'));
     initStore(home);
-    const result = await remember({
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: { subject: 'cli', role: 'admin' },
-    }, {
+    const result = await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
       content: 'api-canary-remember-77',
       kind: 'distilled',
     });
@@ -34,7 +32,7 @@ describe('api.remember', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-api-rem-'));
     initStore(home);
     await remember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_test', role: 'admin' } },
+      apiCtx(home, 'default', { subject: 'api_key:hk_test', role: 'admin' }),
       { content: 'audit-trail-canary' },
     );
     const { openHippoDb, closeHippoDb } = await import('../src/db/index.js');
@@ -62,16 +60,16 @@ describe("api.remember stamps the caller's project", () => {
   });
 
   /** A store inside a git checkout named `proj`, so the folder stamp is `proj`. */
-  function storeCtx(flagged: boolean): HippoDbContext {
+  function storeCtx(flagged: boolean): FullContext {
     mkdirSync(join(tmp, 'proj', '.git'), { recursive: true });
     const store = join(tmp, 'proj', '.hippo');
     mkdirSync(store, { recursive: true });
     initStore(store);
     if (flagged) writeFileSync(join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
-    return { hippoRoot: store, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    return apiCtx(store, 'default', { subject: 'cli', role: 'admin' });
   }
 
-  const originOf = (ctx: HippoDbContext, id: string): string | null | undefined => readEntry(ctx.hippoRoot, id)?.origin_project;
+  const originOf = (ctx: FullContext, id: string): string | null | undefined => readEntry(ctx.hippoRoot, id)?.origin_project;
 
   it('a shared store with no project stamps NULL', async () => {
     const ctx = storeCtx(true);

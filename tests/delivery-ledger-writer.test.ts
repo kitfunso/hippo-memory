@@ -273,7 +273,7 @@ describe('writeDeliveryEvent', () => {
     db.exec('DROP TABLE delivery_candidates');
     expect(runWithRequestId('req-ledger-7', () => writeDeliveryEvent(db, event()))).toBeNull();
     expect(err).toHaveBeenCalledTimes(1);
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: .* requestId=req-ledger-7\n$/);
+    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: .* requestId=req-ledger-7 errorClass=\w+ stack=.*\n$/);
   });
 });
 

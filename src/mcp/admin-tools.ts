@@ -3,9 +3,9 @@
 import { evalNow } from '../core/ablation.js';
 import { shareMemory, listPeers } from '../sharing/share.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
-import { predictionBaserate } from '../api/predictions.js';
-import { listOpenConflicts, resolveMemoryConflict } from '../api/conflicts.js';
-import { getMemoryStatus, getTouchableMemory } from '../api/memories.js';
+import { predictionBaserate } from '../api/objects/predictions.js';
+import { listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
+import { getMemoryStatus, getTouchableMemory } from '../api/memories/memories.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
@@ -14,20 +14,28 @@ const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
-export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
+export async function runPredictBaserateTool(
+  { args, ctx, hippoRoot, tenantId, store }: ToolCall<'predictions'>
+): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
-  if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
-  const baserate = await predictionBaserate({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, classTag);
+  if (!classTag) {
+    return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
+  }
+  const baserate = await predictionBaserate({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, classTag);
   if (baserate.nClosed === 0) {
-    return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) ` +
+    return (
+      `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) ` +
       `and close it with hippo_predict_close once the actual outcome is known. ` +
-      `Base rates need closed predictions with numeric actual_value to compute.`;
+      `Base rates need closed predictions with numeric actual_value to compute.`
+    );
   }
   const lines: string[] = [baserate.summary, ''];
   lines.push(`n_closed:         ${baserate.nClosed}`);
   lines.push(`n_ratio_eligible: ${baserate.nRatioEligible}`);
-  if (baserate.meanEstimate !== null) lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanEstimate !== null) {
+    lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  }
   if (baserate.meanActual !== null)   lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
   if (baserate.meanRatio !== null)    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
   if (baserate.p50Ratio !== null)     lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
@@ -35,9 +43,11 @@ export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }:
   return lines.join('\n');
 }
 
-export function runStatusTool({ ctx, hippoRoot, config, tenantId }: ToolCall): string {
+export async function runStatusTool(
+  { ctx, hippoRoot, config, tenantId, store }: ToolCall<'reports'>,
+): Promise<string> {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const tallies = getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, evalNow(), 0.1);
+  const tallies = await getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, evalNow(), 0.1);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
@@ -48,16 +58,18 @@ export function runStatusTool({ ctx, hippoRoot, config, tenantId }: ToolCall): s
   ].join('\n');
 }
 
-export function runConflictsTool(call: ToolCall): string {
-  const { ctx, hippoRoot, tenantId } = call;
-  const conflicts = listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, ctx?.project);
+export async function runConflictsTool(call: ToolCall<'conflicts'>): Promise<string> {
+  const { ctx, hippoRoot, tenantId, store } = call;
+  const conflicts = await listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, ctx?.project);
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
     `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
   ).join('\n');
 }
 
-export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+export async function runResolveTool(
+  { args, ctx, hippoRoot, tenantId, store }: ToolCall<'conflicts'>,
+): Promise<string> {
   const conflictId = Number(args.conflict_id);
   const keepId = String(args.keep || '');
   const forget = Boolean(args.forget);
@@ -66,10 +78,11 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
   if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
   let loserId: string;
   try {
-    const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store };
-    ({ loserId } = resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
+    const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store };
+    ({ loserId } = await resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
-    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot touch.
+    // A missing, unreachable or settled conflict answers alike, so
+    // the reply says nothing of a pair the caller cannot touch.
     if (err instanceof NotFoundError || err instanceof ConflictError) return NOT_RESOLVED;
     throw err;
   }
@@ -77,15 +90,15 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export async function runShareTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
+export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
   const shareId = String(args.id || '');
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
   const actor = mcpActor(ctx);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
-  await getTouchableMemory({ hippoRoot, tenantId, actor, store: ctx?.store }, shareId);
-  // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to the global store.
-  // The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
+  await getTouchableMemory({ hippoRoot, tenantId, actor, store }, shareId);
+  // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's
+  // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const shared = shareMemory(hippoRoot, shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
@@ -95,5 +108,7 @@ export function runPeersTool({ tenantId }: ToolCall): string {
   // Tenant-scope peer discovery to the caller, as hippo_share does; undefined would list host-wide.
   const peers = listPeers(undefined, tenantId);
   if (peers.length === 0) return 'No peers found.';
-  return peers.map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`).join('\n');
+  return peers
+    .map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`)
+    .join('\n');
 }

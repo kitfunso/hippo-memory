@@ -1,13 +1,14 @@
-/** Physics state persistence: particle state (position, velocity, mass, charge, temperature) in SQLite, with BLOB columns for 384-dim vectors. */
+/**
+ * Physics state persistence: particle state (position, velocity, mass, charge, temperature) in SQLite, with BLOB
+ * columns for 384-dim vectors.
+ */
 
-import { evalNow, strengthAblation } from '../core/ablation.js';
+import { evalNow } from '../core/ablation.js';
 import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
-import { computeMass, computeCharge, computeTemperature, initializeParticle } from '../core/physics.js';
-import { calculateStrength } from '../core/memory.js';
-import { DAY_MS } from '../util/time.js';
+import { initializeParticle } from '../core/physics.js';
 import { placeholders } from '../util/sql.js';
 import { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
 
@@ -101,7 +102,9 @@ export function savePhysicsState(
   if (particles.length === 0) return;
 
   const stmt = db.prepare(`
-    INSERT INTO memory_physics (memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation, updated_at)
+    INSERT INTO memory_physics (
+      memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation, updated_at
+    )
     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(memory_id) DO UPDATE SET
       position_blob = excluded.position_blob,
@@ -130,7 +133,10 @@ export function savePhysicsState(
 
 const RESET_BATCH = 64;
 
-/** Drops every particle, then seeds one per entry that has an embedding; `entries` may be read lazily, as each batch is written before the next is read. */
+/**
+ * Drops every particle, then seeds one per entry that has an embedding; `entries` may be read lazily, as each batch is
+ * written before the next is read.
+ */
 export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,
@@ -156,23 +162,4 @@ export function resetAllPhysicsState(
     flush();
     return count;
   });
-}
-
-/** Refresh mass, charge and temperature for existing particles from current memory attributes (called during consolidation). */
-export function refreshParticleProperties(
-  particles: PhysicsParticle[],
-  entries: Map<string, MemoryEntry>,
-  now: Date = evalNow(),
-): void {
-  for (const p of particles) {
-    const entry = entries.get(p.memoryId);
-    if (!entry) continue;
-
-    const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
-    const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
-
-    p.mass = computeMass(strength, entry.retrieval_count);
-    p.charge = computeCharge(entry.emotional_valence);
-    p.temperature = computeTemperature(ageDays, 1.0);
-  }
 }

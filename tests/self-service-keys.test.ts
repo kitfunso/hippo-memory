@@ -11,6 +11,7 @@ import { adminActor, authCreate, authCreateSelf, authRevoke, type Actor, type Au
 import { ForbiddenError } from '../src/core/api-errors.js';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const TENANT = 'ext-tenant';
 const DAY_MS = 86_400_000;
@@ -50,7 +51,7 @@ function actorOf(token: string): Actor {
 }
 
 function mintAs(actor: Actor, label = 'laptop', over: Partial<AuthCreateSelfOpts> = {}): Promise<AuthCreateSelfResult> {
-  return authCreateSelf({ hippoRoot: home, tenantId: TENANT, actor }, { label, ...OPTS, ...over });
+  return authCreateSelf(apiCtx(home, TENANT, actor), { label, ...OPTS, ...over });
 }
 
 const selfMint = (token = ALICE, label = 'laptop', over: Partial<AuthCreateSelfOpts> = {}): Promise<AuthCreateSelfResult> => mintAs(actorOf(token), label, over);
@@ -72,7 +73,7 @@ function breakAuditLog(): void {
   withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
 }
 
-const revokeAs = async (token: string, keyId: string): Promise<AuthRevokeResult> => await authRevoke({ hippoRoot: home, tenantId: TENANT, actor: actorOf(token) }, keyId);
+const revokeAs = async (token: string, keyId: string): Promise<AuthRevokeResult> => await authRevoke(apiCtx(home, TENANT, actorOf(token)), keyId);
 
 async function listKeys(token: string): Promise<string[]> {
   const res = await fetch(`${handle!.url}/v1/auth/keys?active=false`, { headers: { authorization: `Bearer ${token}` } });
@@ -196,7 +197,7 @@ describe('authCreateSelf', () => {
     ['perSubject', 1.5],
     ['perSubject', Number.NaN],
   ])('throws before opening the store when %s is %s', async (field, value) => {
-    const ctx = { hippoRoot: join(home, 'never-opened'), tenantId: TENANT, actor: actorOf(ALICE) };
+    const ctx = apiCtx(join(home, 'never-opened'), TENANT, actorOf(ALICE));
     await expect(authCreateSelf(ctx, { ...OPTS, [field]: value })).rejects.toThrow(RangeError);
     await expect(authCreateSelf(ctx, { ...OPTS, [field]: value })).rejects.toThrow(field);
     expect(existsSync(ctx.hippoRoot)).toBe(false);
@@ -228,7 +229,7 @@ describe('authCreate audit rows', () => {
     ['the local admin', adminActor('cli')],
   ])('leaves no key behind when a mint by %s cannot write its audit row', async (_name, actor) => {
     breakAuditLog();
-    await expect(authCreate({ hippoRoot: home, tenantId: TENANT, actor }, { label: 'x' })).rejects.toThrow(/audit table unwritable/);
+    await expect(authCreate(apiCtx(home, TENANT, actor), { label: 'x' })).rejects.toThrow(/audit table unwritable/);
     expect(keyRows()).toEqual([]);
   });
 });
@@ -256,7 +257,7 @@ describe('authRevoke by a member signed in through the auth resolver', () => {
   });
 
   it('refuses its own subject\'s key in another tenant, and an unknown key, with the same error', async () => {
-    const elsewhere = await authCreateSelf({ hippoRoot: home, tenantId: 'other-tenant', actor: actorOf(ALICE) }, OPTS);
+    const elsewhere = await authCreateSelf(apiCtx(home, 'other-tenant', actorOf(ALICE)), OPTS);
     const bobs = await selfMint('tok.bob');
     for (const keyId of [elsewhere.keyId, 'hk_unknown', bobs.keyId]) {
       await expect(revokeAs(ALICE, keyId)).rejects.toThrow(new ForbiddenError('A member can revoke only the keys it minted'));

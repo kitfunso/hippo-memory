@@ -8,6 +8,7 @@ import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/session
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { retrieve } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpDir: string;
 beforeEach(() => {
@@ -23,7 +24,7 @@ describe('api.recall continuity flag', () => {
     writeEntry(tmpDir, createMemory('test memory about widgets', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
     const result = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'widgets' },
     );
     expect(result.continuity).toBeUndefined();
@@ -55,7 +56,7 @@ describe('api.recall continuity flag', () => {
     });
 
     const result = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'deploys', includeContinuity: true },
     );
     expect(result.continuity).toBeDefined();
@@ -70,7 +71,7 @@ describe('api.recall continuity flag', () => {
     writeEntry(tmpDir, createMemory('lonely memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
     const result = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'lonely', includeContinuity: true },
     );
     expect(result.continuity).toBeDefined();
@@ -104,7 +105,7 @@ describe('api.recall continuity flag', () => {
     });
 
     const result = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'tenantB', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'tenantB', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     expect(result.continuity!.activeSnapshot).toBeNull();
@@ -124,7 +125,7 @@ describe('api.recall continuity flag', () => {
     });
 
     const result = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     expect(result.continuity!.activeSnapshot).toBeNull();
@@ -145,13 +146,13 @@ describe('api.recall continuity flag', () => {
     });
 
     const noScopeResult = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     expect(noScopeResult.continuity!.activeSnapshot).toBeNull();
 
     const scopedResult = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true, scope: 'slack:private:Csecret' },
     );
     expect(scopedResult.continuity!.activeSnapshot?.task).toBe('private task');
@@ -179,7 +180,7 @@ describe('api.recall continuity flag', () => {
     });
 
     const noScopeResult = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     // Snapshot is public-scope (null) so it surfaces. Handoff is private,
@@ -188,7 +189,7 @@ describe('api.recall continuity flag', () => {
     expect(noScopeResult.continuity!.sessionHandoff).toBeNull();
 
     const scopedResult = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true, scope: 'slack:private:Csecret' },
     );
     // Note: snapshot has scope=null and won't match 'slack:private:Csecret'
@@ -212,14 +213,14 @@ describe('api.recall continuity flag', () => {
 
     // Caller asks for C2 → must NOT see C1 snapshot.
     const c2Result = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true, scope: 'slack:private:C2' },
     );
     expect(c2Result.continuity!.activeSnapshot).toBeNull();
 
     // Caller asks for C1 exactly → DOES see C1 snapshot.
     const c1Result = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true, scope: 'slack:private:C1' },
     );
     expect(c1Result.continuity!.activeSnapshot?.task).toBe('C1 task');
@@ -236,7 +237,7 @@ describe('api.recall continuity flag', () => {
     });
 
     const result = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     // 4 + 4 + 4 chars at Math.ceil(len/4) = 1+1+1 = 3
@@ -250,7 +251,7 @@ describe('api.recall continuity flag', () => {
       session_id: 'sess-1', source: 'test',
     });
     const before = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
 
@@ -259,7 +260,7 @@ describe('api.recall continuity flag', () => {
       outcome: 'success', targetRuntime: 'node', cardId: 'CARD-1',
     });
     const after = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'anything', includeContinuity: true },
     );
     expect(after.continuityTokens!).toBeGreaterThan(before.continuityTokens!);

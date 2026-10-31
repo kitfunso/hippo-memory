@@ -21,6 +21,7 @@ import {
   type SessionScan,
 } from '../src/capture/session-digest.js';
 import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../src/core/session-digest-row.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const REPLY = 'Retry `upload()` with backoff because the storage token expires mid-transfer.';
 
@@ -92,14 +93,14 @@ describe('writing the digest row', () => {
 
   it('skips a digest whose text was rejected', async () => {
     write('s1', scan(REPLY));
-    await reject({ hippoRoot, tenantId: 'default', actor: adminActor('test') }, { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
+    await reject(apiCtx(hippoRoot, 'default', adminActor('test')), { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
     expect(write('s1', scan(REPLY))).toMatchObject({ written: false, reason: 'it matches a rejected value' });
     expect(digests()).toEqual([]);
   });
 
   it('a reject blocks that text only, so a re-run with a new reply writes the row again', async () => {
     write('s1', scan(REPLY));
-    await reject({ hippoRoot, tenantId: 'default', actor: adminActor('test') }, { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
+    await reject(apiCtx(hippoRoot, 'default', adminActor('test')), { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
     expect(write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.')).written).toBe(true);
     expect(digests()).toHaveLength(1);
   });

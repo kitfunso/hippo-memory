@@ -35,7 +35,7 @@ describe('extraction-aware search preference', () => {
       layer: Layer.Semantic,
       tags: ['basketball', 'sports', 'extracted'],
       source: 'extraction',
-      extracted_from: raw.id,
+      extractedFrom: raw.id,
     });
     writeEntry(hippoDir, fact);
 
@@ -113,7 +113,7 @@ describe('extraction-aware search preference', () => {
       layer: Layer.Semantic,
       tags: ['error', 'data-pipeline', 'extracted'],
       source: 'extraction',
-      extracted_from: raw.id,
+      extractedFrom: raw.id,
     });
     writeEntry(hippoDir, fact);
 

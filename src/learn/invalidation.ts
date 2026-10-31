@@ -1,7 +1,6 @@
-import { addTagToEntries, writeEntriesTogether } from '../store/entry-writes.js';
-import { confirmedOutcomeTimes } from '../store/audit.js';
-import { loadAllEntries, loadEntriesMentioning, readEntry } from '../store/entry-reads.js';
-import { requireGroup, type HippoStore } from '../store/port.js';
+import type { Learning } from '../store/port/learning.js';
+import { localFilesAt } from './roots.js';
+import type { StoreWith } from '../store/index.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
 import {
@@ -36,6 +35,10 @@ export interface InvalidationOptions {
   /** Consider ONLY this memory id (no content/tag matching). */
   onlyId?: string;
 }
+
+const TRIVIAL_REMOVAL_WORDS = new Set([
+  'extra', 'unused', 'empty', 'old', 'whitespace', 'spaces', 'blank', 'dead', 'commented',
+]);
 
 /** Extract what was replaced/removed from a commit message.
  *  Returns null if the commit isn't a breaking/migration change. */
@@ -74,8 +77,7 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
   if (removeMatch) {
     const target = removeMatch[1].trim();
     const words = target.split(/\s+/);
-    const trivialWords = new Set(['extra', 'unused', 'empty', 'old', 'whitespace', 'spaces', 'blank', 'dead', 'commented']);
-    const isTrivial = words.length <= 2 && words.some(w => trivialWords.has(w.toLowerCase()));
+    const isTrivial = words.length <= 2 && words.some(w => TRIVIAL_REMOVAL_WORDS.has(w.toLowerCase()));
     if (isTrivial) return null;
     return { from: target, to: null, type: 'removal' };
   }
@@ -83,10 +85,22 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
   return null;
 }
 
-/** Find memories that reference the invalidated pattern and weaken them (halve half_life_days, confidence 'stale', add 'invalidated' tag; pinned are skipped).
- *  Tag matching is EXACT: the FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot mass-weaken every memory with that tag. */
+/** Find memories that reference the invalidated pattern and weaken them (halve half_life_days, confidence 'stale', add
+ * 'invalidated' tag; pinned are skipped).
+ * Tag matching is EXACT: the FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
+ * mass-weaken every memory with that tag. */
 export function invalidateMatching(
   hippoRoot: string,
+  target: InvalidationTarget,
+  tenantId?: string,
+  options?: InvalidationOptions,
+): InvalidationResult {
+  return invalidateIn(localFilesAt(hippoRoot).learning, target, tenantId, options);
+}
+
+/** invalidateMatching on the memories `learning` holds. */
+function invalidateIn(
+  learning: Learning,
   target: InvalidationTarget,
   tenantId?: string,
   options?: InvalidationOptions,
@@ -94,17 +108,19 @@ export function invalidateMatching(
   // tenantId opt-in: when set, only that tenant's memories are weakened; undefined is host-wide.
   // The onlyId read is tenant-scoped too, so another tenant's id is invisible here.
   const entries = options?.onlyId === undefined
-    ? loadEntriesMentioning(hippoRoot, invalidationTokenize(target.from), target.from.toLowerCase().trim(), tenantId)
-    : [readEntry(hippoRoot, options.onlyId, tenantId)].filter((entry) => entry !== null);
+    ? learning.entriesMentioning(invalidationTokenize(target.from), target.from.toLowerCase().trim(), tenantId)
+    : [learning.readEntry(options.onlyId, tenantId)].filter((entry) => entry !== null);
   const { result, weakened } = weakenMatches(entries, target, options);
-  writeEntriesTogether(hippoRoot, weakened);
+  learning.writeEntriesTogether(weakened);
   return result;
 }
 
-/** invalidateMatching for a batch: matches against `live`, the caller's list of the tenant's rows, and keeps it current.
- *  Each match is read again before it is weakened, so a row another writer changed since the list was read is never written back stale. */
+/** invalidateMatching for a batch: matches against `live`, the caller's list of the tenant's rows, and keeps it
+ * current.
+ * Each match is read again before it is weakened, so a row another writer changed since the list was read is never
+ * written back stale. */
 export async function invalidateMatchingAmong(
-  store: HippoStore,
+  store: StoreWith<'lessonWrites'>,
   live: MemoryEntry[],
   target: InvalidationTarget,
   tenantId?: string,
@@ -113,9 +129,11 @@ export async function invalidateMatchingAmong(
   const ids = [...seen.targets, ...seen.skippedPinned];
   const fresh = new Map<string, MemoryEntry>();
   // The port reads at most 500 ids a call.
-  for (const chunk of chunked(ids, 500)) for (const entry of await store.entriesByIds(chunk, tenantId)) fresh.set(entry.id, entry);
+  for (const chunk of chunked(ids, 500)) {
+    for (const entry of await store.entriesByIds(chunk, tenantId)) fresh.set(entry.id, entry);
+  }
   const { result, weakened } = weakenMatches(ids.flatMap((id) => fresh.get(id) ?? []), target);
-  if (weakened.length > 0) await requireGroup(store, 'lessonWrites').writeTogether(weakened);
+  if (weakened.length > 0) await store.lessonWrites.writeTogether(weakened);
   const byId = new Map(weakened.map((entry) => [entry.id, entry]));
   for (let i = 0; i < live.length; i++) live[i] = byId.get(live[i].id) ?? live[i];
   return result;
@@ -216,7 +234,8 @@ export interface ChurnRefs {
   scripts: string[];
 }
 
-/** Pure syntactic extraction; repo-aware resolution (trackedness, path relativization) happens only in detectChurnStale. */
+/** Pure syntactic extraction; repo-aware resolution (trackedness, path relativization) happens only in
+ * detectChurnStale. */
 export function extractChurnRefs(content: string): ChurnRefs {
   const paths = new Set<string>();
   for (const m of content.matchAll(CHURN_PATH_RE)) {
@@ -335,11 +354,19 @@ interface ChurnCandidates {
   skippedPinned: string[];
 }
 
-function collectChurnCandidates(entries: readonly MemoryEntry[], opts: Pick<DetectChurnStaleOptions, 'projectName' | 'legacyName'>): ChurnCandidates {
+function collectChurnCandidates(
+  entries: readonly MemoryEntry[],
+  opts: Pick<DetectChurnStaleOptions, 'projectName' | 'legacyName'>,
+): ChurnCandidates {
   const skippedPinned: string[] = [];
   const candidates: ChurnCandidate[] = [];
   for (const entry of entries) {
-    if (!entry.origin_project || (entry.origin_project !== opts.projectName && entry.origin_project !== opts.legacyName)) continue;
+    if (
+      !entry.origin_project ||
+      (entry.origin_project !== opts.projectName && entry.origin_project !== opts.legacyName)
+    ) {
+      continue;
+    }
     if (entry.superseded_by) continue;
     if (entry.kind === 'raw' || entry.kind === 'archived') continue;
     if (entry.pinned) {
@@ -374,7 +401,9 @@ interface ChurnNeeds {
 }
 
 /** The per-commit lookups of a ChurnGitView; each asks git once per commit and remembers the answer. */
-function churnCommitLookups(repoRoot: string): Pick<ChurnGitView, 'resolveAnchorCommit' | 'symbolsPresentAt' | 'scriptsAt'> {
+function churnCommitLookups(
+  repoRoot: string,
+): Pick<ChurnGitView, 'resolveAnchorCommit' | 'symbolsPresentAt' | 'scriptsAt'> {
   const anchorCommitCache = new Map<string, string | null>();
   const resolveAnchorCommit = (anchorIso: string): string | null => {
     if (!anchorCommitCache.has(anchorIso)) {
@@ -431,7 +460,16 @@ function loadChurnGitView(
     : new Set<string>();
   const headScripts = needs.scripts ? packageScriptsAt(repoRoot, 'HEAD') : null;
 
-  return { repoRoot, projectName, windowLog, trackedIndex, headIndex, presentAtHeadSymbols, headScripts, ...churnCommitLookups(repoRoot) };
+  return {
+    repoRoot,
+    projectName,
+    windowLog,
+    trackedIndex,
+    headIndex,
+    presentAtHeadSymbols,
+    headScripts,
+    ...churnCommitLookups(repoRoot),
+  };
 }
 
 function pathEvidence(git: ChurnGitView, paths: readonly string[], anchorTime: number): string | null {
@@ -465,7 +503,12 @@ function symbolEvidence(git: ChurnGitView, symbols: readonly string[], anchor: s
   return hit ? `symbol-gone: \`${hit}\`` : null;
 }
 
-function scriptEvidence(git: ChurnGitView, scripts: readonly string[], anchor: string, headScripts: Record<string, string>): string | null {
+function scriptEvidence(
+  git: ChurnGitView,
+  scripts: readonly string[],
+  anchor: string,
+  headScripts: Record<string, string>,
+): string | null {
   const anchorCommit = git.resolveAnchorCommit(anchor);
   if (!anchorCommit) return null;
   const anchorScripts = git.scriptsAt(anchorCommit);
@@ -475,7 +518,8 @@ function scriptEvidence(git: ChurnGitView, scripts: readonly string[], anchor: s
   return hit ? `script-gone: ${hit}` : null;
 }
 
-/** The first churn evidence against one candidate: a changed or deleted file, then a gone symbol, then a gone script. */
+/** The first churn evidence against one candidate: a changed or deleted file, then a gone symbol, then a gone
+ * script. */
 function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): string | null {
   let evidence = pathEvidence(git, refs.paths, new Date(anchor).getTime());
   if (!evidence && refs.symbols.length > 0) evidence = symbolEvidence(git, refs.symbols, anchor);
@@ -485,12 +529,21 @@ function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): stri
   return evidence;
 }
 
-function tagChurnStale(hippoRoot: string, tenantId: string, toTag: readonly MemoryEntry[], confirmedAt: Map<string, string>): void {
+function tagChurnStale(
+  learning: Learning,
+  tenantId: string,
+  toTag: readonly MemoryEntry[],
+  confirmedAt: Map<string, string>,
+): void {
   // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence.
-  const confirmedNow = confirmedOutcomeTimes(hippoRoot, tenantId);
+  const confirmedNow = learning.confirmedOutcomeTimes(tenantId);
   const unconfirmed = toTag.filter((stale) => confirmedNow.get(stale.id) === confirmedAt.get(stale.id));
   if (unconfirmed.length === 0) return;
-  addTagToEntries(hippoRoot, tenantId, unconfirmed.map((stale) => stale.id), CHURN_STALE_TAG);
+  learning.addTagToEntries(
+    tenantId,
+    unconfirmed.map((stale) => stale.id),
+    CHURN_STALE_TAG,
+  );
 }
 
 /** Counts every candidate's evidence into `result` and returns the rows still to tag, writing nothing. */
@@ -526,19 +579,27 @@ export function detectChurnStale(
   repoRoot: string,
   opts: DetectChurnStaleOptions,
 ): ChurnStaleResult {
+  return detectChurnIn(localFilesAt(hippoRoot).learning, repoRoot, opts);
+}
+
+/** detectChurnStale on the memories `learning` holds. */
+function detectChurnIn(learning: Learning, repoRoot: string, opts: DetectChurnStaleOptions): ChurnStaleResult {
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
-  const entries = loadAllEntries(hippoRoot, opts.tenantId);
+  const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
+  const entries = learning.currentEntriesFromOrigins(opts.tenantId, origins);
   const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
-  const confirmedAt = confirmedOutcomeTimes(hippoRoot, opts.tenantId);
+  const confirmedAt = learning.confirmedOutcomeTimes(opts.tenantId);
   // Compared as epoch ms, not strings: imported rows may carry offsets or other ISO forms.
   const anchorOf = (entry: MemoryEntry): string => {
     const confirmed = confirmedAt.get(entry.id);
     const confirmedMs = confirmed ? Date.parse(confirmed) : NaN;
-    return confirmedMs > Date.parse(entry.created) ? new Date(confirmedMs).toISOString() : new Date(entry.created).toISOString();
+    return confirmedMs > Date.parse(entry.created)
+      ? new Date(confirmedMs).toISOString()
+      : new Date(entry.created).toISOString();
   };
 
   const needs: ChurnNeeds = {
@@ -554,10 +615,11 @@ export function detectChurnStale(
 
   try {
     const git = loadChurnGitView(repoRoot, opts.legacyName ?? opts.projectName, candidates, anchorOf, needs);
-    // Collected here and written only after every candidate's evidence is computed, so a GitReadError mid-loop cannot leave an earlier candidate tagged.
+    // Collected here and written only after every candidate's evidence is computed, so a GitReadError mid-loop cannot
+    // leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
-    if (!dryRun && toTag.length > 0) tagChurnStale(hippoRoot, opts.tenantId, toTag, confirmedAt);
+    if (!dryRun && toTag.length > 0) tagChurnStale(learning, opts.tenantId, toTag, confirmedAt);
   } catch (err) {
     if (err instanceof GitReadError) return emptyChurnResult(dryRun, skippedPinned, err.message);
     throw err;

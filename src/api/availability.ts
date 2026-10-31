@@ -1,6 +1,8 @@
 import { DAY_MS, HOUR_MS } from '../util/time.js';
-// Flags when a recall's top-K is dominated by recent entries while older relevant candidates in the same matched pool were passed over.
-// Soft warning only (never filters or reorders) and PURE: no I/O or env reads; the HIPPO_AVAILABILITY gate lives in the callers.
+// Flags when a recall's top-K is dominated by recent entries while older relevant candidates in the same matched pool
+// were passed over.
+// Soft warning only (never filters or reorders) and PURE: no I/O or env reads; the HIPPO_AVAILABILITY gate lives in the
+// callers.
 
 /** A minimal age reference: a memory id plus its ISO-8601 creation timestamp
  *  (MemoryEntry.created, canonical ISO per the src/core/memory.ts invariant). */
@@ -67,7 +69,9 @@ function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] 
     .filter((e) => Number.isFinite(e.ts));
 }
 
-/** Returns an AvailabilityHint when the returned slice is recency-dominated, the pool skews older and older matches were passed over; else null.
+/**
+ * Returns an AvailabilityHint when the returned slice is recency-dominated, the pool skews older and older matches were
+ * passed over; else null.
  * Entries with an unparseable `created` are dropped so a malformed row cannot poison the medians with NaN. */
 export function detectAvailabilityBias(opts: DetectAvailabilityBiasOpts): AvailabilityHint | null {
   const now = opts.now ?? Date.now();

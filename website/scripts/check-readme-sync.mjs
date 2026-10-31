@@ -32,17 +32,23 @@ try {
 // The test figure lives once in site.ts; the README and llms.txt must carry the same one.
 const testsFloor = (site.match(/^\s*tests:\s*'([^']+)'/m) || [])[1];
 const llms = await readFile(join(root, 'public', 'llms.txt'), 'utf8');
-if (!testsFloor) missing.push('tests: no `tests:` figure in site.ts');
-else for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
-  if (!text.includes(`${testsFloor} tests`)) missing.push(`tests: ${name} does not say "${testsFloor} tests"`);
+if (!testsFloor) {
+  missing.push('tests: no `tests:` figure in site.ts');
+} else {
+  for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
+    if (!text.includes(`${testsFloor} tests`)) missing.push(`tests: ${name} does not say "${testsFloor} tests"`);
+  }
 }
 
 // Keep setup limits and commercial availability on the owning rendered surfaces.
 for (const field of ['notice', 'availability']) {
   const value = (site.match(new RegExp(`^\\s*${field}:\\s*'([^']+)'`, 'm')) || [])[1];
-  if (!value) missing.push(`${field}: no shared copy in site.ts`);
-  else for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
-    if (!normalize(text).includes(normalize(value))) missing.push(`${field}: ${name} lost the shared wording`);
+  if (!value) {
+    missing.push(`${field}: no shared copy in site.ts`);
+  } else {
+    for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
+      if (!normalize(text).includes(normalize(value))) missing.push(`${field}: ${name} lost the shared wording`);
+    }
   }
 }
 const setup = await readFile(join(root, 'src', 'components', 'GetStarted.astro'), 'utf8');

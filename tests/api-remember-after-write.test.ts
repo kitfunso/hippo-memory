@@ -6,6 +6,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { remember } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 /** Makes every insert into the Slack event log fail, as a real constraint would. */
 function breakEventLog(root: string): void {
@@ -24,7 +25,7 @@ describe('remember with a connector event is transactional', () => {
 
   it('rolls back the memory row when the event log write throws', async () => {
     breakEventLog(root);
-    await expect(remember({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, {
+    await expect(remember(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), {
         content: 'doomed',
         event: { connector: 'slack', eventId: 'Ev_doomed' },
       }),

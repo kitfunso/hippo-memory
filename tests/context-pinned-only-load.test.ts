@@ -1,6 +1,7 @@
 // The pinned-only branch of getContext used to load every row of both stores to
 // return about eleven. These pin what the narrower load must still return.
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -10,16 +11,17 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { isContentWorthStoring } from '../src/core/memory-quality.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PROJECT = 'proj-a';
 
 let tmpRoot: string;
 let local: string;
 let globalRoot: string;
-let ctx: Context;
+let ctx: FullContext;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
   const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
@@ -41,7 +43,7 @@ beforeEach(() => {
   initStore(local);
   initStore(globalRoot);
   process.env.HIPPO_HOME = globalRoot;
-  ctx = { hippoRoot: local, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {

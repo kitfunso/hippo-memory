@@ -11,7 +11,7 @@ import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
 import { initMemoryStore } from '../api/store-init.js';
 import { isInitialized } from '../core/project-identity.js';
-import { listMemories } from '../api/memories.js';
+import { listMemories } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
@@ -20,7 +20,7 @@ import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
-import { errorCode, errorMessage, log } from '../util/log.js';
+import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
@@ -45,7 +45,13 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
       }
     } catch (err) {
       const code = errorCode(err);
-      if (!QUIET_SCAN_ERRORS.has(code)) log.warn(`repo scan skipped ${dir}`, { code: code || 'unknown', reason: errorMessage(err) });
+      if (!QUIET_SCAN_ERRORS.has(code)) {
+        log.warn(`repo scan skipped ${dir}`, {
+          code: code || 'unknown',
+          reason: errorMessage(err),
+          ...errorFields(err),
+        });
+      }
     }
   }
   // Check if rootDir itself is a git repo
@@ -90,7 +96,9 @@ function installScanHooks(repos: readonly string[]): void {
   // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff in every repo.
   const agents = detectAgentHooks(repos);
   if (agents.length === 0) {
-    console.log('   No agent config found in these repositories. Run `hippo setup` to add hooks for the agents on this machine.');
+    console.log(
+      '   No agent config found in these repositories. Run `hippo setup` to add hooks for the agents on this machine.',
+    );
   }
   installUserLevelHooks(agents, true);
 }
@@ -139,8 +147,11 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = listMemories(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
-    console.log(`  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} memories${added > 0 ? ` (+${added} from git)` : ''}`);
+    const entries = await listMemories(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
+    console.log(
+      `  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} ` +
+      `memories${added > 0 ? ` (+${added} from git)` : ''}`,
+    );
   }
 
   printScanSummary(repos.length, totalLessons, totalLowInfo);
@@ -222,7 +233,10 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   if (learn) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));
 }
 
-/** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
+/**
+ * Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one
+ * switch skips them all.
+ */
 function initInstallsIntegrations(flags: CliFlags): boolean {
   if (flags['no-hooks']) return false;
   if (!envSkipAutoIntegrations()) return true;
@@ -266,7 +280,8 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
     if (!hookDef) continue;
 
     const targetPath = path.resolve(dir, hookDef.file);
-    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a new AGENTS.md or CLAUDE.md.
+    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a new AGENTS.md or
+    // CLAUDE.md.
     if (!fs.existsSync(targetPath) || seen.has(targetPath)) continue;
     seen.add(targetPath);
     const existing = fs.readFileSync(targetPath, 'utf8');
@@ -291,7 +306,10 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
     console.log(`   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`);
     return;
   }
-  writeFileAtomic(filePath, `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`);
+  writeFileAtomic(
+    filePath,
+    `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`,
+  );
   console.log(`   Refreshed the ${owner} hippo block in ${name}`);
 }
 
@@ -330,7 +348,8 @@ function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
 }
 
 function installOpencodeUserPlugin(): void {
-  // opencode uses a TS plugin, not Claude Code's JSON-hook schema (see OPENCODE_PLUGIN_SOURCE in src/hooks/opencode.ts).
+  // opencode uses a TS plugin, not Claude Code's JSON-hook schema (see OPENCODE_PLUGIN_SOURCE in
+  // src/hooks/opencode.ts).
   const result = installOpencodePlugin();
   if (result.installed) {
     console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);
@@ -339,11 +358,16 @@ function installOpencodeUserPlugin(): void {
     console.log(`   Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`);
   }
   if (result.jsonRepairFailed) {
-    console.log(`   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`);
+    console.log(
+      `   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`,
+    );
   }
 }
 
-/** Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
+/**
+ * Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so
+ * re-running init adds newer hooks.
+ */
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
     // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in.
@@ -353,7 +377,8 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     // Checked first so init never creates ~/.codex on a machine without Codex.
     if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
-    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping `hippo init` in lockstep with
+    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping `hippo init` in lockstep
+    // with
     // `hippo hook install claude-code` and `hippo setup`.
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();

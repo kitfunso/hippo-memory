@@ -14,6 +14,8 @@ import { loadEntriesByIds } from '../../src/store/entry-reads.js';
 import { hashedVector } from './hashed-embedding-server.js';
 import { FAKE_NOW, rowsOf, seedPortBranches, seedTemplates, TENANT, type Templates } from './recall-golden-seed.js';
 import { keyFor, onDb } from './store-worker-server.js';
+import { apiCtx } from './api-ctx.js';
+import { objectsAt } from './objects-at.js';
 
 export const EMBEDDING_MODEL = 'hashed-16';
 export const VECTOR_IDENTITY = embeddingIndexIdentity(`openai:${EMBEDDING_MODEL}`);
@@ -49,17 +51,17 @@ function seedVectors(root: string): void {
   });
 }
 
-function seedGraph(root: string): void {
-  savePolicy(root, TENANT, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
-  saveDecision(root, TENANT, { decisionText: 'We adopt RetryPolicy across all services' });
-  extractGraph(root, TENANT);
-  savePolicy(root, OTHER_TENANT, { policyName: 'AcmePolicy', policyText: 'page the owner first' });
-  extractGraph(root, OTHER_TENANT);
+async function seedGraph(root: string): Promise<void> {
+  await savePolicy(objectsAt(root), root, TENANT, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
+  await saveDecision(objectsAt(root), root, TENANT, { decisionText: 'We adopt RetryPolicy across all services' });
+  await extractGraph(objectsAt(root), root, TENANT);
+  await savePolicy(objectsAt(root), root, OTHER_TENANT, { policyName: 'AcmePolicy', policyText: 'page the owner first' });
+  await extractGraph(objectsAt(root), root, OTHER_TENANT);
 }
 
 /** A connector's flagged text, which lands under a quarantine scope with a pending record; returns the memory id. */
 async function hold(root: string, tenantId: string, ending: string): Promise<string> {
-  const saved = await remember({ hippoRoot: root, tenantId, actor: adminActor('seed') }, { content: `${STANDING_ORDER} ${ending}.`, untrusted: true, scope: HELD_SCOPE });
+  const saved = await remember(apiCtx(root, tenantId, adminActor('seed')), { content: `${STANDING_ORDER} ${ending}.`, untrusted: true, scope: HELD_SCOPE });
   if (saved.quarantined === undefined) throw new Error(`the seed text was not quarantined: ${ending}`);
   return saved.id;
 }
@@ -75,7 +77,7 @@ export async function seedMovedReads(): Promise<MovedReadsSeed> {
     vi.stubEnv('HIPPO_HOME', join(dirname(root), 'seed-home'));
     seedPortBranches(root);
     seedVectors(root);
-    seedGraph(root);
+    await seedGraph(root);
     held = [];
     for (const ending of ['commit', 'deploy', 'release']) held.push(await hold(root, TENANT, ending));
     otherHeld = await hold(root, OTHER_TENANT, 'merge');

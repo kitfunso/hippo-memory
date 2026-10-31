@@ -1,15 +1,14 @@
-// The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief, note, decide, incident, predict) share.
+// The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief, note, decide,
+// incident, predict) share.
 
-import { printError } from './output.js';
 import { parseListLimit, parsePositiveId, stringFlag, type CliFlags } from './flag-values.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 /** The member of `states` named by `status`, or exit 1 with the message that lists every allowed value. */
 export function requireStatus<S extends string>(status: string, states: ReadonlySet<S>): S {
   const found = [...states].find((s) => s === status);
   if (found === undefined) {
-    printError(`Invalid --status: "${status}". Must be one of: ${[...states, 'all'].join(' | ')}.`);
-    throw new CliExit(1);
+    fail(`Invalid --status: "${status}". Must be one of: ${[...states, 'all'].join(' | ')}.`);
   }
   return found;
 }
@@ -23,14 +22,14 @@ export function statusFilter<S extends string>(flags: CliFlags, states: Readonly
 export interface ObjectListSpec<O, S extends string> {
   readonly plural: string;
   readonly states: ReadonlySet<S>;
-  readonly load: (opts: { status?: S; limit: number }) => readonly O[];
+  readonly load: (opts: { status?: S; limit: number }) => Promise<readonly O[]>;
   readonly printRow: (o: O) => void;
 }
 
-export function listObjects<O, S extends string>(flags: CliFlags, spec: ObjectListSpec<O, S>): void {
+export async function listObjects<O, S extends string>(flags: CliFlags, spec: ObjectListSpec<O, S>): Promise<void> {
   const limit = parseListLimit(flags);
   const status = statusFilter(flags, spec.states);
-  const results = spec.load(status === undefined ? { limit } : { status, limit });
+  const results = await spec.load(status === undefined ? { limit } : { status, limit });
   if (results.length === 0) {
     console.log(`No ${spec.plural}.`);
     return;
@@ -47,16 +46,14 @@ export function idArgOrExit(
 ): number {
   const idRaw = args[1];
   if (!idRaw) {
-    printError(usage);
-    throw new CliExit(1);
+    fail(usage);
   }
   return parsePositiveId(idRaw, label);
 }
 
 export function foundOrExit<O>(found: O | null | undefined, noun: string, id: number): O {
   if (!found) {
-    printError(`${noun} ${id} not found.`);
-    throw new CliExit(1);
+    fail(`${noun} ${id} not found.`);
   }
   return found;
 }
@@ -69,13 +66,13 @@ export interface ObjectNames {
 }
 
 /** `hippo <cmd> close <id>` for a kind whose close call returns the closed row. */
-export function closeObject(
+export async function closeObject(
   args: string[],
   names: ObjectNames,
-  close: (id: number) => { id: number },
-): void {
+  close: (id: number) => Promise<{ id: number }>,
+): Promise<void> {
   const id = idArgOrExit(args, `Usage: hippo ${names.cmd} close <id>`, names.idLabel);
-  console.log(`${names.noun} #${close(id).id} closed.`);
+  console.log(`${names.noun} #${(await close(id)).id} closed.`);
 }
 
 interface LifecycleTail {

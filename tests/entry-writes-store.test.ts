@@ -5,7 +5,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeF
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
+  archiveRaw, forget, outcome, outcomeForLastRecall, narrowContext, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
   type OutcomeResult, type RememberResult, type SupersedeResult,
 } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
@@ -94,8 +94,11 @@ describe('the api with ctx.store', () => {
     const before = auditIdsOnHippoDb(storeRoot);
     const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: portOnlyStoreWithoutVectorReads(storeRoot) };
     const calls = [
-      () => remember(ctx, { content: 'deploys go out on tuesdays' }), () => outcome(ctx, ['mem_x'], true), () => supersede(ctx, 'mem_x', 'new text'),
-      () => archiveRaw(ctx, 'mem_x', 'r'), () => forget(ctx, 'mem_x'),
+      async () => remember(narrowContext(ctx, 'entryWrites'), { content: 'deploys go out on tuesdays' }),
+      async () => outcome(narrowContext(ctx, 'entryWrites'), ['mem_x'], true),
+      async () => supersede(narrowContext(ctx, 'entryWrites'), 'mem_x', 'new text'),
+      async () => archiveRaw(narrowContext(ctx, 'entryWrites'), 'mem_x', 'r'),
+      async () => forget(narrowContext(ctx, 'entryWrites'), 'mem_x'),
     ];
     for (const call of calls) await expect(call()).rejects.toThrow(new StoreNotPortedError('port-only', 'entryWrites'));
     expect(auditIdsOnHippoDb(storeRoot)).toEqual(before);
@@ -107,7 +110,9 @@ describe('the api with ctx.store', () => {
     await expect(remember(ctx, { content: 'connector text', untrusted: true })).rejects.toThrow(noGroup);
     await expect(outcome(ctx, ['mem_x'], true, { traceId: 1 })).rejects.toThrow(new StoreNotPortedError('in-memory', 'lastRecall'));
     await expect(archiveRaw(ctx, 'mem_x', 'r', { event: { connector: 'slack', eventId: 'Ev_x' } })).rejects.toThrow(noGroup);
-    await expect(outcomeForLastRecall(ctx, true)).rejects.toThrow(new StoreNotPortedError('in-memory', 'lastRecall'));
+    await expect(outcomeForLastRecall(ctx, true)).rejects.toMatchObject({
+      status: 501, message: 'this store keeps no last recall: send the ids your recall returned',
+    });
   });
 });
 

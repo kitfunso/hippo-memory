@@ -20,6 +20,7 @@
  * tests/dedupe-survivor-determinism.test.ts and tests/api-sleep.test.ts.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,8 +28,10 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { deduplicateStore, type DedupPair } from '../src/consolidate/dedupe.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
@@ -39,8 +42,8 @@ function tmpHome(prefix: string) {
   };
 }
 
-function ctxFor(home: string, tenantId: string): HippoDbContext {
-  return { hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } };
+function ctxFor(home: string, tenantId: string): FullContext {
+  return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
 }
 
 function setStrength(home: string, id: string, strength: number): void {
@@ -69,7 +72,7 @@ describe('deduplicateStore tenant partition', () => {
       const a = await remember(ctxFor(home, 'tenant-a'), { content: SHARED_CONTENT });
       const b = await remember(ctxFor(home, 'tenant-b'), { content: SHARED_CONTENT });
 
-      const result = deduplicateStore(home);
+      const result = deduplicateStore(sqliteConsolidation(home));
 
       expect(result.removed).toBe(0);
       expect(result.pairs).toEqual([]);
@@ -104,7 +107,7 @@ describe('deduplicateStore tenant partition', () => {
       setStrength(home, bWeak.id, 0.5);
       setStrength(home, bStrong.id, 1.0);
 
-      const result = deduplicateStore(home);
+      const result = deduplicateStore(sqliteConsolidation(home));
 
       expect(result.removed).toBe(2);
       expect(result.pairs.length).toBe(2);
@@ -141,8 +144,8 @@ describe('deduplicateStore tenant partition', () => {
       setStrength(home, bWeak.id, 0.5);
       setStrength(home, bStrong.id, 1.0);
 
-      const dry = deduplicateStore(home, { dryRun: true });
-      const real = deduplicateStore(home, { dryRun: false });
+      const dry = deduplicateStore(sqliteConsolidation(home), { dryRun: true });
+      const real = deduplicateStore(sqliteConsolidation(home), { dryRun: false });
 
       expect(dry.removed).toBe(2);
       expect(real.removed).toBe(2);

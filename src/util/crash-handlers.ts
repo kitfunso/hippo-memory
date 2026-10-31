@@ -15,24 +15,32 @@ function afterFlush(leave: () => void): void {
   setTimeout(leave, 1000).unref();
 }
 
-/** Exit once stdout and stderr have drained, so the last reply and the last log line reach their reader; capped at 1 s. */
+/**
+ * Exit once stdout and stderr have drained, so the last reply and the last log line reach their reader; capped at 1 s.
+ */
 export function exitAfterFlush(code: number): void {
   process.exitCode = code;
   afterFlush(() => process.exit(code));
 }
 
-// process.exit joins every worker thread, so one stuck in a synchronous statement would hold the exit open; a kill cannot be held.
+// process.exit joins every worker thread, so one stuck in a synchronous statement would hold the exit open; a kill
+// cannot be held.
 function killSelf(): void {
   process.kill(process.pid, 'SIGKILL');
 }
 
-/** Runs `shutdown` for `cause`, then exits with `code`, or 1 when it threw. One still running after its bound is logged and the process ended without it. */
+/**
+ * Runs `shutdown` for `cause`, then exits with `code`, or 1 when it threw. One still running after its bound is logged
+ * and the process ended without it.
+ */
 function exitAfterShutdown(name: string, cause: string, shutdown: Shutdown, code: number): void {
   let ended = false;
   // Referenced on purpose: a shutdown that never settles must end at the bound, not when the loop happens to empty.
   const bound = setTimeout(() => {
     ended = true;
-    log.error(`${name} shutdown after ${cause} did not finish within ${shutdown.boundMs} ms; ending the process without it`);
+    log.error(
+      `${name} shutdown after ${cause} did not finish within ${shutdown.boundMs} ms; ending the process without it`,
+    );
     process.exitCode = 1;
     afterFlush(killSelf);
   }, shutdown.boundMs);
@@ -61,7 +69,10 @@ export function installSignalHandlers(name: string, shutdown: Shutdown): void {
   process.once('SIGINT', () => stopFor('SIGINT'));
 }
 
-/** After an uncaught throw the process state is unknown: log the cause, run `shutdown` once, then exit 1 for the supervisor or client to restart it. */
+/**
+ * After an uncaught throw the process state is unknown: log the cause, run `shutdown` once, then exit 1 for the
+ * supervisor or client to restart it.
+ */
 export function installCrashHandlers(name: string, shutdown?: Shutdown): void {
   let crashing = false;
   const crash = <E>(kind: string, err: E): void => {

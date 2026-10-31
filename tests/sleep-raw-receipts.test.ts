@@ -11,6 +11,7 @@
  *   - the quality audit, for any receipt shorter than 10 characters ("lgtm").
  * Real SQLite throughout, no mocks.
  */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,6 +26,7 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { auditMemory } from '../src/core/memory-audit.js';
 import * as api from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -46,8 +48,8 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
   return { ...entry, created: then, last_retrieved: then };
 }
 
-function ctxFor(home: string): api.Context {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+function ctxFor(home: string): FullContext {
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 
 describe('deleting a raw row', () => {

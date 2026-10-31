@@ -36,7 +36,7 @@ function seedLocal(hippoRoot: string): void {
     seeded('deploy target was the old staging cluster', 'mem_golden_old', '2026-01-02T00:00:00.000Z', { superseded_by: 'mem_golden_new' }),
     seeded('deploy target is the new staging cluster in eu west', 'mem_golden_new', '2026-01-25T00:00:00.000Z', { conflicts_with: ['mem_golden_plain'] }),
     seeded('deploy goal work: migrate the rollout scripts to the new runner', 'mem_golden_goal', '2026-01-15T00:00:00.000Z', { retrieval_count: 3, outcome_positive: 2 }, { tags: ['goal-alpha'] }),
-    seeded('deploy trace: ran the canary and promoted it', 'mem_golden_trace', '2026-01-22T00:00:00.000Z', {}, { layer: Layer.Trace, trace_outcome: 'success' }),
+    seeded('deploy trace: ran the canary and promoted it', 'mem_golden_trace', '2026-01-22T00:00:00.000Z', {}, { layer: Layer.Trace, traceOutcome: 'success' }),
     seeded('unrelated note about lunch options near the office', 'mem_golden_noise', '2026-01-21T00:00:00.000Z'),
   ];
   for (const row of rows) writeEntry(hippoRoot, row);

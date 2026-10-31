@@ -1,4 +1,5 @@
-// hippo.db's half of the AuditMaintenance and LessonWrites store groups: the quality audit, audit prune and git learn's batch.
+// hippo.db's half of the AuditMaintenance and LessonWrites store groups: the quality audit, audit prune and git learn's
+// batch.
 import { pruneAuditRows } from '../audit.js';
 import { loadTextsHoldingWords } from '../candidates.js';
 import { deleteEntriesAutomatically, memoriesBackingObjects } from '../delete-and-batch.js';
@@ -34,12 +35,17 @@ export function servedAuditMaintenance(sync: Sync<AuditMaintenance>): AuditMaint
 export function sqliteLessonWrites(hippoRoot: string): Sync<LessonWrites> {
   return {
     tenantEntries: (tenantId) => loadAllEntries(hippoRoot, tenantId),
-    textsHoldingWords: (tenantId, words, ownScope) => loadTextsHoldingWords(hippoRoot, tenantId, words, undefined, touchableScopeSql('', ownScope)),
+    textsHoldingWords: (tenantId, words, ownScope) =>
+      loadTextsHoldingWords(hippoRoot, tenantId, words, undefined, touchableScopeSql('', ownScope)),
     writeSkippingRejected(entries, actor) {
       const written: string[] = [];
-      writeEntriesSkippingRejected(hippoRoot, (put) => {
-        for (const entry of entries) if (put(entry)) written.push(entry.id);
-      }, actor);
+      writeEntriesSkippingRejected(
+        hippoRoot,
+        (put) => {
+          for (const entry of entries) if (put(entry)) written.push(entry.id);
+        },
+        actor,
+      );
       return written;
     },
     writeTogether(entries) {

@@ -1,13 +1,37 @@
 // The rows `hippo projects` and sleep's tag repair read and write, bound to one hippo.db handle and tenant,
 // so the merge and repair rules in src/sharing/project-merge.ts decide without holding the handle.
-import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import {
+  closeHippoDb,
+  getMeta,
+  openHippoDbReadOnly,
+  setMeta,
+  withTrialScope,
+  withWriteScope,
+  type DatabaseSyncLike,
+} from '../db/index.js';
 import { withBackup } from '../db/backup.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { appendAuditEvent, queryAuditEvents, type AppendAuditOpts, type AuditEvent } from './audit.js';
-import { compactionOriginsWithCwd, compactionTranscripts, holdsOrigin, restampCompactionOrigin } from './compactions.js';
-import { insertDormantRow, listDormantSnapshots, replaceDormantEntry, type DormantReason, type DormantSnapshot } from './dormant.js';
+import {
+  compactionOriginsWithCwd,
+  compactionTranscripts,
+  holdsOrigin,
+  restampCompactionOrigin,
+} from './compactions.js';
+import {
+  insertDormantRow,
+  listDormantSnapshots,
+  replaceDormantEntry,
+  type DormantReason,
+  type DormantSnapshot,
+} from './dormant.js';
 import { selectAllEntries, selectEntriesByIds, selectLiveEntriesBySourcePrefix } from './entry-reads.js';
-import { deleteEntryRowInTx, restampOriginProjectAt, stampOriginProjectsAt, writeEntryMirrors } from './entry-writes.js';
+import {
+  deleteEntryRowInTx,
+  restampOriginProjectAt,
+  stampOriginProjectsAt,
+  writeEntryMirrors,
+} from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import { onHandle } from './open.js';
 import { setAsideRow, type SetAsideResult, type SetAsideWhy } from './set-aside.js';
@@ -45,8 +69,12 @@ export interface TagRewrite<T> {
 
 export interface ProjectTagStore extends ProjectTagReads {
   readonly hippoRoot: string;
-  /** One transaction; a dry run rolls back with no backup, else the store is backed up first and mirrors follow the commit. */
-  rewrite<T>(opts: { readonly dryRun: boolean; readonly backupLabel: string }, body: (tx: ProjectTagWrites, backup: string | null) => TagRewrite<T>): T;
+  /** One transaction; a dry run rolls back with no backup, else the store is backed up first and mirrors follow the
+   * commit. */
+  rewrite<T>(
+    opts: { readonly dryRun: boolean; readonly backupLabel: string },
+    body: (tx: ProjectTagWrites, backup: string | null) => TagRewrite<T>,
+  ): T;
   repairedOnce(): boolean;
   markRepairedOnce(): void;
 }
@@ -76,6 +104,16 @@ export function projectTagReads(db: DatabaseSyncLike, tenantId: string): Project
   };
 }
 
+/** `projectTagReads` on a read-only handle this call opens and closes, for doctor; `fn` must finish with the reads. */
+export function readProjectTags<T>(hippoRoot: string, tenantId: string, fn: (reads: ProjectTagReads) => T): T {
+  const db = openHippoDbReadOnly(hippoRoot);
+  try {
+    return fn(projectTagReads(db, tenantId));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 function projectTagWrites(db: DatabaseSyncLike, { tenantId, actor }: ProjectTagScope): ProjectTagWrites {
   return {
     ...projectTagReads(db, tenantId),
@@ -98,9 +136,13 @@ function rewriteOn<T>(
 ): T {
   const tx = projectTagWrites(db, scope);
   if (opts.dryRun) return withTrialScope(db, TX_LABEL, () => body(tx, null)).result;
-  const done = withBackup(db, scope.hippoRoot, opts.backupLabel, (backup) => withWriteScope(db, TX_LABEL, () => body(tx, backup)));
+  const done = withBackup(db, scope.hippoRoot, opts.backupLabel, (backup) =>
+    withWriteScope(db, TX_LABEL, () => body(tx, backup)),
+  );
   // After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the next rebuild.
-  for (const entry of selectEntriesByIds(db, done.rewrite, scope.tenantId).values()) writeEntryMirrors(scope.hippoRoot, entry);
+  for (const entry of selectEntriesByIds(db, done.rewrite, scope.tenantId).values()) {
+    writeEntryMirrors(scope.hippoRoot, entry);
+  }
   for (const id of done.purge) removeEntryMirrors(scope.hippoRoot, id);
   return done.result;
 }

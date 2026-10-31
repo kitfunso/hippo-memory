@@ -24,21 +24,21 @@ describe('DAG drill-down search', () => {
   it('includes child facts when a DAG summary matches', () => {
     const summary = createMemory(
       'John is a basketball player who trains daily and wants to improve his shooting percentage',
-      { layer: Layer.Semantic, tags: ['dag-summary', 'speaker:John'], dag_level: 2 },
+      { layer: Layer.Semantic, tags: ['dag-summary', 'speaker:John'], dagLevel: 2 },
     );
     writeEntry(hippoRoot, summary);
 
     const f1 = createMemory('John wants to improve his shooting percentage to lead the league', {
       layer: Layer.Semantic,
       tags: ['extracted', 'speaker:John'],
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     });
     const f2 = createMemory('John dreams of winning a national championship', {
       layer: Layer.Semantic,
       tags: ['extracted', 'speaker:John'],
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     });
     writeEntry(hippoRoot, f1);
     writeEntry(hippoRoot, f2);
@@ -55,7 +55,7 @@ describe('DAG drill-down search', () => {
     const fact = createMemory('Tim reads sci-fi novels', {
       layer: Layer.Semantic,
       tags: ['extracted', 'speaker:Tim'],
-      dag_level: 1,
+      dagLevel: 1,
     });
     writeEntry(hippoRoot, fact);
 

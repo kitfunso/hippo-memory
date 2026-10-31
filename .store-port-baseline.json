@@ -1,43 +1,29 @@
 {
-  "openersOutside": 6,
+  "openersOutside": 0,
   "openersInCli": 0,
   "storeBranches": 0,
   "routesWithoutStore": 0,
-  "sqliteOnlyRoutes": 2,
+  "sqliteOnlyRoutes": 0,
   "routesOnLoop": 12,
   "twinFunctions": 0,
   "sqlOutside": 0,
   "txLiterals": 0,
   "tenantResolvesInCli": 0,
-  "storeImportsInCli": 3,
-  "handleHoldersOutside": 8,
-  "storeFilesWithoutSql": 3,
+  "storeImportsInCli": 4,
+  "storeImportsInDomain": 3,
+  "handleHoldersOutside": 1,
+  "storeFilesWithoutSql": 2,
   "storeFilesWithoutSqlList": [
-    "src/store/card-detail.ts",
     "src/store/delivery-recorder.ts",
     "src/store/embeddings/index.ts"
   ],
-  "openersOutsideByFile": {
-    "src/agent-memories/sync.ts": 3,
-    "src/doctor.ts": 1,
-    "src/index.ts": 2
-  },
+  "openersOutsideByFile": {},
   "sqlOutsideByFile": {},
   "handleHoldersOutsideByFile": {
-    "src/agent-memories/apply.ts": 1,
-    "src/agent-memories/legacy.ts": 1,
-    "src/agent-memories/sync.ts": 1,
-    "src/doctor.ts": 1,
-    "src/graph/delta.ts": 1,
-    "src/graph/write.ts": 1,
-    "src/index.ts": 1,
-    "src/sharing/global-store.ts": 1
+    "src/entry/sqlite-handles.ts": 1
   },
   "sqliteLocalMethods": [],
-  "sqliteOnlyRoutesList": [
-    "POST /v1/memories/:id/promote",
-    "POST /v1/sleep"
-  ],
+  "sqliteOnlyRoutesList": [],
   "carrierFiles": 0,
   "carrierFilesList": []
 }

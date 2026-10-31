@@ -9,12 +9,12 @@ import { isHandled, programFromConfig } from './check-floating-promises.mjs';
 
 /** The async api write functions, by the file that declares them. */
 export const API_WRITES = {
-  'src/api/auth.ts': ['authCreate', 'authCreateSelf', 'authListRows', 'authRevoke'],
-  'src/api/forget.ts': ['forget'],
-  'src/api/outcome.ts': ['outcome', 'outcomeForLastRecall'],
-  'src/api/promote.ts': ['supersede', 'archiveRaw'],
-  'src/api/remember.ts': ['remember'],
-  'src/api/remember-local.ts': ['rememberLocally'],
+  'src/api/auth/auth.ts': ['authCreate', 'authCreateSelf', 'authListRows', 'authRevoke'],
+  'src/api/memories/forget.ts': ['forget'],
+  'src/api/memories/outcome.ts': ['outcome', 'outcomeForLastRecall'],
+  'src/api/memories/promote.ts': ['supersede', 'archiveRaw'],
+  'src/api/memories/remember.ts': ['remember'],
+  'src/api/memories/remember-local.ts': ['rememberLocally'],
   'src/importers/vault.ts': ['importVault'],
 };
 

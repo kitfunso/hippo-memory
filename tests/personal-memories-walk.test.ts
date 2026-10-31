@@ -1,4 +1,5 @@
 // The personal-memories plan's lane T walk, written from the plan alone: one shared-store server, callers A, B and an unowned admin.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -25,6 +26,7 @@ import { initStore } from '../src/store/open.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const A_SCOPE = 'personal:private:oid-a';
 const B_SCOPE = 'personal:private:oid-b';
@@ -67,10 +69,10 @@ function mint(label: string, role: 'admin' | 'member', ownerSubject?: string, ro
   }
 }
 
-function ctxOf(who: Who): api.Context {
+function ctxOf(who: Who): FullContext {
   const subject = `api_key:${keys[who].keyId}`;
-  if (who === 'ADM') return { hippoRoot: store, tenantId: 'default', actor: { subject, role: 'admin' } };
-  return { hippoRoot: store, tenantId: 'default', actor: { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' } };
+  if (who === 'ADM') return apiCtx(store, 'default', { subject, role: 'admin' });
+  return apiCtx(store, 'default', { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' });
 }
 
 async function http(token: string | null, method: string, route: string, body?: JsonValue, extra: Record<string, string> = {}, base = handle!.url): Promise<Reply> {
@@ -156,13 +158,13 @@ beforeAll(async () => {
   ids.teamTeal = await post(keys.B.plaintext, { content: TEAL, project: alpha });
 
   const summary = seedRow('umberline rollup for the walk session', A_SCOPE, '',
-    { layer: Layer.Semantic, dag_level: 2, confidence: 'inferred', tags: ['dag-summary'] }, { descendant_count: 1 });
+    { layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred', tags: ['dag-summary'] }, { descendant_count: 1 });
   ids.summary = summary.id;
   ids.child = seedRow('the umberline ledger closed at noon', A_SCOPE, '', {
-    layer: Layer.Episodic, kind: 'raw', confidence: 'observed', dag_level: 1, dag_parent_id: summary.id, source_session_id: SESSION,
+    layer: Layer.Episodic, kind: 'raw', confidence: 'observed', dagLevel: 1, dagParentId: summary.id, sourceSessionId: SESSION,
   }).id;
   ids.teamRaw = seedRow('the tealraw ledger opened at nine', null, 'alpha',
-    { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', source_session_id: SESSION }).id;
+    { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', sourceSessionId: SESSION }).id;
 });
 
 afterAll(async () => {
@@ -420,8 +422,8 @@ describe('personal memories walk (plan lane T)', () => {
   });
 
   it('line 11: api.authGrant of A\'s scope is 400, and a resolver scope list naming it opens nothing (F8)', async () => {
-    expect(() => api.authGrant(ctxOf('ADM'), keys.B.keyId, A_SCOPE)).toThrow(BadRequestError);
-    expect(api.authGrant(ctxOf('ADM'), keys.B.keyId, 'slack:private:C9')).toEqual({ ok: true });
+    await expect(api.authGrant(ctxOf('ADM'), keys.B.keyId, A_SCOPE)).rejects.toThrow(BadRequestError);
+    expect(await api.authGrant(ctxOf('ADM'), keys.B.keyId, 'slack:private:C9')).toEqual({ ok: true });
 
     const scoped = `q=zircon&scope=${encodeURIComponent(A_SCOPE)}`;
     expect((await recallIds(SIGNIN_A, scoped)).ids).toContain(ids.aZircon);
@@ -433,7 +435,7 @@ describe('personal memories walk (plan lane T)', () => {
 
   it('line 12: GET /v1/memories?scope=slack:private:C1 reads for a granted member and ADM, unchanged', async () => {
     const granted = mint('walk-c', 'member');
-    api.authGrant(ctxOf('ADM'), granted.keyId, 'slack:private:C1');
+    await api.authGrant(ctxOf('ADM'), granted.keyId, 'slack:private:C1');
     const slack = seedRow('the kowalskiwharf payroll rollout starts thursday', 'slack:private:C1', null);
     const route = `q=kowalskiwharf&scope=${encodeURIComponent('slack:private:C1')}`;
     for (const token of [granted.plaintext, keys.ADM.plaintext]) {

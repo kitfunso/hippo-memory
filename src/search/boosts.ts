@@ -1,5 +1,5 @@
 import { envSummaryDeboost } from '../util/env.js';
-import { calculateStrength, CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
+import { calculateStrength, CHURN_STALE_TAG, DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import { isOutcomeFastAblated, isRecencyAblated, evalRecencyScaleDays } from '../core/ablation.js';
 import { pathBoostMultiplier } from './path-context.js';
 import { scopeMatch } from '../core/active-scope.js';
@@ -17,7 +17,8 @@ const EXTRACTION_TAG_BOOST = 1.3;
 const OUTCOME_NUDGE_SLOPE = 0.15;
 const OUTCOME_NUDGE_MIN = 0.85;
 const OUTCOME_NUDGE_MAX = 1.15;
-// Strength and recency enter the rank as floor + span * signal, so a weak or old memory keeps most of its lexical score.
+// Strength and recency enter the rank as floor + span * signal, so a weak or old memory keeps most of its lexical
+// score.
 export const STRENGTH_RANK_FLOOR = 0.5;
 export const STRENGTH_RANK_SPAN = 0.5;
 const RECENCY_RANK_FLOOR = 0.8;
@@ -48,7 +49,7 @@ export function outcomeMultiplier(entry: MemoryEntry): number {
 
 /** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same deboost. */
 export function isDagSummary(entry: MemoryEntry): boolean {
-  return entry.dag_level === 2 || entry.dag_level === 3;
+  return entry.dag_level === DAG_LEVEL.topic || entry.dag_level === DAG_LEVEL.entity;
 }
 
 /** Summary deboost: per-call, then HIPPO_SUMMARY_DEBOOST, then 0.85; values outside (0, 1] fall through. */

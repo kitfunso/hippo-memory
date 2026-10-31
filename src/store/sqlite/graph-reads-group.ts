@@ -6,15 +6,19 @@ import type { GraphReads, Sync } from '../port.js';
 
 export function sqliteGraphReads(hippoRoot: string): Sync<GraphReads> {
   return {
-    graphRows: (tenantId, { entity, limit, reader }) => withGraphReadSnapshot(hippoRoot, (db) => graphViewRows(hippoRoot, db, tenantId, {
-      entity,
-      limit,
-      canRead: reader && ((scope) => scope === null || canReadScope(reader, scope)),
-    })),
+    graphRows: (tenantId, { entity, limit, reader }) =>
+      withGraphReadSnapshot(hippoRoot, (db) =>
+        graphViewRows(hippoRoot, db, tenantId, {
+          entity,
+          limit,
+          canRead: reader && ((scope) => scope === null || canReadScope(reader, scope)),
+        }),
+      ),
   };
 }
 
-/** The group as a served store answers it: the call runs at once and resolves through a Promise, so a throw rejects as another store's would. */
+/** The group as a served store answers it: the call runs at once and resolves through a Promise, so a throw rejects as
+ * another store's would. */
 export function servedGraphReads(sync: Sync<GraphReads>): GraphReads {
   return { graphRows: async (tenantId, query) => sync.graphRows(tenantId, query) };
 }

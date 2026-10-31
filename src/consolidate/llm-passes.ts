@@ -27,6 +27,8 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
 
 type SleepLlm = ReturnType<typeof sleepLlm>;
 
+const dagStore = (run: SleepRun) => ({ hippoRoot: run.hippoRoot, consolidation: run.store });
+
 export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
   // 1.6. Batch extraction — extract facts from episodic memories missing them
   const extractedFromIds = new Set(
@@ -52,7 +54,10 @@ export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined
   }
 }
 
-/** Extracts facts from each candidate; true when it stopped on a failure every later call would repeat (bad key, no credit, unknown model). */
+/**
+ * Extracts facts from each candidate; true when it stopped on a failure every later call would repeat (bad key, no
+ * credit, unknown model).
+ */
 async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly MemoryEntry[]): Promise<boolean> {
   const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
   const report = llm.llmError('extraction');
@@ -74,7 +79,10 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
     }
     if (stopped) {
       const skipped = batch.length - index - 1;
-      report(`stopped after a failure that will not clear on retry; ${skipped} of ${batch.length} candidates skipped, and the DAG passes with them`);
+      report(
+        `stopped after a failure that will not clear on retry; ${skipped} of ${batch.length} candidates skipped, and ` +
+        `the DAG passes with them`,
+      );
       break;
     }
   }
@@ -90,11 +98,13 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   if (!(apiKey && extractedFacts.length >= 3 && !run.dryRun)) return;
   try {
     const { buildDag } = await import('./dag.js');
-    const dagResult = await buildDag(run.hippoRoot, extractedFacts, { ...llmOpts, onError: llmError('dag') });
+    const dagResult = await buildDag(dagStore(run), extractedFacts, { ...llmOpts, onError: llmError('dag') });
     run.result.dagCandidateClusters = dagResult.candidateClusters;
     run.result.dagSummariesCreated = dagResult.summariesCreated;
     if (dagResult.summariesCreated > 0) {
-      run.result.details.push(`  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`);
+      run.result.details.push(
+        `  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`,
+      );
     }
   } catch (err) {
     llmError('dag')(errorMessage(err));
@@ -102,7 +112,8 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   }
 }
 
-// 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same apiKey/dryRun gate as buildDag.
+// 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same apiKey/dryRun gate as
+// buildDag.
 // Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling 1000) prevents runaway LLM cost.
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
@@ -111,13 +122,22 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
     const rawCap = envDagRebuildCap();
     // Hard ceiling so a misconfigured env can't burn unbounded LLM cost.
     const cap = rawCap !== undefined ? Math.min(rawCap, 1000) : 20;
-    const rebuildResult = await rebuildDirtySummaries(run.hippoRoot, { ...llmOpts, onError: llmError('dag rebuild'), cap });
+    const rebuildResult = await rebuildDirtySummaries(run.store, {
+      ...llmOpts,
+      onError: llmError('dag rebuild'),
+      cap,
+    });
     result.summariesRebuilt = rebuildResult.rebuilt;
     result.summariesRebuildFailed = rebuildResult.failed;
     result.summariesZeroChildSkipped = rebuildResult.zeroChildSkipped;
     result.summariesRebuildRefused = rebuildResult.refused;
     result.summariesRebuildCapped = rebuildResult.capped;
-    if (rebuildResult.rebuilt > 0 || rebuildResult.zeroChildSkipped > 0 || rebuildResult.failed > 0 || rebuildResult.refused > 0) {
+    if (
+      rebuildResult.rebuilt > 0 ||
+      rebuildResult.zeroChildSkipped > 0 ||
+      rebuildResult.failed > 0 ||
+      rebuildResult.refused > 0
+    ) {
       const parts: string[] = [];
       if (rebuildResult.rebuilt > 0) parts.push(`${rebuildResult.rebuilt} rebuilt`);
       if (rebuildResult.refused > 0) parts.push(`${rebuildResult.refused} refused`);
@@ -132,18 +152,23 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   }
 }
 
-// 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7 was skipped (re-clusters existing L2s every sleep).
-// Uses loadAllL2Summaries, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
+// 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7 was skipped
+// (re-clusters existing L2s every sleep).
+// Reads the stored L2s, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const { buildEntityProfiles } = await import('./dag.js');
-    const { loadAllL2Summaries } = await import('../store/summaries.js');
-    const l2Summaries = loadAllL2Summaries(run.hippoRoot);
+    const l2Summaries = run.store.unprofiledTopicSummaries();
     if (l2Summaries.length >= 2) {
-      const profileResult = await buildEntityProfiles(run.hippoRoot, l2Summaries, { ...llmOpts, onError: llmError('dag profiles') });
+      const profileResult = await buildEntityProfiles(dagStore(run), l2Summaries, {
+        ...llmOpts,
+        onError: llmError('dag profiles'),
+      });
       run.result.entityProfilesCreated = profileResult.profilesCreated;
       if (profileResult.profilesCreated > 0) {
-        run.result.details.push(`  🌲 DAG L3: ${profileResult.profilesCreated} entity profiles, ${profileResult.l2sLinked} L2s linked`);
+        run.result.details.push(
+          `  🌲 DAG L3: ${profileResult.profilesCreated} entity profiles, ${profileResult.l2sLinked} L2s linked`,
+        );
       }
     }
   } catch (err) {

@@ -7,8 +7,12 @@ import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
-/** The opencode plugin installed at ~/.config/opencode/plugins/hippo.ts: session.idle runs `hippo session-end`, session.created runs `hippo last-sleep`.
- * No `@opencode-ai/plugin` type import (unresolved, it would crash the loader); `$` is guarded and `.nothrow()` keeps a missing hippo binary from throwing. */
+/**
+ * The opencode plugin installed at ~/.config/opencode/plugins/hippo.ts: session.idle runs `hippo session-end`,
+ * session.created runs `hippo last-sleep`.
+ * No `@opencode-ai/plugin` type import (unresolved, it would crash the loader); `$` is guarded and `.nothrow()` keeps a
+ * missing hippo binary from throwing.
+ */
 const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
 // hippo-memory opencode plugin. DO NOT EDIT — regenerated on every
 // \`hippo hook install opencode\` from src/hooks.ts OPENCODE_PLUGIN_SOURCE
@@ -58,8 +62,12 @@ function resolveOpencodeConfigPath(): string {
   return path.join(homeDir(), '.config', 'opencode', 'opencode.json');
 }
 
-/** True iff a hook entry's command starts with `hippo ` plus a verb hippo itself installs (session-end, last-sleep, sleep, capture, context).
- * Structural, not substring (`echo "remember to hippo sleep"` is not ours), and per hook so user-authored hooks in the same entry survive. */
+/**
+ * True iff a hook entry's command starts with `hippo ` plus a verb hippo itself installs (session-end, last-sleep,
+ * sleep, capture, context).
+ * Structural, not substring (`echo "remember to hippo sleep"` is not ours), and per hook so user-authored hooks in the
+ * same entry survive.
+ */
 const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)(?=\s|$)/;
 
 function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
@@ -68,7 +76,9 @@ function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
   return isJsonString(cmd) && HIPPO_OWNED_COMMAND_RE.test(cmd);
 }
 
-/** Strip every hippo-owned hook from opencode.json's `hooks` key, deleting entries, keys and the object as they empty; user-authored hooks and other keys stay.
+/**
+ * Strip every hippo-owned hook from opencode.json's `hooks` key, deleting entries, keys and the object as they empty;
+ * user-authored hooks and other keys stay.
  * Returns `{ migrated, jsonRepairFailed }`; jsonRepairFailed means the file is present but unparseable. */
 function migrateLegacyOpencodeHooksBlock() {
   const configPath = resolveOpencodeConfigPath();

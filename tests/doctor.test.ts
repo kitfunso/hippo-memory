@@ -15,7 +15,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
 import type { SpoolFs } from '../src/capture/compaction-spool.js';
 import { startCompaction } from '../src/store/compactions-record.js';
-import { repairProjectNames } from '../src/api/projects.js';
+import { repairProjectNames } from '../src/api/objects/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
 

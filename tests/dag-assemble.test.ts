@@ -7,17 +7,19 @@
  * non-fresh-tail items first instead of oldest-first.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSessionRawMemories } from '../src/store/entry-reads.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { assemble, type Context } from '../src/api/index.js';
+import { assemble } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:assemble', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:assemble', role: 'admin' });
 }
 
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -28,10 +30,10 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     kind: 'raw',
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
-    source_session_id: sessionId,
+    sourceSessionId: sessionId,
     tags: opts.tags ?? [],
-    dag_level: opts.dag_level ?? 0,
-    dag_parent_id: opts.dag_parent_id ?? undefined,
+    dagLevel: opts.dag_level ?? 0,
+    dagParentId: opts.dag_parent_id ?? undefined,
   });
   if (opts.created) e.created = opts.created;
   if (opts.strength !== undefined) e.strength = opts.strength;
@@ -43,7 +45,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
     tags: ['dag-summary'],
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',

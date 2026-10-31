@@ -40,7 +40,8 @@ function createStoreFilesOwnerOnly(hippoRoot: string): void {
   }
 }
 
-// The archive only grows and its ids never repeat, so an unchanged top id means no row this process has not swept; a failed sweep stays due.
+// The archive only grows and its ids never repeat, so an unchanged top id means no row this process has not swept; a
+// failed sweep stays due.
 function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, probedTop: number | undefined): void {
   const top = probedTop ?? archiveTop(db);
   const key = storeKey(hippoRoot);
@@ -54,14 +55,21 @@ function archiveTop(db: DatabaseSyncLike): number {
   return Number(row?.top ?? 0);
 }
 
-/** A connection with what its own open's probe read; facts go stale with the next statement, so a handle made by an earlier call carries null. */
+/**
+ * A connection with what its own open's probe read; facts go stale with the next statement, so a handle made by an
+ * earlier call carries null.
+ */
 export interface OpenedDb {
   readonly db: DatabaseSyncLike;
   readonly facts: OpenFacts | null;
 }
 
-/** A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the caller owns and closes it.
- *  Outside any request scope (CLI start-up, timers) this is the only handle there is; openHippoDb reuses the scope's when one exists. */
+/**
+ * A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the
+ * caller owns and closes it.
+ * Outside any request scope (CLI start-up, timers) this is the only handle there is; openHippoDb reuses the scope's
+ * when one exists.
+ */
 export function connectWithFacts(hippoRoot: string, busyWaitMs: number = DEFAULT_BUSY_WAIT_MS): OpenedDb {
   createStoreFilesOwnerOnly(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
@@ -76,14 +84,20 @@ export function connectWithFacts(hippoRoot: string, busyWaitMs: number = DEFAULT
     try {
       sweepArchivedMirrorsIfDue(hippoRoot, db, facts?.archiveTop);
     } catch (cleanupErr) {
-      log.error(`openHippoDb: cleanupArchivedMirrors failed (non-fatal): ${errorMessage(cleanupErr)}`, errorFields(cleanupErr));
+      log.error(
+        `openHippoDb: cleanupArchivedMirrors failed (non-fatal): ${errorMessage(cleanupErr)}`,
+        errorFields(cleanupErr),
+      );
     }
     return { db, facts };
   } catch (error) {
     try {
       db.close();
     } catch (closeErr) {
-      log.error(`openHippoDb: closing the handle after a failed open failed: ${errorMessage(closeErr)}`, errorFields(closeErr));
+      log.error(
+        `openHippoDb: closing the handle after a failed open failed: ${errorMessage(closeErr)}`,
+        errorFields(closeErr),
+      );
     }
     throw error;
   }

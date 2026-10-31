@@ -1,4 +1,5 @@
-// GitHub Copilot Chat in VS Code: memory-tool files under VS Code's own data folders, one set per product and workspace.
+// GitHub Copilot Chat in VS Code: memory-tool files under VS Code's own data folders, one set per product and
+// workspace.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readTextFile } from './files.js';
@@ -68,7 +69,12 @@ function isDirectory(p: string): boolean {
   return fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() === true;
 }
 
-function projectContainers(data: string, ctx: AdapterContext, matches: (f: string) => boolean, warnings: string[]): Container[] {
+function projectContainers(
+  data: string,
+  ctx: AdapterContext,
+  matches: (f: string) => boolean,
+  warnings: string[],
+): Container[] {
   const storage = path.join(data, 'User', 'workspaceStorage');
   if (!fs.existsSync(storage)) return [];
   let ids: string[];

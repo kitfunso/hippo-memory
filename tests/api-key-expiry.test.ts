@@ -12,6 +12,7 @@ import { EXPIRING_KEYS_MIN_BINARY } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 
@@ -35,7 +36,7 @@ function mint(expiresAt?: string): { keyId: string; plaintext: string } {
 
 function selfMint(): Promise<AuthCreateSelfResult> {
   const actor: Actor = { subject: 'alice', role: 'member', viaAuthResolver: true };
-  return authCreateSelf({ hippoRoot: home, tenantId: 'default', actor }, { ttlDays: 30, perSubject: 3 });
+  return authCreateSelf(apiCtx(home, 'default', actor), { ttlDays: 30, perSubject: 3 });
 }
 
 const floor = (): string | undefined => withDb((db) => meta(db, 'min_compatible_binary'));
@@ -195,7 +196,7 @@ describe('key lists', () => {
 
   it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', async () => {
     const keys = threeKeys();
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
+    const ctx = apiCtx(home, 'default', adminActor('cli'));
     expect((await authListRows(ctx, { active: true })).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
     expect((await authListRows(ctx, { active: false })).map((r) => r.key.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
     const [first] = await authListRows(ctx, { active: true, limit: 1 });
@@ -250,13 +251,10 @@ describe('expired keys over MCP and the stream', () => {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
-    const deadline = Date.now() + 6000;
-    while (Date.now() < deadline && !buf.includes('auth_revoked')) {
-      const r = await Promise.race([
-        reader.read(),
-        new Promise<{ value: undefined; done: true }>((ok) => setTimeout(() => ok({ value: undefined, done: true }), 300)),
-      ]);
-      if (r.value) buf += decoder.decode(r.value);
+    // The 100 ms heartbeat wakes each read, and the server ends the stream after auth_revoked, so the loop waits on events, not a clock.
+    for (let r = await reader.read(); !r.done; r = await reader.read()) {
+      buf += decoder.decode(r.value);
+      if (buf.includes('auth_revoked')) break;
     }
     ac.abort();
     expect(buf).toContain('auth_revoked');

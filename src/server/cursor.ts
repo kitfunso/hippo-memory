@@ -31,13 +31,19 @@ function isPart(value: JsonValue | undefined, part: CursorPart): value is string
   return isJsonNumber(value) && Number.isInteger(value);
 }
 
-function toPosition(parsed: JsonValue | undefined, keyPart: CursorPart, idPart: CursorPart): KeysetPosition | undefined {
+function toPosition(
+  parsed: JsonValue | undefined,
+  keyPart: CursorPart,
+  idPart: CursorPart,
+): KeysetPosition | undefined {
   if (!Array.isArray(parsed) || parsed.length !== 2) return undefined;
   const [key, id] = parsed;
   return isPart(key, keyPart) && isPart(id, idPart) ? { key, id } : undefined;
 }
 
-/** The position a `?cursor=` names, or undefined when the param is absent; anything this server did not mint is a 400. */
+/**
+ * The position a `?cursor=` names, or undefined when the param is absent; anything this server did not mint is a 400.
+ */
 export function parseCursor(raw: string | null, keyPart: CursorPart, idPart: CursorPart): KeysetPosition | undefined {
   if (raw === null) return undefined;
   const parsed = raw.length <= MAX_CURSOR_CHARS && CURSOR_RE.test(raw) ? decodeJson(raw) : undefined;
@@ -51,14 +57,19 @@ export interface Page<T> {
   nextCursor: string | null;
 }
 
-/** Drops the one-row lookahead the query fetched past `limit` and names the next page's cursor, null on the last page. */
+/**
+ * Drops the one-row lookahead the query fetched past `limit` and names the next page's cursor, null on the last page.
+ */
 export function pageOf<T>(rows: readonly T[], limit: number, positionOf: (row: T) => KeysetPosition): Page<T> {
   if (rows.length <= limit) return { items: [...rows], nextCursor: null };
   const items = rows.slice(0, limit);
   return { items, nextCursor: encodeCursor(positionOf(items[items.length - 1]!)) };
 }
 
-/** Rows ordered by (created_at DESC, id DESC): the decision, incident, process, policy, skill, brief, note and prediction tables. */
+/**
+ * Rows ordered by (created_at DESC, id DESC): the decision, incident, process, policy, skill, brief, note and
+ * prediction tables.
+ */
 export function byCreatedAt(row: { createdAt: string; id: number }): KeysetPosition {
   return { key: row.createdAt, id: row.id };
 }
