@@ -10,12 +10,7 @@ import { autoDetectContext } from '../../api/context/context-auto.js';
 import { sharedStoreOf } from '../../api/types.js';
 import { type ProjectIdentity } from '../../base/scope/project-identity.js';
 import type { Machine } from '../../base/util/agent-homes.js';
-import {
-  assembleCost,
-  assembleText,
-  drillCost,
-  drillText,
-} from '../../api/context/context-render.js';
+import { assembleCost, assembleText, drillCost, drillText } from '../../api/hippo-db/dag-render.js';
 import { mcpApiContext, ownsServerCwd, type HippoDbToolCall, type ToolCall } from './protocol.js';
 import { toolRecallText } from './tool-recall.js';
 import {

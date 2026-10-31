@@ -29,6 +29,7 @@ A core path that can use the tier but works without it reads `ctx.enrich`, a `Co
 
 Domain code never imports `src/store`. A domain function that calls the tier names the repositories it calls under `hippoDb`. Their interfaces, and the record and request shapes they pass, live in `src/base/records`; their effect table is `src/store/sqlite/hippo-db-effects.ts`.
 
+
 ### Where the port lives
 
 The port is `src/base/ports/store.ts`, with its core groups in `src/base/ports/store/` and its published type entry in `store-index.ts`. It sits in `src/base`, below both layers, so src/domain and the adapter in src/store import the same port and src/domain imports nothing from src/store (`apart` in `layers.json`).
@@ -223,6 +224,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/tokens.ts
 - `recordTokens`: Record memory text handed to an agent in the token ledger (ROADMAP TE0).
+
+### src/api/hippo-db/token-reports.ts
 - `failureSummary`: Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30); ROADMAP CD13.
 
 ### src/api/types.ts

@@ -1,6 +1,6 @@
 // `hippo session`: log, show, complete and resume one agent session.
 
-import { continuityLatest } from '../../api/continuity/continuity.js';
+import { continuityLatest } from '../../api/hippo-db/continuity-latest.js';
 import {
   isHandoffOutcome,
   formatHandoffEvidenceLine,

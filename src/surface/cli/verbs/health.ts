@@ -3,7 +3,7 @@
 import { TAIL_MAX_LINES } from '../support-bundle.js';
 import { DEFAULT_ASSEMBLE_BUDGET, DEFAULT_FRESH_TAIL_COUNT } from '../../../api/assemble.js';
 import { DEFAULT_DRILL_DOWN_LIMIT } from '../../../api/objects/drill-down.js';
-import { DEFAULT_REPORT_WINDOW_DAYS } from '../../../api/tokens.js';
+import { DEFAULT_REPORT_WINDOW_DAYS } from '../../../api/hippo-db/token-reports.js';
 import { DEFAULT_DORMANT_LIST_LIMIT } from '../../../base/records/dormant.js';
 import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../../base/util/limits.js';
 import { type VerbSpec, verb } from '../verb-row.js';

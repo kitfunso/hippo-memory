@@ -1,5 +1,6 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
-import { assembleCost, contextCost, drillCost } from '../../../api/context/context-render.js';
+import { contextCost } from '../../../api/context/context-render.js';
+import { assembleCost, drillCost } from '../../../api/hippo-db/dag-render.js';
 import {
   assemble,
   type AssembleOptions,

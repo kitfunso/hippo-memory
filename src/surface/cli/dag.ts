@@ -3,12 +3,8 @@
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import * as api from '../../api/index.js';
-import {
-  assembleCost,
-  assembleHeading,
-  drillCost,
-  settleTokens,
-} from '../../api/context/context-render.js';
+import { settleTokens } from '../../api/context/context-render.js';
+import { assembleCost, assembleHeading, drillCost } from '../../api/hippo-db/dag-render.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { printError } from './output.js';
 import { MAX_DRILL_DOWN_DEPTH } from '../../api/objects/drill-down.js';

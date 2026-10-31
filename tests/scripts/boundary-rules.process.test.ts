@@ -374,6 +374,26 @@ describe('.dependency-cruiser.cjs grant rule', () => {
   });
 });
 
+describe('.dependency-cruiser.cjs core port rule', () => {
+  it('fails a core file that reaches the adapter directly or through a local module, type-only included', () => {
+    const reached = cruise(
+      {
+        'src/store/sqlite/hippo-db.ts': 'export interface HippoDbRepos { readonly n: number }\n',
+        'src/api/hippo-db-context.ts':
+          "import type { HippoDbRepos } from '../store/sqlite/hippo-db.js';\nexport type Tier = { readonly hippoDb: HippoDbRepos };\n",
+        'src/api/recall/rows.ts': "import type { Tier } from '../hippo-db-context.js';\nexport type Rows = Tier;\n",
+        'src/base/ports/store/keys.ts':
+          "import type { HippoDbRepos } from '../../../store/sqlite/hippo-db.js';\nexport type Keys = HippoDbRepos;\n",
+        'src/api/context/context.ts': 'export const LIMIT = 5;\n',
+        'src/api/memories/forget.ts':
+          "import type { Tier } from '../hippo-db-context.js';\nexport type Forget = Tier;\n",
+      },
+      'core-port-no-sqlite',
+    );
+    expect([...new Set(reached)].sort()).toEqual(['src/api/recall/rows.ts', 'src/base/ports/store/keys.ts']);
+  });
+});
+
 /** The files scripts/checks/check-sqlite-loads.mjs names over `files` in a fresh folder. */
 function sqliteLoads(files: Record<string, string>): string[] {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-sqlite-')));

@@ -7,7 +7,7 @@ import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import type { HippoDbContext, HippoDbStore } from '../../api/hippo-db-context.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
-import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
+import { autoSleepConsolidate } from '../../api/sleep/sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpContext, McpHost } from '../mcp/protocol.js';

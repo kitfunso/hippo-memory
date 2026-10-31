@@ -2,8 +2,7 @@
 // and nothing imports it. The sleep modules alone: the api barrel loads far more than one sleep
 // needs, and every sleep pays for the start.
 import { evalStoreRules } from '../../infra/eval-switches.js';
-import { sleepWholeStore } from '../../api/sleep/sleep.js';
-import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
+import { autoSleepConsolidate, sleepWholeStore } from '../../api/sleep/sleep.js';
 import { rootInfra } from '../../infra/ports.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';

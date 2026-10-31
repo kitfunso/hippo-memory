@@ -183,7 +183,8 @@ export type {
 export { DEFAULT_CONTEXT_BUDGET, contextGet } from './context/context.js';
 export { NO_QUERY } from './context/context-plan.js';
 export { contextProjectFor, type ProjectFacts } from './context/context-project.js';
-export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
+export { recordTokens } from './tokens.js';
+export { failureSummary, tokenSummary } from './hippo-db/token-reports.js';
 export { dormantForget, isDormant, dormantList, dormantRestore } from './sleep/dormant.js';
 export { quarantineApprove, quarantineList, quarantineReject } from './hippo-db/quarantine.js';
 export type { QuarantineListItem } from './hippo-db/quarantine.js';

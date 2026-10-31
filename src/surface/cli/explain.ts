@@ -10,7 +10,8 @@ import {
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
-import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
+import { recallRowOrigin } from '../../api/recall/rows.js';
+import { scopeHiddenCount } from '../../api/hippo-db/scope-hidden-count.js';
 import { type CliCommand, type CliContext, type CliStore } from './api-context.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
 import { printedTokens } from '../../api/context/context-render.js';

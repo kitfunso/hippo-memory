@@ -13,7 +13,7 @@ import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
-import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/tokens.js';
+import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/hippo-db/token-reports.js';
 import {
   correctionLatencyReport,
   embeddingReindexNeeded,
