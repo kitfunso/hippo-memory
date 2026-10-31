@@ -283,9 +283,28 @@ export function writeHiddenTests(cacheDir, workDir, t) {
   for (const f of t.testFiles) writeFile(workDir, f, git(['show', `${t.fixRef}:${f}`], cacheDir, {}, 'buffer'));
 }
 
-/** Added lines of a task's gold diff that are long enough to be a leak signal. */
+/** Added lines of a task's gold diff that are long enough to be a leak signal and that the base tree does not already hold. */
 export function goldLines(cacheDir, t) {
   // A git error throws: an empty list would silently turn the leak check off for the task.
-  return git(['diff', '--no-ext-diff', '--no-color', '--no-textconv', t.baseRef, t.fixRef], cacheDir).split('\n')
+  const added = git(['diff', '--no-ext-diff', '--no-color', '--no-textconv', t.baseRef, t.fixRef], cacheDir).split('\n')
     .filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1).trim()).filter((l) => l.length >= 40);
+  if (added.length === 0) return added;
+  // A line the base tree already holds, such as an import or a licence header, tells the agent nothing the repo does not (Amendment 8).
+  const base = baseLinesHolding(cacheDir, t.baseRef, added);
+  return added.filter((l) => !base.includes(l));
+}
+
+/** The base tree's lines that hold any of `lines`, joined by newlines; '' when none does. */
+function baseLinesHolding(cacheDir, ref, lines) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-gold-'));
+  const file = path.join(dir, 'patterns');
+  try {
+    fs.writeFileSync(file, `${lines.join('\n')}\n`);
+    const r = gitSpawn(['grep', '-F', '-h', '-I', '--no-color', '-f', file, ref], cacheDir);
+    if (r.status === 1) return '';
+    if (r.status !== 0) throw new Error(`git grep for gold lines at ${ref} in ${cacheDir} failed (exit ${r.status}): ${String(r.stderr)}`);
+    return r.stdout.toString('utf8');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }

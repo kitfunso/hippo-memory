@@ -615,6 +615,28 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(Math.max(...cells.map((c) => c.seed))).toBe(3);
   });
 
+  it('--only-seed plans one seed, the same cells a 1..N plan gives that seed, and refuses a seed past an arm\'s count or beside --seeds', () => {
+    const scratch = tmp('ab-run-only-');
+    const r = makeRepo();
+    const tasksFile = join(scratch, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y'), task(r, 'a3', 'z')] }] }));
+    const cli = (out: string, ...extra: string[]) => spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', join(scratch, out), '--dry-run', ...extra], { encoding: 'utf8', env: { ...process.env, Z0_ANCESTOR_STOP: scratch } });
+    type Cell = { seed: number; position: number; arm: string; sequence: string; taskId: string };
+    const plan = (out: string): Cell[] => JSON.parse(readFileSync(join(scratch, out, 'plan.json'), 'utf8'));
+    const key = (c: Cell) => `${c.seed}|${c.position}|${c.arm}|${c.sequence}|${c.taskId}`;
+    const one = cli('one', '--only-seed', '3', '--arms', 'A1,A2');
+    expect(one.status, one.stderr).toBe(0);
+    expect(one.stdout).toContain('seeds A1:only 3 A2:only 3');
+    const all = cli('all', '--arms', 'A1,A2');
+    expect(all.status, all.stderr).toBe(0);
+    expect(plan('one').map(key)).toEqual(plan('all').filter((c) => c.seed === 3).map(key));
+    const past = cli('past', '--only-seed', '3', '--arms', 'A0,A1');
+    expect(past.status).not.toBe(0);
+    expect(past.stderr).toContain('--only-seed 3 is past the prereg seed count of A0');
+    const both = cli('both', '--only-seed', '2', '--seeds', '2', '--arms', 'A1,A2');
+    expect(both.stderr).toContain('--only-seed cannot be combined with --seeds');
+  });
+
   it('--seed-rule plans wave 2: it refuses a stop file, a wrong schema, an unlisted arm, a count outside 3 to 9, --seeds and --screen, and plans seeds above 3 only', () => {
     const scratch = tmp('ab-run-wave2-');
     const r = makeRepo();

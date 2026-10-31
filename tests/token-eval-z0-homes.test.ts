@@ -492,6 +492,14 @@ describe('workspace checkout', () => {
     expect(() => goldLines(repo, { baseRef: base, fixRef: 'no-such-ref' })).toThrow(/no-such-ref/);
   });
 
+  it('goldLines drops an added line the base tree already holds, such as a shared import (Amendment 8)', async () => {
+    const shared = 'import { RuleTester } from "@typescript-eslint/rule-tester";';
+    const { repo, base, g } = await gitRepo({ 'other.js': `  ${shared}\n` });
+    writeFileSync(join(repo, 'lib.js'), `${shared}\na + b, the fix that a later task must never see in an earlier workspace\n`);
+    g('commit', '-qam', 'fix 2');
+    expect(goldLines(repo, { baseRef: base, fixRef: g('rev-parse', 'HEAD') })).toEqual(['a + b, the fix that a later task must never see in an earlier workspace']);
+  });
+
   it('goldLines and writeHiddenTests ignore the global git config and attributes the agent shares, running nothing from them', async () => {
     const { repo, base, fix } = await gitRepo({});
     const t = { baseRef: base, fixRef: fix, testFiles: ['lib.js'] };

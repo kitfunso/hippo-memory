@@ -237,13 +237,20 @@ function parseArgs(argv) {
   if (!/^[1-9]\d*$/.test(timeoutArg)) throw new Error(`--session-timeout-min must be a positive integer, got ${timeoutArg}`);
   const seedsArg = flag('--seeds', null);
   if (seedsArg !== null && !/^[1-9]\d*$/.test(seedsArg)) throw new Error(`--seeds must be a positive integer, got ${seedsArg}`);
+  // Amendment 8 reruns one sequence-seed; planRuns keys rotation and order on the real seed, so seed N alone plans N's cells of a 1..N plan.
+  const onlyArg = flag('--only-seed', null);
+  if (onlyArg !== null && !/^[1-9]\d*$/.test(onlyArg)) throw new Error(`--only-seed must be a positive integer, got ${onlyArg}`);
+  if (onlyArg !== null && (seedsArg !== null || ruleFile !== null || screen)) throw new Error('--only-seed cannot be combined with --seeds, --seed-rule or --screen');
+  const onlySeed = onlyArg === null ? null : Number(onlyArg);
+  const over = onlySeed === null ? [] : arms.filter((a) => onlySeed > ARM_SEEDS[a]);
+  if (over.length) throw new Error(`--only-seed ${onlySeed} is past the prereg seed count of ${over.join(', ')}`);
   const canariesFile = flag('--canaries', null);
   const canaries = canariesFile ? fs.readFileSync(canariesFile, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : [];
   if (canariesFile && canaries.length === 0) throw new Error(`--canaries ${canariesFile} holds no canary; one per line`);
   const pinsFile = flag('--pins', null);
   return {
     canaries, pins: pinsFile ? JSON.parse(fs.readFileSync(pinsFile, 'utf8')) : null,
-    flag, spec, arms, rule, seeds: seedsArg === null ? null : Number(seedsArg), sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen,
+    flag, spec, arms, rule, onlySeed, seeds: seedsArg === null ? null : Number(seedsArg), sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen,
     passEnv: argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : [])),
     mode: argv.includes('--dry-run') ? 'dry' : (argv.includes('--check-homes') ? 'check' : 'real'),
   };
@@ -268,7 +275,7 @@ async function main() {
     console.log('wave 2 has no sessions');
     return;
   }
-  const steps = args.screen ? planScreen(spec) : planFor(spec, arms, seeds, waveTwo);
+  const steps = args.screen ? planScreen(spec) : (args.onlySeed ? planRuns(spec, arms, () => args.onlySeed, args.onlySeed) : planFor(spec, arms, seeds, waveTwo));
   const records = path.join(out, args.screen ? 'screen.jsonl' : 'runs.jsonl');
   // A run appends to its records file and both modes rewrite plan.json, so an earlier run's records would end up unplanned.
   const rewrite = args.screen ? '' : ' and rewrite plan.json';
@@ -284,7 +291,7 @@ async function main() {
   // Outside the try below: a task the runner refuses is not a run abandoned partway, so it must not leave ABANDONED.
   preflight(spec, out, mode, stopAt, { screen: args.screen });
   if (args.screen) console.log(`${steps.length} screen sessions: A0 and A4 only, seeds 1 and 2.`);
-  else console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => (waveTwo ? `${a}:${WAVE_2_FIRST_SEED}-${waveTwo[a]}` : `${a}:${seedCap(seeds)(a)}`)).join(' ')}.`);
+  else console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => (waveTwo ? `${a}:${WAVE_2_FIRST_SEED}-${waveTwo[a]}` : (args.onlySeed ? `${a}:only ${args.onlySeed}` : `${a}:${seedCap(seeds)(a)}`))).join(' ')}.`);
   if (rule) console.log(`seed rule sha256 ${rule.sha256}`);
   if (mode === 'dry') return dryRun(args, steps);
   const dirName = (st) => st.runName ?? st.sequence.id;
