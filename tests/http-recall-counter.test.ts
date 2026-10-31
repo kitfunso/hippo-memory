@@ -9,13 +9,15 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { remember, retrieve } from '../src/api/index.js';
-import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 let handle: ServerHandle;
 
 function ctx() {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' as const } };
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' as const });
 }
 
 function totalRecalled(): number {
@@ -37,7 +39,7 @@ beforeEach(async () => {
   mkdirSync(join(home, '.hippo'), { recursive: true });
   initStore(home);
   for (const content of ['alpha token one', 'alpha token two', 'alpha token three']) {
-    remember(ctx(), { content });
+    await remember(ctx(), { content });
   }
   handle = await serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
 });

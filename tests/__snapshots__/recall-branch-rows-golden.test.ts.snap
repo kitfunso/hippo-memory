@@ -2874,7 +2874,7 @@ exports[`recall branch replies and rows match the code before the store port > m
         "session_id": null,
         "surface": "mcp_recall",
         "tenant_id": "default",
-        "tokens": 24,
+        "tokens": 28,
       },
     ],
     "retrieved": [
@@ -2914,7 +2914,7 @@ exports[`recall branch replies and rows match the code before the store port > m
     "error": null,
     "status": 200,
     "text": "## Cutoff
-Showing 0 of 19 candidates; 19 dropped to fit limit.
+Showing 0 of 19 candidates; 19 not shown (rank, budget or limit).
 
 ---
 

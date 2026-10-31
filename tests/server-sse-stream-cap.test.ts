@@ -9,6 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 interface OpenStream {
   status: number;
@@ -70,12 +71,7 @@ describe('/mcp/stream concurrent stream cap', () => {
 
     first.abort();
     let status = 0;
-    const deadline = Date.now() + 3000;
-    while (Date.now() < deadline) {
-      status = (await openStream()).status;
-      if (status === 200) break;
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    await waitFor(async () => (status = (await openStream()).status) === 200, { timeoutMs: 3000, intervalMs: 50, what: 'a freed stream slot' });
     expect(status).toBe(200);
   });
 

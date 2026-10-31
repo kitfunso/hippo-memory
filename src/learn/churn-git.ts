@@ -10,7 +10,8 @@ import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 
 // A `git log --name-status` dump can run to tens of MB; default 1MB pipe would truncate it.
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
-// Longer than the 10 s of one-line git reads because a full log dump on a large repo is slow, yet bounded so a wedged git cannot stall sleep.
+// Longer than the 10 s of one-line git reads because a full log dump on a large repo is slow, yet bounded so a wedged
+// git cannot stall sleep.
 const GIT_TIMEOUT_MS = MINUTE_MS;
 
 /** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run on this. */
@@ -18,7 +19,13 @@ export class GitReadError extends Error {}
 
 function runGit(args: string[], repoRoot: string): string {
   try {
-    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true });
+    return execFileSync('git', args, {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: GIT_MAX_BUFFER,
+      timeout: GIT_TIMEOUT_MS,
+      windowsHide: true,
+    });
   } catch (err) {
     throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`, { cause: err });
   }
@@ -27,7 +34,13 @@ function runGit(args: string[], repoRoot: string): string {
 // git grep exits 1 for "no match" -- a normal empty result, not a failure.
 function runGitGrepOrEmpty(args: string[], repoRoot: string): string {
   try {
-    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true });
+    return execFileSync('git', args, {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: GIT_MAX_BUFFER,
+      timeout: GIT_TIMEOUT_MS,
+      windowsHide: true,
+    });
   } catch (err) {
     // SAFETY: execFileSync attaches `status` to the thrown Error on a non-zero child exit.
     const status = (err as { status?: number }).status;
@@ -58,7 +71,15 @@ export function fetchChurnWindowLog(repoRoot: string, sinceIso: string): ChurnCo
   const buffered = new Date(new Date(sinceIso).getTime() - DAY_MS).toISOString();
   const raw = runGit(
     // --first-parent -m: a merge's changes land as one diff against its mainline parent.
-    ['log', '--no-renames', '--first-parent', '-m', `--since=${buffered}`, '--pretty=format:%x01%H%x02%cI', '--name-status'],
+    [
+      'log',
+      '--no-renames',
+      '--first-parent',
+      '-m',
+      `--since=${buffered}`,
+      '--pretty=format:%x01%H%x02%cI',
+      '--name-status',
+    ],
     repoRoot,
   );
   const commits: ChurnCommit[] = [];
@@ -102,7 +123,10 @@ export function resolveCommitBefore(repoRoot: string, beforeIso: string): string
   return raw === '' ? null : raw;
 }
 
-/** package.json `scripts` at a revision; {} when the file is absent, null when unparsable. Git failures throw GitReadError. */
+/**
+ * package.json `scripts` at a revision; {} when the file is absent, null when unparsable. Git failures throw
+ * GitReadError.
+ */
 export function packageScriptsAt(repoRoot: string, rev: string): Record<string, string> | null {
   if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repoRoot).trim() === '') return {};
   const raw = runGit(['show', `${rev}:package.json`], repoRoot);

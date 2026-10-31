@@ -14,7 +14,8 @@ export const openclawAdapter: Adapter = {
   },
 };
 
-// SHORTCUT: agents.defaults.workspace in openclaw.json is not read (the file allows comments, and there is no parser for that here); read it if users ask.
+// SHORTCUT: agents.defaults.workspace in openclaw.json is not read (the file allows comments, and there is no parser
+// for that here); read it if users ask.
 function workspaceDir(ctx: AdapterContext): string {
   const { OPENCLAW_WORKSPACE_DIR: workspace } = ctx.env;
   return path.resolve(workspace || path.join(stateDir(ctx), 'workspace'));
@@ -32,7 +33,9 @@ function userContainers(workspace: string): Container[] {
   if (!fs.existsSync(file)) return [];
   const read = readTextFile(file);
   if (!read.ok) {
-    return [{ scope: 'user', path: file, readable: false, items: [], skipped: [], warnings: [read.reason], textKeyed: true }];
+    return [
+      { scope: 'user', path: file, readable: false, items: [], skipped: [], warnings: [read.reason], textKeyed: true },
+    ];
   }
   const stored = splitMarkdownItems(read.text).map(({ heading, headingSlug, text }) => ({
     headingSlug,

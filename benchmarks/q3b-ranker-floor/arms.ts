@@ -1,6 +1,7 @@
 // The three arms: one request shape per ranker of `retrieve()`. Each returns the contents it showed, best first.
 
-import { adminActor, retrieve, type Context } from '../../dist/api/index.js';
+import { adminActor, retrieve, type StoreContext } from '../../dist/api/index.js';
+import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { engineFlags } from '../../dist/cli/flag-values.js';
 import { loadConfig } from '../../dist/core/config.js';
 import { getReranker } from '../../dist/rerankers/index.js';
@@ -26,13 +27,14 @@ export interface Ranked {
 export async function rankWith(arm: Arm, q: EvalQuery): Promise<Ranked> {
   const missing = stagesNotRun(arm, q.stages);
   if (missing.length > 0) throw new Error(`arm ${arm} cannot run ${missing.map((s) => STAGE_LABEL[s]).join(', ')} for ${q.id}`);
-  const ctx: Context = { hippoRoot: getHippoRoot(), tenantId: resolveTenantId({}), actor: adminActor('cli') };
+  const hippoRoot = getHippoRoot();
+  const ctx: StoreContext = { hippoRoot, tenantId: resolveTenantId({}), actor: adminActor('cli'), store: sqliteStore(hippoRoot) };
   if (arm === 'A') return cliCore(ctx, q);
   return arm === 'B' ? sqlBm25(ctx, q) : showRanked(ctx, q);
 }
 
 /** Arm A: the request `hippo recall` builds, less its rendering. The budget is priced on content tokens, not printed lines. */
-async function cliCore(ctx: Context, q: EvalQuery): Promise<Ranked> {
+async function cliCore(ctx: StoreContext, q: EvalQuery): Promise<Ranked> {
   const config = loadConfig(ctx.hippoRoot);
   const globalRoot = getGlobalRoot();
   const reranker = q.stages.reranker ? getReranker(q.stages.reranker) : null;
@@ -69,13 +71,13 @@ async function cliCore(ctx: Context, q: EvalQuery): Promise<Ranked> {
 }
 
 /** Arm B: `retrieve` with no mode and no ranker option, as `GET /v1/memories` calls it. */
-async function sqlBm25(ctx: Context, q: EvalQuery): Promise<Ranked> {
+async function sqlBm25(ctx: StoreContext, q: EvalQuery): Promise<Ranked> {
   const [result, retrieveMs] = await timed(() => retrieve(ctx, { query: q.text, limit: SHOWN_ROWS, ...session(q) }));
   return { texts: result.results.map((r) => r.content), retrieveMs };
 }
 
 /** Arm C: the options the MCP recall tool passes, with the ranked list cut to the shown rows in place of its rendering. */
-async function showRanked(ctx: Context, q: EvalQuery): Promise<Ranked> {
+async function showRanked(ctx: StoreContext, q: EvalQuery): Promise<Ranked> {
   const mode = loadConfig(ctx.hippoRoot).physics?.enabled !== false ? 'physics' : 'hybrid';
   let shown: SearchResult[] = [];
   const [, retrieveMs] = await timed(() => retrieve(ctx, {

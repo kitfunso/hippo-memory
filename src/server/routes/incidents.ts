@@ -5,12 +5,24 @@ import { NotFoundError } from '../../core/api-errors.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
-import { objectsOf } from '../../api/objects.js';
-import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, optionalString, requiredString } from './object-routes.js';
+import { objectsOf } from '../../api/objects/objects.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  type ObjectRouteConfig,
+  optionalString,
+  requiredString,
+} from './object-routes.js';
 
 const MAX_LINKED_MEMORY_IDS = 256;
 
-const incidentRoutes: ObjectRouteConfig<'incident'> = { noun: 'incident', field: 'incident', listField: 'incidents', object: INCIDENT };
+const incidentRoutes: ObjectRouteConfig<'incident'> = {
+  noun: 'incident',
+  field: 'incident',
+  listField: 'incidents',
+  object: INCIDENT,
+};
 
 function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined {
   const raw = body['linkedMemoryIds'];
@@ -29,9 +41,10 @@ function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined 
   return raw;
 }
 
-// Routes: /v1/incidents (open, list, show, resolve, close), mirroring /v1/decisions; status is validated against VALID_INCIDENT_STATES.
+// Routes: /v1/incidents (open, list, show, resolve, close), mirroring /v1/decisions; status is validated against
+// VALID_INCIDENT_STATES.
 // Lifecycle is open->resolved->closed (no supersede), so linkedMemoryIds replaces supersedesDecisionId on create.
-export async function handleCreateIncident(rr: AuthedRouteRequest): Promise<void> {
+export async function handleCreateIncident(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   const { req, res, opts, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   const write = {
@@ -49,11 +62,11 @@ export async function handleCreateIncident(rr: AuthedRouteRequest): Promise<void
   }
 }
 
-export function handleListIncidents(rr: AuthedRouteRequest): Promise<void> {
+export function handleListIncidents(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   return listRoute(incidentRoutes, rr);
 }
 
-export async function handleResolveIncident(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export async function handleResolveIncident(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   const { req, res, ctx } = rr;
   const id = parseInt(match[1], 10);
   const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', { max: MAX_SHORT_FIELD_LEN });
@@ -61,10 +74,10 @@ export async function handleResolveIncident(rr: AuthedRouteRequest, match: RegEx
   sendJson(res, 200, { incident });
 }
 
-export function handleCloseIncident(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleCloseIncident(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return closeRoute(incidentRoutes, rr, match);
 }
 
-export function handleGetIncident(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleGetIncident(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return getRoute(incidentRoutes, rr, match);
 }

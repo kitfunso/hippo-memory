@@ -1,14 +1,16 @@
 // tests/goal-outcome-propagation.test.ts
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
-const ctx = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
 
 function readStrength(root: string, memId: string): number {
   const db = openHippoDb(root);
@@ -49,8 +51,8 @@ describe('completeGoal lifespan-windowed propagation', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('outcome >= 0.7 boosts memories recalled within the goal lifespan', () => {
-    const m = remember(ctx(root), { content: 'lesson', tags: ['rfx'] });
+  it('outcome >= 0.7 boosts memories recalled within the goal lifespan', async () => {
+    const m = await remember(ctx(root), { content: 'lesson', tags: ['rfx'] });
     // Default strength is 1.0 (ceiling); knock it down so the 1.10x boost shows.
     setStrength(root, m.id, 0.5);
     const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
@@ -60,8 +62,8 @@ describe('completeGoal lifespan-windowed propagation', () => {
     expect(readStrength(root, m.id)).toBeGreaterThan(before);
   });
 
-  it('outcome < 0.3 decays memories within window', () => {
-    const m = remember(ctx(root), { content: 'misleading', tags: ['rfx'] });
+  it('outcome < 0.3 decays memories within window', async () => {
+    const m = await remember(ctx(root), { content: 'misleading', tags: ['rfx'] });
     const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, new Date().toISOString());
     const before = readStrength(root, m.id);
@@ -69,8 +71,8 @@ describe('completeGoal lifespan-windowed propagation', () => {
     expect(readStrength(root, m.id)).toBeLessThan(before);
   });
 
-  it('neutral band [0.3, 0.7) leaves strength unchanged', () => {
-    const m = remember(ctx(root), { content: 'neutral', tags: ['rfx'] });
+  it('neutral band [0.3, 0.7) leaves strength unchanged', async () => {
+    const m = await remember(ctx(root), { content: 'neutral', tags: ['rfx'] });
     const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, new Date().toISOString());
     const before = readStrength(root, m.id);
@@ -78,8 +80,8 @@ describe('completeGoal lifespan-windowed propagation', () => {
     expect(readStrength(root, m.id)).toBe(before);
   });
 
-  it('memories recalled BEFORE the goal lifespan are NOT propagated', () => {
-    const m = remember(ctx(root), { content: 'pre-goal', tags: ['rfx'] });
+  it('memories recalled BEFORE the goal lifespan are NOT propagated', async () => {
+    const m = await remember(ctx(root), { content: 'pre-goal', tags: ['rfx'] });
     // Seed a log row dated yesterday — before any goal exists.
     const yesterday = new Date(Date.now() - 86400_000).toISOString();
     const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
@@ -89,8 +91,8 @@ describe('completeGoal lifespan-windowed propagation', () => {
     expect(readStrength(root, m.id)).toBe(before); // no change
   });
 
-  it('UNIQUE(memory_id, goal_id) prevents double-propagation if the log is poked twice', () => {
-    const m = remember(ctx(root), { content: 'once', tags: ['rfx'] });
+  it('UNIQUE(memory_id, goal_id) prevents double-propagation if the log is poked twice', async () => {
+    const m = await remember(ctx(root), { content: 'once', tags: ['rfx'] });
     const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     const now = new Date().toISOString();
     seedRecallLog(root, g.id, m.id, now);
@@ -99,8 +101,8 @@ describe('completeGoal lifespan-windowed propagation', () => {
     // Strength multiplied by 1.10 once, not twice.
   });
 
-  it('strength clamps at upper bound 1.0', () => {
-    const m = remember(ctx(root), { content: 'near-ceiling', tags: ['rfx'] });
+  it('strength clamps at upper bound 1.0', async () => {
+    const m = await remember(ctx(root), { content: 'near-ceiling', tags: ['rfx'] });
     // The remember API doesn't expose strength; override directly.
     setStrength(root, m.id, 0.95);
     const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });

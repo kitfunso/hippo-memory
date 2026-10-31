@@ -1,5 +1,9 @@
-/** Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and age, then apply the `markRetrieved` strengthening.
- * A lightweight deterministic analog of hippocampal replay, so important memories stay strong without being queried; distinct from decay, physics and merge. */
+/**
+ * Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and age, then apply the
+ * `markRetrieved` strengthening.
+ * A lightweight deterministic analog of hippocampal replay, so important memories stay strong without being queried;
+ * distinct from decay, physics and merge.
+ */
 
 import { HOUR_MS } from '../util/time.js';
 import { isOutcomeSlowAblated } from '../core/ablation.js';
@@ -19,11 +23,14 @@ const REWARD_NET_GAIN = 0.25;
 const IDLE_BOOST_GAIN = 0.1;
 const STRENGTH_FLOOR = 0.1;
 
-/** Priority score for ranking survivors for replay (higher = more likely sampled); pure in the entry and current time. */
+/**
+ * Priority score for ranking survivors for replay (higher = more likely sampled); pure in the entry and current time.
+ */
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
-  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still eligible, just unlikely).
+  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still eligible, just
+  // unlikely).
   // The clamp is required because sampleForReplay needs all weights positive.
   const rewardSignal = outcomeAblated
     ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
@@ -47,7 +54,10 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
   return rewardSignal * valence * underRehearsed * idleBoost * strengthFloor;
 }
 
-/** Deterministic 32-bit RNG (Mulberry32): same seed, same sequence, so replay is reproducible without a random-number dependency. */
+/**
+ * Deterministic 32-bit RNG (Mulberry32): same seed, same sequence, so replay is reproducible without a random-number
+ * dependency.
+ */
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
@@ -59,7 +69,8 @@ function mulberry32(seed: number): () => number {
 }
 
 /** Pick `count` memories for replay, weighted by `replayPriority`, without replacement; deterministic for a seed.
- * Weighted but not greedy: always taking the top-N overfits, so a stochastic element keeps adjacent survivors in play. */
+ * Weighted but not greedy: always taking the top-N overfits, so a stochastic element keeps adjacent survivors in play.
+ */
 export function sampleForReplay(
   survivors: MemoryEntry[],
   count: number,
@@ -69,7 +80,8 @@ export function sampleForReplay(
   if (count <= 0 || survivors.length === 0) return [];
   const rng = mulberry32(seed);
 
-  // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats staleness, so derive rather than trust
+  // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats staleness, so derive
+  // rather than trust
   // the stored value (it no longer carries the age-out case).
   const eligible = survivors.filter((e) => resolveConfidence(e, now) !== 'stale');
   if (eligible.length === 0) return [];

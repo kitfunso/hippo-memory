@@ -117,19 +117,19 @@ describe('check-size-ratchet.mjs', () => {
     });
   });
 
-  it('fails when a file gains a line over 160 characters', () => {
-    withFixture({ 'src/a.ts': lineOf(161) + lineOf(161) }, { longLines: { 'src/a.ts': 1 } }, ({ run }) => {
+  it('fails when a file gains a line over 120 characters', () => {
+    withFixture({ 'src/a.ts': lineOf(121) + lineOf(121) }, { longLines: { 'src/a.ts': 1 } }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('src/a.ts: 1 -> 2');
     });
   });
 
-  it('passes when a file loses a long line, counts exactly 160 as short, and --update lowers the baseline', () => {
-    withFixture({ 'src/a.ts': lineOf(161) + lineOf(160) }, { longLines: { 'src/a.ts': 2 } }, ({ run, baseline }) => {
+  it('passes when a file loses a long line, counts exactly 120 as short, and --update lowers the baseline', () => {
+    withFixture({ 'src/a.ts': lineOf(121) + lineOf(120) }, { longLines: { 'src/a.ts': 2 } }, ({ run, baseline }) => {
       const r = run();
       expect(r.status).toBe(0);
-      expect(r.stdout).toContain('1 src lines over 160 characters');
+      expect(r.stdout).toContain('1 src lines over 120 characters');
       expect(run('--update').status).toBe(0);
       expect(baseline().longLines).toEqual({ 'src/a.ts': 1 });
     });
@@ -148,7 +148,7 @@ describe('check-size-ratchet.mjs', () => {
     withFixture({ 'src/a.ts': lineOf(200) }, { files: {}, functions: {} }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(0);
-      expect(r.stdout).toContain('1 src lines over 160 characters');
+      expect(r.stdout).toContain('1 src lines over 120 characters');
     });
   });
 });

@@ -13,7 +13,8 @@ export function isSqliteBusy(cause: unknown): boolean {
 /** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
 export const DEFAULT_BUSY_WAIT_MS = 5000;
 
-// busy_timeout covers neither contended statement here: SQLite skips the busy handler for `PRAGMA journal_mode` and for a write
+// busy_timeout covers neither contended statement here: SQLite skips the busy handler for `PRAGMA journal_mode` and for
+// a write
 // that upgrades a deferred read snapshot, so both need an explicit wait.
 export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = DEFAULT_BUSY_WAIT_MS): void {
   const deadline = Date.now() + timeoutMs;
@@ -29,6 +30,16 @@ export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs =
   }
 }
 
+// SQLite cannot bind a savepoint name as a parameter, so the name is spliced into the SQL and must be a bare
+// identifier.
+const SAVEPOINT_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function assertSavepointName(name: string): void {
+  if (!SAVEPOINT_NAME_RE.test(name)) {
+    throw new Error(`invalid savepoint name ${JSON.stringify(name)}: use letters, digits and _ only`);
+  }
+}
+
 function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
   if (top) {
     db.exec('ROLLBACK');
@@ -38,7 +49,10 @@ function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
   }
 }
 
-/** Undo after a failure without letting a failed undo replace the caller's error; an idle handle means SQLite already unwound the scope. */
+/**
+ * Undo after a failure without letting a failed undo replace the caller's error; an idle handle means SQLite already
+ * unwound the scope.
+ */
 function undoAfterFailure(db: DatabaseSyncLike, top: boolean, name: string): void {
   if (db.isTransaction === false) return;
   try {
@@ -54,8 +68,11 @@ export interface WriteScopeOptions {
 }
 
 /** Runs `fn` as one write: BEGIN IMMEDIATE on an idle handle, else SAVEPOINT `name` inside the caller's transaction.
- *  A deferred scope that reads first cannot wait out another writer, while BEGIN IMMEDIATE waits the open's busy_timeout. */
+ * A deferred scope that reads first cannot wait out another writer, while BEGIN IMMEDIATE waits the open's
+ * busy_timeout.
+ */
 export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => T, opts?: WriteScopeOptions): T {
+  assertSavepointName(name);
   const top = db.isTransaction === false;
   if (top && opts) execWithBusyRetry(db, 'BEGIN IMMEDIATE', opts.busyWaitMs);
   else db.exec(top ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${name}`);
@@ -88,8 +105,12 @@ export function withReadSnapshot<T>(db: DatabaseSyncLike, fn: () => T): T {
   return result;
 }
 
-/** Runs `fn` and undoes every write it made, throw or not: a dry run that reports what a real run would do. Takes no write lock up front. */
+/**
+ * Runs `fn` and undoes every write it made, throw or not: a dry run that reports what a real run would do. Takes no
+ * write lock up front.
+ */
 export function withTrialScope<T>(db: DatabaseSyncLike, name: string, fn: () => T): T {
+  assertSavepointName(name);
   const top = db.isTransaction === false;
   db.exec(top ? 'BEGIN' : `SAVEPOINT ${name}`);
   let result: T;
@@ -111,13 +132,16 @@ class RolledBack<V> {
   }
 }
 
-/** `withWriteScope` for a write that can refuse: a callback that returns `rollback(value)` gets the scope's writes undone
+/**
+ * `withWriteScope` for a write that can refuse: a callback that returns `rollback(value)` gets the scope's writes
+ * undone
  *  and `value` back, with no throw. Any other return commits. */
 export function withWriteScopeOr<T, R>(
   db: DatabaseSyncLike,
   name: string,
   fn: (rollback: <V>(value: V) => RolledBack<V>) => T | RolledBack<R>,
 ): T | R {
+  assertSavepointName(name);
   const top = db.isTransaction === false;
   db.exec(top ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${name}`);
   try {

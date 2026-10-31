@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../store/working-memory.js';
 import { isJsonString } from '../util/json.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 
 export interface CodexSessionTranscriptOptions {
   codexHome: string;
@@ -48,7 +48,7 @@ function readCodexSessionIdsFromHistoryDelta(historyPath: string, startOffsetByt
         ordered.push(sessionId);
       }
     } catch (err) {
-      log.warn(`codex history ${historyPath}: skipped a malformed JSONL line (${errorMessage(err)})`);
+      log.warn(`codex history ${historyPath}: skipped a malformed JSONL line (${errorMessage(err)})`, errorFields(err));
     }
   }
 

@@ -1,7 +1,12 @@
-/** Learned memory-value scorer, a rescue-only veto in the sleep decay pass (it can only shrink the condemned set); mirrors benchmarks/memory-value/*.mjs.
- * rescueSet rescues a condemned entry iff it ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set; memory-value-wiring.test.ts guards parity. */
+/**
+ * Learned memory-value scorer, a rescue-only veto in the sleep decay pass (it can only shrink the condemned set);
+ * mirrors benchmarks/memory-value/*.mjs.
+ * rescueSet rescues a condemned entry iff it ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set;
+ * memory-value-wiring.test.ts guards parity.
+ */
 
 import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { strengthAblation } from '../core/ablation.js';
 import { type MemoryEntry, calculateStrength } from '../core/memory.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
@@ -23,7 +28,9 @@ export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
  *  evidence): a code constant tied to that evidence, not user-tunable. */
 const RESCUE_BUDGET = 0.3;
 
-/** Per-tenant floor on the non-pinned candidate set: below it ranks are noise, and keepN=ceil(0.3*N) would rescue a 1-entry tenant's entry every sleep forever.
+/**
+ * Per-tenant floor on the non-pinned candidate set: below it ranks are noise, and keepN=ceil(0.3*N) would rescue a
+ * 1-entry tenant's entry every sleep forever.
  * A code constant tied to that reasoning, not user-tunable (like RESCUE_BUDGET). */
 const MIN_RESCUE_GROUP = 10;
 
@@ -38,8 +45,12 @@ export interface MvFeatureVector {
   content_length: number;
 }
 
-/** Blind v1 feature dict for one entry, restricted to the 8 dims the frozen weights carry. `strength` is CLOCK-BASIS `calculateStrength(entry, now)` with no
- * DecayOptions, as in the weights' training; passing the production decay basis would silently break parity with the frozen weights. */
+/**
+ * Blind v1 feature dict for one entry, restricted to the 8 dims the frozen weights carry. `strength` is CLOCK-BASIS
+ * `calculateStrength(entry, now)` with no
+ * DecayOptions, as in the weights' training; passing the production decay basis would silently break parity with the
+ * frozen weights.
+ */
 export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
   const pos = entry.outcome_positive ?? 0;
@@ -47,7 +58,8 @@ export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVecto
   return {
     age_days: ageDays,
     half_life_days: entry.half_life_days,
-    strength: calculateStrength(entry, now), // clock-basis, never decayOpts — see doc comment above
+    // clock-basis, never the production decay basis — see doc comment above
+    strength: calculateStrength(entry, now, { ablation: strengthAblation() }),
     retrieval_count: entry.retrieval_count,
     outcome_positive: pos,
     outcome_negative: neg,
@@ -56,7 +68,9 @@ export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVecto
   };
 }
 
-/** Throws on a malformed weight constant (wrong dims, non-finite weight, missing digest): flag-on with a broken constant must throw, never act as flag-off.
+/**
+ * Throws on a malformed weight constant (wrong dims, non-finite weight, missing digest): flag-on with a broken constant
+ * must throw, never act as flag-off.
  * Parameterized (default: the frozen singleton) so the throw paths are unit-testable. */
 function isFiniteWeightValue(value: number): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -81,13 +95,18 @@ export function validateWeights(
   }
   if (!isNonEmptyDigestString(digest)) {
     throw new Error(
-      'memory-value: weights constant is malformed — SOURCE_ARTIFACT_SHA256 digest missing (src/consolidate/memory-value-weights.ts)',
+      'memory-value: weights constant is malformed — SOURCE_ARTIFACT_SHA256 digest missing ' +
+      '(src/consolidate/memory-value-weights.ts)',
     );
   }
 }
 
-/** Min-max normalize the 8 features over the given entries (constant -> 0), then score = dot(weights, normalized); callers set the scope.
- * An entry with any non-finite feature (NaN from a malformed `created`) is excluded from normalization and scores -Infinity, so it can never be rescued. */
+/**
+ * Min-max normalize the 8 features over the given entries (constant -> 0), then score = dot(weights, normalized);
+ * callers set the scope.
+ * An entry with any non-finite feature (NaN from a malformed `created`) is excluded from normalization and scores
+ * -Infinity, so it can never be rescued.
+ */
 export function scoreEntries(
   entries: MemoryEntry[],
   now: Date,
@@ -133,7 +152,10 @@ export function scoreEntries(
   return scores;
 }
 
-/** Per-entry rank context within its tenant's non-pinned candidate set: the basis both rescueSet and the consolidate audit-row metadata read. */
+/**
+ * Per-entry rank context within its tenant's non-pinned candidate set: the basis both rescueSet and the consolidate
+ * audit-row metadata read.
+ */
 export interface MvRankInfo {
   tenantId: string;
   score: number;
@@ -145,7 +167,9 @@ export interface MvRankInfo {
   keepN: number;
 }
 
-/** Group non-pinned entries by tenantId, score and rank each group independently, and return rank context for every non-pinned entry;
+/**
+ * Group non-pinned entries by tenantId, score and rank each group independently, and return rank context for every
+ * non-pinned entry;
  * rescueSet and the consolidate audit rows share it so they never compute the ranking differently. */
 export function rankNonPinnedByTenant(
   entries: MemoryEntry[],
@@ -160,7 +184,7 @@ export function rankNonPinnedByTenant(
     if (e.pinned) continue; // pinned entries never compete for rescue (never condemned)
     // Default an undefined tenantId as dag.ts:341 does: a raw/legacy row can carry one at runtime,
     // and keying it "undefined" would split it into its own singleton tenant.
-    const tenantId = e.tenantId ?? DEFAULT_TENANT_ID;
+    const tenantId = e.tenant_id ?? DEFAULT_TENANT_ID;
     const list = byTenant.get(tenantId);
     if (list) list.push(e);
     else byTenant.set(tenantId, [e]);
@@ -198,8 +222,11 @@ export interface RescueSetOptions {
   readonly precomputedRanks?: Map<string, MvRankInfo>;
 }
 
-/** Rescue decision: the subset of condemnedIds ranking in the top 30% of their tenant's non-pinned set by learned score.
- * Pass `precomputedRanks` to skip the internal ranking so the whole-store pass runs once per sleep; `weights`/`digest` overrides exist for tests only. */
+/**
+ * Rescue decision: the subset of condemnedIds ranking in the top 30% of their tenant's non-pinned set by learned score.
+ * Pass `precomputedRanks` to skip the internal ranking so the whole-store pass runs once per sleep; `weights`/`digest`
+ * overrides exist for tests only.
+ */
 export function rescueSet(
   entries: MemoryEntry[],
   condemnedIds: Set<string>,

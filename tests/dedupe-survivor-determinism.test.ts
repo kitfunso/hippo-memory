@@ -16,6 +16,7 @@
  * file-private.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,11 +25,13 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { deduplicateStore, strengthBucket } from '../src/consolidate/dedupe.js';
 import { compareEntryIdentity } from '../src/core/compare.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 // Two cases build and consolidate a separate store for each of six ingest orders.
 vi.setConfig({ testTimeout: 30_000 });
@@ -42,8 +45,8 @@ function tmpHome(prefix: string) {
   };
 }
 
-function ctxFor(home: string): HippoDbContext {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+function ctxFor(home: string): FullContext {
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 
 function setStrength(home: string, id: string, strength: number): void {
@@ -94,18 +97,18 @@ const VARIANT_A = VARIANT_B.replace(' this time', '  this time');
 const VARIANT_C = VARIANT_B.replace(' each week', '  each week');
 
 describe('dedupe survivor determinism', () => {
-  it('1. keeps the same surviving content across opposite ingest orders (red-on-master core)', () => {
+  it('1. keeps the same surviving content across opposite ingest orders (red-on-master core)', async () => {
     const s1 = tmpHome('hippo-dedupe-det-1a-');
     const s2 = tmpHome('hippo-dedupe-det-1b-');
     try {
-      remember(ctxFor(s1.home), { content: CONTENT_A });
-      remember(ctxFor(s1.home), { content: CONTENT_B });
+      await remember(ctxFor(s1.home), { content: CONTENT_A });
+      await remember(ctxFor(s1.home), { content: CONTENT_B });
 
-      remember(ctxFor(s2.home), { content: CONTENT_B });
-      remember(ctxFor(s2.home), { content: CONTENT_A });
+      await remember(ctxFor(s2.home), { content: CONTENT_B });
+      await remember(ctxFor(s2.home), { content: CONTENT_A });
 
-      const result1 = deduplicateStore(s1.home);
-      const result2 = deduplicateStore(s2.home);
+      const result1 = deduplicateStore(sqliteConsolidation(s1.home));
+      const result2 = deduplicateStore(sqliteConsolidation(s2.home));
 
       expect(result1.removed).toBe(1);
       expect(result2.removed).toBe(1);
@@ -116,7 +119,7 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('2. permutation invariance: 3 pairwise near-duplicates with an epsilon-chain triple (1.0/0.994/0.988) survive identically across all 6 ingest orders', () => {
+  it('2. permutation invariance: 3 pairwise near-duplicates with an epsilon-chain triple (1.0/0.994/0.988) survive identically across all 6 ingest orders', async () => {
     const contents = [VARIANT_A, VARIANT_B, VARIANT_C];
     const strengths = [1.0, 0.994, 0.988]; // pins transitivity: old raw-epsilon check tied 1.0~0.994 and 0.994~0.988 but not 1.0~0.988
     const survivorContents = new Set<string>();
@@ -126,14 +129,14 @@ describe('dedupe survivor determinism', () => {
       try {
         const ids: string[] = [];
         for (const idx of perm) {
-          const { id } = remember(ctxFor(home), { content: contents[idx] });
+          const { id } = await remember(ctxFor(home), { content: contents[idx] });
           ids[idx] = id;
         }
         for (let idx = 0; idx < contents.length; idx++) {
           setStrength(home, ids[idx], strengths[idx]);
         }
 
-        deduplicateStore(home);
+        deduplicateStore(sqliteConsolidation(home));
         const remaining = loadAllEntries(home, 'default');
         expect(remaining.length).toBe(1);
         survivorContents.add(remaining[0].content);
@@ -146,15 +149,15 @@ describe('dedupe survivor determinism', () => {
     expect([...survivorContents][0]).toBe(VARIANT_A);
   });
 
-  it('3. strength dominance preserved: materially stronger entry survives even when ingested last', () => {
+  it('3. strength dominance preserved: materially stronger entry survives even when ingested last', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-3-');
     try {
-      const weak = remember(ctxFor(home), { content: CONTENT_A });
-      const strong = remember(ctxFor(home), { content: CONTENT_B });
+      const weak = await remember(ctxFor(home), { content: CONTENT_A });
+      const strong = await remember(ctxFor(home), { content: CONTENT_B });
       setStrength(home, weak.id, 0.5);
       setStrength(home, strong.id, 1.0);
 
-      const result = deduplicateStore(home);
+      const result = deduplicateStore(sqliteConsolidation(home));
 
       expect(result.removed).toBe(1);
       expect(result.pairs[0].kept).toBe(strong.id);
@@ -165,28 +168,28 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('4. retrieval-count tiebreak preserved on an equal strength bucket, regardless of ingest order', () => {
+  it('4. retrieval-count tiebreak preserved on an equal strength bucket, regardless of ingest order', async () => {
     const s1 = tmpHome('hippo-dedupe-det-4a-');
     const s2 = tmpHome('hippo-dedupe-det-4b-');
     try {
       // Order 1: low-retrieval entry ingested first.
-      const low1 = remember(ctxFor(s1.home), { content: CONTENT_A });
-      const high1 = remember(ctxFor(s1.home), { content: CONTENT_B });
+      const low1 = await remember(ctxFor(s1.home), { content: CONTENT_A });
+      const high1 = await remember(ctxFor(s1.home), { content: CONTENT_B });
       setStrength(s1.home, low1.id, 1.0);
       setStrength(s1.home, high1.id, 1.0);
       setRetrievalCount(s1.home, low1.id, 0);
       setRetrievalCount(s1.home, high1.id, 5);
 
       // Order 2: high-retrieval entry ingested first.
-      const high2 = remember(ctxFor(s2.home), { content: CONTENT_B });
-      const low2 = remember(ctxFor(s2.home), { content: CONTENT_A });
+      const high2 = await remember(ctxFor(s2.home), { content: CONTENT_B });
+      const low2 = await remember(ctxFor(s2.home), { content: CONTENT_A });
       setStrength(s2.home, high2.id, 1.0);
       setStrength(s2.home, low2.id, 1.0);
       setRetrievalCount(s2.home, high2.id, 5);
       setRetrievalCount(s2.home, low2.id, 0);
 
-      const result1 = deduplicateStore(s1.home);
-      const result2 = deduplicateStore(s2.home);
+      const result1 = deduplicateStore(sqliteConsolidation(s1.home));
+      const result2 = deduplicateStore(sqliteConsolidation(s2.home));
 
       expect(result1.pairs[0].keptContent).toBe(CONTENT_B);
       expect(result2.pairs[0].keptContent).toBe(CONTENT_B);
@@ -198,7 +201,7 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('4b. quantization intent: within-epsilon strength difference is a TIE, so retrieval_count decides (kills the raw-strength-compare mutant)', () => {
+  it('4b. quantization intent: within-epsilon strength difference is a TIE, so retrieval_count decides (kills the raw-strength-compare mutant)', async () => {
     // strengths 1.0 and 0.996 land in the SAME bucket (round(100.0) ==
     // round(99.6) == 100), so under the shipped comparator retrieval_count
     // decides -- the 0.996-strength / 5-retrieval entry must survive. A
@@ -208,14 +211,14 @@ describe('dedupe survivor determinism', () => {
     // determinism properties (independent-review r1 MED).
     const { home, restore } = tmpHome('hippo-dedupe-det-4b-');
     try {
-      const strongRaw = remember(ctxFor(home), { content: CONTENT_A });
-      const retrieved = remember(ctxFor(home), { content: CONTENT_B });
+      const strongRaw = await remember(ctxFor(home), { content: CONTENT_A });
+      const retrieved = await remember(ctxFor(home), { content: CONTENT_B });
       setStrength(home, strongRaw.id, 1.0);
       setStrength(home, retrieved.id, 0.996);
       setRetrievalCount(home, strongRaw.id, 0);
       setRetrievalCount(home, retrieved.id, 5);
 
-      const result = deduplicateStore(home);
+      const result = deduplicateStore(sqliteConsolidation(home));
 
       expect(result.removed).toBe(1);
       expect(result.pairs[0].kept).toBe(retrieved.id);
@@ -226,13 +229,13 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('5. exact-content duplicates: dedupe removes one, store ends with exactly one copy', () => {
+  it('5. exact-content duplicates: dedupe removes one, store ends with exactly one copy', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-5-');
     try {
-      remember(ctxFor(home), { content: CONTENT_A });
-      remember(ctxFor(home), { content: CONTENT_A });
+      await remember(ctxFor(home), { content: CONTENT_A });
+      await remember(ctxFor(home), { content: CONTENT_A });
 
-      const result = deduplicateStore(home);
+      const result = deduplicateStore(sqliteConsolidation(home));
 
       expect(result.removed).toBe(1);
       const remaining = loadAllEntries(home, 'default');
@@ -243,14 +246,14 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('6. dryRun parity: dryRun pairs equal what a subsequent real run deletes', () => {
+  it('6. dryRun parity: dryRun pairs equal what a subsequent real run deletes', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-6-');
     try {
-      remember(ctxFor(home), { content: CONTENT_A });
-      remember(ctxFor(home), { content: CONTENT_B });
+      await remember(ctxFor(home), { content: CONTENT_A });
+      await remember(ctxFor(home), { content: CONTENT_B });
 
-      const dry = deduplicateStore(home, { dryRun: true });
-      const real = deduplicateStore(home, { dryRun: false });
+      const dry = deduplicateStore(sqliteConsolidation(home), { dryRun: true });
+      const real = deduplicateStore(sqliteConsolidation(home), { dryRun: false });
 
       expect(dry.removed).toBe(1);
       expect(real.removed).toBe(1);
@@ -340,7 +343,7 @@ describe('dedupe survivor determinism', () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-meta-');
     try {
       for (const entry of order) writeEntry(home, entry);
-      const result = deduplicateStore(home);
+      const result = deduplicateStore(sqliteConsolidation(home));
       expect(result.removed).toBe(order.length - 1);
       const remaining = loadAllEntries(home);
       expect(remaining.length).toBe(1);
@@ -385,7 +388,7 @@ describe('dedupe survivor determinism', () => {
       const { home, restore } = tmpHome('hippo-dedupe-det-raw-');
       try {
         for (const entry of order) writeEntry(home, entry);
-        const result = deduplicateStore(home);
+        const result = deduplicateStore(sqliteConsolidation(home));
         expect(result.removed).toBe(0);
         expect(result.pairs).toHaveLength(0);
         const ids = loadAllEntries(home).map((e) => e.id).sort();
@@ -407,7 +410,7 @@ describe('dedupe survivor determinism', () => {
       };
       const current = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
       for (const entry of [successor, stale, current]) writeEntry(home, entry);
-      const result = deduplicateStore(home);
+      const result = deduplicateStore(sqliteConsolidation(home));
       expect(result.removed).toBe(0);
       expect(result.pairs).toHaveLength(0);
       const ids = loadAllEntries(home).map((e) => e.id).sort();

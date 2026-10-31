@@ -38,7 +38,7 @@ describe('GET /v1/sessions/:id/assemble', () => {
         layer: Layer.Buffer,
         confidence: 'observed',
         kind: 'raw',
-        source_session_id: 'sess-http',
+        sourceSessionId: 'sess-http',
         tenantId: 'default',
       });
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
@@ -78,7 +78,7 @@ describe('GET /v1/sessions/:id/assemble', () => {
     // 3 raws under one parent + parent summary. Without summarize: 3 items.
     const summary = createMemory('topic alpha rollup http', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dag_level: 2, confidence: 'inferred', tags: ['dag-summary'],
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred', tags: ['dag-summary'],
     });
     writeEntry(home, summary);
     for (let i = 0; i < 3; i++) {
@@ -87,9 +87,9 @@ describe('GET /v1/sessions/:id/assemble', () => {
         layer: Layer.Episodic,
         confidence: 'observed',
         kind: 'raw',
-        source_session_id: 'sess-noop',
-        dag_level: 1,
-        dag_parent_id: summary.id,
+        sourceSessionId: 'sess-noop',
+        dagLevel: 1,
+        dagParentId: summary.id,
         tenantId: 'default',
       });
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;

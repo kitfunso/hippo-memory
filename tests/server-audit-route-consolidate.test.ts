@@ -14,11 +14,13 @@
  * Real HTTP server (serve port:0), per-test isolated local + global stores.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, sleep, outcome, type HippoDbContext } from '../src/api/index.js';
+import { remember, sleep, outcome } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
   let home: string;
@@ -31,7 +33,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     globalHome = makeRoot('audit-route');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
   });
 
   afterEach(async () => {
@@ -47,8 +49,8 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
 
   it('round-trips a consolidate row written by api.sleep', async () => {
     // Seed: write one row by invoking api.sleep, then query via HTTP.
-    const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'seed-for-consolidate' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+    await remember(ctx, { content: 'seed-for-consolidate' });
     await sleep(ctx, { dryRun: true });
 
     // D2 v1.12.10: consolidate rows now tagged tenant='__host__' (api.sleep
@@ -65,9 +67,9 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
   });
 
   it('round-trips an outcome row (pre-existing drift the v1.11.5 Set update closes)', async () => {
-    const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    const m1 = remember(ctx, { content: 'outcome-target' });
-    outcome(ctx, [m1.id], true);
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+    const m1 = await remember(ctx, { content: 'outcome-target' });
+    await outcome(ctx, [m1.id], true);
 
     const res = await fetch(`${handle.url}/v1/audit?op=outcome`);
     // Pre-v1.11.5 this returned 400 'invalid op' even though rows existed.

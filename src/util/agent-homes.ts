@@ -24,7 +24,11 @@ export function claudeConfigDir(home: string = os.homedir(), env: Env = processE
 }
 
 /** VS Code's user-data resolution: portable install first, then the app-data override, then the platform default. */
-export function vscodeDataFolders(ctx: { readonly env: Env; readonly home: string; readonly platform: NodeJS.Platform }): string[] {
+export function vscodeDataFolders(ctx: {
+  readonly env: Env;
+  readonly home: string;
+  readonly platform: NodeJS.Platform;
+}): string[] {
   const { env, home, platform } = ctx;
   if (env.VSCODE_PORTABLE) return [path.join(env.VSCODE_PORTABLE, 'user-data')];
   let appData: string;

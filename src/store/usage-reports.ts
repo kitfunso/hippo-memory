@@ -1,5 +1,6 @@
 // The token-use and failure reports, each read on one handle of its own.
-// A file apart from token-ledger-rows.ts: src/store/token-ledger.ts imports that one, so a summary there would be an import cycle.
+// A file apart from token-ledger-rows.ts: src/store/token-ledger.ts imports that one, so a summary there would be an
+// import cycle.
 
 import { onHandle } from './open.js';
 import { summarizeTokenUse, type TokenSummary } from './token-ledger.js';

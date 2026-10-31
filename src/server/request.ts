@@ -2,10 +2,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { STORE_BUSY_MESSAGE } from '../store/port.js';
-import { isStoreBusy } from '../store/sqlite/busy.js';
+import { isStoreBusy } from '../api/busy.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { mapApiError } from '../api/error-reply.js';
 import { HttpError, sendJson } from '../util/http-util.js';
+import { MINUTE_MS } from '../util/time.js';
 
 // The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -16,16 +17,25 @@ function resolveRequestId(header: string | string[] | undefined): string {
   return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
 }
 
-/** One line per failed request; 4xx is the caller's mistake, a busy 503 is back-pressure and a 501 is a route not on this store, so none logs as an error. */
+/**
+ * One line per failed request; 4xx is the caller's mistake, a busy 503 is back-pressure and a 501 is a route not on
+ * this store, so none logs as an error.
+ */
 export function logRequestFailure<E>(req: IncomingMessage, err: E, status: number): void {
   const message = errorMessage(err);
   const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
   // A 5xx that tells the caller when to retry is back-pressure too.
-  if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) log.warn(line, { status });
-  else if (status >= 500 && status !== 501) log.error(line, { status, ...errorFields(err) });
-  // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the request scope.
-  else if (status === 401 || status === 403) log.warn(line, { status });
-  else log.info(line, { status });
+  if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) {
+    log.warn(line, { status });
+  } else if (status >= 500 && status !== 501) {
+    log.error(line, { status, ...errorFields(err) });
+  } else if (status === 401 || status === 403) {
+    // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the
+    // request scope.
+    log.warn(line, { status });
+  } else {
+    log.info(line, { status });
+  }
 }
 
 /** The status and client message for a failed request; a held write lock is a retryable 503, never a 500. */
@@ -33,17 +43,26 @@ export function replyFor<E>(err: E): { status: number; message: string } {
   return isStoreBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
 }
 
-// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered before it is called slow.
-const SLOW_REQUEST_WARN_MS = 60_000;
+// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered before it is called
+// slow.
+const SLOW_REQUEST_WARN_MS = MINUTE_MS;
 
 /** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request
  * or touches the reply; the timer goes when the reply finishes or the socket closes. */
-function watchSlowRequest(req: IncomingMessage, res: ServerResponse, requestId: string, afterMs: number = SLOW_REQUEST_WARN_MS): void {
+function watchSlowRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  afterMs: number = SLOW_REQUEST_WARN_MS,
+): void {
   const startedAt = Date.now();
   const timer = setTimeout(() => {
     // A reply already under way is a stream doing its job, not a stuck request.
     if (res.headersSent) return;
-    log.warn(`${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} is still running`, { requestId, elapsedMs: Date.now() - startedAt });
+    log.warn(`${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} is still running`, {
+      requestId,
+      elapsedMs: Date.now() - startedAt,
+    });
   }, afterMs);
   // The watchdog alone must never keep the process alive.
   timer.unref();
@@ -63,7 +82,10 @@ const accessNotes = new WeakMap<IncomingMessage, AccessNote>();
 // A path that matched no route is caller data, so the access line never repeats it.
 const UNMATCHED_ROUTE = 'unmatched';
 
-/** Names the matched route (the table's pattern, never the path sent) or the caller's tenant for the request's access line. */
+/**
+ * Names the matched route (the table's pattern, never the path sent) or the caller's tenant for the request's access
+ * line.
+ */
 export function noteAccess(req: IncomingMessage, note: AccessNote): void {
   const held = accessNotes.get(req);
   if (held) Object.assign(held, note);
@@ -74,7 +96,10 @@ export function accessRouteOf(req: IncomingMessage): string {
   return accessNotes.get(req)?.route ?? UNMATCHED_ROUTE;
 }
 
-/** One info line per finished request. A path id and a query string can both hold caller data, so the line carries neither. */
+/**
+ * One info line per finished request. A path id and a query string can both hold caller data, so the line carries
+ * neither.
+ */
 function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, requestId: string): void {
   const note: AccessNote = {};
   accessNotes.set(req, note);
@@ -91,7 +116,10 @@ function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, reques
   });
 }
 
-/** The request's id, after stamping the headers every reply carries and starting the slow-request watchdog and the access line. */
+/**
+ * The request's id, after stamping the headers every reply carries and starting the slow-request watchdog and the
+ * access line.
+ */
 export function openRequest(req: IncomingMessage, res: ServerResponse, slowWarnMs?: number): string {
   const requestId = resolveRequestId(req.headers['x-request-id']);
   res.setHeader('X-Request-Id', requestId);
@@ -128,7 +156,10 @@ export function parseRequest(req: IncomingMessage): ParsedRoute {
   };
 }
 
-/** Pattern matcher for /v1/memories/:id/<action> (no router dependency); null if `path` does not match, else each :param name mapped to its value. */
+/**
+ * Pattern matcher for /v1/memories/:id/<action> (no router dependency); null if `path` does not match, else each :param
+ * name mapped to its value.
+ */
 function decodePathSegment(segment: string): string {
   try {
     return decodeURIComponent(segment);
@@ -156,7 +187,9 @@ export function matchPath(pattern: string, path: string): Record<string, string>
   return params;
 }
 
-/** Rejects URL-encoded slashes in path segments BEFORE the URL parser decodes them (`%2F` would become `/` and 404 or match the wrong template).
+/**
+ * Rejects URL-encoded slashes in path segments BEFORE the URL parser decodes them (`%2F` would become `/` and 404 or
+ * match the wrong template).
  * Only the PATHNAME is scanned, so recall queries like `?q=https%3A%2F%2Fexample.com` are not rejected. */
 export function rejectEncodedSlash(rawUrl: string): void {
   const queryIdx = rawUrl.indexOf('?');

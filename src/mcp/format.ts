@@ -7,7 +7,7 @@ import { confidenceLabel } from '../core/memory.js';
 import type { ContextCost, ContinuityBlock, RecallResult, RecallResultItem } from '../api/index.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
 import { printedTokens } from '../api/context-render.js';
-import { detectAnchoring } from '../api/recall-history.js';
+import { detectAnchoring } from '../api/recall/finish.js';
 import { detectAvailabilityBias } from '../api/availability.js';
 import { estimateTokens } from '../util/token-text.js';
 
@@ -127,8 +127,9 @@ export function trailPiece(events: readonly SessionEvent[]): string {
 export const contextCost: ContextCost = {
   entry: memoryCost,
   fixed: (budget) => memoriesReserve(budget),
-  snapshot: (s) => estimateTokens(snapshotPiece(s)),
-  handoff: (h) => estimateTokens(handoffPiece(h)),
+  // hippo_context passes no continuity opt-in, so the mode is always 'full' and the full piece is the price.
+  snapshot: (s, _mode) => estimateTokens(snapshotPiece(s)),
+  handoff: (h, _mode) => estimateTokens(handoffPiece(h)),
   trail: (events) => estimateTokens(trailPiece(events)),
 };
 
@@ -152,11 +153,13 @@ export function tailSection(rows: RecallResultItem[]): string {
 export function planningSection(r: RecallResult): string {
   if (r.planningFallacyHint) {
     const h = r.planningFallacyHint;
-    return `## Planning fallacy hint\nClass: ${h.classTag}\n${h.baserateSummary}\n(detected: ${JSON.stringify(h.detectedPhrase)})\n\n---\n\n`;
+    return `## Planning fallacy hint\nClass: ${h.classTag}\n${h.baserateSummary}\n(detected: ` +
+      `${JSON.stringify(h.detectedPhrase)})\n\n---\n\n`;
   }
   if (r.planningFallacyWatching) {
     const w = r.planningFallacyWatching;
-    return `## Planning fallacy watch\nReason: ${w.reason}\n${w.suggestion}\n(detected: ${JSON.stringify(w.detectedPhrase)})\n\n---\n\n`;
+    return `## Planning fallacy watch\nReason: ${w.reason}\n${w.suggestion}\n(detected: ` +
+      `${JSON.stringify(w.detectedPhrase)})\n\n---\n\n`;
   }
   return '';
 }

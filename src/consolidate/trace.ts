@@ -1,4 +1,6 @@
-/** Trace-layer helpers. A trace is a `MemoryEntry` with `layer === 'trace'`: ordered agent actions and their outcome, stored as markdown in `content`
+/**
+ * Trace-layer helpers. A trace is a `MemoryEntry` with `layer === 'trace'`: ordered agent actions and their outcome,
+ * stored as markdown in `content`
  * (`renderTraceContent` formats it). */
 
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
@@ -16,7 +18,10 @@ export interface TraceRecord {
   outcome: 'success' | 'failure' | 'partial';
 }
 
-/** Render a trace record as agent-readable markdown: `Task:`, `Outcome:`, then numbered `Steps:` with each observation on an arrow line (omitted if empty). */
+/**
+ * Render a trace record as agent-readable markdown: `Task:`, `Outcome:`, then numbered `Steps:` with each observation
+ * on an arrow line (omitted if empty).
+ */
 export function renderTraceContent(rec: TraceRecord): string {
   const lines: string[] = [];
   lines.push(`Task: ${rec.task}`);

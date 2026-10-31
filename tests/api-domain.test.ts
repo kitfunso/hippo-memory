@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { FullContext } from './_helpers/api-ctx.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
+import { withStoreGroups } from '../src/store/sqlite/store.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
@@ -17,14 +19,13 @@ import {
   authListRows,
   authRevoke,
   auditList,
-  type Context,
 } from '../src/api/index.js';
 import { appendAuditEvent } from '../src/store/audit.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('api domain — recall/forget/promote/supersede', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-api-dom-'));
@@ -32,32 +33,27 @@ describe('api domain — recall/forget/promote/supersede', () => {
     initStore(home);
     initStore(globalHome);
     // Pin the global store to our tmpdir for promote().
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
   });
 
   afterEach(() => {
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
 
   it('recall returns BM25 candidates and audits with the supplied actor', async () => {
-    remember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
+    await remember(
+      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
       { content: 'recall-canary alpha-token sentinel' },
     );
-    remember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
+    await remember(
+      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
       { content: 'unrelated content for noise' },
     );
 
     const result = await retrieve(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_recall', role: 'admin' } },
+      apiCtx(home, 'default', { subject: 'api_key:hk_recall', role: 'admin' }),
       { query: 'alpha-token' },
     );
 
@@ -77,15 +73,15 @@ describe('api domain — recall/forget/promote/supersede', () => {
     }
   });
 
-  it('forget deletes the row and audits with the supplied actor', () => {
-    const { id } = remember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
+  it('forget deletes the row and audits with the supplied actor', async () => {
+    const { id } = await remember(
+      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
       { content: 'forget-me-please' },
     );
     expect(readEntry(home, id)?.id).toBe(id);
 
-    const result = forget(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_forget', role: 'admin' } },
+    const result = await forget(
+      apiCtx(home, 'default', { subject: 'api_key:hk_forget', role: 'admin' }),
       id,
     );
     expect(result).toEqual({ ok: true, id });
@@ -103,14 +99,14 @@ describe('api domain — recall/forget/promote/supersede', () => {
     }
   });
 
-  it('promote copies a memory into the global store and audits with the supplied actor', () => {
-    const { id } = remember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
+  it('promote copies a memory into the global store and audits with the supplied actor', async () => {
+    const { id } = await remember(
+      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
       { content: 'promote-me-to-global' },
     );
 
     const result = promote(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_promote', role: 'admin' } },
+      withStoreGroups({ hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_promote', role: 'admin' } }, 'localFiles'),
       id,
     );
     expect(result.ok).toBe(true);
@@ -134,14 +130,14 @@ describe('api domain — recall/forget/promote/supersede', () => {
     }
   });
 
-  it('supersede chains old -> new and audits with the supplied actor', () => {
-    const { id: oldId } = remember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
+  it('supersede chains old -> new and audits with the supplied actor', async () => {
+    const { id: oldId } = await remember(
+      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
       { content: 'original-belief' },
     );
 
-    const result = supersede(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_supersede', role: 'admin' } },
+    const result = await supersede(
+      apiCtx(home, 'default', { subject: 'api_key:hk_supersede', role: 'admin' }),
       oldId,
       'updated-belief',
     );
@@ -183,7 +179,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('archiveRaw moves a kind=raw row into raw_archive and removes it from memories', () => {
+  it('archiveRaw moves a kind=raw row into raw_archive and removes it from memories', async () => {
     // createMemory defaults to distilled, but archiveRawMemory only accepts
     // kind='raw'. Insert a raw row directly via SQL to seed the test.
     const db = openHippoDb(home);
@@ -210,8 +206,8 @@ describe('api domain — archive_raw / auth / audit', () => {
       closeHippoDb(db);
     }
 
-    const result = archiveRaw(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_archive', role: 'admin' } },
+    const result = await archiveRaw(
+      apiCtx(home, 'default', { subject: 'api_key:hk_archive', role: 'admin' }),
       rawId,
       'gdpr-request',
     );
@@ -244,8 +240,8 @@ describe('api domain — archive_raw / auth / audit', () => {
   });
 
   it('authCreate + authList + authRevoke flow with cross-tenant guard', async () => {
-    const ctxA: Context = { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };
-    const ctxB: Context = { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } };
+    const ctxA: FullContext = apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' });
+    const ctxB: FullContext = apiCtx(home, 'tenant-b', { subject: 'cli', role: 'admin' });
 
     const k1 = await authCreate(ctxA, { label: 'first' });
     expect(k1.keyId).toMatch(/^hk_/);
@@ -273,7 +269,7 @@ describe('api domain — archive_raw / auth / audit', () => {
 
     // Cross-tenant revoke must be rejected with the same "not found" message
     // as a missing key, so caller cannot probe other tenants' key_ids.
-    expect(() => authRevoke(ctxA, kOther.keyId)).toThrow(/Unknown key_id/);
+    await expect(authRevoke(ctxA, kOther.keyId)).rejects.toThrow(/Unknown key_id/);
 
     // kOther must still be active on tenant-b.
     const activeB = await authListRows(ctxB, { active: true });
@@ -308,21 +304,21 @@ describe('api domain — archive_raw / auth / audit', () => {
     }
 
     const aAll = await auditList(
-      { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } },
+      apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' }),
       {},
     );
     expect(aAll.length).toBe(2);
     expect(aAll.every((e) => e.tenantId === 'tenant-a')).toBe(true);
 
     const aRemember = await auditList(
-      { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } },
+      apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' }),
       { op: 'remember' },
     );
     expect(aRemember.length).toBe(1);
     expect(aRemember[0]!.targetId).toBe('a1');
 
     const bAll = await auditList(
-      { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } },
+      apiCtx(home, 'tenant-b', { subject: 'cli', role: 'admin' }),
       {},
     );
     expect(bAll.length).toBe(1);

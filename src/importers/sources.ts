@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type ImportResult, type ImportOptions, importEntries } from './core.js';
 import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 /** Coerce one imported record (string, `{content|text: ...}` object, or
@@ -15,30 +15,30 @@ function extractMemoryText(candidate: JsonValue): string {
   return '';
 }
 
-/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects, `{"memories": [...]}`, or plain text with one memory per line. */
+/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects, `{"memories": [...]}`, or
+ * plain text with one memory per line. */
 function parseChatGPTFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
 
-  // Try JSON first
   if (raw.startsWith('[') || raw.startsWith('{')) {
     try {
       const parsed: JsonValue = JSON.parse(raw);
 
-      // {"memories": [...]} - ChatGPT export format
       if (isJsonObject(parsed) && Array.isArray(parsed.memories)) {
         return parsed.memories.map(extractMemoryText).filter(Boolean);
       }
 
-      // Array format
       if (Array.isArray(parsed)) {
         return parsed.map(extractMemoryText).filter(Boolean);
       }
     } catch (err) {
-      log.warn(`import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as plain text`);
+      log.warn(
+        `import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as plain text`,
+        errorFields(err),
+      );
     }
   }
 
-  // Plain text: one memory per line
   return raw.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
@@ -70,19 +70,18 @@ function splitMarkdown(content: string): string[] {
   return chunks.filter(Boolean);
 }
 
-/** Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still open. */
+/** Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still
+ * open. */
 function appendLine(chunks: string[], open: string, line: string): string {
   let current = open;
   const trimmed = line.trim();
 
-  // Heading: start a new chunk
   if (/^#{1,6}\s+/.test(trimmed)) {
     if (current.trim()) chunks.push(current.trim());
     current = trimmed;
     return current;
   }
 
-  // Bullet point: each bullet is its own chunk (flush previous if not a bullet context)
   if (/^[-*+]\s+/.test(trimmed)) {
     if (current.trim() && !/^[-*+]\s+/.test(current.split('\n')[0])) {
       chunks.push(current.trim());
@@ -96,7 +95,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
     return current;
   }
 
-  // Numbered list item
   if (/^\d+\.\s+/.test(trimmed)) {
     if (current.trim()) {
       chunks.push(current.trim());
@@ -106,7 +104,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
     return current;
   }
 
-  // Empty line
   if (!trimmed) {
     if (current.trim()) {
       chunks.push(current.trim());
@@ -115,7 +112,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
     return current;
   }
 
-  // Regular line: append to current
   return current ? current + ' ' + trimmed : trimmed;
 }
 
@@ -123,7 +119,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
 function parseClaudeFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
 
-  // JSON memory file
   if (filePath.endsWith('.json')) {
     try {
       const parsed: JsonValue = JSON.parse(raw.trim());
@@ -131,11 +126,13 @@ function parseClaudeFile(filePath: string): string[] {
         return parsed.map(extractMemoryText).filter(Boolean);
       }
     } catch (err) {
-      log.warn(`import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as markdown`);
+      log.warn(
+        `import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as markdown`,
+        errorFields(err),
+      );
     }
   }
 
-  // Markdown file: strip hippo block and split
   const cleaned = stripHippoBlock(raw);
   return splitMarkdown(cleaned);
 }
@@ -155,7 +152,7 @@ function parseCursorFile(content: string): string[] {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Skip comment-only lines that are empty after stripping #
+    // A bare '#' is an empty comment line, so it ends the rule like a blank line.
     if (!trimmed || trimmed === '#') {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -164,7 +161,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Numbered item: 1. 2. 3.
     if (/^\d+\.\s+/.test(trimmed)) {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -174,7 +170,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Bullet: - or *
     if (/^[-*]\s+/.test(trimmed)) {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -184,7 +179,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Regular line
     current = current ? current + ' ' + trimmed : trimmed;
   }
 
@@ -211,7 +205,8 @@ export function importCursor(sourcePath: string, options: ImportOptions): Import
   return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }
 
-/** Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per line. */
+/** Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per
+ * line. */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
   const isMarkdown = filePath.endsWith('.md') || filePath.endsWith('.mdx');
@@ -220,11 +215,9 @@ function parseGenericFile(filePath: string): string[] {
     return splitMarkdown(raw);
   }
 
-  // Plain text: try double newlines first
   const byParagraph = raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (byParagraph.length > 1) return byParagraph;
 
-  // Fall back to one-per-line
   return raw.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 

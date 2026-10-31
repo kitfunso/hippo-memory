@@ -6,7 +6,8 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { log } from '../src/util/log.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { __resetSessionRecallHistoryHttp, serve, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import type { HippoStore, StoreGroups } from '../src/store/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
@@ -129,7 +130,7 @@ async function runSteps(steps: readonly Step[], inProcess: boolean) {
 // Seeding the template stores row by row runs past the 30 s hook default on a slow runner.
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
-  seed = seedMovedReads();
+  seed = await seedMovedReads();
 }, 120_000);
 
 afterAll(async () => {

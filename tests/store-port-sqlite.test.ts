@@ -17,12 +17,13 @@ import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../src/store/planning-fallacy-evidence.js';
-import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
+import { writeRecallTrace } from '../src/store/recall-trace.js';
+import { serve } from '../src/server.js';
 import {
-  serve, sqliteStore, __resetSessionRecallHistoryHttp,
-  type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
-  type VectorCandidateSpec,
-} from '../src/server.js';
+  sqliteStore, type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry,
+  type RecallSearchArgs, type RecallTraceInput, type RecallWrites, type VectorCandidateSpec,
+} from '../src/entry/store-kit.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry } from '../src/store/entry-writes.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
@@ -35,6 +36,7 @@ import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_h
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, statsMirror, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 type Kind = 'local' | 'wide';
 interface Outcome<T> { value: T; rows: unknown; opens: number }
@@ -109,7 +111,7 @@ const ALICE_A: ContinuityKey = { owner: 'alice', project: ['proj-a'] };
 
 /** A second tenant where alice and bob share proj-a and alice also works in proj-b, so each narrowed read has rows to skip. */
 function seedTeam(root: string): void {
-  const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) => seeded(content, id, created, { tenantId: TEAM, ...extra });
+  const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) => seeded(content, id, created, { tenant_id: TEAM, ...extra });
   const rows = [
     team('lighthouse runbook for project a', 'mem_t_a', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-a' }),
     team('lighthouse runbook for project b', 'mem_t_b', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-b' }),
@@ -132,8 +134,8 @@ function seedTeam(root: string): void {
   saveSessionHandoff(root, TEAM, { version: 1, sessionId: 'alice-proj-a', summary: 'bob hands off on her session', nextAction: 'merge' }, { owner: 'bob', project: ['proj-a'] });
 }
 
-beforeAll(() => {
-  templates = seedTemplates((root) => {
+beforeAll(async () => {
+  templates = await seedTemplates((root) => {
     seedPortBranches(root);
     seedTeam(root);
     // A goal with a retrieval policy, so activeGoals has a policy row to read.
@@ -384,10 +386,10 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
         );
         writeGoalRecallLog(db, localGoalRecallRows(db, boost.log));
         for (const event of events) appendAuditEvent(db, event);
+        writeRecallTrace(db, trace);
       } finally {
         closeHippoDb(db);
       }
-      writeRecallTraceAtRoot(s.root, trace);
       strengthenRetrieved(s.root, strengthen.ids, strengthen.opts);
     }, (store) => store.finishRecall(finishWrites()));
     // The global row's memory lives in another store, so its log row is dropped.
@@ -433,7 +435,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
 
   it('recordTokens writes the ledger row the API helper writes', async () => {
     const { port } = await parity(
-      (s) => recordTokens({ hippoRoot: s.root, tenantId: TENANT, actor: { subject: 'test', role: 'admin' } }, 'http_recall', { items: 2, tokens: 40, sessionId: SESSION }),
+      (s) => recordTokens(apiCtx(s.root, TENANT, { subject: 'test', role: 'admin' }), 'http_recall', { items: 2, tokens: 40, sessionId: SESSION }),
       (store) => store.recordTokens({ tenantId: TENANT, sessionId: SESSION, surface: 'http_recall', event: 'inject', items: 2, tokens: 40 }),
     );
     expect(port.rows).toMatchObject({ ledger: [{ surface: 'http_recall', items: 2, tokens: 40 }] });
@@ -446,7 +448,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
       mkdirSync(join(root, 'hippo.db'));
       const use = { tenantId: TENANT, surface: 'http_recall', event: 'inject', items: 1, tokens: 1 } as const;
       await expect(sqliteStore(root).recordTokens(use)).rejects.toThrow();
-      await expect(recordTokens({ hippoRoot: root, tenantId: TENANT, actor: { subject: 'test', role: 'admin' } }, 'http_recall', use)).resolves.toBeUndefined();
+      await expect(recordTokens(apiCtx(root, TENANT, { subject: 'test', role: 'admin' }), 'http_recall', use)).resolves.toBeUndefined();
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

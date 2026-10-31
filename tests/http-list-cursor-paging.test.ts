@@ -1,5 +1,6 @@
 /** Keyset cursor paging on the /v1 list routes, against a real SQLite store and a real server: no mocks. */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -9,7 +10,7 @@ import { queryAuditEvents } from '../src/store/audit.js';
 import { recordQuarantine } from '../src/store/quarantine.js';
 import * as api from '../src/api/index.js';
 import { loadDecisions, saveDecision } from '../src/objects/decisions.js';
-import { loadIncidents, saveIncident } from '../src/objects/incidents.js';
+import { loadIncidents, openIncident } from '../src/objects/incidents.js';
 import { loadProcesses, saveProcess } from '../src/objects/processes.js';
 import { loadPolicies, savePolicy } from '../src/objects/policies.js';
 import { loadSkills, saveSkill } from '../src/objects/skills.js';
@@ -18,6 +19,8 @@ import { loadCustomerNotes, saveCustomerNote } from '../src/objects/customer-not
 import { loadAllPredictions, savePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../src/util/json.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const ROWS = 7;
 const PAGE = 3;
@@ -46,18 +49,18 @@ let home: string;
 let handle: ServerHandle;
 let adminKey: CreateApiKeyResult;
 
-function seedTenant(tenantId: string, count: number): void {
-  const ctx: api.HippoDbContext = { hippoRoot: home, tenantId, actor: api.adminActor('test') };
+async function seedTenant(tenantId: string, count: number): Promise<void> {
+  const ctx: FullContext = apiCtx(home, tenantId, api.adminActor('test'));
   for (let i = 0; i < count; i++) {
-    saveDecision(home, tenantId, { decisionText: `${tenantId} decision ${i}` });
-    saveIncident(home, tenantId, { incidentText: `${tenantId} incident ${i}` });
-    saveProcess(home, tenantId, { processName: `${tenantId} process ${i}`, steps: ['one', 'two'] });
-    savePolicy(home, tenantId, { policyName: `${tenantId} policy ${i}`, policyText: 'keep it short' });
-    saveSkill(home, tenantId, { skillName: `${tenantId} skill ${i}`, instructions: 'do the thing' });
-    saveProjectBrief(home, tenantId, { repo: `${tenantId}/repo-${i}`, summary: 'a brief' });
-    saveCustomerNote(home, tenantId, { customer: `${tenantId} customer ${i}`, note: 'a note' });
+    await saveDecision(objectsAt(home), home, tenantId, { decisionText: `${tenantId} decision ${i}` });
+    await openIncident(objectsAt(home), home, tenantId, { incidentText: `${tenantId} incident ${i}` }, 'cli');
+    await saveProcess(objectsAt(home), home, tenantId, { processName: `${tenantId} process ${i}`, steps: ['one', 'two'] });
+    await savePolicy(objectsAt(home), home, tenantId, { policyName: `${tenantId} policy ${i}`, policyText: 'keep it short' });
+    await saveSkill(objectsAt(home), home, tenantId, { skillName: `${tenantId} skill ${i}`, instructions: 'do the thing' });
+    await saveProjectBrief(objectsAt(home), home, tenantId, { repo: `${tenantId}/repo-${i}`, summary: 'a brief' });
+    await saveCustomerNote(objectsAt(home), home, tenantId, { customer: `${tenantId} customer ${i}`, note: 'a note' });
     savePrediction(home, tenantId, { classTag: 'paging', claimText: `${tenantId} claim ${i}` });
-    const { id } = api.remember(ctx, { content: `${tenantId} held memory ${i} for review` });
+    const { id } = await api.remember(ctx, { content: `${tenantId} held memory ${i} for review` });
     const db = openHippoDb(home);
     try {
       createApiKey(db, { tenantId, label: `${tenantId} key ${i}`, role: 'member' });
@@ -76,11 +79,12 @@ beforeAll(async () => {
   } finally {
     closeHippoDb(db);
   }
-  seedTenant('default', ROWS);
+  await seedTenant('default', ROWS);
   // Another tenant's rows must never leak into a page, even when the tenant filter sits beside a cursor.
-  seedTenant('tenant-b', 3);
-  // Paging every route makes well over the per-IP burst; the limiter is read once, at serve().
+  await seedTenant('tenant-b', 3);
+  // Paging every route makes well over the per-IP and per-caller bursts; both limiters are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
+  vi.stubEnv('HIPPO_CALLER_RPS', '0');
   handle = await serve({ hippoRoot: home, port: 0 });
   vi.unstubAllEnvs();
 }, 60_000);
@@ -150,20 +154,20 @@ describe.each(ROUTES)('GET $path paging', (route) => {
 });
 
 describe('no paging params: the body a small store got before cursors existed', () => {
-  const ctx = (): api.HippoDbContext => ({ hippoRoot: home, tenantId: 'default', actor: api.adminActor('test') });
+  const ctx = (): FullContext => (apiCtx(home, 'default', api.adminActor('test')));
   const json = <T>(value: T): JsonValue => JSON.parse(JSON.stringify(value));
 
   // Each reference is the store call the route made before paging, with the same arguments.
   const before = new Map<string, () => JsonValue | Promise<JsonValue>>([
     ['/v1/quarantine', async () => json(await api.quarantineList(ctx(), { status: 'pending' }))],
     ['/v1/predictions', () => json(loadAllPredictions(home, 'default', { limit: 100 }))],
-    ['/v1/decisions', () => json(loadDecisions(home, 'default', { limit: 100 }))],
-    ['/v1/incidents', () => json(loadIncidents(home, 'default', { limit: 100 }))],
-    ['/v1/processes', () => json(loadProcesses(home, 'default', { limit: 100 }))],
-    ['/v1/policies', () => json(loadPolicies(home, 'default', { limit: 100 }))],
-    ['/v1/skills', () => json(loadSkills(home, 'default', { limit: 100 }))],
-    ['/v1/project-briefs', () => json(loadProjectBriefs(home, 'default', { limit: 100 }))],
-    ['/v1/customer-notes', () => json(loadCustomerNotes(home, 'default', { limit: 100 }))],
+    ['/v1/decisions', async () => json(await loadDecisions(objectsAt(home), 'default', { limit: 100 }))],
+    ['/v1/incidents', async () => json(await loadIncidents(objectsAt(home), 'default', { limit: 100 }))],
+    ['/v1/processes', async () => json(await loadProcesses(objectsAt(home), 'default', { limit: 100 }))],
+    ['/v1/policies', async () => json(await loadPolicies(objectsAt(home), 'default', { limit: 100 }))],
+    ['/v1/skills', async () => json(await loadSkills(objectsAt(home), 'default', { limit: 100 }))],
+    ['/v1/project-briefs', async () => json(await loadProjectBriefs(objectsAt(home), 'default', { limit: 100 }))],
+    ['/v1/customer-notes', async () => json(await loadCustomerNotes(objectsAt(home), 'default', { limit: 100 }))],
   ]);
 
   it.each(ROUTES.filter((r) => r.key !== null))('$path keeps its list and adds next_cursor: null last', async (route) => {

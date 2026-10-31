@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request, type Server } from 'node:http';
@@ -19,14 +19,13 @@ describe('dashboard local access token', () => {
   let hippoRoot: string;
   let server: Server | undefined;
   let port: number;
-  const prevHippoHome = process.env.HIPPO_HOME;
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-dash-token-'));
     hippoRoot = join(home, '.hippo');
     mkdirSync(hippoRoot, { recursive: true });
     initStore(hippoRoot);
-    process.env.HIPPO_HOME = join(home, '.hippo-global');
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     server = serveDashboard(hippoRoot, 0, TOKEN);
     port = await boundPort(server);
   });
@@ -34,8 +33,7 @@ describe('dashboard local access token', () => {
   afterEach(async () => {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     server = undefined;
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -56,6 +54,11 @@ describe('dashboard local access token', () => {
 
     const again = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } });
     expect(again.status).toBe(200);
+  });
+
+  it('bounds the cookie to one day, so a browser that restores its session does not keep the token forever', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/overview?token=${TOKEN}`);
+    expect(res.headers.get('set-cookie')).toMatch(/; Max-Age=86400(;|$)/);
   });
 
   it('answers a page load that carries the token with the cookie and a 303 to the same address without it, never to another host', async () => {
@@ -117,20 +120,39 @@ describe('dashboard local access token', () => {
     expect(status).toBe(403);
   });
 
-  it('prints the dashboard URL with the token once at start', async () => {
+  /** The lines a second dashboard prints at start with stdout's isTTY forced to `tty`, and the port it bound. */
+  async function startLines(tty: boolean): Promise<{ lines: string[]; port: number }> {
     const lines: string[] = [];
     const spy = vi.spyOn(console, 'log').mockImplementation((...args) => {
       lines.push(args.join(' '));
     });
+    const savedTty = process.stdout.isTTY;
+    process.stdout.isTTY = tty;
     try {
       const second = serveDashboard(hippoRoot, 0, 'another-token-abcdef');
       const secondPort = await boundPort(second);
       await new Promise((r) => setImmediate(r));
       await new Promise<void>((resolve) => second.close(() => resolve()));
-      const withToken = lines.filter((l) => l.includes('token=another-token-abcdef'));
-      expect(withToken).toEqual([`Hippo Dashboard running at http://localhost:${secondPort}/?token=another-token-abcdef`]);
+      return { lines, port: secondPort };
     } finally {
+      process.stdout.isTTY = savedTty;
       spy.mockRestore();
     }
+  }
+
+  it('prints the dashboard URL with the token once at start on a terminal', async () => {
+    const { lines, port: secondPort } = await startLines(true);
+    const withToken = lines.filter((l) => l.includes('token=another-token-abcdef'));
+    expect(withToken).toEqual([`Hippo Dashboard running at http://localhost:${secondPort}/?token=another-token-abcdef`]);
+  });
+
+  it('keeps the token off a captured stdout and writes the full URL to an owner-only file in the hippo root', async () => {
+    const urlFile = join(hippoRoot, 'dashboard.url');
+    const { lines, port: secondPort } = await startLines(false);
+    expect(lines.join('\n')).not.toContain('token=');
+    expect(lines).toContain(`Hippo Dashboard running at http://localhost:${secondPort}/ (open the URL with its token from ${urlFile})`);
+    expect(existsSync(urlFile)).toBe(true);
+    expect(readFileSync(urlFile, 'utf8')).toBe(`http://localhost:${secondPort}/?token=another-token-abcdef\n`);
+    if (process.platform !== 'win32') expect(statSync(urlFile).mode & 0o777).toBe(0o600);
   });
 });

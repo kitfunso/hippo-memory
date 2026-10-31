@@ -357,11 +357,11 @@ const again = (fn: string, label: string, plural: string): string =>
 const NOUNS: readonly NounRow[] = [
   {
     noun: 'predict', seed: ['predict', 'Ships by Friday', '--class', 'release'], read: 'show',
-    refuses: (raw) => `exit 1: Invalid prediction id: "${raw}"`, loose: () => 'exit 0: Prediction #1',
+    refuses: strict('prediction'), loose: strict('prediction'),
   },
   {
     noun: 'decide', seed: ['decide', 'Use Postgres for billing'], read: 'get',
-    refuses: (raw) => `exit 1: Invalid decision id: "${raw}"`, loose: () => 'exit 0: Decision #1',
+    refuses: strict('decision'), loose: strict('decision'),
   },
   { noun: 'incident', seed: ['incident', 'open', 'Checkout returned 500s'], read: 'get', refuses: strict('incident'), loose: strict('incident') },
   {

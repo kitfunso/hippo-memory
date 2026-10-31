@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../core/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
 import { assertTenantId } from './tenant.js';
 import { findRejectedValue, rejectionDigest } from './rejection.js';
@@ -7,13 +7,17 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow } from './entry-row.js';
 import { onHandle, openStore } from './open.js';
+import { chunked } from '../util/chunked.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
+import { placeholders } from '../util/sql.js';
 
-// Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry,
-// audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin orchestrator rebuildDirtySummaries().
+// Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private
+// MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin
+// orchestrator rebuildDirtySummaries().
 
-/** Host-wide loader for L2 topic summaries without an L3 parent, for consolidate phase 1.9 (buildEntityProfiles); SQL-level filter, since in-memory
- * `survivors` lacks L2s created by phase 1.7. Entries carry tenantId so per-cluster writes stay tenant-scoped. */
+/** Host-wide loader for L2 topic summaries without an L3 parent, for consolidate phase 1.9 (buildEntityProfiles);
+ * SQL-level filter, since in-memory `survivors` lacks L2s created by phase 1.7. Entries carry tenantId so per-cluster
+ * writes stay tenant-scoped. */
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
@@ -21,7 +25,7 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
     const rows = db.prepare(`
       SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories
-       WHERE dag_level = 2
+       WHERE dag_level = ${DAG_LEVEL.topic}
          AND dag_parent_id IS NULL
          AND kind != 'archived'
          AND superseded_by IS NULL
@@ -31,9 +35,10 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
   }, openStore);
 }
 
-/** Dirty summaries across all tenants in one query, newest change first (latest_at DESC NULLS LAST, id ASC) so HIPPO_DAG_REBUILD_CAP takes the most
- * recently changed. Each entry carries its own tenantId so the children read and rebuild UPDATE stay tenant-scoped. */
-export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
+/** Dirty summaries across all tenants, newest change first (latest_at DESC NULLS LAST, id ASC), at most `limit` (all
+ * when omitted) so HIPPO_DAG_REBUILD_CAP reads only the most recently changed. Each entry carries its tenantId so later
+ * writes stay tenant-scoped. */
+export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
@@ -43,12 +48,14 @@ export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
        WHERE summary_dirty = 1
          AND kind != 'archived'
        ORDER BY latest_at DESC NULLS LAST, id ASC
-    `).all() as MemoryRow[];
+       LIMIT ?
+    `).all(limit ?? -1) as MemoryRow[];
     return rows.map(rowToEntry);
   }, openStore);
 }
 
-/** Live (non-archived) children of a DAG summary, so a rebuild regenerates from the CURRENT child set; tenant-scoped as defence in depth. */
+/** Live (non-archived) children of a DAG summary, so a rebuild regenerates from the CURRENT child set; tenant-scoped as
+ * defence in depth. */
 export function loadChildrenOfSummary(
   hippoRoot: string,
   summaryId: string,
@@ -71,7 +78,51 @@ export function loadChildrenOfSummary(
   }, openStore);
 }
 
-/** Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal rebuild. */
+/** loadChildrenOfSummary for many summaries in one IN query per tenant chunk; the map key is
+ * `${tenantId}\u0000${summaryId}`, each list in created order. */
+export function loadChildrenOfSummaries(
+  hippoRoot: string,
+  summaries: ReadonlyArray<{ id: string; tenant_id: string }>,
+): Map<string, MemoryEntry[]> {
+  const byTenant = new Map<string, string[]>();
+  for (const s of summaries) {
+    assertTenantId('loadChildrenOfSummaries', s.tenant_id);
+    const ids = byTenant.get(s.tenant_id) ?? [];
+    ids.push(s.id);
+    byTenant.set(s.tenant_id, ids);
+  }
+  const out = new Map<string, MemoryEntry[]>();
+  onHandle(hippoRoot, (db) => {
+    for (const [tenantId, ids] of byTenant) {
+      for (const slice of chunked(ids)) {
+        // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+        const rows = db.prepare(`
+          SELECT ${MEMORY_SELECT_COLUMNS}
+            FROM memories
+           WHERE dag_parent_id IN (${placeholders(slice.length)})
+             AND tenant_id = ?
+             AND kind != 'archived'
+             AND superseded_by IS NULL
+           ORDER BY created ASC
+        `).all(...slice, tenantId) as MemoryRow[];
+        for (const entry of rows.map(rowToEntry)) {
+          const key = childrenKey(tenantId, entry.dag_parent_id ?? '');
+          const list = out.get(key);
+          if (list) list.push(entry); else out.set(key, [entry]);
+        }
+      }
+    }
+  }, openStore);
+  return out;
+}
+
+/** Key into the map loadChildrenOfSummaries returns. */
+export function childrenKey(tenantId: string, summaryId: string): string {
+  return `${tenantId}\u0000${summaryId}`;
+}
+
+/** Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal
+ * rebuild. */
 export interface RebuildPatch {
   content: string;            // new content for normal rebuild; summary.content for zero-child
   descendant_count: number;
@@ -82,14 +133,15 @@ export interface RebuildPatch {
   actor: string;
 }
 
-/** Apply a rebuild result to a dirty summary in one write scope (UPDATE plus syncFtsRow); `AND summary_dirty = 1` makes a concurrent race-loser a no-op.
- * Returns `{ changed, refused }`: `refused` only when a tombstone hit suppressed the content write while the metadata UPDATE still landed. */
+/** Apply a rebuild result to a dirty summary in one write scope (UPDATE plus syncFtsRow); `AND summary_dirty = 1` makes
+ * a concurrent race-loser a no-op. Returns `{ changed, refused }`: `refused` only when a tombstone hit suppressed the
+ * content write while the metadata UPDATE still landed. */
 export function applyRebuildResult(
   hippoRoot: string,
   summary: MemoryEntry,
   patch: RebuildPatch,
 ) {
-  assertTenantId('applyRebuildResult', summary.tenantId);
+  assertTenantId('applyRebuildResult', summary.tenant_id);
   return onHandle(hippoRoot, (db) => {
     return withWriteScope(db, 'rebuild_summary', () => applyRebuildInSavepoint(db, summary, patch));
   }, openStore);
@@ -106,7 +158,7 @@ const REBUILD_CONTENT_SQL = `UPDATE memories
                   summary_dirty = 0
             WHERE id = ?
               AND tenant_id = ?
-              AND dag_level IN (2, 3)
+              AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
               AND summary_dirty = 1
               AND kind != 'archived'`;
 const REBUILD_METADATA_SQL = `UPDATE memories
@@ -116,7 +168,7 @@ const REBUILD_METADATA_SQL = `UPDATE memories
                   summary_dirty = 0
             WHERE id = ?
               AND tenant_id = ?
-              AND dag_level IN (2, 3)
+              AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
               AND summary_dirty = 1
               AND kind != 'archived'`;
 
@@ -130,10 +182,11 @@ function applyRebuildInSavepoint(
   // Check tombstones before choosing the UPDATE: this direct UPDATE bypasses upsertEntryRow's guard, and
   // a deterministic rebuild would otherwise re-assert a rejected value every sleep cycle.
   const tombstone = patch.bumpRebuildCount
-    ? findRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
+    ? findRejectedValue(db, summary.tenant_id, rejectionDigest(patch.content))
     : null;
-  // On a tombstone hit, write no content: take the zero-child metadata-only path (descendant_count/earliest_at/latest_at, summary_dirty cleared, no
-  // rebuild_count bump). Clearing dirty is deliberate: leaving it set would make every later sleep re-attempt and re-refuse the same rebuild forever.
+  // On a tombstone hit, write no content: take the zero-child metadata-only path
+  // (descendant_count/earliest_at/latest_at, summary_dirty cleared, no rebuild_count bump). Clearing dirty is
+  // deliberate: leaving it set would make every later sleep re-attempt and re-refuse the same rebuild forever.
   const applyContentWrite = patch.bumpRebuildCount && !tombstone;
 
   const result = applyContentWrite
@@ -144,14 +197,14 @@ function applyRebuildInSavepoint(
         patch.latest_at,
         nowIso,
         summary.id,
-        summary.tenantId,
+        summary.tenant_id,
       )
     : db.prepare(REBUILD_METADATA_SQL).run(
         patch.descendant_count,
         patch.earliest_at,
         patch.latest_at,
         summary.id,
-        summary.tenantId,
+        summary.tenant_id,
       );
 
   // `changed` means THIS call's UPDATE hit a row, so a refusal still settles the cycle (false would retry
@@ -172,13 +225,14 @@ function auditRefusedRebuild(
   patch: RebuildPatch,
   tombstone: NonNullable<ReturnType<typeof findRejectedValue>>,
 ): void {
-  // refused === true here (narrowed for the tombstone.* access). Best-effort refusal audit written INLINE in this still-open SAVEPOINT (the metadata
-  // UPDATE already committed to it), so a direct audit() call is correct, not the post-rollback auditRejectionRefusal.
+  // refused === true here (narrowed for the tombstone.* access). Best-effort refusal audit written INLINE in this
+  // still-open SAVEPOINT (the metadata UPDATE already committed to it), so a direct audit() call is correct, not the
+  // post-rollback auditRejectionRefusal.
   audit(db, 'reject_refusal', {
     targetId: summary.id,
     metadata: { digest: tombstone.digest, reason: tombstone.reason },
     actor: patch.actor,
-    tenantId: summary.tenantId
+    tenantId: summary.tenant_id
   });
   log.warn(
     `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
@@ -201,7 +255,7 @@ function syncRebuiltSummary(
     descendant_count: patch.descendant_count,
     earliest_at: patch.earliest_at,
     latest_at: patch.latest_at,
-    summary_dirty: 0,
+    summary_dirty: false,
     last_rebuilt_at: applyContentWrite ? nowIso : summary.last_rebuilt_at,
     rebuild_count: applyContentWrite
       ? (summary.rebuild_count ?? 0) + 1
@@ -215,11 +269,12 @@ function syncRebuiltSummary(
       source: 'E3-rebuild',
       zero_children: patch.zeroChildren,
       descendant_count: patch.descendant_count,
-    }, actor: patch.actor, tenantId: summary.tenantId });
+    }, actor: patch.actor, tenantId: summary.tenant_id });
 }
 
-/** Clear summary_dirty on a new summary after buildDag's child-link loop (each member's writeEntry marks the parent dirty, so the same cycle would rebuild it).
- * Idempotent (no-op, no audit if not dirty); audit source='buildDag-clean' distinguishes it from the rebuild's. */
+/** Clear summary_dirty on a new summary after buildDag's child-link loop (each member's writeEntry marks the parent
+ * dirty, so the same cycle would rebuild it). Idempotent (no-op, no audit if not dirty); audit source='buildDag-clean'
+ * distinguishes it from the rebuild's. */
 export function clearSummaryDirtyAfterBuild(
   hippoRoot: string,
   summaryId: string,
@@ -236,14 +291,19 @@ export function clearSummaryDirtyAfterBuild(
          SET summary_dirty = 0
        WHERE id = ?
          AND tenant_id = ?
-         AND dag_level IN (2, 3)
+         AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
          AND summary_dirty = 1
          AND kind != 'archived'
       RETURNING dag_level
     `).get(summaryId, tenantId) as { dag_level: number } | undefined;
     if (result) {
       // source tells buildDag-clean (L2) from buildEntityProfiles-clean (L3) and any future build path.
-      audit(db, 'summary_marked_clean', { targetId: summaryId, metadata: { dag_level: result.dag_level, source }, actor, tenantId });
+      audit(db, 'summary_marked_clean', {
+        targetId: summaryId,
+        metadata: { dag_level: result.dag_level, source },
+        actor,
+        tenantId,
+      });
     }
   }, openStore);
 }

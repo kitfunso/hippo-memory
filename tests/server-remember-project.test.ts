@@ -1,16 +1,18 @@
 // POST /v1/memories stamps the caller's `project.name`, or NULL on a shared store, and never the served folder.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
-import { adminActor, type Context } from '../src/api/index.js';
+import { adminActor } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import type { JsonValue } from '../src/util/json.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const ROW = 'the zorblaxian quintessor needs a restart every monday';
 const PROMPT = 'how do I restart the zorblaxian quintessor';
@@ -48,7 +50,7 @@ async function originAfterPost(h: ServerHandle, body: Record<string, JsonValue>)
 }
 
 async function hookText(project: string): Promise<string> {
-  const ctx: Context = { hippoRoot: store, tenantId: 'default', actor: adminActor('remember-project-test') };
+  const ctx: FullContext = apiCtx(store, 'default', adminActor('remember-project-test'));
   const req = { sessionId: `s-${project}`, project: { name: project, legacyName: project }, payload: { prompt: PROMPT } };
   return (await promptHookContext(ctx, req, { sharedStore: true })).stdout;
 }

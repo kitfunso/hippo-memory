@@ -5,13 +5,15 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { savePolicy } from '../../src/objects/policies.js';
 import { canReadScope } from '../../src/core/recall-scope.js';
-import { withSqliteAllowed, type HippoStore } from '../../src/server.js';
+import { type HippoStore } from '../../src/entry/store-kit.js';
+import { withSqliteAllowed } from '../../src/db/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow } from '../../src/store/graph-rows.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
+import { objectsAt } from './objects-at.js';
 
 export interface InMemoryGraphReadsStore extends StoreSide {
   readonly store: HippoStore & { readonly graphReads: GraphReads };
@@ -170,8 +172,8 @@ function seedTenantA(db: Db, dir: string, policyId: number): SeededTenantA {
 }
 
 /** Adds a graph to each of four tenants: A with rows under three scopes, B sharing one name with A, one entity under `solo`, and 405 same-named entities under `bulk`. */
-export function seedGraphRows(dir: string): SeededGraph {
-  const policyId = savePolicy(dir, TENANT_A, { policyName: 'Anchored', policyText: 'kept by its object' }).id;
+export async function seedGraphRows(dir: string): Promise<SeededGraph> {
+  const policyId = (await savePolicy(objectsAt(dir), dir, TENANT_A, { policyName: 'Anchored', policyText: 'kept by its object' })).id;
   const db = openHippoDb(dir);
   vi.useFakeTimers({ toFake: ['Date'] });
   try {

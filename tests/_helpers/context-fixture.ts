@@ -22,7 +22,7 @@ type SeedOpts = Parameters<typeof seeded>[4];
 
 function inTenant(tenantId: string, origin: string | null) {
   return (content: string, id: string, hours: number, extra: Partial<MemoryEntry> = {}, opts: SeedOpts = {}): MemoryEntry =>
-    seeded(content, id, ago(hours), { tenantId, origin_project: origin, ...extra }, opts);
+    seeded(content, id, ago(hours), { tenant_id: tenantId, origin_project: origin, ...extra }, opts);
 }
 
 function memoryRows(): MemoryEntry[] {
@@ -48,7 +48,7 @@ function memoryRows(): MemoryEntry[] {
     a('other project vault path lives in its runbook', 'mem_a_secret_other', 45, { origin_project: 'other' }, { tags: ['Token'] }),
     a('user global vault path lives in the home runbook', 'mem_a_secret_global', 46, { origin_project: '' }, { tags: ['password'] }),
     a('build failed when the zebra cache was cold', 'mem_a_error', 47, { conflicts_with: ['mem_a_own_1'] }, {
-      tags: ['error:build'], layer: Layer.Semantic, emotional_valence: 'negative', schema_fit: 0.9, extracted_from: 'mem_a_own_0', dag_level: 2,
+      tags: ['error:build'], layer: Layer.Semantic, emotionalValence: 'negative', schemaFit: 0.9, extractedFrom: 'mem_a_own_0', dagLevel: 2,
     }),
     a('legacy row with no recorded origin about the rollout', 'mem_a_no_origin', 48, { origin_project: null }),
     a('rollout lesson that decays within a day', 'mem_a_decayed', 200, { half_life_days: 1 }),
@@ -56,7 +56,7 @@ function memoryRows(): MemoryEntry[] {
     a('rollout lesson with no half life', 'mem_a_flat', 49, { half_life_days: 0 }),
     b('globex pinned rule about the deploy window', 'mem_b_pin', 50, {}, { pinned: true }),
     ...Array.from({ length: 5 }, (_, i) => b(`globex note ${i} about the rollout plan`, `mem_b_${i}`, 5 + i)),
-    seeded('globex drifted row written by an old importer', 'mem_b_drift', '2026-03-05 10:00:00', { tenantId: TENANT_B, origin_project: PROJECT }),
+    seeded('globex drifted row written by an old importer', 'mem_b_drift', '2026-03-05 10:00:00', { tenant_id: TENANT_B, origin_project: PROJECT }),
   ];
 }
 
@@ -158,7 +158,11 @@ export function seedContextGlobal(dir: string): void {
 export function contextRowsOf(root: string) {
   const db = openHippoDb(root);
   try {
-    return { ...rowsOf(root), strengthened: db.prepare('SELECT id, retrieval_count, last_retrieved, half_life_days, strength FROM memories ORDER BY id').all() };
+    const rows = rowsOf(root);
+    // The audit row is written by the store, and a worker-thread store stamps the real clock, not the faked Date.
+    // SAFETY: rowsOf selects ts, tenant_id, actor, op, target_id and metadata_json for the audit rows.
+    const audit = (rows.audit as Array<{ ts: string; op: string }>).map((row) => ({ ...row, ts: 'stamped' }));
+    return { ...rows, audit, strengthened: db.prepare('SELECT id, retrieval_count, last_retrieved, half_life_days, strength FROM memories ORDER BY id').all() };
   } finally {
     closeHippoDb(db);
   }

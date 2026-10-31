@@ -1,6 +1,6 @@
 ---
 name: memory
-description: Project memory powered by Hippo. Use when starting a session, after learning something, after hitting an error, or when the user mentions memory/remember/recall. Auto-invoked at session start.
+description: Project memory powered by Hippo. Use when starting a session, after learning something, after hitting an error, or when the user mentions memory/remember/recall.
 ---
 
 # Hippo Memory
@@ -8,9 +8,11 @@ description: Project memory powered by Hippo. Use when starting a session, after
 Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
 Memories decay over time unless retrieved. Errors stick longer. Sleep consolidates.
 
-## At session start (MANDATORY)
+## At the start of a task
 
-Before doing any work, load relevant context:
+The plugin's UserPromptSubmit hook injects pinned rules and the memories that match each prompt, so do not load them yourself.
+
+Only if no hippo memory block has appeared in this session, run this at the start of a task:
 
 ```bash
 hippo context --auto --budget 1500

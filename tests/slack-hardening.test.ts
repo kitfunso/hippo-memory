@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,7 +8,7 @@ import { createRequire } from 'node:module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
@@ -22,6 +23,8 @@ import { verifySlackSignature } from '../src/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
@@ -85,7 +88,7 @@ describe('Slack hardening + migration v19', () => {
     const restore = withEnv('HIPPO_TENANT', 'env-tenant-A');
     const db = openHippoDb(root);
     try {
-      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBe('env-tenant-A');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBe('env-tenant-A');
     } finally {
       closeHippoDb(db);
       restore();
@@ -100,7 +103,7 @@ describe('Slack hardening + migration v19', () => {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TKNOWN', 'tenant-known', new Date().toISOString());
-      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBeNull();
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBeNull();
     } finally {
       closeHippoDb(db);
       restore();
@@ -116,7 +119,7 @@ describe('Slack hardening + migration v19', () => {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TKNOWN', 'tenant-known', new Date().toISOString());
-      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBe('env-fallback');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBe('env-fallback');
     } finally {
       closeHippoDb(db);
       r2();
@@ -196,7 +199,7 @@ describe('Slack hardening + migration v19', () => {
 
   // The fast pre-check answers a replay; a second worker whose pre-check ran too early is caught by the event-log insert inside its own write.
   it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
     // First call: ordinary ingest succeeds and writes to slack_event_log.
     const r1 = await ingestMessage(ctx, {
@@ -231,24 +234,25 @@ describe('Slack hardening + migration v19', () => {
     const racedOpts = messageToRememberOpts(raced);
     if (!racedOpts) throw new Error('the raced message has text');
     const memBefore = loadAllEntries(root).length;
-    const winners: IngestResult[] = [];
+    const winners: Promise<IngestResult>[] = [];
     let winnerRan = false;
     const { exec } = DatabaseSync.prototype;
     const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
       // The loser's first lock request: the winner stores the same event on its own connection, then the loser goes on.
       if (sql === 'BEGIN IMMEDIATE' && !winnerRan) {
         winnerRan = true;
-        // On hippo.db `remember` answers at once, so the winner commits before this lock request goes through.
+        // remember's first store call is the write, which hippo.db runs before it returns, so the winner commits before this lock request goes through.
         const stored = remember(ctx, { ...racedOpts, untrusted: true, event: { connector: 'slack', eventId: racedEventId } });
-        winners.push({ status: stored.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: stored.id });
+        winners.push(stored.then((w): IngestResult => ({ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id })));
       }
       exec.call(this, sql);
     });
     const loser = await ingestMessage(ctx, raced);
     spy.mockRestore();
+    const settled = await Promise.all(winners);
 
-    expect(winners.map((w) => w.status)).toEqual(['ingested']);
-    expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: winners[0].memoryId });
+    expect(settled.map((w) => w.status)).toEqual(['ingested']);
+    expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: settled[0].memoryId });
     // One new memory row, the winner's: the loser's write rolled back.
     expect(loadAllEntries(root).length).toBe(memBefore + 1);
 
@@ -261,7 +265,7 @@ describe('Slack hardening + migration v19', () => {
           .prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`)
           .all(racedEventId) as Array<{ memory_id: string }>;
         expect(rows).toHaveLength(1);
-        expect(rows[0].memory_id).toBe(winners[0].memoryId);
+        expect(rows[0].memory_id).toBe(settled[0].memoryId);
       } finally {
         closeHippoDb(db);
       }
@@ -344,7 +348,7 @@ describe('Slack hardening + migration v19', () => {
     }
 
     // Seed the DLQ row.
-    const dlqId = await parkInDlq(slackDlq, root, {
+    const dlqId = await parkInDlq(slackDlq, sqliteStore(root), {
       tenantId: 'default',
       teamId: 'TREPLAY',
       rawPayload: body,
@@ -357,7 +361,7 @@ describe('Slack hardening + migration v19', () => {
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.
     const result = await replayDlqEntry(
-      { hippoRoot: root },
+      { hippoRoot: root, store: sqliteStore(root) },
       dlqId,
       { signingSecret: SECRET, now: Number(ts), skewSeconds: 60 },
     );

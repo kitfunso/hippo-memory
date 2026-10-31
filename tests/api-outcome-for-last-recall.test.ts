@@ -10,14 +10,16 @@
  * Real-DB per project convention (mkdtempSync + initStore + rmSync cleanup).
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
-import { remember, outcomeForLastRecall, type HippoDbContext } from '../src/api/index.js';
-import { recordStatements, countMatching } from './_helpers/count-statements.js';
+import { remember, outcomeForLastRecall } from '../src/api/index.js';
+import { recordStatementsAsync, countMatching } from './_helpers/count-statements.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-ofr-'));
@@ -29,9 +31,9 @@ function cleanup(home: string): void {
   rmSync(home, { recursive: true, force: true });
 }
 
-function seedMemory(home: string, content: string, tenantId = 'default'): string {
-  const res = remember(
-    { hippoRoot: home, tenantId, actor: { subject: 'cli', role: 'admin' } },
+async function seedMemory(home: string, content: string, tenantId = 'default'): Promise<string> {
+  const res = await remember(
+    apiCtx(home, tenantId, { subject: 'cli', role: 'admin' }),
     { content, kind: 'distilled' },
   );
   return res.id;
@@ -44,35 +46,27 @@ function seedLastRetrievalIds(home: string, ids: string[]): void {
 }
 
 describe('api.outcomeForLastRecall', () => {
-  it('returns {applied:0, ids:[]} when last_retrieval_ids is empty', () => {
+  it('returns {applied:0, ids:[]} when last_retrieval_ids is empty', async () => {
     const home = tmpHome();
     try {
-      const ctx: HippoDbContext = {
-        hippoRoot: home,
-        tenantId: 'default',
-        actor: { subject: 'cli', role: 'admin' },
-      };
-      const result = outcomeForLastRecall(ctx, true);
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const result = await outcomeForLastRecall(ctx, true);
       expect(result).toEqual({ applied: 0, ids: [] });
     } finally {
       cleanup(home);
     }
   });
 
-  it('applies a positive outcome to every id from the last recall', () => {
+  it('applies a positive outcome to every id from the last recall', async () => {
     const home = tmpHome();
     try {
-      const id1 = seedMemory(home, 'last-recall-mem-1');
-      const id2 = seedMemory(home, 'last-recall-mem-2');
-      const id3 = seedMemory(home, 'last-recall-mem-3');
+      const id1 = await seedMemory(home, 'last-recall-mem-1');
+      const id2 = await seedMemory(home, 'last-recall-mem-2');
+      const id3 = await seedMemory(home, 'last-recall-mem-3');
       seedLastRetrievalIds(home, [id1, id2, id3]);
 
-      const ctx: HippoDbContext = {
-        hippoRoot: home,
-        tenantId: 'default',
-        actor: { subject: 'cli', role: 'admin' },
-      };
-      const result = outcomeForLastRecall(ctx, true);
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const result = await outcomeForLastRecall(ctx, true);
 
       expect(result.applied).toBe(3);
       expect(result.ids).toEqual([id1, id2, id3]);
@@ -81,7 +75,7 @@ describe('api.outcomeForLastRecall', () => {
     }
   });
 
-  it('silently skips cross-tenant ids AND filters them out of the response (no leak)', () => {
+  it('silently skips cross-tenant ids AND filters them out of the response (no leak)', async () => {
     const home = tmpHome();
     try {
       // The id belongs to tenant_b. last_retrieval_ids is hippoRoot-level
@@ -91,15 +85,11 @@ describe('api.outcomeForLastRecall', () => {
       // WRITE path. v1.11.4: also filter the RESPONSE so cross-tenant ids
       // do not leak via the returned `ids` list (fix for the HTTP /v1/outcome
       // no-body last-recall disclosure path; see api.outcome JSDoc).
-      const tenantBId = seedMemory(home, 'belongs-to-tenant-b', 'tenant_b');
+      const tenantBId = await seedMemory(home, 'belongs-to-tenant-b', 'tenant_b');
       seedLastRetrievalIds(home, [tenantBId]);
 
-      const ctxA: HippoDbContext = {
-        hippoRoot: home,
-        tenantId: 'tenant_a',
-        actor: { subject: 'cli', role: 'admin' },
-      };
-      const result = outcomeForLastRecall(ctxA, true);
+      const ctxA: FullContext = apiCtx(home, 'tenant_a', { subject: 'cli', role: 'admin' });
+      const result = await outcomeForLastRecall(ctxA, true);
 
       expect(result.applied).toBe(0);
       // ids must NOT contain tenant_b's id — that would be a cross-tenant
@@ -114,16 +104,12 @@ describe('api.outcomeForLastRecall', () => {
   it('emits one audit_log row per applied id, tagged with ctx.actor', async () => {
     const home = tmpHome();
     try {
-      const id1 = seedMemory(home, 'audit-target-1');
-      const id2 = seedMemory(home, 'audit-target-2');
+      const id1 = await seedMemory(home, 'audit-target-1');
+      const id2 = await seedMemory(home, 'audit-target-2');
       seedLastRetrievalIds(home, [id1, id2]);
 
-      const ctx: HippoDbContext = {
-        hippoRoot: home,
-        tenantId: 'default',
-        actor: { subject: 'api_key:hk_ofr_test', role: 'admin' },
-      };
-      const result = outcomeForLastRecall(ctx, false);
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'api_key:hk_ofr_test', role: 'admin' });
+      const result = await outcomeForLastRecall(ctx, false);
       expect(result.applied).toBe(2);
 
       const { openHippoDb, closeHippoDb } = await import('../src/db/index.js');
@@ -148,15 +134,16 @@ describe('api.outcomeForLastRecall', () => {
 });
 
 describe('api.outcomeForLastRecall reads', () => {
-  it('reads the last recall from meta and only its own rows, never the index of the store', () => {
+  it('reads the last recall from meta and only its own rows, never the index of the store', async () => {
     const home = tmpHome();
     try {
-      const ids = Array.from({ length: 40 }, (_, i) => seedMemory(home, `bystander or recalled memory number ${i}`));
+      const ids: string[] = [];
+      for (let i = 0; i < 40; i++) ids.push(await seedMemory(home, `bystander or recalled memory number ${i}`));
       const recalled = [ids[3], ids[17]];
       seedLastRetrievalIds(home, recalled);
-      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      const { result, statements, rowsRead } = recordStatements(() => outcomeForLastRecall(ctx, true));
+      const { result, statements, rowsRead } = await recordStatementsAsync(async () => outcomeForLastRecall(ctx, true));
 
       expect(result).toEqual({ applied: 2, ids: recalled });
       expect(countMatching(statements, 'FROM memories ORDER BY created ASC, id ASC')).toBe(0);

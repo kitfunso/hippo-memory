@@ -1,11 +1,11 @@
 // A store other than hippo.db for recall's vector reads: it copies hippo.db's vectors, particles and filter columns into memory once,
-// then answers with the pieces hippo-memory/server exports, so a parity test shows those pieces are all another store needs.
+// then answers with the pieces hippo-memory/store-kit exports, so a parity test shows those pieces are all another store needs.
 import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
 import { passesScopeFilterForRecall } from '../../src/core/recall-scope.js';
 import {
-  bufferToFloat32, decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows,
-  type HippoStore, type PhysicsParticle, type RecallScopeFilter, type VectorCandidateSpec, type VectorReads, type VectorRow,
-} from '../../src/server.js';
+  bufferToFloat32, decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows, type HippoStore, type PhysicsParticle,
+  type RecallScopeFilter, type VectorCandidateSpec, type VectorReads, type VectorRow,
+} from '../../src/entry/store-kit.js';
 import { portOnlyStore } from './port-only-store.js';
 
 export interface FilterRow {

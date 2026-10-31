@@ -111,22 +111,22 @@ describe('embedding provider', () => {
 });
 
 describe('repo scan in init', () => {
-  const scan = (dir: string): void => {
+  const scan = async (dir: string): Promise<void> => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    handleInit({ hippoRoot: root, tenantId: 'default', args: [], flags: { scan: dir } });
+    await handleInit({ hippoRoot: root, tenantId: 'default', args: [], flags: { scan: dir } });
   };
 
-  it('warns with path and code for an unexpected readdir failure', () => {
+  it('warns with path and code for an unexpected readdir failure', async () => {
     failReaddir('EIO');
-    scan(root);
+    await scan(root);
     const line = logged().find((l) => l.includes('repo scan skipped'));
     expect(line).toContain(root);
     expect(line).toContain('code=EIO');
   });
 
-  it.each(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR'])('stays silent for %s', (code) => {
+  it.each(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR'])('stays silent for %s', async (code) => {
     failReaddir(code);
-    scan(root);
+    await scan(root);
     expect(logged().filter((l) => l.includes('repo scan skipped'))).toEqual([]);
   });
 });
@@ -199,7 +199,7 @@ describe('dormant snapshot', () => {
       const entry = createMemory('the retired cron host was called nightly-02');
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
       db.prepare('UPDATE dormant_memories SET content = ? WHERE id = ?').run('edited by hand', entry.id);
-      expect(listDormantSnapshots(db, entry.tenantId)).toEqual([]);
+      expect(listDormantSnapshots(db, entry.tenant_id)).toEqual([]);
       const line = logged().find((l) => l.includes('dormant_memories.entry_json'));
       expect(line).toContain('wrong shape');
       expect(line).toContain(`id=${entry.id}`);

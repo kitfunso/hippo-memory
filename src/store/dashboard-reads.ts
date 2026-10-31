@@ -1,10 +1,10 @@
-// The dashboard snapshot's read of one tenant: live rows with only the columns it shows, and SQL counts of the rows it leaves out.
+// The dashboard snapshot's read of one tenant: live rows with only
+// the columns it shows, and SQL counts of the rows it leaves out.
 import * as fs from 'fs';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db/index.js';
 import { withReadSnapshot } from '../db/busy.js';
 import { pragmaDataVersion } from '../db/meta.js';
 import { tableExists } from '../db/tables.js';
-import { storedVectorIds } from '../db/vector-store.js';
 import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../core/memory.js';
 import { onHandle, openStore } from './open.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
@@ -26,16 +26,37 @@ export interface DashboardRows {
   readonly excluded: ExcludedCounts;
 }
 
-const LIVE_COLUMNS = 'id, created, last_retrieved, retrieval_count, half_life_days, layer, tags_json, emotional_valence, outcome_positive, ' +
+// Full content stays: dashboard-snapshot's Fact.lower serves search over the whole text, so a preview would change
+// which rows match.
+const LIVE_COLUMNS =
+  'id, created, last_retrieved, retrieval_count, half_life_days, ' +
+  'layer, tags_json, emotional_valence, outcome_positive, ' +
   'outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
 type LiveRow = Pick<
   MemoryRow,
-  'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'tags_json' | 'emotional_valence' | 'outcome_positive'
-  | 'outcome_negative' | 'pinned' | 'confidence' | 'content' | 'superseded_by' | 'kind' | 'scope' | 'origin_project'
+  | 'id'
+  | 'created'
+  | 'last_retrieved'
+  | 'retrieval_count'
+  | 'half_life_days'
+  | 'layer'
+  | 'tags_json'
+  | 'emotional_valence'
+  | 'outcome_positive'
+  | 'outcome_negative'
+  | 'pinned'
+  | 'confidence'
+  | 'content'
+  | 'superseded_by'
+  | 'kind'
+  | 'scope'
+  | 'origin_project'
 >;
 
-// SQL twins of isQuarantineScope and of the two halves of isLiveMemory; substr compares bytes, as startsWith does, where LIKE would fold case.
-const QUARANTINED = `(scope IS NOT NULL AND substr(scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
+// SQL twins of isQuarantineScope and of the two halves of isLiveMemory; substr compares bytes, as startsWith does,
+// where LIKE would fold case.
+const QUARANTINED = `(scope IS NOT NULL ` +
+  `AND substr(scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
 const SUPERSEDED_BY = `(superseded_by IS NOT NULL AND superseded_by <> '')`;
 const KIND = `COALESCE(kind, 'distilled')`;
 const LIVE = `NOT ${SUPERSEDED_BY} AND ${KIND} IN ('raw', 'distilled') AND NOT ${QUARANTINED}`;
@@ -69,7 +90,9 @@ export function loadDashboardRows(hippoRoot: string, tenantId: string): Dashboar
   return onHandle(hippoRoot, (db) => {
     return withReadSnapshot(db, () => {
       // SAFETY: the SELECT names exactly LiveRow's columns.
-      const live = db.prepare(`SELECT ${LIVE_COLUMNS} FROM memories WHERE tenant_id = ? AND ${LIVE} ORDER BY created ASC, id ASC`).all(tenantId) as LiveRow[];
+      const live = db
+        .prepare(`SELECT ${LIVE_COLUMNS} FROM memories WHERE tenant_id = ? AND ${LIVE} ORDER BY created ASC, id ASC`)
+        .all(tenantId) as LiveRow[];
       // SAFETY: the SELECT names exactly these two fields, and `why` is one of the three CASE arms or NULL.
       const counts = db.prepare(
         `\n        SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +
@@ -85,7 +108,8 @@ export function loadDashboardRows(hippoRoot: string, tenantId: string): Dashboar
   }, openStore);
 }
 
-/** The dashboard's one read-only connection, kept across refreshes for the commit signal; it opens on the first read that finds a database. */
+/** The dashboard's one read-only connection, kept across refreshes for the commit signal; it opens on the first read
+ * that finds a database. */
 export class DashboardConnection {
   private db: DatabaseSyncLike | null = null;
 
@@ -100,10 +124,25 @@ export class DashboardConnection {
     return pragmaDataVersion(this.db);
   }
 
-  /** Ids with a stored vector: none before the connection opens, null on a store older than the vector table (schema v52). */
-  embeddedIds(): ReadonlySet<string> | null {
+  /** Ids of the tenant's rows with a stored vector: none before the connection opens, null on a store older than the
+   * vector table (schema v52). */
+  embeddedIds(tenantId: string): ReadonlySet<string> | null {
     if (this.db === null) return new Set();
-    return tableExists(this.db, 'memory_vectors') ? storedVectorIds(this.db) : null;
+    if (!tableExists(this.db, 'memory_vectors')) return null;
+    // SAFETY: the SELECT names the one TEXT id column.
+    const rows = this.db
+      .prepare(
+        'SELECT m.id FROM memories m WHERE m.tenant_id = ? ' +
+          'AND EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = m.id)',
+      )
+      .all(tenantId) as Array<{ id: string }>;
+    return new Set(rows.map((row) => row.id));
+  }
+
+  /** Whether `id` has a stored vector, whatever its tenant and whether or not a memory row holds it. */
+  hasVector(id: string): boolean {
+    if (this.db === null || !tableExists(this.db, 'memory_vectors')) return false;
+    return this.db.prepare('SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
   }
 
   close(): void {

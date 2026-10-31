@@ -64,6 +64,17 @@ describe('scripts/postinstall.cjs', () => {
     expect(existsSync(join(home, '.hippo', 'integrations', 'codex.json'))).toBe(false);
   });
 
+  it('says why on stderr when the built postinstall fails, and still lets the install finish', () => {
+    const pkg = join(home, 'pkg');
+    mkdirSync(join(pkg, 'scripts'), { recursive: true });
+    mkdirSync(join(pkg, 'dist'));
+    writeFileSync(join(pkg, 'scripts', 'postinstall.cjs'), readFileSync(SCRIPT, 'utf8'));
+    writeFileSync(join(pkg, 'dist', 'postinstall.js'), "throw new Error('dist postinstall broke');\n");
+    const r = spawnSync(process.execPath, [join(pkg, 'scripts', 'postinstall.cjs')], { env: { ...process.env, HIPPO_SKIP_POSTINSTALL: '' }, encoding: 'utf8' });
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain('dist postinstall broke');
+  });
+
   it('HIPPO_SKIP_POSTINSTALL=1 prints nothing even when Claude Code is present', () => {
     mkdirSync(join(home, '.claude'));
     const r = run({ HIPPO_SKIP_POSTINSTALL: '1' });

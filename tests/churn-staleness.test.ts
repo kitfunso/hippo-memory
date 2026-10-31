@@ -1,5 +1,6 @@
 /** FE2 staleness-from-code-churn: extraction, detection, outcome-clearing, rank, config, CLI. */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -22,6 +23,7 @@ import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import { loadConfig } from '../src/core/config.js';
 import * as api from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)
@@ -335,15 +337,15 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('a positive outcome recorded after the churn moves the anchor forward, clearing the staleness', () => {
+  it('a positive outcome recorded after the churn moves the anchor forward, clearing the staleness', async () => {
     fs.writeFileSync(path.join(repoDir, 'j.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see j.ts for the setup', { created: ANCHOR });
     fs.writeFileSync(path.join(repoDir, 'j.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-    api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
+    const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
+    await api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
 
     const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
@@ -427,32 +429,32 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
     fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
-  it('drops the churn-stale tag on good=true', () => {
+  it('drops the churn-stale tag on good=true', async () => {
     const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     writeEntry(hippoRoot, mem);
 
-    const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-    api.outcome(ctx, [mem.id], true);
+    const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
+    await api.outcome(ctx, [mem.id], true);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('keeps the churn-stale tag on good=false', () => {
+  it('keeps the churn-stale tag on good=false', async () => {
     const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     writeEntry(hippoRoot, mem);
 
-    const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-    api.outcome(ctx, [mem.id], false);
+    const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
+    await api.outcome(ctx, [mem.id], false);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('a good outcome on an untagged memory is a no-op for tags', () => {
+  it('a good outcome on an untagged memory is a no-op for tags', async () => {
     const mem = createMemory('plain content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['other'] });
     writeEntry(hippoRoot, mem);
 
-    const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-    api.outcome(ctx, [mem.id], true);
+    const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
+    await api.outcome(ctx, [mem.id], true);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).toEqual(['other']);
   });
@@ -560,7 +562,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       const b = createMemory('zephyr gearbox notes with a few more words', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       const c = createMemory('zephyr gearbox notes with many many more padding words here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       for (const m of [stale, b, c]) writeEntry(hippoRoot, m);
-      const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
+      const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
       const ids = (await api.retrieve(ctx, { query: 'zephyr' })).results.map((r) => r.id);
       expect(ids).toHaveLength(3);
       expect(ids[0]).not.toBe(stale.id);

@@ -348,21 +348,23 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('fails and names a file outside the list that calls onStore, and ignores the carrier file itself', () => {
+  it('fails and names a file outside the list that names the carrier, a file defining it included', () => {
     const use = "import { onStore } from './on-store.js';\nexport const f = (ctx: any) => onStore(ctx, () => 1);\n";
-    const files = { 'src/api/on-store.ts': 'export const onStore = andThen;\n', 'src/api/old.ts': use, 'src/api/new.ts': use };
+    const reply = 'export type R = StoreReply<object, number>;\n';
+    const files = { 'src/api/on-store.ts': 'export const onStore = andThen;\n', 'src/api/old.ts': use, 'src/api/new.ts': use, 'src/api/reply.ts': reply };
     withFixture(files, { carrierFiles: 2, carrierFilesList: ['src/api/old.ts', 'src/api/gone.ts'] }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen or onStore');
-      expect(r.stderr).not.toContain('src/api/on-store.ts');
+      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen, onStore or StoreReply');
+      expect(r.stderr).toContain('src/api/on-store.ts: not a carrier file');
+      expect(r.stderr).toContain('src/api/reply.ts: not a carrier file');
       expect(r.stderr).not.toContain('src/api/old.ts');
     });
   });
 
   it('fails and names each surface file that records a recall itself, in a route or a CLI verb', () => {
     const route = [
-      "import { noteRecall as n } from '../../api/recall-record.js';",
+      "import { noteRecall as n } from '../../api/recall/finish.js';",
       'export const f = (s: any, ctx: any) => {',
       '  s.bumpRecallStats(1);',
       "  recordTokens(ctx, 'http_recall', {});",
@@ -377,7 +379,7 @@ describe('check-store-port.mjs', () => {
         expect(r.stderr).toContain('src/server/routes/recall.ts:3 bumpRecallStats');
         expect(r.stderr).toContain('src/server/routes/recall.ts:4 recordTokens with a recall label');
         expect(r.stderr).toContain('src/cli/recall.ts:1 recordTokens with a recall label');
-        expect(r.stderr).toContain('recall-finish.ts');
+        expect(r.stderr).toContain('recall/finish.ts');
       }
     });
   });
@@ -389,7 +391,7 @@ describe('check-store-port.mjs', () => {
       'export const s = "recordTokens(ctx, \'recall\')";',
       "export const g = (ctx: any) => recordTokens(ctx, 'http_context', { note: 'recalled' });",
     ].join('\n');
-    withFixture({ 'src/api/recall-finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
+    withFixture({ 'src/api/recall/finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
     });

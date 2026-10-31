@@ -10,6 +10,7 @@ import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { extractInvalidationTarget, invalidateMatching } from '../src/learn/invalidation.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -42,8 +43,8 @@ describe('captureError', () => {
   });
 
   it('writes into the tenant it is given, else default', () => {
-    expect(captureError(1, 'err', 'cmd', 'tenant_b').tenantId).toBe('tenant_b');
-    expect(captureError(1, 'err', 'cmd').tenantId).toBe('default');
+    expect(captureError(1, 'err', 'cmd', 'tenant_b').tenant_id).toBe('tenant_b');
+    expect(captureError(1, 'err', 'cmd').tenant_id).toBe('default');
   });
 
   it('short stderr passes through unchanged', () => {
@@ -381,7 +382,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
         method: 'tools/call',
         params: { name: 'hippo_learn', arguments: { days: 3650 } },
       },
-      { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot) },
     );
 
     // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/mcp/request.ts:173).
@@ -482,6 +483,13 @@ describe('deduplicateLesson', () => {
     const unrelated = 'completely different content about authentication tokens jwt';
     const isDup = deduplicateLesson(tmpDir, unrelated);
     expect(isDup).toBe(false);
+  });
+
+  it('matches the full-scan answer for a lesson with SQL wildcard characters and an unrelated row', () => {
+    writeEntry(tmpDir, createMemory('retry_budget 100% spent on cache', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(tmpDir, createMemory('zzz qqq', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    expect(deduplicateLesson(tmpDir, 'retry_budget 100% spent on cache')).toBe(true);
+    expect(deduplicateLesson(tmpDir, 'retry%budget 100_ spent')).toBe(false);
   });
 });
 

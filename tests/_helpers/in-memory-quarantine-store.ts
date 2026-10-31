@@ -5,7 +5,8 @@ import { createApiKey } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { recordQuarantine } from '../../src/store/quarantine.js';
-import { withSqliteAllowed, type HippoStore, type KeysetPosition, type MemoryEntry } from '../../src/server.js';
+import { type HippoStore, type KeysetPosition, type MemoryEntry } from '../../src/entry/store-kit.js';
+import { withSqliteAllowed } from '../../src/db/open.js';
 import { selectEntriesByIds } from '../../src/store/entry-reads.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { openStore } from '../../src/store/open.js';
@@ -65,7 +66,7 @@ export function inMemoryQuarantineStore(hippoRoot: string): InMemoryQuarantineSt
   const { memories, records } = copyRows(hippoRoot);
   const owned = (tenantId: string, id: string): MemoryEntry | undefined => {
     const entry = memories.get(id);
-    return entry?.tenantId === tenantId ? entry : undefined;
+    return entry?.tenant_id === tenantId ? entry : undefined;
   };
   const pendingOrRefusal = (tenantId: string, id: string): QuarantineRow | QuarantineRefusal => {
     const row = records.find((r) => r.tenantId === tenantId && r.memoryId === id);
@@ -107,7 +108,7 @@ export function inMemoryQuarantineStore(hippoRoot: string): InMemoryQuarantineSt
     ...base.store,
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
-      const found = [...memories.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenantId === tenantId));
+      const found = [...memories.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId));
       return structuredClone(found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)));
     },
     quarantine,

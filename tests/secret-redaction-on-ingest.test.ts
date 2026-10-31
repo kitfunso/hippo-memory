@@ -21,6 +21,7 @@ import { captureError, partitionLessons } from '../src/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { addWorkspace } from '../src/connectors/slack/workspaces.js';
 import { replayDlqEntry } from '../src/connectors/slack/dlq.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // Built at runtime so no token-shaped literal lands in the repo.
 const GHP = 'ghp_' + 'x1Y2z3W4v5'.repeat(3) + 'Q6r7S8';
@@ -158,8 +159,8 @@ describe('connector webhooks', () => {
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
     addWorkspace(root, { teamId: 'T1', tenantId: 'default' });
-    expect((await replayDlqEntry({ hippoRoot: root }, row.id, { signingSecret: SIGNING })).status).toBe('sig_missing');
-    expect((await replayDlqEntry({ hippoRoot: root }, row.id, { force: true })).ok).toBe(true);
+    expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root) }, row.id, { signingSecret: SIGNING })).status).toBe('sig_missing');
+    expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root) }, row.id, { force: true })).ok).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
   });
 
@@ -218,11 +219,11 @@ describe('importers', () => {
     });
   }
 
-  it('vault import stores the note without the token and counts the redaction', () => {
+  it('vault import stores the note without the token and counts the redaction', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-vault-'));
     try {
       fs.writeFileSync(path.join(vault, 'ops.md'), `${line}\n`, 'utf8');
-      const result = importVault(vault, { hippoRoot: root, name: 'notes' });
+      const result = await importVault(vault, { hippoRoot: root, name: 'notes' });
       expect(result.imported).toBe(1);
       expect(result.redacted).toBe(1);
       expect(result.entries[0].content).not.toContain(GHP);

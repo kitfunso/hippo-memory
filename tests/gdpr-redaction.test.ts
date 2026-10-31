@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,9 +10,9 @@ import {
   getSchemaVersion,
   type DatabaseSyncLike,
 } from '../src/db/index.js';
-import type { HippoDbContext } from '../src/api/index.js';
 import { remember, archiveRaw, retrieve } from '../src/api/index.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 interface RedactedArchivePayload {
   redacted: boolean;
@@ -95,13 +96,13 @@ describe('GDPR Path A redaction + migration v20', () => {
     }
   });
 
-  it('2. fresh archive Path A: payload_json is metadata-only (no original content)', () => {
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'tenant-A', actor: { subject: 'cli', role: 'admin' } };
-    const { id } = remember(ctx, {
+  it('2. fresh archive Path A: payload_json is metadata-only (no original content)', async () => {
+    const ctx: FullContext = apiCtx(root, 'tenant-A', { subject: 'cli', role: 'admin' });
+    const { id } = await remember(ctx, {
       content: 'a-very-distinctive-secret-string-zylph123',
       kind: 'raw',
     });
-    archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
+    await archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
 
     const db = openHippoDb(root);
     try {
@@ -212,10 +213,10 @@ describe('GDPR Path A redaction + migration v20', () => {
     }
   });
 
-  it('5. audit row preserved: archiveRaw writes audit_log op=archive_raw even though raw_archive is gone', () => {
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'tenant-B', actor: { subject: 'user:42', role: 'admin' } };
-    const { id } = remember(ctx, { content: 'audit-trail-content', kind: 'raw' });
-    archiveRaw(ctx, id, 'compliance test');
+  it('5. audit row preserved: archiveRaw writes audit_log op=archive_raw even though raw_archive is gone', async () => {
+    const ctx: FullContext = apiCtx(root, 'tenant-B', { subject: 'user:42', role: 'admin' });
+    const { id } = await remember(ctx, { content: 'audit-trail-content', kind: 'raw' });
+    await archiveRaw(ctx, id, 'compliance test');
 
     const db = openHippoDb(root);
     try {
@@ -234,15 +235,15 @@ describe('GDPR Path A redaction + migration v20', () => {
   });
 
   it('6. no re-recall after archive: original content text returns 0 results', async () => {
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'tenant-C', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: FullContext = apiCtx(root, 'tenant-C', { subject: 'cli', role: 'admin' });
     const distinctive = 'gdpr-canary-token-quaxle';
-    const { id } = remember(ctx, { content: distinctive, kind: 'raw' });
+    const { id } = await remember(ctx, { content: distinctive, kind: 'raw' });
 
     // Pre-condition: recall finds it.
     const before = await retrieve(ctx, { query: distinctive });
     expect(before.results.some((r) => r.id === id)).toBe(true);
 
-    archiveRaw(ctx, id, 'right-to-be-forgotten');
+    await archiveRaw(ctx, id, 'right-to-be-forgotten');
 
     // Post-condition: gone from recall.
     const after = await retrieve(ctx, { query: distinctive });

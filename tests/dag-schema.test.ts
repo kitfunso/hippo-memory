@@ -23,15 +23,15 @@ describe('schema v13: DAG fields', () => {
     const summary = createMemory('John is a basketball player who trains daily', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
-      dag_level: 2,
+      dagLevel: 2,
     });
     writeEntry(hippoRoot, summary);
 
     const fact = createMemory('John scored 30 points on Jan 2', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     });
     writeEntry(hippoRoot, fact);
 

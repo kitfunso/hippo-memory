@@ -1,4 +1,5 @@
 // The ambient summary describes the whole visible store, not the rows a query or the no-query cap happened to load.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,12 +12,13 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { Layer, _resetLossAversionRatioCacheForTests, type EmotionalValence, type MemoryEntry } from '../src/core/memory.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { getContext, adminActor, type Context } from '../src/api/index.js';
+import { getContext, adminActor } from '../src/api/index.js';
 import { renderAmbientSummary, tallyAmbientEntries, ambientStateFromTallies } from '../src/core/ambient.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let root = '';
 let store = '';
-let ctx: Context;
+let ctx: FullContext;
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hippo-ambient-whole-'));
@@ -25,7 +27,7 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');
   initStore(store);
-  ctx = { hippoRoot: store, tenantId: 'default', actor: adminActor('test') };
+  ctx = apiCtx(store, 'default', adminActor('test'));
 });
 
 afterEach(() => {

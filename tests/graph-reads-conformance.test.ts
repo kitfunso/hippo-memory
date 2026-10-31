@@ -58,7 +58,7 @@ async function readIds(calls: readonly Call[]): Promise<RowIds[]> {
 
 beforeAll(async () => {
   fixture = seedTwoTenants();
-  g = seedGraphRows(fixture.dir);
+  g = await seedGraphRows(fixture.dir);
   const { e } = g;
   newest = {
     entities: [e.anchored, e.shared, e.lone, e.twinOpen, e.twinHeld, e.mine, e.secret, e.spoke2, e.spoke1, e.hub],

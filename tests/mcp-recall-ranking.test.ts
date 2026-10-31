@@ -16,6 +16,7 @@ import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -77,7 +78,7 @@ function seed(config?: StoreConfig): Seeded {
 function call(home: string, args: Record<string, string | number | boolean>, ctx?: Partial<McpContext>): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } },
-    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, ...ctx },
+    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, ...ctx, store: sqliteStore(home) },
   );
 }
 
@@ -231,10 +232,10 @@ describe('MCP hippo_recall ranking', () => {
 
   it('overflowed children of a level-2 summary bring the summary into the tail', async () => {
     const s = track(seed());
-    const parent = add(s, 'SUM', 'rollup summary of the child notes', { dag_level: 2, tags: ['dag-summary'] });
+    const parent = add(s, 'SUM', 'rollup summary of the child notes', { dagLevel: 2, tags: ['dag-summary'] });
     // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
     await withSharedStoreHandles(() => {
-      for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dag_level: 0, dag_parent_id: parent.id });
+      for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dagLevel: 0, dagParentId: parent.id });
       for (let i = 0; i < 60; i++) add(s, `B${i}`, `beta row ${i}`);
     });
     expect(observe(s, textOf(await call(s.home, { query: 'beta', budget: 200 })))).toEqual(EXPECTED.dagOverflow);
@@ -268,7 +269,7 @@ const EXPECTED = {
   tightBudget: {
     ranked: ['SC1', 'L1', 'L2'],
     tail: [],
-    cutoff: 'Showing 3 of 11 candidates; 8 dropped to fit limit.',
+    cutoff: 'Showing 3 of 11 candidates; 8 not shown (rank, budget or limit).',
   },
   explicitScope: {
     ranked: ['SC1', 'SC2'],
@@ -278,7 +279,7 @@ const EXPECTED = {
   continuity: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1'],
     tail: [],
-    cutoff: 'Showing 9 of 11 candidates; 2 dropped to fit limit.',
+    cutoff: 'Showing 9 of 11 candidates; 2 not shown (rank, budget or limit).',
   },
   physicsNoEmbeddings: {
     ranked: ['X1', 'SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
@@ -308,11 +309,11 @@ const EXPECTED = {
   windowEdge: {
     ranked: ['F0', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'W1', 'F10', 'F100', 'F101', 'F102', 'F103', 'F104', 'F105', 'F106', 'F107', 'F108', 'F109', 'F11', 'F110', 'F111'],
     tail: [],
-    cutoff: 'Showing 25 of 213 candidates; 188 dropped to fit limit.',
+    cutoff: 'Showing 25 of 213 candidates; 188 not shown (rank, budget or limit).',
   },
   dagOverflow: {
-    ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13'],
+    ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12'],
     tail: ['SUM'],
-    cutoff: 'Showing 14 of 63 candidates; 49 dropped to fit limit; 1 summary substitutions added.',
+    cutoff: 'Showing 13 of 63 candidates; 50 not shown (rank, budget or limit); 1 summary substitutions added.',
   },
 } satisfies Record<string, Observed>;

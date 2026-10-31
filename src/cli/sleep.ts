@@ -19,7 +19,8 @@ import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
 export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
-  // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the SessionStart hook can re-display the output.
+  // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the SessionStart hook can
+  // re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;
   let restoreStdout: (() => void) | null = null;
   if (logFile) {
@@ -59,7 +60,9 @@ function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
     const parts = [
       r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
       r.folds.length > 0 ? `folded ${r.folds.map((f) => `${f.from} into ${f.into}`).join(', ')}` : '',
-      r.toProject.length + r.setAside.length > 0 ? `re-tagged ${r.toProject.length + r.setAside.length} merged memories` : '',
+      r.toProject.length + r.setAside.length > 0
+        ? `re-tagged ${r.toProject.length + r.setAside.length} merged memories`
+        : '',
     ].filter((p) => p !== '');
     console.log(`Repaired project tags once after the upgrade: ${parts.join('; ')} (backup: ${r.backup}).`);
   } catch (err) {
@@ -67,22 +70,19 @@ function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
   }
 }
 
-async function cmdSleepCore(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags
-): Promise<void> {
-  requireInit(hippoRoot);
-
+async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
   // Stays in cli.ts; api.sleep covers Phase 2-6 only.
   const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
   if (learn && flags['dry-run']) {
-    console.log("Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` previews those).");
+    console.log(
+      "Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` " +
+      "previews those).",
+    );
   } else if (learn) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
-      const { added } = learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
+      const { added } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
     }
 
@@ -96,13 +96,27 @@ async function cmdSleepCore(
 
     printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }), '');
   }
+}
+
+async function cmdSleepCore(
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags
+): Promise<void> {
+  requireInit(hippoRoot);
+
+  await learnBeforeSleep(hippoRoot, tenantId, flags);
 
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
   if (!flags['dry-run']) {
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
-    if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
+    if (finished > 0) {
+      console.log(
+        `Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`,
+      );
+    }
     repairProjectTagsOnce(hippoRoot, tenantId);
-    repairQualityOnceAt(hippoRoot, tenantId);
+    await repairQualityOnceAt(hippoRoot, tenantId);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).

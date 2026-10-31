@@ -27,7 +27,8 @@ export interface SupportBundleOpts extends DoctorOpts {
 const TAIL_MAX_BYTES = 256 * 1024;
 export const TAIL_MAX_LINES = 200;
 const TAIL_MAX_LINE_CHARS = 2000;
-// Greedy on purpose: complete key blocks are redacted first, so any END left is an orphan and what precedes it may be key body.
+// Greedy on purpose: complete key blocks are redacted first, so any END left is an orphan and what precedes it may be
+// key body.
 const ORPHAN_KEY_END_RE = /^[\s\S]*-----END [A-Z ]*PRIVATE KEY-----/;
 
 // The other env vars hippo reads outside the HIPPO_ prefix (src/embeddings/provider.ts, connectors/*).
@@ -195,7 +196,9 @@ function collectHomeAliases(home: string, probes: readonly string[]): Set<string
 
   // The alias (e.g. a short-name temp root) can sit above the probe itself, so walk ancestors and
   // compare native realpaths rather than checking each probe alone.
-  const homeKeys = new Set([nativeRealPathKey(home), nativeRealPathKey(os.homedir())].filter((k): k is string => k !== null));
+  const homeKeys = new Set(
+    [nativeRealPathKey(home), nativeRealPathKey(os.homedir())].filter((k): k is string => k !== null),
+  );
   for (const probe of probes) {
     let dir = path.resolve(probe);
     for (;;) {
@@ -222,7 +225,8 @@ const HOME_SPELLINGS: readonly ((p: string) => string)[] = [
   (p) => p.replace(/[^A-Za-z0-9]/g, '-'),
 ];
 
-// Git Bash, Cygwin and WSL mount a drive at /c, /cygdrive/c and /mnt/c; a Claude Code folder name writes each / and : as -.
+// Git Bash, Cygwin and WSL mount a drive at /c, /cygdrive/c and /mnt/c; a Claude Code folder name writes each / and :
+// as -.
 function mountedDrive(letter: string): string {
   return `(?:${letter}[:-]|(?:[-/](?:cygdrive|mnt))?[-/]${letter})`;
 }
@@ -231,7 +235,8 @@ function mountedDrive(letter: string): string {
 function spellingPattern(spelling: string, deep: boolean): string | null {
   if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegex(spelling) : null;
   // Each tool that mounts a drive writes it its own way, so a home two or more folders below its drive (\Users\<name>)
-  // matches after any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap with it.
+  // matches after any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap
+  // with it.
   const drive = /^([A-Za-z])[:-]/.exec(spelling);
   const below = drive === null ? spelling : spelling.slice(2);
   const body = below.split(/[\\/]+/).map(escapeRegex).join('[\\\\/]+');
@@ -240,7 +245,8 @@ function spellingPattern(spelling: string, deep: boolean): string | null {
     return deep ? body : `(?<![\\p{L}\\p{N}_])${body}`;
   }
   if (deep) return `${mountedDrive(drive[1])}?${body}`;
-  // One folder (C:\x, D:\home) is a name any path may hold, so it swaps only after its drive and as a whole name; a drive
+  // One folder (C:\x, D:\home) is a name any path may hold, so it swaps only after its drive and as a whole name; a
+  // drive
   // root swaps nothing.
   return /[^\\/-]/.test(below) ? `(?<![\\p{L}\\p{N}_])${mountedDrive(drive[1])}${body}` : null;
 }
@@ -317,7 +323,8 @@ export function buildSupportBundle(opts: SupportBundleOpts): JsonObject {
     env: listSetEnvNames(),
     logs: buildLogsSection(opts),
   };
-  // Store paths found from the working folder arrive resolved; the global root arrives as HIPPO_HOME was typed, and log lines
+  // Store paths found from the working folder arrive resolved; the global root arrives as HIPPO_HOME was typed, and log
+  // lines
   // often quote the temp folder, which usually sits under the home.
   const redacted = redactStrings(bundle, buildHomePattern(opts.home, [getGlobalRoot(), os.tmpdir()]));
   // SAFETY: the value built above is always a JsonObject; redactStrings preserves object shape.

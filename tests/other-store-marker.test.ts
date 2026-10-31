@@ -1,5 +1,5 @@
 // A hippo root holding the other-store marker refuses every hippo.db open, from the CLI as from a request, and never creates the file.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,7 @@ import {
 } from '../src/db/index.js';
 import { repairAutomaticMemories } from '../src/store/quality-repair.js';
 import * as serverEntry from '../src/server.js';
+import * as storeKit from '../src/entry/store-kit.js';
 import { initStore } from '../src/store/open.js';
 
 const CLI = join(dirname(dirname(fileURLToPath(import.meta.url))), 'dist', 'cli.js');
@@ -88,6 +89,20 @@ describe('the other-store marker', () => {
     expect(dbFiles()).toEqual([]);
   });
 
+  it('tells an unreadable marker at warn, with the error class', () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      mkdirSync(marker);
+      refusal(() => openHippoDb(root));
+      const told = stderr.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('is unreadable'));
+      expect(told).toHaveLength(1);
+      expect(told[0]).toContain('[hippo] warn: ');
+      expect(told[0]).toContain('errorClass=Error');
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
   it('without a marker, both opens work as before', () => {
     closeHippoDb(openHippoDb(root));
     closeHippoDb(openHippoDbReadOnly(root));
@@ -108,10 +123,12 @@ describe('the other-store marker', () => {
     expect(readdirSync(root)).toEqual([OTHER_STORE_MARKER]);
   });
 
-  it('the server entry exports what store copy needs', () => {
-    expect(serverEntry.OTHER_STORE_MARKER).toBe(OTHER_STORE_MARKER);
-    expect(serverEntry.OtherStoreFolderError).toBe(OtherStoreFolderError);
-    expect(serverEntry.withSqliteAllowed).toBe(withSqliteAllowed);
+  it('the store-kit entry exports the marker name and no entry exports the waiver', () => {
+    expect(storeKit.OTHER_STORE_MARKER).toBe(OTHER_STORE_MARKER);
+    for (const entry of [serverEntry, storeKit]) {
+      expect('OtherStoreFolderError' in entry).toBe(false);
+      expect('withSqliteAllowed' in entry).toBe(false);
+    }
   });
 
   it('quality repair, which opens hippo.db itself to skip migrations, refuses and takes no backup', () => {

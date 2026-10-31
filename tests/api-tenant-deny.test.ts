@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { remember, forget, archiveRaw } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function selectRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: T is pinned by each call site to the exact column list of the
@@ -33,21 +34,20 @@ describe('api tenant deny — archiveRaw and forget', () => {
     try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 
-  it('archiveRaw refuses to archive a row that belongs to another tenant', () => {
+  it('archiveRaw refuses to archive a row that belongs to another tenant', async () => {
     // Tenant A creates a kind='raw' memory.
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+    const created = await remember(
+      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
       { content: 'raw-row-from-alpha tenant-deny canary', kind: 'raw' },
     );
 
     // Tenant B (bravo) tries to archive it. Should fail with not-found.
-    expect(() =>
-      archiveRaw(
-        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
+    await expect(archiveRaw(
+        apiCtx(home, 'bravo', { subject: 'api_key:bravo-key', role: 'admin' }),
         created.id,
         'cross-tenant probe',
       ),
-    ).toThrow(/memory not found/i);
+    ).rejects.toThrow(/memory not found/i);
 
     // Original row must still exist with its kind intact.
     const db = openHippoDb(home);
@@ -63,20 +63,19 @@ describe('api tenant deny — archiveRaw and forget', () => {
     }
   });
 
-  it('forget refuses to delete a row that belongs to another tenant', () => {
+  it('forget refuses to delete a row that belongs to another tenant', async () => {
     // Tenant A creates a kind='distilled' memory.
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+    const created = await remember(
+      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
       { content: 'distilled-row-from-alpha tenant-deny canary', kind: 'distilled' },
     );
 
     // Tenant B tries to forget it.
-    expect(() =>
-      forget(
-        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
+    await expect(forget(
+        apiCtx(home, 'bravo', { subject: 'api_key:bravo-key', role: 'admin' }),
         created.id,
       ),
-    ).toThrow(/memory not found/i);
+    ).rejects.toThrow(/memory not found/i);
 
     // Original row must still exist.
     const db = openHippoDb(home);
@@ -91,13 +90,13 @@ describe('api tenant deny — archiveRaw and forget', () => {
     }
   });
 
-  it('forget still works for the owning tenant', () => {
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+  it('forget still works for the owning tenant', async () => {
+    const created = await remember(
+      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
       { content: 'owning-tenant forget happy-path' },
     );
-    const result = forget(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+    const result = await forget(
+      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
       created.id,
     );
     expect(result.ok).toBe(true);

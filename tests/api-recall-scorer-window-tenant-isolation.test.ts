@@ -8,19 +8,20 @@
  * `result.total` (misleading metadata — we want the actual rows checked).
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { retrieve, type Context } from '../src/api/index.js';
-import { _forceLikePathForTests } from '../src/store/search-rows.js';
+import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string, tenantId: string): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:tenant-iso', role: 'admin' } };
+function ctxFor(root: string, tenantId: string): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:tenant-iso', role: 'admin' });
 }
 function makeRaw(text: string, tenantId: string): MemoryEntry {
   return createMemory(text, {
@@ -41,7 +42,7 @@ describe('scorerWindow tenant isolation', () => {
   // (no-terms, FTS, LIKE fallback, full-store fallback). Cover three of the
   // four explicitly via the recall path: the FTS branch (terms match), the
   // no-terms branch (empty query), and the LIKE-fallback branch
-  // (the _forceLikePathForTests switch). The full-store fallback fires only when
+  // (a part-word query FTS5 tokens miss). The full-store fallback fires only when
   // both FTS and LIKE return zero rows on terms — exotic enough that the
   // shared SQL builder is the relevant unit.
 
@@ -86,23 +87,18 @@ describe('scorerWindow tenant isolation', () => {
     }
   });
 
-  it('LIKE-fallback path: the forced LIKE route keeps tenant isolation', async () => {
+  it('LIKE-fallback path: a part-word query keeps tenant isolation', async () => {
     const N = 5;
     const tenantAIds = seedTwoTenants(N);
-    try {
-      _forceLikePathForTests(true);
-      const result = await retrieve(ctxFor(root, 'tenant-a'), {
-        query: 'kappa',
-        limit: 100,
-        scorerWindow: N + 5,
-      });
-      expect(result.results.length).toBe(N);
-      for (const r of result.results) {
-        expect(tenantAIds.has(r.id)).toBe(true);
-        expect(r.content).not.toContain('B-');
-      }
-    } finally {
-      _forceLikePathForTests(false);
+    const result = await retrieve(ctxFor(root, 'tenant-a'), {
+      query: 'kapp',
+      limit: 100,
+      scorerWindow: N + 5,
+    });
+    expect(result.results.length).toBe(N);
+    for (const r of result.results) {
+      expect(tenantAIds.has(r.id)).toBe(true);
+      expect(r.content).not.toContain('B-');
     }
   });
 });

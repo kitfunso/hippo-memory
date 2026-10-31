@@ -1,9 +1,10 @@
 // A personal write lands in the caller's own scope with origin '', and no client, vault or CLI can type a personal scope.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { remember, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { remember, type Actor } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { createApiKey } from '../src/store/auth.js';
 import { handleRemember } from '../src/cli/remember.js';
@@ -14,21 +15,22 @@ import type { JsonValue } from '../src/util/json.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NO_OWNER_TEXT = 'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
 
 let root: string;
 
-function ctxFor(actor: Actor): HippoDbContext {
-  return { hippoRoot: root, tenantId: 'default', actor };
+function ctxFor(actor: Actor): FullContext {
+  return apiCtx(root, 'default', actor);
 }
 
 const ownerA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 
 /** Status and message the HTTP layer would answer with for a refused call. */
-function refusal(fn: () => void): { status: number; message: string } {
+async function refusal(fn: () => void): Promise<{ status: number; message: string }> {
   try {
-    fn();
+    await fn();
   } catch (err) {
     return mapApiError(err);
   }
@@ -44,15 +46,15 @@ afterEach(() => {
 });
 
 describe('remember with personal', () => {
-  it('stamps the owner\'s scope and origin \'\' even when the caller names a project', () => {
-    const { id } = remember(ctxFor(ownerA), { content: 'my editor keybindings live in dotfiles', personal: true, project: { name: 'alpha' } });
+  it('stamps the owner\'s scope and origin \'\' even when the caller names a project', async () => {
+    const { id } = await remember(ctxFor(ownerA), { content: 'my editor keybindings live in dotfiles', personal: true, project: { name: 'alpha' } });
     const row = readEntry(root, id, 'default');
     expect(row?.scope).toBe('personal:private:a');
     expect(row?.origin_project).toBe('');
   });
 
-  it('a team write with the same project still stamps that project, so the personal branch is what drops it', () => {
-    const { id } = remember(ctxFor(ownerA), { content: 'the alpha build runs on node 22', project: { name: 'alpha' } });
+  it('a team write with the same project still stamps that project, so the personal branch is what drops it', async () => {
+    const { id } = await remember(ctxFor(ownerA), { content: 'the alpha build runs on node 22', project: { name: 'alpha' } });
     const row = readEntry(root, id, 'default');
     expect(row?.scope).toBeNull();
     expect(row?.origin_project).toBe('alpha');
@@ -64,50 +66,50 @@ describe('remember with personal', () => {
     ['a 240-character owner', { subject: 'api_key:hk_l', role: 'member', owner: 'x'.repeat(240) }],
     ['a control character in the owner', { subject: 'api_key:hk_c', role: 'member', owner: 'a\u0007b' }],
   ];
-  it.each(ownerless)('%s gets a 400 and stores nothing', (_label, actor) => {
-    expect(refusal(() => remember(ctxFor(actor), { content: 'note for later', personal: true }))).toEqual({ status: 400, message: NO_OWNER_TEXT });
+  it.each(ownerless)('%s gets a 400 and stores nothing', async (_label, actor) => {
+    expect(await refusal(() => remember(ctxFor(actor), { content: 'note for later', personal: true }))).toEqual({ status: 400, message: NO_OWNER_TEXT });
     expect(loadAllEntries(root)).toHaveLength(0);
   });
 
-  it('a 239-character owner fits', () => {
+  it('a 239-character owner fits', async () => {
     const owner = 'y'.repeat(239);
-    const { id } = remember(ctxFor({ subject: 'api_key:hk_y', role: 'member', owner }), { content: 'longest owner note', personal: true });
+    const { id } = await remember(ctxFor({ subject: 'api_key:hk_y', role: 'member', owner }), { content: 'longest owner note', personal: true });
     expect(readEntry(root, id, 'default')?.scope).toBe(`personal:private:${owner}`);
   });
 
-  it('personal with a scope is a 400', () => {
-    expect(refusal(() => remember(ctxFor(ownerA), { content: 'note', personal: true, scope: 'team' })))
+  it('personal with a scope is a 400', async () => {
+    expect(await refusal(() => remember(ctxFor(ownerA), { content: 'note', personal: true, scope: 'team' })))
       .toEqual({ status: 400, message: 'send personal or scope, not both' });
     expect(loadAllEntries(root)).toHaveLength(0);
   });
 
-  it('personal with untrusted throws a plain error, never a quarantine row', () => {
-    const fn = (): void => { remember(ctxFor(ownerA), { content: 'note', personal: true, untrusted: true }); };
-    expect(fn).toThrow(Error);
-    expect(refusal(fn).status).toBe(500);
+  it('personal with untrusted throws a plain error, never a quarantine row', async () => {
+    const fn = async (): Promise<void> => { await remember(ctxFor(ownerA), { content: 'note', personal: true, untrusted: true }); };
+    await expect(Promise.resolve().then(fn)).rejects.toThrow(Error);
+    expect((await refusal(fn)).status).toBe(500);
     expect(loadAllEntries(root)).toHaveLength(0);
   });
 });
 
 describe('client scopes', () => {
-  it.each(['personal:private:b', 'Personal:x'])('remember refuses %s with a 400', (scope) => {
-    expect(refusal(() => remember(ctxFor(ownerA), { content: 'note', scope })).status).toBe(400);
+  it.each(['personal:private:b', 'Personal:x'])('remember refuses %s with a 400', async (scope) => {
+    expect((await refusal(() => remember(ctxFor(ownerA), { content: 'note', scope }))).status).toBe(400);
     expect(loadAllEntries(root)).toHaveLength(0);
   });
 
-  it('a connector scope still passes', () => {
-    const { id } = remember(ctxFor(ownerA), { content: 'channel note', scope: 'slack:private:C1' });
+  it('a connector scope still passes', async () => {
+    const { id } = await remember(ctxFor(ownerA), { content: 'channel note', scope: 'slack:private:C1' });
     expect(readEntry(root, id, 'default')?.scope).toBe('slack:private:C1');
   });
 
-  it('vault import refuses a personal scope before reading a note', () => {
+  it('vault import refuses a personal scope before reading a note', async () => {
     const vault = mkdtempSync(join(tmpdir(), 'hippo-personal-vault-'));
     try {
       writeFileSync(join(vault, 'note.md'), '# note\nsome vault text\n');
-      expect(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'personal:private:b' })).toThrow(BadRequestError);
-      expect(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'PERSONAL:x' })).toThrow(BadRequestError);
+      await expect(importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'personal:private:b' })).rejects.toThrow(BadRequestError);
+      await expect(importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'PERSONAL:x' })).rejects.toThrow(BadRequestError);
       expect(loadAllEntries(root)).toHaveLength(0);
-      importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'vault:private:v' });
+      await importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'vault:private:v' });
       expect(loadAllEntries(root).map((e) => e.scope)).toEqual(['vault:private:v']);
     } finally {
       rmSync(vault, { recursive: true, force: true });

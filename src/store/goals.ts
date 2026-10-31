@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
+import { placeholders } from '../util/sql.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
@@ -87,8 +88,8 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
   });
 }
 
-/** Depth-cap enforcer for pushGoalWithDb and resumeGoal: suspends the oldest `overflow` goals; **caller MUST be inside a `BEGIN IMMEDIATE` transaction**.
- * @internal Internal goal-stack invariant. Subject to change. */
+/** Depth-cap enforcer for pushGoalWithDb and resumeGoal: suspends the oldest `overflow` goals; **caller MUST be inside
+ * a `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack invariant. Subject to change. */
 function enforceDepthCapWithinTx(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -204,12 +205,6 @@ export interface GetActiveGoalsOpts {
   tenantId: string;
 }
 
-export function getActiveGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goal[] {
-  return onHandle(hippoRoot, (db) => {
-    return getActiveGoalsWithDb(db, opts);
-  });
-}
-
 /** A session's active goals, oldest first, and the retrieval policy of each goal that names one. */
 export interface ActiveGoals {
   readonly goals: Goal[];
@@ -262,7 +257,8 @@ export interface GoalRecallLogRow {
   score: number;
 }
 
-// Per-goal retrieval_policy multipliers compose onto the base goal-tag boost and are hard-capped at MAX_FINAL_MULTIPLIER (3.0x) before scoring.
+// Per-goal retrieval_policy multipliers compose onto the base goal-tag boost and are hard-capped at
+// MAX_FINAL_MULTIPLIER (3.0x) before scoring.
 function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   const policyIds = [...new Set(active.flatMap((g) => (g.retrievalPolicyId ? [g.retrievalPolicyId] : [])))];
@@ -270,7 +266,7 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
   // SAFETY: the SELECT projects exactly these seven retrieval_policy columns; MAX_ACTIVE_GOAL_DEPTH bounds the IN list.
   const rows = db.prepare(`
     SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
-    FROM retrieval_policy WHERE id IN (${policyIds.map(() => '?').join(',')})
+    FROM retrieval_policy WHERE id IN (${placeholders(policyIds.length)})
   `).all(...policyIds) as Array<{
     id: string;
     goal_id: string;
@@ -303,12 +299,15 @@ export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRec
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.memoryId))];
   // SAFETY: the SELECT projects exactly one column, `id`, from memories.
-  const local = db.prepare(`SELECT id FROM memories WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Array<{ id: string }>;
+  const local = db.prepare(`SELECT id FROM memories WHERE id IN (${placeholders(ids.length)})`).all(...ids) as Array<{
+    id: string;
+  }>;
   const localIds = new Set(local.map((r) => r.id));
   return rows.filter((r) => localIds.has(r.memoryId));
 }
 
-/** INSERT OR IGNORE: UNIQUE(memory_id, goal_id) makes a re-recall during the same goal life a no-op for outcome attribution. */
+/** INSERT OR IGNORE: UNIQUE(memory_id, goal_id) makes a re-recall during the same goal life a no-op for outcome
+ * attribution. */
 export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): void {
   if (rows.length === 0) return;
   const insertLog = db.prepare(`
@@ -328,8 +327,9 @@ const STRENGTH_DECAY = 0.85;
 
 export interface CompleteGoalOpts {
   outcomeScore?: number;
-  /** When true, skip the strength-multiplier propagation (default false); status still goes to 'completed' and `outcome_score` is still recorded.
-   * The idempotency guard returns early on a second `completeGoal` call before this flag is read. */
+  /** When true, skip the strength-multiplier propagation (default false); status still goes to 'completed' and
+   * `outcome_score` is still recorded. The idempotency guard returns early on a second `completeGoal` call before this
+   * flag is read. */
   noPropagate?: boolean;
 }
 
@@ -362,7 +362,8 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
         else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
 
         if (multiplier !== 1) {
-          // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one adjustment per pair.
+          // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one
+          // adjustment per pair.
           db.prepare(`
             UPDATE memories
             SET strength = MIN(1.0, MAX(0.0, strength * ?))

@@ -70,7 +70,17 @@ interface Draft {
 export function planContainer(input: PlanInput): ContainerPlan {
   const live = groupByKey(input.live);
   const dormant = groupByKey(input.dormant);
-  const draft: Draft = { unchanged: 0, retag: [], collapse: [], writes: [], fresh: [], restores: [], setAside: [], duplicates: 0, refused: 0 };
+  const draft: Draft = {
+    unchanged: 0,
+    retag: [],
+    collapse: [],
+    writes: [],
+    fresh: [],
+    restores: [],
+    setAside: [],
+    duplicates: 0,
+    refused: 0,
+  };
   for (const item of input.items) planItem(input, item, live.get(item.key) ?? [], dormant.get(item.key) ?? [], draft);
 
   const read = new Set([...input.items.map((i) => i.key), ...input.skipped]);
@@ -86,7 +96,13 @@ export function planContainer(input: PlanInput): ContainerPlan {
   return { ...plan, writes: [...plan.writes, ...fresh] };
 }
 
-function planItem(input: PlanInput, item: PlanItem, rows: readonly LiveRow[], snaps: readonly DormantRow[], draft: Draft): void {
+function planItem(
+  input: PlanInput,
+  item: PlanItem,
+  rows: readonly LiveRow[],
+  snaps: readonly DormantRow[],
+  draft: Draft,
+): void {
   const tagged = rows.filter((r) => r.tagged);
   if (item.refused) {
     draft.refused++;

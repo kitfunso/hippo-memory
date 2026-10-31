@@ -1,6 +1,7 @@
 import { envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
-import { verifyGitHubSignature } from './signature.js';
+import { DAY_MS } from '../../util/time.js';
+import { isWellFormedGitHubSignature, verifyGitHubSignature } from './signature.js';
 import {
   isGitHubWebhookEnvelope,
   isGitHubIssueEvent,
@@ -16,8 +17,8 @@ import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import { resolveTenantId } from '../../store/tenant.js';
-import type { Context } from '../../api/index.js';
-import type { HippoStore } from '../../store/index.js';
+import type { ConnectorContext } from '../store.js';
+import type { ConnectorStore } from '../store.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -29,10 +30,20 @@ import {
 } from '../../util/http-util.js';
 import type { JsonValue } from '../../util/json.js';
 
-/** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by installation.id then repository.full_name.
- *  ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 409 on a delivery id seen in the replay window;
- *  404 when GITHUB_WEBHOOK_SECRET is unset. No Bearer: its route row declares webhook-signature. */
-export async function handleGitHubEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
+/** Reads the raw body and refuses it unless the signature matches the current or the previous secret. */
+async function readSignedBody(request: WebhookRequest, secret: string, sigStr: string): Promise<string> {
+  const rawBody = await readWebhookBody(request);
+  const previousSecret = envGitHubWebhookSecretPrevious();
+  if (!verifyGitHubSignature({ rawBody, signature: sigStr, webhookSecret: secret, previousSecret })) {
+    throw new HttpError(401, 'invalid GitHub signature');
+  }
+  return rawBody;
+}
+
+/** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
+ *  installation.id then repository.full_name. ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature;
+ *  409 on a replayed delivery id; 404 if GITHUB_WEBHOOK_SECRET is unset. No Bearer: route auth is webhook-signature. */
+export async function handleGitHubEventsWebhook(request: WebhookRequest, store: ConnectorStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
   const secret = envGitHubWebhookSecret();
@@ -42,7 +53,6 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store?:
     res.end(JSON.stringify({ error: 'not found' }));
     return;
   }
-  const previousSecret = envGitHubWebhookSecretPrevious();
   const sigHdr = req.headers['x-hub-signature-256'];
   const eventHdr = req.headers['x-github-event'];
   const deliveryHdr = req.headers['x-github-delivery'];
@@ -50,28 +60,28 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store?:
   const eventName = isHeaderString(eventHdr) ? eventHdr : null;
   const deliveryId = isHeaderString(deliveryHdr) ? deliveryHdr : null;
 
-  if (sigStr === null) {
+  if (sigStr === null || !isWellFormedGitHubSignature(sigStr)) {
     closeIfBodyUnread(request);
     throw new HttpError(401, 'invalid GitHub signature');
   }
-  const rawBody = await readWebhookBody(request);
-  if (
-    !verifyGitHubSignature({
-      rawBody,
-      signature: sigStr,
-      webhookSecret: secret,
-      previousSecret,
-    })
-  ) {
-    throw new HttpError(401, 'invalid GitHub signature');
-  }
+  const rawBody = await readSignedBody(request, secret, sigStr);
 
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go
   // to the DLQ and a human can replay later.
   const replayKey = deliveryId === null ? null : `${opts.hippoRoot}\n${deliveryId}`;
-  if (replayKey !== null && !claimDelivery(replayKey, Date.now())) throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+  if (replayKey !== null && !claimDelivery(replayKey, Date.now())) {
+    throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+  }
   try {
-    await routeSignedDelivery({ hippoRoot: opts.hippoRoot, store, res, rawBody, eventName, deliveryId, signature: sigStr });
+    await routeSignedDelivery({
+      hippoRoot: opts.hippoRoot,
+      store,
+      res,
+      rawBody,
+      eventName,
+      deliveryId,
+      signature: sigStr,
+    });
   } catch (err) {
     // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get through.
     if (replayKey !== null) seenDeliveries.delete(replayKey);
@@ -80,12 +90,14 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store?:
 }
 
 // GitHub signs no timestamp, so a captured delivery verifies forever; this window is what refuses its replay.
-const DELIVERY_REPLAY_TTL_MS = 24 * 60 * 60 * 1000;
+const DELIVERY_REPLAY_TTL_MS = DAY_MS;
 const DELIVERY_REPLAY_MAX_IDS = 10_000;
-// SHORTCUT: seen ids live in this process and reset on restart or eviction; move them to the store if serve ever runs as several processes.
+// A fast path only: the durable dedupe is the connector event log's content-derived idempotency key (ingest.ts, and the
+// deletion key below), so a replay after a restart or an eviction is a stored 'duplicate' with no new rows.
 const seenDeliveries = new Map<string, number>();
 
-/** Claims a delivery id for the window; false when it was claimed within the window already. The oldest claim goes first at the cap. */
+/** Claims a delivery id for the window; false when it was claimed within the window already. The oldest claim goes
+ * first at the cap. */
 function claimDelivery(key: string, now: number): boolean {
   const seenAt = seenDeliveries.get(key);
   if (seenAt !== undefined && now - seenAt < DELIVERY_REPLAY_TTL_MS) return false;
@@ -110,7 +122,7 @@ type SignedEnvelope = JsonValue & GitHubWebhookEnvelope;
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
 interface SignedDelivery {
   hippoRoot: string;
-  store?: HippoStore;
+  store: ConnectorStore;
   res: ServerResponse;
   rawBody: string;
   eventName: string | null;
@@ -138,7 +150,7 @@ async function parkAndAck(
     installationId: park.installationId,
     repoFullName: park.repoFullName,
   };
-  await parkInDlq(githubDlq, d.hippoRoot, row, d.store);
+  await parkInDlq(githubDlq, d.store, row);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
@@ -153,7 +165,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
 
   // Tenant resolution. Fail closed on multi-tenant installs with unknown
   // routing - same policy as Slack.
-  const resolvedTenant = await resolveTenantForGitHub(d.hippoRoot, routing, d.store);
+  const resolvedTenant = await resolveTenantForGitHub(d.store, routing);
   if (resolvedTenant === null) {
     await parkAndAck(d, {
       ...routing,
@@ -164,7 +176,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     return;
   }
 
-  const ctx: Context = {
+  const ctx: ConnectorContext = {
     hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:github', role: 'admin' },
@@ -233,7 +245,7 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
 /** Ingests, archives or parks by event header; false when no guard matched the body. */
 async function dispatchGitHubEvent(
   d: SignedDelivery,
-  ctx: Context,
+  ctx: ConnectorContext,
   body: SignedEnvelope,
   deliveryId: string,
   routing: DlqRouting,
@@ -242,7 +254,8 @@ async function dispatchGitHubEvent(
   if (action === null) return false;
 
   if (action.kind === 'manual-review') {
-    // issues.deleted (admin-initiated) is logged, not archived: archiving could lose the memory if the issue moves between accounts.
+    // issues.deleted (admin-initiated) is logged, not archived: archiving
+    // could lose the memory if the issue moves between accounts.
     await parkAndAck(d, {
       ...routing,
       tenantId: ctx.tenantId,

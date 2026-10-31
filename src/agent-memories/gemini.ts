@@ -96,7 +96,11 @@ function findEntry(projects: JsonObject, target: string, platform: NodeJS.Platfo
   return Object.entries(projects).find(([key]) => path.isAbsolute(key) && fold(key, platform) === want);
 }
 
-function topEntry(projects: JsonObject, projectRoot: string, platform: NodeJS.Platform): [string, JsonValue] | undefined {
+function topEntry(
+  projects: JsonObject,
+  projectRoot: string,
+  platform: NodeJS.Platform,
+): [string, JsonValue] | undefined {
   const top = gitLayout(projectRoot)?.top;
   return top === undefined ? undefined : findEntry(projects, top, platform);
 }

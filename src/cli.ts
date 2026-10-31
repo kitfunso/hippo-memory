@@ -13,20 +13,26 @@ import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { STORE_BUSY_MESSAGE } from './store/port.js';
-import { isStoreBusy } from './store/sqlite/busy.js';
+import { isStoreBusy } from './api/busy.js';
 import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
-import { USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
+import {
+  USAGE_HEADER,
+  USAGE_EXAMPLES,
+  printAuditPruneUsage,
+  printSlackBackfillUsage,
+  printSlackWorkspacesUsage,
+} from './cli/usage.js';
 import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';
 import { COMMANDS } from './cli/verbs.js';
 import type { VerbSpec } from './cli/verb-row.js';
-import { CliExit } from './cli/exit.js';
-
-// Helpers
+import { CliExit, fail } from './cli/exit.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
   const only = spec?.dryRun;
-  const honoured = only === undefined ? spec?.flags.switches?.includes('dry-run') : only !== false && only.honoured(args, flags);
+  const honoured = only === undefined
+    ? spec?.flags.switches?.includes('dry-run')
+    : only !== false && only.honoured(args, flags);
   if (honoured) return null;
   const where = only ? ` outside \`hippo ${command} ${only.form}\`` : '';
   return `hippo ${command} has no --dry-run${where}, so it would run for real. Nothing was changed.`;
@@ -61,7 +67,6 @@ function setSeparatedFlag(flags: CliFlags, key: string, next: string | undefined
     return 2;
   }
   if (!next || next.startsWith('--') || kind === 'switch') {
-    // Boolean flag
     flags[key] = true;
     return 1;
   }
@@ -107,9 +112,7 @@ export function parseArgs(argv: string[]) {
 
 export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliFlags): boolean {
   if (envSkipAutoIntegrations()) return false;
-  if (!['context', 'remember', 'recall', 'sleep', 'capture', 'outcome', 'status', 'init'].includes(currentCommand)) {
-    return false;
-  }
+  if (!COMMAND_INDEX.get(currentCommand)?.repairsCodexWrapper) return false;
   if (currentCommand === 'init' && flagIsTrue(flags, 'no-hooks')) return false;
   return true;
 }
@@ -121,7 +124,7 @@ function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void 
   try {
     repairCodexWrapperIfInstalled();
   } catch (err) {
-    log.debug(`codex wrapper not repaired: ${errorMessage(err)}`);
+    log.debug(`codex wrapper not repaired: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -162,8 +165,6 @@ function printHelp(command: string, args: string[]): void {
   else console.log(verbUsage(command) ?? usageText());
 }
 
-// Entry point
-
 function printVersion(): never {
   const __filename_local = fileURLToPath(import.meta.url);
   const __dirname_local = path.dirname(__filename_local);
@@ -178,8 +179,7 @@ function printVersion(): never {
  *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
 function rejectEmptyScope(flags: CliFlags): void {
   if ('scope' in flags && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
-    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
-    throw new CliExit(1);
+    fail('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
   }
 }
 
@@ -189,8 +189,7 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) !== 'number') continue;
     if (!isStringFlag(raw) || !raw.trim() || !Number.isFinite(Number(raw))) {
-      printError(`--${key} requires a numeric value.`);
-      throw new CliExit(1);
+      fail(`--${key} requires a numeric value.`);
     }
   }
 }
@@ -200,8 +199,7 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
 function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) === 'switch' && !isBooleanFlag(raw)) {
-      printError(`--${key} takes no value`);
-      throw new CliExit(1);
+      fail(`--${key} takes no value`);
     }
   }
 }
@@ -218,7 +216,9 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
   }
   // main() refuses --dry-run by name on a verb without one, so that flag is not also called ignored.
   const ignored = declared ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run') : unknown;
-  if (ignored.length > 0) printError(`hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`);
+  if (ignored.length > 0) {
+    printError(`hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`);
+  }
 }
 
 async function main(
@@ -254,7 +254,7 @@ async function main(
     throw new CliExit(1);
   }
   const run = (): void | Promise<void> => spec.run({ hippoRoot, tenantId: resolveTenantId({}), args, flags });
-  await (spec.scoped ? (await import('./db/request-stores.js')).runWithRequestStores(run) : run());
+  await (spec.scoped ? (await import('./cli/api-context.js')).cliRequest(run) : run());
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {

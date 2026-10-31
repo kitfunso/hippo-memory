@@ -4,16 +4,16 @@ import { envAnthropicApiKey } from '../util/env.js';
 import { deduplicateStore } from '../consolidate/dedupe.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import { embedCoverage, embedMissingMemories, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
-import { countAllMemories } from '../api/memories.js';
-import { cliApiContext } from './api-context.js';
+import { countAllMemories } from '../api/memories/memories.js';
+import { cliApiContext, cliLocalFiles } from './api-context.js';
 import type * as api from '../api/index.js';
 import { loadConfig } from '../core/config.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
-import { boolFlag, numberFlag, type CommandContext } from './flag-values.js';
+import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const MAX_FAILED_SHOWN = 5;
 const MAX_PAIRS_SHOWN = 15;
@@ -24,14 +24,13 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
 
   const apiKey = envAnthropicApiKey();
   if (!apiKey) {
-    printError('hippo refine needs ANTHROPIC_API_KEY in the environment.');
-    throw new CliExit(1);
+    fail('hippo refine needs ANTHROPIC_API_KEY in the environment.');
   }
 
   const dryRun = boolFlag(flags, 'dry-run');
   const all = boolFlag(flags, 'all');
   const limit = numberFlag(flags, 'limit');
-  const model = flags['model'] ? String(flags['model']) : undefined;
+  const model = stringFlagOrExit(flags, 'model') || undefined;
   const asJson = boolFlag(flags, 'json');
 
   const result = await refineStore(hippoRoot, {
@@ -60,7 +59,7 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
   }
 }
 
-export function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const dryRun = boolFlag(flags, 'dry-run');
@@ -68,10 +67,12 @@ export function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): voi
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
 
-  const total = countAllMemories(cliApiContext(hippoRoot, tenantId));
-  console.log(`Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`);
+  const total = await countAllMemories(cliApiContext(hippoRoot, tenantId));
+  console.log(
+    `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
+  );
 
-  const result = deduplicateStore(hippoRoot, { dryRun });
+  const result = deduplicateStore(cliLocalFiles(hippoRoot).consolidation, { dryRun });
 
   if (result.removed === 0) {
     console.log('No duplicates found.');
@@ -92,7 +93,9 @@ function printDedupGroups(result: DedupResult, dryRun: boolean): void {
 
   console.log(`${dryRun ? 'Would remove' : 'Removed'} ${result.removed} duplicates:`);
   if (sameLayerSem.length > 0) {
-    console.log(`  ${sameLayerSem.length} redundant semantic memories (consolidation regenerated near-identical patterns)`);
+    console.log(
+      `  ${sameLayerSem.length} redundant semantic memories (consolidation regenerated near-identical patterns)`,
+    );
   }
   if (sameLayerEpi.length > 0) {
     console.log(`  ${sameLayerEpi.length} duplicate episodic memories (same lesson learned from multiple sources)`);
@@ -132,8 +135,8 @@ export async function handleEmbed(
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
 
-  // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an earlier embed);
-  // the provider-availability gate is deferred to the embed path.
+  // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an
+  // earlier embed); the provider-availability gate is deferred to the embed path.
   if (flags['reset-physics']) {
     resetPhysics(ctx);
     return;
@@ -164,7 +167,9 @@ export async function handleEmbed(
   const embeddedAfter = new Set(after.vectorIds);
   const unembedded = after.memoryIds.filter((id) => !embeddedAfter.has(id)).length;
   if (unembedded > 0) {
-    printError(`${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`);
+    printError(
+      `${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`,
+    );
     process.exitCode = 1;
   }
 }

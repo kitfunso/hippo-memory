@@ -1,10 +1,13 @@
+import { strengthAblation } from '../core/ablation.js';
 import { type MemoryEntry, markRetrieved } from '../core/memory.js';
 import { type DatabaseSyncLike, closeHippoDb, openHippoDb, withWriteScope } from '../db/index.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
+import { chunked } from '../util/chunked.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { errorMessage, log } from '../util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
+import { appendAuditEvent } from './audit.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
@@ -12,17 +15,48 @@ import { onHandle, openStore } from './open.js';
 
 export interface WriteEntryOptions {
   actor?: string;
-  afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
   /** Runs after the row commits and before the mirrors, on an idle connection; keep it best-effort. */
   afterCommit?: () => void;
 }
 
-/** Write an entry to SQLite and refresh mirrors; `opts.afterWrite` runs in the same SAVEPOINT as the INSERT, so a throw rolls the row back.
- * `opts.actor` defaults to 'cli'; the api layer passes the resolved actor so the audit log gets one row per write. */
+/** Store-side only, never exported from a package entry: `afterWrite` hands the write's own db handle to the hook. */
+export interface WriteEntryInternalOptions extends WriteEntryOptions {
+  /** Runs in the same SAVEPOINT as the INSERT, so a throw rolls the row back. */
+  afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
+}
+
+/** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'; the api layer passes the resolved
+ * actor, so the audit log gets one row per write. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
+  writeEntryWithHook(hippoRoot, entry, opts);
+}
+
+/** writeEntry for store code that needs the write's own handle: `opts.afterWrite` shares the INSERT's SAVEPOINT. */
+function writeEntryWithHook(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryInternalOptions): void {
   onHandle(hippoRoot, (db) => {
     writeEntryOn(db, hippoRoot, entry, opts);
   }, openStore);
+}
+
+/** Writes a promoted copy; with `auditAs` the `promote` audit row joins the INSERT's SAVEPOINT, so both or neither. */
+export function writePromotedEntry(
+  hippoRoot: string,
+  entry: MemoryEntry,
+  opts: { readonly actor?: string; readonly sourceId: string; readonly auditAs?: { tenantId: string; actor: string } },
+): void {
+  const { auditAs, sourceId } = opts;
+  writeEntryWithHook(hippoRoot, entry, {
+    actor: opts.actor,
+    afterWrite: auditAs && ((db, globalId) => {
+      appendAuditEvent(db, {
+        tenantId: auditAs.tenantId,
+        actor: auditAs.actor,
+        op: 'promote',
+        targetId: globalId,
+        metadata: { sourceId },
+      });
+    }),
+  });
 }
 
 /** writeEntry for each of `entries` in one transaction, so all land or none; each
@@ -47,7 +81,8 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
 }
 
 /** Runs `fill` in one transaction; each `put` writes one entry and returns false when the store rejects its value,
- * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were written. */
+ * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were
+ * written. */
 export function writeEntriesSkippingRejected(
   hippoRoot: string,
   fill: (put: (entry: MemoryEntry) => boolean) => void,
@@ -88,7 +123,12 @@ export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readon
 }
 
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
-function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
+function writeEntryOn(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  entry: MemoryEntry,
+  opts?: WriteEntryInternalOptions,
+): void {
   try {
     const stamped = stampOriginProject(hippoRoot, entry);
     writeEntryDbOnly(db, stamped, opts);
@@ -104,15 +144,13 @@ function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntr
   }
 }
 
-/** DB-only write path: upsert, afterWrite hook and audit row inside one withWriteScope; the caller owns `db` and must call `writeEntryMirrors` after any
- * outer tx commits, so a rolled-back tx never leaves orphan markdown. The audit row commits atomically with the INSERT. */
+/** DB-only write path: upsert, afterWrite hook and audit row inside one withWriteScope; the caller owns `db` and must
+ * call `writeEntryMirrors` after any outer tx commits, so a rolled-back tx never leaves orphan markdown. The audit row
+ * commits atomically with the INSERT. */
 export function writeEntryDbOnly(
   db: DatabaseSyncLike,
   entry: MemoryEntry,
-  opts?: {
-    actor?: string;
-    afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
-  },
+  opts?: Pick<WriteEntryInternalOptions, 'actor' | 'afterWrite'>,
 ): void {
   // Inside a caller's transaction (e.g. supersede's BEGIN IMMEDIATE) the scope is a SAVEPOINT,
   // so a throw here rolls back only this write and leaves the outer open.
@@ -125,16 +163,17 @@ export function writeEntryDbOnly(
   });
 }
 
-/** What follows a row's upsert inside its write scope: the remember row, last of the write's audit rows, then the summary parent's dirty mark. */
+/** What follows a row's upsert inside its write scope: the remember row, last of the write's audit rows, then the
+ * summary parent's dirty mark. */
 export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
   audit(db, 'remember', { targetId: entry.id, metadata: {
       kind: entry.kind ?? 'distilled',
       scope: entry.scope ?? null,
-    }, actor, tenantId: entry.tenantId });
+    }, actor, tenantId: entry.tenant_id });
   // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
   // have no parent, so the hot path pays one null check.
   if (entry.dag_parent_id) {
-    markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, actor);
+    markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenant_id, actor);
   }
 }
 
@@ -168,8 +207,13 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], o
   }
 }
 
-/** strengthenRetrieved on an open handle in its own write scope, a savepoint inside a caller's transaction, so a recall's last writes share one handle. */
-export function strengthenRetrievedInOwnTx(db: DatabaseSyncLike, ids: readonly string[], opts: StrengthenOptions): Set<string> {
+/** strengthenRetrieved on an open handle in its own write scope, a savepoint inside a caller's transaction, so a
+ * recall's last writes share one handle. */
+export function strengthenRetrievedInOwnTx(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+  opts: StrengthenOptions,
+): Set<string> {
   if (ids.length === 0 || opts.recallBoostAblated) return new Set();
   try {
     return withWriteScope(db, 'strengthen_retrieved', () => strengthenRetrievedOn(db, ids, opts));
@@ -183,18 +227,29 @@ function warnStrengthenFailed<E>(error: E): void {
   log.warn(`retrieval stats not saved (${errorMessage(error)})`);
 }
 
+/** Rows per recall-write statement: five bound values each, far under SQLite's parameter limit. */
+const RETRIEVAL_UPDATE_CHUNK = 100;
+
 /** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the caller decides. */
-export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string[], opts: StrengthenOptions): Set<string> {
+export function strengthenRetrievedOn(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+  opts: StrengthenOptions,
+): Set<string> {
   const found = new Set<string>();
   if (ids.length === 0 || opts.recallBoostAblated) return found;
   const byId = selectEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
-  const update = db.prepare(
-    'UPDATE memories SET retrieval_count = ?, last_retrieved = ?, half_life_days = ?, strength = ? WHERE id = ?',
-  );
-  for (const e of markRetrieved(live)) {
-    update.run(e.retrieval_count, e.last_retrieved, e.half_life_days, e.strength, e.id);
-    found.add(e.id);
+  const updated = markRetrieved(live, undefined, { ablation: strengthAblation() });
+  // One UPDATE ... FROM per chunk of rows instead of one statement per row.
+  for (const chunk of chunked(updated, RETRIEVAL_UPDATE_CHUNK)) {
+    const values = chunk.map(() => '(?, ?, ?, ?, ?)').join(', ');
+    db.prepare(
+      `WITH v(id, rc, lr, hl, st) AS (VALUES ${values})
+       UPDATE memories SET retrieval_count = v.rc, last_retrieved = v.lr, half_life_days = v.hl, strength = v.st
+       FROM v WHERE memories.id = v.id`,
+    ).run(...chunk.flatMap((e) => [e.id, e.retrieval_count, e.last_retrieved, e.half_life_days, e.strength]));
+    for (const e of chunk) found.add(e.id);
   }
   return found;
 }
@@ -202,15 +257,16 @@ export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string
 /** Rewrites a live row's tags and its full-text row on the caller's transaction, with no audit row. */
 export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void {
   db.prepare(`UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`)
-    .run(JSON.stringify(entry.tags), entry.id, entry.tenantId);
+    .run(JSON.stringify(entry.tags), entry.id, entry.tenant_id);
   syncFtsRow(db, entry);
 }
 
-/** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's dormant move does, and marks its summary parent dirty. */
+/** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's dormant move does, and
+ * marks its summary parent dirty. */
 export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
-  db.prepare('DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenantId);
+  db.prepare('DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenant_id);
   deleteFtsRow(db, entry.id);
-  if (entry.dag_parent_id) markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, actor);
+  if (entry.dag_parent_id) markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenant_id, actor);
 }
 
 /** One half-life per memory id, on the caller's transaction. */
@@ -221,21 +277,34 @@ export function setHalfLivesAt(db: DatabaseSyncLike, rows: readonly { id: string
 
 /** Moves every row of `from` in a tenant to project `into`. */
 export function restampOriginProjectAt(db: DatabaseSyncLike, tenantId: string, from: string, into: string): void {
-  db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`)
-    .run(into, tenantId, from);
+  db.prepare(
+    `UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`,
+  ).run(into, tenantId, from);
 }
 
 /** Stamps each id with its project. */
-export function stampOriginProjectsAt(db: DatabaseSyncLike, tenantId: string, rows: readonly { id: string; origin: string }[]): void {
-  const stamp = db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`);
+export function stampOriginProjectsAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  rows: readonly { id: string; origin: string }[],
+): void {
+  const stamp = db.prepare(
+    `UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`,
+  );
   for (const { id, origin } of rows) stamp.run(origin, tenantId, id);
 }
 
 /** Renames a live row's source from `from` to `to`; the count is 0 when another writer moved or superseded it first. */
-export function renameEntrySourceAt(db: DatabaseSyncLike, tenantId: string, id: string, from: string, to: string): number {
-  const moved = db.prepare(
-    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
-  ).run(to, id, tenantId, from);
+export function renameEntrySourceAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+  from: string,
+  to: string,
+): number {
+  const moved = db
+    .prepare(`UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`)
+    .run(to, id, tenantId, from);
   return Number(moved.changes ?? 0);
 }
 
@@ -250,15 +319,19 @@ export function renameEntrySourceAndOriginAt(
   db: DatabaseSyncLike, tenantId: string, id: string, options: RenameSourceOptions,
 ): number {
   const { from, to, origin } = options;
-  const done = db.prepare(
-    `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? AND source = ?`,
-  ).run(to, origin, id, tenantId, from);
+  const done = db
+    .prepare(
+      `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
+      `AND source = ?`,
+    )
+    .run(to, origin, id, tenantId, from);
   return Number(done.changes ?? 0);
 }
 
 /** Marks `id` superseded by `newId`; false when another writer superseded it first. */
 export function supersedeEntryAt(db: DatabaseSyncLike, tenantId: string, id: string, newId: string): boolean {
-  const result = db.prepare(`UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`)
+  const result = db
+    .prepare(`UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`)
     .run(newId, id, tenantId);
   return Number(result.changes ?? 0) !== 0;
 }

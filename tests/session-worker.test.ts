@@ -1,6 +1,8 @@
 // One session-end worker per session: a busy session queues the request for the running worker, and turn capture resumes from its cursor.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
+import nodeFs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnPosition, turnsAfter, type WorkerMode } from '../src/capture/session-worker.js';
@@ -88,6 +90,23 @@ describe('runSessionWorker', () => {
     expect(fs.readdirSync(sessions)).toEqual([]);
   });
 
+  it('lets only one of two acquirers in one process run at a time', async () => {
+    let active = 0;
+    let peak = 0;
+    const runs: WorkerMode[] = [];
+    const work = async (mode: WorkerMode): Promise<void> => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      runs.push(mode);
+      active--;
+    };
+    await Promise.all([runSessionWorker(ID, 'turn', work), runSessionWorker(ID, 'turn', work)]);
+    expect(peak).toBe(1);
+    expect(runs.length).toBeGreaterThanOrEqual(1);
+    expect(fs.readdirSync(sessions)).toEqual([]);
+  });
+
   it('runs a request that another reply queued while the work ran, before it lets go', async () => {
     const runs: WorkerMode[] = [];
     await runSessionWorker(ID, 'turn', async (mode) => {
@@ -104,6 +123,38 @@ describe('runSessionWorker', () => {
     await runSessionWorker(id, 'full', work);
     expect(runs).toEqual(['full']);
     expect(fs.readdirSync(sessions)).toEqual([]);
+  });
+
+  it('refuses to run unlocked when the request cannot be queued', async () => {
+    fs.rmSync(sessions, { recursive: true });
+    fs.writeFileSync(sessions, 'a file where the sessions folder belongs');
+    const { runs, work } = recorder();
+    await runSessionWorker(ID, 'full', work);
+    expect(runs).toEqual([]);
+  });
+
+  it('runs unlocked and warns once per lock path when the lock cannot be created', async () => {
+    const real = nodeFs.writeFileSync;
+    const denyLock = (p: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, options?: fs.WriteFileOptions): void => {
+      if (String(p).endsWith('.lock')) throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      real(p, data, options);
+    };
+    const spy = vi.spyOn(nodeFs, 'writeFileSync').mockImplementation(denyLock);
+    syncBuiltinESMExports();
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { runs, work } = recorder();
+      await runSessionWorker(ID, 'turn', work);
+      await runSessionWorker(ID, 'turn', work);
+      expect(runs).toEqual(['turn', 'turn']);
+      const lines = write.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('cannot be created or cleared'));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain(`${ID}.lock`);
+    } finally {
+      write.mockRestore();
+      spy.mockRestore();
+      syncBuiltinESMExports();
+    }
   });
 
   it('lets go of the lock when the work throws', async () => {

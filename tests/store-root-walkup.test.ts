@@ -18,6 +18,7 @@ import { queryAuditEvents } from '../src/store/audit.js';
 import { adminActor, retrieve } from '../src/api/index.js';
 import { findHippoStoreDir, getHippoRoot, isInitialized } from '../src/core/project-identity.js';
 import { findHippoRoot } from '../src/mcp/server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const hippoBin = path.join(repoRoot, 'bin', 'hippo.js');
@@ -214,7 +215,7 @@ describe('CLI end to end', () => {
     process.env.HIPPO_HOME = globalStore;
     try {
       const direct = await retrieve(
-        { hippoRoot: globalStore, tenantId: 'default', actor: adminActor('test') },
+        apiCtx(globalStore, 'default', adminActor('test')),
         { query: 'projectless-orbit', includeContinuity: true },
       );
       expect(direct.continuity?.activeSnapshot?.task).toBe('Foreign global active task');

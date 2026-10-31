@@ -8,42 +8,50 @@ import { loadConfig } from '../core/config.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories.js';
+import { getMemory } from '../api/memories/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, parseCountFlag, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag, stringFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  parseCountFlag,
+  type CommandContext,
+  boolFlag,
+  flagIsTrue,
+  nonEmptyStringFlag,
+  stringFlag,
+  stringFlagOrExit,
+} from './flag-values.js';
 import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { errorMessage } from '../util/log.js';
 import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;
 const REJECTED_DIGEST_LIST_CHARS = 16;
 const DORMANT_PREVIEW_CHARS = 100;
 const STRENGTH_DECIMALS = 3;
 
-export function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const good = boolFlag(flags, 'good');
   const bad = boolFlag(flags, 'bad');
 
   if (!good && !bad) {
-    printError('Specify --good or --bad');
-    throw new CliExit(1);
+    fail('Specify --good or --bad');
   }
 
   // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const specificId = flags['id'] ? String(flags['id']) : null;
+  const specificId = stringFlagOrExit(flags, 'id') || null;
 
   let updated: number;
   if (specificId) {
-    updated = api.outcome(ctx, [specificId], good).applied;
+    updated = (await api.outcome(ctx, [specificId], good)).applied;
   } else {
-    const r = api.outcomeForLastRecall(ctx, good);
+    const r = await api.outcomeForLastRecall(ctx, good);
     if (r.ids.length === 0) {
       console.log('No recent recall to apply outcome to. Use --id <id> to target a specific memory.');
       return;
@@ -58,12 +66,12 @@ export function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): v
 const ARCHIVE_REASON_REQUIRED =
   'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
 
-function cmdForget(
+async function cmdForget(
   hippoRoot: string,
   tenantId: string,
   id: string,
   flags: CliFlags,
-): void {
+): Promise<void> {
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -71,39 +79,41 @@ function cmdForget(
   // Raw memories (connector ingestion) are append-only: a BEFORE-DELETE trigger aborts any delete,
   // so archiveRaw is the sanctioned removal path and records ctx.actor as the archiver.
   if (flagIsTrue(flags, 'archive')) {
-    archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
+    await archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
     return;
   }
 
   try {
-    api.forget(ctx, id);
+    await api.forget(ctx, id);
     console.log(`Forgot ${id}`);
   } catch (err) {
-    reportForgetFailure(ctx, id, err);
+    await reportForgetFailure(ctx, id, err);
     throw new CliExit(1);
   }
 }
 
-function archiveForgottenRaw(ctx: api.HippoDbContext, id: string, reason: string | null): void {
+async function archiveForgottenRaw(
+  ctx: api.ContextWith<'entryWrites'>,
+  id: string,
+  reason: string | null,
+): Promise<void> {
   if (!reason) {
-    printError(ARCHIVE_REASON_REQUIRED);
-    throw new CliExit(1);
+    fail(ARCHIVE_REASON_REQUIRED);
   }
   try {
-    api.archiveRaw(ctx, id, reason);
+    await api.archiveRaw(ctx, id, reason);
     console.log(`Archived ${id}`);
   } catch (err) {
-    printError(`Could not archive ${id}: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Could not archive ${id}: ${errorMessage(err)}`);
   }
 }
 
-function reportForgetFailure(ctx: api.HippoDbContext, id: string, cause: unknown): void {
+async function reportForgetFailure(ctx: api.ContextWith<'dormant'>, id: string, cause: unknown): Promise<void> {
   if (cause instanceof RawAppendOnlyError) {
     // The delete was refused by the append-only trigger — this is a raw
     // memory, not a missing one. Point the user at the archive path.
     printError(rawForgetRefusal(id));
-  } else if (api.isDormant(ctx, id)) {
+  } else if (await api.isDormant(ctx, id)) {
     // Sleep moved it to the dormant store: it is not in active memory, so
     // point at the command that owns it.
     printError(
@@ -124,25 +134,23 @@ async function previewForget(hippoRoot: string, tenantId: string, id: string, ar
   requireInit(hippoRoot);
   const entry = await getMemory(cliApiContext(hippoRoot, tenantId), id);
   if (!entry) {
-    printError(`Memory not found: ${id}`);
-    throw new CliExit(1);
+    fail(`Memory not found: ${id}`);
   }
   if (!archive && entry.kind === 'raw') {
-    printError(rawForgetRefusal(id));
-    throw new CliExit(1);
+    fail(rawForgetRefusal(id));
   }
   if (archive && entry.kind !== 'raw') {
-    printError(`Could not archive ${id}: memory ${id} is not raw (kind=${entry.kind})`);
-    throw new CliExit(1);
+    fail(`Could not archive ${id}: memory ${id} is not raw (kind=${entry.kind})`);
   }
   const snippet = truncateWithEllipsis(entry.content, CONTENT_PREVIEW_CHARS);
   console.log(`Would ${archive ? 'archive' : 'forget'} ${id} (dry run, nothing changed): "${snippet}"`);
 }
 
-export function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), String(flags['status'] ?? 'open'), { everyTenant: true });
+  const status = stringFlagOrExit(flags, 'status') ?? 'open';
+  const conflicts = await api.listConflicts(cliApiContext(hippoRoot, tenantId), status, { everyTenant: true });
   if (flags['json']) {
     console.log(JSON.stringify({ conflicts }, null, 2));
     return;
@@ -164,11 +172,10 @@ export function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext):
 
 /** Shown when --keep is missing, to help the user decide. */
 async function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId: string): Promise<void> {
-  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open');
+  const conflicts = await api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open');
   const conflict = conflicts.find((c) => c.id === conflictId);
   if (!conflict) {
-    printError(`Conflict ${conflictId} not found or already resolved.`);
-    throw new CliExit(1);
+    fail(`Conflict ${conflictId} not found or already resolved.`);
   }
 
   console.log(`Conflict ${conflictId}:`);
@@ -188,7 +195,9 @@ async function showConflictForResolve(hippoRoot: string, conflictId: number, ten
     console.log(`      ${truncateWithEllipsis(entryB.content, CONFLICT_PREVIEW_CHARS)}`);
   }
   console.log('');
-  console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
+  console.log(
+    `Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`,
+  );
 }
 
 export async function handleResolve({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
@@ -198,11 +207,10 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
   // Accept "42" or "conflict_42"
   const conflictId = parseInt(rawId.replace(/^conflict_/, ''), 10);
   if (isNaN(conflictId)) {
-    printError('Usage: hippo resolve <conflict_id> --keep <memory_id> [--forget]');
-    throw new CliExit(1);
+    fail('Usage: hippo resolve <conflict_id> --keep <memory_id> [--forget]');
   }
 
-  const keepId = String(flags['keep'] ?? '').trim();
+  const keepId = stringFlagOrExit(flags, 'keep') ?? '';
   if (!keepId) {
     await showConflictForResolve(hippoRoot, conflictId, tenantId);
     return;
@@ -213,7 +221,7 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
   // --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and keepId.
   const rejectLoser = boolFlag(flags, 'reject-loser');
   const reasonFlag = stringFlag(flags, 'reason');
-  const result = api.resolveMemoryConflict(cliApiContext(hippoRoot, tenantId), conflictId, {
+  const result = await api.resolveMemoryConflict(cliApiContext(hippoRoot, tenantId), conflictId, {
     keepId,
     forget: forgetLoser,
     rejectLoser,
@@ -238,8 +246,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
   // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable identity.
   const reason = (stringFlag(flags, 'reason') ?? '').trim();
   if (!reason) {
-    printError('hippo reject requires --reason "<why>" (the tombstone stores no content; reason is its only identity).');
-    throw new CliExit(1);
+    fail('hippo reject requires --reason "<why>" (the tombstone stores no content; reason is its only identity).');
   }
 
   const valueFlag = stringFlag(flags, 'value');
@@ -247,13 +254,11 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
 
   if (!memoryId && valueFlag === undefined) {
     printError('Usage: hippo reject <memory-id> --reason "<why>"');
-    printError('   or: hippo reject --value "<text>" --reason "<why>"');
-    throw new CliExit(1);
+    fail('   or: hippo reject --value "<text>" --reason "<why>"');
   }
   if (memoryId && valueFlag !== undefined) {
     // Ambiguous ask: silently preferring one form would ignore the other without feedback.
-    printError('hippo reject takes EITHER a memory id OR --value, not both.');
-    throw new CliExit(1);
+    fail('hippo reject takes EITHER a memory id OR --value, not both.');
   }
 
   try {
@@ -264,8 +269,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
     });
     printRejected(result, reason);
   } catch (err) {
-    printError(`Could not reject: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Could not reject: ${errorMessage(err)}`);
   }
 }
 
@@ -280,7 +284,9 @@ function printRejected(result: ReturnType<typeof api.rejectOnHost>, reason: stri
       console.log(`  Merged rows that held it keep their other texts in: ${result.successorIds.join(', ')}`);
     }
     if (result.dormantSuccessorIds.length > 0) {
-      console.log(`  Dormant merged rows that held it keep their other texts in: ${result.dormantSuccessorIds.join(', ')}`);
+      console.log(
+        `  Dormant merged rows that held it keep their other texts in: ${result.dormantSuccessorIds.join(', ')}`,
+      );
     }
   } else {
     console.log('  No live rows matched (pre-emptive tombstone).');
@@ -317,14 +323,12 @@ export function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandCont
   const root = resolveAuthRoot(hippoRoot, flags);
   const digestOrPrefix = (args[0] ?? '').trim();
   if (!digestOrPrefix) {
-    printError('Usage: hippo unreject <digest-or-prefix>');
-    throw new CliExit(1);
+    fail('Usage: hippo unreject <digest-or-prefix>');
   }
 
   const outcome = unrejectValue(root, tenantId, digestOrPrefix, 'cli');
   if (outcome.status === 'not_found') {
-    printError(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
-    throw new CliExit(1);
+    fail(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
   }
   if (outcome.status === 'ambiguous') {
     printError(`"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones. Use a longer prefix:`);
@@ -334,24 +338,26 @@ export function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandCont
     throw new CliExit(1);
   }
 
-  console.log(`Unrejected [${outcome.digest.slice(0, DIGEST_DISPLAY_CHARS)}...] (was: ${outcome.reason ?? 'none given'})`);
+  console.log(
+    `Unrejected [${outcome.digest.slice(0, DIGEST_DISPLAY_CHARS)}...] (was: ${outcome.reason ?? 'none given'})`,
+  );
 }
 
 /** `hippo dormant [list|restore <id>|forget <id>]`: dormant memories are what sleep keeps instead of deleting
  * (on by default; `"dormant": { "enabled": false }` in .hippo/config.json deletes instead). */
-export function handleDormant({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleDormant({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
   const sub = args[0];
 
   if (sub === 'restore' || sub === 'forget') {
-    changeDormant(ctx, sub, (args[1] ?? '').trim());
+    await changeDormant(ctx, sub, (args[1] ?? '').trim());
     return;
   }
 
   const queryArgs = sub === 'list' ? args.slice(1) : args;
   const limit = parseCountFlag(flags['limit']);
-  const rows = api.listDormant(ctx, {
+  const rows = await api.listDormant(ctx, {
     query: queryArgs.join(' '),
     limit: limit > 0 ? limit : undefined,
   });
@@ -363,22 +369,23 @@ export function handleDormant({ hippoRoot, tenantId, args, flags }: CommandConte
   printDormantRows(rows, queryArgs.length > 0, root);
 }
 
-function changeDormant(ctx: api.Context, sub: 'restore' | 'forget', id: string): void {
+async function changeDormant(ctx: api.ContextWith<'dormant'>, sub: 'restore' | 'forget', id: string): Promise<void> {
   if (!id) {
-    printError(`Usage: hippo dormant ${sub} <id>`);
-    throw new CliExit(1);
+    fail(`Usage: hippo dormant ${sub} <id>`);
   }
   try {
     if (sub === 'restore') {
-      api.restoreDormant(ctx, id);
+      await api.restoreDormant(ctx, id);
       console.log(`Restored ${id} to active memory.`);
     } else {
-      api.forgetDormant(ctx, id);
+      await api.forgetDormant(ctx, id);
       console.log(`Forgot dormant memory ${id} permanently.`);
     }
   } catch (err) {
     if (err instanceof RejectedValueError) {
-      printError(`Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`);
+      printError(
+        `Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`,
+      );
     } else {
       printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
     }
@@ -386,16 +393,20 @@ function changeDormant(ctx: api.Context, sub: 'restore' | 'forget', id: string):
   }
 }
 
-function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: boolean, root: string): void {
+function printDormantRows(rows: Awaited<ReturnType<typeof api.listDormant>>, hasQuery: boolean, root: string): void {
   if (rows.length === 0) {
     console.log(hasQuery ? 'No dormant memories match.' : 'No dormant memories.');
     if (!loadConfig(root).dormant.enabled) {
-      console.log(`Sleep deletes faded memories. To keep them dormant instead, set "dormant": { "enabled": true } in ${path.join(root, 'config.json')}.`);
+      console.log(
+        `Sleep deletes faded memories. To keep them dormant instead, set "dormant": { "enabled": true } in ${path.join(root, 'config.json')}.`,
+      );
     }
     return;
   }
 
-  console.log(`${rows.length} dormant memor${rows.length === 1 ? 'y' : 'ies'}${hasQuery ? ' matching' : ''} (newest first):\n`);
+  console.log(
+    `${rows.length} dormant memor${rows.length === 1 ? 'y' : 'ies'}${hasQuery ? ' matching' : ''} (newest first):\n`,
+  );
   for (const row of rows) {
     const preview = truncateWithEllipsis(row.content, DORMANT_PREVIEW_CHARS);
     console.log(`--- ${row.id}`);
@@ -408,7 +419,8 @@ function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: bo
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');
 }
 
-/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (poisoning defence). */
+/** `hippo quarantine [list] [--all] [--json] [--global]`,
+ * `quarantine approve <id>`, `quarantine reject <id>` (poisoning defence). */
 export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
@@ -433,10 +445,13 @@ export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: Com
   printQuarantineRows(rows);
 }
 
-async function decideQuarantined(ctx: api.Context, sub: 'approve' | 'reject', id: string): Promise<void> {
+async function decideQuarantined(
+  ctx: api.ContextWith<'quarantine'>,
+  sub: 'approve' | 'reject',
+  id: string,
+): Promise<void> {
   if (!id) {
-    printError(`Usage: hippo quarantine ${sub} <id>`);
-    throw new CliExit(1);
+    fail(`Usage: hippo quarantine ${sub} <id>`);
   }
   try {
     if (sub === 'approve') {
@@ -447,8 +462,7 @@ async function decideQuarantined(ctx: api.Context, sub: 'approve' | 'reject', id
       console.log(`Rejected ${id}: stays quarantined.`);
     }
   } catch (err) {
-    printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Could not ${sub} ${id}: ${errorMessage(err)}`);
   }
 }
 
@@ -457,7 +471,9 @@ function printQuarantineRows(rows: Awaited<ReturnType<typeof api.quarantineList>
   for (const row of rows) {
     console.log(`--- ${row.id} [${row.status}]`);
     console.log(`    ${row.contentPreview}`);
-    console.log(`    ${row.reason}, original scope ${row.originalScope ?? '(none)'}, quarantined ${row.quarantinedAt.slice(0, DATE_PREFIX_CHARS)}`);
+    console.log(
+      `    ${row.reason}, original scope ${row.originalScope ?? '(none)'}, quarantined ${row.quarantinedAt.slice(0, DATE_PREFIX_CHARS)}`,
+    );
     console.log('');
   }
   console.log('Approve: hippo quarantine approve <id>   Reject: hippo quarantine reject <id>');
@@ -466,16 +482,14 @@ function printQuarantineRows(rows: Awaited<ReturnType<typeof api.quarantineList>
 export async function handleForget({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
-    printError('Please provide a memory ID.');
-    throw new CliExit(1);
+    fail('Please provide a memory ID.');
   }
   // Archive has its own HTTP route (POST /v1/memories/:id/archive); route
   // both branches the same way the direct path does.
   const archive = flagIsTrue(flags, 'archive');
   const reason = stringFlag(flags, 'reason') ?? null;
   if (archive && !reason) {
-    printError(ARCHIVE_REASON_REQUIRED);
-    throw new CliExit(1);
+    fail(ARCHIVE_REASON_REQUIRED);
   }
   if (flagIsTrue(flags, 'dry-run')) {
     await previewForget(hippoRoot, tenantId, id, archive);
@@ -495,23 +509,20 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
       // fallback to handle, not an error to report to the user.
       if (err instanceof Error && client.classifyTransportFailure(err) !== 'none') throw err;
       const msg = errorMessage(err);
-      printError(archive ? `Could not archive ${id}: ${msg}` : msg);
-      throw new CliExit(1);
+      fail(archive ? `Could not archive ${id}: ${msg}` : msg);
     }
   });
   if (routed) return;
-  cmdForget(hippoRoot, tenantId, id, flags);
+  await cmdForget(hippoRoot, tenantId, id, flags);
 }
 
 function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], flags: CommandContext['flags']): void {
   if (args[0] || flags['id'] !== undefined) {
     printError('Usage: hippo invalidate --churn [--dry-run]');
-    printError('--churn takes no pattern or --id.');
-    throw new CliExit(1);
+    fail('--churn takes no pattern or --id.');
   }
   if (!isGitRepo(process.cwd())) {
-    printError('hippo invalidate --churn must run inside a git repository.');
-    throw new CliExit(1);
+    fail('hippo invalidate --churn must run inside a git repository.');
   }
   const churnDryRun = flagIsTrue(flags, 'dry-run');
   let churnFailed = false;
@@ -524,11 +535,15 @@ function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], fl
     if (result.preview.length === 0) {
       console.log(`No churn-stale candidates in ${root}.`);
     } else if (churnDryRun) {
-      console.log(`DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`);
+      console.log(
+        `DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`,
+      );
     } else {
       console.log(`Tagged ${result.marked} memories churn-stale in ${root} (${result.alreadyMarked} already tagged):`);
     }
-    result.preview.forEach(p => console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`));
+    result.preview.forEach((p) =>
+      console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`),
+    );
     if (result.skippedPinned.length > 0) {
       console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
     }
@@ -543,16 +558,14 @@ export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandCo
   if (flagIsTrue(flags, 'id')) {
     // Value-less --id must never silently fall through to pattern mode
     // (pattern mode writes broadly; an ignored --id reverses user intent).
-    printError('--id requires a memory id');
-    throw new CliExit(1);
+    fail('--id requires a memory id');
   }
   const onlyId = stringFlag(flags, 'id');
   const dryRun = flagIsTrue(flags, 'dry-run');
   if ((target && onlyId) || (!target && !onlyId)) {
     printError('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
     printError('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');
-    printError('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
-    throw new CliExit(1);
+    fail('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
   }
   const reason = nonEmptyStringFlag(flags, 'reason') ?? null;
   const invTarget: api.InvalidationTarget = {

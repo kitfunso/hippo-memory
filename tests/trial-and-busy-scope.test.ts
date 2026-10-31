@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb, withReadSnapshot, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../src/db/index.js';
-import { DEFAULT_BUSY_WAIT_MS } from '../src/db/busy.js';
+import { DEFAULT_BUSY_WAIT_MS, withWriteScopeOr } from '../src/db/busy.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
@@ -137,6 +137,21 @@ describe('withReadSnapshot', () => {
     withDb((db) => {
       const attempt = (): number => withReadSnapshot(db, () => { db.exec('ROLLBACK'); return 1; });
       expect(attempt).toThrow(/no transaction is active/i);
+    });
+  });
+});
+
+describe('scope names', () => {
+  it('refuses a savepoint name that is not a plain identifier before any of it reaches SQL', () => {
+    withDb((db) => {
+      const hostile = "x; DELETE FROM meta WHERE key = 'kept'; SAVEPOINT y";
+      withWriteScope(db, 'outer', () => {
+        put(db, 'kept');
+        expect(() => withWriteScope(db, hostile, () => 1)).toThrow(/savepoint name/);
+        expect(() => withTrialScope(db, hostile, () => 1)).toThrow(/savepoint name/);
+        expect(() => withWriteScopeOr(db, hostile, () => 1)).toThrow(/savepoint name/);
+      });
+      expect(metaCount(db, 'kept')).toBe(1);
     });
   });
 });

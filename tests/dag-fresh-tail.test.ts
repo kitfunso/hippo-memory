@@ -7,17 +7,19 @@
  * filtered, deduplicated against the BM25 hits.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { retrieve, type Context } from '../src/api/index.js';
-import { sqliteStore, type HippoStore } from '../src/server.js';
+import { retrieve } from '../src/api/index.js';
+import { sqliteStore, type HippoStore } from '../src/entry/store-kit.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:fresh-tail', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(root, tenantId, { subject: 'test:fresh-tail', role: 'admin' });
 }
 
 function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -27,7 +29,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
     tags: opts.tags ?? [],
   });
 }
@@ -94,8 +96,8 @@ describe('fresh-tail recall', () => {
   });
 
   it('5. fresh-tail respects tenant isolation', async () => {
-    writeEntry(root, makeRaw('default tenant row', { tenantId: 'default' }));
-    writeEntry(root, makeRaw('other tenant row', { tenantId: 'other' }));
+    writeEntry(root, makeRaw('default tenant row', { tenant_id: 'default' }));
+    writeEntry(root, makeRaw('other tenant row', { tenant_id: 'other' }));
     const r = await retrieve(ctxFor(root, 'default'), {
       query: 'unmatched',
       freshTailCount: 10,

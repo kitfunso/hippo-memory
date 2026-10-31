@@ -10,11 +10,9 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
-import type { DeliveryFault } from '../../src/store/delivery-recorder.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
-const FAULT_CLI = path.resolve(__dirname, '..', 'fixtures', 'delivery-fault-cli.mjs');
 
 export const PROMPT_HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
 export const PIN = 'PINNED: always check the rollback plan before deploy';
@@ -64,19 +62,17 @@ export function dispose(p: Project): void {
 export interface RunOpts {
   input?: string;
   env?: NodeJS.ProcessEnv;
-  fault?: DeliveryFault;
   cwd?: string;
 }
 
 export function hippo(p: Project, args: string[], opts: RunOpts = {}): SpawnSyncReturns<string> {
-  const entry = opts.fault ? [FAULT_CLI, opts.fault] : [HIPPO_JS];
-  return spawnSync(process.execPath, [...entry, ...args], {
+  return spawnSync(process.execPath, [HIPPO_JS, ...args], {
     cwd: opts.cwd ?? p.cwd, env: { ...p.env, ...opts.env }, input: opts.input ?? '', encoding: 'utf8',
   });
 }
 
 /** A run whose detached session-end worker cannot start, so no worker sleeps on the store while the test reads it. */
-export function hippoNoWorker(p: Project, args: string[], opts: Omit<RunOpts, 'fault'> = {}): SpawnSyncReturns<string> {
+export function hippoNoWorker(p: Project, args: string[], opts: RunOpts = {}): SpawnSyncReturns<string> {
   const preload = path.join(p.dir, 'no-worker.mjs');
   fs.writeFileSync(preload, `process.execPath = ${JSON.stringify(path.join(p.dir, 'no-such-node'))};\n`);
   return spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, ...args], {

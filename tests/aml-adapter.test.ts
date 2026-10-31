@@ -26,6 +26,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import type { JsonValue } from '../src/util/json.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 const ADAPTER_PATH = fileURLToPath(new URL('../deploy/aml/adapter/adapter.mjs', import.meta.url));
 
@@ -37,18 +38,14 @@ interface SearchRow {
 }
 
 async function waitForAdapterReady(baseUrl: string, timeoutMs = 10_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let lastErr: unknown;
-  while (Date.now() < deadline) {
+  await waitFor(async () => {
     try {
       const res = await fetch(`${baseUrl}/health`);
-      if (res.status === 200 || res.status === 503) return;
-    } catch (err) {
-      lastErr = err;
+      return res.status === 200 || res.status === 503;
+    } catch {
+      return false; // not listening yet
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error(`adapter never became reachable at ${baseUrl}: ${String(lastErr)}`);
+  }, { timeoutMs, intervalMs: 50, what: `adapter reachable at ${baseUrl}` });
 }
 
 interface AdapterHandle {
@@ -430,15 +427,17 @@ describe('rate-limit key forwarding and status pass-through', () => {
   const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
   const savedClientIpHeader = process.env.HIPPO_CLIENT_IP_HEADER;
   const savedV1Rps = process.env.HIPPO_V1_RPS;
+  const savedTrustedProxies = process.env.HIPPO_TRUSTED_PROXIES;
 
   beforeAll(async () => {
     rlHippoRoot = join(mkdtempSync(join(tmpdir(), 'hippo-aml-adapter-ratelimit-')), '.hippo');
     initStore(rlHippoRoot);
 
-    // Only HIPPO_V1_RPS is read at serve() boot; the other two are read per
-    // request, so they are set here for one place to save and restore them.
+    // Set before serve(), which checks the proxy pair at boot; one place saves and restores them all.
     process.env.HIPPO_REQUIRE_AUTH = '1';
     process.env.HIPPO_CLIENT_IP_HEADER = 'cf-connecting-ip';
+    // The adapter is hippo's only peer here, as in deploy/aml.
+    process.env.HIPPO_TRUSTED_PROXIES = '*';
     process.env.HIPPO_V1_RPS = '0.5';
     rlHippoHandle = await serve({ hippoRoot: rlHippoRoot, host: '127.0.0.1', port: 0 });
 
@@ -466,6 +465,8 @@ describe('rate-limit key forwarding and status pass-through', () => {
     } else {
       process.env.HIPPO_CLIENT_IP_HEADER = savedClientIpHeader;
     }
+    if (savedTrustedProxies === undefined) delete process.env.HIPPO_TRUSTED_PROXIES;
+    else process.env.HIPPO_TRUSTED_PROXIES = savedTrustedProxies;
     if (savedV1Rps === undefined) {
       delete process.env.HIPPO_V1_RPS;
     } else {

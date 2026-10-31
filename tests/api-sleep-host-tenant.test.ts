@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { sleep, adminActor } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('api.sleep audit row tenant tag', () => {
   let root: string;
@@ -27,11 +28,7 @@ describe('api.sleep audit row tenant tag', () => {
   });
 
   it('emits consolidate audit row with tenant_id="__host__" (not ctx.tenantId)', async () => {
-    const ctx = {
-      hippoRoot: root,
-      tenantId: 'acme', // intentionally non-default to make sure __host__ wins
-      actor: adminActor('cli:operator-alice'),
-    };
+    const ctx = apiCtx(root, 'acme', adminActor('cli:operator-alice'));
     await sleep(ctx, { dryRun: true });
 
     const db = openHippoDb(root);
@@ -54,11 +51,11 @@ describe('api.sleep audit row tenant tag', () => {
 
   it('multiple sleeps from different tenants all tag __host__ (host-wide is honest)', async () => {
     await sleep(
-      { hippoRoot: root, tenantId: 'acme', actor: adminActor('cli:alice') },
+      apiCtx(root, 'acme', adminActor('cli:alice')),
       { dryRun: true },
     );
     await sleep(
-      { hippoRoot: root, tenantId: 'globex', actor: adminActor('cli:bob') },
+      apiCtx(root, 'globex', adminActor('cli:bob')),
       { dryRun: true },
     );
 
@@ -85,7 +82,7 @@ describe('api.sleep audit row tenant tag', () => {
 
   it('consolidate rows are visible to `hippo audit list --tenant __host__`', async () => {
     await sleep(
-      { hippoRoot: root, tenantId: 'acme', actor: adminActor('cli:alice') },
+      apiCtx(root, 'acme', adminActor('cli:alice')),
       { dryRun: true },
     );
 

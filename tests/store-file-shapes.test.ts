@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { initStore } from '../src/store/open.js';
+import { onHandle, openStore } from '../src/store/open.js';
 import { packageScriptsAt } from '../src/learn/churn-git.js';
 
 let dir: string;
@@ -21,8 +21,11 @@ describe('legacy index.json and stats.json shapes', () => {
     fs.mkdirSync(root, { recursive: true });
     fs.writeFileSync(path.join(root, 'index.json'), body, 'utf8');
     fs.writeFileSync(path.join(root, 'stats.json'), body, 'utf8');
-    expect(() => initStore(root)).not.toThrow();
-    expect(() => initStore(root)).not.toThrow();
+    // SAFETY: COUNT(*) always returns one row with the aliased integer column n.
+    const memoryCount = (): number => onHandle(root, (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n, openStore);
+    expect(memoryCount()).toBe(0);
+    expect(memoryCount()).toBe(0);
+    expect(fs.readFileSync(path.join(root, 'index.json'), 'utf8')).toBe(body);
   });
 });
 

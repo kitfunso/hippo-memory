@@ -78,7 +78,7 @@ claim we retracted.
 
 ## Quick start
 
-Start in one project. [What hippo init changes](#what-hippo-init-changes) lists everything the second command writes.
+Start in one project. [What hippo init changes](#what-hippo-init-changes) lists everything the second command writes. A step-by-step version is on the website: [hippo-memory.com/quickstart](https://hippo-memory.com/quickstart/).
 
 ```bash
 npm install -g hippo-memory
@@ -223,11 +223,11 @@ hippo context --auto --budget 1500
 hippo snapshot clear
 ```
 
-`hippo context --auto` includes the active task snapshot before long-term memories, so agents get both the immediate thread and the deeper lessons.
+`hippo context --auto` prints the active task snapshot before long-term memories when the calling session saved it, so agents get both the immediate thread and the deeper lessons. A snapshot from another session prints as one line that names the command that shows it.
 
 ### Session event trails
 
-Manual snapshots are useful, but real work also needs a breadcrumb trail. Hippo can now store short session events and link them to the active snapshot so context output shows the latest steps, not just the last summary.
+Manual snapshots are useful, but real work also needs a breadcrumb trail. Hippo can now store short session events and link them to the active snapshot so context output shows the latest steps, not just the last summary. The trail prints for the calling session's own snapshot; for another session's, the command in the pointer line prints it.
 
 ```bash
 hippo session log \
@@ -675,10 +675,12 @@ hippo sleep
 Wrap any command with `hippo watch` to auto-learn from failures:
 
 ```bash
-hippo watch "npm run build"
+hippo watch -- npm run build
 # if it fails, Hippo captures the error automatically
 # next time an agent asks about build issues, the memory is there
 ```
+
+The command runs with no shell, so each argument reaches the program as written. To run a shell line with pipes or `&&`, pass it as one string after `--shell`: `hippo watch --shell "npm test && npm run build"`.
 
 ---
 
@@ -736,7 +738,7 @@ hippo watch "npm run build"
 | `hippo failures [--days n]` | Failed tool calls the capture-error hook saw, by outcome, and how many errors first happened in another session |
 | `hippo embed` | Embed all memories for semantic search |
 | `hippo embed --status` | Show embedding coverage |
-| `hippo watch "<command>"` | Run command, auto-learn from failures |
+| `hippo watch -- <command> [args...]` | Run command with no shell, auto-learn from failures (`--shell "<line>"` runs one line through the shell) |
 | `hippo learn --git` | Scan recent git commits for lessons |
 | `hippo learn --git --days <n>` | Scan N days back (default: 7) |
 | `hippo learn --git --repos <paths>` | Scan multiple repos (comma-separated) |
@@ -784,8 +786,8 @@ hippo watch "npm run build"
 | `hippo dashboard` | Open web dashboard at localhost:3333 (memory health by project, and the card board); open the printed URL, which carries a per-start access token |
 | `hippo dashboard --port <n>` | Use custom port |
 | `hippo mcp` | Start MCP server (stdio transport) |
-| `hippo serve` | Start the HTTP API server for this store on `127.0.0.1:6789` (`--port <n>` or `HIPPO_PORT`; `--host <host>`, which off loopback needs `HIPPO_REQUIRE_AUTH=1`). Every request needs an API key (`hippo auth create`, then `Authorization: Bearer <key>`; the hippo CLI reads `HIPPO_API_KEY`). `HIPPO_ALLOW_KEYLESS_LOCAL=1` lets requests from this machine in without one, as host admin; `HIPPO_REQUIRE_AUTH=1` wins over it |
-| `hippo serve --tls-cert <file> --tls-key <file>` | Serve HTTPS with that PEM certificate and key (or set `HIPPO_TLS_CERT` and `HIPPO_TLS_KEY`). Without them a network bind still starts, and warns once that API keys and memory text travel in cleartext unless a TLS-terminating proxy sits in front |
+| `hippo serve` | Start the HTTP API server for this store on `127.0.0.1:6789` (`--port <n>` or `HIPPO_PORT`; `--host <host>`, which off loopback needs `HIPPO_REQUIRE_AUTH=1`). Every request needs an API key (`hippo auth create`, then `Authorization: Bearer <key>`; the hippo CLI reads `HIPPO_API_KEY`). `HIPPO_ALLOW_KEYLESS_LOCAL=1` lets requests from this machine in without one, as a member (`HIPPO_KEYLESS_LOCAL_ROLE=admin` makes them host admin, for sleep and the quarantine routes); `HIPPO_REQUIRE_AUTH=1` wins over it. Each caller gets 20 requests a second, burst 40 (`HIPPO_CALLER_RPS`; `0` turns it off). See [Security defaults](docs/UPGRADING-2.0.md#security-defaults) |
+| `hippo serve --tls-cert <file> --tls-key <file>` | Serve HTTPS with that PEM certificate and key (or set `HIPPO_TLS_CERT` and `HIPPO_TLS_KEY`). Without them a network bind refuses to start, since API keys and memory text would travel in cleartext; behind a TLS-terminating proxy, pass `--allow-cleartext` (or set `HIPPO_ALLOW_CLEARTEXT=1`) |
 
 On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked against the card's live run and the command is refused, unchanged, if the two do not match.
 
@@ -808,6 +810,8 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 
 Init patches an instruction file only if it already exists. It also sets up a daily run and imports your coding agents' own memories; [What hippo init changes](#what-hippo-init-changes) lists everything.
 
+Setup guides on the website: [Claude Code](https://hippo-memory.com/claude-code/) · [Codex](https://hippo-memory.com/codex/) · [Cursor](https://hippo-memory.com/cursor/).
+
 ### Manual install
 
 If you prefer explicit control:
@@ -821,7 +825,7 @@ hippo hook install opencode      # patches AGENTS.md + installs the opencode TS 
 ```
 
 This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the agent to:
-1. Run `hippo context --auto --budget 1500` at session start
+1. Run `hippo context --auto --budget 1500` at the start of a task. In Claude Code and Codex, whose prompt hook already injects pinned rules and matching memories, only if no hippo memory block has appeared in the session
 2. Run `hippo remember "<what went wrong and why>" --error` the moment it finds out why something failed, never as a closing step
 3. Everywhere but Claude Code, whose own auto memory does this job: run a plain `hippo remember` the moment it learns something that should outlive the session, leaving out secrets and personal details
 4. Capture a short summary with `hippo capture --stdin` when the session ends, but only where no hook captures the session: Cursor, OpenClaw, OpenCode, Pi, and Codex without its wrapper
@@ -854,11 +858,9 @@ For GitHub Copilot, when `$COPILOT_HOME` (else `~/.copilot`) or a VS Code User f
 ````markdown
 ## Project Memory (Hippo)
 
-Pinned rules and recent writes auto-inject at every prompt via the installed
-UserPromptSubmit hook; never re-run that part manually. At the START of a
-task (not per prompt), additionally load task-specific context: git-aware
-recall over the full store that per-prompt injection does not cover. Also
-run it if the hook is not installed:
+The installed UserPromptSubmit hook injects pinned rules and the memories
+that match each prompt, so never load them yourself. If no hippo memory
+block has appeared in this session, run this at the start of a task:
 ```bash
 hippo context --auto --budget 1500
 ```
@@ -874,6 +876,8 @@ ends, so there is nothing to run before you finish.
 ````
 
 ### MCP Server
+
+Setup for each client: [hippo-memory.com/mcp](https://hippo-memory.com/mcp/).
 
 For any MCP-compatible client (Cursor, Windsurf (now Devin Desktop), Cline, Claude Desktop):
 
@@ -989,6 +993,8 @@ The AI-memory category matured fast in 2026. Hippo's specific take (bio-decay, s
 
 Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "learn what is wrong and stop repeating it." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
 
+Side-by-side pages on the website: [hippo vs mem0](https://hippo-memory.com/vs/mem0/) · [hippo vs Zep](https://hippo-memory.com/vs/zep/) · [hippo vs Letta](https://hippo-memory.com/vs/letta/) · [CLAUDE.md vs MEMORY.md](https://hippo-memory.com/vs/claude-memory/).
+
 ---
 
 ## Benchmarks
@@ -1095,7 +1101,7 @@ node run.mjs --adapter all
 
 ### How do I give Claude Code memory between sessions?
 
-Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block telling Claude to run `hippo context --auto` when a session starts. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. `hippo init --scan ~` gives every git repo under your home folder a store and installs the same hooks, but adds no block to any `CLAUDE.md`. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both.
+Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block saying the prompt hook injects pinned rules and matching memories, and asking Claude to run `hippo context --auto` at the start of a task only if no hippo memory block has appeared. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. `hippo init --scan ~` gives every git repo under your home folder a store and installs the same hooks, but adds no block to any `CLAUDE.md`. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both.
 
 ### How do I give Cursor memory between sessions?
 

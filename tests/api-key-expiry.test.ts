@@ -12,6 +12,7 @@ import { EXPIRING_KEYS_MIN_BINARY } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 
@@ -33,9 +34,9 @@ function mint(expiresAt?: string): { keyId: string; plaintext: string } {
   return withDb((db) => createApiKey(db, { tenantId: 'default', label: 'expiry', role: 'member', ownerSubject: 'alice', expiresAt }));
 }
 
-function selfMint(): AuthCreateSelfResult {
+function selfMint(): Promise<AuthCreateSelfResult> {
   const actor: Actor = { subject: 'alice', role: 'member', viaAuthResolver: true };
-  return authCreateSelf({ hippoRoot: home, tenantId: 'default', actor }, { ttlDays: 30, perSubject: 3 });
+  return authCreateSelf(apiCtx(home, 'default', actor), { ttlDays: 30, perSubject: 3 });
 }
 
 const floor = (): string | undefined => withDb((db) => meta(db, 'min_compatible_binary'));
@@ -105,17 +106,17 @@ describe('the binary floor for expiring keys', () => {
     expect(floor()).toBe('1.24.0');
   });
 
-  it('the first self-minted key raises the floor and a second leaves it', () => {
+  it('the first self-minted key raises the floor and a second leaves it', async () => {
     expect(floor()).toBe('1.24.0');
-    selfMint();
+    await selfMint();
     expect(floor()).toBe(EXPIRING_KEYS_MIN_BINARY);
-    selfMint();
+    await selfMint();
     expect(floor()).toBe(EXPIRING_KEYS_MIN_BINARY);
   });
 
-  it('a self-mint that fails leaves the floor where it was', () => {
+  it('a self-mint that fails leaves the floor where it was', async () => {
     withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
-    expect(() => selfMint()).toThrow(/audit table unwritable/);
+    await expect(selfMint()).rejects.toThrow(/audit table unwritable/);
     expect(floor()).toBe('1.24.0');
   });
 
@@ -193,14 +194,14 @@ describe('key lists', () => {
     return { expired, live, liveExpiry, plain };
   }
 
-  it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', () => {
+  it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', async () => {
     const keys = threeKeys();
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
-    expect(authListRows(ctx, { active: true }).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
-    expect(authListRows(ctx, { active: false }).map((r) => r.key.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
-    const [first] = authListRows(ctx, { active: true, limit: 1 });
+    const ctx = apiCtx(home, 'default', adminActor('cli'));
+    expect((await authListRows(ctx, { active: true })).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
+    expect((await authListRows(ctx, { active: false })).map((r) => r.key.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
+    const [first] = await authListRows(ctx, { active: true, limit: 1 });
     expect(first?.key.keyId).toBe(keys.plain);
-    const byId = new Map(authListRows(ctx, { active: true }).map((r) => [r.key.keyId, r.key]));
+    const byId = new Map((await authListRows(ctx, { active: true })).map((r) => [r.key.keyId, r.key]));
     expect(byId.get(keys.live)).toMatchObject({ ownerSubject: 'alice', expiresAt: keys.liveExpiry });
     expect(byId.get(keys.plain)).toMatchObject({ ownerSubject: null, expiresAt: null });
   });
@@ -238,23 +239,22 @@ describe('expired keys over MCP and the stream', () => {
   it('closes an open stream once its key expires', async () => {
     process.env.MCP_SSE_HEARTBEAT_MS = '100';
     handle = await serve({ hippoRoot: home, port: 0 });
-    const key = mint(new Date(Date.now() + 1500).toISOString());
+    const key = mint(new Date(Date.now() + 3_600_000).toISOString());
     const ac = new AbortController();
     const res = await fetch(`${handle.url}/mcp/stream`, {
       headers: { accept: 'text/event-stream', authorization: `Bearer ${key.plaintext}` },
       signal: ac.signal,
     });
     expect(res.status).toBe(200);
+    // Expire the key only once the stream is open, so a slow runner cannot reach the open after a wall-clock expiry.
+    withDb((db) => db.prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`).run(new Date(Date.now() - 1000).toISOString(), key.keyId));
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
-    const deadline = Date.now() + 6000;
-    while (Date.now() < deadline && !buf.includes('auth_revoked')) {
-      const r = await Promise.race([
-        reader.read(),
-        new Promise<{ value: undefined; done: true }>((ok) => setTimeout(() => ok({ value: undefined, done: true }), 300)),
-      ]);
-      if (r.value) buf += decoder.decode(r.value);
+    // The 100 ms heartbeat wakes each read, and the server ends the stream after auth_revoked, so the loop waits on events, not a clock.
+    for (let r = await reader.read(); !r.done; r = await reader.read()) {
+      buf += decoder.decode(r.value);
+      if (buf.includes('auth_revoked')) break;
     }
     ac.abort();
     expect(buf).toContain('auth_revoked');

@@ -34,7 +34,7 @@ function mount(count = 100, empty: ReactNode = "nothing") {
   const grid = screen.getByRole("grid", { name: "Rows" });
   // jsdom keeps scrollTop at 0, so back it with a plain value the hook can write.
   let top = 0;
-  Object.defineProperty(grid, "scrollTop", { configurable: true, get: () => top, set: (v: number) => void (top = v) });
+  Object.defineProperty(grid, "scrollTop", { configurable: true, get: () => top, set: (v: number) => { top = v; } });
   return { grid, onActivate };
 }
 

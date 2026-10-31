@@ -11,6 +11,8 @@ if (!fs.existsSync(distPostinstall)) {
   process.exit(0);
 }
 
-import(pathToFileURL(distPostinstall).href).catch(() => {
+// A failed nudge must not fail the install, but the reason still reaches the user.
+import(pathToFileURL(distPostinstall).href).catch((err) => {
+  process.stderr.write(`hippo-memory postinstall skipped: ${err instanceof Error ? err.message : err}\n`);
   process.exit(0);
 });

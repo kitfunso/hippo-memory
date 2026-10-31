@@ -1,9 +1,9 @@
-// PreCompact for a caller on another machine: the record and the owner's snapshot go under its tenant and project; only a refused bind
-// or the holdout arm withholds the instruction.
+// PreCompact for a caller on another machine: the record and the owner's snapshot go under its tenant and project;
+// only a refused bind or the holdout arm withholds the instruction.
 import type { Context } from '../api/types.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { markSnapshotSavedAt, startCompactionAt } from '../store/compaction-caller.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, type ContinuityKey } from '../store/sessions.js';
 import { assertTrigger, bindCaller, callerInHoldout, checkedWorkingState } from './caller-session.js';
@@ -27,7 +27,7 @@ function logged<T>(what: string, fn: () => T): T | null {
   try {
     return fn();
   } catch (err) {
-    log.warn(`pre-compact: ${what}: ${errorMessage(err)}`);
+    log.warn(`pre-compact: ${what}: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }
@@ -37,11 +37,19 @@ export function preCompactForCaller(ctx: Context, req: CallerPreCompactRequest):
   const state = checkedWorkingState(req.workingState);
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
-  const start = { sessionId: req.sessionId, originProject: req.project.name, trigger: req.trigger, cwd: null, transcriptPath: null };
+  const start = {
+    sessionId: req.sessionId,
+    originProject: req.project.name,
+    trigger: req.trigger,
+    cwd: null,
+    transcriptPath: null,
+  };
   const recordId = logged('compaction record not started', () => startCompactionAt(ctx.hippoRoot, ctx.tenantId, start));
   if (state !== null && saveOwnerSnapshot(ctx, req.sessionId, key, state) && recordId !== null) {
     // Marked under ctx.tenantId, which the environment's tenant may not be.
-    logged('compaction record not marked with its snapshot', () => markSnapshotSavedAt(ctx.hippoRoot, ctx.tenantId, recordId));
+    logged('compaction record not marked with its snapshot', () =>
+      markSnapshotSavedAt(ctx.hippoRoot, ctx.tenantId, recordId),
+    );
   }
   return { stdout: PRE_COMPACT_INSTRUCTION };
 }
@@ -52,5 +60,6 @@ function saveOwnerSnapshot(ctx: Context, sessionId: string, key: ContinuityKey, 
   const merged = mergeWorkingState(state, existing, sessionId);
   if (merged === null) return false;
   const snapshot = { ...merged, source: 'pre-compact', session_id: sessionId };
-  return logged('snapshot not saved', () => saveActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, snapshot, key)) !== null;
+  const saved = logged('snapshot not saved', () => saveActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, snapshot, key));
+  return saved !== null;
 }

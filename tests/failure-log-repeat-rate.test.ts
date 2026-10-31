@@ -64,7 +64,7 @@ describe('repeat-error rate', () => {
 
   it('counts a repeat only when another session hit the signature first', () => {
     withDb(home, (db) => {
-      const log = (sessionId: string | null, sigHash: string, outcome: FailureOutcome = 'duplicate'): void =>
+      const log = (sessionId: string | null, sigHash: string, outcome: FailureOutcome = 'duplicate'): number =>
         recordFailure(db, { tenantId: 'default', sessionId, tool: 'Bash', outcome, sigHash });
       log('s1', 'A', 'stored');
       log('s1', 'A');

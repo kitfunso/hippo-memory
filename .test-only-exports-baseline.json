@@ -1,8 +1,7 @@
 {
-  "count": 58,
+  "count": 52,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
-    "src/capture/compaction-spool.ts:_setSpoolFsForTests",
     "src/capture/extract.ts:extractFromText",
     "src/capture/session-digest.ts:MAX_DIGEST_CHARS",
     "src/capture/session-digest.ts:_setDigestExistsProbeForTests",
@@ -16,8 +15,6 @@
     "src/consolidate/half-life-migration.ts:storeHalfLifeBase",
     "src/consolidate/memory-value.ts:MV_FEATURE_NAMES",
     "src/consolidate/memory-value.ts:computeMvFeatures",
-    "src/core/config.ts:_resetSharedStoreCacheForTests",
-    "src/core/memory.ts:_resetLossAversionRatioCacheForTests",
     "src/core/physics.ts:applyOutcomeFeedback",
     "src/core/project-identity.ts:clearProjectIdentityCache",
     "src/core/prompt-recall.ts:PROMPT_RECALL_MAX_CHARS",
@@ -29,7 +26,6 @@
     "src/graph/extract.ts:MAX_REFERENCES_PER_OBJECT",
     "src/graph/extract.ts:MAX_REF_NAME_LEN",
     "src/graph/extract.ts:MIN_REF_NAME_LEN",
-    "src/graph/extract.ts:loadGraphSources",
     "src/mcp/request.ts:recordMcpTokens",
     "src/objects/customer-notes.ts:MAX_NOTE_LEN",
     "src/objects/customer-notes.ts:loadActiveNotesForCustomer",
@@ -47,7 +43,6 @@
     "src/server/server-detect.ts:removePidfile",
     "src/store/auth.ts:apiKeyVerifyStats",
     "src/store/delivery-recorder.ts:DELIVERY_REJECTED_ROW_CAP",
-    "src/store/delivery-recorder.ts:_setDeliveryFaultForTests",
     "src/store/embeddings/index.ts:EMBED_TEXT_FORMAT",
     "src/store/embeddings/index.ts:resolveIndexedEmbeddingModel",
     "src/store/failure-log.ts:failuresBySession",
@@ -55,7 +50,6 @@
     "src/store/recall-trace.ts:DELIVERY_LEDGER_RETENTION_DAYS",
     "src/store/recall-trace.ts:readDeliveryEvents",
     "src/store/recall-trace.ts:writeDeliveryEvent",
-    "src/store/search-rows.ts:_forceLikePathForTests",
     "src/util/log.ts:logThreshold",
     "src/util/log.ts:resetLogOnce",
     "src/util/secret-detect.ts:redactSecrets"

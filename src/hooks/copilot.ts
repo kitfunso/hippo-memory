@@ -28,7 +28,10 @@ The installed hooks load pinned memories when a session starts and capture
 the session as you work, so there is nothing to run before you finish.
 `.trim();
 
-/** Every Copilot text a release has written, so install upgrades an old block and uninstall still removes it; add the old text when the text changes. */
+/**
+ * Every Copilot text a release has written, so install upgrades an old block and uninstall still removes it; add the
+ * old text when the text changes.
+ */
 const SHIPPED_COPILOT_INSTRUCTIONS: readonly string[] = [
   COPILOT_INSTRUCTIONS,
   `
@@ -77,7 +80,11 @@ export interface CopilotPaths {
 function profileDirs(userDir: string): string[] {
   const dir = path.join(userDir, 'profiles');
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => path.join(dir, e.name)).sort();
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => path.join(dir, e.name))
+    .sort();
 }
 
 export function copilotPaths(): CopilotPaths {
@@ -107,17 +114,25 @@ function hippoCommand(): string {
 }
 
 /** The Copilot CLI's mcp-config.json keeps servers under "mcpServers", each with an env and a tool list. */
-export const COPILOT_CLI_MCP: McpHost = { key: 'mcpServers', server: () => ({ type: 'local', command: hippoCommand(), args: ['mcp'], env: {}, tools: ['*'] }) };
+export const COPILOT_CLI_MCP: McpHost = {
+  key: 'mcpServers',
+  server: () => ({ type: 'local', command: hippoCommand(), args: ['mcp'], env: {}, tools: ['*'] }),
+};
 
 /** VS Code's mcp.json keeps stdio servers under "servers"; it has no "mcpServers" key. */
-export const VSCODE_MCP: McpHost = { key: 'servers', server: () => ({ type: 'stdio', command: hippoCommand(), args: ['mcp'] }) };
+export const VSCODE_MCP: McpHost = {
+  key: 'servers',
+  server: () => ({ type: 'stdio', command: hippoCommand(), args: ['mcp'] }),
+};
 
 /** Only a server hippo wrote counts as hippo's: another command, other args, or
  * any key or value setup does not write (an env you added) makes it the user's. */
 function isHipposServer(entry: JsonValue | undefined, host: McpHost): boolean {
   if (!isJsonObjectLiteral(entry) || !('command' in entry) || !('args' in entry)) return false;
   const ours = host.server();
-  return Object.entries(entry).every(([key, value]) => (key === 'command' ? value === 'hippo' || value === 'hippo.cmd' : isDeepStrictEqual(value, ours[key])));
+  return Object.entries(entry).every(([key, value]) =>
+    key === 'command' ? value === 'hippo' || value === 'hippo.cmd' : isDeepStrictEqual(value, ours[key]),
+  );
 }
 
 /** What to paste under the host's key when hippo cannot edit the file itself. */
@@ -130,14 +145,18 @@ interface McpConfig {
   readonly servers: JsonObject;
 }
 
-/** Null for a file with comments, one that is not JSON, or one whose shape a merge would overwrite; a missing file reads as empty. */
+/**
+ * Null for a file with comments, one that is not JSON, or one whose shape a merge would overwrite; a missing file reads
+ * as empty.
+ */
 function readMcpConfig(file: string, host: McpHost): McpConfig | null {
   let config: JsonValue = {};
   if (fs.existsSync(file)) {
     try {
       config = readJsonFile(file);
     } catch (err) {
-      // Only a parse failure means the text is not JSON hippo can merge; EACCES or EISDIR is thrown with its own message.
+      // Only a parse failure means the text is not JSON hippo can merge; EACCES or EISDIR is thrown with its own
+      // message.
       if (!(err instanceof SyntaxError)) throw err;
       // An empty file is a new one with no servers yet, not one with comments.
       if (fs.readFileSync(file, 'utf8').trim() !== '') return null;
@@ -151,7 +170,10 @@ function readMcpConfig(file: string, host: McpHost): McpConfig | null {
 
 export type McpMergeStatus = 'added' | 'present' | 'user-owned' | 'unreadable';
 
-/** Adds hippo's server and keeps every other key; a file hippo cannot parse, or a "hippo" key it did not write, stays as it is. */
+/**
+ * Adds hippo's server and keeps every other key; a file hippo cannot parse, or a "hippo" key it did not write, stays as
+ * it is.
+ */
 function mergeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpMergeStatus {
   const read = readMcpConfig(file, host);
   if (read === null) return 'unreadable';
@@ -178,7 +200,10 @@ export function removeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): 
   return 'removed';
 }
 
-/** A filesystem error on an MCP config file (EACCES, EISDIR, EBUSY), kept as its own message so setup can report it and go on. */
+/**
+ * A filesystem error on an MCP config file (EACCES, EISDIR, EBUSY), kept as its own message so setup can report it and
+ * go on.
+ */
 export interface McpFailure {
   readonly failed: string;
 }
@@ -191,7 +216,10 @@ function hasErrnoCode(err: Error): err is NodeJS.ErrnoException {
   return 'code' in err && typeof err.code === 'string';
 }
 
-/** One MCP config step; a filesystem error comes back as a failure, so the hooks file and the instructions still install. */
+/**
+ * One MCP config step; a filesystem error comes back as a failure, so the hooks file and the instructions still
+ * install.
+ */
 function mcpStep<S extends string>(step: () => S): S | McpFailure {
   try {
     return step();
@@ -207,7 +235,9 @@ function isCopilotBlock(inner: string): boolean {
 
 type FoundBlock = NonNullable<ReturnType<typeof hippoBlock>>;
 
-/** Replaces only the text between the markers, in the file's own line ending, or appends a block after the user's text. */
+/**
+ * Replaces only the text between the markers, in the file's own line ending, or appends a block after the user's text.
+ */
 function withCopilotBlock(text: string, found: FoundBlock | null): string {
   if (found !== null) {
     const { start, end, eol } = found;
@@ -218,10 +248,16 @@ function withCopilotBlock(text: string, found: FoundBlock | null): string {
   return `${text}${text.endsWith('\n') ? '\n' : '\n\n'}${block}`;
 }
 
-/** `kept`: a hippo block that is not the Copilot text (edited, or another agent's in a shared file); `unclosed`: a start marker with no end. */
+/**
+ * `kept`: a hippo block that is not the Copilot text (edited, or another agent's in a shared file); `unclosed`: a start
+ * marker with no end.
+ */
 export type InstructionsInstallStatus = 'written' | 'present' | 'kept' | 'unclosed';
 
-/** Creates the file when missing; any block but hippo's own Copilot one, and a start marker with no end, leave the file as it is. */
+/**
+ * Creates the file when missing; any block but hippo's own Copilot one, and a start marker with no end, leave the file
+ * as it is.
+ */
 function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
   const old = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   const found = hippoBlock(old);
@@ -233,7 +269,10 @@ function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
   return 'written';
 }
 
-/** `text` without the block and its markers, plus the line break after the end marker, else the one before the start marker. */
+/**
+ * `text` without the block and its markers, plus the line break after the end marker, else the one before the start
+ * marker.
+ */
 function withoutCopilotBlock(text: string, found: FoundBlock): string {
   const from = found.start - HOOK_MARKERS.start.length;
   const to = found.end + HOOK_MARKERS.end.length;
@@ -244,7 +283,9 @@ function withoutCopilotBlock(text: string, found: FoundBlock): string {
 
 export type InstructionsRemoveStatus = 'removed' | 'absent' | 'kept' | 'unclosed';
 
-/** Splices out only hippo's own Copilot block and keeps every other byte; a file left with nothing but whitespace goes. */
+/**
+ * Splices out only hippo's own Copilot block and keeps every other byte; a file left with nothing but whitespace goes.
+ */
 export function removeInstructionsBlock(file: string): InstructionsRemoveStatus {
   if (!fs.existsSync(file)) return 'absent';
   const old = fs.readFileSync(file, 'utf8');
@@ -260,7 +301,10 @@ export function removeInstructionsBlock(file: string): InstructionsRemoveStatus 
 /** `kept`: the file is there but is not the text hippo writes, so the user edited it or it is someone else's. */
 export type VscodeInstructionsInstallStatus = 'written' | 'present' | 'kept';
 
-/** The file is hippo's alone, so it is written whole; an earlier hippo text is upgraded, and any other text already there stays. */
+/**
+ * The file is hippo's alone, so it is written whole; an earlier hippo text is upgraded, and any other text already
+ * there stays.
+ */
 export function ensureVscodeInstructions(file: string): VscodeInstructionsInstallStatus {
   if (fs.existsSync(file)) {
     const old = fs.readFileSync(file, 'utf8');
@@ -297,7 +341,10 @@ export interface CopilotInstallResult {
   readonly vscode: readonly VscodeInstallResult[];
 }
 
-/** The CLI's folder holds more than the hooks folder setup makes for VS Code, so a rerun on a VS Code-only machine still finds no CLI. */
+/**
+ * The CLI's folder holds more than the hooks folder setup makes for VS Code, so a rerun on a VS Code-only machine still
+ * finds no CLI.
+ */
 export function isCopilotCliPresent(home: string = copilotHomeDir()): boolean {
   if (fs.statSync(home, { throwIfNoEntry: false })?.isDirectory() !== true) return false;
   const entries = fs.readdirSync(home);

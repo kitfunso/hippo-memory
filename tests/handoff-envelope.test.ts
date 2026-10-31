@@ -18,6 +18,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, t
 import { getContext, adminActor } from '../src/api/index.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 interface ColumnInfo {
   name: string;
@@ -284,7 +285,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       scope: null,
     });
 
-    const handoff = writeSessionEndHandoff(root, 'default', 'sess-a', { gitRef: 'deadbeef', dirtyTree: false, testStatus: 'pass' });
+    const handoff = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-a', evidence: { gitRef: 'deadbeef', dirtyTree: false, testStatus: 'pass' } });
     expect(handoff).not.toBeNull();
     expect(handoff!.taskId).toBe('ship W1');
     expect(handoff!.summary).toBe('writing the envelope');
@@ -301,12 +302,12 @@ describe('test 6: writeSessionEndHandoff', () => {
       session_id: 'sess-a',
     });
 
-    expect(writeSessionEndHandoff(root, 'default', 'sess-b', null)).toBeNull();
+    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-b', evidence: null })).toBeNull();
   });
 
   it('6c: returns null when no active snapshot exists', () => {
     initStore(root);
-    expect(writeSessionEndHandoff(root, 'default', 'sess-none', null)).toBeNull();
+    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-none', evidence: null })).toBeNull();
   });
 
   it('6d: returns null when a handoff strictly newer than the snapshot exists', () => {
@@ -327,7 +328,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       closeHippoDb(db);
     }
 
-    expect(writeSessionEndHandoff(root, 'default', 'sess-d', null)).toBeNull();
+    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-d', evidence: null })).toBeNull();
   });
 
   it('6e: a handoff whose created_at equals snapshot.updated_at to the millisecond does NOT suppress the write', () => {
@@ -352,7 +353,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       closeHippoDb(db);
     }
 
-    const written = writeSessionEndHandoff(root, 'default', 'sess-e', null);
+    const written = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-e', evidence: null });
     expect(written).not.toBeNull();
 
     const db2 = openHippoDb(root);
@@ -374,7 +375,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       session_id: 'sess-f1',
     });
     appendSessionEvent(root, 'default', { session_id: 'sess-f1', event_type: 'session_complete', content: 'success' });
-    const withOutcome = writeSessionEndHandoff(root, 'default', 'sess-f1', null);
+    const withOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f1', evidence: null });
     expect(withOutcome!.outcome).toBe('success');
 
     saveActiveTaskSnapshot(root, 'default', {
@@ -384,7 +385,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       session_id: 'sess-f2',
     });
     appendSessionEvent(root, 'default', { session_id: 'sess-f2', event_type: 'session_complete', content: 'not-a-real-outcome' });
-    const withoutOutcome = writeSessionEndHandoff(root, 'default', 'sess-f2', null);
+    const withoutOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f2', evidence: null });
     expect(withoutOutcome!.outcome).toBeNull();
   });
 });
@@ -392,7 +393,7 @@ describe('test 6: writeSessionEndHandoff', () => {
 describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
   it('surfaces the newest unfinished handoff, then the next one after each stamp', async () => {
     initStore(root);
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
 
     for (let i = 1; i <= 10; i++) {
       const sessionId = `sess-${i}`;
@@ -402,7 +403,7 @@ describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
         next_step: `next ${i}`,
         session_id: sessionId,
       });
-      writeSessionEndHandoff(root, 'default', sessionId, { gitRef: `ref${i}`, dirtyTree: false, testStatus: 'pass' });
+      writeSessionEndHandoff(root, { tenantId: 'default', sessionId, evidence: { gitRef: `ref${i}`, dirtyTree: false, testStatus: 'pass' } });
       closeTaskSnapshotsForSession(root, 'default', sessionId);
     }
 
@@ -427,7 +428,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-priv', summary: 'private', artifacts: [], scope: 'slack:private:C1',
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'fresh' });
     expect(result.sessionHandoff).toBeUndefined();
   });
@@ -437,7 +438,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-legacy', summary: 'legacy', artifacts: [], scope: 'unknown:legacy',
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'fresh' });
     expect(result.sessionHandoff).toBeUndefined();
   });
@@ -447,7 +448,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-pub', summary: 'public', artifacts: [], scope: null,
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'fresh' });
     expect(result.sessionHandoff?.sessionId).toBe('sess-pub');
   });
@@ -461,7 +462,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-priv-active', summary: 'private handoff', artifacts: [], scope: 'slack:private:C1',
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'sess-priv-active' });
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.sessionHandoff).toBeUndefined();
@@ -476,7 +477,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-b', summary: 'unrelated handoff', artifacts: [],
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'sess-a' });
     // pre-fix: activeSnapshot (scope-filtered) was null, so keying on activeSnapshot?.session_id fell through to the ambient unfinishedOnly lookup and surfaced sess-b's handoff.
     expect(result.activeSnapshot).toBeUndefined();
@@ -495,7 +496,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     appendSessionEvent(root, 'default', {
       session_id: 'sess-mix', event_type: 'note', content: 'private event', scope: 'proj:private:x',
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'sess-mix' });
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.recentEvents).toHaveLength(1);
@@ -560,7 +561,7 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       next_step: 'next',
       session_id: 'sess-carry',
     });
-    const refreshed = writeSessionEndHandoff(root, 'default', 'sess-carry', null);
+    const refreshed = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-carry', evidence: null });
     expect(refreshed!.constraints).toEqual(['no schema break']);
     expect(refreshed!.cardId).toBe('card-9');
     expect(refreshed!.targetRuntime).toBe('codex');
@@ -585,7 +586,7 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       next_step: 'next',
       session_id: 'sess-diff',
     });
-    const notCarried = writeSessionEndHandoff(root, 'default', 'sess-diff', null);
+    const notCarried = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-diff', evidence: null });
     expect(notCarried!.constraints).toEqual([]);
     expect(notCarried!.cardId).toBeNull();
     expect(notCarried!.targetRuntime).toBeNull();
@@ -614,7 +615,7 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       next_step: 'next',
       session_id: 'sess-scope-mismatch',
     });
-    const handoff = writeSessionEndHandoff(root, 'default', 'sess-scope-mismatch', null);
+    const handoff = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-scope-mismatch', evidence: null });
     expect(handoff!.artifacts).toEqual([]);
     expect(handoff!.constraints).toEqual([]);
     expect(handoff!.cardId).toBeNull();
@@ -739,7 +740,7 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     try {
       const create = runCli(home, env, 'handoff', 'create', '--summary', 's', '--target-runtime');
       expect(create.status, create.out).toBe(1);
-      expect(create.out).toContain('--target-runtime needs a value');
+      expect(create.out).toContain('--target-runtime requires a value');
 
       const latest = runCli(home, env, 'handoff', 'latest', '--json');
       expect(latest.status, latest.out).toBe(0);
@@ -754,7 +755,7 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     try {
       const create = runCli(home, env, 'handoff', 'create', '--card-id', '--summary', 's');
       expect(create.status, create.out).toBe(1);
-      expect(create.out).toContain('--card-id needs a value');
+      expect(create.out).toContain('--card-id requires a value');
 
       const latest = runCli(home, env, 'handoff', 'latest', '--json');
       expect(latest.status, latest.out).toBe(0);

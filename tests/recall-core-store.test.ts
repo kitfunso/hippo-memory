@@ -1,5 +1,6 @@
 // The CLI ranking core writes through the store the context carries, and the port names no SQLite code.
 
+import type { StoreContext } from '../src/api/types.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,12 +10,16 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
-import type { HippoStore, RecallWrites } from '../src/store/index.js';
-import { adminActor, type Context } from '../src/api/index.js';
-import { retrieve } from '../src/api/recall.js';
-import type { CliCoreRecall } from '../src/api/recall-types.js';
+import { sqliteStore, type HippoStore, type LastRecallWrites, type RecallWrites } from '../src/store/index.js';
+import { loadIndex } from '../src/store/index-and-stats.js';
+import { outcomeForLastRecall } from '../src/api/index.js';
+import { withSqliteAllowed } from '../src/db/index.js';
+import { adminActor } from '../src/api/index.js';
+import { retrieve } from '../src/api/recall/recall.js';
+import type { CliCoreRecall } from '../src/api/recall/types.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
+import { apiCtx, type FullContext } from './_helpers/api-ctx.js';
 
 let home: string;
 let hippoRoot: string;
@@ -58,8 +63,18 @@ describe('retrieve with the CLI ranking core', () => {
   it('writes the recall through a store that is not hippo.db when the context carries one', async () => {
     const inner = portOnlyStore(hippoRoot);
     const writes: RecallWrites[] = [];
-    const store: HippoStore = { ...inner, finishRecall: async (w) => { writes.push(w); await inner.finishRecall(w); } };
-    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
+    const lastRecall = sqliteStore(hippoRoot).lastRecall;
+    const store: HippoStore = {
+      ...inner,
+      lastRecall: {
+        ...lastRecall,
+        finishRecall: async (w: LastRecallWrites, root) => {
+          writes.push(w);
+          return withSqliteAllowed(() => lastRecall.finishRecall(w, root));
+        },
+      },
+    };
+    const ctx: StoreContext = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
 
     const result = await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
 
@@ -69,11 +84,47 @@ describe('retrieve with the CLI ranking core', () => {
     expect(writes[0]!.audit.map((a) => a.op)).toEqual(['recall']);
     expect([...(writes[0]!.strengthen?.ids ?? [])].sort()).toEqual(['mem_core_0', 'mem_core_1']);
     expect(recallRowsInHippoDb()).toBe(1);
+    expect(writes[0]!.trace?.results).toHaveLength(2);
+  });
+
+  it('leaves the last-recall marker on the previous recall when a later recall shows nothing', async () => {
+    const ctx: FullContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
+    await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
+    const marked = loadIndex(hippoRoot);
+    expect([...marked.last_retrieval_ids].sort()).toEqual(['mem_core_0', 'mem_core_1']);
+
+    const empty = await retrieve(ctx, { query: 'zzqqxx nomatch', cliCore: cliCore() });
+
+    expect(empty.results).toEqual([]);
+    const after = loadIndex(hippoRoot);
+    expect(after.last_retrieval_ids).toEqual(marked.last_retrieval_ids);
+    expect(after.last_trace_id).toBe(marked.last_trace_id);
+    const outcome = await outcomeForLastRecall(ctx, true);
+    expect(outcome.applied).toBe(2);
+    expect([...outcome.ids].sort()).toEqual(['mem_core_0', 'mem_core_1']);
+  });
+
+  it('writes the second store\'s recall rows through the store named for that root', async () => {
+    const secondRoot = join(home, 'second');
+    initStore(secondRoot);
+    writeEntry(secondRoot, { ...createMemory('deploy notes kept in the second store'), id: 'mem_second_0', strength: 1 });
+    const inner = portOnlyStore(secondRoot);
+    const writes: RecallWrites[] = [];
+    const globalStore: HippoStore = { ...inner, finishRecall: async (w) => { writes.push(w); await inner.finishRecall(w); } };
+    const ctx: FullContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
+
+    const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), sources: { globalRoot: secondRoot, globalStore } } });
+
+    expect(result.results.map((r) => r.id)).toContain('mem_second_0');
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.audit.map((a) => a.op)).toEqual(['recall']);
+    expect([...(writes[0]!.strengthen?.ids ?? [])]).toEqual(['mem_second_0']);
   });
 });
 
 describe('the store port', () => {
   it('imports nothing from the SQLite layer, so an add-on can build a store on it alone', () => {
+    // A layering rule about imports, which no call can show, so the file text is the contract.
     const source = readFileSync(join(import.meta.dirname, '../src/store/port.ts'), 'utf8');
     expect(source).not.toMatch(/from '\.\.\/db\//);
   });

@@ -1,4 +1,7 @@
-/** Cosine over any indexable vectors (a Float32 view scores as its number[] copy); 0 for empty, mismatched or zero-norm input. */
+/**
+ * Cosine over any indexable vectors (a Float32 view scores as its number[] copy); 0 for empty, mismatched or zero-norm
+ * input.
+ */
 export function cosineOf(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
 

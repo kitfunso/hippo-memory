@@ -24,8 +24,14 @@ export interface CaptureWriteOpts {
   readonly onCaptured?: (entry: MemoryEntry) => void;
 }
 
-/** One outcome per item, in order. `keys` holds the texts already stored and gains each one written, so a repeat inside the batch is skipped. */
-export function writeCapturedItems(hippoRoot: string, items: readonly CaptureItem[], keys: Set<string>, opts: CaptureWriteOpts): CapturedOutcome[] {
+/** One outcome per item, in order. `keys` holds the texts already stored and gains each one written, so a repeat inside
+ * the batch is skipped. */
+export function writeCapturedItems(
+  hippoRoot: string,
+  items: readonly CaptureItem[],
+  keys: Set<string>,
+  opts: CaptureWriteOpts,
+): CapturedOutcome[] {
   const db = openStore(hippoRoot);
   try {
     return items.map((item) => {

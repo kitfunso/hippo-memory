@@ -11,6 +11,7 @@
  * Admins (tenant owners, the local CLI, loopback without a key) keep full
  * access. Real HTTP server on port 0, real SQLite, no mocks.
  */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -21,6 +22,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import * as api from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PRIVATE_SCOPE = 'slack:private:CSECRET1';
 const PUBLIC_SCOPE = 'slack:public:CGENERAL';
@@ -173,13 +175,13 @@ describe('member-key boundaries in the api layer (every surface goes through it)
     rmSync(home, { recursive: true, force: true });
   });
 
-  const memberCtx = (): api.Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:m', role: 'member' } });
-  const adminCtx = (): api.HippoDbContext => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+  const memberCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'api_key:m', role: 'member' }));
+  const adminCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'cli', role: 'admin' }));
 
-  it('key management refuses a member actor', () => {
-    expect(() => api.authCreate(memberCtx(), { role: 'admin' })).toThrow(api.ForbiddenError);
-    expect(() => api.authRevoke(memberCtx(), 'k_missing')).toThrow(api.ForbiddenError);
-    expect(api.authCreate(adminCtx(), { role: 'member' }).role).toBe('member');
+  it('key management refuses a member actor', async () => {
+    await expect(api.authCreate(memberCtx(), { role: 'admin' })).rejects.toThrow(api.ForbiddenError);
+    await expect(api.authRevoke(memberCtx(), 'k_missing')).rejects.toThrow(api.ForbiddenError);
+    expect((await api.authCreate(adminCtx(), { role: 'member' })).role).toBe('member');
   });
 
   it('recall and assemble refuse a restricted scope for a member, and allow it for an admin', async () => {

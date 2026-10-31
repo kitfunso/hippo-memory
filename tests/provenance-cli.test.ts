@@ -60,7 +60,7 @@ describe('hippo provenance CLI', () => {
       createMemory('slack message ingested with full envelope', {
         kind: 'raw',
         owner: 'user:keith',
-        artifact_ref: 'slack://team/eng/1714600000.001',
+        artifactRef: 'slack://team/eng/1714600000.001',
       }),
     );
     writeEntry(
@@ -68,7 +68,7 @@ describe('hippo provenance CLI', () => {
       createMemory('raw row from a misconfigured connector', {
         kind: 'raw',
         owner: null,
-        artifact_ref: null,
+        artifactRef: null,
       }),
     );
 
@@ -102,7 +102,7 @@ describe('hippo provenance CLI', () => {
       createMemory('raw row with full envelope', {
         kind: 'raw',
         owner: 'agent:hippo',
-        artifact_ref: 'gh://hippo/hippo-memory/pull/100',
+        artifactRef: 'gh://hippo/hippo-memory/pull/100',
       }),
     );
 

@@ -1,5 +1,6 @@
 // Z1: recall against the prompt, gated (docs/plans/2026-09-26-z1-prompt-recall.md).
 // Real SQLite stores in tmp dirs, no mocks.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -8,16 +9,17 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import type { HippoConfig } from '../src/core/config.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PROJECT = 'proj-a';
 
 let tmpRoot: string;
 let local: string;
-let ctx: Context;
+let ctx: FullContext;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
   const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
@@ -50,7 +52,7 @@ beforeEach(() => {
   initStore(local);
   initStore(globalRoot);
   process.env.HIPPO_HOME = globalRoot;
-  ctx = { hippoRoot: local, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {

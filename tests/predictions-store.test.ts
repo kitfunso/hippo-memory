@@ -20,6 +20,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntryThenFail } from './_helpers/failing-write.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -117,12 +118,8 @@ describe('predictions store (first-class object)', () => {
     });
 
     expect(() => {
-      writeEntry(home, mem, {
-        afterWrite: () => {
-          throw new Error('forced afterWrite failure');
-        },
-      });
-    }).toThrow('forced afterWrite failure');
+      writeEntryThenFail(home, mem);
+    }).toThrow('forced');
 
     // Memory row count unchanged (SAVEPOINT rollback)
     const memAfter = (() => {

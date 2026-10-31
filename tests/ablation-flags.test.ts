@@ -25,7 +25,10 @@ import {
 import { hybridSearch } from '../src/search/hybrid.js';
 import { outcomeMultiplier } from '../src/search/boosts.js';
 import { markRetrieved } from '../src/core/memory.js';
-import { evalNow, isOutcomeSlowAblated, _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { evalNow, isOutcomeSlowAblated, strengthAblation, _resetAblationCacheForTests } from '../src/core/ablation.js';
+
+// Core no longer reads the environment: each call hands it the flags the test just set.
+const abl = () => ({ ablation: strengthAblation() });
 
 const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_DECAY',
@@ -68,18 +71,18 @@ const NOW = new Date('2026-06-11T12:00:00.000Z');
 describe('defaults (no flags set)', () => {
   it('decay, strengthening, and both outcome channels all run', async () => {
     // Decay live: old memory weaker than fresh.
-    expect(calculateStrength(agedMemory(30), NOW)).toBeLessThan(
-      calculateStrength(agedMemory(0), NOW),
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(
+      calculateStrength(agedMemory(0), NOW, abl()),
     );
     // Strengthening live: markRetrieved mutates.
-    const [marked] = markRetrieved([agedMemory(30)], NOW);
+    const [marked] = markRetrieved([agedMemory(30)], NOW, abl());
     expect(marked.retrieval_count).toBe(1);
     expect(marked.last_retrieved).toBe(NOW.toISOString());
     expect(marked.half_life_days).toBe(9); // 7 + 2
     // Slow outcome channel live.
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m)).toBeGreaterThan(1);
+    expect(calculateRewardFactor(m, strengthAblation())).toBeGreaterThan(1);
     // Fast outcome channel live.
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBeGreaterThan(1);
@@ -108,7 +111,7 @@ describe('HIPPO_ABLATE_RECENCY / HIPPO_EVAL_RECENCY_DAYS', () => {
   it('ablated: the multiplier is 1 and decay stays live (isolation)', async () => {
     setEnv('HIPPO_ABLATE_RECENCY', '1');
     expect(await recencyOf(30)).toBe(1);
-    expect(calculateStrength(agedMemory(30), NOW)).toBeLessThan(calculateStrength(agedMemory(0), NOW));
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(calculateStrength(agedMemory(0), NOW, abl()));
   });
 
   it('a 7-day scale lowers the multiplier; junk values keep 30', async () => {
@@ -140,11 +143,11 @@ describe('HIPPO_ABLATE_DECAY', () => {
   });
 
   it('neutralizes decay: a 30-day-old memory equals a fresh one', () => {
-    expect(calculateStrength(agedMemory(30), NOW)).toBe(calculateStrength(agedMemory(0), NOW));
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBe(calculateStrength(agedMemory(0), NOW, abl()));
   });
 
   it('isolation: strengthening writes still run', () => {
-    const [marked] = markRetrieved([agedMemory(30)], NOW);
+    const [marked] = markRetrieved([agedMemory(30)], NOW, abl());
     expect(marked.retrieval_count).toBe(1);
     expect(marked.half_life_days).toBe(9);
   });
@@ -152,7 +155,7 @@ describe('HIPPO_ABLATE_DECAY', () => {
   it('isolation: slow outcome channel still runs', () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, false);
-    expect(calculateRewardFactor(m)).toBeLessThan(1);
+    expect(calculateRewardFactor(m, strengthAblation())).toBeLessThan(1);
   });
 
   it('documents the clamp interaction: read-side retrieval boost saturates at 1', () => {
@@ -161,8 +164,8 @@ describe('HIPPO_ABLATE_DECAY', () => {
     // boost can only offset decay, never exceed baseline). See ablation.ts.
     const m = agedMemory(0);
     m.retrieval_count = 16;
-    expect(calculateStrength(m, NOW)).toBe(1.0);
-    expect(calculateStrength(agedMemory(0), NOW)).toBe(1.0);
+    expect(calculateStrength(m, NOW, abl())).toBe(1.0);
+    expect(calculateStrength(agedMemory(0), NOW, abl())).toBe(1.0);
   });
 
   it('documents the co-ablation: outcome-slow is inert when decay is off (codex P2)', async () => {
@@ -173,7 +176,7 @@ describe('HIPPO_ABLATE_DECAY', () => {
     let bad = agedMemory(10, 'outcome laden memory');
     bad = applyOutcome(applyOutcome(bad, false), false);
     const plain = agedMemory(10, 'outcome laden memory');
-    expect(calculateStrength(bad, NOW)).toBe(calculateStrength(plain, NOW)); // slow inert
+    expect(calculateStrength(bad, NOW, abl())).toBe(calculateStrength(plain, NOW, abl())); // slow inert
     const results = await hybridSearch('outcome laden memory', [bad], {
       budget: 10000,
       explain: true,
@@ -200,7 +203,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // at each persisting caller (codex round-6 P2).
     const before = agedMemory(30);
     before.confidence = 'stale';
-    const result = markRetrieved([before], NOW);
+    const result = markRetrieved([before], NOW, abl());
     expect(result.length).toBe(1); // ids preserved for outcome attribution
     expect(result[0]).toBe(before); // identical object, untouched
     expect(result[0].retrieval_count).toBe(0); // no count
@@ -223,14 +226,14 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     hot.last_retrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
     const cold = agedMemory(10);
     cold.created = created;
-    expect(computeMass(calculateStrength(hot, NOW), hot.retrieval_count)).toBe(
-      computeMass(calculateStrength(cold, NOW), cold.retrieval_count),
+    expect(computeMass(calculateStrength(hot, NOW, abl()), hot.retrieval_count)).toBe(
+      computeMass(calculateStrength(cold, NOW, abl()), cold.retrieval_count),
     );
   });
 
   it('isolation: decay still runs', () => {
-    expect(calculateStrength(agedMemory(30), NOW)).toBeLessThan(
-      calculateStrength(agedMemory(0), NOW),
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(
+      calculateStrength(agedMemory(0), NOW, abl()),
     );
   });
 
@@ -240,7 +243,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     const withHistory = agedMemory(10);
     withHistory.retrieval_count = 16;
     const without = agedMemory(10);
-    expect(calculateStrength(withHistory, NOW)).toBe(calculateStrength(without, NOW));
+    expect(calculateStrength(withHistory, NOW, abl())).toBe(calculateStrength(without, NOW, abl()));
   });
 
   it('neutralizes physics particle mass too: retrieval history cannot leak via gravity (codex round-5 P2)', async () => {
@@ -267,16 +270,16 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     untouched.created = created;
     untouched.last_retrieved = created;
     untouched.half_life_days = 7;
-    expect(calculateStrength(reset, NOW)).toBe(calculateStrength(untouched, NOW));
+    expect(calculateStrength(reset, NOW, abl())).toBe(calculateStrength(untouched, NOW, abl()));
     // Sanity: WITHOUT the flag these differ (the reset memory is stronger).
     clearAblationEnv();
-    expect(calculateStrength(reset, NOW)).toBeGreaterThan(calculateStrength(untouched, NOW));
+    expect(calculateStrength(reset, NOW, abl())).toBeGreaterThan(calculateStrength(untouched, NOW, abl()));
   });
 
   it('isolation: both outcome channels still run', async () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m)).toBeGreaterThan(1);
+    expect(calculateRewardFactor(m, strengthAblation())).toBeGreaterThan(1);
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBeGreaterThan(1);
   });
@@ -296,7 +299,7 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m)).toBe(1.0);
+    expect(calculateRewardFactor(m, strengthAblation())).toBe(1.0);
   });
 
   it('neutralizes the fast channel (outcomeBoost = 1 despite outcomes)', async () => {
@@ -308,10 +311,10 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
   });
 
   it('isolation: decay and strengthening still run', () => {
-    expect(calculateStrength(agedMemory(30), NOW)).toBeLessThan(
-      calculateStrength(agedMemory(0), NOW),
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(
+      calculateStrength(agedMemory(0), NOW, abl()),
     );
-    const [marked] = markRetrieved([agedMemory(30)], NOW);
+    const [marked] = markRetrieved([agedMemory(30)], NOW, abl());
     expect(marked.retrieval_count).toBe(1);
   });
 
@@ -327,13 +330,13 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     // Recompute BOTH strength caches at the same instant: replayPriority also
     // reads entry.strength, and applyOutcome's recompute-at-real-now would
     // otherwise differ from plain's initial cache purely by fixture timing.
-    rewarded.strength = calculateStrength(rewarded, NOW);
-    plain.strength = calculateStrength(plain, NOW);
+    rewarded.strength = calculateStrength(rewarded, NOW, abl());
+    plain.strength = calculateStrength(plain, NOW, abl());
     expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBe(replayPriority(plain, NOW, isOutcomeSlowAblated()));
     // Sanity: WITHOUT the flag the rewarded memory is prioritized.
     clearAblationEnv();
-    rewarded.strength = calculateStrength(rewarded, NOW);
-    plain.strength = calculateStrength(plain, NOW);
+    rewarded.strength = calculateStrength(rewarded, NOW, abl());
+    plain.strength = calculateStrength(plain, NOW, abl());
     expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBeGreaterThan(replayPriority(plain, NOW, isOutcomeSlowAblated()));
   });
 });
@@ -347,7 +350,7 @@ describe('HIPPO_ABLATE_OUTCOME_SLOW (decomposition arm)', () => {
   it('slow off, fast still live', async () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m)).toBe(1.0); // slow off
+    expect(calculateRewardFactor(m, strengthAblation())).toBe(1.0); // slow off
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBeGreaterThan(1); // fast on
   });
@@ -362,7 +365,7 @@ describe('HIPPO_ABLATE_OUTCOME_FAST (decomposition arm)', () => {
   it('fast off, slow still live', async () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m)).toBeGreaterThan(1); // slow on
+    expect(calculateRewardFactor(m, strengthAblation())).toBeGreaterThan(1); // slow on
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBe(1); // fast off
   });
@@ -384,11 +387,11 @@ describe('HIPPO_FAKE_NOW', () => {
     realFresh.created = '2026-06-11T00:00:00.000Z';
     realFresh.last_retrieved = '2026-06-11T00:00:00.000Z';
     realFresh.half_life_days = 7;
-    expect(calculateStrength(realFresh)).toBeLessThan(0.01);
+    expect(calculateStrength(realFresh, undefined, abl())).toBeLessThan(0.01);
     // createMemory write-stamps honor the fake clock too (simulated sessions).
     expect(createMemory('stamped in 2030', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }).created).toBe('2030-01-01T00:00:00.000Z');
     // markRetrieved default stamp = fake now.
-    const [marked] = markRetrieved([createMemory('stamp me', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })]);
+    const [marked] = markRetrieved([createMemory('stamp me', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })], undefined, abl());
     expect(marked.last_retrieved).toBe('2030-01-01T00:00:00.000Z');
   });
 
@@ -474,6 +477,15 @@ describe('HIPPO_FAKE_NOW', () => {
     process.env.HIPPO_FAKE_NOW = '2030-01-01T00:00:00.000Z';
     _resetAblationCacheForTests();
     const m = agedMemory(0);
-    expect(calculateStrength(m, NOW)).toBe(1.0); // explicit NOW, not 2030
+    expect(calculateStrength(m, NOW, abl())).toBe(1.0); // explicit NOW, not 2030
+  });
+});
+
+describe('core scoring does not read the environment', () => {
+  it('calculateStrength ignores HIPPO_ABLATE_DECAY unless the options carry it', () => {
+    process.env.HIPPO_ABLATE_DECAY = '1';
+    _resetAblationCacheForTests();
+    expect(calculateStrength(agedMemory(30), NOW)).toBeLessThan(calculateStrength(agedMemory(0), NOW));
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBe(calculateStrength(agedMemory(0), NOW, abl()));
   });
 });

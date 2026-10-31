@@ -1,9 +1,11 @@
-/** LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so API-key users opt in; idempotent via the `llm-refined` tag.
+/**
+ * LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so API-key users opt in;
+ * idempotent via the `llm-refined` tag.
  * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../core/memory.js';
-import { REFINED_TAG, storeRefinement, type Context } from '../api/index.js';
-import { listMemories, listMemoriesByIds, type TenantReach } from '../api/memories.js';
+import { REFINED_TAG, storeRefinement, type StoreContext } from '../api/index.js';
+import { listMemories, listMemoriesByIds, type TenantReach } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { chunked } from '../util/chunked.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
@@ -30,7 +32,10 @@ export interface RefineOptions {
   all?: boolean;
   /** Injected for testing — defaults to the real fetch. */
   fetcher?: typeof fetch;
-  /** Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return null and are skipped. */
+  /**
+   * Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return null and are
+   * skipped.
+   */
   tenantId?: string;
 }
 
@@ -42,7 +47,10 @@ export interface RefineResult {
   details: Array<{ id: string; status: 'refined' | 'skipped' | 'failed'; reason?: string }>;
 }
 
-/** Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns null when the API call failed. */
+/**
+ * Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns null when the API
+ * call failed.
+ */
 export async function refineSemanticMemory(
   merged: string,
   sources: MemoryEntry[],
@@ -93,6 +101,7 @@ function describeRefineFailure(failure: AnthropicMessageFailure): string {
     case 'request': return `refine: request failed: ${failure.message}`;
     case 'http': return `refine: API answered HTTP ${failure.status}${failure.detail ? `: ${failure.detail}` : ''}`;
     case 'unreadable': return `refine: unreadable response: ${failure.message}`;
+    case 'empty': return 'refine: response held no text';
   }
 }
 
@@ -101,7 +110,10 @@ function isConsolidated(entry: MemoryEntry): boolean {
   return CONSOLIDATED_MARKERS.some((m) => entry.content.startsWith(m));
 }
 
-/** Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so reruns skip it (unless `all`). */
+/**
+ * Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so reruns skip it
+ * (unless `all`).
+ */
 export async function refineStore(
   hippoRoot: string,
   opts: RefineOptions,
@@ -117,7 +129,7 @@ export async function refineStore(
   // No tenant means every tenant, so the ctx's own tenant is never read.
   const ctx = cliApiContext(hippoRoot, opts.tenantId ?? '');
   const reach: TenantReach = { everyTenant: opts.tenantId === undefined };
-  const entries = listMemories(ctx, reach);
+  const entries = await listMemories(ctx, reach);
   let processed = 0;
 
   for (const entry of entries) {
@@ -140,7 +152,7 @@ export async function refineStore(
 }
 
 async function refineOneEntry(
-  ctx: Context,
+  ctx: StoreContext,
   reach: TenantReach,
   entry: MemoryEntry,
   opts: RefineOptions,
@@ -151,9 +163,8 @@ async function refineOneEntry(
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
   // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped,
   // so refine still works from the merged content alone.
-  const found = new Map(
-    chunked(parentIds).flatMap((chunk) => listMemoriesByIds(ctx, chunk, reach)).map((p) => [p.id, p]),
-  );
+  const chunks = await Promise.all(chunked(parentIds).map((chunk) => listMemoriesByIds(ctx, chunk, reach)));
+  const found = new Map(chunks.flat().map((p) => [p.id, p]));
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 
   const refined = await refineSemanticMemory(entry.content, sources, {
@@ -174,7 +185,7 @@ async function refineOneEntry(
     return;
   }
 
-  storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenantId), entry, refined);
+  await storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenant_id), entry, refined);
   result.refined++;
   result.details.push({ id: entry.id, status: 'refined' });
 }

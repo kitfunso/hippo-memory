@@ -1,9 +1,10 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
@@ -17,17 +18,14 @@ import type {
   GitHubPullRequestEvent,
   GitHubPullRequestReviewCommentEvent,
 } from '../src/connectors/github/types.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
 
 // -- Test helpers ----------------------------------------------------------
 
-const ctx = (root: string): HippoDbContext => ({
-  hippoRoot: root,
-  tenantId: 'default',
-  actor: { subject: 'connector:github', role: 'admin' },
-});
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
 
 function makeIssueEvent(overrides: Partial<GitHubIssueEvent['issue']> = {}): GitHubIssueEvent {
   return {
@@ -107,20 +105,21 @@ interface LostRace {
   readonly winner: IngestResult;
 }
 
-/** The second worker's write of the same issue event. It runs on hippo.db at once, with no await, so it commits inside the loser's lock request. */
-function storeAsOtherWorker(root: string, { event }: IngestInput): IngestResult {
+/** The second worker's write of the same issue event. remember's first store call is the write, which hippo.db runs before it
+ *  returns, so it commits inside the loser's lock request; only the answer waits for the Promise. */
+async function storeAsOtherWorker(root: string, { event }: IngestInput): Promise<IngestResult> {
   const opts = event.eventName === 'issues' ? issueEventToRememberOpts(event.payload) : null;
   if (event.eventName !== 'issues' || !opts) throw new Error('the raced event is an issue with a body');
   const { issue, repository } = event.payload;
   const idempotencyKey = computeIdempotencyKey(`github://${repository?.full_name}/issue/${issue.number}`, issue.updated_at ?? null);
   const logged = { connector: 'github', idempotencyKey, deliveryId: 'd-other-worker', eventName: 'issues' } as const;
-  const stored = remember(ctx(root), { ...opts, untrusted: true, event: logged });
+  const stored = await remember(ctx(root), { ...opts, untrusted: true, event: logged });
   return { status: stored.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: stored.duplicate?.memoryId ?? stored.id };
 }
 
 /** Ingests `input` as the loser of a race: at its first lock request a second worker stores the same event on its own connection and commits. */
 async function ingestBehindAnotherWorker(root: string, input: IngestInput): Promise<LostRace> {
-  const winners: IngestResult[] = [];
+  const winners: Promise<IngestResult>[] = [];
   let winnerRan = false;
   const { exec } = DatabaseSync.prototype;
   const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
@@ -131,7 +130,7 @@ async function ingestBehindAnotherWorker(root: string, input: IngestInput): Prom
     exec.call(this, sql);
   });
   try {
-    return { loser: await ingestEvent(ctx(root), input), winner: winners[0] };
+    return { loser: await ingestEvent(ctx(root), input), winner: await winners[0] };
   } finally {
     spy.mockRestore();
   }

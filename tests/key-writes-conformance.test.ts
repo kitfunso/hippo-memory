@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { mintApiKey } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { auditHighIdAt } from '../src/store/key-audit.js';
-import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../src/server.js';
+import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../src/entry/store-kit.js';
 import { inMemoryKeyWritesStore, OWNED_SCOPE, OWNER, seedOwnedKeys, type OwnedKeys } from './_helpers/in-memory-key-writes-store.js';
 import {
   FIXTURE_REVOKED_AT, onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture,

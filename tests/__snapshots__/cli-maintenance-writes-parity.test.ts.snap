@@ -3040,7 +3040,7 @@ exports[`hippo watch (built CLI, no server) > no command > output 1`] = `
 "$ hippo watch -> 1
 --- stdout
 --- stderr
-Usage: hippo watch "<command>"
+Usage: hippo watch -- <command> [args...], or hippo watch --shell "<command line>"
 "
 `;
 

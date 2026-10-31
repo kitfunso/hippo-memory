@@ -7,7 +7,9 @@ export interface ProvenanceCoverage {
   gaps: Array<{ id: string; missing: ('owner' | 'artifact_ref')[] }>;
 }
 
-/** Provenance coverage gate: every `kind='raw'` row must carry `owner` and `artifact_ref`; derivative or terminal rows are excluded.
+/**
+ * Provenance coverage gate: every `kind='raw'` row must carry `owner` and `artifact_ref`; derivative or terminal rows
+ * are excluded.
  * Coverage 1.0 on a non-empty raw set is the ship gate. */
 export function buildProvenanceCoverage(entries: MemoryEntry[]): ProvenanceCoverage {
   const raws = entries.filter((e) => e.kind === 'raw');

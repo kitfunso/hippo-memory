@@ -5,24 +5,13 @@
 // keyword must not be recorded as the repo) + lenient parseInt on a mutating
 // subcommand. Plus the refresh path (write + dry-run) and the version chain.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
-interface TestEnv { cwd: string; hippoRoot: string; globalRoot: string; }
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-brief-cli-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 /** Extracts the `#<id>` printed by a `brief` CLI command, or throws. */
 function extractId(text: string): string {
   const match = text.match(/#(\d+)/);
@@ -39,7 +28,7 @@ function run(env: TestEnv, args: string[]): string {
 
 describe('hippo brief CLI', () => {
   let env: TestEnv;
-  beforeEach(() => { env = makeEnv(); });
+  beforeEach(() => { env = makeEnv('brief-cli'); });
   afterEach(() => { rmSync(env.cwd, { recursive: true, force: true }); });
 
   it('`brief new "<repo>" --summary ...` records the real repo, not the "new" keyword', () => {

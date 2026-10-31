@@ -9,9 +9,10 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleRecall } from '../src/cli/recall.js';
-import { resetSessionRings } from '../src/api/recall-record.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
 import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpResponse } from '../src/mcp/server.js';
-import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { retrieve, RecallContractError, type RecallResult } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
@@ -20,6 +21,8 @@ import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../src/cli/flag-values.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 type Surface = 'cli' | 'mcp' | 'http';
 const SURFACES: readonly Surface[] = ['cli', 'mcp', 'http'];
@@ -47,7 +50,7 @@ type ToolArgs = Record<string, string | number | boolean>;
 function callTool(root: string, name: string, args: ToolArgs): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true },
+    { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) },
   );
 }
 
@@ -119,8 +122,8 @@ async function onFreshStore<T>(kind: 'local' | 'wide', fn: (s: Store) => Promise
   }
 }
 
-beforeAll(() => {
-  templates = seedTemplates();
+beforeAll(async () => {
+  templates = await seedTemplates();
 });
 
 afterAll(() => {
@@ -234,7 +237,7 @@ describe('recall surface parity goldens', () => {
     const got = await onFreshStore('local', async (s) => {
       const r = await viaMcp(s, { query: 'deploy', budget: 80 });
       const recallRow = auditOps(s.root).find((a) => a.op === 'recall');
-      // SAFETY: the 'recall' audit row's metadata is { query_hash, query_length, results } (src/api/recall-record.ts).
+      // SAFETY: the 'recall' audit row's metadata is { query_hash, query_length, results } (src/api/recall/finish.ts).
       const metadata = JSON.parse(recallRow!.metadata_json) as { results: number };
       return { shownHeading: /Found \d+ memor[a-z]*/.exec(r.output)?.[0] ?? null, auditResults: metadata.results };
     });
@@ -256,7 +259,7 @@ describe('recall surface parity goldens', () => {
     const got = await onFreshStore('local', async (s) => {
       let rankedScore = 0;
       const result = await retrieve(
-        { hippoRoot: s.root, tenantId: TENANT, actor: { subject: 'mcp', role: 'admin' } },
+        apiCtx(s.root, TENANT, { subject: 'mcp', role: 'admin' }),
         {
           query: 'deploy', limit: 50, mode: 'physics', sessionId: SESSION, keepHeldCopies: true, suppressAvailabilityHint: true,
           showRanked: ({ ranked }) => {
@@ -353,7 +356,7 @@ describe('shared store recall, MCP vs HTTP', () => {
       writeEntry(root, seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', { origin_project: 'beta' }));
       const mcp = toolReply(await handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } } },
-        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' } },
+        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' }, store: sqliteStore(root) },
       ));
       expect(mcp.isError, mcp.text).toBe(false);
       expect(mcp.text).toContain('the acme repo');

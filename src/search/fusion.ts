@@ -47,11 +47,20 @@ export function fuseRanks(input: FusionInput): Map<number, number> {
   const opts = { absentRank: entries.length + 1 };
   // An all-absent third list would add a constant the later multipliers make non-uniform, so an empty one is skipped.
   return graphRanked.length > 0
-    ? rrfFuse([bm25Ranked, cosineRanked, graphRanked], [input.bm25Weight, input.embeddingWeight, input.graphStream?.weight ?? 0], opts)
+    ? rrfFuse(
+        [bm25Ranked, cosineRanked, graphRanked],
+        [input.bm25Weight, input.embeddingWeight, input.graphStream?.weight ?? 0],
+        opts,
+      )
     : rrfFuse([bm25Ranked, cosineRanked], [input.bm25Weight, input.embeddingWeight], opts);
 }
 
-function graphRanking(input: FusionInput, eligibleCount: number, bm25Ranked: number[], cosineRanked: number[]): number[] {
+function graphRanking(
+  input: FusionInput,
+  eligibleCount: number,
+  bm25Ranked: number[],
+  cosineRanked: number[],
+): number[] {
   const gs = input.graphStream;
   // Without doc vectors the dense ranking is just entry order, so seeds drawn from it would mean nothing.
   const hasDocVectors = input.dense.hadVec.some(Boolean);

@@ -3,12 +3,7 @@
 import { DEFAULT_TENANT_ID, envLossAversionRatio } from '../util/env.js';
 import { BadRequestError } from './api-errors.js';
 import { randomUUID } from 'crypto';
-import {
-  isDecayAblated,
-  isOutcomeSlowAblated,
-  isRecallBoostAblated,
-  evalNow,
-} from './ablation.js';
+import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from './ablation.js';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
@@ -32,7 +27,8 @@ export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 export const MEMORY_KINDS = ['raw', 'distilled', 'superseded', 'archived'] as const;
 export type MemoryKind = (typeof MEMORY_KINDS)[number];
 
-// Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison sorts them chronologically.
+// Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison sorts them
+// chronologically.
 // A markdown rebuild keeps legacy offsets as written, so importers should normalize on write.
 
 export interface MemoryEntry {
@@ -61,14 +57,18 @@ export interface MemoryEntry {
   valid_from: string;               // ISO 8601 timestamp when this belief became true
   superseded_by: string | null;     // ID of the memory that replaced this one; null = current
   extracted_from: string | null;
-  dag_level: number;            // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
+  dag_level: number; // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
   dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
-  // Cached DAG metadata for level-2+ summaries so recall can bound scope without re-walking; always 0 / null on leaves and facts.
+  // Cached DAG metadata for level-2+ summaries so recall can bound scope without re-walking; always 0 / null on leaves
+  // and facts.
   descendant_count?: number;
   earliest_at?: string | null;
   latest_at?: string | null;
-  /** 1 when a child was invalidated, superseded, forgotten or archived since the last rebuild; sleep clears it. Always 0 below level 2. */
-  summary_dirty?: 0 | 1;
+  /**
+   * True when a child was invalidated, superseded, forgotten or archived since the last rebuild; sleep clears it.
+   * Always false below level 2.
+   */
+  summary_dirty?: boolean;
   /** ISO 8601 time of the last successful rebuild, or null if never rebuilt. */
   last_rebuilt_at?: string | null;
   /** Count of successful rebuilds: 0 at the first buildDag write, bumped by each rebuild. */
@@ -80,14 +80,21 @@ export interface MemoryEntry {
   scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global
   owner: string | null;         // 'user:<id>' or 'agent:<id>'
   artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
-  tenantId: string;             // 'default' for single-tenant deployments
-  /** Owning project, lowercased; '' = user-global (injectable everywhere), null = none known (legacy or unnamed write), denied by ambient context.
+  tenant_id: string;            // 'default' for single-tenant deployments
+  /**
+   * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known (legacy or unnamed write),
+   * denied by ambient context.
    *  Stamped at write time by stampOriginProject (src/store/entry-row.ts); undefined only before the first write. */
   origin_project?: string | null;
-  /** Raw FTS5 bm25() from the search path (negative, lower = better); set only for a non-empty query the FTS join answered.
+  /**
+   * Raw FTS5 bm25() from the search path (negative, lower = better); set only for a non-empty query the FTS join
+   * answered.
    *  Not comparable to the JS scorer in src/search/bm25.ts, so read it as rank metadata only. */
   bm25_score?: number;
 }
+
+/** Named dag_level values; level 0 is a raw leaf. */
+export const DAG_LEVEL = { extracted: 1, topic: 2, entity: 3 } as const;
 
 /** Tag on a memory whose named file/symbol/script changed after it was stored. */
 export const CHURN_STALE_TAG = 'churn-stale';
@@ -123,12 +130,17 @@ function getLossAversionRatio(): number {
   return parsed;
 }
 
-/** Test-only: a test that sets HIPPO_LOSS_AVERSION_RATIO calls this in beforeEach and afterEach (tests/emotional-multipliers.test.ts). */
+/**
+ * Test-only: a test that sets HIPPO_LOSS_AVERSION_RATIO calls this in beforeEach and afterEach
+ * (tests/emotional-multipliers.test.ts).
+ */
 export function _resetLossAversionRatioCacheForTests(): void {
   _lossAversionRatioCache = undefined;
 }
 
-/** Scales only the `negative` multiplier; `critical` stays unscaled so the knob moves just the losses-vs-gains claim. */
+/**
+ * Scales only the `negative` multiplier; `critical` stays unscaled so the knob moves just the losses-vs-gains claim.
+ */
 export function applyLossAversionRatio(
   valence: EmotionalValence,
   baseMultiplier: number,
@@ -137,10 +149,16 @@ export function applyLossAversionRatio(
   return baseMultiplier * getLossAversionRatio();
 }
 
-/** 1 + REWARD_SLOPE * (pos - neg) / (pos + neg + 1), in (0.5, 1.5), 1.0 with no outcomes; it scales the effective half-life. */
-export function calculateRewardFactor(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>): number {
+/**
+ * 1 + REWARD_SLOPE * (pos - neg) / (pos + neg + 1), in (0.5, 1.5), 1.0 with no outcomes; it scales the effective
+ * half-life.
+ */
+export function calculateRewardFactor(
+  entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>,
+  ablation: StrengthAblation = NO_STRENGTH_ABLATION,
+): number {
   // EVAL-ONLY ablation (see ablation.ts): the slow outcome channel.
-  if (isOutcomeSlowAblated()) return 1.0;
+  if (ablation.outcomeSlow) return 1.0;
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   if (pos === 0 && neg === 0) return 1.0;
@@ -156,28 +174,48 @@ export const DECAY_BASE = 0.5;
 export const REWARD_SLOPE = 0.5;
 export const RETRIEVAL_BOOST_SLOPE = 0.1;
 
-/** Bad outcome marks past good ones, floored at zero; each halves strength and stops recall strengthening, so a correction outranks pinning. */
-export function netWrong(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>): number {
-  if (isOutcomeSlowAblated() || isDecayAblated()) return 0;
+/**
+ * Bad outcome marks past good ones, floored at zero; each halves strength and stops recall strengthening, so a
+ * correction outranks pinning.
+ */
+export function netWrong(
+  entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>,
+  ablation: StrengthAblation = NO_STRENGTH_ABLATION,
+): number {
+  if (ablation.outcomeSlow || ablation.decay) return 0;
   return Math.max(0, (entry.outcome_negative ?? 0) - (entry.outcome_positive ?? 0));
 }
 
 /** What calculateStrength reads, so a caller can score a row without loading its text. */
 export type StrengthInputs = Pick<
   MemoryEntry,
-  'pinned' | 'created' | 'last_retrieved' | 'half_life_days' | 'retrieval_count' | 'emotional_valence' | 'outcome_positive' | 'outcome_negative'
+  | 'pinned'
+  | 'created'
+  | 'last_retrieved'
+  | 'half_life_days'
+  | 'retrieval_count'
+  | 'emotional_valence'
+  | 'outcome_positive'
+  | 'outcome_negative'
 >;
 
-/** Decay basis: clock = wall time, session = per sleep cycle (intermittent agents), adaptive = half-life scaled by session frequency. */
+/**
+ * Decay basis: clock = wall time, session = per sleep cycle (intermittent agents), adaptive = half-life scaled by
+ * session frequency.
+ */
 export interface DecayOptions {
   decayBasis?: 'clock' | 'session' | 'adaptive';
   /** Average interval between sleep cycles, in days. Used by 'adaptive' and 'session' modes. */
   avgSessionIntervalDays?: number;
   /** Total sleep cycles completed. Used by consolidation tracking. */
   sleepCount?: number;
+  /** EVAL-ONLY switches resolved once at the entry layer (`strengthAblation()`); absent means production scoring. */
+  ablation?: StrengthAblation;
 }
 
-/** Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]; the basis modes are on DecayOptions.
+/**
+ * Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]; the basis modes are on
+ * DecayOptions.
  *  Pinned memories skip time decay, but being marked wrong still fades them (netWrong). */
 export function calculateStrength(
   entry: StrengthInputs,
@@ -185,17 +223,19 @@ export function calculateStrength(
   now: Date = evalNow(),
   options: DecayOptions = {},
 ): number {
+  const ablation = options.ablation ?? NO_STRENGTH_ABLATION;
   // Being marked wrong outranks every shield: pinning, error tags, heavy recall.
-  const wrongPenalty = Math.pow(DECAY_BASE, Math.min(netWrong(entry), MAX_WRONG_HALVINGS));
+  const wrongPenalty = Math.pow(DECAY_BASE, Math.min(netWrong(entry, ablation), MAX_WRONG_HALVINGS));
   if (entry.pinned) return wrongPenalty;
 
-  // EVAL-ONLY ablation (see ablation.ts): anchor decay at creation so clock resets from earlier unflagged runs cannot leak in.
+  // EVAL-ONLY ablation (see ablation.ts): anchor decay at creation so clock resets from earlier unflagged runs cannot
+  // leak in.
   const lastRetrieved = new Date(
-    isRecallBoostAblated() ? entry.created : entry.last_retrieved,
+    ablation.recallBoost ? entry.created : entry.last_retrieved,
   );
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
-  const rewardFactor = calculateRewardFactor(entry);
+  const rewardFactor = calculateRewardFactor(entry, ablation);
   const effectiveHalfLife = entry.half_life_days * rewardFactor;
 
   // Guard: zero half-life causes 0/0 = NaN in the exponent
@@ -204,9 +244,9 @@ export function calculateStrength(
   const decayExponent = decayExponentFor(options, daysSince, effectiveHalfLife);
 
   // EVAL-ONLY ablation (see ablation.ts): decay := 1, so the [0,1] clamp below caps the boost at baseline.
-  const decay = isDecayAblated() ? 1.0 : Math.pow(DECAY_BASE, decayExponent);
+  const decay = ablation.decay ? 1.0 : Math.pow(DECAY_BASE, decayExponent);
 
-  const retrievalBoost = retrievalBoostFor(entry);
+  const retrievalBoost = retrievalBoostFor(entry, ablation);
 
   const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotional_valence] ?? 1.0;
   const emotionalMultiplier = applyLossAversionRatio(entry.emotional_valence, baseMultiplier);
@@ -221,7 +261,8 @@ function decayExponentFor(options: DecayOptions, daysSince: number, halfLifeDays
   let effectiveHalfLife = halfLifeDays;
   const basis = options.decayBasis ?? 'clock';
   if (basis === 'session') {
-    // Each sleep cycle counts as one "day"; sessions since last retrieval are estimated from wall time and the average interval.
+    // Each sleep cycle counts as one "day"; sessions since last retrieval are estimated from wall time and the average
+    // interval.
     const avgInterval = options.avgSessionIntervalDays ?? 1;
     const sessionsSince = avgInterval > 0 ? Math.max(0, daysSince / avgInterval) : daysSince;
     return sessionsSince / effectiveHalfLife;
@@ -238,13 +279,14 @@ function decayExponentFor(options: DecayOptions, daysSince: number, halfLifeDays
 }
 
 // EVAL-ONLY ablation (see ablation.ts) neutralizes the read side too, so counts written before the flag cannot leak in.
-function retrievalBoostFor(entry: StrengthInputs): number {
-  return isRecallBoostAblated() || netWrong(entry) > 0
+function retrievalBoostFor(entry: StrengthInputs, ablation: StrengthAblation): number {
+  return ablation.recallBoost || netWrong(entry, ablation) > 0
     ? 1.0
     : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrieval_count + 1);
 }
 
-const HIGH_SCHEMA_FIT = 0.7;
+/** A memory counts as high schema fit strictly above this. */
+export const HIGH_SCHEMA_FIT = 0.7;
 const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
 const LOW_SCHEMA_FIT = 0.3;
 const LOW_FIT_HALF_LIFE_FACTOR = 0.5;
@@ -277,7 +319,10 @@ export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): numbe
   return hl;
 }
 
-/** Counts the outcome; calculateStrength turns the counts into a reward factor on the half-life, so there is no fixed delta here. */
+/**
+ * Counts the outcome; calculateStrength turns the counts into a reward factor on the half-life, so there is no fixed
+ * delta here.
+ */
 export function applyOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
   const updated: MemoryEntry = {
     ...entry,
@@ -319,7 +364,7 @@ export interface ConfidenceFacets {
   agedOut: boolean;
 }
 
-export function confidenceFacets(entry: MemoryEntry, now: Date = evalNow()): ConfidenceFacets {
+export function confidenceFacets(entry: ConfidenceInputs, now: Date = evalNow()): ConfidenceFacets {
   return facetsOf(entry, now);
 }
 
@@ -336,57 +381,82 @@ export function confidenceLabel(entry: MemoryEntry, now: Date = evalNow()) {
   };
 }
 
-/** The stored confidence, or 'stale' once the entry is aged out (not retrieved for AGED_OUT_AFTER_DAYS; pinned and verified exempt). */
+/**
+ * The stored confidence, or 'stale' once the entry is aged out (not retrieved for AGED_OUT_AFTER_DAYS; pinned and
+ * verified exempt).
+ */
 export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): ConfidenceLevel {
   return isAgedOut(entry, now) ? 'stale' : entry.confidence;
 }
 
-/** Base half-life in days before deriveHalfLife's multipliers: 365 because 7 lost the current fact far more often and 730 did no better.
+/**
+ * Base half-life in days before deriveHalfLife's multipliers: 365 because 7 lost the current fact far more often and
+ * 730 did no better.
  *  `hippo sleep` moves memories still on an older base (src/consolidate/half-life-migration.ts). */
 export const DEFAULT_HALF_LIFE_DAYS = 365;
+
+/** The flat half-life the decision, incident and other object writers gave their memories before they took the
+ * default. */
+export const LEGACY_TYPED_HALF_LIFE = 90;
 
 export const COMPACTION_MEMORY_TAG = 'compaction-memory';
 export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 
-/** An imported agent memory is kept for good: the agent's note file is its record. It needs both its tool's tag and a source with that tool's prefix,
+/**
+ * An imported agent memory is kept for good: the agent's note file is its record. It needs both its tool's tag and a
+ * source with that tool's prefix,
  *  since merge copies source tags onto rows whose source is 'consolidation'. */
 export interface KeepPair {
   readonly tag: string;
   readonly sourcePrefix: string;
 }
-export const KEEP_PAIRS: readonly KeepPair[] = AGENT_MEMORY_TOOLS.map((t) => ({ tag: t.tag, sourcePrefix: toolSourcePrefix(t.id) }));
+export const KEEP_PAIRS: readonly KeepPair[] = AGENT_MEMORY_TOOLS.map((t) => ({
+  tag: t.tag,
+  sourcePrefix: toolSourcePrefix(t.id),
+}));
 
 export function isKeptForGood(entry: Pick<MemoryEntry, 'tags' | 'source' | 'superseded_by'>): boolean {
-  return !entry.superseded_by && KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix));
+  return (
+    !entry.superseded_by &&
+    KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix))
+  );
 }
-export function canAutoDelete(entry: Pick<MemoryEntry, 'pinned' | 'kind' | 'tags' | 'source' | 'superseded_by'>): boolean {
+export function canAutoDelete(
+  entry: Pick<MemoryEntry, 'pinned' | 'kind' | 'tags' | 'source' | 'superseded_by'>,
+): boolean {
   return !entry.pinned && entry.kind !== 'raw' && !isKeptForGood(entry);
 }
 
+/** Options are camelCase; `MemoryEntry` keeps the snake_case stored-row names. */
 export interface CreateMemoryOptions {
   layer?: Layer;
   tags?: string[];
-  emotional_valence?: EmotionalValence;
+  emotionalValence?: EmotionalValence;
   pinned?: boolean;
-  schema_fit?: number;
+  schemaFit?: number;
   source?: string;
   confidence?: ConfidenceLevel;
-  /** The store's `loadConfig(hippoRoot).defaultHalfLifeDays`; required so no writer silently gets the compiled default. */
+  /**
+   * The store's `loadConfig(hippoRoot).defaultHalfLifeDays`; required so no writer silently gets the compiled default.
+   */
   baseHalfLifeDays: number;
-  trace_outcome?: TraceOutcome;
-  source_session_id?: string | null;
-  valid_from?: string;
-  extracted_from?: string;
-  dag_level?: number;
-  dag_parent_id?: string;
+  traceOutcome?: TraceOutcome;
+  sourceSessionId?: string | null;
+  validFrom?: string;
+  extractedFrom?: string;
+  dagLevel?: number;
+  dagParentId?: string;
   kind?: MemoryKind;
   scope?: string | null;
   owner?: string | null;
-  artifact_ref?: string | null;
+  artifactRef?: string | null;
   tenantId?: string;
 }
 
-/** Create a new memory entry with defaults. Untyped JavaScript callers that omit the options get the compiled default half-life. */
+/**
+ * Create a new memory entry with defaults. Untyped JavaScript callers that omit the options get the compiled default
+ * half-life.
+ */
 export function createMemory(content: string, options: CreateMemoryOptions): MemoryEntry;
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   assertValidMemoryInput(content, options);
@@ -394,8 +464,8 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
   const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
-  const emotional_valence = options.emotional_valence ?? inferValence(tags);
-  const schema_fit = options.schema_fit ?? DEFAULT_SCHEMA_FIT;
+  const emotional_valence = options.emotionalValence ?? inferValence(tags);
+  const schema_fit = options.schemaFit ?? DEFAULT_SCHEMA_FIT;
 
   const half_life_days = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, { tags, schema_fit });
 
@@ -420,18 +490,18 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
     content,
     parents: [],
     starred: false,
-    trace_outcome: options.trace_outcome ?? null,
-    source_session_id: options.source_session_id ?? null,
-    valid_from: options.valid_from ?? now,
+    trace_outcome: options.traceOutcome ?? null,
+    source_session_id: options.sourceSessionId ?? null,
+    valid_from: options.validFrom ?? now,
     superseded_by: null,
-    extracted_from: options.extracted_from ?? null,
-    dag_level: options.dag_level ?? 0,
-    dag_parent_id: options.dag_parent_id ?? null,
+    extracted_from: options.extractedFrom ?? null,
+    dag_level: options.dagLevel ?? 0,
+    dag_parent_id: options.dagParentId ?? null,
     kind: options.kind ?? 'distilled',
     scope: options.scope ?? null,
     owner: options.owner ?? null,
-    artifact_ref: options.artifact_ref ?? null,
-    tenantId: options.tenantId ?? DEFAULT_TENANT_ID,
+    artifact_ref: options.artifactRef ?? null,
+    tenant_id: options.tenantId ?? DEFAULT_TENANT_ID,
   };
 
   entry.strength = calculateStrength(entry);
@@ -445,12 +515,17 @@ function assertValidMemoryInput(content: string, options: Partial<CreateMemoryOp
   }
 
   const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
-  if (options.trace_outcome !== undefined && !validOutcomes.includes(options.trace_outcome)) {
-    throw new BadRequestError(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
+  if (options.traceOutcome !== undefined && !validOutcomes.includes(options.traceOutcome)) {
+    throw new BadRequestError(
+      `Invalid trace_outcome: ${options.traceOutcome}. Must be 'success', 'failure', 'partial', or null.`,
+    );
   }
 }
 
-/** The row that replaces `old`: a supersede never changes where a memory belongs, so source, scope, session and a stamped origin carry over. */
+/**
+ * The row that replaces `old`: a supersede never changes where a memory belongs, so source, scope, session and a
+ * stamped origin carry over.
+ */
 export function createSuccessor(
   old: MemoryEntry,
   content: string,
@@ -464,7 +539,7 @@ export function createSuccessor(
     confidence: 'verified',
     tenantId: opts.tenantId,
     scope: old.scope,
-    source_session_id: old.source_session_id,
+    sourceSessionId: old.source_session_id,
     baseHalfLifeDays: opts.baseHalfLifeDays,
   });
   // A legacy null origin has nothing to carry, so the store stamps it from its own location.
@@ -474,20 +549,27 @@ export function createSuccessor(
   return next;
 }
 
-/** How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3 is novel and decays faster if unused.
+/**
+ * How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3 is novel and decays
+ * faster if unused.
  *  Tags shared with existing memories count by rarity (a rare shared tag fits more), plus content-token overlap. */
 export function computeSchemaFit(
   content: string,
   tags: string[],
   existingEntries: MemoryEntry[]
 ): number {
+  return schemaFitFrom(content, tags, schemaFitSourceOf(existingEntries));
+}
+
+/** What schema fit reads from `entries`, built once for a caller that scores many contents against the same rows. */
+export function schemaFitSourceOf(entries: readonly MemoryEntry[]): SchemaFitSource {
   const tagCounts = new Map<string, number>();
-  for (const entry of existingEntries) {
+  for (const entry of entries) {
     for (const tag of entry.tags) {
       tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
   }
-  return schemaFitFrom(content, tags, { rows: existingEntries.length, tagCounts, contents: existingEntries.map((e) => e.content) });
+  return { rows: entries.length, tagCounts, contents: entries.map((e) => e.content) };
 }
 
 /** What schema fit reads from a set of memories, so a store can answer without loading its rows. */
@@ -499,8 +581,21 @@ export interface SchemaFitSource {
   readonly contents: Iterable<string>;
 }
 
+// Tokens of this length or shorter are filler for schema fit.
+const FILLER_TOKEN_MAX_LENGTH = 3;
+// Matching half the tags at average weight scores about 0.5, so the raw overlap ratio is doubled.
+const TAG_OVERLAP_SCALE = 2;
+// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on one hit.
+const CONTENT_ENOUGH_MIN_MATCHES = 5;
+
 function significantTokens(text: string): Set<string> {
-  return new Set(text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3));
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > FILLER_TOKEN_MAX_LENGTH),
+  );
 }
 
 /** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */
@@ -519,14 +614,13 @@ export function schemaFitFrom(content: string, tags: readonly string[], source: 
     if (freq > 0) weightedOverlap += Math.log(N / freq) + 1;
     totalWeight += maxIdf;
   }
-  // Scaled so that matching half the tags at average weight gives about 0.5.
-  const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * 2) : 0;
+  const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * TAG_OVERLAP_SCALE) : 0;
 
   const newTokens = significantTokens(content);
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
 
   // The content score is capped at 1, which this many matching memories reach.
-  const enough = Math.max(5, N * CONTENT_ENOUGH_FRACTION);
+  const enough = Math.max(CONTENT_ENOUGH_MIN_MATCHES, N * CONTENT_ENOUGH_FRACTION);
   let contentMatches = 0;
   for (const text of source.contents) {
     const entryTokens = significantTokens(text);
@@ -550,12 +644,19 @@ function inferValence(tags: string[]): EmotionalValence {
 }
 
 /** Returns copies with the retrieval count, clock and half-life updated; the caller persists them.
- *  Under HIPPO_ABLATE_RECALL_BOOST (eval-only) the entries come back unchanged, not empty, since callers derive last_retrieval_ids from them. */
-export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): MemoryEntry[] {
-  if (isRecallBoostAblated()) return entries;
+ * Under HIPPO_ABLATE_RECALL_BOOST (eval-only) the entries come back unchanged, not empty, since callers derive
+ * last_retrieval_ids from them.
+ */
+export function markRetrieved(
+  entries: MemoryEntry[],
+  now: Date = evalNow(),
+  options: Pick<DecayOptions, 'ablation'> = {},
+): MemoryEntry[] {
+  const ablation = options.ablation ?? NO_STRENGTH_ABLATION;
+  if (ablation.recallBoost) return entries;
   return entries.map((e) => {
     if (e.superseded_by) return e;
-    const wrong = netWrong(e) > 0;
+    const wrong = netWrong(e, ablation) > 0;
     // Confidence stays untouched: it is an epistemic tier, not a recency signal.
     const updated: MemoryEntry = {
       ...e,
@@ -564,7 +665,7 @@ export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): Me
       last_retrieved: wrong ? e.last_retrieved : now.toISOString(),
       half_life_days: wrong ? e.half_life_days : e.half_life_days + RETRIEVAL_HALF_LIFE_GAIN_DAYS,
     };
-    updated.strength = calculateStrength(updated, now);
+    updated.strength = calculateStrength(updated, now, { ablation });
     return updated;
   });
 }

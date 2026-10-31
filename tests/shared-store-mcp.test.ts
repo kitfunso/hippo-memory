@@ -9,10 +9,12 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { adminActor, learn, MCP_LEARN } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import type { JsonValue } from '../src/util/json.js';
+import { cliStdioHost } from '../src/cli/api-context.js';
 import { sharedStoreRefusal } from '../src/mcp/shared-gate.js';
 import { TOOLS } from '../src/mcp/tools.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 type ToolReply = { result?: { content: Array<{ text: string }>; isError?: boolean } };
 const OFF = ['hippo_learn', 'hippo_share', 'hippo_resolve', 'hippo_peers'];
@@ -95,10 +97,10 @@ describe('MCP writes on a shared store', () => {
     expect(loadAllEntries(store).map((e) => e.origin_project)).toEqual(['acme']);
   });
 
-  it('learn with the MCP profile stores NULL rows', () => {
+  it('learn with the MCP profile stores NULL rows', async () => {
     const store = flaggedStore();
-    const ctx = { hippoRoot: store, tenantId: 'default', actor: adminActor('shared-store-mcp-test') };
-    const result = learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN });
+    const ctx = apiCtx(store, 'default', adminActor('shared-store-mcp-test'));
+    const result = await learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN });
     expect(result.added).toBe(1);
     const rows = loadAllEntries(store);
     expect(rows).toHaveLength(1);
@@ -137,7 +139,8 @@ describe('the MCP tool gate on a shared store', () => {
     expect(loadAllEntries(store)).toEqual([]);
   });
 
-  it('leaves stdio alone: no context means no shared store to gate', () => {
-    for (const { name } of TOOLS) expect(sharedStoreRefusal(name, undefined), name).toBeUndefined();
+  it('leaves stdio alone: the stdio host is never gated on a shared store', () => {
+    const ctx = cliStdioHost.contextFor(flaggedStore(), 'default');
+    for (const { name } of TOOLS) expect(sharedStoreRefusal(name, ctx), name).toBeUndefined();
   });
 });

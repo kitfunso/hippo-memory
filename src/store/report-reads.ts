@@ -2,7 +2,8 @@ import type { MemoryEntry } from '../core/memory.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { onHandle, openStore } from './open.js';
 
-/** Every superseded row, the row that replaced it and that row's extraction source, in loadAllEntries' order: all a correction-latency report reads. */
+/** Every superseded row, the row that replaced it and that row's extraction source, in loadAllEntries' order: all a
+ * correction-latency report reads. */
 export function loadCorrectionEntries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     const superseded = `superseded_by IS NOT NULL AND superseded_by != ''`;

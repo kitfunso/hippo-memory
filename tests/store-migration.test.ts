@@ -30,8 +30,8 @@ describe('schema v3: trace columns', () => {
     initStore(tmpDir);
     const t = createMemory('traced experience content', {
       layer: Layer.Trace,
-      trace_outcome: 'success',
-      source_session_id: 'sess-1',
+      traceOutcome: 'success',
+      sourceSessionId: 'sess-1',
     });
     writeEntry(tmpDir, t);
     const loaded = loadAllEntries(tmpDir).find((e) => e.id === t.id);

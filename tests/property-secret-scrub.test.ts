@@ -110,8 +110,8 @@ const HYPHEN_ENDED: readonly { name: string; key: Gen<string> }[] = [
 ];
 
 describe('secret scrubbing properties', () => {
-  it('no generated secret of any shape reaches the output of either scrub', () => {
-    forAll(0x5ec1, 400, LEAKY_TEXT, ({ text, secrets }) => {
+  it('no generated secret of any shape reaches the output of either scrub', async () => {
+    await forAll(0x5ec1, 400, LEAKY_TEXT, ({ text, secrets }) => {
       for (const { name, scrub } of SCRUBS) {
         const out = scrub(text);
         expect(secrets.filter((s) => leaked(out, s)).map((s) => s.text), `${name} left a secret in: ${out}`).toEqual([]);
@@ -119,41 +119,41 @@ describe('secret scrubbing properties', () => {
     });
   });
 
-  it('redactSecretsStrict changes nothing on a second pass', () => {
-    forAll(0x1de0, 400, SOUP, (text) => {
+  it('redactSecretsStrict changes nothing on a second pass', async () => {
+    await forAll(0x1de0, 400, SOUP, (text) => {
       const once = redactSecretsStrict(text);
       expect(redactSecretsStrict(once)).toBe(once);
     });
   });
 
   // A home path glued after another, or after a short name, is uncovered only once the text before it is masked, so masking each shape once is not enough.
-  it('scrubForSharing changes nothing on a second pass over home paths, nested or not', () => {
+  it('scrubForSharing changes nothing on a second pass over home paths, nested or not', async () => {
     const paths = map(both(WORD_RUN, arr(pick(HOME_PATHS), 1, 3)), ([words, nested]) => [...words, nested.join('')].join(' '));
-    forAll(0x1de1, 200, paths, (text) => {
+    await forAll(0x1de1, 200, paths, (text) => {
       const once = scrubForSharing(text);
       expect(scrubForSharing(once)).toBe(once);
     });
   });
 
-  it('sentences of ordinary words and ordinary config lines come back unchanged', () => {
+  it('sentences of ordinary words and ordinary config lines come back unchanged', async () => {
     // A sentence ends in a full stop, so a word never runs on into the config line under it.
     const sentence = map(arr(pick(WORDS), 1, 8), (words) => `${words.join(' ')}.`);
     const benign = map(arr(oneOf([sentence, sentence, pick(ORDINARY_CONFIG_LINES)]), 1, 8), (lines) => lines.join('\n'));
-    forAll(0xbe9, 400, benign, (text) => {
+    await forAll(0xbe9, 400, benign, (text) => {
       expect(redactSecretsStrict(text)).toBe(text);
     });
   });
 
-  it('text made of ordinary words comes back unchanged from the share scrub', () => {
-    forAll(0xbea, 400, map(arr(pick(WORDS), 1, 12), (parts) => parts.join(' ')), (text) => {
+  it('text made of ordinary words comes back unchanged from the share scrub', async () => {
+    await forAll(0xbea, 400, map(arr(pick(WORDS), 1, 12), (parts) => parts.join(' ')), (text) => {
       expect(scrubForSharing(text)).toBe(text);
     });
   });
 
   // A word boundary does not close a token that ends in a hyphen before a space, so the key or its closing hyphens would stay.
   HYPHEN_ENDED.forEach(({ name, key }, index) => {
-    it(`a ${name} that ends in hyphens is scrubbed whole`, () => {
-      forAll(0x600 + index, 200, both(WORD_RUN, key), ([words, text]) => {
+    it(`a ${name} that ends in hyphens is scrubbed whole`, async () => {
+      await forAll(0x600 + index, 200, both(WORD_RUN, key), ([words, text]) => {
         expect(redactSecretsStrict([...words, text, 'end'].join(' '))).toBe([...words, '[REDACTED]', 'end'].join(' '));
       });
     });

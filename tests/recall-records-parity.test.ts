@@ -10,8 +10,9 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { handleRecall } from '../src/cli/recall.js';
-import { resetSessionRings } from '../src/api/recall-record.js';
-import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import type { RecallResult } from '../src/api/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
@@ -123,9 +124,9 @@ async function onStore<T>(s: Store, fn: (s: Store) => Promise<T>): Promise<T> {
 
 const onSeeded = <T>(fn: (s: Store) => Promise<T>): Promise<T> => onStore(freshStore(templates, 'local'), fn);
 
-beforeAll(() => {
+beforeAll(async () => {
   launchFolder = process.cwd();
-  templates = seedTemplates(seedContinuity);
+  templates = await seedTemplates(seedContinuity);
 });
 
 afterAll(() => {

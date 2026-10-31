@@ -1,5 +1,5 @@
 // sendAnthropicMessage reads its reply under a byte cap and through shape checks, and reports a bad reply as a typed failure.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { type AnthropicMessageFailure, isPermanentFailure, sendAnthropicMessage } from '../src/util/anthropic-messages.js';
 
 const REPLY_CAP_BYTES = 1024 * 1024;
@@ -13,9 +13,9 @@ describe('sendAnthropicMessage reply reading', () => {
     expect(await send(JSON.stringify({ content: [{ type: 'text', text: '  tea  ' }] }))).toEqual({ ok: true, text: 'tea' });
   });
 
-  it('returns empty text when the reply has no text block', async () => {
+  it('reports a reply with no text block as an empty failure, not as ok', async () => {
     for (const body of ['{}', '{"content":[]}', '{"content":"tea"}', '{"content":[{"type":"tool_use"}]}', '{"content":[null]}']) {
-      expect(await send(body)).toEqual({ ok: true, text: '' });
+      expect(await send(body)).toEqual({ ok: false, failure: { kind: 'empty' } });
     }
   });
 
@@ -53,6 +53,22 @@ describe('sendAnthropicMessage on a non-2xx reply', () => {
 
   it('reports an empty detail for an empty body', async () => {
     expect(await failWith(404, '')).toEqual({ ok: false, failure: { kind: 'http', status: 404, detail: '' } });
+  });
+
+  it('warns with the error fields when the body cannot be read, and keeps the empty detail', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const broken = new ReadableStream<Uint8Array>({ pull: () => { throw new Error('socket reset'); } });
+      const reply = await sendAnthropicMessage({
+        apiKey: 'k-test', maxTokens: 10, prompt: 'hi', fetcher: async () => new Response(broken, { status: 400 }),
+      });
+      expect(reply).toEqual({ ok: false, failure: { kind: 'http', status: 400, detail: '' } });
+      const written = stderr.mock.calls.map((c) => String(c[0])).join('');
+      expect(written).toContain('could not read the error body of a 400 reply');
+      expect(written).toContain('errorClass=');
+    } finally {
+      stderr.mockRestore();
+    }
   });
 });
 

@@ -1,7 +1,7 @@
 // First-class object verbs for predictions: record a claim, close it against the actual, and read the class base rate.
 
-import * as predictionsApi from '../api/predictions.js';
-import type { Context } from '../api/types.js';
+import * as predictionsApi from '../api/objects/predictions.js';
+import type { ContextWith } from '../api/types.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../core/prediction.js';
 import type { Prediction } from '../store/predictions.js';
 import { cliApiContext } from './api-context.js';
@@ -9,25 +9,26 @@ import { printError } from './output.js';
 import { parseListLimit, type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { foundOrExit, idArgOrExit, requireStatus } from './object-verbs.js';
-import { parseObjectId } from './lenient-id.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const BASERATE_DECIMALS = 3;
 const PREDICTION_NOUN = 'Prediction';
 
-async function predictClose(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
-  const id = idArgOrExit(args, 'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]', 'prediction', parseObjectId);
+async function predictClose(ctx: ContextWith<'predictions'>, args: string[], flags: CliFlags): Promise<void> {
+  const id = idArgOrExit(
+    args,
+    'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]',
+    'prediction',
+  );
   const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
   // SAFETY: Set.has only compares by value, so a string outside the closure states is a plain miss.
   if (!VALID_CLOSURE_STATES.has(stateRaw as ClosureState) || stateRaw === 'open') {
-    printError(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
-    throw new CliExit(1);
+    fail(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
   }
   const actualRaw = flags['actual'];
   const actualValue = actualRaw !== undefined ? Number(actualRaw) : undefined;
   if (actualRaw !== undefined && !Number.isFinite(actualValue)) {
-    printError(`Invalid --actual: "${actualRaw}". Must be a number.`);
-    throw new CliExit(1);
+    fail(`Invalid --actual: "${actualRaw}". Must be a number.`);
   }
   const closureNote = stringFlag(flags, 'note');
 
@@ -37,10 +38,17 @@ async function predictClose(ctx: Context, args: string[], flags: CliFlags): Prom
     actualValue,
     closureNote,
   });
-  console.log(`Prediction ${closed.id} closed: state=${closed.closureState}${closed.actualValue !== null ? ` actual=${closed.actualValue}` : ''}`);
+  console.log(
+    `Prediction ${closed.id} closed: state=${closed.closureState}${closed.actualValue !== null ? ` actual=${closed.actualValue}` : ''}`,
+  );
 }
 
-async function loadPredictionList(ctx: Context, status: string, classTag: string, limit: number): Promise<Prediction[]> {
+async function loadPredictionList(
+  ctx: ContextWith<'predictions'>,
+  status: string,
+  classTag: string,
+  limit: number,
+): Promise<Prediction[]> {
   if (status === 'open') {
     return predictionsApi.listPredictions(ctx, {
       classTag: classTag || undefined,
@@ -54,8 +62,7 @@ async function loadPredictionList(ctx: Context, status: string, classTag: string
   const closureState = requireStatus(status, VALID_CLOSURE_STATES);
   if (!classTag) {
     // status filter without class: scan all classes is more complex; v1 requires --class for non-default status
-    printError('--status filter (non-open) requires --class to be set.');
-    throw new CliExit(1);
+    fail('--status filter (non-open) requires --class to be set.');
   }
   return predictionsApi.listPredictions(ctx, {
     classTag,
@@ -64,7 +71,7 @@ async function loadPredictionList(ctx: Context, status: string, classTag: string
   });
 }
 
-async function predictList(ctx: Context, flags: CliFlags): Promise<void> {
+async function predictList(ctx: ContextWith<'predictions'>, flags: CliFlags): Promise<void> {
   const classTag = stringFlag(flags, 'class')?.trim() ?? '';
   const status = stringFlag(flags, 'status')?.trim() ?? 'all';
   const limit = parseListLimit(flags);
@@ -76,7 +83,8 @@ async function predictList(ctx: Context, flags: CliFlags): Promise<void> {
   }
   console.log(`Found ${results.length} predictions:\n`);
   for (const p of results) {
-    const estPart = p.estimateValue !== null ? ` estimate=${p.estimateValue}${p.estimateUnit ? ` ${p.estimateUnit}` : ''}` : '';
+    const estPart =
+      p.estimateValue !== null ? ` estimate=${p.estimateValue}${p.estimateUnit ? ` ${p.estimateUnit}` : ''}` : '';
     const actPart = p.actualValue !== null ? ` actual=${p.actualValue}` : '';
     const tgtPart = p.targetDate ? ` target=${p.targetDate}` : '';
     console.log(`#${p.id} [${p.closureState}] class=${p.classTag}${estPart}${actPart}${tgtPart}`);
@@ -85,14 +93,16 @@ async function predictList(ctx: Context, flags: CliFlags): Promise<void> {
   }
 }
 
-async function predictShow(ctx: Context, args: string[]): Promise<void> {
-  const id = idArgOrExit(args, 'Usage: hippo predict show <id>', 'prediction', parseObjectId);
+async function predictShow(ctx: ContextWith<'predictions'>, args: string[]): Promise<void> {
+  const id = idArgOrExit(args, 'Usage: hippo predict show <id>', 'prediction');
   const pred = foundOrExit(await predictionsApi.predictionById(ctx, id), PREDICTION_NOUN, id);
   console.log(`Prediction #${pred.id}`);
   console.log(`  class: ${pred.classTag}`);
   console.log(`  claim: ${pred.claimText}`);
   console.log(`  state: ${pred.closureState}`);
-  if (pred.estimateValue !== null) console.log(`  estimate: ${pred.estimateValue}${pred.estimateUnit ? ' ' + pred.estimateUnit : ''}`);
+  if (pred.estimateValue !== null) {
+    console.log(`  estimate: ${pred.estimateValue}${pred.estimateUnit ? ' ' + pred.estimateUnit : ''}`);
+  }
   if (pred.targetDate) console.log(`  target: ${pred.targetDate}`);
   if (pred.actualValue !== null) console.log(`  actual: ${pred.actualValue}`);
   if (pred.closedAt) console.log(`  closed: ${pred.closedAt}`);
@@ -101,12 +111,11 @@ async function predictShow(ctx: Context, args: string[]): Promise<void> {
   console.log(`  created: ${pred.createdAt}`);
 }
 
-async function predictBaserate(ctx: Context, flags: CliFlags): Promise<void> {
+async function predictBaserate(ctx: ContextWith<'predictions'>, flags: CliFlags): Promise<void> {
   // Reference-class / planning-fallacy detector
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
-    printError('Usage: hippo predict baserate --class <c>');
-    throw new CliExit(1);
+    fail('Usage: hippo predict baserate --class <c>');
   }
   const baserate = await predictionsApi.predictionBaserate(ctx, classTag);
   if (baserate.nClosed === 0) {
@@ -118,10 +127,14 @@ async function predictBaserate(ctx: Context, flags: CliFlags): Promise<void> {
   console.log(baserate.summary);
   console.log(`  n_closed:         ${baserate.nClosed}`);
   console.log(`  n_ratio_eligible: ${baserate.nRatioEligible}`);
-  if (baserate.meanEstimate !== null) console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
-  if (baserate.meanActual !== null)   console.log(`  mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
-  if (baserate.meanRatio !== null)    console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.p50Ratio !== null)     console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.meanEstimate !== null) {
+    console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  }
+  if (baserate.meanActual !== null) {
+    console.log(`  mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
+  }
+  if (baserate.meanRatio !== null) console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.p50Ratio !== null) console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
   if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
 }
 
@@ -137,24 +150,21 @@ export async function handlePredict({ hippoRoot, tenantId, args, flags }: Comman
   return predictCreate(ctx, subcommand, flags);
 }
 
-async function predictCreate(ctx: Context, claimText: string, flags: CliFlags): Promise<void> {
+async function predictCreate(ctx: ContextWith<'predictions'>, claimText: string, flags: CliFlags): Promise<void> {
   if (!claimText) {
     printError('Usage: hippo predict "<claim>" --class <c> [--estimate <v>] [--unit <u>] [--target <YYYY-MM-DD>]');
     printError('       hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
     printError('       hippo predict list [--class X] [--status open|closed|closed-unknown|all] [--limit N]');
-    printError('       hippo predict show <id>');
-    throw new CliExit(1);
+    fail('       hippo predict show <id>');
   }
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
-    printError('--class is required for prediction creation.');
-    throw new CliExit(1);
+    fail('--class is required for prediction creation.');
   }
   const estimateRaw = flags['estimate'];
   const estimateValue = estimateRaw !== undefined ? Number(estimateRaw) : undefined;
   if (estimateRaw !== undefined && !Number.isFinite(estimateValue)) {
-    printError(`Invalid --estimate: "${estimateRaw}". Must be a number.`);
-    throw new CliExit(1);
+    fail(`Invalid --estimate: "${estimateRaw}". Must be a number.`);
   }
   const estimateUnit = stringFlag(flags, 'unit');
   const targetDate = stringFlag(flags, 'target');

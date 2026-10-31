@@ -1,4 +1,10 @@
-import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../util/env.js';
+import {
+  envClefEndpoint,
+  envClefEndpointToken,
+  envClefTimeoutMs,
+  envCloudflareAccountId,
+  envCloudflareApiToken,
+} from '../util/env.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
@@ -7,6 +13,7 @@ import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
+import { isLoopbackHost } from '../util/net.js';
 
 const RAY_ID_MAX_CHARS = 64;
 
@@ -29,11 +36,6 @@ interface ClefRoute {
   url: string;
   token: string | undefined;
   backend: Exclude<RerankProvenance['backend'], 'native'>;
-}
-
-// Plain http would put the token and the memory text on the wire, so only the local machine may use it.
-function isLoopback(hostname: string): boolean {
-  return hostname === 'localhost' || hostname === '[::1]' || /^127(\.\d{1,3}){3}$/.test(hostname);
 }
 
 interface ClefScores {
@@ -73,7 +75,8 @@ export function resolveClefRoute(model: ClefModel): ClefRoute {
     if (parsed.username || parsed.password) {
       throw new Error('HIPPO_CLEF_ENDPOINT must not embed credentials; set HIPPO_CLEF_ENDPOINT_TOKEN');
     }
-    if (parsed.protocol === 'http:' && !isLoopback(parsed.hostname)) {
+    // Plain http would put the token and the memory text on the wire, so only the local machine may use it.
+    if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
       throw new Error('HIPPO_CLEF_ENDPOINT must use https unless it is on this machine');
     }
     const endpointToken = envClefEndpointToken();
@@ -92,15 +95,25 @@ export function resolveClefRoute(model: ClefModel): ClefRoute {
   };
 }
 
-/** Unwraps a Workers AI `{ result }` envelope or a bare System One reply and checks model and `c1..cN`; a string is the rejection reason. */
-export function parseClefReply(body: JsonValue, n: number, model: ClefModel, requireModel: boolean): ClefScores | string {
+/**
+ * Unwraps a Workers AI `{ result }` envelope or a bare System One reply and checks model and `c1..cN`; a string is the
+ * rejection reason.
+ */
+export function parseClefReply(
+  body: JsonValue,
+  n: number,
+  model: ClefModel,
+  requireModel: boolean,
+): ClefScores | string {
   if (!isJsonObject(body)) return 'reply is not a JSON object';
   if (body.success === false) return 'provider reported failure';
   const reply = body.result === undefined ? body : body.result;
   if (!isJsonObject(reply)) return 'reply has no result object';
 
   const actual = reply.model;
-  if (actual !== undefined && (!isJsonString(actual) || actual.trim() !== model)) return 'reply names a different model';
+  if (actual !== undefined && (!isJsonString(actual) || actual.trim() !== model)) {
+    return 'reply names a different model';
+  }
   if (actual === undefined && requireModel) return 'reply does not name its model';
 
   const answers = reply.answers;
@@ -124,11 +137,17 @@ export function parseClefReply(body: JsonValue, n: number, model: ClefModel, req
   };
 }
 
-async function requestScores(model: ClefModel, query: string, head: SearchResult[], route: ClefRoute): Promise<ClefScores> {
+async function requestScores(
+  model: ClefModel,
+  query: string,
+  head: SearchResult[],
+  route: ClefRoute,
+): Promise<ClefScores> {
   const { state, questions } = buildRelevanceRequest(query, head);
   // Strict parse: parseInt would read "15s" as 15 ms, and Node clamps a delay past 2^31-1 to 1 ms.
   const requested = Number(envClefTimeoutMs());
-  const timeoutMs = Number.isInteger(requested) && requested > 0 && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
+  const timeoutMs =
+    Number.isInteger(requested) && requested > 0 && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
   const headers = new Headers({ 'content-type': 'application/json' });
   if (route.token) headers.set('authorization', `Bearer ${route.token}`);
   const resp = await rerankerPost(route.url, { headers, body: JSON.stringify({ state, model, questions }) }, timeoutMs);
@@ -156,7 +175,10 @@ function nativeOrder(head: SearchResult[], provenance: RerankProvenance): Rerank
   }));
 }
 
-/** A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order (never paid Jev) and warns. */
+/**
+ * A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order (never paid Jev) and
+ * warns.
+ */
 export function createClefReranker(model: ClefModel): RerankerFn {
   const outage = createOutageWarning(model, 'keeping the native order');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {

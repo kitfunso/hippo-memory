@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { judgeAll, type JudgeOptions, type Judgment } from '../src/eval/judgment.js';
 import { envTypesafeApiKey } from '../src/util/env.js';
 
@@ -124,6 +124,28 @@ describe('judge', () => {
     const thrower: typeof fetch = async () => { throw new Error('offline'); };
     expect(await judgeOne('abc', { apiKey: 'k', fetcher: thrower })).toBeNull();
     expect(await judgeOne('abc', { apiKey: 'k', fetcher: jevResponse({}, 401) })).toBeNull();
+  });
+
+  it('reads at most 4 KB of a large error body and logs a short snippet', async () => {
+    let pulled = 0;
+    const chunk = new TextEncoder().encode('x'.repeat(1024));
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    });
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const fetcher: typeof fetch = async () => new Response(body, { status: 401 });
+      expect(await judgeOne('abc', { apiKey: 'k', fetcher })).toBeNull();
+      const line = write.mock.calls.map((c) => String(c[0])).find((m) => m.includes('non-2xx'));
+      expect(line).toBeDefined();
+      expect(line!.length).toBeLessThan(400);
+    } finally {
+      write.mockRestore();
+    }
+    expect(pulled).toBeLessThan(16 * 1024);
   });
 
   it('retries once on a rate limit, then succeeds', async () => {

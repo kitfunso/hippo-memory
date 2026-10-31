@@ -1,10 +1,12 @@
-// Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the dead-letter queue and workspace routing.
-// `xAt(db, ...)` runs on the caller's handle; the same name without `At` opens hippo.db for that one call.
+// Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the dead-letter queue and
+// workspace routing. `xAt(db, ...)` runs on the caller's handle; the same name without `At` opens hippo.db for that one
+// call.
 
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { onHandle } from '../open.js';
 import type { ConnectorEventRecord } from '../port.js';
-import { getDlqRow, insertDlqRow, listDlqRows, markDlqRetried, type DlqRawRow } from './dlq.js';
+import { eventMemoryAt, eventRecord, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
+import { dlqAccess } from './dlq.js';
 
 // Backfill cursors
 
@@ -19,7 +21,8 @@ export function slackCursorAt(db: DatabaseSyncLike, tenantId: string, channelId:
 export function saveSlackCursorAt(db: DatabaseSyncLike, tenantId: string, channelId: string, latestTs: string): void {
   db.prepare(
     `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)
-       ON CONFLICT(tenant_id, channel_id) DO UPDATE SET latest_ts = excluded.latest_ts, updated_at = excluded.updated_at`,
+       ON CONFLICT(tenant_id, channel_id) DO UPDATE SET latest_ts = excluded.latest_ts, updated_at =
+       excluded.updated_at`,
   ).run(tenantId, channelId, latestTs, new Date().toISOString());
 }
 
@@ -33,30 +36,23 @@ export function saveSlackCursor(hippoRoot: string, tenantId: string, channelId: 
 
 // Event log
 
+const SLACK_LOG: EventLogSpec = { table: 'slack_event_log', keyColumn: 'event_id' };
+
 export function slackEventSeenAt(db: DatabaseSyncLike, eventId: string): boolean {
-  const row = db.prepare(`SELECT 1 FROM slack_event_log WHERE event_id = ?`).get(eventId);
-  return !!row;
+  return eventSeenAt(db, SLACK_LOG, eventId);
 }
 
 /** Records the event unless a row already holds its id; false means another writer got there first. */
 export function markSlackEventSeenAt(db: DatabaseSyncLike, eventId: string, memoryId: string | null): boolean {
-  const inserted = db
-    .prepare(`INSERT OR IGNORE INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`)
-    .run(eventId, new Date().toISOString(), memoryId);
-  return Number(inserted.changes ?? 0) !== 0;
+  return markEventSeenAt(db, SLACK_LOG, eventId, [], memoryId);
 }
 
 export function slackEventMemoryAt(db: DatabaseSyncLike, eventId: string): string | null {
-  // SAFETY: the SELECT names only `memory_id`, a nullable column; .get() returns undefined when no row matches.
-  const row = db.prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`).get(eventId) as
-    | { memory_id: string | null }
-    | undefined;
-  return row?.memory_id ?? null;
+  return eventMemoryAt(db, SLACK_LOG, eventId);
 }
 
 export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorEventRecord {
-  return onHandle(hippoRoot, (db): ConnectorEventRecord =>
-    slackEventSeenAt(db, eventId) ? { seen: true, memoryId: slackEventMemoryAt(db, eventId) } : { seen: false });
+  return eventRecord(hippoRoot, SLACK_LOG, eventId);
 }
 
 export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId: string | null): void {
@@ -65,7 +61,8 @@ export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId:
 
 // Deletion lookup
 
-/** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row with the same ref. */
+/** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row
+ * with the same ref. */
 export function rawMemoryIdForArtifactAt(db: DatabaseSyncLike, artifactRef: string, tenantId: string): string | null {
   // SAFETY: the SELECT projects only `id`; .get() returns undefined when no row matches.
   const row = db
@@ -103,51 +100,34 @@ export interface SlackDlqInsert {
   slackTimestamp?: string | null;
 }
 
-const SELECT_COLUMNS = `id, tenant_id, team_id, raw_payload, error, received_at, retried_at,
-              bucket, retry_count, signature, slack_timestamp`;
-
-function rowToItem(r: DlqRawRow): DlqItem {
-  return {
-    id: Number(r.id),
-    tenantId: String(r.tenant_id),
-    teamId: r.team_id == null ? null : String(r.team_id),
-    rawPayload: String(r.raw_payload),
-    error: String(r.error),
-    receivedAt: String(r.received_at),
-    retriedAt: r.retried_at == null ? null : String(r.retried_at),
-    bucket: r.bucket == null ? 'parse_error' : String(r.bucket),
-    retryCount: Number(r.retry_count ?? 0),
-    signature: r.signature == null ? null : String(r.signature),
-    slackTimestamp: r.slack_timestamp == null ? null : String(r.slack_timestamp),
-  };
-}
+const DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
+  { field: 'id', column: 'id', kind: 'int' },
+  { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
+  { field: 'teamId', column: 'team_id', kind: 'nullableText', insert: true },
+  { field: 'rawPayload', column: 'raw_payload', kind: 'text', insert: true },
+  { field: 'error', column: 'error', kind: 'text', insert: true },
+  { field: 'receivedAt', column: 'received_at', kind: 'text' },
+  { field: 'retriedAt', column: 'retried_at', kind: 'nullableText' },
+  { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
+  { field: 'retryCount', column: 'retry_count', kind: 'count' },
+  { field: 'signature', column: 'signature', kind: 'nullableText', insert: true },
+  { field: 'slackTimestamp', column: 'slack_timestamp', kind: 'nullableText', insert: true },
+]);
 
 export function insertSlackDlq(hippoRoot: string, row: SlackDlqInsert): number {
-  return onHandle(hippoRoot, (db) =>
-    insertDlqRow(db, 'slack_dlq', [
-      ['tenant_id', row.tenantId],
-      ['team_id', row.teamId ?? null],
-      ['raw_payload', row.rawPayload],
-      ['error', row.error],
-      ['bucket', row.bucket],
-      ['signature', row.signature],
-      ['slack_timestamp', row.slackTimestamp ?? null],
-    ]));
+  return onHandle(hippoRoot, (db) => DLQ.insert(db, row));
 }
 
 export function listSlackDlq(hippoRoot: string, tenantId: string, limit: number): DlqItem[] {
-  return onHandle(hippoRoot, (db) => listDlqRows(db, 'slack_dlq', SELECT_COLUMNS, tenantId, limit).map(rowToItem));
+  return onHandle(hippoRoot, (db) => DLQ.list(db, tenantId, limit));
 }
 
 export function slackDlqEntry(hippoRoot: string, id: number): DlqItem | null {
-  return onHandle(hippoRoot, (db) => {
-    const row = getDlqRow(db, 'slack_dlq', SELECT_COLUMNS, id);
-    return row ? rowToItem(row) : null;
-  });
+  return onHandle(hippoRoot, (db) => DLQ.get(db, id));
 }
 
 export function markSlackDlqRetried(hippoRoot: string, id: number): void {
-  onHandle(hippoRoot, (db) => markDlqRetried(db, 'slack_dlq', id));
+  onHandle(hippoRoot, (db) => DLQ.markRetried(db, id));
 }
 
 // Workspace routing

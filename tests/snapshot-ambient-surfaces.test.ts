@@ -10,6 +10,7 @@ import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T2 tests: the two
 // ambient surfaces (MCP recall block, CLI `hippo context`) reroute through
@@ -52,7 +53,7 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
         method: 'tools/call',
         params: { name: 'hippo_context', arguments: {} },
       },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
     );
   }
 

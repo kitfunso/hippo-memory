@@ -1,4 +1,5 @@
-// The optional Transformers.js package, and a bounded load of a model from it, shared by the local embedder and the cross-encoder.
+// The optional Transformers.js package, and a bounded load of a model from it, shared by the local embedder and the
+// cross-encoder.
 import { MINUTE_MS } from '../util/time.js';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -12,7 +13,10 @@ const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformer
 
 export interface TransformersPackage {
   readonly name: string;
-  /** The ESM entry; a require-style import picks the CommonJS build and puts a second copy of the library, with its own ONNX sessions, in the process. */
+  /**
+   * The ESM entry; a require-style import picks the CommonJS build and puts a second copy of the library, with its own
+   * ONNX sessions, in the process.
+   */
   readonly url: string;
 }
 
@@ -29,7 +33,8 @@ function entryUrl(name: string): string | null {
   try {
     return import.meta.resolve(name);
   } catch {
-    // import.meta.resolve is missing under some module runners (vitest's included), so the require-based resolve stands in there.
+    // import.meta.resolve is missing under some module runners (vitest's included), so the require-based resolve stands
+    // in there.
     try {
       return pathToFileURL(_require.resolve(name)).href;
     } catch {
@@ -47,12 +52,17 @@ export async function importTransformers<M>(): Promise<{ readonly name: string; 
   } catch (err) {
     // A Node error's code (ERR_MODULE_NOT_FOUND and the like) says more than its message alone.
     const code = errorCode(err);
-    throw new Error(`transformers import failed (${pkg.name}): ${code ? `${code} ` : ''}${errorMessage(err)}`, { cause: err });
+    throw new Error(`transformers import failed (${pkg.name}): ${code ? `${code} ` : ''}${errorMessage(err)}`, {
+      cause: err,
+    });
   }
 }
 
 export interface ModelLoadPolicy {
-  /** How long one load may run before it counts as failed; nothing can cancel it, so it keeps running and a late model is still kept. */
+  /**
+   * How long one load may run before it counts as failed; nothing can cancel it, so it keeps running and a late model
+   * is still kept.
+   */
   readonly timeoutMs: number;
   /** How long a failure is answered from memory before the next call loads again. */
   readonly backoffMs: number;
@@ -63,29 +73,56 @@ export interface ModelLoadPolicy {
 export const MODEL_LOAD_POLICY: ModelLoadPolicy = { timeoutMs: 2 * MINUTE_MS, backoffMs: 5 * MINUTE_MS };
 
 export interface ModelLoads<T> {
-  /** The model under `key`: the loaded one, the load in flight, the failure inside its backoff window, or a new `start()`. */
+  /**
+   * The model under `key`: the loaded one, the load in flight, the failure inside its backoff window, or a new
+   * `start()`.
+   */
   load(key: string, start: () => Promise<T>): Promise<T>;
 }
 
-/** One load per key at a time, bounded by the policy's timeout; `onFailure` hears each failed attempt, so once per backoff window. */
-export function createModelLoads<T>(policy: ModelLoadPolicy, onFailure?: (key: string, err: Error) => void): ModelLoads<T> {
+/** Runs `start` under a timeout; a model that arrives after the timeout is still handed to `onLoaded`. */
+function loadWithTimeout<T>(
+  key: string,
+  start: () => Promise<T>,
+  timeoutMs: number,
+  onLoaded: (model: T) => void,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${key} did not load within ${timeoutMs / 1000} s`)), timeoutMs);
+    timer.unref();
+    Promise.resolve()
+      .then(start)
+      .then(
+        (model) => {
+          clearTimeout(timer);
+          onLoaded(model);
+          resolve(model);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err instanceof Error ? err : new Error(errorMessage(err)));
+        },
+      );
+  });
+}
+
+/**
+ * One load per key at a time, bounded by the policy's timeout; `onFailure` hears each failed attempt, so once per
+ * backoff window.
+ */
+export function createModelLoads<T>(
+  policy: ModelLoadPolicy,
+  onFailure?: (key: string, err: Error) => void,
+): ModelLoads<T> {
   const loaded = new Map<string, T>();
   const inFlight = new Map<string, Promise<T>>();
   const failed = new Map<string, { readonly error: Error; readonly until: number }>();
 
-  const attempt = (key: string, start: () => Promise<T>): Promise<T> => new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${key} did not load within ${policy.timeoutMs / 1000} s`)), policy.timeoutMs);
-    timer.unref();
-    Promise.resolve().then(start).then((model) => {
-      clearTimeout(timer);
+  const attempt = (key: string, start: () => Promise<T>): Promise<T> =>
+    loadWithTimeout(key, start, policy.timeoutMs, (model) => {
       loaded.set(key, model);
       failed.delete(key);
-      resolve(model);
-    }, (err) => {
-      clearTimeout(timer);
-      reject(err instanceof Error ? err : new Error(errorMessage(err)));
     });
-  });
 
   return {
     load(key, start) {
@@ -95,11 +132,13 @@ export function createModelLoads<T>(policy: ModelLoadPolicy, onFailure?: (key: s
       if (pending) return pending;
       const failure = failed.get(key);
       if (failure && Date.now() < failure.until) return Promise.reject(failure.error);
-      const next = attempt(key, start).catch((err: Error) => {
-        failed.set(key, { error: err, until: Date.now() + policy.backoffMs });
-        onFailure?.(key, err);
-        throw err;
-      }).finally(() => inFlight.delete(key));
+      const next = attempt(key, start)
+        .catch((err: Error) => {
+          failed.set(key, { error: err, until: Date.now() + policy.backoffMs });
+          onFailure?.(key, err);
+          throw err;
+        })
+        .finally(() => inFlight.delete(key));
       inFlight.set(key, next);
       return next;
     },

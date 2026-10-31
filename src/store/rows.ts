@@ -1,6 +1,13 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
-import { Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../core/memory.js';
-import { errorMessage, log } from '../util/log.js';
+import {
+  Layer,
+  FALLBACK_HALF_LIFE_DAYS,
+  DEFAULT_SCHEMA_FIT,
+  type MemoryEntry,
+  type ConfidenceLevel,
+  type MemoryKind,
+} from '../core/memory.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { type JsonValue, isJsonObject } from '../util/json.js';
 import { warnDamagedColumn, type StoredJsonSite } from '../util/stored-json.js';
 
@@ -168,8 +175,8 @@ export const MEMORY_SEARCH_COLUMNS = [
   ...MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`),
   'bm25(memories_fts) AS bm25_score',
 ].join(', ');
-/** Default candidate-pool size for `loadSearchEntries` when `limit` is undefined; `api.recall` imports it for `RecallResult.windowSize` so the two cannot
- * drift. */
+/** Default candidate-pool size for `loadSearchEntries` when `limit` is undefined; `api.recall` imports it for
+ * `RecallResult.windowSize` so the two cannot drift. */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 type RetrievalFields = Pick<
@@ -181,13 +188,14 @@ type RetrievalFields = Pick<
 type PlacementFields = Pick<
   MemoryEntry,
   'source_session_id' | 'valid_from' | 'superseded_by' | 'extracted_from' | 'dag_level' | 'dag_parent_id' | 'kind' |
-  'scope' | 'owner' | 'artifact_ref' | 'tenantId' | 'origin_project' | 'descendant_count' | 'earliest_at' |
+  'scope' | 'owner' | 'artifact_ref' | 'tenant_id' | 'origin_project' | 'descendant_count' | 'earliest_at' |
   'latest_at' | 'summary_dirty' | 'last_rebuilt_at' | 'rebuild_count' | 'dag_level_3_built_at'
 >;
 
 function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
-  // SAFETY: every `as X` narrows a SQLite column to a MemoryEntry enum/union member; `row` comes from MEMORY_SELECT_COLUMNS / MEMORY_SEARCH_COLUMNS,
-  // the only queries producing MemoryRow, and the DB layer writes these columns only from the same enums.
+  // SAFETY: every `as X` narrows a SQLite column to a MemoryEntry enum/union member; `row` comes from
+  // MEMORY_SELECT_COLUMNS / MEMORY_SEARCH_COLUMNS, the only queries producing MemoryRow, and the DB layer writes these
+  // columns only from the same enums.
   return {
     id: row.id,
     created: row.created,
@@ -203,7 +211,11 @@ function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
     outcome_score: row.outcome_score === null || row.outcome_score === undefined ? null : Number(row.outcome_score),
     outcome_positive: Number(row.outcome_positive ?? 0),
     outcome_negative: Number(row.outcome_negative ?? 0),
-    conflicts_with: parseJsonArray(row.conflicts_with_json, { table: 'memories', id: row.id, column: 'conflicts_with_json' }),
+    conflicts_with: parseJsonArray(row.conflicts_with_json, {
+      table: 'memories',
+      id: row.id,
+      column: 'conflicts_with_json',
+    }),
     pinned: Boolean(row.pinned),
     confidence: row.confidence ?? 'observed',
     content: row.content,
@@ -226,12 +238,12 @@ function rowToPlacementFields(row: MemoryRow): PlacementFields {
     scope: row.scope ?? null,
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,
-    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
+    tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
     origin_project: row.origin_project ?? null,
     descendant_count: Number(row.descendant_count ?? 0),
     earliest_at: row.earliest_at ?? null,
     latest_at: row.latest_at ?? null,
-    summary_dirty: (Number(row.summary_dirty ?? 0) === 1 ? 1 : 0) as 0 | 1,
+    summary_dirty: Number(row.summary_dirty) === 1,
     last_rebuilt_at: row.last_rebuilt_at ?? null,
     rebuild_count: Number(row.rebuild_count ?? 0),
     dag_level_3_built_at: row.dag_level_3_built_at ?? null,
@@ -248,7 +260,8 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
   return entry;
 }
 
-/** A column that is not JSON reads as empty. With `site` the row is named at warn once; without it no row is known and the line stays at debug. */
+/** A column that is not JSON reads as empty. With `site` the row is named at warn once; without it no row is known and
+ * the line stays at debug. */
 export function parseJsonArray(raw: string | null | undefined, site?: StoredJsonSite): string[] {
   if (!raw) return [];
   try {
@@ -256,13 +269,14 @@ export function parseJsonArray(raw: string | null | undefined, site?: StoredJson
     return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
   } catch (err) {
     if (site) warnDamagedColumn(site, 'not valid JSON');
-    else log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`);
+    else log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`, errorFields(err));
     return [];
   }
 }
 
-/** Strict parse for `last_trace_id`: Number(raw) turns '' or garbage into 0/NaN (a masked FK violation); require a clean positive integer string, else unset.
- * The ONE place that decides 'clean'; consumers read the validated value from `buildIndexFromDb`'s result and never re-parse. */
+/** Strict parse for `last_trace_id`: Number(raw) turns '' or garbage into 0/NaN (a masked FK violation); require a
+ * clean positive integer string, else unset. The ONE place that decides 'clean'; consumers read the validated value
+ * from `buildIndexFromDb`'s result and never re-parse. */
 export function parseLastTraceId(raw: string | null | undefined): string | null {
   const trimmed = (raw ?? '').trim();
   if (!/^\d+$/.test(trimmed) || Number(trimmed) <= 0) return null;

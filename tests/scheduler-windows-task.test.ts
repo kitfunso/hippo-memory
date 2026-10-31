@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from '../src/cli/scheduler.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 describe('Windows daily task', () => {
   it('runs the runner under a headless console', () => {
@@ -30,7 +31,7 @@ describe('Windows daily task', () => {
       expect(schtasks('/query', '/tn', name, '/xml')).toContain('<Command>conhost.exe</Command>');
       schtasks('/run', '/tn', name);
       const out = join(dir, 'out.txt');
-      for (let i = 0; i < 50 && !existsSync(out); i++) await new Promise((r) => setTimeout(r, 200));
+      await waitFor(() => existsSync(out), { timeoutMs: 10_000, intervalMs: 200, what: 'the scheduled task output' });
       expect(readFileSync(out, 'utf8').trim()).toBe('ran');
     } finally {
       if (created) schtasks('/delete', '/tn', name, '/f');

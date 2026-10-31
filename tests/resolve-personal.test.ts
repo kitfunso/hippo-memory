@@ -1,7 +1,8 @@
 // Conflict resolution never reaches another person's personal row, and a personal value never becomes a tenant-wide tombstone (F1).
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { remember, type Actor } from '../src/api/index.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../src/api/error-reply.js';
@@ -9,6 +10,8 @@ import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const A_TEXT = 'always run the deploy script with --dry-run first';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -19,12 +22,12 @@ const actorA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 const actorB: Actor = { subject: 'api_key:hk_b', role: 'member', owner: 'b' };
 const unownedAdmin: Actor = { subject: 'api_key:hk_admin', role: 'admin' };
 
-function ctxFor(actor: Actor): HippoDbContext {
-  return { hippoRoot: root, tenantId: 'default', actor };
+function ctxFor(actor: Actor): FullContext {
+  return apiCtx(root, 'default', actor);
 }
 
 async function callTool(actor: Actor, name: string, args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  const ctx: McpContext = { hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role };
+  const ctx: McpContext = { hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role , store: sqliteStore(root) };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
 }
@@ -55,9 +58,9 @@ interface PersonalPair {
 }
 
 /** A's personal row in an open conflict with B's team row. */
-function personalPair(): PersonalPair {
-  const personalId = remember(ctxFor(actorA), { content: A_TEXT, personal: true }).id;
-  const teamId = remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' }).id;
+async function personalPair(): Promise<PersonalPair> {
+  const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
+  const teamId = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
   return { personalId, teamId, conflictId: seedConflict(personalId, teamId) };
 }
 
@@ -71,10 +74,10 @@ afterEach(() => {
 
 describe('resolving conflicts next to personal rows', () => {
   it('rejectLoser on a team row sweeps team duplicates but leaves another person\'s personal row holding the same text', async () => {
-    const personalId = remember(ctxFor(actorA), { content: A_TEXT, personal: true }).id;
-    const teamCopy = remember(ctxFor(actorB), { content: A_TEXT }).id;
-    const loser = remember(ctxFor(actorB), { content: A_TEXT }).id;
-    const keeper = remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' }).id;
+    const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
+    const teamCopy = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
+    const loser = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
+    const keeper = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
     expect(new Set([personalId, teamCopy, loser]).size).toBe(3);
     const conflictId = seedConflict(keeper, loser);
 
@@ -88,7 +91,7 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('rejectLoser on the owner\'s own personal loser is a 400 that changes nothing, while forget resolves it', async () => {
-    const { personalId, teamId, conflictId } = personalPair();
+    const { personalId, teamId, conflictId } = await personalPair();
     let refusal: { status: number; message: string } | undefined;
     try {
       await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, rejectLoser: true });
@@ -107,8 +110,8 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('hippo_conflicts hides a pair holding someone else\'s personal row, and the owner sees it', async () => {
-    const { personalId, teamId } = personalPair();
-    const otherTeamId = remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' }).id;
+    const { personalId, teamId } = await personalPair();
+    const otherTeamId = (await remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' })).id;
     const [conflictId, teamConflictId] = seedConflicts([personalId, teamId], [otherTeamId, teamId]);
     const listed = replyText(await callTool(actorA, 'hippo_conflicts', {}));
     expect(listed).toContain(`conflict_${conflictId}:`);
@@ -121,7 +124,7 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('hippo_resolve on a pair holding someone else\'s personal row answers as a missing conflict does, and the owner resolves it', async () => {
-    const { personalId, teamId, conflictId } = personalPair();
+    const { personalId, teamId, conflictId } = await personalPair();
     for (const outsider of [actorB, unownedAdmin]) {
       expect(replyText(await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, forget: true }))).toBe(NOT_RESOLVED);
       expect(replyText(await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId + 1000, keep: teamId, forget: true }))).toBe(NOT_RESOLVED);
@@ -134,7 +137,7 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('the dashboard resolve answers a pair holding a personal row as it answers a missing conflict, open or resolved', async () => {
-    const { personalId, teamId, conflictId } = personalPair();
+    const { personalId, teamId, conflictId } = await personalPair();
     const missing = resolveOpenConflict(root, 'default', conflictId + 1000, { keep: teamId });
     expect(missing.status).toBe(404);
     expect(resolveOpenConflict(root, 'default', conflictId, { keep: teamId })).toEqual(missing);

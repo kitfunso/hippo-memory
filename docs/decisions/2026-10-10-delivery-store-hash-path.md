@@ -1,7 +1,9 @@
 # Delivery ledger store hash: the path the hook took, read by its two rules
 
+Superseded by `2026-10-10-delivery-tool-failure-columns.md` for rows at `ledger_version` 4; this record still governs rows at 3 and below.
+
 Date: 2026-10-10
-Status: accepted
+Status: accepted for rows at `ledger_version` 3 and below; superseded for version 4
 Links: PR #766; `scripts/z10-reconstruct.mjs` (`reconstruct`); `docs/evals/2026-10-10-z10-exit-check-result.md`, "Review fixes after the scored run" item 5, Limits and Out; commits `ead586f5`, `6b9205b4`, `a82bc723`
 
 ## Context

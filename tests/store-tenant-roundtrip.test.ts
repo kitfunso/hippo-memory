@@ -15,7 +15,7 @@ describe('store roundtrip with tenant_id', () => {
       const entry = createMemory('tenant test content', { tenantId: 'acme' });
       writeEntry(home, entry);
       const loaded = readEntry(home, entry.id);
-      expect(loaded?.tenantId).toBe('acme');
+      expect(loaded?.tenant_id).toBe('acme');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -28,7 +28,7 @@ describe('store roundtrip with tenant_id', () => {
       const entry = createMemory('no tenant content');
       writeEntry(home, entry);
       const loaded = readEntry(home, entry.id);
-      expect(loaded?.tenantId).toBe('default');
+      expect(loaded?.tenant_id).toBe('default');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

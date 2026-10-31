@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cmdCapture } from '../src/capture/command.js';
 import { transcriptWorkingState } from '../src/capture/working-state.js';
 import { maskEmails } from '../src/util/secret-detect.js';
@@ -17,20 +17,17 @@ const PROMPT = `We decided to send the customer.ts export to ${EMAIL} because bi
 let tmp: string;
 let repo: string;
 let hippoRoot: string;
-let origHippoHome: string | undefined;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-email-mask-'));
   repo = path.join(tmp, 'repo');
   hippoRoot = path.join(repo, '.hippo');
   initStore(hippoRoot);
-  origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
 });
 
 afterEach(() => {
-  if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-  else delete process.env.HIPPO_HOME;
+  vi.unstubAllEnvs();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 

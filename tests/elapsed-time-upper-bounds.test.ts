@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const TESTS = fileURLToPath(new URL('.', import.meta.url));
+const UI_SRC = fileURLToPath(new URL('../ui/src', import.meta.url));
 // This file holds the shapes as sample text.
 const SELF = 'elapsed-time-upper-bounds.test.ts';
 const CLOCK = String.raw`(?:Date\.now\(\)|performance\.now\(\)|hrtime(?:\.bigint)?\(\))`;
@@ -71,11 +72,19 @@ function boundedInline(subject: string, timed: (code: string) => boolean): boole
 const files = readdirSync(TESTS, { recursive: true, encoding: 'utf8' })
   .map((file) => file.split('\\').join('/'))
   .filter((file) => /\.(?:ts|mjs|cjs)$/.test(file) && !file.startsWith('fixtures/') && file !== SELF);
-const found = files.flatMap((file) => elapsedUpperBounds(file, readFileSync(join(TESTS, file), 'utf8')));
+// The dashboard package has its own test run that the root suite never sees.
+const uiFiles = readdirSync(UI_SRC, { recursive: true, encoding: 'utf8' })
+  .map((file) => file.split('\\').join('/'))
+  .filter((file) => /\.test\.tsx?$/.test(file));
+const found = [
+  ...files.flatMap((file) => elapsedUpperBounds(file, readFileSync(join(TESTS, file), 'utf8'))),
+  ...uiFiles.flatMap((file) => elapsedUpperBounds(`ui/src/${file}`, readFileSync(join(UI_SRC, file), 'utf8'))),
+];
 
 describe('elapsed-time upper bounds in tests', () => {
   it('reads the whole tests folder, so the scan is live', () => {
     expect(files.length).toBeGreaterThan(500);
+    expect(uiFiles.length).toBeGreaterThan(5);
   });
 
   it('no test asserts one outside the listed lines', () => {

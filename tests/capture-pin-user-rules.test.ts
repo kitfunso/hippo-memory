@@ -1,14 +1,16 @@
 // A rule the person states is pinned at capture, so the prompt hook injects it on a later prompt that shares none of its words.
 // Real SQLite stores in tmp dirs, no mocks.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { FullContext } from './_helpers/api-ctx.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
 import { collectSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const TAUGHT = 'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
 const USER_DECISION = "Let's go with SQLite for the cache because the app must work offline.";
@@ -18,8 +20,7 @@ const LATER_PROMPT = 'Fix formatCents in src/money.js so it rounds half up';
 describe('capture pins the rules a person states', () => {
   let scratch: string;
   let root: string;
-  let priorHome: string | undefined;
-  let ctx: Context;
+  let ctx: FullContext;
 
   const capture = (turns: SessionTurn[]) => cmdCapture(root, { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
   const injected = async () => (await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT }))
@@ -31,14 +32,12 @@ describe('capture pins the rules a person states', () => {
     initStore(root);
     const global = join(scratch, 'global');
     initStore(global);
-    priorHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = global;
-    ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    vi.stubEnv('HIPPO_HOME', global);
+    ctx = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   });
 
   afterEach(() => {
-    if (priorHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = priorHome;
+    vi.unstubAllEnvs();
     rmSync(scratch, { recursive: true, force: true });
   });
 

@@ -18,6 +18,7 @@
  * Project rule: always use real DB for tests.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -25,14 +26,15 @@ import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { detectPlanningClaim } from '../src/predictions/planning-fallacy.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
-import { retrieve, type Context } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'test:j32-watch', role: 'admin' } };
+function ctxFor(root: string): FullContext {
+  return apiCtx(root, 'default', { subject: 'test:j32-watch', role: 'admin' });
 }
 
 // Seed N closed predictions in a class so the baserate hint can fire on a

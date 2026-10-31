@@ -113,7 +113,7 @@ beforeAll(() => {
   seed('fred_cache_drop',
     `FRED cache can silently drop series. tips_10y vanished from fred_weekly.parquet during daily refresh, breaking the gold model.`,
     clusterEmbedding(FRED_CENTROID, 1),
-    { tags: ['data-pipeline', 'fred', 'error'], emotional_valence: 'negative' });
+    { tags: ['data-pipeline', 'fred', 'error'], emotionalValence: 'negative' });
 
   seed('fred_fallback',
     `FRED as fallback for dead data URLs. IMF and FAO went 404. Same indices available on FRED. More reliable than scraping.`,
@@ -139,7 +139,7 @@ beforeAll(() => {
   seed('subagent_fabrication',
     `Always verify sub-agent model metrics. Natgas V3 claimed Min Sharpe 0.99 -> 1.60. Actual: CV=-0.73.`,
     clusterEmbedding(SUBAGENT_CENTROID, 3),
-    { tags: ['sub-agent', 'verification', 'error'], emotional_valence: 'critical' });
+    { tags: ['sub-agent', 'verification', 'error'], emotionalValence: 'critical' });
 
   // ── Quant/backtest cluster ────────────────────────────────────────────
   seed('walk_forward_overestimates',
@@ -161,7 +161,7 @@ beforeAll(() => {
   seed('eia_path_change',
     `EIA API path changed silently. /petroleum/sum/wkly became /petroleum/sum/sndw. Broke 9 of 10 series.`,
     clusterEmbedding(PIPELINE_CENTROID, 1),
-    { tags: ['data-pipeline', 'eia', 'api', 'error'], emotional_valence: 'negative' });
+    { tags: ['data-pipeline', 'eia', 'api', 'error'], emotionalValence: 'negative' });
 
   seed('staleness_hides_ok',
     `Data source staleness hides behind OK reports. 5+ sources silently stale while refresh reported 14/14 OK.`,
@@ -182,7 +182,7 @@ beforeAll(() => {
   seed('no_emoji_python',
     `No emoji in Python print statements on Windows. cp1252 encoding crashes on emoji characters.`,
     clusterEmbedding(PLATFORM_CENTROID, 1),
-    { tags: ['platform', 'windows', 'encoding'], emotional_valence: 'negative' });
+    { tags: ['platform', 'windows', 'encoding'], emotionalValence: 'negative' });
 
   seed('powershell_semicolons',
     `PowerShell uses semicolons not && to chain commands. The && operator causes silent failure.`,
@@ -193,7 +193,7 @@ beforeAll(() => {
   seed('never_overwrite',
     `NEVER overwrite existing production files. Create versioned copies. Violating destroys PnL history.`,
     clusterEmbedding(PRODUCTION_CENTROID, 1),
-    { tags: ['production', 'rule', 'critical'], emotional_valence: 'critical', pinned: true });
+    { tags: ['production', 'rule', 'critical'], emotionalValence: 'critical', pinned: true });
 
   seed('version_files',
     `Version production files before modifying. Always create a backup copy before touching production files.`,

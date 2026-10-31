@@ -14,7 +14,8 @@ import {
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
-import { CliExit } from './exit.js';
+import { cliApiContext } from './api-context.js';
+import { CliExit, fail } from './exit.js';
 
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
 
@@ -30,15 +31,12 @@ function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags):
     printError('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
     throw new CliExit(2);
   }
-  // --since is advisory in V1: the slack_cursors row drives resume, so the backfill loop always continues where it left off (keeps idempotency clean).
+  // --since is advisory in V1: the slack_cursors row drives resume, so the backfill loop always continues where it left
+  // off (keeps idempotency clean).
   const sinceIso = stringFlag(flags, 'since');
   void sinceIso;
   const fetcher = slackHistoryFetcher(token);
-  const ctx = {
-    hippoRoot,
-    tenantId,
-    actor: api.adminActor('cli:slack-backfill'),
-  };
+  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:slack-backfill') };
   backfillChannel(ctx, {
     teamId: envSlackTeamId() ?? 'T_UNKNOWN',
     channel: { id: channel, is_private: false },
@@ -62,22 +60,21 @@ function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliFlags):
 
 async function cmdSlackDlqReplay(
   hippoRoot: string,
+  tenantId: string,
   args: string[],
   flags: CliFlags,
 ): Promise<void> {
   const idArg = args[2];
   if (!idArg) {
-    printError('Usage: hippo slack dlq replay <id> [--force]');
-    throw new CliExit(1);
+    fail('Usage: hippo slack dlq replay <id> [--force]');
   }
   const id = Number(idArg);
   if (!Number.isFinite(id) || !Number.isInteger(id) || id < 1) {
-    printError(`replay: invalid id ${idArg}`);
-    throw new CliExit(1);
+    fail(`replay: invalid id ${idArg}`);
   }
   const force = flags.force === true;
   const result = await replayDlqEntry(
-    { hippoRoot },
+    cliApiContext(hippoRoot, tenantId),
     id,
     {
       force,
@@ -85,10 +82,9 @@ async function cmdSlackDlqReplay(
     },
   );
   if (!result.ok) {
-    printError(
+    fail(
       `replay failed: status=${result.status} retry_count=${result.retryCount}${result.reason ? ` reason=${result.reason}` : ''}`,
     );
-    throw new CliExit(1);
   }
   console.log(
     `replay ok: status=${result.status} memory_id=${result.memoryId ?? '(none)'} retry_count=${result.retryCount}`,
@@ -102,8 +98,7 @@ function cmdSlackWorkspacesAdd(
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   const tenantId = (stringFlag(flags, 'tenant') ?? '').trim();
   if (!teamId || !tenantId) {
-    printError('Usage: hippo slack workspaces add --team <T> --tenant <t>');
-    throw new CliExit(1);
+    fail('Usage: hippo slack workspaces add --team <T> --tenant <t>');
   }
   const ws = addSlackWorkspace(hippoRoot, { teamId, tenantId });
   console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
@@ -126,13 +121,11 @@ function cmdSlackWorkspacesRemove(
 ): void {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   if (!teamId) {
-    printError('Usage: hippo slack workspaces remove --team <T>');
-    throw new CliExit(1);
+    fail('Usage: hippo slack workspaces remove --team <T>');
   }
   const removed = removeSlackWorkspace(hippoRoot, teamId);
   if (!removed) {
-    printError(`no workspace registered for team ${teamId}`);
-    throw new CliExit(1);
+    fail(`no workspace registered for team ${teamId}`);
   }
   console.log(`removed: ${teamId}`);
 }
@@ -148,7 +141,7 @@ export async function handleSlack({ hippoRoot, tenantId, args, flags }: CommandC
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    await cmdSlackDlqReplay(hippoRoot, args, flags);
+    await cmdSlackDlqReplay(hippoRoot, tenantId, args, flags);
     return;
   }
   if (sub === 'workspaces') {
@@ -168,8 +161,7 @@ export async function handleSlack({ hippoRoot, tenantId, args, flags }: CommandC
     printSlackWorkspacesUsage();
     throw new CliExit(1);
   }
-  printError(
+  fail(
     'Usage: hippo slack <backfill|dlq list|dlq replay <id> [--force]|workspaces add|workspaces list|workspaces remove> [...]',
   );
-  throw new CliExit(1);
 }

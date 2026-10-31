@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { withSharedStoreHandles } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { runSlackSmoke } from '../benchmarks/e1.3/slack-1000-event-smoke.js';
+
+// The case commits 100 rows to a real store, so its time follows the runner's disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('slack 1000-event smoke (CI subset)', () => {
   let root: string;
@@ -19,7 +23,8 @@ describe('slack 1000-event smoke (CI subset)', () => {
   });
 
   it('100 events, replayed twice, produces exactly 100 raw memories with zero outbound HTTP', async () => {
-    const result = await runSlackSmoke({ hippoRoot: root, count: 100, replay: 2 });
+    // One connection for the run: a close per call checkpoints the WAL, which is slow on Windows; the benchmark CLI keeps per-call opens.
+    const result = await withSharedStoreHandles(() => runSlackSmoke({ hippoRoot: root, count: 100, replay: 2 }));
     expect(result.uniqueMemories).toBe(100);
     expect(result.outboundHttp).toBe(0);
     expect(result.totalIngestCalls).toBe(200);

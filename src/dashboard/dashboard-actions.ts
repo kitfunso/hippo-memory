@@ -7,6 +7,7 @@ import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { readEntry } from '../store/entry-reads.js';
 import { writeEntry } from '../store/entry-writes.js';
+import { sqliteStore } from '../store/sqlite/store.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
 import { isLiveMemory } from './dashboard-snapshot.js';
 import type { ForgetResult, ResolveResult } from './dashboard-types.js';
@@ -45,23 +46,33 @@ export function pinMemory(hippoRoot: string, tenantId: string, rawId: string, bo
 }
 
 /** Marks a memory wrong, the same signal as `hippo outcome --bad`. */
-export function markWrong(hippoRoot: string, tenantId: string, rawId: string): ActionResult {
+export async function markWrong(hippoRoot: string, tenantId: string, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.HippoDbContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
+  const ctx: api.ContextWith<'entryWrites'> = {
+    hippoRoot,
+    tenantId,
+    actor: api.adminActor(ACTOR),
+    store: sqliteStore(hippoRoot),
+  };
   // outcome() answers `applied: 0` for a missing or other-tenant id instead of throwing.
-  if (api.outcome(ctx, [id], false).applied === 0) return notFound();
+  if ((await api.outcome(ctx, [id], false)).applied === 0) return notFound();
   const entry = readEntry(hippoRoot, id, tenantId);
   return entry === null ? notFound() : { status: 200, body: null, changed: true, entry };
 }
 
 /** Deletes a memory like `hippo forget`; a raw receipt is append-only and answers 409 with the archive hint. */
-export function forgetMemory(hippoRoot: string, tenantId: string, rawId: string): ActionResult {
+export async function forgetMemory(hippoRoot: string, tenantId: string, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.HippoDbContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
+  const ctx: api.ContextWith<'entryWrites'> = {
+    hippoRoot,
+    tenantId,
+    actor: api.adminActor(ACTOR),
+    store: sqliteStore(hippoRoot),
+  };
   try {
-    const done: ForgetResult = api.forget(ctx, id);
+    const done: ForgetResult = await api.forget(ctx, id);
     return { status: 200, body: done, changed: true };
   } catch (err) {
     if (err instanceof NotFoundError) return notFound();
@@ -89,7 +100,7 @@ export function resolveOpenConflict(hippoRoot: string, tenantId: string, conflic
   if (liveEntry(hippoRoot, tenantId, conflict.memory_a_id) === null || liveEntry(hippoRoot, tenantId, conflict.memory_b_id) === null) {
     return notFound();
   }
-  const resolved = resolveConflict(hippoRoot, conflictId, keep, false, tenantId, { rejectedBy: ACTOR });
+  const resolved = resolveConflict(hippoRoot, { conflictId, keepId: keep, tenantId }, { rejectedBy: ACTOR });
   // Both guards passed above, so null here is a race with another resolver.
   if (resolved === null) return already();
   const result: ResolveResult = { ok: true, conflictId, keptId: keep, weakenedId: resolved.loserId };

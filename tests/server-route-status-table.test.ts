@@ -214,7 +214,7 @@ describe('HTTP route status table: status and error text per route', () => {
     }
     savedRps = process.env.HIPPO_V1_RPS;
     process.env.HIPPO_V1_RPS = '0';
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
   });
 
   afterAll(async () => {
@@ -453,7 +453,7 @@ describe('HTTP route status table under the rate limiter', () => {
     initStore(home);
     const saved = process.env.HIPPO_V1_RPS;
     process.env.HIPPO_V1_RPS = '0.5';
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
     try {
       expect(await runCases(handle.url, LIMITED)).toEqual(expected(LIMITED));
     } finally {

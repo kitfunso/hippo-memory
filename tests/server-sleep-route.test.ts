@@ -17,15 +17,16 @@
  * Real HTTP server (serve port:0), per-test isolated local + global stores.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { Context } from '../src/api/index.js';
 import { remember } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets POST /v1/sleep under test in this
@@ -45,7 +46,7 @@ describe('POST /v1/sleep', () => {
     globalHome = makeRoot('srv-slp');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
   });
 
   afterEach(async () => {
@@ -78,8 +79,8 @@ describe('POST /v1/sleep', () => {
   });
 
   it('dry_run=true previews dedup/audit and skips share/ambient', async () => {
-    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'dry-run-canary' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    await remember(ctx, { content: 'dry-run-canary' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
       method: 'POST',
@@ -102,9 +103,9 @@ describe('POST /v1/sleep', () => {
   });
 
   it('runs the full pipeline on a populated store', async () => {
-    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     for (let i = 0; i < 5; i++) {
-      remember(ctx, { content: `populate ${i} ${'x'.repeat(50)}` });
+      await remember(ctx, { content: `populate ${i} ${'x'.repeat(50)}` });
     }
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
@@ -119,8 +120,8 @@ describe('POST /v1/sleep', () => {
   });
 
   it('no_share=true keeps shared undefined', async () => {
-    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'high-value would-trigger-share' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    await remember(ctx, { content: 'high-value would-trigger-share' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
       method: 'POST',
@@ -147,11 +148,11 @@ describe('POST /v1/sleep', () => {
     // Seed near-duplicate memories under two tenants. Run /v1/sleep (default
     // Bearer). Verify both tenants' rows are visible to dedupe (they share
     // hippoRoot).
-    const tenantA: Context = { hippoRoot: home, tenantId: 'tenant_a', actor: { subject: 'localhost:cli', role: 'admin' } };
-    const tenantB: Context = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const tenantA: FullContext = apiCtx(home, 'tenant_a', { subject: 'localhost:cli', role: 'admin' });
+    const tenantB: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const dupContent = 'highly similar content x'.repeat(20);
-    remember(tenantA, { content: dupContent + ' tenant_a marker' });
-    remember(tenantB, { content: dupContent + ' tenant_b marker' });
+    await remember(tenantA, { content: dupContent + ' tenant_a marker' });
+    await remember(tenantB, { content: dupContent + ' tenant_b marker' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
       method: 'POST',
@@ -189,7 +190,7 @@ describe('POST /v1/sleep', () => {
     fetch(`${handle.url}/v1/sleep`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 
   it('answers GET /health while a sleep is still running', async () => {
-    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), { content: 'a memory for the sleep to write' });
     // The sleep needs the write lock held here, so it cannot finish until the health answer has released it.
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');
@@ -207,7 +208,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('still answers 503 with Retry-After when another connection holds the write lock', async () => {
-    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), { content: 'a memory for the sleep to write' });
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');
     const busy = await postSleep();
@@ -217,7 +218,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('refuses a third sleep at once with 503 and Retry-After 30 while one runs and one waits, then takes sleeps again', async () => {
-    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), { content: 'a memory for the sleep to write' });
     // Neither admitted sleep can finish while this lock is held, so the first reply back is the refusal.
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');

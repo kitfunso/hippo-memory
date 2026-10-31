@@ -55,7 +55,7 @@ Examples:
   hippo card heartbeat card_abc --run 7
   hippo card reclaim
   hippo embed --status
-  hippo watch "npm run build"
+  hippo watch -- npm run build
   hippo learn --git --days 30
   hippo promote mem_abc123
   hippo sync

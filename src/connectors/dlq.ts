@@ -1,8 +1,9 @@
-// The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of defaults, one replay result.
+// The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of
+// defaults, one replay result.
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../util/secret-detect.js';
-import { requireGroup, storeFor, type HippoStore } from '../store/index.js';
+import type { StoreWith } from '../store/index.js';
 import type { ConnectorDeadLetter } from '../store/port.js';
 import type { JsonValue } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
@@ -31,8 +32,8 @@ export interface ParkedRow<Bucket extends string> {
   signature: string | null;
 }
 
-/** What one connector supplies: the tag that names its table to the store, its list, its one-row read and its retry bump.
- * `Own` is the columns only its table has. */
+/** What one connector supplies: the tag that names its table to the store, its list, its one-row read and its retry
+ * bump. `Own` is the columns only its table has. */
 export interface ConnectorDlq<Own, Bucket extends string, Item> {
   readonly letter: (row: ParkedRow<Bucket> & Own) => ConnectorDeadLetter;
   readonly list: (hippoRoot: string, tenantId: string, limit: number) => Item[];
@@ -41,12 +42,10 @@ export interface ConnectorDlq<Own, Bucket extends string, Item> {
   readonly bump: (hippoRoot: string, id: number) => void;
 }
 
-/** Parks on `store`, else on hippo.db under `hippoRoot`. */
 export async function parkInDlq<Own, Bucket extends string>(
   dlq: ConnectorDlq<Own, Bucket, unknown>,
-  hippoRoot: string,
+  store: StoreWith<'connectorEvents'>,
   opts: ParkOpts<Bucket> & NoInfer<Own>,
-  store?: HippoStore,
 ): Promise<number> {
   const rawPayload = redactPayload(opts.rawPayload);
   // A redacted body can never match its signature, so the row keeps none and replay needs --force.
@@ -59,7 +58,7 @@ export async function parkInDlq<Own, Bucket extends string>(
     bucket: opts.bucket ?? DEFAULT_BUCKET,
     signature: redacted ? null : opts.signature ?? null,
   });
-  return requireGroup(storeFor({ hippoRoot, store }), 'connectorEvents').parkDeadLetter(letter);
+  return store.connectorEvents.parkDeadLetter(letter);
 }
 
 export function listDlq<Item>(
@@ -138,7 +137,8 @@ export interface ReplaySteps<Item, Envelope extends JsonValue> {
   readonly reingest: (row: Item, envelope: Envelope) => Promise<Reingest>;
 }
 
-/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted once, except a missing signature. */
+/** Re-runs a parked row under today's secret and routing; every
+ * attempt past the read is counted once, except a missing signature. */
 export async function replayParked<Item extends ParkedEntry, Envelope extends JsonValue>(
   steps: ReplaySteps<Item, Envelope>,
   hippoRoot: string,
@@ -163,7 +163,12 @@ export async function replayParked<Item extends ParkedEntry, Envelope extends Js
   const outcome = await steps.reingest(row, parsed);
   if (!outcome.ok) return failAndBump(steps.dlq, hippoRoot, row, outcome.status, outcome.reason);
   steps.dlq.bump(hippoRoot, row.id);
-  const result: ReplayResult = { ok: true, status: outcome.status, memoryId: outcome.memoryId, retryCount: row.retryCount + 1 };
+  const result: ReplayResult = {
+    ok: true,
+    status: outcome.status,
+    memoryId: outcome.memoryId,
+    retryCount: row.retryCount + 1,
+  };
   if (outcome.reason !== undefined) result.reason = outcome.reason;
   return result;
 }

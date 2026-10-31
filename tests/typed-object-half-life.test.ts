@@ -9,13 +9,14 @@ import { readEntry } from '../src/store/entry-reads.js';
 import type { HippoConfig } from '../src/core/config.js';
 import { deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { saveDecision } from '../src/objects/decisions.js';
-import { saveIncident } from '../src/objects/incidents.js';
+import { openIncident } from '../src/objects/incidents.js';
 import { saveProcess } from '../src/objects/processes.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveSkill } from '../src/objects/skills.js';
 import { saveProjectBrief } from '../src/objects/project-briefs.js';
 import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { savePrediction } from '../src/store/predictions.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -29,15 +30,15 @@ function store(config: Partial<HippoConfig> | undefined): string {
   return root;
 }
 
-const writers: [string, (root: string) => { memoryId: string | null }][] = [
-  ['decision', (root) => saveDecision(root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', (root) => saveIncident(root, 'default', { incidentText: 'the billing cron charged twice on the 1st' })],
-  ['process', (root) => saveProcess(root, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
-  ['policy', (root) => savePolicy(root, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
-  ['skill', (root) => saveSkill(root, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
-  ['project brief', (root) => saveProjectBrief(root, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
-  ['customer note', (root) => saveCustomerNote(root, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
-  ['prediction', (root) => savePrediction(root, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
+const writers: [string, (root: string) => Promise<{ memoryId: string | null }>][] = [
+  ['decision', async (root) => await saveDecision(objectsAt(root), root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
+  ['incident', async (root) => await openIncident(objectsAt(root), root, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
+  ['process', async (root) => await saveProcess(objectsAt(root), root, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
+  ['policy', async (root) => await savePolicy(objectsAt(root), root, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
+  ['skill', async (root) => await saveSkill(objectsAt(root), root, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
+  ['project brief', async (root) => await saveProjectBrief(objectsAt(root), root, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
+  ['customer note', async (root) => await saveCustomerNote(objectsAt(root), root, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
+  ['prediction', async (root) => savePrediction(root, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
 ];
 
 const defaults: [string, Partial<HippoConfig> | undefined, number][] = [
@@ -46,9 +47,9 @@ const defaults: [string, Partial<HippoConfig> | undefined, number][] = [
 ];
 
 describe.each(defaults)('first-class objects on %s', (_label, config, base) => {
-  it.each(writers)('a %s decays no faster than an ordinary memory', (_kind, save) => {
+  it.each(writers)('a %s decays no faster than an ordinary memory', async (_kind, save) => {
     const root = store(config);
-    const entry = readEntry(root, save(root).memoryId!, 'default')!;
+    const entry = readEntry(root, (await save(root)).memoryId!, 'default')!;
     expect(entry.half_life_days).toBe(deriveHalfLife(base, entry));
     expect(entry.half_life_days).toBeGreaterThanOrEqual(base);
   });

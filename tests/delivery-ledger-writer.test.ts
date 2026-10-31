@@ -13,6 +13,7 @@ import {
 } from '../src/store/recall-trace.js';
 import {
   createDeliveryRecorder,
+  DELIVERY_LEDGER_VERSION,
   DELIVERY_REJECTED_ROW_CAP,
   type DeliveryEventInput,
   type DeliveryRejectReason,
@@ -105,8 +106,8 @@ describe('writeDeliveryEvent', () => {
     expect(first).not.toBeNull();
     const rows = readDeliveryEvents(db, 'default', 'sess-1');
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of, r.ledger_version])).toEqual([
-      [first, 1, null, 3],
-      [second, 2, null, 3],
+      [first, 1, null, DELIVERY_LEDGER_VERSION],
+      [second, 2, null, DELIVERY_LEDGER_VERSION],
     ]);
     expect(rows[0].candidates).toEqual([{
       event_id: first, tenant_id: 'default', memory_id: 'mem-1', source_store: 'local', pool: 'pin', stage: 'final',
@@ -272,7 +273,7 @@ describe('writeDeliveryEvent', () => {
     db.exec('DROP TABLE delivery_candidates');
     expect(runWithRequestId('req-ledger-7', () => writeDeliveryEvent(db, event()))).toBeNull();
     expect(err).toHaveBeenCalledTimes(1);
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: .* requestId=req-ledger-7\n$/);
+    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: .* requestId=req-ledger-7 errorClass=\w+ stack=.*\n$/);
   });
 });
 
@@ -411,5 +412,65 @@ describe('createDeliveryRecorder row building', () => {
     rec.flush(write);
     rec.flush(write);
     expect(write).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('tool-failure rows', () => {
+  const failureEvent = (overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput => event({
+    eventType: 'tool-failure', promptHash: null, promptLength: 0, blockState: 'empty', consideredCount: 0, selectedCount: 0, emittedCount: 0,
+    selectedTokens: 0, injectedTokens: 0, budgetTokens: 0, staticHash: null, emittedHash: null, elapsedMs: 1, toolUseId: null, failureId: null,
+    candidates: [], ...overrides,
+  });
+  const rows = () => readDeliveryEvents(db, 'default', 'sess-1');
+
+  it('every stored row carries the current ledger version', () => {
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1', failureId: 3 }));
+    const [row] = rows();
+    expect([row.ledger_version, row.tool_use_id, row.failure_id]).toEqual([DELIVERY_LEDGER_VERSION, 'toolu_1', 3]);
+    expect(DELIVERY_LEDGER_VERSION).toBe(4);
+  });
+
+  it('the same tool_use_id twice is a duplicate of the first row and unnumbered', () => {
+    const first = writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1' }));
+    const second = writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1' }));
+    expect(rows().map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([[first, 1, null], [second, null, first]]);
+  });
+
+  it('two distinct ids within one millisecond are two numbered rows', () => {
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1' }));
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_2' }));
+    expect(rows().map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+  });
+
+  it('no id gives two numbered rows, never merged by time', () => {
+    writeDeliveryEvent(db, failureEvent());
+    writeDeliveryEvent(db, failureEvent());
+    expect(rows().map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+  });
+
+  it('the same id in another session or tenant is not a duplicate', () => {
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1' }));
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1', sessionId: 'sess-2' }));
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1', tenantId: 'other' }));
+    expect(readDeliveryEvents(db, 'default', 'sess-2').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null]]);
+    expect(readDeliveryEvents(db, 'other', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null]]);
+  });
+
+  it('a sub-agent row is unnumbered and never a duplicate', () => {
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1' }));
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1', sessionState: 'subagent' }));
+    expect(rows().map((r) => [r.session_state, r.turn_seq, r.duplicate_of])).toEqual([['payload', 1, null], ['subagent', null, null]]);
+  });
+
+  it('the index rejects a forced second numbered row with the same key', () => {
+    writeDeliveryEvent(db, failureEvent({ toolUseId: 'toolu_1' }));
+    const forced = (turnSeq: number | null): void => { db.prepare(
+      `INSERT INTO delivery_events (ts, ledger_version, tenant_id, runtime, event_type, surface, store_hash, write_store, session_id,
+         session_state, turn_seq, block_state, tool_use_id)
+       VALUES ('2026-09-01T00:00:00.000Z', 4, 'default', 'claude-code', 'tool-failure', 'hook', 'aaaaaaaaaaaaaaaa', 'local', 'sess-1',
+         'payload', ?, 'empty', 'toolu_1')`,
+    ).run(turnSeq); };
+    expect(() => forced(9)).toThrow(/UNIQUE|constraint/i);
+    expect(() => forced(null)).not.toThrow();
   });
 });

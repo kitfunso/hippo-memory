@@ -2,7 +2,8 @@
  * The dispatcher in cli.ts re-exports handleGitHub. */
 
 import { envGitHubToken, envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../util/env.js';
-import { type Context, adminActor } from '../api/index.js';
+import { adminActor } from '../api/index.js';
+import type { ConnectorContext } from '../connectors/store.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
@@ -18,6 +19,7 @@ import {
 } from '../connectors/github/types.js';
 import type { JsonValue } from '../util/json.js';
 import type { CommandContext } from './flag-values.js';
+import { cliApiContext } from './api-context.js';
 import { CliExit } from './exit.js';
 import { errorMessage } from '../util/log.js';
 
@@ -28,7 +30,8 @@ function isFlagString(value: FlagValue): value is string {
   return typeof value === 'string';
 }
 
-// FlagValue never includes `number`, so a `value is number` predicate on it would not type-check; the generic wrapper narrows any type T instead.
+// FlagValue never includes `number`, so a `value is number` predicate on it would not type-check; the generic wrapper
+// narrows any type T instead.
 function isNumberLike<T>(value: T): value is T & number {
   return typeof value === 'number';
 }
@@ -37,7 +40,8 @@ function isFlagValueNumberLike(value: FlagValue): boolean {
   return isNumberLike(value);
 }
 
-/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or shapes failing the type guards. */
+/** Map a parsed envelope + eventName header to an IngestEvent;
+ * null for unknown event types or shapes failing the type guards. */
 function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent | null {
   if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
     return { eventName: 'issues', payload: parsed };
@@ -100,11 +104,7 @@ export async function cmdGitHubBackfill(
   const sinceFlag = flags['since'];
   const sinceIso = isFlagString(sinceFlag) ? sinceFlag : undefined;
 
-  const ctx: Context = {
-    hippoRoot,
-    tenantId,
-    actor: adminActor('cli:github-backfill'),
-  };
+  const ctx: ConnectorContext = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
   try {
     const result = await backfillRepo(ctx, {
       repoFullName: repo,
@@ -133,8 +133,27 @@ export function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _flags: Fl
   }
 }
 
+const PAYLOAD_PREVIEW_CHARS = 200;
+
+/** A parked payload that is not JSON, naming the command and the start of the text so the operator can find the row. */
+export class GitHubPayloadParseError extends Error {
+  constructor(command: string, rawPayload: string, cause: unknown) {
+    const start = JSON.stringify(rawPayload.slice(0, PAYLOAD_PREVIEW_CHARS));
+    super(`${command}: payload is not valid JSON (${errorMessage(cause)}); starts with ${start}`, { cause });
+    this.name = 'GitHubPayloadParseError';
+  }
+}
+
+export function parseParkedPayload(rawPayload: string): JsonValue {
+  try {
+    return JSON.parse(rawPayload);
+  } catch (err) {
+    throw new GitHubPayloadParseError('hippo github dlq replay', rawPayload, err);
+  }
+}
+
 const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
-  const parsed = JSON.parse(args.rawPayload);
+  const parsed = parseParkedPayload(args.rawPayload);
   const event = parsedToIngestEvent(parsed, args.eventName);
   if (!event) {
     return { memoryId: null };
@@ -185,11 +204,7 @@ export async function cmdGitHubDlqReplay(
     throw new CliExit(1);
   }
   const force = flags['force'] === true;
-  const ctx: Context = {
-    hippoRoot,
-    tenantId,
-    actor: adminActor('cli:github-dlq-replay'),
-  };
+  const ctx: ConnectorContext = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
   // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
   const result = await replayDlqEntry(ctx, id, {
     force,

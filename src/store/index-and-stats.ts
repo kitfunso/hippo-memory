@@ -1,10 +1,24 @@
-import { type DatabaseSyncLike, withWriteScope, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db/index.js';
+import {
+  type DatabaseSyncLike,
+  withWriteScope,
+  setMeta,
+  isSqliteBusy,
+  pruneConsolidationRuns,
+  getMeta,
+} from '../db/index.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { log } from '../util/log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
-import { buildIndexFromDb, readLastRecall, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
+import {
+  buildIndexFromDb,
+  readLastRecall,
+  syncMirrorFiles,
+  writeIndexMirror,
+  writeStatsMirror,
+  buildStatsFromDb,
+} from './mirrors.js';
 import { onHandle, openStore, loadLegacyEntriesFromMarkdown } from './open.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -22,8 +36,8 @@ export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrie
   }, openStore);
 }
 
-/** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit in one transaction, as callers
- * rely on both moving together. index.json is left to `rebuildIndex`. */
+/** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
+ * in one transaction, as callers rely on both moving together. index.json is left to `rebuildIndex`. */
 export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   onHandle(hippoRoot, (db) => {
     withWriteScope(db, 'save_index', () => {
@@ -89,7 +103,8 @@ export function updateStats(
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: Parameters<typeof updateStats>[1]): void {
-  // One atomic statement per named counter: a read-modify-write loses concurrent increments and stamps stale values over the untouched two.
+  // One atomic statement per named counter: a read-modify-write loses concurrent increments and stamps stale values
+  // over the untouched two.
   const increments: ReadonlyArray<readonly [string, number]> = [
     ['total_remembered', delta.remembered ?? 0],
     ['total_recalled', delta.recalled ?? 0],
@@ -108,7 +123,11 @@ export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: Pa
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
 
-export function updateStatsUnlessBusy(hippoRoot: string, delta: Parameters<typeof updateStats>[1], committed: string): void {
+export function updateStatsUnlessBusy(
+  hippoRoot: string,
+  delta: Parameters<typeof updateStats>[1],
+  committed: string,
+): void {
   try {
     updateStats(hippoRoot, delta);
   } catch (err) {
@@ -162,7 +181,8 @@ export interface SessionDecayContext {
 /** Timestamp of the latest consolidation run, or undefined when there is none. */
 export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
   // SAFETY: row's shape matches the single `timestamp` column named in the SELECT.
-  const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as { timestamp?: string } | undefined;
+  const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as
+    { timestamp?: string } | undefined;
   return row?.timestamp;
 }
 

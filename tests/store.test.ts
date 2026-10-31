@@ -8,6 +8,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
+import { flushStatsMirrors } from '../src/store/mirrors.js';
 import { loadIndex, rebuildIndex, loadStats, updateStats } from '../src/store/index-and-stats.js';
 import {
   saveActiveTaskSnapshot,
@@ -212,6 +213,17 @@ describe('index management', () => {
 });
 
 describe('stats tracking', () => {
+  it('writes at once after a flush, so a flushed root keeps no throttle state', () => {
+    initStore(tmpDir);
+    updateStats(tmpDir, { recalled: 1 });
+    updateStats(tmpDir, { recalled: 1 });
+    flushStatsMirrors(tmpDir);
+    updateStats(tmpDir, { recalled: 1 });
+    // SAFETY: stats.json holds the LegacyStats mirror, which always carries total_recalled.
+    const file = JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8')) as { total_recalled: number };
+    expect(file.total_recalled).toBe(3);
+  });
+
   it('persists stat counters through the SQLite backbone', () => {
     initStore(tmpDir);
     // Longer than any rewrite, so bytes left over from it would break the mirror's JSON.
@@ -230,6 +242,7 @@ describe('stats tracking', () => {
     expect(stats.total_remembered).toBe(2);
     expect(stats.total_recalled).toBe(1);
     expect(stats.total_forgotten).toBe(1);
+    flushStatsMirrors(tmpDir);
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8'))).toEqual(stats);
   });
 });

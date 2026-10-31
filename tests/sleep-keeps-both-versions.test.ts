@@ -1,4 +1,5 @@
 // Every stored version of a fact survives until one is retired: sleep never drops a value's text, and the paths below never skip a new value as a copy of an old one.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -28,6 +29,9 @@ import { computeSalience } from '../src/core/salience.js';
 import { heldTexts, mergedText } from '../src/util/same-text.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -77,7 +81,7 @@ const json = (out: string): { results: { id: string; content: string }[] } => JS
 type ToolArgs = { query?: string; fresh_tail_count?: number; days?: number };
 
 async function mcp(root: string, name: string, args: ToolArgs): Promise<string> {
-  const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true });
+  const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) });
   // SAFETY: the tools/call case always wraps a tool's output as { content: [{ type: 'text', text }] }.
   const result = res?.result as { content?: { text?: string }[] } | undefined;
   return result?.content?.[0]?.text ?? '';
@@ -113,7 +117,7 @@ async function sleepMany(root: string): Promise<void> {
   const start = Date.now();
   for (const day of [1, 2, 3, 4, 5, 6, 7, 600]) {
     await consolidate(root, { now: new Date(start + day * DAY) });
-    deduplicateStore(root);
+    deduplicateStore(sqliteConsolidation(root));
   }
 }
 
@@ -176,7 +180,7 @@ describe('sleep keeps both versions', () => {
     ];
     for (const text of pairs.flat()) writeEntry(root, createMemory(text));
 
-    expect(deduplicateStore(root).removed).toBe(0);
+    expect(deduplicateStore(sqliteConsolidation(root)).removed).toBe(0);
     expect(loadAllEntries(root)).toHaveLength(6);
   });
 
@@ -185,7 +189,7 @@ describe('sleep keeps both versions', () => {
     const text = 'The staging service listens on port 4400.';
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(root, createMemory(t));
 
-    expect(deduplicateStore(root, { threshold: 1 }).removed).toBe(1);
+    expect(deduplicateStore(sqliteConsolidation(root), { threshold: 1 }).removed).toBe(1);
     expect(loadAllEntries(root)).toHaveLength(1);
 
     const cli = newRoot();
@@ -340,7 +344,7 @@ describe('merged row', () => {
 describe('a retired version leaves the merged row', () => {
   const OLD = 'The web app dev server runs on port 3000 locally.';
   const NEW = 'The web app dev server now runs on port 5173 locally.';
-  const ctx = (root: string): api.Context => ({ hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') });
+  const ctx = (root: string): FullContext => (apiCtx(root, 'default', api.adminActor('cli')));
   const recalled = async (root: string): Promise<string> => (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
   const current = (root: string): string => loadAllEntries(root).filter((e) => !e.superseded_by).map((e) => e.content).join('\n');
 
@@ -357,7 +361,7 @@ describe('a retired version leaves the merged row', () => {
 
   it('reject takes the value out of every merged row that holds it, in the same call', async () => {
     const { root, old, next, row } = await mergedPair();
-    api.forget(ctx(root), next.id); // as if the demoted source had faded, so only the merged row still holds the new value
+    await api.forget(ctx(root), next.id); // as if the demoted source had faded, so only the merged row still holds the new value
 
     const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
 
@@ -379,11 +383,11 @@ describe('a retired version leaves the merged row', () => {
     } finally {
       closeHippoDb(db);
     }
-    api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
+    await api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
 
     const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
-    const [dormant] = api.listDormant(ctx(root));
-    const restored = api.restoreDormant(ctx(root), dormant.id);
+    const [dormant] = await api.listDormant(ctx(root));
+    const restored = await api.restoreDormant(ctx(root), dormant.id);
 
     expect(current(root)).not.toContain(OLD);
     expect(await recalled(root)).not.toContain('port 3000');
@@ -394,7 +398,7 @@ describe('a retired version leaves the merged row', () => {
 
   it('a superseded version leaves the merged row at the next sleep', async () => {
     const { root, old, next } = await mergedPair();
-    api.supersede(ctx(root), old.id, 'The web app dev server runs on port 5173, set in vite.config.ts.');
+    await api.supersede(ctx(root), old.id, 'The web app dev server runs on port 5173, set in vite.config.ts.');
 
     await consolidate(root, { now: new Date(Date.now() + DAY) });
 
@@ -421,7 +425,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
   const FACTS = ['General project context: the staging service listens on port 4400.', 'General project context: the analytics service listens on port 7700.'];
   const QUERY = 'service listens port';
   const copies = (text: string): number => text.split('port 4400').length - 1;
-  const ctx = (root: string): api.Context => ({ hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') });
+  const ctx = (root: string): FullContext => (apiCtx(root, 'default', api.adminActor('cli')));
 
   async function mergedStore(): Promise<{ root: string; row: MemoryEntry }> {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));

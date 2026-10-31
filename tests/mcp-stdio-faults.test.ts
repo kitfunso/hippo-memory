@@ -8,6 +8,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { embedAll } from '../src/search/embed-memories.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 const serverPath = path.resolve('dist/mcp/server.js');
 let tmpHome: string;
@@ -108,7 +109,8 @@ function crashScript(failure: string): string {
   const file = path.join(tmpHome, `crash-${procs.length}.mjs`);
   fs.writeFileSync(file, [
     `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
-    'startStdioLoop();',
+    `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/cli/api-context.js')).href)});`,
+    'startStdioLoop(cliStdioHost);',
     `setTimeout(() => { ${failure} }, 50);`,
   ].join('\n'));
   return file;
@@ -185,8 +187,8 @@ describe('MCP stdio fault handling', () => {
       run.proc.stdin.write(toolCall(9, 'hippo_recall', { query: 'staging queue' }));
       await embeddings.queryAsked;
       run.proc.stdin.end();
-      // The child has read the end of stdin once its event loop turns, which this wait outlasts.
-      await new Promise((ok) => setTimeout(ok, 300));
+      // The end of stdin is in the pipe once the parent's side has flushed it; the child then reads it on its next loop turn.
+      await waitFor(() => run.proc.stdin.writableFinished, { what: 'stdin end flushed' });
       expect(run.proc.exitCode).toBeNull();
       embeddings.release();
       const reply = JSON.parse(await run.nextLine(10000));

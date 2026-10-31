@@ -7,16 +7,18 @@
  * tests/api-sleep-phase-faults.test.ts.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { FullContext } from './_helpers/api-ctx.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, adminActor, type Context } from '../src/api/index.js';
+import { sleep, adminActor } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { getGlobalRoot } from '../src/sharing/global-store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // Same secret shape tests/secret-detect.test.ts proves trips detectSecret;
 // pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.
@@ -26,26 +28,23 @@ const CLEAN_ROW = 'gotcha: powershell 5.1 has no pipeline chain operators, use i
 describe('api.sleep secretSkipped counter', () => {
   let tmpDir: string;
   let globalTmp: string;
-  let origHippoHome: string | undefined;
-  let ctx: Context;
+  let ctx: FullContext;
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'hippo-sleep-secretskip-'));
     const hippoRoot = join(tmpDir, '.hippo');
     initStore(hippoRoot);
     globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-secretskip-global-'));
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalTmp;
+    vi.stubEnv('HIPPO_HOME', globalTmp);
 
     writeEntry(hippoRoot, createMemory(SECRET_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
     writeEntry(hippoRoot, createMemory(CLEAN_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
 
-    ctx = { hippoRoot, tenantId: 'default', actor: adminActor('test:secret-skip') };
+    ctx = apiCtx(hippoRoot, 'default', adminActor('test:secret-skip'));
   });
 
   afterEach(() => {
-    if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-    else delete process.env.HIPPO_HOME;
+    vi.unstubAllEnvs();
     rmSync(tmpDir, { recursive: true, force: true });
     rmSync(globalTmp, { recursive: true, force: true });
   });

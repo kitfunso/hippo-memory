@@ -96,7 +96,7 @@ async with Hippo(api_key="sk_...") as client:
 | `auth_create(label?)` | `POST /v1/auth/keys` | mint a key (plaintext returned ONCE) |
 | `auth_list(active?)` | `GET /v1/auth/keys` | list keys for caller's tenant |
 | `auth_revoke(key_id)` | `DELETE /v1/auth/keys/:keyId` | revoke a key |
-| `audit(op?, since?, limit?)` | `GET /v1/audit` | read audit events |
+| `audit(op?, since?, limit?)` | `GET /v1/audit` | read audit events (admin key only; a member key gets 403) |
 
 Every method returns a Pydantic v2 model. Failed HTTP responses raise `HippoError` with `status_code` and parsed `body`.
 

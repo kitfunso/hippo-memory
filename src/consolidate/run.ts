@@ -1,7 +1,7 @@
 import { MemoryEntry, type DecayOptions } from '../core/memory.js';
-import { type DormantMove } from '../store/dormant.js';
-import { ftsDrift } from '../store/entry-row.js';
-import { type TombstoneChecks } from '../store/tombstone-checks.js';
+import type { DormantMove } from '../store/dormant.js';
+import type { Consolidation } from '../store/port.js';
+import type { TombstoneChecks } from '../store/tombstone-checks.js';
 import { loadConfig } from '../core/config.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
 
@@ -48,15 +48,22 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
 }
 
 /** Re-syncs the full-text index with `memories`; a store open that is already current no longer counts the two. */
-export function syncFtsIndex(hippoRoot: string, dryRun: boolean, result: ConsolidationResult): void {
-  const counts = ftsDrift(hippoRoot, !dryRun);
+export function syncFtsIndex(store: Consolidation, dryRun: boolean, result: ConsolidationResult): void {
+  const counts = store.ftsDrift(!dryRun);
   if (counts === null) return;
-  result.details.push(`  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${counts.fts} indexed rows for ${counts.memories} memories)`);
+  result.details.push(
+    `  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${counts.fts} indexed rows for ` +
+    `${counts.memories} memories)`,
+  );
 }
 
-/** State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one transaction. */
+/**
+ * State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one
+ * transaction.
+ */
 export interface SleepRun {
   hippoRoot: string;
+  store: Consolidation;
   now: Date;
   dryRun: boolean;
   config: ReturnType<typeof loadConfig>;
@@ -64,7 +71,10 @@ export interface SleepRun {
   result: ConsolidationResult;
   all: MemoryEntry[];
   retirable: (entry: MemoryEntry) => boolean;
-  /** Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both check tombstones here first. */
+  /**
+   * Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both check tombstones
+   * here first.
+   */
   tombstones: TombstoneChecks;
   survivors: MemoryEntry[];
   pendingWrites: MemoryEntry[];

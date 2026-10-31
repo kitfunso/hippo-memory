@@ -15,6 +15,7 @@
  *   6. AT5 paired case: reject removes a value from recall, permanently.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -38,13 +39,14 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { importEntries } from '../src/importers/core.js';
 import { importVault } from '../src/importers/vault.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-function ctx(hippoRoot: string, tenantId: string = 'default'): api.HippoDbContext {
-  return { hippoRoot, tenantId, actor: { subject: 'cli', role: 'admin' } };
+function ctx(hippoRoot: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(hippoRoot, tenantId, { subject: 'cli', role: 'admin' });
 }
 
 describe('case 1: acceptance (roadmap-verbatim)', () => {
@@ -97,7 +99,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
       // Supersession unchanged for non-rejected values: api.supersede.
       const u = createMemory('unrelated baseline for api supersede', { layer: Layer.Episodic });
       writeEntry(home, u);
-      const supersedeResult = api.supersede(ctx(home), u.id, 'unrelated baseline, revised');
+      const supersedeResult = await api.supersede(ctx(home), u.id, 'unrelated baseline, revised');
       expect(supersedeResult.ok).toBe(true);
       expect(readEntry(home, u.id)!.superseded_by).toBe(supersedeResult.newId);
       expect(readEntry(home, supersedeResult.newId)!.content).toBe('unrelated baseline, revised');
@@ -132,7 +134,7 @@ describe('case 2: refused supersede audit surface', () => {
       const yContent = 'rejected successor content for supersede';
       await api.reject(ctx(home), { value: yContent, reason: 'pre-emptively rejected successor' });
 
-      expect(() => api.supersede(ctx(home), old.id, yContent)).toThrow(RejectedValueError);
+      await expect(api.supersede(ctx(home), old.id, yContent)).rejects.toThrow(RejectedValueError);
 
       // CAS rolled back: the old row's superseded_by pointer is untouched.
       const stored = readEntry(home, old.id);
@@ -357,7 +359,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
     try {
       initStore(home);
       const wContent = 'do not use the deprecated zynthkey rotation script for staging credentials';
-      const remembered = api.remember(ctx(home), { content: wContent });
+      const remembered = await api.remember(ctx(home), { content: wContent });
 
       const before = await api.retrieve(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(before.results.some((r) => r.id === remembered.id)).toBe(true);
@@ -369,7 +371,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
 
       let caught: unknown;
       try {
-        api.remember(ctx(home), { content: wContent });
+        await api.remember(ctx(home), { content: wContent });
       } catch (err) {
         caught = err;
       }
@@ -497,12 +499,12 @@ describe('import dry-run tombstone accuracy', () => {
       writeFileSync(join(vault, 'other.md'), otherNote);
       await api.reject(ctx(home), { value: rejectedNote, reason: 'pre-emptive dry-run vault tombstone' });
 
-      const dryResult = importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
+      const dryResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
       expect(dryResult.rejected).toBe(1);
       expect(dryResult.imported).toBe(1);
       expect(loadAllEntries(home).length).toBe(0); // dry-run writes nothing
 
-      const realResult = importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: false });
+      const realResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: false });
       expect(realResult.rejected).toBe(1);
       expect(realResult.imported).toBe(1);
       const contents = loadAllEntries(home).map((e) => e.content);
@@ -707,7 +709,7 @@ describe('merge tombstone check uses the destination tenant', () => {
       const allAfter = loadAllEntries(home);
       const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
       expect(semantic).toBeDefined();
-      expect(semantic!.tenantId).toBe('tenant-a');
+      expect(semantic!.tenant_id).toBe('tenant-a');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

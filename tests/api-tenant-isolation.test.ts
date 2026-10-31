@@ -1,6 +1,8 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { rmSync } from 'node:fs';
+import { withStoreGroups } from '../src/store/sqlite/store.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
@@ -9,10 +11,11 @@ import {
   remember,
   promote,
   supersede,
-  type HippoDbContext,
 } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { supersedeNow } from './_helpers/supersede-now.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
@@ -26,45 +29,35 @@ function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
   return db.prepare(sql).get(...params) as T | undefined;
 }
 
-// v0.39 commit 1 regressions:
-//  - promote: tenant pre-check matches archiveRaw (CRITICAL #1)
-//  - authCreate: HTTP body.tenantId ignored, key bound to caller (CRITICAL #2)
-//  - supersede: BEGIN IMMEDIATE CAS: two-connection race + clean path + tenant scope
-//    (CRITICAL #4)
+// A caller's tenant bounds promote, supersede and key minting, so one tenant can never touch another's rows.
 
 describe('api tenant isolation', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
 
   beforeEach(() => {
-    home = makeRoot('v039');
-    globalHome = makeRoot('v039-global');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    home = makeRoot('api-tenant');
+    globalHome = makeRoot('api-tenant-global');
+    vi.stubEnv('HIPPO_HOME', globalHome);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
-    try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
-    try { rmSync(globalHome, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    vi.unstubAllEnvs();
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    rmSync(globalHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   // ---- Test 1: promote cross-tenant denied ----------------------------------
-  it('promote refuses to promote a row that belongs to another tenant', () => {
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+  it('promote refuses to promote a row that belongs to another tenant', async () => {
+    const created = await remember(
+      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
       { content: 'alpha-row promote-cross-tenant canary' },
     );
 
     expect(() =>
       promote(
-        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
+        withStoreGroups({ hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } }, 'localFiles'),
         created.id,
       ),
     ).toThrow(/memory not found/i);
@@ -91,9 +84,9 @@ describe('api tenant isolation', () => {
   });
 
   // The loser read the row before the winner committed, so its early check passed: only the guarded UPDATE can refuse it.
-  it('supersede refuses the writer that read the row before another connection superseded it', () => {
-    const alpha = (): HippoDbContext => ({ hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } });
-    const created = remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
+  it('supersede refuses the writer that read the row before another connection superseded it', async () => {
+    const alpha = (): FullContext => (apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }));
+    const created = await remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
 
     const winners: string[] = [];
     let raced = false;
@@ -102,11 +95,11 @@ describe('api tenant isolation', () => {
       // The loser's first lock request: the winner runs to its commit on its own connection, then the loser goes on.
       if (sql === 'BEGIN IMMEDIATE' && !raced) {
         raced = true;
-        winners.push(supersede(alpha(), created.id, 'the winner').newId);
+        winners.push(supersedeNow(alpha(), created.id, 'the winner'));
       }
       exec.call(this, sql);
     });
-    expect(() => supersede(alpha(), created.id, 'the loser')).toThrow(`Memory ${created.id} already superseded by another writer`);
+    await expect(supersede(alpha(), created.id, 'the loser')).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
     vi.restoreAllMocks();
 
     expect(winners).toHaveLength(1);
@@ -121,18 +114,18 @@ describe('api tenant isolation', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(() => supersede(alpha(), created.id, 'a later writer')).toThrow(`is already superseded by ${winners[0]}`);
+    await expect(supersede(alpha(), created.id, 'a later writer')).rejects.toThrow(`is already superseded by ${winners[0]}`);
   });
 
   // ---- Test 6: supersede CAS — clean path -----------------------------------
-  it('supersede CAS clean path: both rows present, audit row written, chain pointer set', () => {
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+  it('supersede CAS clean path: both rows present, audit row written, chain pointer set', async () => {
+    const created = await remember(
+      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
       { content: 'alpha-row supersede clean-path canary' },
     );
 
-    const result = supersede(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+    const result = await supersede(
+      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
       created.id,
       'fresh replacement content',
     );
@@ -150,7 +143,7 @@ describe('api tenant isolation', () => {
     const newEntry = readEntry(home, result.newId, 'alpha');
     expect(newEntry).not.toBeNull();
     expect(newEntry!.content).toBe('fresh replacement content');
-    expect(newEntry!.tenantId).toBe('alpha');
+    expect(newEntry!.tenant_id).toBe('alpha');
 
     // Audit log: 'supersede' op with newId metadata + 'remember' for the new row.
     const db = openHippoDb(home);
@@ -171,19 +164,18 @@ describe('api tenant isolation', () => {
   });
 
   // ---- Test 7: supersede CAS — tenant-scoped --------------------------------
-  it('supersede across tenants throws "Memory not found" via readEntry tenant scope', () => {
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+  it('supersede across tenants throws "Memory not found" via readEntry tenant scope', async () => {
+    const created = await remember(
+      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
       { content: 'alpha-row supersede tenant-scope canary' },
     );
 
-    expect(() =>
-      supersede(
-        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
+    await expect(supersede(
+        apiCtx(home, 'bravo', { subject: 'api_key:bravo-key', role: 'admin' }),
         created.id,
         'cross-tenant supersede attempt',
       ),
-    ).toThrow(/memory not found/i);
+    ).rejects.toThrow(/memory not found/i);
 
     // The original row is untouched: no superseded_by, no new memory created.
     const db = openHippoDb(home);
@@ -217,26 +209,20 @@ describe('api tenant isolation', () => {
 describe('authCreate HTTP body.tenantId ignored', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot('v039-authcreate');
-    globalHome = makeRoot('v039-authcreate-global');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    home = makeRoot('api-authcreate');
+    globalHome = makeRoot('api-authcreate-global');
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
-    try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
-    try { rmSync(globalHome, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    vi.unstubAllEnvs();
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    rmSync(globalHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it('POST /v1/auth/keys ignores body.tenantId, binds key to bearer tenant', async () => {
