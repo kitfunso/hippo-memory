@@ -72,7 +72,7 @@ Flags (set to `1` or `true`):
 - `HIPPO_ABLATE_DECAY`: the time-decay term becomes 1 in `calculateStrength`.
 - `HIPPO_ABLATE_RECALL_BOOST`: full recall-strengthening ablation.
   - `markRetrieved` returns entries UNMUTATED (no clock reset, count or half-life increment); ids stay available so `hippo outcome` attribution keeps working in this arm.
-  - Persisting callers (CLI recall, api context, MCP recall/context, consolidation replay) skip their `writeEntry` loops (identical-row writes would still refresh `updated_at`, mirrors and DAG dirty flags).
+  - Persisting callers handed the ablated model (api recall and context, consolidation replay) skip their `writeEntry` loops (identical-row writes would still refresh `updated_at`, mirrors and DAG dirty flags).
   - The retrieval-count READ boost becomes 1.
   - Decay anchors at `created` instead of `last_retrieved`, so prior-run clock resets cannot leak in.
   - Replay rehearsal is silenced entirely (it IS strengthening; use config `replay.count=0` to separate replay in unflagged arms).
@@ -84,7 +84,7 @@ Flags (set to `1` or `true`):
 - `HIPPO_EVAL_RECENCY_DAYS`: a positive number replaces the 30-day scale of that recency factor (tuning grids only). Unset, zero, negative or junk values keep 30.
 - `HIPPO_FAKE_NOW`: timestamp injected as the default `now` for strength computation and retrieval stamping (simulated-time protocols). It MUST be the exact `Date.toISOString()` form (`YYYY-MM-DDTHH:mm:ss.sssZ`); it is validated by round-trip, so junk, locale dates, non-UTC offsets and rolled-over dates (`2026-02-31`) all fall back to the real clock.
 
-The rankers in `src/domain/search` read none of these. They take the switches as `switches` (`EvalSwitches`, `src/base/memory/eval-switches.ts`) and the clock as `now`. The roots read the environment once: `realInfra` puts `evalSwitches()` on `ctx.infra` for each context, and the `./search` and `./testing` entries and `dist/entry/eval-scripts.js` fill it for a library caller, so a frozen eval that sets a flag still gets it.
+The rankers in `src/domain/search` read none of these. They take the switches as `switches` (`EvalSwitches`, `src/base/memory/eval-switches.ts`) and the clock as `now`. Only eval roots read the flags: the package entries, `dist/entry/eval-scripts.js` and `hippo eval` fill them for their caller, so a frozen eval that sets a flag still gets it. The production roots (the other CLI verbs, `serve`, MCP, the dashboard and the sleep child) open their store with `rootStoreRules` (`src/infra/ports.ts`) and rank by the production model; of these variables they read `HIPPO_FAKE_NOW` alone.
 
 Formula notes (load-bearing for the experiments). Ablating decay has TWO intrinsic co-effects, because the unified formula routes other mechanisms THROUGH the decay term. Both are real properties of the architecture, not implementation accidents; experiment analysis must attribute accordingly (the decay-off arm is "decay + its dependents off", see prereg amendment A1):
 

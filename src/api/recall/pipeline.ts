@@ -181,7 +181,6 @@ export function rankCtxOf(ctx: Context): RankRecallCtx {
     tenantId: ctx.tenantId,
     embedderFor: ctx.infra.embedderFor,
     cwd: ctx.infra.machine.cwd,
-    switches: ctx.infra.evalSwitches,
     now: ctx.infra.clock(),
     signal: ctx.signal,
   };

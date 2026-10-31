@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { calculateStrength } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { calculateStrengthAt as strengthUnder } from '../../src/base/memory/strength.js';
-import { evalSwitches } from '../../src/infra/eval-switches.js';
+import {
+  calculateStrengthAt as strengthUnder,
+  PRODUCTION_STRENGTH,
+  type StrengthModel,
+} from '../../src/base/memory/strength.js';
+import { strengthModelUnder } from '../../src/infra/eval-switches.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -10,9 +14,6 @@ import { loadContextCandidates, tallySources, loadTextsHolding } from '../_helpe
 import { DAY_MS } from '../../src/base/util/time.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
 const { writeEntry } = sessionPerTest();
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
@@ -116,11 +117,13 @@ describe('loadContextCandidates reward factor', () => {
   });
 
   // One row survives a cap of 1; the pair is chosen so a slope other than REWARD_SLOPE flips the winner.
-  async function survivor(rows: MemoryEntry[]): Promise<{ id: string; strongest: string }> {
+  async function survivor(
+    rows: MemoryEntry[],
+    model: StrengthModel = PRODUCTION_STRENGTH,
+  ): Promise<{ id: string; strongest: string }> {
     for (const e of rows) writeEntry(root, e);
 
-    const got = loadContextCandidates(root, 'default', { cap: 1, now: NOW });
-    const model = evalSwitches().strength;
+    const got = loadContextCandidates(root, 'default', { cap: 1, now: NOW }, model);
     const strongest = [...rows].sort((a, b) => strengthUnder(b, NOW, model) - strengthUnder(a, NOW, model))[0].id;
     return { id: got[0].id, strongest };
   }
@@ -136,11 +139,10 @@ describe('loadContextCandidates reward factor', () => {
   });
 
   it('drops the reward factor from the rank when outcome-slow is ablated', async () => {
-    vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
-    const { id, strongest } = await survivor([
-      row('x-rewarded', 20, { outcomePositive: 3 }),
-      row('z-plain', 20, { halfLifeDays: 12 }),
-    ]);
+    const { id, strongest } = await survivor(
+      [row('x-rewarded', 20, { outcomePositive: 3 }), row('z-plain', 20, { halfLifeDays: 12 })],
+      strengthModelUnder({ decay: false, recallBoost: false, outcomeSlow: true }),
+    );
     expect(strongest).toBe('z-plain');
     expect(id).toBe(strongest);
   });

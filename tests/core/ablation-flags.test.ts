@@ -19,12 +19,7 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { outcomeBoostFor } from '../../src/domain/search/boosts.js';
 import { evalNow, evalSwitches, type StrengthAblation } from '../../src/infra/eval-switches.js';
-import {
-  envAblateDecay,
-  envAblateOutcome,
-  envAblateOutcomeSlow,
-  envAblateRecallBoost,
-} from '../../src/base/util/env.js';
+import { envFlagOn } from '../../src/base/util/env.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -36,9 +31,9 @@ afterEach(() => {
 // Core no longer reads the environment: each call hands it the flags the test just set.
 // The cuts the stubbed env names, as the entry functions take them.
 const ablation = (): StrengthAblation => ({
-  decay: envAblateDecay(),
-  recallBoost: envAblateRecallBoost(),
-  outcomeSlow: envAblateOutcome() || envAblateOutcomeSlow(),
+  decay: envFlagOn('HIPPO_ABLATE_DECAY'),
+  recallBoost: envFlagOn('HIPPO_ABLATE_RECALL_BOOST'),
+  outcomeSlow: envFlagOn('HIPPO_ABLATE_OUTCOME') || envFlagOn('HIPPO_ABLATE_OUTCOME_SLOW'),
 });
 const abl = () => ({ ablation: ablation() });
 

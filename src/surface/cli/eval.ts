@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliConfig, cliInfra } from './api-context.js';
-import { PRODUCTION_SWITCHES } from '../../base/memory/eval-switches.js';
+import { evalSwitches } from '../../infra/eval-switches.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { vectorSourceOf } from '../../domain/search/hybrid.js';
@@ -126,7 +126,7 @@ async function runCorpusEval(
     localBump,
     runtime: cliConfig(hippoRoot).runtime,
     cwd: infra.machine.cwd,
-    switches: infra.evalSwitches ?? PRODUCTION_SWITCHES,
+    switches: evalSwitches(),
     now: infra.clock(),
   });
 }
@@ -196,11 +196,7 @@ async function runEvalSuite(
   const baseline = loadEvalBaseline(baselinePath);
 
   const infra = cliInfra();
-  const result = await runFeatureEvalAt(
-    PACKAGE_VERSION,
-    infra.evalSwitches ?? PRODUCTION_SWITCHES,
-    infra.clock(),
-  );
+  const result = await runFeatureEvalAt(PACKAGE_VERSION, evalSwitches(), infra.clock());
 
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));

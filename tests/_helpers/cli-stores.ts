@@ -3,7 +3,7 @@ import type { CaptureTarget } from '../../src/surface/capture/command.js';
 import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
 import type { CliStore } from '../../src/surface/cli/api-context.js';
 import { sqliteDiagnosticsStore, sqliteStore } from '../../src/surface/open-store.js';
-import { evalStoreRules } from '../../src/infra/eval-switches.js';
+import { rootStoreRules } from '../../src/infra/ports.js';
 import { envLossAversionRatio } from '../../src/base/util/env.js';
 import type { EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { detachedEmbedder } from '../../src/api/embeddings.js';
@@ -16,7 +16,7 @@ import { TEST_DETACHED, TEST_RUN } from './test-run.js';
 /** hippo.db under `root` with no runtime: a test holds it across its commands and reads its mirrors
  * at once. */
 export function storeAt(root: string): CliStore {
-  return sqliteStore(root, evalStoreRules(envLossAversionRatio()));
+  return sqliteStore(root, rootStoreRules(envLossAversionRatio()));
 }
 
 export function captureTarget(root: string): CaptureTarget {

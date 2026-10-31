@@ -9,8 +9,11 @@ import type { CallerState } from './callers.js';
 import type { CoreEnrichment, FolderHome, GlobalEnrichment, LedgerBook } from './enrichment.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { FailureNotices } from '../base/util/failure-notices.js';
-import { strengthModelFor } from '../base/memory/eval-switches.js';
-import type { StrengthModel } from '../base/memory/strength.js';
+import {
+  PRODUCTION_STRENGTH,
+  withLossAversion,
+  type StrengthModel,
+} from '../base/memory/strength.js';
 import type { DetachedWork } from '../domain/search/detached-work.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
@@ -93,10 +96,9 @@ export interface Context {
   readonly detached?: DetachedWork | undefined;
 }
 
-/** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion
- * ratio. */
-export function strengthOf(ctx: Pick<Context, 'infra' | 'config'>): StrengthModel {
-  return strengthModelFor(ctx.infra.evalSwitches, ctx.config.runtime);
+/** The strength model `ctx` scores by: production, at its config's loss-aversion ratio. */
+export function strengthOf(ctx: Pick<Context, 'config'>): StrengthModel {
+  return withLossAversion(PRODUCTION_STRENGTH, ctx.config.runtime?.lossAversionRatio);
 }
 
 /** A Context as a published entry takes it: without `infra`, the entry fills in the real ports. */

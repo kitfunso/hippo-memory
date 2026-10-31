@@ -13,12 +13,6 @@ type FlagState = 'on' | 'off' | 'unset' | 'unknown';
 /** Every on/off variable, with the side an unrecognised spelling takes: the safe one, so a typo
  * never opens a door. */
 const FLAGS = {
-  HIPPO_ABLATE_DECAY: false,
-  HIPPO_ABLATE_RECALL_BOOST: false,
-  HIPPO_ABLATE_OUTCOME: false,
-  HIPPO_ABLATE_OUTCOME_SLOW: false,
-  HIPPO_ABLATE_OUTCOME_FAST: false,
-  HIPPO_ABLATE_RECENCY: false,
   HIPPO_AUTODEBIAS: false,
   HIPPO_ANCHORING: false,
   HIPPO_AVAILABILITY: false,
@@ -121,18 +115,9 @@ export function envByName(name: string): string | undefined {
   return raw(name);
 }
 
-// Eval-only lifecycle switches; src/infra/eval-switches.ts reads them at call time.
-export const envAblateDecay = bool('HIPPO_ABLATE_DECAY');
-export const envAblateRecallBoost = bool('HIPPO_ABLATE_RECALL_BOOST');
-export const envAblateOutcome = bool('HIPPO_ABLATE_OUTCOME');
-export const envAblateOutcomeSlow = bool('HIPPO_ABLATE_OUTCOME_SLOW');
-export const envAblateOutcomeFast = bool('HIPPO_ABLATE_OUTCOME_FAST');
-export const envAblateRecency = bool('HIPPO_ABLATE_RECENCY');
-
-/** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null. */
-export function envEvalRecencyDays(): number | null {
-  const days = Number(raw('HIPPO_EVAL_RECENCY_DAYS'));
-  return Number.isFinite(days) && days > 0 ? days : null;
+/** An on/off variable that the module owning it names, on only for an on spelling. */
+export function envFlagOn(name: string): boolean {
+  return flagState(name) === 'on';
 }
 
 /** HIPPO_FAKE_NOW as epoch millis, or null unless it is byte-identical to Date.toISOString

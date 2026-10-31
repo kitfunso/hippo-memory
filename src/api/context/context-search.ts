@@ -89,7 +89,6 @@ function engineSettings(ctx: Context, plan: ContextPlan) {
     scope: plan.activeScope,
     runtime: ctx.config.runtime,
     cwd: ctx.infra.machine.cwd,
-    switches: ctx.infra.evalSwitches,
     now: plan.now,
   };
 }
