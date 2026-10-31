@@ -23,6 +23,7 @@ import {
 } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../../../api/dead-letters.js';
+import { holdDelivery, releaseDelivery } from '../../../api/hippo-db/connector-events.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenant } from '../tenant-route.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
@@ -103,7 +104,7 @@ export async function handleGitHubEventsWebhook(
   // can replay later. The delivery id header is unsigned, so a captured body resent under a fresh
   // id must still hit the same hold.
   const replayKey = sigStr;
-  await claimOrRefuse(ports.store, replayKey);
+  await claimOrRefuse(ports, replayKey);
   try {
     await routeSignedDelivery({
       hippoRoot: opts.hippoRoot,
@@ -117,7 +118,7 @@ export async function handleGitHubEventsWebhook(
   } catch (err) {
     // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get
     // through.
-    await freeHold(ports.store, replayKey);
+    await freeHold(ports, replayKey);
     throw err;
   }
 }
@@ -151,15 +152,15 @@ function readGitHubHeaders(req: WebhookRequest['req']): GitHubHeaders {
 // store, and the sweep never reaches it.
 const REPLAY_HOLD_MS = 36_500 * DAY_MS;
 
-async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
+async function claimOrRefuse(ports: WebhookPorts, key: string): Promise<void> {
   const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
-  if (!(await store.hippoDb.connectorEvents.claimDelivery(claim))) {
+  if (!(await holdDelivery(ports, claim))) {
     throw new HttpError(409, 'duplicate X-GitHub-Delivery');
   }
 }
 
-async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
-  await store.hippoDb.connectorEvents.releaseDelivery('github', key).catch((err) => {
+async function freeHold(ports: WebhookPorts, key: string): Promise<void> {
+  await releaseDelivery(ports, 'github', key).catch((err) => {
     log.warn(
       'github webhook: could not free the replay hold of a failed delivery',
       errorFields(err),

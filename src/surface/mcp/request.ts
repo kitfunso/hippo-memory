@@ -1,5 +1,5 @@
-// Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method
-// switch.
+// Transport-agnostic request handling: the api Context of each tool call, the tool dispatch table,
+// tool execution and the JSON-RPC method switch.
 
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import type { HippoStore } from '../../base/ports/store.js';
@@ -8,9 +8,17 @@ import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../../api/recall/request.js';
 import { recordTokens } from '../../api/tokens.js';
-import { globalTargetOf, hasHippoDb, type HippoDbStore } from '../../api/hippo-db-context.js';
 import {
-  mcpApiContext,
+  coreEnrichment,
+  globalTargetOf,
+  hasHippoDb,
+  type HippoDbStore,
+} from '../../api/hippo-db-context.js';
+import type { Context as ApiContext } from '../../api/types.js';
+import type { CallerProject } from '../../api/prompt-hook.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
+import {
+  mcpActor,
   type HippoDbToolHandler,
   type LocalToolHandler,
   type McpCaller,
@@ -44,6 +52,61 @@ import {
 } from './json-rpc.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
 
+/** The api Context a tool call runs as: the transport's store, reach and config under the
+ * caller's actor. */
+function mcpApiContext(ctx: McpCaller): ApiContext {
+  return {
+    tenantId: ctx.tenantId,
+    actor: mcpActor(ctx),
+    store: ctx.store,
+    reach: ctx.reach,
+    config: ctx.config,
+    callers: ctx.callers,
+    clientKey: mcpClientKey(ctx),
+    infra: ctx.infra,
+    signal: ctx.signal,
+    enrich: coreEnrichment(ctx.store),
+    detached: ctx.detached,
+  };
+}
+
+/** The transport's client key, else `stdio-<pid>:<tenant>`; a caller's project narrows either,
+ * so two repos on one shared store keep apart lists. */
+function mcpClientKey(ctx: McpCaller): string {
+  const base = ctx.clientKey || `stdio-${process.pid}:${ctx.tenantId || DEFAULT_TENANT_ID}`;
+  return ctx.project ? `${base}:${ctx.project.name}` : base;
+}
+
+/** An MCP call on the HTTP server runs on the request's auth-resolved Context, as a REST route
+ * does; `host` is what the server bound at boot. */
+export function mcpContextOn(
+  ctx: ApiContext,
+  host: Pick<McpContext, 'hippoRoot' | 'storeFor' | 'tools'>,
+  project?: CallerProject,
+): McpContext {
+  const mcpCtx: McpContext = {
+    ...host,
+    tenantId: ctx.tenantId,
+    // McpContext.actor stays string; extract subject at the boundary.
+    actor: ctx.actor.subject,
+    // The caller's real role: MCP tools must not run a member key as admin.
+    role: ctx.actor.role,
+    scopes: ctx.actor.scopes,
+    viaAuthResolver: ctx.actor.viaAuthResolver,
+    hostAdmin: ctx.actor.hostAdmin,
+    owner: ctx.actor.owner,
+    clientKey: ctx.clientKey,
+    store: ctx.store,
+    config: ctx.config,
+    reach: ctx.reach,
+    callers: ctx.callers,
+    infra: ctx.infra,
+    detached: ctx.detached,
+  };
+  if (project !== undefined) mcpCtx.project = project;
+  return mcpCtx;
+}
+
 // ── Token ledger ──
 
 /** Records the memory text hippo_context returned; best-effort (a ledger failure never fails the
@@ -75,10 +138,10 @@ function anyStore(run: ToolHandler): ToolRow {
 /** A tool that runs only on a store with hippo.db's local tier, handed that store and an api
  * Context on it. */
 function onHippoDb(run: HippoDbToolHandler): ToolRow {
-  const on =
-    (ctx: McpCaller, store: HippoDbStore): ToolRun =>
-    (args) =>
-      run({ ...toolCall(ctx), args, store, api: { ...mcpApiContext(ctx), store } });
+  const on = (ctx: McpCaller, store: HippoDbStore): ToolRun => {
+    const call = toolCall(ctx);
+    return (args) => run({ ...call, args, store, api: { ...call.api, store } });
+  };
   return {
     bind: (proved) => (hasHippoDb(proved) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined),
     onAll: (ctx) => on(ctx, ctx.store),
@@ -135,7 +198,7 @@ export function allMcpTools(): McpTools<HippoDbStore> {
  * (the HTTP server's Bearer, or the stdio host's folder walk and HIPPO_TENANT). */
 function toolCall(ctx: McpCaller): Omit<ToolCall, 'args'> {
   const { hippoRoot, tenantId, config, store } = ctx;
-  return { ctx, hippoRoot, store, config, tenantId };
+  return { ctx, api: mcpApiContext(ctx), hippoRoot, store, config, tenantId };
 }
 
 /** The tool bound to `ctx`'s host, or undefined when its store does not serve it. */

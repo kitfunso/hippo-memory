@@ -3,7 +3,6 @@
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { EntryContext } from '../../api/types.js';
 import { storeLesson } from './capture-error.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { scrubForSharing } from './share-scrub.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
@@ -16,7 +15,12 @@ import type {
 } from '../../base/records/rejections.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { withEntryInfra } from '../entry-infra.js';
-import { withHippoDb, type HippoDbContext } from '../../api/hippo-db-context.js';
+import { withHippoDb } from '../../api/hippo-db-context.js';
+import {
+  firstFailureOutcome,
+  logCallerFailure,
+  type CallerFailureEvent,
+} from '../../api/hippo-db/failure-log.js';
 
 type FailureSkip = Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'>;
 
@@ -95,11 +99,7 @@ export async function captureFailureForCaller(
   const ctx = withHippoDb(withEntryInfra(given));
   const failure = checkedFailure(req);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const earlier = await ctx.store.hippoDb.failureLog.requestOutcome(
-    ctx.tenantId,
-    req.requestId,
-    req.sessionId,
-  );
+  const earlier = await firstFailureOutcome(ctx, req.requestId, req.sessionId);
   // A retry after a lost reply gets the first answer and writes nothing; one whose store failed
   // tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
@@ -112,47 +112,25 @@ export async function captureFailureForCaller(
     return { outcome };
   } finally {
     // The hash is of the text as stored, so a repeat counts against the lesson it repeats.
-    await logOutcome(ctx, {
-      req: { ...req, text: failure.text },
-      key,
-      outcome: logged,
-      retried: earlier !== null,
-    });
+    const event = failureEvent({ ...req, text: failure.text }, key, logged);
+    await logCallerFailure(ctx, event, earlier !== null);
   }
 }
 
-interface LogOutcomeOptions {
-  readonly req: CallerFailureRequest;
-  readonly key: ContinuityKey;
-  readonly outcome: FailureOutcome;
-  readonly retried: boolean;
-}
-
-/** Runs after the outcome in its own try, so a log error never hides the store's error or its
- * outcome. */
-async function logOutcome(
-  ctx: HippoDbContext,
-  { req, key, outcome, retried }: LogOutcomeOptions,
-): Promise<void> {
-  try {
-    // The request id allows one row, so a retry rewrites the first try's outcome.
-    if (retried) {
-      await ctx.store.hippoDb.failureLog.settleOutcome(ctx.tenantId, req.requestId, outcome);
-      return;
-    }
-    await ctx.store.hippoDb.failureLog.record({
-      tenantId: ctx.tenantId,
-      sessionId: req.sessionId,
-      tool: req.tool,
-      outcome,
-      rule: req.rule,
-      sigHash: req.text?.trim() ? failureHash(req.text) : null,
-      detailHash: req.detailHash,
-      ownerSubject: key.owner,
-      originProject: req.project.name,
-      requestId: req.requestId,
-    });
-  } catch (err) {
-    log.warn(`capture-error: failure not logged: ${errorMessage(err)}`, errorFields(err));
-  }
+function failureEvent(
+  req: CallerFailureRequest,
+  key: ContinuityKey,
+  outcome: FailureOutcome,
+): CallerFailureEvent {
+  return {
+    sessionId: req.sessionId,
+    tool: req.tool,
+    outcome,
+    rule: req.rule,
+    sigHash: req.text?.trim() ? failureHash(req.text) : null,
+    detailHash: req.detailHash,
+    ownerSubject: key.owner,
+    originProject: req.project.name,
+    requestId: req.requestId,
+  };
 }

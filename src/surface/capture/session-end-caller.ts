@@ -8,6 +8,7 @@ import { bindCaller, checkedWorkingState } from './caller-session.js';
 import { snapshotFields, type WorkingState } from '../../base/session/working-state.js';
 import { withEntryInfra } from '../entry-infra.js';
 import { withHippoDb } from '../../api/hippo-db-context.js';
+import { closeCallerSession, type CallerSessionEndResult } from '../../api/session-end.js';
 
 export type CallerEvidence = Pick<HandoffEvidence, 'gitRef' | 'dirtyTree' | 'testStatus'>;
 
@@ -19,12 +20,6 @@ export interface CallerSessionEndRequest {
   readonly workingState: WorkingState | null;
   /** The git state the caller saw when the session ended. */
   readonly evidence: CallerEvidence | null;
-}
-
-export interface CallerSessionEndResult {
-  /** False when an earlier handoff already covers the session, as on a retry. */
-  readonly handoffWritten: boolean;
-  readonly snapshotsClosed: number;
 }
 
 const TEST_STATUSES: ReadonlySet<string> = new Set(['pass', 'fail', 'unknown']);
@@ -46,10 +41,7 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
   return { gitRef, dirtyTree, testStatus };
 }
 
-/**
- * Call on a session's final end only, since it closes the snapshot. A failed close throws so the
- * sender retries, and the retry writes no second handoff.
- */
+/** Call on a session's final end only, since it closes the snapshot. */
 export async function sessionEndHandoffForCaller(
   given: EntryContext,
   req: CallerSessionEndRequest,
@@ -58,14 +50,6 @@ export async function sessionEndHandoffForCaller(
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const { sessions } = ctx.store.hippoDb;
-  const sessionEnd = {
-    sessionId: req.sessionId,
-    evidence,
-    derived: state === null ? null : snapshotFields(state),
-  };
-  const handoff = await sessions.save(ctx.tenantId, 'handoff', { sessionEnd }, key);
-  const close = { status: 'session-ended', sessionId: req.sessionId };
-  const snapshotsClosed = await sessions.clear(ctx.tenantId, 'snapshot', close, key);
-  return { handoffWritten: handoff !== null, snapshotsClosed };
+  const derived = state === null ? null : snapshotFields(state);
+  return closeCallerSession(ctx, key, { sessionId: req.sessionId, evidence, derived });
 }

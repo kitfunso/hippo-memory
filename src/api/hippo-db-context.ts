@@ -71,6 +71,17 @@ export function coreEnrichment(store: Context['store']): CoreEnrichment | undefi
   };
 }
 
+export interface EnrichedFields {
+  readonly store?: Context['store'];
+  readonly enrich?: CoreEnrichment;
+}
+
+/** `ctx` with its store's local tier as the core paths read it, unless its builder set `enrich`. */
+export function withCoreEnrichment<C extends EnrichedFields>(ctx: C): C {
+  const enrich = ctx.enrich ?? (ctx.store && coreEnrichment(ctx.store));
+  return enrich === undefined ? ctx : { ...ctx, enrich };
+}
+
 /** What a core path reads from the global store's local tier; unset on a store without one. */
 export function globalEnrichment(store: Context['store']): GlobalEnrichment | undefined {
   if (!hasHippoDb(store)) return undefined;

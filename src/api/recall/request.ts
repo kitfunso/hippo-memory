@@ -11,7 +11,8 @@ import {
 } from '../../domain/predictions/planning-fallacy.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { LastRecall, LastRecallWrites } from '../../base/records/last-recall.js';
+import type { LastRecallWrites } from '../../base/records/last-recall.js';
+import type { LastRecallFinish } from '../enrichment.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { estimateTokens } from '../../base/util/token-text.js';
@@ -331,7 +332,7 @@ async function recordShown(
     trace: traceOf(ctx, opts, core, shown.results),
   };
   const audited = await finishOrReport(() =>
-    finishShown(store, core.lastRecall, writes, ids.length > 0),
+    finishShown(store, ctx.enrich?.lastRecall, writes, ids.length > 0),
   );
   if (audited && second !== undefined) await finishSecond(ctx, second, recallRow, heldElsewhere);
   // The caller prints whether or not the record was written, so the ring and the ledger still take
@@ -429,12 +430,14 @@ function traceOf(
 }
 
 // A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs
-// these ids with an older trace; an empty one leaves the marker on the previous recall.
+// these ids with an older trace; an empty one, or a store that keeps none, leaves the marker alone.
 function finishShown(
   store: HippoStore,
-  lastRecall: LastRecall,
+  lastRecall: LastRecallFinish | undefined,
   writes: LastRecallWrites,
   marks: boolean,
 ): Promise<number | null | void> {
-  return marks ? lastRecall.finishRecall(writes, undefined) : store.finishRecall(writes);
+  return marks && lastRecall
+    ? lastRecall.finishRecall(writes, undefined)
+    : store.finishRecall(writes);
 }

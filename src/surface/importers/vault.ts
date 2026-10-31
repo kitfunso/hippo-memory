@@ -4,13 +4,13 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../../base/memory/entry.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
+import { rawRowsUnder } from '../../api/memories/memories.js';
+import { wouldRefuse } from '../../api/hippo-db/rejections.js';
 import {
   coreEnrichment,
   type HippoDbContext,
   type HippoDbStore,
 } from '../../api/hippo-db-context.js';
-import type { EntryCursor } from '../../base/ports/store/types.js';
-import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../host/config-file.js';
@@ -226,14 +226,7 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
 
 async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, MemoryEntry[]>> {
   // One load serves both per-file idempotency and the deletion diff.
-  const under = {
-    tenantId: ctx.tenantId,
-    kinds: ['raw'],
-    artifactRefPrefix: `vault:${vaultName}:`,
-  } as const;
-  const rows = await readAll((after?: EntryCursor) =>
-    ctx.store.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
-  );
+  const rows = await rawRowsUnder(ctx, `vault:${vaultName}:`);
   // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
   // later changed or deletion pass must archive them all or older raw vault content stays
   // searchable.
@@ -424,10 +417,7 @@ async function storeVaultNote({
   // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches
   // what a real run would refuse.
   if (run.dryRun) {
-    const [refused] = await run.ctx.store.hippoDb.rejections.refusedAmong([
-      { tenantId: run.ctx.tenantId, entryId: echo.id, content: echo.content },
-    ]);
-    return !refused;
+    return !(await wouldRefuse(run.ctx, echo));
   }
   try {
     // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now,

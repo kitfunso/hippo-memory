@@ -12,6 +12,7 @@ import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } fr
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
 import { parkInDlq } from '../../../api/dead-letters.js';
+import { holdDelivery, releaseDelivery } from '../../../api/hippo-db/connector-events.js';
 import { errorFields, log } from '../../../base/util/log.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
@@ -106,8 +107,7 @@ const REPLAY_HOLD_MS = DAY_MS;
 /** Routes a verified request once: the signature covers the timestamp and the body, so a repeat
  * is the same request. */
 async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
-  const events = d.store.hippoDb.connectorEvents;
-  const held = await events.claimDelivery({
+  const held = await holdDelivery(d, {
     connector: 'slack',
     key: d.signature,
     nowMs: Date.now(),
@@ -121,7 +121,7 @@ async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
     await routeSignedSlackPayload(d);
   } catch (err) {
     // A request that failed left nothing stored, so Slack's retry must get through.
-    await events.releaseDelivery('slack', d.signature).catch((releaseErr) => {
+    await releaseDelivery(d, 'slack', d.signature).catch((releaseErr) => {
       log.warn(
         'slack webhook: could not free the replay hold of a failed delivery',
         errorFields(releaseErr),

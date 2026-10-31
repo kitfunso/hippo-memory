@@ -7,6 +7,7 @@ import type { RememberOptions } from '../../../api/index.js';
 import type { ConnectorEvent } from '../../../base/records/connectors.js';
 import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
+import { connectorEventRecord } from '../../../api/hippo-db/connector-events.js';
 import {
   issueEventToRememberOpts,
   issueCommentEventToRememberOpts,
@@ -83,7 +84,6 @@ export async function ingestEvent(
   ctx: ConnectorContext,
   input: IngestInput,
 ): Promise<IngestResult> {
-  const events = ctx.store.hippoDb.connectorEvents;
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
     eventUpdatedAt(input.event),
@@ -97,7 +97,7 @@ export async function ingestEvent(
 
   // Fast path: pre-check. Avoids running the transform / opening a write tx for the common
   // already-seen case (GitHub auto-retries with the same body).
-  const seen = await events.eventRecord(event);
+  const seen = await connectorEventRecord(ctx, event);
   if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
   // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the

@@ -195,16 +195,14 @@ export interface GitHubDlqItem {
 /** The three GitHub streams a backfill drains, each with its own high-water mark. */
 export type GitHubStream = 'issues' | 'issueComments' | 'prReviewComments';
 
-/** Where a backfill resumes: a Slack channel's newest timestamp, or one GitHub stream's
- * high-water mark. */
-export type CursorKey =
-  | { readonly connector: 'slack'; readonly tenantId: string; readonly channelId: string }
-  | {
-      readonly connector: 'github';
-      readonly tenantId: string;
-      readonly repo: string;
-      readonly stream: GitHubStream;
-    };
+/** What a backfill drains: a Slack channel, or one GitHub stream of a repository. */
+export type BackfillStream =
+  | { readonly connector: 'slack'; readonly channelId: string }
+  | { readonly connector: 'github'; readonly repo: string; readonly stream: GitHubStream };
+
+/** Where a backfill resumes, per tenant: a Slack channel's newest timestamp, or one GitHub
+ * stream's high-water mark. */
+export type CursorKey = BackfillStream & { readonly tenantId: string };
 
 export interface SlackWorkspace {
   teamId: string;

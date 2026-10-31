@@ -1,3 +1,4 @@
+import { backfillCursor, saveBackfillCursor } from '../../../api/hippo-db/connector-events.js';
 import type { ConnectorContext } from '../ingest.js';
 import { ingestMessage } from './ingest.js';
 import type { SlackMessageEvent } from './types.js';
@@ -35,9 +36,8 @@ export async function backfillChannel(
   // `oldest` (numeric ts) is the resume bound for the first page only; `cursor` starts null and
   // Slack mints the next-page token. Mixing the two would feed a numeric ts as an opaque cursor and
   // break on rerun.
-  const cursors = ctx.store.hippoDb.connectorEvents;
-  const at = { connector: 'slack', tenantId: ctx.tenantId, channelId: opts.channel.id } as const;
-  const resumeFrom: string | null = await cursors.cursor(at);
+  const at = { connector: 'slack', channelId: opts.channel.id } as const;
+  const resumeFrom: string | null = await backfillCursor(ctx, at);
   let cursor: string | null = null;
   let ingested = 0;
   let pages = 0;
@@ -59,11 +59,11 @@ export async function backfillChannel(
       if (r.status === 'ingested') ingested++;
       if (!latestTs || msg.ts > latestTs) latestTs = msg.ts;
       if (opts.maxMessages && ingested >= opts.maxMessages) {
-        if (latestTs) await cursors.saveCursor(at, latestTs);
+        if (latestTs) await saveBackfillCursor(ctx, at, latestTs);
         return { ingested, pages };
       }
     }
-    if (latestTs) await cursors.saveCursor(at, latestTs);
+    if (latestTs) await saveBackfillCursor(ctx, at, latestTs);
     if (!page.next_cursor) break;
     cursor = page.next_cursor;
   }

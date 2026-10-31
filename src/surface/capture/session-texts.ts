@@ -4,7 +4,6 @@ import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { EntryContext } from '../../api/types.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
-import { storedTextKeys } from '../../base/util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
@@ -12,6 +11,7 @@ import { extractFromTexts } from './extract.js';
 import { withEntryInfra } from '../entry-infra.js';
 import { withDetached } from '../../api/detached.js';
 import { withHippoDb } from '../../api/hippo-db-context.js';
+import { textKeysHeldUnder } from '../../api/hippo-db/captures.js';
 
 const MAX_TEXTS = 30;
 const MAX_TEXT_BYTES = 32 * 1024;
@@ -63,16 +63,15 @@ export async function captureSessionTexts(
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows
   // block a copy, other projects' rows do not.
   const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
-  const held = await ctx.store.hippoDb.captures.textsHolding(
-    dedup.tenantId,
+  const held = await textKeysHeldUnder(
+    ctx,
+    dedup,
     items.map((i) => i.content),
-    { project: dedup.project },
   );
-  const { store, config } = ctx;
-  const folder = { store, config, embedderFor: ctx.infra.embedderFor };
+  const folder = { ...ctx, embedderFor: ctx.infra.embedderFor };
   const tally = await withDetached(ctx, (detached) =>
     captureExtractedItems(
-      { store, config, embed: detachedEmbedder(folder, ctx.infra, detached) },
+      { ...ctx, embed: detachedEmbedder(folder, ctx.infra, detached) },
       {
         tenantId: ctx.tenantId,
         originProject: req.project,
@@ -83,7 +82,7 @@ export async function captureSessionTexts(
         now: ctx.infra.clock(),
       },
       items,
-      storedTextKeys(held),
+      held,
     ),
   );
   return { ...tally, skipped: tally.skipped + extracted.length - items.length };

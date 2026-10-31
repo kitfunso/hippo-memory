@@ -1,7 +1,6 @@
 // Option and result shapes for recall and retrieve.
 
 import type { ContinuityBlock } from '../../base/ports/store.js';
-import type { LastRecall } from '../../base/records/last-recall.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
 import type {
@@ -133,8 +132,6 @@ export interface CliCoreRecall extends CliCoreRanking {
   /** The host agent's session: it stamps the token ledger row, and the trace when the recall
    * names no session. */
   hostSessionId?: string;
-  /** Where a shown list is kept as the last recall, for a later `hippo outcome` with no ids. */
-  lastRecall: LastRecall;
   show: (
     ranking: RankRecallResult,
     planning: PlanningFallacyOutput,

@@ -93,7 +93,11 @@ async function restoreCompactSnapshot(
   payloadSessionId: string | null,
   rec: DeliveryRecorder | null,
 ): Promise<void> {
-  const text = await compactResumeBlock(cli.apiContext(hippoRoot, tenantId), payloadSessionId);
+  const text = await compactResumeBlock(
+    cli.apiContext(hippoRoot, tenantId),
+    payloadSessionId,
+    null,
+  );
   if (text === null) return;
   // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);

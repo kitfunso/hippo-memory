@@ -8,6 +8,7 @@ import {
   type HippoDbStore,
 } from '../../api/hippo-db-context.js';
 import type { ConnectorEvent } from '../../base/records/connectors.js';
+import { markConnectorEventSeen } from '../../api/hippo-db/connector-events.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
@@ -67,6 +68,6 @@ export async function rememberWithEventLog(
 }
 
 async function markSkipped(ctx: ConnectorContext, event: ConnectorEvent): Promise<IngestResult> {
-  await ctx.store.hippoDb.connectorEvents.markEventSeen(event);
+  await markConnectorEventSeen(ctx, event);
   return { status: 'skipped', memoryId: null };
 }

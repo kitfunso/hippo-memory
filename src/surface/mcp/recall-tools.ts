@@ -11,7 +11,7 @@ import { sharedStoreOf } from '../../api/types.js';
 import { type ProjectIdentity } from '../../base/scope/project-identity.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../../api/hippo-db/dag-render.js';
-import { mcpApiContext, ownsServerCwd, type HippoDbToolCall, type ToolCall } from './protocol.js';
+import { ownsServerCwd, type HippoDbToolCall, type ToolCall } from './protocol.js';
 import { toolRecallText } from './tool-recall.js';
 import {
   formatMemories,
@@ -40,11 +40,11 @@ interface DrillDownExtraOptions {
   depth?: number;
 }
 
-export async function runRecallTool({ ctx, args }: ToolCall): Promise<string> {
+export async function runRecallTool({ ctx, api, args }: ToolCall): Promise<string> {
   // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not
   // passed on.
   const { opts } = parseRecallRequest(toolParams(args));
-  return toolRecallText(mcpApiContext(ctx), {
+  return toolRecallText(api, {
     opts,
     budget: numberArg(args, 'budget') || undefined,
     project: ctx.project,
@@ -111,7 +111,13 @@ function localProject(
     : projectIdentity(cwd);
 }
 
-export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall): Promise<string> {
+export async function runContextTool({
+  args,
+  ctx,
+  api,
+  hippoRoot,
+  config,
+}: ToolCall): Promise<string> {
   // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends
   // X-Hippo-Project.
   if (sharedStoreOf(ctx) && ctx.project === undefined) {
@@ -123,7 +129,7 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
   const ownsCwd = ownsServerCwd(ctx);
   const now = ctx.infra.clock();
-  const result = await apiGetContext(mcpApiContext(ctx), {
+  const result = await apiGetContext(api, {
     // The server's git state is no remote caller's, so a project or remote caller gets rows by
     // strength without a query.
     q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(ctx.infra.machine.git),

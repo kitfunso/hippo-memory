@@ -291,7 +291,6 @@ describe('recall ranker order', () => {
             ranked = ranking.results.map((r) => stable(r.entry.id));
             return { results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 };
           },
-          lastRecall: ctx.store.hippoDb.lastRecall,
         },
       );
       return ranked;

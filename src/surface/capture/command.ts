@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
-import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey } from '../../base/util/same-text.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
@@ -20,6 +20,8 @@ import type { CaptureDedup, CapturedOutcome } from '../../base/records/capture.j
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
 import type { HippoDbStore } from '../../api/hippo-db-context.js';
+import { ensureStoreFiles } from '../../api/store-init.js';
+import { textKeysHeldUnder } from '../../api/hippo-db/captures.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -101,7 +103,7 @@ function writeLogBanner(logFile: string): boolean {
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   if (options.global) {
-    await target.store.hippoDb.folderFiles.ensure();
+    await ensureStoreFiles(target);
   } else if (!isInitialized(target.root)) {
     console.error(
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
@@ -133,7 +135,8 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
     return;
   }
 
-  const keys = await storedKeysInView(target.store, options, extracted);
+  const contents = extracted.map((item) => item.content);
+  const keys = await textKeysHeldUnder(target, captureDedup(options), contents);
 
   printCaptureTally(options, await captureFromCli(target, options, extracted, keys));
 }
@@ -155,18 +158,6 @@ async function captureFromCli(
     return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys);
   }
   return previewCapture({ store, config }, writeOpts, extracted, keys);
-}
-
-// Dedup only against rows this capture's reader sees: another tenant's or project's rows are
-// hidden, so they must not stop its own copy.
-async function storedKeysInView(
-  store: Pick<HippoDbStore, 'hippoDb'>,
-  options: CaptureOptions,
-  extracted: readonly ExtractedItem[],
-): Promise<Set<string>> {
-  const { tenantId, ...filter } = captureDedup(options);
-  const texts = extracted.map((item) => item.content);
-  return storedTextKeys(await store.hippoDb.captures.textsHolding(tenantId, texts, filter));
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its

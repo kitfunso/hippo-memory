@@ -1,4 +1,5 @@
 import type { ConnectorEvent } from '../../../base/records/connectors.js';
+import { connectorEventRecord } from '../../../api/hippo-db/connector-events.js';
 import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { messageToRememberOpts } from './transform.js';
 import type { ChannelMeta } from './scope.js';
@@ -19,11 +20,10 @@ export async function ingestMessage(
   ctx: ConnectorContext,
   input: IngestInput,
 ): Promise<IngestResult> {
-  const events = ctx.store.hippoDb.connectorEvents;
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
   // Idempotency check: if already seen, return the cached memory_id without re-running the
   // transform or hitting api.remember.
-  const seen = await events.eventRecord(event);
+  const seen = await connectorEventRecord(ctx, event);
   if (seen.seen) {
     // Empty-body events are marked seen with memory_id=NULL, so their replay returns the same
     // 'skipped' they first returned; a non-NULL memory_id means a memory was ingested, so

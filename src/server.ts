@@ -99,6 +99,6 @@ export {
   sessionEndHandoffForCaller,
   type CallerEvidence,
   type CallerSessionEndRequest,
-  type CallerSessionEndResult,
 } from './surface/capture/session-end-caller.js';
+export type { CallerSessionEndResult } from './api/session-end.js';
 export type { WorkingState } from './base/session/working-state.js';

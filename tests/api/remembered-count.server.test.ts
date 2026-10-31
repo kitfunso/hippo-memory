@@ -8,11 +8,9 @@ import type { GitRunner } from '../../src/base/ports/git.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaySlackDlqEntry, slackDlq } from '../../src/surface/connectors/slack/dlq.js';
-import { runLearnTool } from '../../src/surface/mcp/memory-tools.js';
-import { mcpApiContext } from '../../src/surface/mcp/protocol.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { testInfra } from '../_helpers/infra.js';
-import { mcpContext } from '../_helpers/mcp-context.js';
+import { mcpContext, runMcpTool } from '../_helpers/mcp-context.js';
 import { execOn, keyFor, newRoot, post, start, undoAll } from '../_helpers/store-worker-server.js';
 
 afterEach(undoAll);
@@ -100,8 +98,6 @@ describe('Total remembered', () => {
       run: (args) => ({ ok: true, stdout: args[0] === 'rev-parse' ? 'true\n' : LESSONS.join('\n') }),
     };
     const infra = testInfra();
-    const store = sqliteStore(root);
-    const config = loadConfig(root);
     const ctx = mcpContext({
       hippoRoot: root,
       tenantId: 'default',
@@ -109,12 +105,11 @@ describe('Total remembered', () => {
       role: 'admin',
       hostAdmin: true,
       stdio: true,
-      store,
-      config,
+      store: sqliteStore(root),
+      config: loadConfig(root),
       infra: { ...infra, machine: { ...infra.machine, git, cwd: '/injected/folder' } },
     });
-    const call = { args: { days: 30 }, ctx, hippoRoot: root, config, tenantId: 'default', store };
-    const text = await runLearnTool({ ...call, api: { ...mcpApiContext(ctx), store } });
+    const text = await runMcpTool(ctx, 'hippo_learn', { days: 30 });
     expect(text).toMatch(/^Git learn: 2 new/);
 
     expect(await remembered(root)).toBe(2);

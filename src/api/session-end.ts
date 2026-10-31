@@ -5,7 +5,8 @@
 import * as path from 'node:path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
-import type { SessionEvent } from '../base/records/sessions.js';
+import type { SessionEndHandoffRequest, SessionEvent } from '../base/records/sessions.js';
+import type { ContinuityKey } from '../base/ports/store/types.js';
 import type { TranscriptCalls } from '../base/session/transcript-calls.js';
 import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
 import { errorMessage, log, errorFields, type LineLog, type LogFields } from '../base/util/log.js';
@@ -99,6 +100,26 @@ async function closeSnapshot(
   }
 }
 
+export interface CallerSessionEndResult {
+  /** False when an earlier handoff already covers the session, as on a retry. */
+  readonly handoffWritten: boolean;
+  readonly snapshotsClosed: number;
+}
+
+/** A remote caller's session end under its owner and project. A failed close throws so the
+ * sender retries, and the retry writes no second handoff. */
+export async function closeCallerSession(
+  ctx: HippoDbContext,
+  key: ContinuityKey,
+  sessionEnd: SessionEndHandoffRequest,
+): Promise<CallerSessionEndResult> {
+  const { sessions } = ctx.store.hippoDb;
+  const handoff = await sessions.save(ctx.tenantId, 'handoff', { sessionEnd }, key);
+  const close = { status: 'session-ended', sessionId: sessionEnd.sessionId };
+  const snapshotsClosed = await sessions.clear(ctx.tenantId, 'snapshot', close, key);
+  return { handoffWritten: handoff !== null, snapshotsClosed };
+}
+
 /** The caller's store and the global one, each once; a store that keeps no ledger is left out. */
 function rereadLedgers(ctx: Context): LedgerBook[] {
   const local = ctx.reach?.hasLocal === false ? undefined : ctx.reach?.ledger?.ledger;
@@ -145,14 +166,15 @@ export async function bookSessionRereads(
 }
 
 /** The block a compaction lost: the fresh task snapshot and its session trail, or null with none
- * or another session's snapshot. */
+ * or another session's snapshot. A remote caller's `key` reads its owner's snapshot. */
 export async function compactResumeBlock(
   ctx: HippoDbContext,
   payloadSessionId: string | null,
+  key: ContinuityKey | null,
 ): Promise<string | null> {
   const { sessions } = ctx.store.hippoDb;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
-  const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, null);
+  const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, key);
   // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a
   // manual run with no payload id still prints.
   if (!snapshot) return null;

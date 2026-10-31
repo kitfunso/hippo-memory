@@ -1,4 +1,5 @@
 import { rawArchiveForEvent } from '../../../api/index.js';
+import { deletionTarget, markConnectorEventSeen } from '../../../api/hippo-db/connector-events.js';
 import type { ConnectorEvent } from '../../../base/records/connectors.js';
 import type { ConnectorContext } from '../ingest.js';
 
@@ -22,19 +23,14 @@ export async function handleMessageDeleted(
   ctx: ConnectorContext,
   input: DeletionInput,
 ): Promise<DeletionResult> {
-  const events = ctx.store.hippoDb.connectorEvents;
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
-  // The tenant in the lookup is load-bearing: without it a deletion event from tenant A could
-  // archive tenant B's raw row sharing the same artifact_ref.
-  const target = await events.eventRecord(event, {
-    artifactRef: `slack://${input.teamId}/${input.channelId}/${input.deletedTs}`,
-    tenantId: ctx.tenantId,
-  });
+  const artifactRef = `slack://${input.teamId}/${input.channelId}/${input.deletedTs}`;
+  const target = await deletionTarget(ctx, event, artifactRef);
   if (target.seen) return { status: 'duplicate', memoryId: null };
   const memoryId = target.memoryId;
   if (!memoryId) {
     // No row to archive: the event is still marked seen, so a retry answers 'duplicate'.
-    await events.markEventSeen(event);
+    await markConnectorEventSeen(ctx, event);
     return { status: 'not_found', memoryId: null };
   }
   const reason = `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`;
