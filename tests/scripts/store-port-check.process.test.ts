@@ -174,6 +174,18 @@ describe('check-store-port.mjs', () => {
     expect(r.status, r.stderr).toBe(0);
   });
 
+  it("fails in hippo-memory's own folder when the tier door is missing, so the tier is never skipped unchecked", () => {
+    const r = runOn({
+      'package.json': '{ "name": "hippo-memory" }\n',
+      'src/base/ports/store.ts':
+        'export interface Group { read(tenantId: string, opts: { readonly limit: number }): void }\n',
+    });
+    expect(r.status).toBe(1);
+    expect(r.sites).toEqual([
+      "src/store/sqlite/hippo-db.ts:1 is missing, so no local-tier method was checked; point TIER_DOOR at hippoDbRepos' file",
+    ]);
+  });
+
   it('passes on the real repo', () => {
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: REPO, encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);

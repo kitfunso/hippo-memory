@@ -1,6 +1,6 @@
 // The worker-crossing scan of hippo.db's local tier for check-store-port.mjs. The tier has no port interface to read,
 // so the TypeScript checker reads each repository's method types as hippoDbRepos infers them from its bodies.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 
@@ -76,11 +76,20 @@ function methodHits(checker, inSrc, root, label, method) {
   return hits;
 }
 
+/** Whether `root` is hippo-memory's own folder, where a missing tier door means the scan read nothing. */
+function isHippoRepo(root) {
+  const pkg = resolve(root, 'package.json');
+  return existsSync(pkg) && JSON.parse(readFileSync(pkg, 'utf8')).name === 'hippo-memory';
+}
+
 /** `file:line repo.method(param.path)` for each parameter of a local-tier method whose type holds a function, read
- * from the type hippoDbRepos returns; [] when `root` has no tier door. */
+ * from the type hippoDbRepos returns; [] when `root` is not hippo-memory and has no tier door. */
 export function tierFunctionParams(root = '.') {
   const door = resolve(root, TIER_DOOR);
-  if (!existsSync(door)) return [];
+  if (!existsSync(door)) {
+    if (!isHippoRepo(root)) return [];
+    return [`${TIER_DOOR}:1 is missing, so no local-tier method was checked; point TIER_DOOR at hippoDbRepos' file`];
+  }
   const src = posix(resolve(root, 'src')) + '/';
   const inSrc = (decl) => posix(decl.getSourceFile().fileName).startsWith(src);
   const program = ts.createProgram([door], OPTIONS);
