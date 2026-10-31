@@ -191,7 +191,7 @@ describe('check-store-port.mjs', () => {
     expect(r.stderr).toBe(UNREAD('src/store/sqlite/hippo-db.ts is missing'));
   });
 
-  it("fails in hippo-memory's own folder when hippoDbRepos returns any or a tier with no methods", () => {
+  it("fails in hippo-memory's own folder when hippoDbRepos returns any, or any repository with no methods", () => {
     const pkg = { 'package.json': '{ "name": "hippo-memory" }\n' };
     const typedAny = runOn({
       ...pkg,
@@ -201,12 +201,20 @@ describe('check-store-port.mjs', () => {
       ...pkg,
       'src/store/sqlite/hippo-db.ts': 'export function hippoDbRepos() { return { rows: {} }; }\n',
     });
-    expect([typedAny.status, noMethods.status]).toEqual([1, 1]);
+    const oneBlind = runOn({
+      ...pkg,
+      'src/store/sqlite/hippo-db.ts':
+        'export function hippoDbRepos() { return { rows: null as any, real: { read(id: string) { return id; } } }; }\n',
+    });
+    expect([typedAny.status, noMethods.status, oneBlind.status]).toEqual([1, 1, 1]);
     expect(typedAny.stderr).toBe(
-      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos() returns 0 repositories and no method the checker can read'),
+      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos() returns no repository the checker can read'),
     );
     expect(noMethods.stderr).toBe(
-      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos() returns 1 repositories and no method the checker can read'),
+      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos().rows has no method the checker can read'),
+    );
+    expect(oneBlind.stderr).toBe(
+      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos().rows has no method the checker can read'),
     );
   });
 

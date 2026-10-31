@@ -24,7 +24,9 @@ function tierReaches(root: string, entries: readonly string[]): string[] {
   const ownFile = (f: string): boolean => f.toLowerCase().startsWith(inPackage) && !f.includes('/node_modules/');
   const declaredIn = (symbol: ts.Symbol | undefined, test: (file: string) => boolean): boolean =>
     (symbol?.declarations ?? []).some((d) => test(posix(d.getSourceFile().fileName)));
-  const reaches = (type: ts.Type, seen: Set<ts.Type>): boolean => {
+  // Each instantiation of a generic is a new ts.Type, so members are walked once per declaration; a later instantiation
+  // differs only by its type arguments, which are walked on their own.
+  const reaches = (type: ts.Type, seen: Set<ts.Type | ts.Symbol>): boolean => {
     if (seen.has(type)) return false;
     seen.add(type);
     if ([type.aliasSymbol, type.getSymbol()].some((s) => declaredIn(s, (f) => TIER_DOOR.test(f)))) return true;
@@ -43,7 +45,9 @@ function tierReaches(root: string, entries: readonly string[]): string[] {
         inner.push(...checker.getTypeArguments(object as ts.TypeReference));
       }
       // A type declared outside the package is data whose members the walk does not need.
-      if (declaredIn(type.aliasSymbol ?? type.getSymbol(), ownFile)) {
+      const declaration = type.aliasSymbol ?? type.getSymbol();
+      if (declaration !== undefined && !seen.has(declaration) && declaredIn(declaration, ownFile)) {
+        seen.add(declaration);
         for (const prop of checker.getPropertiesOfType(type)) inner.push(checker.getTypeOfSymbol(prop));
         for (const sig of [...type.getCallSignatures(), ...type.getConstructSignatures()]) {
           inner.push(checker.getReturnTypeOfSignature(sig), ...sig.parameters.map((p) => checker.getTypeOfSymbol(p)));
@@ -145,6 +149,20 @@ describe('published symbols and the local tier', () => {
       'entry.d.ts': [
         "import type { HippoDbTier } from './store/sqlite/hippo-db.js';",
         "import type { Deep } from './node_modules/deep/index.js';",
+        'export declare function numbers(): Deep<number>;',
+        'export declare function tiers(): Deep<HippoDbTier>;',
+      ].join('\n'),
+    };
+    expect(reachesIn(files, ['entry.d.ts'])).toEqual(['entry.d.ts: tiers']);
+  });
+
+  it('walks the members of a self-expanding generic declared in the package once, so it ends and still finds the tier', () => {
+    const files = {
+      'store/sqlite/hippo-db.d.ts': TIER_FIXTURE,
+      'deep.d.ts': 'export interface Deep<T> { readonly value: T; next(): Deep<T[]> }\n',
+      'entry.d.ts': [
+        "import type { HippoDbTier } from './store/sqlite/hippo-db.js';",
+        "import type { Deep } from './deep.js';",
         'export declare function numbers(): Deep<number>;',
         'export declare function tiers(): Deep<HippoDbTier>;',
       ].join('\n'),
