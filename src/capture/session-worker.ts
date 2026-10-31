@@ -5,7 +5,7 @@ import * as path from 'path';
 import { homeDir } from '../util/agent-homes.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../util/log.js';
 import { isObjectLike, isStringValue, type ProgressCursor } from '../core/capture-contract.js';
-import { SESSION_ID_RE } from './copilot-transcript.js';
+import { SESSION_ID_RE } from '../util/session-id.js';
 import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../util/token-text.js';
 import { MINUTE_MS } from '../util/time.js';

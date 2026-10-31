@@ -12,16 +12,18 @@ const title = 'Codex CLI memory across sessions | hippo-memory';
 const description =
   'Codex CLI memory across sessions: hippo adds a block to AGENTS.md and keeps lessons in a local store you can correct, shared with Claude Code and Cursor.';
 
-// The Codex entry of the hook templates in src/cli.ts, up to its closing capture note.
+// The Codex entry of the hook templates in src/hooks/hook-blocks.ts, up to its closing capture note.
 const fence = '```';
 const block = [
   '## Project Memory (Hippo)',
   '',
-  'At the start of every task, run:',
+  "When Hippo's prompt hook is installed, it injects pinned rules and the",
+  'memories that match each prompt, so never load them yourself. If no hippo',
+  'memory block has appeared in this session, run this at the start of a task',
+  'and read the output before writing any code:',
   `${fence}bash`,
   'hippo context --auto --budget 1500',
   fence,
-  'Read the output before writing any code.',
   '',
   'On errors or unexpected behaviour, record it right then, while you work,',
   'never as a closing step:',
@@ -38,9 +40,11 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
     <PageIntro eyebrow="Codex CLI">
       <Fragment slot="title">Codex CLI memory <span class="text-gradient">across sessions</span></Fragment>
       <p>
-        Codex reads <code>AGENTS.md</code> files before it starts work. <code>hippo init</code> adds a short block there
-        telling Codex to run <code>hippo context --auto</code> at the start of every task, so lessons from earlier
-        sessions, and from your other agents, come back when they match the task.
+        Codex reads <code>AGENTS.md</code> files before it starts work. <code>hippo init</code> adds a short block there.
+        The block tells Codex that Hippo's prompt hook injects pinned rules and matching memories. It tells Codex to run
+        <code>hippo context --auto</code> at the start of a task only when no hippo memory block has appeared in the
+        session. Either way, lessons from earlier sessions, and from your other agents, come back when they match the
+        task.
       </p>
     </PageIntro>
 
@@ -73,9 +77,34 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
         checked 2026-09-28).
       </p>
       <p>
+        Codex memories are off by default. Turn them on with <code>memories = true</code> under <code>[features]</code>
+        in <code>config.toml</code>, and use <code>/memories</code> in a session to choose whether that chat uses them
+        (<a class="link" href={codexMemories} target="_blank" rel="noopener noreferrer">OpenAI docs<span class="sr-only"> (opens in new tab)</span></a>,
+        checked 2026-10-25).
+      </p>
+      <p>
+        When they are on, hippo reads them too. <code>hippo init</code>, every <code>hippo sleep</code> and the daily run
+        import the User Profile, preferences and general tips from <code>~/.codex/memories/memory_summary.md</code> into
+        your global store, so your other agents can recall them. Hippo only reads that file and never writes to Codex's
+        folders.
+      </p>
+      <p>
         Hippo is a recall layer too, with two differences. You can mark a lesson wrong with <code>hippo outcome --bad</code>
         or replace one with <code>hippo supersede</code>. And the store sits in your project, with markdown mirrors you can
         commit, shared with Claude Code, Cursor and any MCP client.
+      </p>
+    </Section>
+
+    <Section title="What the Codex wrapper does" alt>
+      <p>
+        After <code>hippo hook install codex</code>, each Codex launch goes through <code>hippo codex-run</code>. It shows
+        the summary of the last session-end run, notes where Codex's <code>history.jsonl</code> ends, and then starts the
+        real Codex.
+      </p>
+      <p>
+        When Codex exits, a background worker takes over. If the folder has its own store, the worker runs
+        <code>hippo sleep</code> on it. Then it finds this session's transcript and captures lessons from it into the
+        folder's store, or into the global store when the folder has none. With no store at all, it does nothing.
       </p>
     </Section>
 

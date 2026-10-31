@@ -67,11 +67,9 @@ export const HOOKS: HookTable = {
     content: `
 ## Project Memory (Hippo)
 
-Pinned rules and recent writes auto-inject at every prompt via the installed
-UserPromptSubmit hook; never re-run that part manually. At the START of a
-task (not per prompt), additionally load task-specific context: git-aware
-recall over the full store that per-prompt injection does not cover. Also
-run it if the hook is not installed:
+The installed UserPromptSubmit hook injects pinned rules and the memories
+that match each prompt, so never load them yourself. If no hippo memory
+block has appeared in this session, run this at the start of a task:
 \`\`\`bash
 hippo context --auto --budget 1500
 \`\`\`
@@ -92,11 +90,13 @@ ends, so there is nothing to run before you finish.
     content: `
 ## Project Memory (Hippo)
 
-At the start of every task, run:
+When Hippo's prompt hook is installed, it injects pinned rules and the
+memories that match each prompt, so never load them yourself. If no hippo
+memory block has appeared in this session, run this at the start of a task
+and read the output before writing any code:
 \`\`\`bash
 hippo context --auto --budget 1500
 \`\`\`
-Read the output before writing any code.
 
 On errors or unexpected behaviour, record it right then, while you work,
 never as a closing step:
@@ -127,6 +127,8 @@ hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 // sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited. Add the old hash
 // when a block changes.
 const SHIPPED_HOOK_HASHES = new Map([
+  ['c80e760208aed70f6094757736b9a2f496ba5c30d88bc2a7ae3e128b403dcc6b', 'claude-code'],
+  ['f1e5815a4b7205c43e2db792215df1943e7853635a1e0f4561b150a41b756451', 'codex'],
   ['c04e48f2896a4fee9ae98f8f832e2d26a3910269df3beb5bcd6baee3cd9db68e', 'claude-code'],
   ['e6b12bd8983c032e5ca8e95a97aeff4178a5a05026d10acad5b2e1b25d5656dd', 'claude-code'],
   ['4c64e11d3e5be68fa547c9248d7553feb645a02f7cf13ba02f7275e1854baf44', 'claude-code'],
