@@ -299,6 +299,9 @@ describe('the instruction block', () => {
     const claude = inner(read('CLAUDE.md'));
     expect(claude).toContain('hippo context --auto --budget 1500');
     expect(hippoCommands(claude)).toEqual(['hippo context --auto --budget 1500']);
+    // Plain prose too: "hippo memory" is the noun in "no hippo memory block", so it is skipped; toEqual names any other command.
+    const proseCommands = [...claude.matchAll(/\bhippo\s+(?!memory\b)[a-z][\w-]*/g)].map((m) => m[0].replace(/\s+/g, ' '));
+    expect([...new Set(proseCommands)]).toEqual(['hippo context']);
     expect(claude).not.toContain('hippo remember "<lesson>"');
     expect(claude).not.toContain(REMEMBER_LINE);
     expect(claude).not.toContain('hippo outcome');
@@ -429,6 +432,13 @@ describe('hippo init on a file that already has a hippo block', () => {
     expect(init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
     expect(inner(read('CLAUDE.md'))).toBe(HOOKS['claude-code'].content);
     expect(init()).not.toMatch(/Refreshed|Left the edited/);
+  });
+
+  it('leaves the 2.2.0 Claude Code block alone once a line is added to it', () => {
+    const edited = `# Rules\n\n${START}\n${CLAUDE_CURRENT}\nAlso run the linter.\n${END}\n`;
+    write('CLAUDE.md', edited);
+    expect(init()).toMatch(/Left the edited/);
+    expect(read('CLAUDE.md')).toBe(edited);
   });
 
   it('changes nothing on a second run', () => {

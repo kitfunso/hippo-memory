@@ -826,7 +826,7 @@ hippo hook install opencode      # patches AGENTS.md + installs the opencode TS 
 
 This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the agent to:
 1. Run `hippo context --auto --budget 1500` at the start of a task. In Claude Code and Codex, whose prompt hook already injects pinned rules and matching memories, only if no hippo memory block has appeared in the session
-2. Everywhere but Claude Code, whose hooks store failed tool calls: run `hippo remember "<what went wrong and why>" --error` the moment it finds out why something failed, never as a closing step
+2. Everywhere but Claude Code, whose hooks store failed tool calls: run `hippo remember "<description of what went wrong>" --error` the moment it finds out why something failed, never as a closing step
 3. Everywhere but Claude Code, whose own auto memory does this job: run a plain `hippo remember` the moment it learns something that should outlive the session, leaving out secrets and personal details
 4. Capture a short summary with `hippo capture --stdin` when the session ends, but only where no hook captures the session: Cursor, OpenClaw, OpenCode, Pi, and Codex without its wrapper
 
