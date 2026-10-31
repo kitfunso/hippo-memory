@@ -9,7 +9,7 @@ import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js'
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
-import { computeAmbientState } from '../../src/base/memory/ambient.js';
+import { computeAmbientStateAt } from '../../src/base/memory/ambient.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -86,7 +86,7 @@ describe('sleep after consolidation', () => {
     );
     expect(contentsByTenant(root)).toEqual({ default: keptDefault, acme: kept });
     expect(result.ambient).toEqual(
-      computeAmbientState(
+      computeAmbientStateAt(
         loadEveryTenantEntries(root).filter((e) => !e.supersededBy),
         evalNow(),
         PRODUCTION_STRENGTH,

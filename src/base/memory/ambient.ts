@@ -5,7 +5,7 @@
 
 import type { MemoryEntry } from './entry.js';
 import { Layer } from './entry.js';
-import { calculateStrength, type StrengthModel } from './strength.js';
+import { calculateStrengthAt, type StrengthModel } from './strength.js';
 import { ERROR_TAG, HIGH_SCHEMA_FIT } from './entry.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -93,7 +93,7 @@ export function isErrorTagged(tags: readonly string[]): boolean {
 
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have
  * here. */
-export function tallyAmbientEntries(
+export function tallyAmbientEntriesAt(
   entries: readonly MemoryEntry[],
   now: Date,
   model: StrengthModel,
@@ -129,7 +129,7 @@ export function foldAmbientRows(
   for (const entry of entries) {
     if (entry.supersededBy) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
-    t.strengthSum += calculateStrength(entry, currentTime, model);
+    t.strengthSum += calculateStrengthAt(entry, currentTime, model);
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
     if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') {
       t.negative++;
@@ -144,12 +144,12 @@ export function foldAmbientRows(
   }
 }
 
-export function computeAmbientState(
+export function computeAmbientStateAt(
   entries: MemoryEntry[],
   now: Date,
   model: StrengthModel,
 ): AmbientState {
-  return ambientStateFromTallies(tallyAmbientEntries(entries, now, model));
+  return ambientStateFromTallies(tallyAmbientEntriesAt(entries, now, model));
 }
 
 /** The ambient state of a row set from its tallies, however they were counted. */

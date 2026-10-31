@@ -1,6 +1,6 @@
 import { MemoryEntry, EXTRACTED_TAG, Layer } from '../../base/memory/entry.js';
 import {
-  calculateStrength,
+  calculateStrengthAt,
   type DecayBasis,
   type StrengthModel,
 } from '../../base/memory/strength.js';
@@ -57,7 +57,7 @@ export async function detectConflicts(
       // An unreviewed quarantined row must not taint a visible memory as conflicted.
       !isQuarantineScope(entry.scope ?? null) &&
       (rescuedIds.has(entry.id) ||
-        calculateStrength(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
+        calculateStrengthAt(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
     if (!live) continue;
     const places = byTenant.get(entry.tenantId);
     if (places) places.push(ids.length);

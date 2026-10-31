@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry, type EmotionalValence } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { computeAmbientState, renderAmbientSummary, formatAmbientVector } from '../../src/base/memory/ambient.js';
+import { computeAmbientStateAt, renderAmbientSummary, formatAmbientVector } from '../../src/base/memory/ambient.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -33,7 +33,7 @@ function mem(
 
 describe('computeAmbientState', () => {
   it('returns zeroed state for empty entries', () => {
-    const state = computeAmbientState([], evalNow(), PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt([], evalNow(), PRODUCTION_STRENGTH);
     expect(state.totalMemories).toBe(0);
     expect(state.tagEntropy).toBe(0);
     expect(state.avgStrength).toBe(0);
@@ -45,7 +45,7 @@ describe('computeAmbientState', () => {
       mem('Memory B', { tags: ['b'] }),
       mem('Memory C', { tags: ['c'] }),
     ];
-    const state = computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt(entries, evalNow(), PRODUCTION_STRENGTH);
     expect(state.totalMemories).toBe(3);
   });
 
@@ -60,8 +60,8 @@ describe('computeAmbientState', () => {
       mem('Beta memory content', { tags: ['x'] }),
       mem('Gamma memory content', { tags: ['x'] }),
     ];
-    const uniformState = computeAmbientState(uniform, evalNow(), PRODUCTION_STRENGTH);
-    const concentratedState = computeAmbientState(concentrated, evalNow(), PRODUCTION_STRENGTH);
+    const uniformState = computeAmbientStateAt(uniform, evalNow(), PRODUCTION_STRENGTH);
+    const concentratedState = computeAmbientStateAt(concentrated, evalNow(), PRODUCTION_STRENGTH);
     expect(uniformState.tagEntropy).toBeGreaterThan(concentratedState.tagEntropy);
   });
 
@@ -71,7 +71,7 @@ describe('computeAmbientState', () => {
       mem('Fresh 1', { created: new Date(now.getTime() - 86400000).toISOString() }),
       mem('Fresh 2', { created: new Date(now.getTime() - 2 * 86400000).toISOString() }),
     ];
-    const state = computeAmbientState(recent, now, PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt(recent, now, PRODUCTION_STRENGTH);
     expect(state.recencyFreshness).toBeGreaterThan(0.5);
   });
 
@@ -81,7 +81,7 @@ describe('computeAmbientState', () => {
       mem('Error 2', { emotionalValence: 'critical' }),
       mem('OK thing', { emotionalValence: 'neutral' }),
     ];
-    const state = computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt(entries, evalNow(), PRODUCTION_STRENGTH);
     // Critical counts as negative, so two of three rows: (2 / 3) * 2 - 0.5.
     expect(state.emotionalSkew).toBeCloseTo(5 / 6, 10);
   });
@@ -92,13 +92,13 @@ describe('computeAmbientState', () => {
       mem('Semantic fact 2', { layer: Layer.Semantic }),
       mem('Episodic event', { layer: Layer.Episodic }),
     ];
-    const state = computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt(entries, evalNow(), PRODUCTION_STRENGTH);
     expect(state.consolidationRatio).toBeCloseTo(2 / 3, 1);
   });
 
   it('computes dagDepth from max dag_level', () => {
     const entries = [mem('Root', { dagLevel: 0 }), mem('Mid', { dagLevel: 1 }), mem('Deep', { dagLevel: 3 })];
-    const state = computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt(entries, evalNow(), PRODUCTION_STRENGTH);
     expect(state.dagDepth).toBe(3);
   });
 
@@ -107,7 +107,7 @@ describe('computeAmbientState', () => {
       mem('Episodic source', { layer: Layer.Episodic }),
       mem('Extracted fact', { layer: Layer.Episodic, extractedFrom: 'some-id' }),
     ];
-    const state = computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt(entries, evalNow(), PRODUCTION_STRENGTH);
     expect(state.extractionCoverage).toBe(0.5);
   });
 
@@ -120,14 +120,14 @@ describe('computeAmbientState', () => {
         return e;
       })(),
     ];
-    const state = computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt(entries, evalNow(), PRODUCTION_STRENGTH);
     expect(state.totalMemories).toBe(2);
   });
 });
 
 describe('renderAmbientSummary', () => {
   it('returns empty message for zero memories', () => {
-    const state = computeAmbientState([], evalNow(), PRODUCTION_STRENGTH);
+    const state = computeAmbientStateAt([], evalNow(), PRODUCTION_STRENGTH);
     expect(renderAmbientSummary(state)).toContain('empty store');
   });
 
@@ -137,7 +137,7 @@ describe('renderAmbientSummary', () => {
       mem('Fact B', { tags: ['error'], layer: Layer.Episodic, emotionalValence: 'negative' }),
       mem('Fact C', { tags: ['topic:deploy'], layer: Layer.Episodic }),
     ];
-    const summary = renderAmbientSummary(computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH));
+    const summary = renderAmbientSummary(computeAmbientStateAt(entries, evalNow(), PRODUCTION_STRENGTH));
     expect(summary).toContain('Memory state:');
     expect(summary).toContain('3 memories');
   });
@@ -146,7 +146,7 @@ describe('renderAmbientSummary', () => {
 describe('formatAmbientVector', () => {
   it('renders all 11 dimensions', () => {
     const entries = [mem('Test', { tags: ['a'] })];
-    const output = formatAmbientVector(computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH));
+    const output = formatAmbientVector(computeAmbientStateAt(entries, evalNow(), PRODUCTION_STRENGTH));
     expect(output).toContain('tag_entropy');
     expect(output).toContain('avg_strength');
     expect(output).toContain('total_memories');

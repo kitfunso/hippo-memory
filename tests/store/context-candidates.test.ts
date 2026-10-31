@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { calculateStrength } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { calculateStrength as strengthUnder } from '../../src/base/memory/strength.js';
+import { calculateStrengthAt as strengthUnder } from '../../src/base/memory/strength.js';
 import { evalSwitches } from '../../src/infra/eval-switches.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';

@@ -10,7 +10,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { contextGet, adminActor } from '../../src/api/index.js';
 import {
   renderAmbientSummary,
-  tallyAmbientEntries,
+  tallyAmbientEntriesAt,
   ambientStateFromTallies,
   foldAmbientRows,
 } from '../../src/base/memory/ambient.js';
@@ -138,7 +138,7 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     const sql = await asCommand((cli) =>
       cli.store(store).contextReads.ambientTallies('default', { currentProject: [], now: NOW }),
     );
-    const js = tallyAmbientEntries([], NOW, evalSwitches().strength);
+    const js = tallyAmbientEntriesAt([], NOW, evalSwitches().strength);
     const live = loadAllEntries(store, 'default').filter((e) => !e.supersededBy);
     foldAmbientRows(js, live, NOW, withLossAversion(evalSwitches().strength, envRuntimeSettings().lossAversionRatio));
 

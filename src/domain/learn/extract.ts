@@ -3,7 +3,7 @@ import {
   EXTRACTED_TAG,
   Layer,
   EmotionalValence,
-  createMemory,
+  createMemoryAt,
 } from '../../base/memory/entry.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
@@ -179,7 +179,7 @@ function buildExtractedEntry(
 ): MemoryEntry {
   const tags = [EXTRACTED_TAG, ...inheritedTags, ...fact.tags];
   return {
-    ...createMemory(
+    ...createMemoryAt(
       fact.content,
       {
         layer: Layer.Semantic,

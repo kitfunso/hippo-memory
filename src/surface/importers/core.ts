@@ -2,7 +2,7 @@
  *  Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown. */
 
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
-import { createMemory, Layer, MemoryEntry } from '../../base/memory/entry.js';
+import { createMemoryAt, Layer, MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { getGlobalRoot } from '../../host/global-store.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
@@ -212,7 +212,7 @@ function createImportEntry({
   // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a
   // system of record (see MEMORY_ENVELOPE.md). The write must use the same tenant as the scoped
   // dedup read above: global=true writes host-wide, global=false writes to options.tenantId.
-  return createMemory(
+  return createMemoryAt(
     chunk,
     {
       layer: Layer.Episodic,

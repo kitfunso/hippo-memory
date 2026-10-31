@@ -312,7 +312,7 @@ async function loadSuccessorValidFrom(
  * local AND global stores, each placed after its seed. Returns `baseResults` unchanged when `hops
  * <= 0`, there are no base results, or nothing new survives the filters and the token budget.
  */
-export async function graphExpandRecall(
+export async function expandOnGraphs(
   baseResults: SearchResult[],
   opts: GraphExpandOptions,
 ): Promise<SearchResult[]> {

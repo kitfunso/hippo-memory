@@ -9,7 +9,7 @@ import {
   folderEmbedTarget,
   type EmbedOutcome,
 } from '../../domain/search/embed-memories.js';
-import { captureError, type FailedCommand } from '../../domain/learn/autolearn.js';
+import { captureErrorAt, type FailedCommand } from '../../domain/learn/autolearn.js';
 import { extractFacts, storeExtractedFacts } from '../../domain/learn/extract.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withDetached } from '../detached.js';
@@ -184,7 +184,7 @@ export async function rememberFailedCommand(
   ctx: HippoDbContext,
   failed: FailedCommand,
 ): Promise<LocalRememberOutcome> {
-  const { content, tags, layer, source, confidence } = captureError(
+  const { content, tags, layer, source, confidence } = captureErrorAt(
     failed,
     ctx.tenantId,
     ctx.infra.clock(),

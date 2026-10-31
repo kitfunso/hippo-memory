@@ -3,7 +3,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
-import { computeAmbientState } from '../../src/base/memory/ambient.js';
+import { computeAmbientStateAt } from '../../src/base/memory/ambient.js';
 import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -56,7 +56,7 @@ describe('sleep after consolidation', () => {
     const after = loadAllEntries(root, 'default');
     expect(after.some((e) => e.id === junk.id)).toBe(false);
     expect(result.ambient).toEqual(
-      computeAmbientState(
+      computeAmbientStateAt(
         after.filter((e) => !e.supersededBy),
         evalNow(),
         PRODUCTION_STRENGTH,

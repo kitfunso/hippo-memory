@@ -2,13 +2,7 @@
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../../base/records/connectors.js';
-import {
-  eventMemory,
-  eventRecord,
-  eventSeen,
-  markEventSeen,
-  type EventLogSpec,
-} from './event-log.js';
+import { eventMemory, keyRecord, eventSeen, markKeySeen, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type {
   TenantRoute,
@@ -41,7 +35,7 @@ export function githubEventMemory(db: DatabaseSyncLike, idempotencyKey: string):
 /** False when the key was already logged, so a caller inside a write scope can roll its own row
  * back. */
 export function markGitHubEventSeen(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
-  return markEventSeen(db, {
+  return markKeySeen(db, {
     log: GITHUB_LOG,
     key: entry.idempotencyKey,
     extra: [
@@ -56,7 +50,7 @@ export function githubEventRecord(
   db: DatabaseSyncLike,
   idempotencyKey: string,
 ): ConnectorEventRecord {
-  return eventRecord(db, GITHUB_LOG, idempotencyKey);
+  return keyRecord(db, GITHUB_LOG, idempotencyKey);
 }
 
 export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [

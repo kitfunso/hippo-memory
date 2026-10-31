@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { contextGet } from '../../src/api/index.js';
-import { computeAmbientState, renderAmbientSummary } from '../../src/base/memory/ambient.js';
+import { computeAmbientStateAt, renderAmbientSummary } from '../../src/base/memory/ambient.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
@@ -101,7 +101,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
 
     expect(result.ambientState?.totalMemories).toBe(1);
 
-    const expectedState = computeAmbientState([admitted], evalNow(), PRODUCTION_STRENGTH);
+    const expectedState = computeAmbientStateAt([admitted], evalNow(), PRODUCTION_STRENGTH);
     expect(result.ambientState).toEqual(expectedState);
     expect(renderAmbientSummary(result.ambientState!)).toBe(renderAmbientSummary(expectedState));
   });
@@ -137,10 +137,10 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     expect(result.ambientState?.totalMemories).toBe(1);
 
     // What the pre-fix code computed: the admitted entry BEFORE markRetrieved ran.
-    const preRetrievalState = computeAmbientState([aged], new Date(FAKE_NOW), PRODUCTION_STRENGTH);
+    const preRetrievalState = computeAmbientStateAt([aged], new Date(FAKE_NOW), PRODUCTION_STRENGTH);
     // What the post-fix code should compute: overlaid with the returned,
     // now-strengthened entry.
-    const postRetrievalState = computeAmbientState(
+    const postRetrievalState = computeAmbientStateAt(
       result.entries.map((e) => e.entry),
       evalNow(),
       PRODUCTION_STRENGTH,

@@ -10,7 +10,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
   PRODUCTION_STRENGTH,
   type StrengthModel,
-  calculateStrength,
+  calculateStrengthAt,
 } from '../../base/memory/strength.js';
 import {
   compareEntryIdentity,
@@ -67,7 +67,7 @@ function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel):
     ageDays,
     halfLifeDays: entry.halfLifeDays,
     // clock-basis, never the production decay basis — see doc comment above
-    strength: calculateStrength(entry, now, rules),
+    strength: calculateStrengthAt(entry, now, rules),
     retrievalCount: entry.retrievalCount,
     outcomePositive: pos,
     outcomeNegative: neg,

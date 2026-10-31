@@ -1,5 +1,5 @@
 import { MemoryEntry } from '../../base/memory/entry.js';
-import { calculateStrength, type DecayBasis } from '../../base/memory/strength.js';
+import { calculateStrengthAt, type DecayBasis } from '../../base/memory/strength.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { chunked } from '../../base/util/chunked.js';
 import {
@@ -81,7 +81,7 @@ function keepSurvivor(
 /** Notes the row's DAG parent for the flush's family units, then returns its live strength. */
 function liveStrength(run: SleepRun, entry: MemoryEntry): number {
   if (entry.dagParentId) run.parentOf.set(entry.id, entry.dagParentId);
-  return calculateStrength(entry, run.now, run.strength, run.decayOpts);
+  return calculateStrengthAt(entry, run.now, run.strength, run.decayOpts);
 }
 
 // Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero

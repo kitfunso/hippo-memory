@@ -2,7 +2,7 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { createMemory, MemoryEntry } from '../../base/memory/entry.js';
+import { createMemoryAt, MemoryEntry } from '../../base/memory/entry.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
 import {
   coreEnrichment,
@@ -308,7 +308,7 @@ async function writeChangedNote({
   // remember() owns the write; the `echo` from createMemory only fills the ImportResult, with its
   // id reconciled to the row that landed.
   const content = vetSecrets(body).content;
-  const echo = createMemory(
+  const echo = createMemoryAt(
     content,
     {
       kind: 'raw',

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execSync, execFileSync } from 'node:child_process';
-import { captureError, extractLessons, partitionLessons, fetchGitLog } from '../../src/domain/learn/autolearn.js';
+import { captureErrorAt, extractLessons, partitionLessons, fetchGitLog } from '../../src/domain/learn/autolearn.js';
 import { isGitRepo } from '../../src/base/ports/git.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -24,7 +24,7 @@ import { mcpContext } from '../_helpers/mcp-context.js';
 
 describe('captureError', () => {
   it('creates a memory entry with error tags', () => {
-    const entry = captureError(
+    const entry = captureErrorAt(
       { command: 'npm test', exitCode: 1, stderr: 'TypeError: Cannot read property x' },
       undefined,
       evalNow(),
@@ -37,31 +37,37 @@ describe('captureError', () => {
 
   it('truncates stderr to 500 chars', () => {
     const longStderr = 'x'.repeat(600);
-    const entry = captureError({ command: 'cmd', exitCode: 2, stderr: longStderr }, undefined, evalNow());
+    const entry = captureErrorAt({ command: 'cmd', exitCode: 2, stderr: longStderr }, undefined, evalNow());
     expect(entry.content.length).toBeLessThan(700);
     expect(entry.content).toContain('truncated');
   });
 
   it('includes exit code in content', () => {
-    const entry = captureError({ command: 'badcmd', exitCode: 127, stderr: 'command not found' }, undefined, evalNow());
+    const entry = captureErrorAt(
+      { command: 'badcmd', exitCode: 127, stderr: 'command not found' },
+      undefined,
+      evalNow(),
+    );
     expect(entry.content).toContain('exit 127');
   });
 
   it('sets emotional_valence to negative', () => {
-    const entry = captureError({ command: 'cmd', exitCode: 1, stderr: 'err' }, undefined, evalNow());
+    const entry = captureErrorAt({ command: 'cmd', exitCode: 1, stderr: 'err' }, undefined, evalNow());
     expect(entry.emotionalValence).toBe('negative');
   });
 
   it('writes into the tenant it is given, else default', () => {
-    expect(captureError({ command: 'cmd', exitCode: 1, stderr: 'err' }, 'tenant_b', evalNow()).tenantId).toBe(
+    expect(captureErrorAt({ command: 'cmd', exitCode: 1, stderr: 'err' }, 'tenant_b', evalNow()).tenantId).toBe(
       'tenant_b',
     );
-    expect(captureError({ command: 'cmd', exitCode: 1, stderr: 'err' }, undefined, evalNow()).tenantId).toBe('default');
+    expect(captureErrorAt({ command: 'cmd', exitCode: 1, stderr: 'err' }, undefined, evalNow()).tenantId).toBe(
+      'default',
+    );
   });
 
   it('short stderr passes through unchanged', () => {
     const stderr = 'short error';
-    const entry = captureError({ command: 'cmd', exitCode: 1, stderr }, undefined, evalNow());
+    const entry = captureErrorAt({ command: 'cmd', exitCode: 1, stderr }, undefined, evalNow());
     expect(entry.content).toContain('short error');
     expect(entry.content).not.toContain('truncated');
   });

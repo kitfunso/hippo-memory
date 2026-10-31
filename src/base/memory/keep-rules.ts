@@ -1,7 +1,7 @@
 // Which memories sleep may never delete, and how an outcome mark changes an entry.
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './entry.js';
-import { calculateStrength, type StrengthModel } from './strength.js';
+import { calculateStrengthAt, type StrengthModel } from './strength.js';
 
 /** An imported agent memory is kept for good: the agent's note file is its record. It needs its
  * tool's tag and a source with that tool's prefix, since merge copies source tags onto rows
@@ -29,9 +29,9 @@ export function canAutoDelete(
   return !entry.pinned && entry.kind !== 'raw' && !isKeptForGood(entry);
 }
 
-/** Counts the outcome and scores the entry at `now`; calculateStrength turns the counts into a
+/** Counts the outcome and scores the entry at `now`; calculateStrengthAt turns the counts into a
  * reward factor on the half-life, so there is no fixed delta here. */
-export function applyOutcome(
+export function applyOutcomeAt(
   entry: MemoryEntry,
   good: boolean,
   now: Date,
@@ -43,19 +43,19 @@ export function applyOutcome(
     outcomePositive: (entry.outcomePositive ?? 0) + (good ? 1 : 0),
     outcomeNegative: (entry.outcomeNegative ?? 0) + (good ? 0 : 1),
   };
-  updated.strength = calculateStrength(updated, now, model);
+  updated.strength = calculateStrengthAt(updated, now, model);
   return updated;
 }
 
-/** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its
+/** applyOutcomeAt as a served outcome applies it: a good outcome reconfirms the entry, so its
  * churn-stale tag goes. */
-export function entryAfterOutcome(
+export function entryAfterOutcomeAt(
   entry: MemoryEntry,
   good: boolean,
   now: Date,
   model: StrengthModel,
 ): MemoryEntry {
-  const updated = applyOutcome(entry, good, now, model);
+  const updated = applyOutcomeAt(entry, good, now, model);
   if (!good || !updated.tags.includes(CHURN_STALE_TAG)) return updated;
   return { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
 }

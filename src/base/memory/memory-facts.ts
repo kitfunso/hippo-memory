@@ -1,8 +1,8 @@
 // What the dashboard reads off one memory at an instant. The store's dashboard SQL calls these same
 // functions, so a count, a sort and a listed row never judge one memory two ways.
 import {
-  calculateStrength,
-  confidenceFacets,
+  calculateStrengthAt,
+  confidenceFacetsAt,
   netWrong,
   type ConfidenceInputs,
   type StrengthInputs,
@@ -73,11 +73,11 @@ function bandOf(pinned: boolean, strength: number, strength30d: number): number 
 
 /** The band of `entry` at `nowMs`, as memoryFacts judges it. */
 export function bandAt(entry: StrengthInputs, nowMs: number, model: StrengthModel): number {
-  const strength = calculateStrength(entry, new Date(nowMs), model);
+  const strength = calculateStrengthAt(entry, new Date(nowMs), model);
   return bandOf(
     entry.pinned,
     strength,
-    calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model),
+    calculateStrengthAt(entry, new Date(nowMs + AHEAD_30D_MS), model),
   );
 }
 
@@ -119,10 +119,10 @@ export function memoryFacts(
   model: StrengthModel,
 ): MemoryFacts {
   const now = new Date(nowMs);
-  const strength = calculateStrength(entry, now, model);
-  const strength7d = calculateStrength(entry, new Date(nowMs + AHEAD_7D_MS), model);
-  const strength30d = calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model);
-  const facets = confidenceFacets(entry, now);
+  const strength = calculateStrengthAt(entry, now, model);
+  const strength7d = calculateStrengthAt(entry, new Date(nowMs + AHEAD_7D_MS), model);
+  const strength30d = calculateStrengthAt(entry, new Date(nowMs + AHEAD_30D_MS), model);
+  const facets = confidenceFacetsAt(entry, now);
   return {
     strength,
     strength7d,

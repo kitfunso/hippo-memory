@@ -2,8 +2,8 @@
 // cannot drift.
 import { MINUTE_MS } from '../../base/util/time.js';
 import {
-  calculateStrength,
-  confidenceFacets,
+  calculateStrengthAt,
+  confidenceFacetsAt,
   confidenceLabel,
   PRODUCTION_STRENGTH,
   type StrengthModel,
@@ -152,7 +152,7 @@ export function contextLine({
   if (framing === 'observe') {
     const dateStr = new Date(e.created).toISOString().slice(0, DATE_PREFIX_CHARS);
     // Verified rules print without the date prefix.
-    if (confidenceFacets(e, now).tier === 'verified') {
+    if (confidenceFacetsAt(e, now).tier === 'verified') {
       return `- **${confTag} ${globalPrefix}${content}**${tagStr}${strengthStr}`;
     }
     return `- **${confTag} Previously observed (${dateStr}): ${globalPrefix}${content}**${tagStr}${strengthStr}`;
@@ -181,7 +181,7 @@ export function contextBlockLines(
         framing,
         showStrength,
         now,
-        strengthPct: Math.round(calculateStrength(item.entry, now, strength) * 100),
+        strengthPct: Math.round(calculateStrengthAt(item.entry, now, strength) * 100),
       }),
     ),
   ];

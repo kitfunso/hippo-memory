@@ -1,7 +1,7 @@
 // How a dormant memory comes back: the api states the scoring as data and the store applies this
 // rule inside its write.
-import { calculateStrength, type StrengthModel } from './strength.js';
-import { createMemory, type MemoryEntry } from './entry.js';
+import { calculateStrengthAt, type StrengthModel } from './strength.js';
+import { createMemoryAt, type MemoryEntry } from './entry.js';
 
 /** A revived row's scoring: a fresh half-life of `halfLifeDays` days, and its strength under
  * `strength`. */
@@ -17,13 +17,13 @@ export function reviveDormant(
   now: Date,
   revival: DormantRevival,
 ): MemoryEntry {
-  // createMemory fills fields a snapshot predates; its placeholder only meets the minimum length,
+  // createMemoryAt fills fields a snapshot predates; its placeholder only meets the minimum length,
   // so a short row restores.
   const revived: MemoryEntry = {
-    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: revival.halfLifeDays }, now),
+    ...createMemoryAt('dormant snapshot defaults', { baseHalfLifeDays: revival.halfLifeDays }, now),
     ...dormant.entry,
     lastRetrieved: now.toISOString(),
   };
   if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
-  return { ...revived, strength: calculateStrength(revived, now, revival.strength) };
+  return { ...revived, strength: calculateStrengthAt(revived, now, revival.strength) };
 }

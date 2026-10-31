@@ -1,8 +1,8 @@
 // hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run,
 // and the shared entry write path. A name ending InTx writes inside the caller's transaction;
 // one ending InOwnTx opens a write scope of its own on the caller's handle.
-import { type MemoryEntry, markRetrieved } from '../../../base/memory/entry.js';
-import { entryAfterOutcome } from '../../../base/memory/keep-rules.js';
+import { type MemoryEntry, markRetrievedAt } from '../../../base/memory/entry.js';
+import { entryAfterOutcomeAt } from '../../../base/memory/keep-rules.js';
 import {
   changedRows,
   closeHippoDb,
@@ -327,7 +327,7 @@ export function strengthenRetrievedInTx(
   if (strengthensNothing(ids, opts)) return found;
   const byId = readEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
-  const updated = markRetrieved(live, rules.clock(), rules.strength);
+  const updated = markRetrievedAt(live, rules.clock(), rules.strength);
   if (updated.length === 0) return found;
   const rows = updated.map((e) => [
     e.id,
@@ -619,7 +619,7 @@ function applyOutcomeInOwnTx(
     for (const id of outcome.ids) {
       const entry = latest.get(id) ?? read.get(id);
       if (!entry || !readerReaches(targetReader(outcome), entry.scope)) continue;
-      const updated = entryAfterOutcome(entry, outcome.good, rules.clock(), rules.strength);
+      const updated = entryAfterOutcomeAt(entry, outcome.good, rules.clock(), rules.strength);
       latest.set(id, updated);
       applied.push(updated);
     }

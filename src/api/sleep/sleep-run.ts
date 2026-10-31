@@ -9,7 +9,7 @@ import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import {
   ambientStateFromTallies,
   foldAmbientRows,
-  tallyAmbientEntries,
+  tallyAmbientEntriesAt,
   type AmbientState,
 } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
@@ -319,7 +319,7 @@ async function summarizeAmbient(
   // One running tally at one `now`, so the float sums match one whole read row for row.
   const now = ctx.infra.clock();
   const rules = strengthOf(ctx);
-  const tallies = tallyAmbientEntries([], now, rules);
+  const tallies = tallyAmbientEntriesAt([], now, rules);
   for await (const page of pages()) {
     foldAmbientRows(
       tallies,

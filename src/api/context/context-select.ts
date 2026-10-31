@@ -1,5 +1,5 @@
 // contextGet's selection stages: the pinned-only branch and the strongest-first branch.
-import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
+import { calculateStrengthAt, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
 import { DEFAULT_LOCAL_BUMP } from '../../base/rank/search-types.js';
@@ -33,7 +33,7 @@ export function oneCopyPerMemory(
   strength: StrengthModel,
 ): [MemoryEntry[], MemoryEntry[]] {
   const score = (e: MemoryEntry, isGlobal: boolean): number =>
-    calculateStrength(e, now, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1);
+    calculateStrengthAt(e, now, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1);
   const best = new Map<string, { entry: MemoryEntry; isGlobal: boolean }>();
   const offer = (entry: MemoryEntry, isGlobal: boolean): void => {
     const held = best.get(entry.content);
@@ -145,7 +145,9 @@ function rankPinned(
       return {
         entry,
         score:
-          calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1) * scopeBoost,
+          calculateStrengthAt(entry, nowP, strength) *
+          (isGlobal ? GLOBAL_DISCOUNT : 1) *
+          scopeBoost,
         tokens: plan.price(entry, isGlobal),
         isGlobal,
       };
@@ -285,7 +287,7 @@ function backfillRecent(plan: ContextPlan, options: BackfillRecentOptions): void
   const recent = newestWorthSurfacing(candidates, plan.includeRecent).map(
     ({ entry, isGlobal }) => ({
       entry,
-      score: calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1),
+      score: calculateStrengthAt(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1),
       tokens: plan.price(entry, isGlobal),
       isGlobal,
     }),
@@ -308,14 +310,14 @@ export function selectStrongest(
   );
   const localRanked = localPool.map((e) => ({
     entry: e,
-    score: calculateStrength(e, now, strength),
+    score: calculateStrengthAt(e, now, strength),
     tokens: plan.price(e, plan.primaryIsGlobal),
     isGlobal: plan.primaryIsGlobal,
   }));
 
   const globalRanked = globalPool.map((e) => ({
     entry: e,
-    score: calculateStrength(e, now, strength) * GLOBAL_DISCOUNT,
+    score: calculateStrengthAt(e, now, strength) * GLOBAL_DISCOUNT,
     tokens: plan.price(e, true),
     isGlobal: true,
   }));

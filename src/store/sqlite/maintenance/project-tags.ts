@@ -8,7 +8,7 @@ import {
   type DatabaseSyncLike,
 } from '../../../db/index.js';
 import { withBackup } from '../../../db/backup.js';
-import { calculateStrength } from '../../../base/memory/strength.js';
+import { calculateStrengthAt } from '../../../base/memory/strength.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import {
   AGENT_MEMORY_SOURCE_PREFIX,
@@ -215,7 +215,7 @@ interface RetireOptions {
 function retire(db: DatabaseSyncLike, { files, row, actor, now }: RetireOptions): void {
   insertDormantRow(db, {
     entry: row,
-    strength: calculateStrength(row, now, files.strength),
+    strength: calculateStrengthAt(row, now, files.strength),
     reason: 'project-repair',
     dormantAt: now.toISOString(),
   });

@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { createMemoryAt, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -388,7 +388,7 @@ function captureEntry(
   // 'default'. A rule the person stated is pinned, so it injects even when a later prompt shares
   // none of its words. SHORTCUT: every stated rule pins; cap or age these pins if a store's pins
   // outgrow the hook budget.
-  const created = createMemory(
+  const created = createMemoryAt(
     item.content,
     {
       layer: Layer.Episodic,

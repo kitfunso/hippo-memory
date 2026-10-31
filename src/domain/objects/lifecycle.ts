@@ -5,7 +5,7 @@
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { createMemoryAt, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import {
   isObjectRefusal,
   type ObjectByKind,
@@ -128,7 +128,7 @@ export function objectMirror({
   text,
   now,
 }: ObjectMirrorOptions): MemoryEntry {
-  return createMemory(
+  return createMemoryAt(
     text.content,
     {
       tags: [source, ...text.tags],

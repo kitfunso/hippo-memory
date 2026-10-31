@@ -1,6 +1,6 @@
 /** The hand-written memories the corpus in eval-suite-corpus.ts is built from. */
 
-import { createMemory, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { createMemoryAt, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { DAY_MS } from '../../base/util/time.js';
 
 const BASE_DATE = new Date('2026-01-15T10:00:00Z');
@@ -23,7 +23,7 @@ export function mem(
     dagParentId?: string;
   } = {},
 ): MemoryEntry {
-  const entry = createMemory(
+  const entry = createMemoryAt(
     content,
     {
       layer: opts.layer ?? Layer.Episodic,

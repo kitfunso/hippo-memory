@@ -1,4 +1,4 @@
-import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
+import { calculateStrengthAt, type StrengthModel } from '../../base/memory/strength.js';
 import {
   CHURN_STALE_TAG,
   DAG_LEVEL,
@@ -64,7 +64,7 @@ export function outcomeNudge(
 
 /** Retrieval-time outcome nudge within [OUTCOME_NUDGE_MIN, OUTCOME_NUDGE_MAX]; the bm25-outcome
  * eval baseline ranks with it too. */
-export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number {
+export function outcomeBoostFor(entry: MemoryEntry, ablated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   if (ablated || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
@@ -135,7 +135,7 @@ export function strengthRecencyMultipliers(
 ) {
   return {
     strength:
-      STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
+      STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrengthAt(entry, ctx.now, ctx.strength),
     recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, ctx.now, ctx.ablation),
   };
 }
@@ -195,7 +195,7 @@ export function applyRankBoosts(
   const decisionBoost = entry.tags.includes('decision') ? DECISION_TAG_BOOST : 1.0;
   const churnStaleMultiplier = churnStaleFactor(entry);
   const pathBoost = pathBoostMultiplier(entry.tags, ctx.pathTags);
-  const outcomeBoost = ctx.outcome ? outcomeMultiplier(entry, ctx.ablation.outcomeFast) : 1.0;
+  const outcomeBoost = ctx.outcome ? outcomeBoostFor(entry, ctx.ablation.outcomeFast) : 1.0;
   const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, ctx.scope));
   const extractionBoost = entry.tags.includes(EXTRACTED_TAG) ? EXTRACTION_TAG_BOOST : 1.0;
   const summary = summaryMultipliers(entry, ctx.now, ctx.summary);

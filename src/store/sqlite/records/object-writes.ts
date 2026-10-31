@@ -9,7 +9,7 @@ import {
 } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import { chunked } from '../../../base/util/chunked.js';
-import { calculateStrength, LEGACY_TYPED_HALF_LIFE } from '../../../base/memory/strength.js';
+import { calculateStrengthAt, LEGACY_TYPED_HALF_LIFE } from '../../../base/memory/strength.js';
 import { deriveHalfLife, type MemoryEntry } from '../../../base/memory/entry.js';
 import { stampOriginProject, upsertEntryRow } from '../entries/entry-row.js';
 import { auditEntryWrite, writeEntryMirrors, auditingRefusal } from '../entries/entry-writes.js';
@@ -290,7 +290,7 @@ function onStoreHalfLife(
 ): MemoryEntry {
   if (getMeta(db, META_KEY.typedHalfLife, '') !== '') return mirror;
   const legacy = { ...mirror, halfLifeDays: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
-  return { ...legacy, strength: calculateStrength(legacy, rules.clock(), rules.strength) };
+  return { ...legacy, strength: calculateStrengthAt(legacy, rules.clock(), rules.strength) };
 }
 
 /** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link

@@ -22,7 +22,7 @@ import {
   detectRegressions,
   formatResult,
   resultToBaseline,
-  runFeatureEval,
+  runFeatureEvalAt,
   type EvalBaseline,
 } from '../../domain/eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -196,7 +196,7 @@ async function runEvalSuite(
   const baseline = loadEvalBaseline(baselinePath);
 
   const infra = cliInfra();
-  const result = await runFeatureEval(
+  const result = await runFeatureEvalAt(
     PACKAGE_VERSION,
     infra.evalSwitches ?? PRODUCTION_SWITCHES,
     infra.clock(),

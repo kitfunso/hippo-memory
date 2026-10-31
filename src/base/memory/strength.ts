@@ -113,7 +113,7 @@ export function netWrong(
   return Math.min(marks, model.maxWrongHalvings);
 }
 
-/** What calculateStrength reads, so a caller can score a row without loading its text. */
+/** What calculateStrengthAt reads, so a caller can score a row without loading its text. */
 export type StrengthInputs = Pick<
   MemoryEntry,
   | 'pinned'
@@ -138,7 +138,7 @@ export interface DecayBasis {
 
 /** Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]. Pinned
  * memories skip time decay, but being marked wrong still fades them (netWrong). */
-export function calculateStrength(
+export function calculateStrengthAt(
   entry: StrengthInputs,
   now: Date,
   model: StrengthModel,
@@ -218,13 +218,13 @@ export interface ConfidenceFacets {
   agedOut: boolean;
 }
 
-export function confidenceFacets(entry: ConfidenceInputs, now: Date): ConfidenceFacets {
+export function confidenceFacetsAt(entry: ConfidenceInputs, now: Date): ConfidenceFacets {
   return { tier: entry.confidence, agedOut: isAgedOut(entry, now) };
 }
 
 // An aged-out row warns on its own, since its stored tier alone would hide it.
 export function confidenceLabel(entry: ConfidenceInputs, now: Date) {
-  const { tier, agedOut } = confidenceFacets(entry, now);
+  const { tier, agedOut } = confidenceFacetsAt(entry, now);
   return {
     text: agedOut ? `${tier}, aged` : tier,
     warn: agedOut || tier === 'stale' || tier === 'inferred',
@@ -233,6 +233,6 @@ export function confidenceLabel(entry: ConfidenceInputs, now: Date) {
 
 /** The stored confidence, or 'stale' once aged out (no retrieval for AGED_OUT_AFTER_DAYS; pinned
  * and verified exempt). */
-export function resolveConfidence(entry: ConfidenceInputs, now: Date): ConfidenceLevel {
+export function resolveConfidenceAt(entry: ConfidenceInputs, now: Date): ConfidenceLevel {
   return isAgedOut(entry, now) ? 'stale' : entry.confidence;
 }

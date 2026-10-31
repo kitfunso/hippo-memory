@@ -16,7 +16,7 @@ import {
 import { type ImportOptions, type ImportResult } from '../../src/surface/importers/core.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import { captureError, partitionLessons } from '../../src/domain/learn/autolearn.js';
+import { captureErrorAt, partitionLessons } from '../../src/domain/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { addWorkspace } from '../../src/surface/connectors/slack/workspaces.js';
 import { replaySlackDlqEntry } from '../../src/surface/connectors/slack/dlq.js';
@@ -286,7 +286,7 @@ describe('machine-captured lessons', () => {
   });
 
   it('hippo watch drops a token from the failed command and its stderr', () => {
-    const entry = captureError(
+    const entry = captureErrorAt(
       {
         command: `curl -H "Authorization: Bearer ${GHP}" https://api.example.com`,
         exitCode: 1,

@@ -9,7 +9,7 @@ import { HOUR_MS } from '../../base/util/time.js';
 import { mulberry32 } from '../../base/util/prng.js';
 import {
   PRODUCTION_STRENGTH,
-  resolveConfidence,
+  resolveConfidenceAt,
   type StrengthModel,
 } from '../../base/memory/strength.js';
 import type { MemoryEntry, EmotionalValence } from '../../base/memory/entry.js';
@@ -86,7 +86,7 @@ export async function sampleForReplay({
     // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats
     // staleness, so derive rather than trust the stored value (it no longer carries the age-out
     // case).
-    if (resolveConfidence(entry, now) === 'stale') continue;
+    if (resolveConfidenceAt(entry, now) === 'stale') continue;
     ids.push(entry.id);
     weights.push(replayPriority(entry, now, outcomeAblated));
   }

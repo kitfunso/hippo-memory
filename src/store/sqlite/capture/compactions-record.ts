@@ -11,7 +11,7 @@ import {
   COMPACTION_MEMORY_TAG,
   COMPACTION_SOURCE_PREFIX,
   Layer,
-  createMemory,
+  createMemoryAt,
   generateId,
   type MemoryEntry,
 } from '../../../base/memory/entry.js';
@@ -328,7 +328,7 @@ function compactionEntry({
   now,
 }: CompactionEntryOptions): MemoryEntry {
   return {
-    ...createMemory(
+    ...createMemoryAt(
       text,
       {
         layer: Layer.Episodic,

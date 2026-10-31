@@ -1,5 +1,5 @@
-import { MemoryEntry, Layer, createMemory, HIGH_SCHEMA_FIT } from '../../base/memory/entry.js';
-import { calculateStrength } from '../../base/memory/strength.js';
+import { MemoryEntry, Layer, createMemoryAt, HIGH_SCHEMA_FIT } from '../../base/memory/entry.js';
+import { calculateStrengthAt } from '../../base/memory/strength.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
@@ -265,7 +265,7 @@ function semanticSummary(
   const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
   const maxValence = pickStrongestValence(cluster);
   return {
-    ...createMemory(
+    ...createMemoryAt(
       mergedContent,
       {
         layer: Layer.Semantic,
@@ -292,7 +292,7 @@ async function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): Promi
       ...e,
       halfLifeDays: Math.max(1, Math.floor(e.halfLifeDays * MERGE_SOURCE_HALF_LIFE_FACTOR)),
     };
-    return { ...row, strength: calculateStrength(row, run.now, run.strength, run.decayOpts) };
+    return { ...row, strength: calculateStrengthAt(row, run.now, run.strength, run.decayOpts) };
   });
   await run.survivors.set(demoted);
   for (const e of demoted) run.pendingWrites.push(e);

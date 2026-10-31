@@ -1,6 +1,6 @@
 // The root entry's learning loop: lessons from errors, the share score and the global store.
 import type { MemoryEntry } from '../base/memory/entry.js';
-import { captureError as captureErrorAt } from '../domain/learn/autolearn.js';
+import { captureErrorAt } from '../domain/learn/autolearn.js';
 import { evalNow } from '../infra/eval-switches.js';
 
 export { extractLessons, partitionLessons } from '../domain/learn/autolearn.js';
