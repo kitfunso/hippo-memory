@@ -13,7 +13,7 @@ import { READ_PAGE_ROWS } from '../base/util/pages.js';
 import type { Reports } from '../base/ports/store/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
-import { requireHostAdmin, strengthOf, type Context, type ContextWith } from './types.js';
+import { requireHostAdmin, strengthOf, type Context } from './types.js';
 import { memoryGet } from './memories/memories.js';
 import type { ConfidenceLevel, MemoryEntry } from '../base/memory/entry.js';
 import {
@@ -23,6 +23,7 @@ import {
 } from '../base/memory/strength.js';
 import type { StoredVectorSummary } from '../base/ports/store.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
+import type { HippoDbContext } from './hippo-db-context.js';
 
 export interface StoreStatus {
   stats: LegacyStats;
@@ -31,7 +32,7 @@ export interface StoreStatus {
 
 /** Lifetime stats and row counts for the whole store. Every tenant, so the host admin only. */
 export async function storeStatus(
-  ctx: ContextWith<'reports'>,
+  ctx: HippoDbContext,
   now: Date,
   atRiskBelow: number,
 ): Promise<StoreStatus> {
@@ -47,7 +48,7 @@ export type TenantStatus = Readonly<
 
 /** The caller's tenant at a glance, read on one snapshot; its own rows only, so any actor. */
 export async function tenantStatus(
-  ctx: ContextWith<'reports'>,
+  ctx: HippoDbContext,
   now: Date,
   atRiskBelow: number,
 ): Promise<TenantStatus> {
@@ -85,7 +86,7 @@ export async function memoryDetail(
 
 /** ISO time of the latest sleep, or undefined when it never slept. Every tenant, so the host
  * admin only. */
-export async function lastSleepAt(ctx: ContextWith<'reports'>): Promise<string | undefined> {
+export async function lastSleepAt(ctx: HippoDbContext): Promise<string | undefined> {
   requireHostAdmin(ctx, 'Reading every tenant');
   const runs = (await ctx.store.hippoDb.reports.stats()).consolidation_runs;
   const last = Array.isArray(runs) ? runs[runs.length - 1] : undefined;
@@ -94,9 +95,7 @@ export async function lastSleepAt(ctx: ContextWith<'reports'>): Promise<string |
 }
 
 /** Ids and dimension of the stored vectors. Every tenant, so the host admin only. */
-export async function vectorSummary(
-  ctx: ContextWith<'embeddingIndex'>,
-): Promise<StoredVectorSummary> {
+export async function vectorSummary(ctx: HippoDbContext): Promise<StoredVectorSummary> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return indexStep(ctx.store.hippoDb.embeddingIndex, { kind: 'summary' });
 }
@@ -106,7 +105,7 @@ export async function vectorSummary(
  * the host admin only.
  */
 export async function embeddingReindexNeeded(
-  ctx: ContextWith<'embeddingIndex'>,
+  ctx: HippoDbContext,
   providerId: string,
 ): Promise<boolean> {
   requireHostAdmin(ctx, 'Reading every tenant');
@@ -138,7 +137,7 @@ async function allRawProvenance(reports: Reports): Promise<RawProvenance> {
 /** Correction latency over every superseded row in the store. Every tenant, so the host admin
  * only. */
 export async function correctionLatencyReport(
-  ctx: ContextWith<'reports'>,
+  ctx: HippoDbContext,
 ): Promise<CorrectionLatencyReport> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildCorrectionLatency(await allCorrectionLinks(ctx.store.hippoDb.reports));
@@ -146,9 +145,7 @@ export async function correctionLatencyReport(
 
 /** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin
  * only. */
-export async function provenanceCoverageReport(
-  ctx: ContextWith<'reports'>,
-): Promise<ProvenanceCoverage> {
+export async function provenanceCoverageReport(ctx: HippoDbContext): Promise<ProvenanceCoverage> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildProvenanceCoverage(await allRawProvenance(ctx.store.hippoDb.reports));
 }

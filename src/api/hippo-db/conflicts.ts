@@ -22,8 +22,9 @@ import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { keysetPages, pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { requireHostAdmin, type Actor, type ContextWith } from '../types.js';
+import { requireHostAdmin, type Actor } from '../types.js';
 import type { TenantReach } from '../memories/memories.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 /** A page of a conflict list: `limit` (default DEFAULT_LIST_LIMIT, at most MAX_LIST_LIMIT) and
  * the position the previous page ended on. */
@@ -71,7 +72,7 @@ function touchable(actor: Actor, row: ConflictRow): boolean {
 }
 
 async function touchableConflict(
-  ctx: ContextWith<'conflicts'>,
+  ctx: HippoDbContext,
   conflictId: number,
 ): Promise<ConflictRow | null> {
   const row = await ctx.store.hippoDb.conflicts.get(ctx.tenantId, conflictId);
@@ -81,7 +82,7 @@ async function touchableConflict(
 /** Conflict `conflictId` in the caller's tenant, any status; null when missing or a row of it is
  * out of reach. */
 export async function conflictGet(
-  ctx: ContextWith<'conflicts'>,
+  ctx: HippoDbContext,
   conflictId: number,
 ): Promise<MemoryConflict | null> {
   return (await touchableConflict(ctx, conflictId))?.conflict ?? null;
@@ -91,7 +92,7 @@ export async function conflictGet(
  * NotFound: missing, untouchable or no longer live. Forbidden: a loser to remove the caller may
  * not change. Conflict: already resolved. BadRequest: `keepId` outside the pair. */
 export async function conflictResolve(
-  ctx: ContextWith<'conflicts'>,
+  ctx: HippoDbContext,
   conflictId: number,
   opts: ResolveMemoryConflictOptions,
 ): Promise<ResolveMemoryConflictResult> {
@@ -129,7 +130,7 @@ export async function conflictResolve(
 /** Removing the loser is a forget, so it takes forget's write rights; a loser out of reach is a
  * missing conflict. */
 async function assertMayRemove(
-  ctx: ContextWith<'conflicts'>,
+  ctx: HippoDbContext,
   conflictId: number,
   loserId: string,
 ): Promise<void> {
@@ -157,7 +158,7 @@ function sidesOf(row: ConflictRow, keepId: string): ResolveSides {
 /** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall: its
  *  repo or user-global, and no scope it was not asked for. */
 export async function conflictListOpen(
-  ctx: ContextWith<'conflicts'>,
+  ctx: HippoDbContext,
   opts: ConflictPageOptions & { project?: CallerProject } = {},
 ): Promise<ConflictPage> {
   const { project } = opts;
@@ -181,7 +182,7 @@ export async function conflictListOpen(
 /** One page of conflicts with `status` ('*' for any) in reach, with no scope filter: the host's
  * own view, so the host admin only. */
 export async function conflictList(
-  ctx: ContextWith<'conflicts'>,
+  ctx: HippoDbContext,
   status: string,
   reach: TenantReach = {},
   opts: ConflictPageOptions = {},

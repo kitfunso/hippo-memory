@@ -21,7 +21,7 @@ import {
 import { errorMessage, log } from '../../../base/util/log.js';
 import { ScopeForbiddenError } from '../../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
-import { StoreNotPortedError } from '../../../base/util/store-blocked.js';
+import { NoLocalTierError } from '../../../base/util/store-blocked.js';
 
 type FieldValue = string | number | boolean | null | readonly string[];
 
@@ -59,7 +59,7 @@ const CLASSES = [
   ScopeForbiddenError,
   RawAppendOnlyError,
   SqliteBlockedError,
-  StoreNotPortedError,
+  NoLocalTierError,
   OtherStoreFolderError,
   StoreBusyError,
   IncompatibleBinaryError,

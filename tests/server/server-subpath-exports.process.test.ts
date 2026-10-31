@@ -52,7 +52,6 @@ const SERVER_TYPES = [
   'CallerProject',
   'CallerSessionEndRequest',
   'CallerSessionEndResult',
-  'CaptureContext',
   'Context',
   'DetachedWork',
   'HippoStore',

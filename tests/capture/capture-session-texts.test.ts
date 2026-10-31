@@ -5,11 +5,8 @@ import * as path from 'node:path';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
-import {
-  captureSessionTexts,
-  type CaptureContext,
-  type SessionCaptureRequest,
-} from '../../src/surface/capture/session-texts.js';
+import { captureSessionTexts, type SessionCaptureRequest } from '../../src/surface/capture/session-texts.js';
+import type { EntryContext } from '../../src/api/types.js';
 import { collectSessionTurns, sessionTail } from '../../src/surface/capture/transcript.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { deriveOriginProject } from '../../src/host/project-identity.js';
@@ -53,7 +50,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const ctxFor = (hippoRoot: string, tenantId = 'default'): CaptureContext => ({
+const ctxFor = (hippoRoot: string, tenantId = 'default'): EntryContext => ({
   store: sqliteStore(hippoRoot),
   config: loadConfig(hippoRoot),
   tenantId,

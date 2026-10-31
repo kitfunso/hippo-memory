@@ -12,13 +12,14 @@ import type { RerankerFn } from '../../base/ports/reranker.js';
 import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import type { ContinuityBlock, StoreWith } from '../../base/ports/store.js';
+import type { ContinuityBlock } from '../../base/ports/store.js';
 import {
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
 } from '../../base/scope/recall-scope.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context } from '../types.js';
 import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
+import type { HippoDbContext, HippoDbStore } from '../hippo-db-context.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
@@ -59,9 +60,9 @@ export function recallRowOrigin(ctx: Context, setting: RecallStoreSetting): Reca
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
  *  window-capped, so this is a floor on a large store. */
 export async function scopeHiddenCount(
-  ctx: ContextWith<'sharing'>,
+  ctx: HippoDbContext,
   query: string,
-  global: StoreWith<'sharing'> | undefined,
+  global: HippoDbStore | undefined,
   requested: string | undefined,
 ): Promise<number> {
   const probes = [ctx.store.hippoDb.sharing, global?.hippoDb.sharing].map(

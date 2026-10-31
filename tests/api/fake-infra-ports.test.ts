@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { adminActor, contextGet, remember, sleepWholeStore } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { recallRerankerPick } from '../../src/api/recall/rows.js';
-import type { ContextWith } from '../../src/api/types.js';
+import type { HippoDbContext } from '../../src/api/hippo-db-context.js';
 import { contextReach } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../src/base/ports/embedder.js';
@@ -14,7 +14,6 @@ import type { InfraPorts } from '../../src/base/ports/infra.js';
 import type { Llm, LlmRequest } from '../../src/base/ports/llm.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import type { AgentFiles } from '../../src/base/util/agent-files.js';
-import type { OptionalGroup } from '../../src/base/ports/store.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { cwdProject } from '../_helpers/api-ctx.js';
@@ -115,7 +114,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function contextOn(fake: FakeInfra): ContextWith<OptionalGroup> {
+function contextOn(fake: FakeInfra): HippoDbContext {
   const store = sqliteStore(hippoRoot);
   return {
     tenantId: 'default',

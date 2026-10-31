@@ -17,9 +17,9 @@ import {
   resolveLastSessionTranscript,
 } from './transcript.js';
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
+import type { HippoDbStore } from '../../api/hippo-db-context.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -53,7 +53,7 @@ export interface CaptureOptions {
 export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
-  readonly store: Pick<StoreWith<'captures' | 'folderFiles' | 'rejections'>, 'hippoDb'>;
+  readonly store: Pick<HippoDbStore, 'hippoDb'>;
   /** Embeds each captured row, off the capture's path. */
   readonly embed: (entry: MemoryEntry) => void;
 }
@@ -160,7 +160,7 @@ async function captureFromCli(
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are
 // hidden, so they must not stop its own copy.
 async function storedKeysInView(
-  store: Pick<StoreWith<'captures'>, 'hippoDb'>,
+  store: Pick<HippoDbStore, 'hippoDb'>,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
 ): Promise<Set<string>> {
@@ -271,7 +271,7 @@ export interface CaptureWriteOptions {
 /** A folder's store with the config its root loaded for this capture, and where its rows'
  * vectors go. */
 export interface ConfiguredStore {
-  readonly store: Pick<StoreWith<'captures'>, 'hippoDb'>;
+  readonly store: Pick<HippoDbStore, 'hippoDb'>;
   readonly config: HippoConfig;
   readonly embed: (entry: MemoryEntry) => void;
 }
@@ -335,7 +335,7 @@ export async function captureExtractedItems(
 }
 
 interface PreviewStore {
-  readonly store: Pick<StoreWith<'rejections'>, 'hippoDb'>;
+  readonly store: Pick<HippoDbStore, 'hippoDb'>;
   readonly config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 }
 

@@ -6,7 +6,7 @@ import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import { descendantAdmits, type DescendantAdmission } from '../../base/scope/read-admission.js';
 import type { CallerProject } from '../prompt-hook.js';
-import type { ContextWith } from '../types.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 export const DEFAULT_DRILL_DOWN_LIMIT = 50;
 export const MAX_DRILL_DOWN_DEPTH = 10;
@@ -68,7 +68,7 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
  * reachable; children get recall's scope filter. Returns `DrillDownResult` or `{failure}`; HTTP
  * maps `not_drillable` to 422. */
 export async function drillDown(
-  ctx: ContextWith<'dagReads'>,
+  ctx: HippoDbContext,
   summaryId: string,
   opts: DrillDownOptions = {},
 ): Promise<DrillDownOutcome> {

@@ -29,8 +29,9 @@ import {
   MAX_SKILL_TRIGGER_LEN,
   skillsMarkdown,
 } from '../../domain/objects/skills.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context } from '../types.js';
 import { saveSiteOf, taggedFrom, type WriteOrigin } from './objects.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 export type { BriefDigest } from '../../domain/objects/project-briefs.js';
 export type { SaveIncidentOptions } from '../../domain/objects/incidents.js';
@@ -54,7 +55,7 @@ export const OBJECT_CAPS = {
 /** Opens an incident as the caller; a linked memory outside the caller's tenant refuses the
  * whole write. */
 export function incidentOpen(
-  ctx: ContextWith<'objects'>,
+  ctx: HippoDbContext,
   write: SaveIncidentOptions,
   origin?: WriteOrigin,
 ): Promise<Incident> {
@@ -73,7 +74,7 @@ export function incidentOpen(
 
 /** Moves an open incident to resolved as the caller. */
 export function incidentResolve(
-  ctx: ContextWith<'objects'>,
+  ctx: HippoDbContext,
   id: number,
   resolutionText: string,
 ): Promise<Incident> {
@@ -90,7 +91,7 @@ export function incidentResolve(
 
 /** The caller's policies in force at `date`, optionally one policy's versions only. */
 export function policiesInForce(
-  ctx: ContextWith<'objects'>,
+  ctx: HippoDbContext,
   date: string,
   opts: { readonly name?: string },
 ): Promise<Policy[]> {
@@ -98,26 +99,23 @@ export function policiesInForce(
 }
 
 /** The caller's active skills as one AGENTS.md block; empty when there are none. */
-export function skillsExport(ctx: ContextWith<'objects'>): Promise<string> {
+export function skillsExport(ctx: HippoDbContext): Promise<string> {
   return skillsMarkdown(ctx.store.hippoDb.objects, ctx.tenantId);
 }
 
 /** The brief a refresh of `repo` would save, without saving it. */
-export function briefDigest(ctx: ContextWith<'objects'>, repo: string): Promise<BriefDigest> {
+export function briefDigest(ctx: HippoDbContext, repo: string): Promise<BriefDigest> {
   return briefFromReceipts(ctx.store.hippoDb.objects, ctx.tenantId, repo);
 }
 
 /** Saves a new version of the repo's brief from its receipts, as the caller. */
-export function briefRefresh(ctx: ContextWith<'objects'>, repo: string): Promise<ProjectBrief> {
+export function briefRefresh(ctx: HippoDbContext, repo: string): Promise<ProjectBrief> {
   return refreshedBrief(ctx.store.hippoDb.objects, saveSiteOf(ctx), repo);
 }
 
 /** The active decision whose mirror is `memoryId`, or null: what the CLI's `--supersedes
  * <memory-id>` names. */
-export function decisionIdByMemory(
-  ctx: ContextWith<'objects'>,
-  memoryId: string,
-): Promise<number | null> {
+export function decisionIdByMemory(ctx: HippoDbContext, memoryId: string): Promise<number | null> {
   return resolveActiveDecisionIdByMemory(ctx.store.hippoDb.objects, ctx.tenantId, memoryId);
 }
 

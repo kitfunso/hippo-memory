@@ -30,11 +30,11 @@ import { duplicateKey, heldTextKeys, storedTextKeys } from '../../base/util/same
 import type { LessonWrites } from '../../base/ports/store.js';
 import { memoryPages } from '../memories/memories.js';
 import { countRemembered } from '../memories/remember.js';
-import { strengthOf, type Context, type ContextWith } from '../types.js';
+import { strengthOf, type Context } from '../types.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
 
 /** A learn writes its lessons through lessonWrites and counts them on hippo.db's local tier. */
-type LearnContext = ContextWith<'lessonWrites'> & HippoDbContext;
+type LearnContext = HippoDbContext & HippoDbContext;
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -327,7 +327,7 @@ export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 /** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or
  * only the one `options.onlyId` names. */
 export async function memoryInvalidate(
-  ctx: ContextWith<'learning' | 'lessonWrites'>,
+  ctx: HippoDbContext,
   target: InvalidationTarget,
   options: InvalidationOptions,
 ): Promise<InvalidationResult> {

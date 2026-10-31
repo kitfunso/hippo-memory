@@ -62,10 +62,9 @@ export { HttpError } from './base/errors/http-errors.js';
 export type { CallerProject } from './api/prompt-hook.js';
 export type { JsonValue } from './base/util/json.js';
 // A session-end route stores the turns its caller read from a transcript on the caller's own
-// machine; it narrows its Context with store-kit's hasGroup(ctx.store, 'captures') first.
+// machine; a store without hippo.db's local tier rejects.
 export {
   captureSessionTexts,
-  type CaptureContext,
   type SessionCaptureRequest,
   type SessionCaptureResult,
 } from './surface/capture/session-texts.js';

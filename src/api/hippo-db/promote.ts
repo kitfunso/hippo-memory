@@ -9,10 +9,10 @@ import type { StoreHome } from '../../base/ports/store.js';
 import { generateId, type MemoryEntry } from '../../base/memory/entry.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
-import { globalTargetOf } from '../infra.js';
 import { withDetached } from '../detached.js';
-import { sharedStoreOf, type ContextWith } from '../types.js';
+import { sharedStoreOf } from '../types.js';
 import { canReadScope, isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
+import { globalTargetOf, type HippoDbContext } from '../hippo-db-context.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and
  * we add a 'promote' audit event so intent stays distinct. The copy keeps the entry's tenantId
@@ -22,7 +22,7 @@ export interface PromoteResult {
   sourceId: string;
   globalId: string;
 }
-export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Promise<PromoteResult> {
+export async function promote(ctx: HippoDbContext, id: string): Promise<PromoteResult> {
   // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing
   // of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);

@@ -6,12 +6,12 @@ import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.j
 import { SESSION_DIGEST_TAG, sessionDigestId } from '../../base/session/session-digest-row.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../base/session/session-snapshot.js';
 import { buildSessionDigest } from '../../domain/learn/session-digest.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import type { Context } from '../types.js';
+import type { HippoDbStore } from '../hippo-db-context.js';
 
 /** The repo store's reads and the digest's write. */
-export type DigestStore = Pick<StoreWith<'sessions'>, 'entriesWhere' | 'hippoDb' | 'entryWrites'>;
+export type DigestStore = Pick<HippoDbStore, 'entriesWhere' | 'hippoDb' | 'entryWrites'>;
 
 /** Where a digest writes: the repo's own store, its tenant and config, and the actor its audit
  * names. */

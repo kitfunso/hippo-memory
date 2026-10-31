@@ -5,9 +5,10 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
-import { strengthOf, type Context, type ContextWith } from '../types.js';
+import { strengthOf, type Context } from '../types.js';
 import { withDetached } from '../detached.js';
 import type { SleepCount } from '../enrichment.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 /**
  * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes
@@ -82,10 +83,7 @@ export async function autoSleepAfterWrite(
 
 /** What one auto-sleep runs: the consolidation alone. */
 export async function autoSleepConsolidate(
-  ctx: Pick<
-    ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'>,
-    'store' | 'config' | 'tenantId' | 'infra'
-  >,
+  ctx: Pick<HippoDbContext, 'store' | 'config' | 'tenantId' | 'infra'>,
 ): Promise<ConsolidationResult> {
   const { store, config, tenantId, infra } = ctx;
   return runConsolidation(store, {

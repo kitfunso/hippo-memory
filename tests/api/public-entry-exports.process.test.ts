@@ -96,9 +96,9 @@ describe('package entry re-exports sleep', () => {
     expect(rootDts()).toMatch(/\bsleep,[^}]*\} from '\.\/entry\/sleep\.js';$/m);
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'entry', 'sleep.d.ts'), 'utf-8');
     expect(dts).toMatch(/^export type \{ SleepOptions, SleepResult \} from '\.\.\/api\/sleep\/sleep\.js';$/m);
-    // The published signature takes a Context whose store sets the sleep groups, so the compiler checks them.
+    // The published signature takes the plain Context, naming no local tier; sleep proves the tier at run time.
     expect(dts).toMatch(
-      /^export declare function sleep\(ctx: SleepContext, opts\?: SleepOptions\): Promise<SleepResult>;$/m,
+      /^export declare function sleep\(ctx: EntryContext, opts\?: SleepOptions\): Promise<SleepResult>;$/m,
     );
     const sleepDts = readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8');
     // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.

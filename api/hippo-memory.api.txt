@@ -127,11 +127,9 @@ entry/session-text.d.ts: transcriptWorkingState re-export
 entry/sleep.d.ts: ConsolidationResult re-export
 entry/sleep.d.ts: DetachedWork re-export
 entry/sleep.d.ts: RescueRank re-export
-entry/sleep.d.ts: SleepContext re-export
 entry/sleep.d.ts: SleepEvent re-export
 entry/sleep.d.ts: SleepOptions re-export
 entry/sleep.d.ts: SleepResult re-export
-entry/sleep.d.ts: SleepStore re-export
 entry/sleep.d.ts: consolidate function
 entry/sleep.d.ts: sleep function
 entry/sleep.d.ts: strengthBucket re-export
@@ -378,11 +376,9 @@ index.d.ts: SalienceDecision re-export
 index.d.ts: SalienceOptions re-export
 index.d.ts: SalienceResult re-export
 index.d.ts: SessionHandoff re-export
-index.d.ts: SleepContext re-export
 index.d.ts: SleepEvent re-export
 index.d.ts: SleepOptions re-export
 index.d.ts: SleepResult re-export
-index.d.ts: SleepStore re-export
 index.d.ts: applyOutcome re-export
 index.d.ts: calculateStrength re-export
 index.d.ts: captureError re-export
@@ -431,7 +427,6 @@ server.d.ts: CallerPreCompactRequest re-export
 server.d.ts: CallerProject re-export
 server.d.ts: CallerSessionEndRequest re-export
 server.d.ts: CallerSessionEndResult re-export
-server.d.ts: CaptureContext re-export
 server.d.ts: ConflictError re-export
 server.d.ts: Context re-export
 server.d.ts: DetachedWork re-export

@@ -7,16 +7,13 @@ import type { CompactionStart } from '../base/ports/store/capture.js';
 import type { TaskSnapshot } from '../base/ports/store/sessions.js';
 import type { ContinuityKey } from '../base/ports/store/types.js';
 import { errorFields, errorMessage, log, type LineLog } from '../base/util/log.js';
-import type { ContextWith } from './types.js';
+import type { HippoDbContext } from './hippo-db-context.js';
 
 /** The Copilot CLI accepts both preCompact and PreCompact, so hippo.json's pair can run twice
  * for one compaction. */
 const TWIN_FIRE_MS = 10_000;
 
-export type PreCompactContext = Pick<
-  ContextWith<'compactionHooks' | 'sessions'>,
-  'tenantId' | 'store' | 'infra'
->;
+export type PreCompactContext = Pick<HippoDbContext, 'tenantId' | 'store' | 'infra'>;
 
 /** One accepted PreCompact payload and the host steps around the store's. */
 export interface PreCompactRun {
@@ -43,10 +40,7 @@ export interface CallerCompaction {
   readonly derived: WorkingState | null;
 }
 
-export type CallerPreCompactContext = Pick<
-  ContextWith<'compactions' | 'sessions'>,
-  'tenantId' | 'store'
->;
+export type CallerPreCompactContext = Pick<HippoDbContext, 'tenantId' | 'store'>;
 
 /** Where a PreCompact's steps report: its progress, and the failures it carries on past. */
 interface StepLog {
@@ -173,7 +167,7 @@ interface DerivedSnapshot {
 }
 
 async function saveDerivedSnapshot(
-  ctx: Pick<ContextWith<'sessions'>, 'tenantId' | 'store'>,
+  ctx: Pick<HippoDbContext, 'tenantId' | 'store'>,
   { sessionId, key, derived, log: steps, markSaved }: DerivedSnapshot,
 ): Promise<void> {
   const { tenantId, store } = ctx;

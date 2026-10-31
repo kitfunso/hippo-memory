@@ -7,9 +7,8 @@ import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../../api/recall/request.js';
-import { globalTargetOf } from '../../api/infra.js';
 import { recordTokens } from '../../api/tokens.js';
-import { hasHippoDb, type HippoDbStore } from '../../api/hippo-db-context.js';
+import { globalTargetOf, hasHippoDb, type HippoDbStore } from '../../api/hippo-db-context.js';
 import {
   mcpApiContext,
   type HippoDbToolHandler,

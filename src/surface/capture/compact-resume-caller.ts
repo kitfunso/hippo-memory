@@ -1,6 +1,6 @@
 // SessionStart after a compaction, for a caller on another machine: the owner's fresh snapshot for
 // this session, as the local hook prints it.
-import type { Context, ContextWith, EntryContext } from '../../api/types.js';
+import type { Context, EntryContext } from '../../api/types.js';
 import {
   COMPACT_RESUME_EVENT_CONTENT_CAP,
   COMPACT_RESUME_MAX_AGE_MS,
@@ -15,6 +15,7 @@ import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { bindCaller, callerInHoldout } from './caller-session.js';
 import type { CallerHookOutput } from './pre-compact-caller.js';
 import { withEntryInfra } from '../entry-infra.js';
+import { withHippoDb } from '../../api/hippo-db-context.js';
 
 export interface CallerCompactResumeRequest {
   readonly sessionId: string;
@@ -24,10 +25,10 @@ export interface CallerCompactResumeRequest {
 }
 
 export async function compactResumeForCaller(
-  given: EntryContext<ContextWith<'sessions'>>,
+  given: EntryContext,
   req: CallerCompactResumeRequest,
 ): Promise<CallerHookOutput> {
-  const ctx = withEntryInfra(given);
+  const ctx = withHippoDb(withEntryInfra(given));
   const key = await bindCaller(ctx, req.sessionId, req.project);
   if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) {
     return { stdout: '' };

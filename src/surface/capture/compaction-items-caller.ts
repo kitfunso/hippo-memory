@@ -1,13 +1,14 @@
 // PostCompact for a caller on another machine: the items it parsed become rows under its owner and
 // project, and a retried request id writes nothing twice.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { ContextWith, EntryContext } from '../../api/types.js';
+import type { EntryContext } from '../../api/types.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../../base/util/compaction-items.js';
 import { scrubCompactionItems } from './compaction-record.js';
 import { log } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { assertRequestId, assertTrigger, bindCaller, callerInHoldout } from './caller-session.js';
 import { withEntryInfra } from '../entry-infra.js';
+import { withHippoDb } from '../../api/hippo-db-context.js';
 
 export interface CallerItemsRequest {
   readonly sessionId: string;
@@ -27,10 +28,10 @@ export interface CallerItemsResult {
  * or deferred here.
  */
 export async function saveCompactionItemsForCaller(
-  given: EntryContext<ContextWith<'compactions' | 'sessions'>>,
+  given: EntryContext,
   req: CallerItemsRequest,
 ): Promise<CallerItemsResult> {
-  const ctx = withEntryInfra(given);
+  const ctx = withHippoDb(withEntryInfra(given));
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
   // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's

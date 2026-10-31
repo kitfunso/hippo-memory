@@ -22,13 +22,13 @@ import type {
   OpenCompaction,
   StepFailure,
 } from '../../base/ports/store/capture.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { loadConfig } from '../../host/config-file.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { readTranscriptTail } from '../../infra/transcript-tail.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
+import type { HippoDbStore } from '../../api/hippo-db-context.js';
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
@@ -42,7 +42,7 @@ export const PRE_COMPACT_INSTRUCTION =
  * resolved. */
 export interface CompactionFolder {
   readonly root: string;
-  readonly store: Pick<StoreWith<'compactionHooks'>, 'hippoDb'>;
+  readonly store: Pick<HippoDbStore, 'hippoDb'>;
   readonly tenantId: string;
 }
 

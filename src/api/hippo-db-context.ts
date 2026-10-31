@@ -1,8 +1,9 @@
 // The context a local feature's api module takes: a store that carries hippo.db's local tier.
 // Only a surface that proved the tier at composition builds one, so no core path reaches it.
-import type { HippoDbTier } from '../store/sqlite/hippo-db.js';
-import { StoreNotPortedError } from '../base/util/store-blocked.js';
+import type { HippoDbStore, HippoDbTier } from '../store/sqlite/hippo-db.js';
+import { NoLocalTierError } from '../base/util/store-blocked.js';
 import type { HippoConfig } from '../base/config/config.js';
+import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { EmbedderFor } from '../base/ports/embedder.js';
 import type { StoreReach } from '../base/ports/store.js';
 import type { Context, ContextReach, LedgerHome } from './types.js';
@@ -25,7 +26,27 @@ export function hasHippoDb<S extends Context['store']>(store: S): store is S & H
 /** `store` with its local tier; a store without one throws the 501 every local path answers. */
 export function requireHippoDb<S extends Context['store']>(store: S): S & HippoDbTier {
   if (hasHippoDb(store)) return store;
-  throw new StoreNotPortedError(store.kind, 'hippoDb');
+  throw new NoLocalTierError(store.kind);
+}
+
+/** `ctx` with its store's local tier proved, as a published entry resolves it at run time; a
+ * store without one throws requireHippoDb's 501. */
+export function withHippoDb<C extends { readonly store: Context['store'] }>(
+  ctx: C,
+): C & { readonly store: C['store'] & HippoDbTier } {
+  return { ...ctx, store: requireHippoDb(ctx.store) };
+}
+
+/** The reach's global write target with its local tier proved and an embedder filled in: the
+ * host's own, else the context's. Unset with no target, or one whose store has no tier to copy
+ * into. */
+export function globalTargetOf(
+  ctx: Pick<Context, 'reach' | 'infra'>,
+): ConfiguredFolder<HippoDbStore> | undefined {
+  const target = ctx.reach?.globalTarget;
+  if (target === undefined || !hasHippoDb(target.store)) return undefined;
+  const embedderFor = target.embedderFor ?? ctx.infra.embedderFor;
+  return { ...target, store: target.store, embedderFor };
 }
 
 /** What a core path reads from `store`'s local tier; unset on a store without one. A root passes

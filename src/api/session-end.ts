@@ -16,8 +16,9 @@ import {
 } from './context/context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
 import { snapshotFields, type WorkingState } from '../base/session/working-state.js';
-import type { Context, ContextWith } from './types.js';
+import type { Context } from './types.js';
 import type { LedgerBook } from './enrichment.js';
+import { hasHippoDb, type HippoDbContext } from './hippo-db-context.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff
  * is written. */
@@ -38,10 +39,7 @@ export interface SessionClose {
 /** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own
  * failure and never throws. The handoff goes first, while the snapshot writeSessionEndHandoff
  * reads is still active. */
-export async function closeEndedSession(
-  ctx: ContextWith<'sessions'>,
-  close: SessionClose,
-): Promise<void> {
+export async function closeEndedSession(ctx: HippoDbContext, close: SessionClose): Promise<void> {
   if (close.sessionId) await writeEndHandoff(ctx, close.sessionId, close);
   if (close.turn) {
     close.log('skip snapshot close: turn mode');
@@ -51,7 +49,7 @@ export async function closeEndedSession(
 }
 
 async function writeEndHandoff(
-  ctx: ContextWith<'sessions'>,
+  ctx: HippoDbContext,
   sessionId: string,
   close: SessionClose,
 ): Promise<void> {
@@ -83,7 +81,7 @@ async function writeEndHandoff(
 // If session-end never fires (crash, kill -9), the freshness bound of an ambient snapshot load is
 // the backstop.
 async function closeSnapshot(
-  ctx: ContextWith<'sessions'>,
+  ctx: HippoDbContext,
   sessionId: string | null,
   logLine: LineLog,
 ): Promise<void> {
@@ -149,7 +147,7 @@ export async function bookSessionRereads(
 /** The block a compaction lost: the fresh task snapshot and its session trail, or null with none
  * or another session's snapshot. */
 export async function compactResumeBlock(
-  ctx: ContextWith<'sessions'>,
+  ctx: HippoDbContext,
   payloadSessionId: string | null,
 ): Promise<string | null> {
   const { sessions } = ctx.store.hippoDb;
@@ -244,11 +242,11 @@ function hasOwnStore(ctx: Context): boolean {
 }
 
 /** The store a session's end writes to: the folder's own, else the global one; null when neither
- * exists. */
-function endStore(ctx: ContextWith<'sessions'>): ContextWith<'sessions'> | null {
+ * exists or the global one has no local tier. */
+function endStore(ctx: HippoDbContext): HippoDbContext | null {
   if (hasOwnStore(ctx)) return ctx;
   const global = ctx.reach?.global;
-  if (global === undefined) return null;
+  if (global === undefined || !hasHippoDb(global.store)) return null;
   return {
     tenantId: ctx.tenantId,
     actor: ctx.actor,
@@ -262,7 +260,7 @@ function endStore(ctx: ContextWith<'sessions'>): ContextWith<'sessions'> | null 
 /** Sleeps the folder's own store: a reply's close only at the auto-sleep threshold, a session's
  * end always. */
 async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
-  ctx: ContextWith<'sessions' | 'reports'>,
+  ctx: HippoDbContext,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   // Sleeping the global store from here would learn this folder's git commits into it; it has its
@@ -334,7 +332,7 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
 /** Books re-reads, sleeps, captures, digests and closes one ended session of the folder `ctx`
  * names, in that order. */
 export async function sessionEndWork<Turn, Scan extends { readonly turns: readonly Turn[] }>(
-  ctx: ContextWith<'sessions' | 'reports'>,
+  ctx: HippoDbContext,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   const rereadLog = await bookSessionRereads(ctx, w.transcriptPath, w.sessionId).catch((err) => {

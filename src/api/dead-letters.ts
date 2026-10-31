@@ -10,7 +10,7 @@ import type {
 } from '../base/ports/store.js';
 import type { JsonValue } from '../base/util/json.js';
 import { errorMessage } from '../base/util/log.js';
-import type { ContextWith } from './types.js';
+import type { HippoDbContext } from './hippo-db-context.js';
 
 /** The tenant stored on a row no tenant was resolved for; the column is NOT NULL. */
 const UNROUTABLE_TENANT = '__unroutable__';
@@ -18,7 +18,7 @@ const UNROUTABLE_TENANT = '__unroutable__';
 const DEFAULT_BUCKET = 'parse_error';
 
 /** The caller's tenant and the store its dead letters live in. */
-export type DeadLetterContext = Pick<ContextWith<'connectorEvents'>, 'tenantId' | 'store'>;
+export type DeadLetterContext = Pick<HippoDbContext, 'tenantId' | 'store'>;
 
 /** A webhook parks before it has routed the payload, so the row's tenant comes with the row. */
 export type ParkContext = Pick<DeadLetterContext, 'store'>;

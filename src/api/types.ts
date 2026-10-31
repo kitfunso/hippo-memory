@@ -2,14 +2,9 @@
 // error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
-import type { GlobalGroup, HippoStore, StoreReach } from '../base/ports/store.js';
+import type { HippoStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type {
-  GlobalTargetGroup,
-  OptionalGroup,
-  SleepGroup,
-  StoreWith,
-} from '../base/ports/store.js';
+import type { OptionalGroup, StoreWith } from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
 import type { CoreEnrichment, FolderHome, GlobalEnrichment, LedgerBook } from './enrichment.js';
@@ -38,10 +33,10 @@ export interface Actor {
 }
 
 /** The operator's global store in reach, with the config.json that ranks its rows and governs
- * its ledger. */
+ * its ledger; a local path proves its tier before it reads one. */
 export interface GlobalInReach {
   readonly root: string;
-  readonly store: StoreWith<GlobalGroup>;
+  readonly store: HippoStore;
   readonly config: HippoConfig;
   readonly enrich?: GlobalEnrichment;
 }
@@ -65,11 +60,8 @@ export interface ContextReach extends Omit<StoreReach, 'global' | 'globalTarget'
 
 /** The global write target a host builds: without `embedderFor` the context's own embedder
  * embeds the copy. */
-export type GlobalTargetInReach = Omit<
-  ConfiguredFolder<StoreWith<GlobalTargetGroup>>,
-  'embedderFor'
-> &
-  Partial<Pick<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'>>;
+export type GlobalTargetInReach = Omit<ConfiguredFolder<HippoStore>, 'embedderFor'> &
+  Partial<Pick<ConfiguredFolder<HippoStore>, 'embedderFor'>>;
 
 export interface Context {
   tenantId: string;
@@ -133,12 +125,6 @@ export type ContextWith<
 > = Context & {
   readonly store: StoreWith<G, F>;
 };
-
-/** A context whose store sets the groups a sleep runs on. */
-export type SleepContext = ContextWith<SleepGroup>;
-
-/** The SleepContext the published sleep entry takes. */
-export type EntrySleepContext = EntryContext<SleepContext>;
 
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector
  * Contexts; Bearer-authed callers build Actor from the api_keys row instead. */

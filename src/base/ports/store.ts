@@ -1,7 +1,7 @@
 // The async store interface and its groups: every method answers a Promise and takes only data, so
 // any backend can serve it from any thread, and hippo.db is one adapter. Type-only apart from the
 // group probes and the store errors.
-import { StoreNotPortedError } from '../util/store-blocked.js';
+import { NoLocalTierError } from '../util/store-blocked.js';
 import type { ConnectorGroups, RecordGroups, ReviewGroups } from './store-groups.js';
 import type { MemoryEntry } from '../memory/entry.js';
 import type { TenantId } from '../util/tenant.js';
@@ -27,7 +27,7 @@ import type { Goals } from './store/goals.js';
 import type { EntryFilter, PageRequest, Reports } from './store/reports.js';
 import type { Dormant } from './store/dormant.js';
 import type { FailureLog } from './store/rejections.js';
-export type { FolderStore, GlobalGroup, GlobalTargetGroup, StoreReach } from './store/reach.js';
+export type { FolderStore, StoreReach } from './store/reach.js';
 import type {
   ApiKeyRecord,
   ActiveGoals,
@@ -146,9 +146,6 @@ export const OPTIONAL_GROUPS = [
   'reports',
 ] as const satisfies readonly OptionalGroup[];
 
-/** The groups a sleep runs on: its own, and the objects and graph its graph pass reads. */
-export type SleepGroup = keyof SleepGroups | 'objects' | 'graphReads';
-
 /** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and
  * context writes no last recall for the CLI's no-ids outcome to read. */
 interface FallbackGroups {
@@ -218,9 +215,6 @@ interface RequiredGroups {
   readonly vectorWrites: VectorWrites;
 }
 
-/** A store a sleep can run on. */
-export type SleepStore = StoreWith<SleepGroup>;
-
 export type StoreGroup = 'base' | keyof GroupMethods;
 
 /** True when the store sets `group`; for an optional group the store is narrowed to one that
@@ -235,13 +229,13 @@ export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
 }
 
 /** The optional group's methods; a store without them throws
- * StoreNotPortedError, which answers 501 as any unported path does. */
+ * NoLocalTierError, which answers 501 as any unported path does. */
 export function requireGroup<G extends OptionalGroup>(
   store: HippoStore,
   group: G,
 ): GroupMethods[G] {
   const methods = groupOf(store, group);
-  if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
+  if (methods === undefined) throw new NoLocalTierError(store.kind);
   return methods;
 }
 
@@ -268,15 +262,13 @@ export function hasGroups<G extends OptionalGroup>(
   return needs.every((group) => groupOf(store, group) !== undefined);
 }
 
-/** `store` narrowed to every group `needs` names; a store without one throws StoreNotPortedError
- * naming the first. */
+/** `store` narrowed to every group `needs` names; a store without one throws NoLocalTierError. */
 export function requireGroups<G extends OptionalGroup>(
   store: HippoStore,
   needs: readonly G[],
 ): StoreWith<G> {
   if (hasGroups(store, needs)) return store;
-  const missing = needs.find((group) => groupOf(store, group) === undefined);
-  throw new StoreNotPortedError(store.kind, missing ?? needs.join(', '));
+  throw new NoLocalTierError(store.kind);
 }
 
 /** A store that sets the optional groups `G`, as a surface proves once before it calls in; `F`

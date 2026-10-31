@@ -5,7 +5,6 @@ import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import * as path from 'node:path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import * as api from '../../api/index.js';
-import type { ContextWith } from '../../api/types.js';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import { type CliContext } from './api-context.js';
 import { printError } from './output.js';
@@ -53,7 +52,7 @@ export async function handleDormant({
 }
 
 async function changeDormant(
-  ctx: ContextWith<'dormant'>,
+  ctx: HippoDbContext,
   sub: 'restore' | 'forget',
   id: string,
 ): Promise<void> {

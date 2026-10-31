@@ -4,14 +4,15 @@ import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { DormantMemory, ListDormantOptions } from '../../base/ports/store/dormant.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
-import { strengthOf, type ContextWith } from '../types.js';
+import { strengthOf } from '../types.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 /**
  * A tenant's dormant memories (sqlite/dormant/dormant.ts): what sleep moved out of active memory when
  * `dormant.enabled` is on. Newest first; `opts.query` keeps rows containing every term
  * (case-insensitive). */
 export function dormantList(
-  ctx: ContextWith<'dormant'>,
+  ctx: HippoDbContext,
   opts: ListDormantOptions = {},
 ): Promise<DormantMemory[]> {
   return ctx.store.hippoDb.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), opts);
@@ -22,10 +23,7 @@ export function dormantList(
  * repair returns `verified`. Throws if the tenant has no such dormant id or a live memory holds it,
  * and RejectedValueError if the value was since rejected (the dormant copy stays).
  */
-export async function dormantRestore(
-  ctx: ContextWith<'dormant'>,
-  id: string,
-): Promise<MemoryEntry> {
+export async function dormantRestore(ctx: HippoDbContext, id: string): Promise<MemoryEntry> {
   const outcome = await ctx.store.hippoDb.dormant.restore(ctx.tenantId, {
     id,
     actor: ctx.actor.subject,
@@ -45,7 +43,7 @@ export async function dormantRestore(
  * Permanently deletes a dormant memory, the explicit "forget it for good"; throws when the tenant
  * has no dormant memory with that id.
  */
-export async function dormantForget(ctx: ContextWith<'dormant'>, id: string): Promise<void> {
+export async function dormantForget(ctx: HippoDbContext, id: string): Promise<void> {
   const forgotten = await ctx.store.hippoDb.dormant.forget(
     ctx.tenantId,
     personalScopeOf(ctx.actor),
@@ -57,7 +55,7 @@ export async function dormantForget(ctx: ContextWith<'dormant'>, id: string): Pr
 
 /** Whether the tenant holds a dormant memory with this id that the caller may touch (for "not
  * found" hints). */
-export async function isDormant(ctx: ContextWith<'dormant'>, id: string): Promise<boolean> {
+export async function isDormant(ctx: HippoDbContext, id: string): Promise<boolean> {
   return (
     (
       await ctx.store.hippoDb.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), {

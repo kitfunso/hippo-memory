@@ -6,8 +6,9 @@ import { assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall
 import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
-import type { Context, ContextWith } from './types.js';
+import type { Context } from './types.js';
 import type { SessionRawCount, SessionRawKey } from '../base/ports/store/context-reads.js';
+import type { HippoDbContext } from './hippo-db-context.js';
 
 export const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;
@@ -73,7 +74,7 @@ export interface AssembleResult {
  *  tail is never evicted).
  *  Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(
-  ctx: ContextWith<'dagReads'>,
+  ctx: HippoDbContext,
   sessionId: string,
   opts: AssembleOptions = {},
 ): Promise<AssembleResult> {
@@ -122,7 +123,7 @@ export async function assemble(
 // Priced at a content length that cannot exceed the real one, so the first pass drops only rows the
 // real costs drop too; the rows left are then read whole and the same eviction runs on them.
 async function fitToBudget(
-  ctx: ContextWith<'dagReads'>,
+  ctx: HippoDbContext,
   query: SessionRawCount,
   start: AssembledContextItem[],
   itemCost: (it: AssembledContextItem) => number,
@@ -145,7 +146,7 @@ function keyItem(k: SessionRawKey): AssembledContextItem {
 
 // Read under the rule the keys were chosen by, so a row a write hid or deleted since is left out.
 async function withContent(
-  ctx: ContextWith<'dagReads'>,
+  ctx: HippoDbContext,
   query: SessionRawCount,
   items: AssembledContextItem[],
 ): Promise<AssembledContextItem[]> {
@@ -176,7 +177,7 @@ interface ScopedKeys {
 }
 
 async function loadScopedKeys(
-  ctx: ContextWith<'dagReads'>,
+  ctx: HippoDbContext,
   sessionId: string,
   opts: AssembleOptions,
   own: string | undefined,

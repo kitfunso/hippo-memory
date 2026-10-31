@@ -1,7 +1,6 @@
 // Connector writes: content an agent doesn't control, which the instruction check gates, written
 // with its event and any quarantine record on hippo.db's local tier, and a connector's deletes.
 import type { ConnectorEvent, ConnectorWrite } from '../../base/ports/store.js';
-import type { ContextWith } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 import {
   countRemembered,
@@ -12,6 +11,7 @@ import {
   type RememberResult,
 } from '../memories/remember.js';
 import { archiveOf, type ArchiveRawResult } from '../memories/promote.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 /** A connector's write of content an agent doesn't control. */
 export interface ConnectorRememberOptions extends RememberOptions {
@@ -34,7 +34,7 @@ function quarantineOf({
  * commits the row with its event and any quarantine record, so an event logged before stores
  * nothing and answers `duplicate`. */
 export async function rememberUntrusted(
-  ctx: ContextWith<'connectorWrites'>,
+  ctx: HippoDbContext,
   opts: ConnectorRememberOptions,
 ): Promise<RememberResult> {
   const prepared = prepareRemember(ctx, opts, true);
@@ -53,7 +53,7 @@ export async function rememberUntrusted(
 /** rawArchive for a connector's delete: the store logs `event` in the archive's own transaction,
  * so a redelivery finds it logged. */
 export async function rawArchiveForEvent(
-  ctx: ContextWith<'connectorWrites'>,
+  ctx: HippoDbContext,
   id: string,
   reason: string,
   event: ConnectorEvent,

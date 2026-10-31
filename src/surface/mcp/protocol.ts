@@ -17,7 +17,6 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import type { GlobalTargetGroup, StoreWith } from '../../base/ports/store.js';
 import type { HippoDbContext, HippoDbStore } from '../../api/hippo-db-context.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
@@ -223,7 +222,7 @@ export type HippoDbToolHandler = (call: HippoDbToolCall) => string | Promise<str
  * the gate. */
 export interface LocalToolCall extends ToolCall {
   store: HippoDbStore;
-  globalTarget: ConfiguredFolder<StoreWith<GlobalTargetGroup>>;
+  globalTarget: ConfiguredFolder<HippoDbStore>;
 }
 
 export type LocalToolHandler = (call: LocalToolCall) => string | Promise<string>;

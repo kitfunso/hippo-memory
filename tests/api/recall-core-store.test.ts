@@ -7,8 +7,7 @@ import { join } from 'node:path';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { LastRecall, LastRecallWrites, RecallWrites, StoreWith } from '../../src/base/ports/store-index.js';
-import type { GlobalGroup } from '../../src/base/ports/store.js';
+import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/base/ports/store-index.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { adminActor } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
@@ -132,7 +131,7 @@ describe('retrieve with the CLI ranking core', () => {
     });
     const inner = sqliteStore(secondRoot);
     const writes: RecallWrites[] = [];
-    const globalStore: StoreWith<GlobalGroup> = {
+    const globalStore: HippoStore = {
       ...inner,
       finishRecall: async (w) => {
         writes.push(w);

@@ -175,7 +175,12 @@ describe('captureExtractedItems', () => {
     };
     const keys = new Set<string>();
     expect(
-      await captureExtractedItems({ store: { hippoDb: { captures } }, config, embed }, options, [item(text)], keys),
+      await captureExtractedItems(
+        { store: { hippoDb: { ...store.hippoDb, captures } }, config, embed },
+        options,
+        [item(text)],
+        keys,
+      ),
     ).toEqual({
       captured: 0,
       skipped: 1,

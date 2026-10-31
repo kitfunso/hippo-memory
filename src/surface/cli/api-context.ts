@@ -1,6 +1,6 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
-import type { ContextReach, ContextWith, GlobalInReach } from '../../api/types.js';
+import type { ContextReach, GlobalInReach } from '../../api/types.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
@@ -13,7 +13,6 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpContext, McpHost } from '../mcp/protocol.js';
 import { allMcpTools } from '../mcp/request.js';
 import type { ImportFiles } from '../importers/core.js';
-import type { OptionalGroup } from '../../base/ports/store.js';
 import {
   askingNearestFirst,
   sqliteImportFiles,
@@ -66,8 +65,7 @@ export type CliStore = HippoDbStore;
 
 /** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
  * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
-export type CliContext = ContextWith<OptionalGroup> &
-  HippoDbContext & { readonly hippoRoot: string };
+export type CliContext = HippoDbContext & HippoDbContext & { readonly hippoRoot: string };
 
 /** One CLI command's stores, built by the CLI root and handed to its verb: each store holds the
  * command's runtime and, inside a request, that request's session. */

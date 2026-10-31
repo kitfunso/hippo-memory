@@ -11,7 +11,7 @@ import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { HippoStore } from '../base/ports/store.js';
-import { requireHippoDb } from '../api/hippo-db-context.js';
+import { withHippoDb } from '../api/hippo-db-context.js';
 import { judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';
@@ -99,7 +99,7 @@ export const retrieveWithCliCore = filled(api.retrieveWithCliCore);
 function connector<A extends unknown[], R>(
   fn: (ctx: ConnectorContext, ...args: A) => R,
 ): (ctx: EntryContext, ...args: A) => R {
-  return filled<A, R>((ctx, ...args) => fn({ ...ctx, store: requireHippoDb(ctx.store) }, ...args));
+  return filled<A, R>((ctx, ...args) => fn(withHippoDb(ctx), ...args));
 }
 export const ingestEvent = connector(ingestGithubEvent);
 export const ingestMessage = connector(ingestSlackMessage);

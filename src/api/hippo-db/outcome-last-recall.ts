@@ -1,7 +1,7 @@
 // Outcome feedback on the last recall, which hippo.db's local tier keeps for the CLI.
 
 import { scopeReaderOf } from '../../base/scope/recall-scope.js';
-import type { ContextWith } from '../types.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 /** The last recall's ids and its trace sit with the store's lastRecall group, which only the CLI
  * and context write. `ids` holds only the ids applied in ctx.tenantId: the index is not
@@ -11,7 +11,7 @@ export interface OutcomeForLastRecallResult {
   ids: string[];
 }
 export async function outcomeForLastRecall(
-  ctx: ContextWith<'lastRecall'>,
+  ctx: HippoDbContext,
   good: boolean,
 ): Promise<OutcomeForLastRecallResult> {
   const ids = await ctx.store.hippoDb.lastRecall.applyOutcomeToLast(

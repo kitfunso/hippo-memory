@@ -1,4 +1,5 @@
-/** A Context's store is the required store; an api or entry that reads an optional group names it in its type. */
+/** A Context's store is the core store; a published entry on hippo.db's local tier takes it as is and proves the
+ * tier at run time. */
 
 import { describe, expectTypeOf, it } from 'vitest';
 import type { Context, ContextWith, EntryContext } from '../../src/api/types.js';
@@ -23,13 +24,13 @@ describe('Context store groups', () => {
     expectTypeOf<ContextWith<'goals'>>().toMatchTypeOf<Context>();
   });
 
-  it('the six session entries of ./server refuse a Context without sessions', () => {
-    expectTypeOf<EntryContext>().not.toMatchTypeOf<Parameters<typeof bindSessionOwner>[0]>();
-    expectTypeOf<EntryContext>().not.toMatchTypeOf<Parameters<typeof compactResumeForCaller>[0]>();
-    expectTypeOf<EntryContext>().not.toMatchTypeOf<Parameters<typeof sessionEndHandoffForCaller>[0]>();
-    expectTypeOf<EntryContext>().not.toMatchTypeOf<Parameters<typeof preCompactForCaller>[0]>();
-    expectTypeOf<EntryContext>().not.toMatchTypeOf<Parameters<typeof saveCompactionItemsForCaller>[0]>();
-    expectTypeOf<EntryContext>().not.toMatchTypeOf<Parameters<typeof captureFailureForCaller>[0]>();
-    expectTypeOf<EntryContext<ContextWith<'sessions'>>>().toMatchTypeOf<Parameters<typeof bindSessionOwner>[0]>();
+  it('the session entries of ./server take the published Context, which names no local tier', () => {
+    expectTypeOf(bindSessionOwner).parameter(0).toEqualTypeOf<EntryContext>();
+    expectTypeOf(compactResumeForCaller).parameter(0).toEqualTypeOf<EntryContext>();
+    expectTypeOf(sessionEndHandoffForCaller).parameter(0).toEqualTypeOf<EntryContext>();
+    expectTypeOf(preCompactForCaller).parameter(0).toEqualTypeOf<EntryContext>();
+    expectTypeOf(saveCompactionItemsForCaller).parameter(0).toEqualTypeOf<EntryContext>();
+    expectTypeOf(captureFailureForCaller).parameter(0).toEqualTypeOf<EntryContext>();
+    expectTypeOf<Extract<keyof EntryContext['store'], 'hippoDb'>>().toEqualTypeOf<never>();
   });
 });

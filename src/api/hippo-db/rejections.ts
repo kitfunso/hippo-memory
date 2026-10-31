@@ -13,9 +13,10 @@ import {
   type UnrejectOutcome,
 } from '../../domain/trust/reject-flow.js';
 import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
-import { requireHostAdmin, type ContextWith } from '../types.js';
+import { requireHostAdmin } from '../types.js';
 import { memoryGet } from '../memories/memories.js';
 import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 // Reject administration is Context-based and tenant-checked; it shares one transaction flow with
 // `hippo reject` via src/domain/trust/reject-flow.ts.
@@ -38,10 +39,7 @@ export interface RejectResult {
  * `unreject`; pass exactly one of `memoryId` or `value`. `memoryId` also removes every live
  * tenant row with that digest (not others' personal rows); `reason` is required. Throws on an
  * unknown id or both/neither. */
-export async function reject(
-  ctx: ContextWith<'rejections'>,
-  opts: RejectOptions,
-): Promise<RejectResult> {
+export async function reject(ctx: HippoDbContext, opts: RejectOptions): Promise<RejectResult> {
   if (opts.memoryId !== undefined) {
     // Tenant scope: same not-found-shaped denial as forget/promote; rejectValue tenant-checks too,
     // but pre-checking keeps the error message consistent.
@@ -58,17 +56,14 @@ export async function reject(
  * personal row by id answers with the personal refusal rather than reject's not-found, as the
  * operator can see that row. */
 export async function rejectOnHost(
-  ctx: ContextWith<'rejections'>,
+  ctx: HippoDbContext,
   opts: RejectOptions,
 ): Promise<RejectFlowResult> {
   requireHostAdmin(ctx, 'Rejecting with the removal report');
   return applyReject(ctx, opts);
 }
 
-function applyReject(
-  ctx: ContextWith<'rejections'>,
-  opts: RejectOptions,
-): Promise<RejectFlowResult> {
+function applyReject(ctx: HippoDbContext, opts: RejectOptions): Promise<RejectFlowResult> {
   return rejectValue(ctx.store, {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
@@ -82,7 +77,7 @@ function applyReject(
 /** Lifts the tombstone a digest or unambiguous prefix names, as the caller; a blank one, no
  * match or several come back as the outcome, so a caller can list the candidates. */
 export function liftRejection(
-  ctx: ContextWith<'rejections'>,
+  ctx: HippoDbContext,
   digestOrPrefix: string,
 ): Promise<UnrejectOutcome> {
   return unrejectValue(ctx.store, {
@@ -93,13 +88,13 @@ export function liftRejection(
 }
 
 /** Every tombstone of the caller's tenant. */
-export function listRejections(ctx: ContextWith<'rejections'>): Promise<RejectedValueRow[]> {
+export function listRejections(ctx: HippoDbContext): Promise<RejectedValueRow[]> {
   return listRejectionsForTenant(ctx.store, ctx.tenantId);
 }
 
 /** Deletes a tombstone by exact digest or unambiguous prefix, restoring writability (the only v1
  * escape hatch); throws on blank, no match or several. */
-export async function unreject(ctx: ContextWith<'rejections'>, digestOrPrefix: string) {
+export async function unreject(ctx: HippoDbContext, digestOrPrefix: string) {
   const outcome = await liftRejection(ctx, digestOrPrefix);
   if (outcome.status === 'not_found') {
     throw new NotFoundError(`no rejected value matches: ${digestOrPrefix}`);

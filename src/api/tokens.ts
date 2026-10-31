@@ -4,8 +4,9 @@ import { rethrowIfStoreBlocked } from '../base/util/store-blocked.js';
 import type { TokenSummary, TokenSurface } from '../base/ports/store/ledger.js';
 import type { FailureSummary } from '../base/ports/store/rejections.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
-import type { Context, ContextWith } from './types.js';
+import type { Context } from './types.js';
 import { DAY_MS } from '../base/util/time.js';
+import type { HippoDbContext } from './hippo-db-context.js';
 
 /** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since
  * a ledger failure must not fail the recall or context call. */
@@ -40,7 +41,7 @@ export const DEFAULT_REPORT_WINDOW_DAYS = 30;
  * DEFAULT_REPORT_WINDOW_DAYS): tokens sent, skipped as unchanged and re-read, per surface, with
  * session counts and mean tokens per session. */
 export function tokenSummary(
-  ctx: ContextWith<'reports'>,
+  ctx: HippoDbContext,
   opts: { days?: number } = {},
 ): Promise<TokenSummary> {
   return ctx.store.hippoDb.reports.tokenUse(
@@ -52,7 +53,7 @@ export function tokenSummary(
 /** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default
  * DEFAULT_REPORT_WINDOW_DAYS). */
 export function failureSummary(
-  ctx: ContextWith<'reports'>,
+  ctx: HippoDbContext,
   opts: { days?: number } = {},
 ): Promise<FailureSummary> {
   return ctx.store.hippoDb.reports.failures(

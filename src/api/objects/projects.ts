@@ -13,7 +13,8 @@ import {
 } from '../../domain/sharing/project-merge.js';
 import type { ProjectTagReads, ProjectTagScope } from '../../base/ports/store/project-tags.js';
 import type { Machine } from '../../base/util/agent-homes.js';
-import { sharedStoreOf, type ContextWith } from '../types.js';
+import { sharedStoreOf } from '../types.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 export type {
   MergeResult,
@@ -31,9 +32,9 @@ export interface MergeProjectNamesOptions {
 }
 
 /** A repair reads the store's folder as well as its rows. */
-type RepairContext = ContextWith<'projectTags' | 'folderFiles'>;
+type RepairContext = HippoDbContext;
 
-function scopeOf(ctx: ContextWith<'projectTags'>): ProjectTagScope {
+function scopeOf(ctx: HippoDbContext): ProjectTagScope {
   return { tenantId: ctx.tenantId, actor: ctx.actor.subject };
 }
 
@@ -45,20 +46,20 @@ async function folderOf(ctx: RepairContext): Promise<StoreFolder> {
 
 /** The reads a project-name plan takes: the tier's project tags, and rows and audit from the
  * port. */
-function tagReads(store: ContextWith<'projectTags'>['store']): ProjectTagReads {
+function tagReads(store: HippoDbContext['store']): ProjectTagReads {
   const { entriesWhere, auditLog } = store;
   return { projectTags: store.hippoDb.projectTags, entriesWhere, auditLog };
 }
 
 /** Live rows per project name in the caller's tenant, newest write first. */
-export function projectNameList(ctx: ContextWith<'projectTags'>): Promise<ProjectSummary[]> {
+export function projectNameList(ctx: HippoDbContext): Promise<ProjectSummary[]> {
   return listProjects(tagReads(ctx.store), ctx.tenantId);
 }
 
 /** Folds project `from` into `into`, backed up and audited as `ctx.actor`; rejects on
  * user-global, unknown or equal names. */
 export function projectNameMerge(
-  ctx: ContextWith<'projectTags'>,
+  ctx: HippoDbContext,
   opts: MergeProjectNamesOptions,
 ): Promise<MergeResult> {
   return mergeProjects(ctx.store.hippoDb.projectTags, scopeOf(ctx), opts);

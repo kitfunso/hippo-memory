@@ -22,6 +22,7 @@ import {
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { handleMcpRequest } from './request.js';
 import type { HippoStore } from '../../base/ports/store.js';
+import { hasHippoDb } from '../../api/hippo-db-context.js';
 import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';
 import { randomUUID } from 'node:crypto';
@@ -210,7 +211,7 @@ async function createGlobalStoreOnFirstRun<S extends HippoStore>(
   const root = hippoHomeDir();
   const target = contextFor(root, tenantId).reach?.globalTarget;
   // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
-  if (target === undefined) return root;
+  if (target === undefined || !hasHippoDb(target.store)) return root;
   await target.store.hippoDb.folderFiles.ensure();
   log.warn(
     `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
