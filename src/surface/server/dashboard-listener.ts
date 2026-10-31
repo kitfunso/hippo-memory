@@ -4,8 +4,7 @@
 import type { Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
-import { requireGroups } from '../../base/ports/store.js';
-import { DASHBOARD_GROUPS } from './dashboard-types.js';
+import { requireHippoDb } from '../../api/hippo-db-context.js';
 import { configReader } from '../../host/config-file.js';
 import { evalClock, evalStoreRules } from '../../infra/eval-switches.js';
 import { loadStaticFiles } from '../dashboard/static-file.js';
@@ -79,8 +78,8 @@ function servingFor(
   const now = opts.now ?? ((): number => clock().getTime());
   const configAt = configReader(envRuntimeSettings);
   const infra = rootInfra(host);
-  // Proved once, so a store without the Board's groups refuses at start, never on a request.
-  const dashboardStore = requireGroups(store, DASHBOARD_GROUPS);
+  // Proved once, so a store without the local tier refuses at start, never on a request.
+  const dashboardStore = requireHippoDb(store);
   return {
     access: { token: opts.token, port: opts.port, tickets: dashboardTickets() },
     reader: startDashboardReader(

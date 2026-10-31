@@ -391,7 +391,7 @@ describe('assemble and drill over serve()', () => {
     vi.unstubAllEnvs();
   });
 
-  it('answer the same on hippo.db and through the port alone', async () => {
+  it('answer on hippo.db, and 501 on a store with no local tier', async () => {
     const onHippoDb = await runServed();
     expect(onHippoDb.map((r) => r.status)).toEqual(SERVED.map(([, status]) => status));
     expect(onHippoDb[0]?.body).toMatchObject({
@@ -410,6 +410,7 @@ describe('assemble and drill over serve()', () => {
       { totalChildren: 12, truncated: true },
       { totalChildren: 1, truncated: false, children: [{ id: 'loop_b' }] },
     ]);
-    expect(await runServed((root) => portOnlyStore(root, ['dagReads']))).toEqual(onHippoDb);
+    const onCoreOnly = await runServed((root) => portOnlyStore(root));
+    expect(onCoreOnly.map((r) => r.status)).toEqual(SERVED.map(() => 501));
   });
 });

@@ -59,6 +59,8 @@ interface Case {
   readonly reaches?: (pass: Pass) => void;
   /** Reads the port-only store must have answered, so the case cannot pass on hippo.db's copy. */
   readonly storeReads?: readonly string[];
+  /** The handoff comes from hippo.db's local tier, which a port-only store lacks, so that store answers without it. */
+  readonly tierHandoff?: true;
 }
 
 const ALICE: Actor = { subject: 'api_key:k1', role: 'member', owner: OWNER };
@@ -238,7 +240,7 @@ const CASES: readonly Case[] = [
       expect(p.result.activeSnapshot).toBeUndefined();
       expect(p.result.sessionHandoff?.summary).toBe('globex handoff');
     },
-    storeReads: ['sessions.read'],
+    tierHandoff: true,
   },
 ];
 
@@ -472,12 +474,9 @@ describe('contextGet on a port-only store, with hippo.db blocked', () => {
     const before = embeddings.requests();
     let port: PortOnlySide | undefined;
     // The operator's global store sits under HIPPO_HOME here, and a store other than hippo.db must neither read nor write it.
-    const onPort = await runPass(
-      c,
-      { withGlobal: true, embedded: true },
-      (root) => (port = portOnlySide(root, ['graphReads', 'sessions'])),
-    );
-    expect(rounded(onPort.result)).toEqual(rounded(onHippoDb.result));
+    const onPort = await runPass(c, { withGlobal: true, embedded: true }, (root) => (port = portOnlySide(root)));
+    const want = c.tierHandoff ? { ...onHippoDb.result, sessionHandoff: undefined } : onHippoDb.result;
+    expect(rounded(onPort.result)).toEqual(rounded(want));
     expect(onPort.rows.local).toEqual(onHippoDb.rows.local);
     expect(onPort.rows.global).toEqual(globalRows);
     // The last-recall ids feed only POST /v1/outcome, which no other store serves, so the store path leaves them as seeded.

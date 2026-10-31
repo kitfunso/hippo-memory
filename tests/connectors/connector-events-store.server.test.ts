@@ -17,8 +17,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { portOnlyStore } from '../_helpers/port-only-store.js';
-import { CONNECTOR_GROUPS, type ConnectorContext } from '../../src/surface/connectors/ingest.js';
+import type { ConnectorContext } from '../../src/surface/connectors/ingest.js';
 import { sqliteConnectorEventsSide, type ConnectorEventsSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -86,7 +85,7 @@ afterAll(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('the connector entry points on a store with connectorEvents', () => {
+describe('the connector entry points on a store served from another folder', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(NOW));
@@ -99,7 +98,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
   it('ingest, redelivery, empty body, deletion and unknown deletion answer from the store with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const served = copyOf();
-    const side = sqliteConnectorEventsSide(served, portOnlyStore(served, CONNECTOR_GROUPS));
+    const side = sqliteConnectorEventsSide(served);
     const slack: ConnectorContext = {
       tenantId: TENANT_A,
       actor: slackActor,
@@ -195,7 +194,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
   });
 });
 
-describe('both webhooks under a store that is not hippo.db', () => {
+describe('both webhooks under a store served from another folder', () => {
   // Generated per run, so no signing secret is ever written down.
   const secrets = { slack: randomBytes(24).toString('hex'), github: randomBytes(24).toString('hex') };
   const handles: ServerHandle[] = [];
@@ -289,7 +288,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
     vi.stubEnv('SLACK_SIGNING_SECRET', secrets.slack);
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', secrets.github);
     const folder = await copyWithRoutes();
-    side = sqliteConnectorEventsSide(folder, portOnlyStore(folder, CONNECTOR_GROUPS));
+    side = sqliteConnectorEventsSide(folder);
     served = await serveOn(side.store);
     baseline = side.auditRows().length;
   });
@@ -299,7 +298,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
     vi.unstubAllEnvs();
   });
 
-  it('a store with both connector groups stores, dedupes, parks and archives signed deliveries, and its folder never gets a hippo.db', async () => {
+  it('stores, dedupes, parks and archives signed deliveries, and the served folder never gets a hippo.db', async () => {
     const stored = await postSlack(served.url, slackEvent('T_ACME', 'Ev_message', posted('1700.000001')));
     expect(stored).toMatchObject({ status: 200, body: { ok: true, status: 'ingested', memoryId: expect.any(String) } });
     const memoryId: string = stored.body.memoryId;

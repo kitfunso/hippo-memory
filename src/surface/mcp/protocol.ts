@@ -17,9 +17,8 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import type { GlobalTargetGroup, OptionalGroup, StoreWith } from '../../base/ports/store.js';
-import type { ContextWith } from '../../api/types.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
+import type { GlobalTargetGroup, StoreWith } from '../../base/ports/store.js';
+import type { HippoDbContext, HippoDbStore } from '../../api/hippo-db-context.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
@@ -211,30 +210,19 @@ export interface ToolCall {
 
 export type ToolHandler = (call: ToolCall) => string | Promise<string>;
 
-/** A call on a store boot proved holds the optional groups `G`, and the api Context it runs as
- * on that store. */
-export interface GroupToolCall<G extends OptionalGroup> extends ToolCall {
-  store: StoreWith<G>;
-  api: ContextWith<G>;
+/** A local tool's call: the store boot proved holds hippo.db's local tier, and the api Context it
+ * runs as on that store. */
+export interface HippoDbToolCall extends ToolCall {
+  store: HippoDbStore;
+  api: HippoDbContext;
 }
 
-export type GroupToolHandler<G extends OptionalGroup> = (
-  call: GroupToolCall<G>,
-) => string | Promise<string>;
-
-/** A local tool's call: its groups' store, and an api Context that carries hippo.db's local tier. */
-export interface HippoDbToolCall<G extends OptionalGroup> extends GroupToolCall<G> {
-  api: ContextWith<G> & HippoDbContext;
-}
-
-export type HippoDbToolHandler<G extends OptionalGroup> = (
-  call: HippoDbToolCall<G>,
-) => string | Promise<string>;
+export type HippoDbToolHandler = (call: HippoDbToolCall) => string | Promise<string>;
 
 /** A share or peers call: a folder store and the global store its reach names, both checked by
  * the gate. */
 export interface LocalToolCall extends ToolCall {
-  store: StoreWith<'folderFiles'>;
+  store: HippoDbStore;
   globalTarget: ConfiguredFolder<StoreWith<GlobalTargetGroup>>;
 }
 

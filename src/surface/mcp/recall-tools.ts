@@ -16,7 +16,7 @@ import {
   drillCost,
   drillText,
 } from '../../api/context/context-render.js';
-import { mcpApiContext, ownsServerCwd, type GroupToolCall, type ToolCall } from './protocol.js';
+import { mcpApiContext, ownsServerCwd, type HippoDbToolCall, type ToolCall } from './protocol.js';
 import { toolRecallText } from './tool-recall.js';
 import {
   formatMemories,
@@ -56,11 +56,7 @@ export async function runRecallTool({ ctx, args }: ToolCall): Promise<string> {
   });
 }
 
-export async function runAssembleTool({
-  args,
-  ctx,
-  api,
-}: GroupToolCall<'dagReads'>): Promise<string> {
+export async function runAssembleTool({ args, ctx, api }: HippoDbToolCall): Promise<string> {
   const sessionId = stringArg(args, 'session_id', MAX_ID_LEN);
   if (!sessionId) return 'No session_id provided.';
   const budget = numberArg(args, 'budget');
@@ -82,7 +78,7 @@ export async function runAssembleTool({
   return assembleText(r);
 }
 
-export async function runDrillTool({ args, ctx, api }: GroupToolCall<'dagReads'>): Promise<string> {
+export async function runDrillTool({ args, ctx, api }: HippoDbToolCall): Promise<string> {
   const summaryId = stringArg(args, 'summary_id', MAX_ID_LEN);
   if (!summaryId) return 'No summary_id provided.';
   const limit = numberArg(args, 'limit');

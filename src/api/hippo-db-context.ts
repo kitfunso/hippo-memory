@@ -1,6 +1,7 @@
 // The context a local feature's api module takes: a store that carries hippo.db's local tier.
 // Only a surface that proved the tier at composition builds one, so no core path reaches it.
 import type { HippoDbTier } from '../store/sqlite/hippo-db.js';
+import { StoreNotPortedError } from '../base/util/store-blocked.js';
 import type { HippoConfig } from '../base/config/config.js';
 import type { EmbedderFor } from '../base/ports/embedder.js';
 import type { StoreReach } from '../base/ports/store.js';
@@ -19,6 +20,12 @@ export interface HippoDbContext extends Context {
 export function hasHippoDb<S extends Context['store']>(store: S): store is S & HippoDbTier {
   // An unset tier counts as absent, as hasGroup counts an unset group.
   return 'hippoDb' in store && store.hippoDb !== undefined;
+}
+
+/** `store` with its local tier; a store without one throws the 501 every local path answers. */
+export function requireHippoDb<S extends Context['store']>(store: S): S & HippoDbTier {
+  if (hasHippoDb(store)) return store;
+  throw new StoreNotPortedError(store.kind, 'hippoDb');
 }
 
 /** What a core path reads from `store`'s local tier; unset on a store without one. A root passes

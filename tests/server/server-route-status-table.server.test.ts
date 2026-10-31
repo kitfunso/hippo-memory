@@ -5,7 +5,8 @@ import type { ServerHandle } from '../../src/server.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { needsHippoDb, ROUTE_GROUPS } from '../_helpers/store-switch.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { onLocalTier } from '../_helpers/v1-route-rows.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -240,7 +241,7 @@ describe('HTTP route status table: status and error text per route', () => {
       seeded[key] = entry.id;
     }
     vi.stubEnv('HIPPO_V1_RPS', '0');
-    handle = await serveAsAdmin({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
+    handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterAll(async () => {
@@ -274,13 +275,13 @@ describe('HTTP route status table: status and error text per route', () => {
   }
 
   // A caller on this machine of these routes reaches the global store, the caller's project, sleep or hippo.db's tier.
-  const onHippoDbOnly = (path: string): boolean => {
-    if (path.startsWith('/v1/quarantine')) return needsHippoDb('tier');
+  const onHippoDbOnly = (method: string, path: string): boolean => {
+    if (onLocalTier(method, path)) return needsHippoDb('tier');
     if (path.endsWith('/sleep')) return needsHippoDb('sleep');
     return /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
   };
   for (const [method, path, , [status, error]] of ROUTES) {
-    it.skipIf(onHippoDbOnly(path))(`${method} ${path} with no body on loopback`, async () => {
+    it.skipIf(onHippoDbOnly(method, path))(`${method} ${path} with no body on loopback`, async () => {
       const r = await call({ method, path: fill(path) });
       expect({ status: r.status, error: r.error, contentType: r.contentType }).toEqual({
         status,
@@ -342,7 +343,7 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.auditBadOp, 400, { error: expect.stringMatching(/^op must be one of: remember \| /) });
   });
 
-  it('prediction and decision routes with valid input', async () => {
+  it.skipIf(needsHippoDb('tier'))('prediction and decision routes with valid input', async () => {
     const out = {
       predict: await create('prediction', '/v1/predictions', {
         claim: 'ship by friday',
@@ -374,7 +375,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   });
 
-  it('incident and process routes with valid input', async () => {
+  it.skipIf(needsHippoDb('tier'))('incident and process routes with valid input', async () => {
     const out = {
       open: await create('incident', '/v1/incidents', { text: 'db down', linkedMemoryIds: [seeded.recall] }),
       incidents: await get('/v1/incidents?status=open'),
@@ -408,7 +409,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   });
 
-  it('policy and skill routes with valid input', async () => {
+  it.skipIf(needsHippoDb('tier'))('policy and skill routes with valid input', async () => {
     const out = {
       policy: await create('policy', '/v1/policies', {
         policyName: 'retention',
@@ -449,7 +450,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   });
 
-  it('project brief and customer note routes with valid input', async () => {
+  it.skipIf(needsHippoDb('tier'))('project brief and customer note routes with valid input', async () => {
     const out = {
       brief: await create('brief', '/v1/project-briefs', { repo: 'kitfunso/parity', summary: 'parity brief' }),
       briefs: await get('/v1/project-briefs?repo=kitfunso/parity'),
@@ -480,7 +481,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   });
 
-  it('a literal path segment wins over the parameterised route next to it', async () => {
+  it.skipIf(needsHippoDb('tier'))('a literal path segment wins over the parameterised route next to it', async () => {
     const out = {
       statsNotById: await get('/v1/predictions/stats'),
       asofNotById: await get('/v1/policies/asof'),
@@ -498,7 +499,9 @@ describe('HTTP route status table: status and error text per route', () => {
   });
 
   it('non-routes, wrong methods and malformed paths', async () => {
-    expect(await runCases(handle.url, NON_ROUTES)).toEqual(expected(NON_ROUTES));
+    // A webhook answers 501 before its secret check on a store without the local tier.
+    const cases = NON_ROUTES.filter(([, method, path]) => !(needsHippoDb('tier') && onLocalTier(method, path)));
+    expect(await runCases(handle.url, cases)).toEqual(expected(cases));
     const health = await get('/health');
     expect(Object.keys(isJsonObject(health.json) ? health.json : {}).sort()).toEqual([
       'audit_write_failures',
@@ -519,7 +522,7 @@ describe('HTTP route status table under the rate limiter', () => {
   it('throttles /v1 and /mcp but never /health or other paths', async () => {
     const home = makeRoot('route-parity-rl');
     vi.stubEnv('HIPPO_V1_RPS', '0.5');
-    const handle = await serveAsAdmin({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
+    const handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
     try {
       expect(await runCases(handle.url, LIMITED)).toEqual(expected(LIMITED));
     } finally {

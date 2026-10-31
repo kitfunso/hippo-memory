@@ -2,23 +2,16 @@
 // switch.
 
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
-import {
-  hasGroup,
-  hasGroups,
-  type HippoStore,
-  type OptionalGroup,
-  type StoreWith,
-} from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../../api/recall/request.js';
 import { globalTargetOf } from '../../api/infra.js';
 import { recordTokens } from '../../api/tokens.js';
-import { hasHippoDb, type HippoDbStore, type HippoDbTier } from '../../api/hippo-db-context.js';
+import { hasHippoDb, type HippoDbStore } from '../../api/hippo-db-context.js';
 import {
   mcpApiContext,
-  type GroupToolHandler,
   type HippoDbToolHandler,
   type LocalToolHandler,
   type McpCaller,
@@ -80,68 +73,45 @@ function anyStore(run: ToolHandler): ToolRow {
   return { bind: () => tool, onAll: tool };
 }
 
-/** A tool that runs only on a store with every group `needs` names, handed that store and an api
+/** A tool that runs only on a store with hippo.db's local tier, handed that store and an api
  * Context on it. */
-function needing<G extends OptionalGroup>(needs: readonly G[], run: GroupToolHandler<G>): ToolRow {
+function onHippoDb(run: HippoDbToolHandler): ToolRow {
   const on =
-    (ctx: McpCaller, store: StoreWith<G>): ToolRun =>
+    (ctx: McpCaller, store: HippoDbStore): ToolRun =>
     (args) =>
       run({ ...toolCall(ctx), args, store, api: { ...mcpApiContext(ctx), store } });
   return {
-    bind: (proved) =>
-      hasGroups(proved, needs) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined,
-    onAll: (ctx) => on(ctx, ctx.store),
-  };
-}
-
-/** A tool that runs only on hippo.db's store, handed its local tier and every group `needs`
- * names. */
-function onHippoDb<G extends OptionalGroup>(
-  needs: readonly G[],
-  run: HippoDbToolHandler<G>,
-): ToolRow {
-  const on =
-    (ctx: McpCaller, store: StoreWith<G> & HippoDbTier): ToolRun =>
-    (args) => {
-      const api = { ...mcpApiContext(ctx), store };
-      return run({ ...toolCall(ctx), args, store, api });
-    };
-  return {
-    bind: (proved) =>
-      hasHippoDb(proved) && hasGroups(proved, needs)
-        ? (ctx) => on(ctx, ctx.storeFor(proved))
-        : undefined,
+    bind: (proved) => (hasHippoDb(proved) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined),
     onAll: (ctx) => on(ctx, ctx.store),
   };
 }
 
 /** A tool that runs only under a folder store with a global store in its reach. */
 function localTool(run: LocalToolHandler): ToolRow {
-  const on = (ctx: McpCaller, store: StoreWith<'folderFiles'>): ToolRun | undefined => {
+  const on = (ctx: McpCaller, store: HippoDbStore): ToolRun | undefined => {
     const globalTarget = globalTargetOf(ctx);
     return globalTarget === undefined
       ? undefined
       : (args) => run({ ...toolCall(ctx), args, store, globalTarget });
   };
   return {
-    bind: (proved) =>
-      hasGroup(proved, 'folderFiles') ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined,
+    bind: (proved) => (hasHippoDb(proved) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined),
     onAll: (ctx) => on(ctx, ctx.store),
   };
 }
 
 const TOOL_ROWS: ReadonlyMap<string, ToolRow> = new Map<string, ToolRow>([
   ['hippo_recall', anyStore(runRecallTool)],
-  ['hippo_assemble', needing(['dagReads'], runAssembleTool)],
-  ['hippo_drill', needing(['dagReads'], runDrillTool)],
-  ['hippo_predict_baserate', needing(['objects'], runPredictBaserateTool)],
+  ['hippo_assemble', onHippoDb(runAssembleTool)],
+  ['hippo_drill', onHippoDb(runDrillTool)],
+  ['hippo_predict_baserate', onHippoDb(runPredictBaserateTool)],
   ['hippo_remember', anyStore(runRememberTool)],
   ['hippo_outcome', anyStore(runOutcomeTool)],
   ['hippo_context', anyStore(runContextTool)],
-  ['hippo_status', needing(['reports'], runStatusTool)],
-  ['hippo_learn', onHippoDb(['lessonWrites'], runLearnTool)],
-  ['hippo_conflicts', needing(['conflicts'], runConflictsTool)],
-  ['hippo_resolve', needing(['conflicts'], runResolveTool)],
+  ['hippo_status', onHippoDb(runStatusTool)],
+  ['hippo_learn', onHippoDb(runLearnTool)],
+  ['hippo_conflicts', onHippoDb(runConflictsTool)],
+  ['hippo_resolve', onHippoDb(runResolveTool)],
   ['hippo_share', localTool(runShareTool)],
   ['hippo_peers', localTool(runPeersTool)],
 ]);

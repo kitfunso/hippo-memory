@@ -130,7 +130,7 @@ describe('retrieve with the CLI ranking core', () => {
       id: 'mem_second_0',
       strength: 1,
     });
-    const inner = portOnlyStore(secondRoot, ['learning', 'ledger', 'folderFiles', 'sessions']);
+    const inner = sqliteStore(secondRoot);
     const writes: RecallWrites[] = [];
     const globalStore: StoreWith<GlobalGroup> = {
       ...inner,

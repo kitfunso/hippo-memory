@@ -418,15 +418,18 @@ describe('the server-thread block of the object routes', () => {
     ).toEqual([...SENDS.keys()].sort());
   });
 
-  it('answers every one of them from the workers with no open of hippo.db on the server thread', async () => {
-    const info = vi.spyOn(log, 'trail');
-    const steps = routeSteps(objectRoutes());
+  it.skipIf(needsHippoDb('tier'))(
+    'answers every one of them from the workers with no open of hippo.db on the server thread',
+    async () => {
+      const info = vi.spyOn(log, 'trail');
+      const steps = routeSteps(objectRoutes());
 
-    const { replies } = await runSteps(steps, false);
+      const { replies } = await runSteps(steps, false);
 
-    expect(replies.map((reply) => [reply.label, reply.status])).toEqual(statuses(steps));
-    expect(blockedLines(info)).toEqual([]);
-  });
+      expect(replies.map((reply) => [reply.label, reply.status])).toEqual(statuses(steps));
+      expect(blockedLines(info)).toEqual([]);
+    },
+  );
 
   it('fails every one of them when its handler opens hippo.db on the server thread', async () => {
     const root = newRoot('object-routes');

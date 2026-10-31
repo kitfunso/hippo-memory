@@ -362,8 +362,8 @@ function frozenAddonRoutes(
 ): NonNullable<ServeOptions['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
-    (addonRoutes ?? []).map(({ path, handler, storeReady }) =>
-      Object.freeze({ path, handler, ...(storeReady !== undefined && { storeReady }) }),
+    (addonRoutes ?? []).map(({ path, handler, hippoDb }) =>
+      Object.freeze({ path, handler, ...(hippoDb === true && { hippoDb }) }),
     ),
   );
   assertAddonRoutes(routes);

@@ -197,8 +197,8 @@ jobs:
         run: node scripts/checks/check-open-core.mjs
 
   # The HTTP server and MCP suites again with serve() on hippo.db's store through the port alone, under a kind that is
-  # not 'sqlite', with only the required groups and the optional ones each suite names, so the port holds for the
-  # smallest store. A test that needs hippo.db's folder skips with its reason (tests/_helpers/store-switch.ts).
+  # not 'sqlite', with only its core groups and no local tier, so the port holds for the smallest store. A test that
+  # needs hippo.db's folder or its local tier skips with its reason (tests/_helpers/store-switch.ts).
   port-only:
     runs-on: ubuntu-latest
     timeout-minutes: 15

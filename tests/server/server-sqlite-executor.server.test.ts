@@ -283,7 +283,6 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
       const server = await serveKeyed({
         hippoRoot: root,
         port: 0,
-        keep: ['objects'],
         authResolver: (token) => {
           closeHippoDb(openHippoDb(root));
           return token === 'idp-token' ? { tenantId: 'default', subject: 'idp:alice', role: 'admin' } : null;
@@ -317,17 +316,20 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
 });
 
 describe('stopping a server with store workers', () => {
-  it('leaves the default store folder free to remove as soon as stop() resolves', async () => {
-    const root = newRoot();
-    const server = await start(root);
-    expect((await post(server, '/v1/predictions', claim('starts the writer'))).status).toBe(201);
-    expect((await get(server, '/v1/predictions')).status).toBe(200);
+  it.skipIf(needsHippoDb('tier'))(
+    'leaves the default store folder free to remove as soon as stop() resolves',
+    async () => {
+      const root = newRoot();
+      const server = await start(root);
+      expect((await post(server, '/v1/predictions', claim('starts the writer'))).status).toBe(201);
+      expect((await get(server, '/v1/predictions')).status).toBe(200);
 
-    await server.stop();
-    rmSync(root, { recursive: true });
+      await server.stop();
+      rmSync(root, { recursive: true });
 
-    expect(existsSync(root)).toBe(false);
-  });
+      expect(existsSync(root)).toBe(false);
+    },
+  );
 
   it('has no live thread once the store is closed', async () => {
     const root = newRoot();

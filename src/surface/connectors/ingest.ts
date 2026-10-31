@@ -1,21 +1,21 @@
 // The write half every connector's ingest shares, after its own pre-check of the event log.
 
 import { rememberUntrusted, type RememberOptions } from '../../api/index.js';
-import type { Actor, ContextWith } from '../../api/types.js';
-import { coreEnrichment } from '../../api/hippo-db-context.js';
-import type { ConnectorEvent, OptionalGroup, StoreWith } from '../../base/ports/store.js';
+import type { Actor } from '../../api/types.js';
+import {
+  coreEnrichment,
+  type HippoDbContext,
+  type HippoDbStore,
+} from '../../api/hippo-db-context.js';
+import type { ConnectorEvent } from '../../base/ports/store.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
-/** The groups every connector reaches: its event log, and the writes that commit with an event. */
-export const CONNECTOR_GROUPS = [
-  'connectorWrites',
-  'connectorEvents',
-] as const satisfies readonly OptionalGroup[];
-export type ConnectorGroup = (typeof CONNECTOR_GROUPS)[number];
-export type ConnectorStore = StoreWith<ConnectorGroup>;
-export type ConnectorContext = ContextWith<ConnectorGroup>;
+/** A connector's event log and the writes that commit with an event live in hippo.db's local
+ * tier, so a connector runs only on a store that has one. */
+export type ConnectorStore = HippoDbStore;
+export type ConnectorContext = HippoDbContext;
 
 /** What the server hands a connector's webhook: the store, its config and the outside services. */
 export interface WebhookPorts {

@@ -2,27 +2,24 @@
 import { randomBytes, scryptSync } from 'node:crypto';
 import { type McpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore, type ApiKeyRecord, type HippoStore } from '../../src/entry/store-kit.js';
-import { FOLDER_GROUPS, withoutFolderGroups } from './port-only-store.js';
+import { withoutHippoDb } from './port-only-store.js';
 import { V1_ROWS } from './v1-route-rows.js';
 
 /** A V1_ROWS key as a request line, each :param slot filled with 1. */
 export const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
 
-// The folder groups, none of which the stub holds.
-const FOLDER_NEEDS: ReadonlySet<string> = new Set(FOLDER_GROUPS);
-
-/** The entries that need hippo.db's folder groups or its local tier, which no store but hippo.db's has. */
+/** The entries that need hippo.db's local tier, which no store but hippo.db's has: its rows and the
+ * webhooks, whose connector writes live there. */
 export function localFileRoutes(): string[] {
-  return V1_ROWS.filter(
-    ({ route }) => (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) || route.hippoDb === true,
-  ).map(({ key }) => requestLine(key));
+  return V1_ROWS.filter(({ route }) => route.hippoDb === true || route.auth === 'webhook-signature').map(({ key }) =>
+    requestLine(key),
+  );
 }
 
-/** hippo.db's groups, each fenced by serve() for a 'stub' store so a handler reaching one answers 501, without the
- * optional groups. */
+/** hippo.db's core groups under a 'stub' kind, without its local tier. */
 export function stubStore(root: string, base: Partial<HippoStore>): HippoStore {
   const stub = {
-    ...withoutFolderGroups(sqliteStore(root)),
+    ...withoutHippoDb(sqliteStore(root)),
     kind: 'stub',
     ...base,
   };

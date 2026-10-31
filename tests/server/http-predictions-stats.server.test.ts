@@ -32,7 +32,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
+  handle = await serve({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {
@@ -40,7 +40,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('HTTP /v1/predictions/stats', () => {
+describe.skipIf(needsHippoDb('tier'))('HTTP /v1/predictions/stats', () => {
   it.skipIf(needsHippoDb('db'))('returns baserate JSON for a class with closed predictions', async () => {
     // Seed: 2 closed predictions in class "http-test"
     for (const [est, act] of [

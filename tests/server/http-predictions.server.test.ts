@@ -36,7 +36,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
+  handle = await serve({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {
@@ -44,7 +44,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('HTTP /v1/predictions (prediction first-class object)', () => {
+describe.skipIf(needsHippoDb('tier'))('HTTP /v1/predictions (prediction first-class object)', () => {
   it('POST /v1/predictions creates a prediction (201 + Prediction body)', async () => {
     const res = await fetch(`${handle.url}/v1/predictions`, {
       method: 'POST',

@@ -3,7 +3,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { onLocalTier } from '../_helpers/v1-route-rows.js';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -39,7 +40,7 @@ beforeAll(async () => {
   }
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
+  handle = await serve({ hippoRoot: home, port: 0 });
   vi.unstubAllEnvs();
 });
 
@@ -94,8 +95,11 @@ const cases: Array<[string, string, Body, RegExp]> = [
   ],
 ];
 
+// A route on hippo.db's local tier answers 501 before it reads the body on a store without the tier.
+const served = cases.filter(([, path]) => !(needsHippoDb('tier') && onLocalTier('POST', path)));
+
 describe('body field caps', () => {
-  it.each(cases)('%s over its cap is a 400 that names the field and the cap', async (_name, path, body, message) => {
+  it.each(served)('%s over its cap is a 400 that names the field and the cap', async (_name, path, body, message) => {
     const r = await post(path, body);
     expect(r.status).toBe(400);
     expect(r.error).toMatch(message);

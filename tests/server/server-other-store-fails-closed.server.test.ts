@@ -92,25 +92,13 @@ describe('serve() under a store that is not hippo.db', () => {
       routes: [
         {
           path: '/v1/x-addon',
+          hippoDb: true,
           handler: async () => {
             addonRuns += 1;
             return {};
           },
         },
-        { path: '/v1/x-addon-base', storeReady: 'base', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
-        {
-          path: '/v1/x-addon-keywrites',
-          storeReady: 'keyWrites',
-          handler: async ({ ctx }) => ({ tenant: ctx.tenantId }),
-        },
-        {
-          path: '/v1/x-addon-readiness',
-          storeReady: 'readiness',
-          handler: async () => {
-            addonRuns += 1;
-            return {};
-          },
-        },
+        { path: '/v1/x-addon-base', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
       ],
     });
   });
@@ -120,15 +108,11 @@ describe('serve() under a store that is not hippo.db', () => {
     vi.unstubAllEnvs();
   });
 
-  it('answers 501 on the /v1 routes that need local files or the local tier, and never runs the handler', async () => {
+  it('answers 501 on every /v1 route on the local tier, and never runs the handler', async () => {
     const routes = localFileRoutes();
-    expect(routes).toEqual([
-      'POST /v1/memories/1/promote',
-      'POST /v1/sleep',
-      'GET /v1/quarantine',
-      'POST /v1/quarantine/1/approve',
-      'POST /v1/quarantine/1/reject',
-    ]);
+    expect(routes).toEqual(
+      expect.arrayContaining(['GET /v1/graph', 'POST /v1/memories/1/promote', 'POST /v1/sleep', 'GET /v1/quarantine']),
+    );
     for (const route of routes) {
       const [method, path] = route.split(' ');
       const res = await fetch(`${handle.url}${path}`, {
@@ -160,7 +144,7 @@ describe('serve() under a store that is not hippo.db', () => {
     expect([...replies].filter(([, status]) => ![400, 401, 403, 404, 501].includes(status))).toEqual([]);
   });
 
-  it('answers 501 on an add-on route that names no group, and never runs its handler; a bad key is still a 401', async () => {
+  it('answers 501 on an add-on route on the local tier, and never runs its handler; a bad key is still a 401', async () => {
     const res = await post('/v1/x-addon', valid);
     expect({ status: res.status, body: await res.json() }).toEqual({
       status: 501,
@@ -170,21 +154,13 @@ describe('serve() under a store that is not hippo.db', () => {
     expect(addonRuns).toBe(0);
   });
 
-  it('runs an add-on route that names a required group, and refuses one whose optional group the store lacks', async () => {
-    for (const path of ['/v1/x-addon-base', '/v1/x-addon-keywrites']) {
-      const ran = await post(path, valid);
-      expect({ path, status: ran.status, body: await ran.json() }).toEqual({
-        path,
-        status: 200,
-        body: { tenant: valid.record.tenantId },
-      });
-    }
-    expect((await post('/v1/x-addon-base', newKey())).status).toBe(401);
-    const refused = await post('/v1/x-addon-readiness', valid);
-    expect({ status: refused.status, body: await refused.json() }).toEqual({
-      status: 501,
-      body: { error: STORE_NOT_PORTED_MESSAGE },
+  it('runs an add-on route with no hippoDb flag on any store', async () => {
+    const ran = await post('/v1/x-addon-base', valid);
+    expect({ status: ran.status, body: await ran.json() }).toEqual({
+      status: 200,
+      body: { tenant: valid.record.tenantId },
     });
+    expect((await post('/v1/x-addon-base', newKey())).status).toBe(401);
     expect(addonRuns).toBe(0);
   });
 

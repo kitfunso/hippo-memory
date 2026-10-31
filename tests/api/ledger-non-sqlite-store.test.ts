@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { adminActor, contextReach } from '../../src/api/index.js';
 import { promptHookContext } from '../../src/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { withoutFolderGroups } from '../_helpers/port-only-store.js';
+import { withoutHippoDb } from '../_helpers/port-only-store.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -49,7 +49,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
     const donor = donorStore();
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
-    const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other' };
+    const store = { ...withoutHippoDb(sqliteStore(donor)), kind: 'other' };
     const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, REQUEST);
     expect(out.stdout).toContain('rollback plan');
@@ -63,7 +63,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
     const { hippoDb } = sqliteStore(donor);
-    const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other', hippoDb };
+    const store = { ...withoutHippoDb(sqliteStore(donor)), kind: 'other', hippoDb };
     const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, REQUEST);
     expect(out.stdout).toContain('rollback plan');
@@ -78,7 +78,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
     const globalRoot = path.join(tmp, 'global');
     fs.mkdirSync(globalRoot);
     initTestStore(globalRoot);
-    const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other' };
+    const store = { ...withoutHippoDb(sqliteStore(donor)), kind: 'other' };
     const global = { root: globalRoot, store: sqliteStore(globalRoot) };
     const reachOf = { hasLocal: true, isGlobal: false, shared: false, global };
     const reach = contextReach(reachOf, loadConfig, testInfra().embedderFor);

@@ -10,7 +10,8 @@ export { evalNow, isRecallBoostAblated } from '../infra/eval-switches.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
-import { requireGroups, type HippoStore } from '../base/ports/store.js';
+import type { HippoStore } from '../base/ports/store.js';
+import { requireHippoDb } from '../api/hippo-db-context.js';
 import { judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';
@@ -25,7 +26,7 @@ import type {
 } from '../api/index.js';
 import { ingestEvent as ingestGithubEvent } from '../surface/connectors/github/ingest.js';
 import { ingestMessage as ingestSlackMessage } from '../surface/connectors/slack/ingest.js';
-import { CONNECTOR_GROUPS, type ConnectorContext } from '../surface/connectors/ingest.js';
+import type { ConnectorContext } from '../surface/connectors/ingest.js';
 import { entryInfra, filled, withEntryInfra } from '../surface/entry-infra.js';
 
 // The target a folderIndex builds carries the embedder, so embedAll needs no wiring of its own.
@@ -93,14 +94,12 @@ export function remember(
 export const retrieve = filled(api.retrieve);
 export const retrieveRanking = filled(api.retrieveRanking);
 export const retrieveWithCliCore = filled(api.retrieveWithCliCore);
-/** A connector ingest on the store its script opened; a store without the connector groups
+/** A connector ingest on the store its script opened; a store without hippo.db's local tier
  * refuses before it writes. */
 function connector<A extends unknown[], R>(
   fn: (ctx: ConnectorContext, ...args: A) => R,
 ): (ctx: EntryContext, ...args: A) => R {
-  return filled<A, R>((ctx, ...args) =>
-    fn({ ...ctx, store: requireGroups(ctx.store, CONNECTOR_GROUPS) }, ...args),
-  );
+  return filled<A, R>((ctx, ...args) => fn({ ...ctx, store: requireHippoDb(ctx.store) }, ...args));
 }
 export const ingestEvent = connector(ingestGithubEvent);
 export const ingestMessage = connector(ingestSlackMessage);
