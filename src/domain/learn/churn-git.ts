@@ -69,8 +69,8 @@ export interface ChurnCommit {
   files: ChurnCommitFile[];
 }
 
-// 1-day buffer guards against git's --since boundary excluding a commit dated exactly at the
-// anchor.
+// 1-day buffer guards against git's --since boundary excluding a commit dated exactly at
+// the anchor.
 export function fetchChurnWindowLog(repo: ChurnRepo, sinceIso: string): ChurnCommit[] {
   const buffered = new Date(new Date(sinceIso).getTime() - DAY_MS).toISOString();
   const raw = runGit(

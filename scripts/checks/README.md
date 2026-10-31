@@ -4,7 +4,7 @@ One line per gate. Each runs from the repo root as `node scripts/checks/<name>`.
 
 - `check-agent-inventory.mjs`: an agent named in the docs must be in docs/integrations/agent-inventory.json, without an overclaim.
 - `check-caught-error-logs.mjs`: log calls and hook side-log writes inside catch blocks and error listeners per file may fall, never rise.
-- `check-comment-history.mjs`: ticket codes, version tags, dates and plan paths in src comments may fall, never rise.
+- `check-comment-history.mjs`: ticket codes, version tags, dates and plan paths in src comments may fall, never rise; a one-word comment line fails.
 - `check-dist-imports.mjs`: a script, benchmark, eval or test imports only dist files and names the build still makes.
 - `check-dts-diff.mjs`: api/hippo-memory.api.txt lists the published exports; `--write` updates it, `--check` verifies it.
 - `check-em-dashes-in-release-notes.mjs`: the CHANGELOG.md entry of the version to publish holds no em dash.

@@ -75,8 +75,8 @@ async function stageEmbeddingIndex(
 }
 
 const EMBED_LOCK_WAIT_MS = 10_000;
-// A held lock is usually a whole embed run, so the polls back off rather than wake 200 times in the
-// budget.
+// A held lock is usually a whole embed run, so the polls back off rather than wake 200 times in
+// the budget.
 const EMBED_LOCK_FIRST_POLL_MS = 50;
 const EMBED_LOCK_MAX_POLL_MS = 1_000;
 

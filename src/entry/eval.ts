@@ -1,5 +1,5 @@
-// The `hippo-memory/eval` entry: the feature eval suite, its synthetic corpus and the regression
-// check.
+// The `hippo-memory/eval` entry: the feature eval suite, its synthetic corpus and the
+// regression check.
 import { buildSyntheticCorpus as corpusAt } from '../domain/eval/eval-suite-corpus.js';
 import {
   runFeatureEval as featureEvalAt,

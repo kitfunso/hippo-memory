@@ -24,8 +24,8 @@ function isProbability(v: JsonValue | undefined): v is number {
   return isJsonNumber(v) && Number.isFinite(v) && v >= 0 && v <= 1;
 }
 
-// A half-scored list ranks worse than the order it would replace, so one bad answer voids the whole
-// response.
+// A half-scored list ranks worse than the order it would replace, so one bad answer voids the
+// whole response.
 function parseScores(body: JsonValue, n: number): number[] | null {
   const answers = isJsonObject(body) ? body.answers : undefined;
   const out: number[] = [];

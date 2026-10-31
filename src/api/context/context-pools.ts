@@ -216,8 +216,8 @@ function refusalReporter(
   );
 }
 
-// The window's predicates are ones admit applies anyway, so below the cap the admitted rows are
-// unchanged.
+// The window's predicates are ones admit applies anyway, so below the cap the admitted rows
+// are unchanged.
 function candidateWindow(
   plan: ContextPlan,
   searches: boolean,

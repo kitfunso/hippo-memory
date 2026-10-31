@@ -207,8 +207,8 @@ async function commitVerdicts(
       if (!v.condemned) {
         keepSurvivor(run, v, v.live);
       } else if (rescuedIds.has(v.id)) {
-        // Confidence is left alone: it is an epistemic tier resolveConfidence derives, not a cached
-        // computation.
+        // Confidence is left alone: it is an epistemic tier resolveConfidence derives, not a
+        // cached computation.
         keepSurvivor(run, v, v.live);
         rescuedEntries.push({ id: v.id, tenantId: v.tenant_id });
         reportRescue(run.result, v.id, v.live, rankById.get(v.id));

@@ -21,8 +21,8 @@ import { clamp } from '../../base/util/stats.js';
 const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
 const DECISION_TAG_BOOST = 1.2;
-// A memory tagged for the active scope outranks a neutral one; one tagged for another scope is
-// demoted.
+// A memory tagged for the active scope outranks a neutral one; one tagged for another scope
+// is demoted.
 const SCOPE_MATCH_BOOST = 1.5;
 const SCOPE_MISMATCH_BOOST = 0.5;
 const EXTRACTION_TAG_BOOST = 1.3;

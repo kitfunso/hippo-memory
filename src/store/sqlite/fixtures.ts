@@ -42,8 +42,8 @@ export function readEntryInFolder(hippoRoot: string, id: string): MemoryEntry | 
   return readEntryIn(storeFilesOf(hippoRoot), id);
 }
 
-// The forms on `files`: an eval that builds them with a session runs its calls on one handle per
-// store.
+// The forms on `files`: an eval that builds them with a session runs its calls on one handle
+// per store.
 const openOn =
   (files: StoreFiles) =>
   (hippoRoot: string): DatabaseSyncLike =>

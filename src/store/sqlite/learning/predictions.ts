@@ -85,8 +85,8 @@ interface ListPredictionsOptions {
   after?: KeysetPosition;
 }
 
-// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/checks/check-row-casts.mjs proves
-// it.
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/checks/check-row-casts.mjs
+// proves it.
 interface PredictionRow {
   id: number;
   memory_id: string | null;

@@ -64,8 +64,8 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
   for (const { table, sql } of chainObjects.values()) if (missing.has(table)) db.exec(sql);
 }
 
-// After the loop, when every column an index names exists; only a store missing one builds the
-// chain.
+// After the loop, when every column an index names exists; only a store missing one builds
+// the chain.
 export function ensureContinuityIndexes(db: DatabaseSyncLike): void {
   // SAFETY: one TEXT column named name.
   const present = db
@@ -91,8 +91,8 @@ function objectsFromChain(): ReadonlyMap<string, ChainObject> {
     // No root: only v39 reads it, to backfill rows an empty database does not have.
     for (const migration of MIGRATIONS) migration.up(db, {});
     const tables = [...HEALED_TABLES, ...REQUEST_TABLES];
-    // SAFETY: rows follow the selected columns, and the WHERE drops the autoindexes whose sql is
-    // NULL.
+    // SAFETY: rows follow the selected columns, and the WHERE drops the autoindexes whose sql
+    // is NULL.
     const rows = db
       .prepare(
         `SELECT name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL AND type IN ('table', 'index') ` +

@@ -113,8 +113,8 @@ async function printEmbeddingStatus(
   const summary = await vectorSummary(ctx);
   if (!embAvail && summary.vectors === 0) return;
   console.log(embeddedLine(counts, summary));
-  // No index argument: the check then asks hippo.db whether any vector exists instead of loading
-  // them.
+  // No index argument: the check then asks hippo.db whether any vector exists instead of
+  // loading them.
   if (await embeddingReindexNeeded(ctx, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }

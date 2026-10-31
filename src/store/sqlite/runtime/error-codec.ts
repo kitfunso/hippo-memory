@@ -140,8 +140,8 @@ export function decodeError(wire: WireError): Error {
     wire.cause === undefined
       ? new Error(message)
       : new Error(message, { cause: decodeError(wire.cause) });
-  // The constructor is not run again: its arguments did not cross, and the fields below are what it
-  // set.
+  // The constructor is not run again: its arguments did not cross, and the fields below are what
+  // it set.
   Object.setPrototypeOf(rebuilt, PROTOTYPES.get(known) ?? Error.prototype);
   Object.assign(rebuilt, wire.fields);
   if (wire.stack !== undefined) rebuilt.stack = wire.stack;

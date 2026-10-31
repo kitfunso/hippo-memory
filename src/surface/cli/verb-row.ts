@@ -1,5 +1,5 @@
-// The shape of one row of the verb table, and the helper that builds it with a type-checked lazy
-// import.
+// The shape of one row of the verb table, and the helper that builds it with a type-checked
+// lazy import.
 
 import type { CliFlags, CommandContext } from './flag-values.js';
 import type { VerbFlags } from './flags.js';

@@ -113,8 +113,8 @@ export class Survivors {
     const loaded = new Map(
       (await this.stored.read(fresh.map((row) => row.id))).map((row) => [row.id, row]),
     );
-    // A row gone since decay read it is its own base, so the flush skips it rather than write it
-    // back.
+    // A row gone since decay read it is its own base, so the flush skips it rather than write
+    // it back.
     for (const row of fresh) this.bases.set(row.id, loaded.get(row.id) ?? row);
     for (const row of rows) this.held.set(row.id, row);
   }

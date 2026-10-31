@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // CI comment gate. Ticket codes, version tags, reviewer notes, dates and plan paths in src/ comments belong in docs
-// or git log; each file's count of such comment lines may fall but never rise above .comment-history-baseline.json.
+// or git log, and may fall but never rise above .comment-history-baseline.json; a one-word comment line always fails.
 // Usage: check-comment-history.mjs [--list [file...]] [--update]. --update rewrites the baseline; run it only after clearing hits.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -27,6 +27,8 @@ const PATTERNS = [
 
 // Section labels that name a plan, wave or feature number instead of what the code is; no baseline, any hit fails.
 const LABEL_PATTERN = /\bFeature \d+:|\bW\d+[a-z]?:|\b[Pp]lan designs? \d+|\bCHANGELOG \d/;
+// A wrapped comment's last word left alone on its line; no baseline, any hit fails.
+const ORPHAN_LINE = /^\s*\/\/ [A-Za-z]+\.?$/;
 
 const PRECEDES_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
@@ -151,18 +153,26 @@ function tsFiles(dir, out = []) {
 function findHits() {
   const hits = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
-    for (const [line, text] of commentLines(readFileSync(file, 'utf8'))) {
+    const src = readFileSync(file, 'utf8');
+    for (const [line, text] of commentLines(src)) {
       const kind = LABEL_PATTERN.test(text) ? 'label' : PATTERNS.find(([, re]) => re.test(text))?.[0];
       if (kind) hits.push({ file, line, kind, text: text.trim() });
     }
+    src.split(/\r?\n/).forEach((text, i) => {
+      if (ORPHAN_LINE.test(text)) hits.push({ file, line: i + 1, kind: 'orphan', text: text.trim() });
+    });
   }
   return hits;
 }
 
+const UNCOUNTED = {
+  label: 'Comments that label a section with a feature, wave or plan number (say what the code is):',
+  orphan: 'Comment lines holding one word (rejoin it to the line above):',
+};
 const hits = findHits();
-const labels = hits.filter((h) => h.kind === 'label');
+const uncounted = hits.filter((h) => h.kind in UNCOUNTED);
 const counts = {};
-for (const h of hits.filter((x) => x.kind !== 'label')) counts[h.file] = (counts[h.file] ?? 0) + 1;
+for (const h of hits.filter((x) => !(x.kind in UNCOUNTED))) counts[h.file] = (counts[h.file] ?? 0) + 1;
 const args = process.argv.slice(2);
 
 if (args.includes('--update')) {
@@ -179,9 +189,12 @@ if (args.includes('--list')) {
   process.exit(0);
 }
 
-if (labels.length > 0) {
-  console.error('Comments that label a section with a feature, wave or plan number (say what the code is):');
-  for (const h of labels) console.error(`  ${h.file}:${h.line} ${h.text}`);
+if (uncounted.length > 0) {
+  for (const [kind, header] of Object.entries(UNCOUNTED)) {
+    const found = uncounted.filter((h) => h.kind === kind);
+    if (found.length > 0) console.error(header);
+    for (const h of found) console.error(`  ${h.file}:${h.line} ${h.text}`);
+  }
   process.exit(1);
 }
 

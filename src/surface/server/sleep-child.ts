@@ -90,8 +90,8 @@ process.once('message', (message) => {
           infra: childInfra(),
         })
       : sleepJob(job, session);
-  // The server's own session and lock wait, so a busy store answers as it did when sleep ran in the
-  // server.
+  // The server's own session and lock wait, so a busy store answers as it did when sleep ran in
+  // the server.
   runSqliteRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failureReply)
     // Exit only once the reply is written, or the parent could see the process end first.

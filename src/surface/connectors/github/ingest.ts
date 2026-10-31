@@ -100,7 +100,7 @@ export async function ingestEvent(
   const seen = await connectorEventRecord(ctx, event);
   if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
-  // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the
-  // transform.
+  // An empty body is logged too, so a retry returns 'duplicate' instead of re-running
+  // the transform.
   return rememberWithEventLog(ctx, event, transformEvent(input.event));
 }

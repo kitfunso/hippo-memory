@@ -143,9 +143,8 @@ function reportsStartedAt<T>(body: T, startedAt: string): boolean {
  * True when /health on info.url reports the pidfile's started_at; unlinks the pidfile on any
  * definitive mismatch and throws ServerUnresponsiveError on a probe timeout. */
 async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promise<boolean> {
-  // Refusal, non-200 or a malformed body unlink the pidfile as stale. A timeout proves neither a
-  // dead server nor this one, so it keeps the pidfile and throws. Any other error keeps it and
-  // warns.
+  // Refusal, non-200 or a malformed body unlinks the pidfile as stale. A timeout proves nothing,
+  // so it keeps the pidfile and throws; any other error keeps it and warns.
   const probeMs = envHealthProbeMs() ?? HEALTH_PROBE_TIMEOUT_MS;
   try {
     const res = await fetch(`${info.url}/health`, { signal: AbortSignal.timeout(probeMs) });

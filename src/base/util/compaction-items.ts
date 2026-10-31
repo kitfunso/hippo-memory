@@ -16,8 +16,8 @@ export interface CompactionItemRows {
 }
 
 const HEADING = 'memories for hippo';
-// `\S` parts the gap from the text, so a line that fails to match is scanned once, not once per
-// space.
+// `\S` parts the gap from the text, so a line that fails to match is scanned once, not once
+// per space.
 const ITEM_LINE = /^\s*(?:[-*]|\d+[.)])(?:\s+(\S.*)?)?$/;
 const ANALYSIS_OPEN = '<analysis>';
 const ANALYSIS_CLOSE = '</analysis>';

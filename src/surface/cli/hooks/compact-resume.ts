@@ -1,5 +1,5 @@
-// The SessionStart(compact) hook: re-prints the task snapshot and session trail that compaction
-// dropped.
+// The SessionStart(compact) hook: re-prints the task snapshot and session trail that
+// compaction dropped.
 import { estimateTokens } from '../../../base/util/token-text.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { isInitialized } from '../../../host/project-identity.js';

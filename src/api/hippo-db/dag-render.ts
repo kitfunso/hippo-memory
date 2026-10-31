@@ -40,8 +40,8 @@ export function assembleText(r: AssembleResult): string {
   );
 }
 
-// Every format prices the full lines: JSON carries full content, and the CLI's previews are never
-// longer.
+// Every format prices the full lines: JSON carries full content, and the CLI's previews are
+// never longer.
 export function assembleCost(sessionId: string): AssembleCost {
   return {
     item: (it) => printedTokens(assembleLine(it)),

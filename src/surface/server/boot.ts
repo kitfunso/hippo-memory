@@ -150,8 +150,8 @@ async function dispatchLimitedRoute(
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
-  // Store-ready: under another store the MCP layer lists and runs only the tools ported to the
-  // port.
+  // Store-ready: under another store the MCP layer lists and runs only the tools ported to
+  // the port.
   return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () =>
     handleMcpPost(r.req, r.res, r.opts),
   );
@@ -264,8 +264,8 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
     loopbackHosts,
     opts.allowCleartext ?? envAllowCleartext(),
   );
-  // An open-ended previous secret keeps working, so the operator hears once that nothing will close
-  // it.
+  // An open-ended previous secret keeps working, so the operator hears once that nothing will
+  // close it.
   warnSlackPreviousSecretOpen();
   warnGitHubPreviousSecretOpen();
 

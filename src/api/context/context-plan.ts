@@ -167,8 +167,8 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
   const config = ctx.config;
   const currentProject = opts.currentProject;
   const includeCrossProject = readsCrossProject(ctx, opts, reach.sharedStore);
-  // Decided before the ambient loads so the pinned-only FTS candidate query can share their
-  // connection.
+  // Decided before the ambient loads so the pinned-only FTS candidate query can share
+  // their connection.
   const promptRecallPending =
     pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
   const cost = opts.cost;

@@ -329,9 +329,8 @@ function referenceTargets(created: readonly DerivedEntity[]): Map<string, Derive
   return byName;
 }
 
-// Pass 3: a `references` edge when one object's text names another entity, matched on word
-// boundaries, self-skipped, deduped and capped per source; the edge is anchored to the source
-// object.
+// Pass 3: a `references` edge, anchored to the source object, when its text names another entity;
+// matched on word boundaries, self-skipped, deduped and capped per source.
 function deriveReferences(
   created: readonly DerivedEntity[],
   supersededPairs: ReadonlySet<string>,

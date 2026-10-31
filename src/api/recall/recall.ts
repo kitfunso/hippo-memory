@@ -182,8 +182,8 @@ function rankRequestOf(
     scopeMode: 'exact',
     ownScope: personalScope,
     originProjects: recallOrigin(opts),
-    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the tag
-    // instead.
+    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the
+    // tag instead.
     boost: goalTag ? {} : { sessionId },
     engineNamed: opts.mode === 'hybrid',
     multihop: false,

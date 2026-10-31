@@ -1,6 +1,5 @@
-// The store's handle types and the legacy setup a first open runs; src/store/sqlite/runtime/handles.ts
-// opens hippo.db, the source of truth, and Markdown and JSON files are human-readable mirrors of
-// it.
+// Handle types and the legacy setup a first open runs; runtime/handles.ts opens hippo.db, the
+// source of truth, whose Markdown and JSON files are human-readable mirrors.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';

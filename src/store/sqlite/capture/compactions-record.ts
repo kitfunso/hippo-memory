@@ -408,8 +408,8 @@ function finishItemWrites(
     try {
       updateStats(db, files, { remembered: writes.written.length });
     } catch (err) {
-      // The rows are committed; a counter that could not be bumped must not turn that into a failed
-      // step.
+      // The rows are committed; a counter that could not be bumped must not turn that into a
+      // failed step.
       log('remembered counter not updated', err);
     }
   }

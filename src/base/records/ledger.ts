@@ -46,8 +46,8 @@ export interface LedgerTurn {
   readonly delivery?: DeliveryEventInput;
 }
 
-// Token ledger row and summary shapes of the store port; the ledger group and the reports group use
-// them.
+// Token ledger row and summary shapes of the store port; the ledger group and the reports group
+// use them.
 /** Where a block was sent: `hook`/`hook_recall` (per-prompt hook), `compact_resume`,
  * `context`/`recall` (CLI), `mcp_*`, `http_*`, and `pilot` (session pilot arm row,
  * src/api/pilot-arm.ts; not a send, so in no surface list). */

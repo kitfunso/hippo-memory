@@ -1,6 +1,5 @@
-// One container's sync: its rows read, every write planned as data, then one store call applies the
-// plan in one transaction; a plan whose rows changed before it landed is read and planned once
-// more.
+// One container's sync: its rows read, every write planned as data, then one store call applies
+// the plan in one transaction; a plan whose rows changed before it landed is planned again.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';

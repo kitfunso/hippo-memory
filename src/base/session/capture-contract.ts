@@ -139,8 +139,8 @@ export function readClaudeCodePreCompact(
   if (empty) return manualRun(runtime, 'pre-compact');
   const payload = parseObject(stdinText);
   const transcriptPath = stringField(payload, 'transcript_path');
-  // A bad payload is skipped, never treated as manual: discovery could pick up another session's
-  // transcript.
+  // A bad payload is skipped, never treated as manual: discovery could pick up another
+  // session's transcript.
   if (transcriptPath === null) {
     return {
       status: 'skipped',

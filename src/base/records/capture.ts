@@ -49,9 +49,8 @@ export interface CaptureDedup {
   readonly everyScope?: boolean;
 }
 
-// The local compaction hooks' record work, as data: the spool and the transcript a replay reads
-// stay with the surface, and each line a step would log comes back as a note for the surface's own
-// log.
+// The local compaction hooks' record work, as data: the spool and transcript a replay reads stay
+// with the surface, and each line a step would log comes back as a note for the surface's log.
 /** Each method opens hippo.db with the hook's wait, so a busy store costs the hook a bounded
  * delay. */
 export interface CompactionHooks {
@@ -185,9 +184,8 @@ export interface FillOutcome {
   notes: string[];
 }
 
-// The Compactions group, kept apart from port.ts: the record and items of a compaction a caller on
-// another machine sends, under the caller's tenant and project, never the server's folder or
-// environment.
+// The Compactions group, apart from port.ts: a compaction a caller on another machine sends, kept
+// under the caller's tenant and project, never the server's folder or environment.
 export interface Compactions {
   /** A `started` record; its id. */
   start(tenantId: string, start: CompactionStart): Promise<string>;

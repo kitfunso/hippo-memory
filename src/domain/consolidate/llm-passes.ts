@@ -76,8 +76,8 @@ export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<
   if (llm === null || run.dryRun) return;
   if (batch.length > 0) {
     const stopped = await extractionPass(run, llm, batch);
-    // The DAG passes call the same API with the same key and model, so they would fail the same
-    // way.
+    // The DAG passes call the same API with the same key and model, so they would fail the
+    // same way.
     if (stopped) return;
   }
 

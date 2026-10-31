@@ -110,8 +110,8 @@ function sessionEndHandoff(
 export const HANDOFF_COLUMNS =
   'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, ' +
   'evidence_json, outcome, target_runtime, card_id';
-// SAFETY: every read cast to this row selects HANDOFF_COLUMNS; scripts/checks/check-row-casts.mjs proves
-// it.
+// SAFETY: every read cast to this row selects HANDOFF_COLUMNS; scripts/checks/check-row-casts.mjs
+// proves it.
 export type SessionHandoffDbRow = SessionHandoffRow;
 
 type HandoffColumn = readonly [column: string, value: string | null];

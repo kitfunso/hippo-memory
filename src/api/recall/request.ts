@@ -45,8 +45,8 @@ import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 
 const MAX_RECALL_LIMIT = 1000;
-// recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds remote
-// cost.
+// recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds
+// remote cost.
 const MAX_SCORER_WINDOW = 1000;
 // Bounds BM25 tokenisation cost while covering pasted error messages.
 const MAX_CONTEXT_QUERY_LEN = 1024;
@@ -348,8 +348,8 @@ async function recordShown(
   });
 }
 
-// The second store logs that it was searched, and strengthens only the rows the first does not
-// hold.
+// The second store logs that it was searched, and strengthens only the rows the first does
+// not hold.
 function finishSecond(
   ctx: Context,
   second: HippoStore,
@@ -387,8 +387,8 @@ function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined 
   return sources !== undefined && ctx.reach?.isGlobal !== true ? sources.store : undefined;
 }
 
-// The caller has ranked and is about to print, so a failed audit write is logged and counted, never
-// thrown.
+// The caller has ranked and is about to print, so a failed audit write is logged and counted,
+// never thrown.
 async function finishOrReport(finish: () => Promise<number | null | void>): Promise<boolean> {
   try {
     await finish();

@@ -37,8 +37,8 @@ export function parseOutboundUrl(
       `${setting} must not embed credentials${keySetting ? `; set ${keySetting}` : ''}`,
     );
   }
-  // Plain http would put the key and the memory text on the wire, so only the local machine may use
-  // it.
+  // Plain http would put the key and the memory text on the wire, so only the local machine may
+  // use it.
   if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
     throw new Error(`${setting} must use https unless it is on this machine`);
   }

@@ -138,8 +138,8 @@ export function handleCard(cmd: CommandContext): Promise<void> {
   if (!Object.hasOwn(CARD_SUBCOMMAND_FLAGS, subcommand)) {
     fail(`Usage: hippo card <${Object.keys(CARD_SUBCOMMAND_FLAGS).join('|')}>`);
   }
-  // SAFETY: hasOwn, unlike `in`, skips inherited keys such as constructor, so subcommand is a real
-  // key.
+  // SAFETY: hasOwn, unlike `in`, skips inherited keys such as constructor, so subcommand is a
+  // real key.
   const known = subcommand as CardSubcommand;
   const allowedFlags = CARD_SUBCOMMAND_FLAGS[known];
   for (const key of Object.keys(flags)) {

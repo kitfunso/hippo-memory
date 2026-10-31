@@ -26,8 +26,8 @@ import type {
   VectorMatchQuery,
 } from './vector-match.js';
 
-// Rows below the file's newest that may be checked for the newest row still holding what the file
-// read.
+// Rows below the file's newest that may be checked for the newest row still holding what the
+// file read.
 const INTACT_WALK = 32;
 
 interface NodeRecord {
@@ -281,8 +281,8 @@ export class GraphFileIndex implements VectorIndex {
   readonly #hippoRoot: string;
   // A file that cannot be trusted warns once, until it is replaced.
   readonly #warned = new Set<string>();
-  // The last view of each path, kept so a long-lived process reads the file once, not on every
-  // query.
+  // The last view of each path, kept so a long-lived process reads the file once, not on
+  // every query.
   readonly #views = new Map<string, GraphFileView>();
 
   constructor(hippoRoot: string) {

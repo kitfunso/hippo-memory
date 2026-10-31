@@ -8,8 +8,8 @@ export const DEFAULT_RECALL_BUDGET = 4000;
 
 /** Results a search keeps whatever they cost when the caller names no minimum. */
 export const DEFAULT_MIN_RESULTS = 1;
-// Local memories outrank global ones by this factor; contextGet applies it as a 1/x global
-// discount.
+// Local memories outrank global ones by this factor; contextGet applies it as a 1/x
+// global discount.
 export const DEFAULT_LOCAL_BUMP = 1.2;
 // The relevance side of the MMR relevance-versus-diversity trade; config and hybrid recall both
 // default to it.

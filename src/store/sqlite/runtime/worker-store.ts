@@ -199,8 +199,8 @@ export function workerSqliteStore(
 }
 
 function rebound<V>(value: V, limits: RequestLimits): V {
-  // SAFETY: a rebind makes the same worker call again, so the new function has the old one's
-  // signature.
+  // SAFETY: a rebind makes the same worker call again, so the new function has the old
+  // one's signature.
   return isRebindable(value) ? (value[REBIND](limits) as V) : value;
 }
 
@@ -208,8 +208,7 @@ function isPlainObject<V>(value: V): value is V & object {
   return value instanceof Object && Object.getPrototypeOf(value) === Object.prototype;
 }
 
-// Down every level of plain objects, since hippo.db's local tier holds its methods two levels
-// down.
+// Down every level of plain objects, since hippo.db's local tier holds its methods two levels down.
 function reboundAll<V>(value: V, limits: RequestLimits): V {
   if (!isPlainObject(value)) return rebound(value, limits);
   const members = Object.entries(value).map(([key, member]) => [key, reboundAll(member, limits)]);

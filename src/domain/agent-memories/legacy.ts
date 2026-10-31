@@ -1,5 +1,5 @@
-// Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they came
-// from.
+// Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they
+// came from.
 import path from 'node:path';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey } from '../../base/util/same-text.js';

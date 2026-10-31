@@ -123,8 +123,8 @@ export function passDashboardSession({
 }: PassDashboardSessionOptions): DashboardSession {
   if (isForeignPage(req)) throw new HttpError(403, 'cross-site or non-local request refused');
   const port = req.socket.localPort ?? access.port;
-  // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate
-  // sessions.
+  // Cookies ignore the port, so the name carries it: two dashboards on one host keep
+  // separate sessions.
   const cookieName = `hippo_dashboard_${port}`;
   // The ticket rides under the `token` key, so the URL keeps the shape users and scripts know.
   if (access.tickets.redeem(query.get('token') ?? undefined, now())) {

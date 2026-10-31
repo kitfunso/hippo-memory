@@ -124,8 +124,8 @@ async function explainScope(
   // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || envActiveScope();
-  // Unlike recall, explain reads the global store whenever it exists, even when it is the local
-  // root.
+  // Unlike recall, explain reads the global store whenever it exists, even when it is the
+  // local root.
   const origin = recallRowOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   await noteScopeHidden(
     ctx,

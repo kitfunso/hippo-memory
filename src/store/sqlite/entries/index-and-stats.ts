@@ -57,8 +57,8 @@ export function sqliteStats({ on, files }: Handles) {
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
-  // Increments a busy store refused, held by the runtime and folded into the next update that
-  // lands.
+  // Increments a busy store refused, held by the runtime and folded into the next update
+  // that lands.
   const { runtime } = files;
   const total = addDelta(runtime?.takeStats(files.hippoRoot) ?? {}, delta);
   try {

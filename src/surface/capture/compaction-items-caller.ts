@@ -34,8 +34,8 @@ export async function saveCompactionItemsForCaller(
   const ctx = withHippoDb(withEntryInfra(given));
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
-  // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's
-  // growth.
+  // Refused before the scrub, as failure text is, so the cut after it only ever takes back a
+  // mask's growth.
   if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) {
     throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
   }

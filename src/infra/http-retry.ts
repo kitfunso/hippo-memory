@@ -105,8 +105,8 @@ interface RetryLogEntry {
 
 function logRetry(entry: RetryLogEntry): void {
   const { init, url, reason, attempt, attempts, delayMs } = entry;
-  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final
-  // failure.
+  // Debug: an attempt that may still succeed is not a warning, and the caller reports the
+  // final failure.
   log.debug('http retry', {
     method: (init.method ?? 'GET').toUpperCase(),
     target: redactedTarget(url),

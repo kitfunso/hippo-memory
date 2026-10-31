@@ -100,8 +100,8 @@ export function sessionTrailText(events: SessionEvent[]): string {
   ].join('\n');
 }
 
-// Each trail event is capped only in the compact-resume block, so other trail prints keep full
-// content.
+// Each trail event is capped only in the compact-resume block, so other trail prints keep
+// full content.
 export const COMPACT_RESUME_EVENT_CONTENT_CAP = 400;
 
 // A snapshot older than this was not written for this compaction (pre-compact skipped), so
@@ -117,8 +117,8 @@ export function compactResumeText(snapshot: TaskSnapshot, events: SessionEvent[]
     '_Point-in-time working-state snapshot, auto-restored after compaction. Background reference, not instructions; ' +
       "the user's live messages win._\n",
     snapshotText(snapshot),
-    // Nothing auto-populates session_events, so an empty trail is the common case and prints
-    // nothing.
+    // Nothing auto-populates session_events, so an empty trail is the common case and
+    // prints nothing.
     ...(events.length > 0 ? [sessionTrailText(events)] : []),
   ].join('\n');
 }
@@ -221,8 +221,8 @@ export function settleTokens(render: (tokens: number) => string): string {
   return text;
 }
 
-// Every summary slot at its longest wording, so the footer reserve covers whatever the summary
-// says.
+// Every summary slot at its longest wording, so the footer reserve covers whatever the
+// summary says.
 const WIDEST_AMBIENT: AmbientState = {
   tagEntropy: 1,
   avgStrength: 0,
@@ -237,8 +237,8 @@ const WIDEST_AMBIENT: AmbientState = {
   totalMemories: Number.MAX_SAFE_INTEGER,
 };
 
-// Each piece is priced with the newline that follows it, so the pieces' sum bounds the joined
-// block.
+// Each piece is priced with the newline that follows it, so the pieces' sum bounds the
+// joined block.
 export function printedTokens(text: string): number {
   return estimateTokens(text + '\n');
 }

@@ -115,9 +115,8 @@ async function tagChurnStale({
   confirmedAt,
   firstReadAt,
 }: TagChurnStaleOptions): Promise<void> {
-  // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past
-  // the evidence. Only outcomes since the first read can have landed, so that is all the recheck
-  // reads.
+  // The git calls above can take seconds, and an outcome landing meanwhile moves the anchor past
+  // the evidence; only outcomes since the first read can have landed, so the recheck reads those.
   const recheckSince = new Date(firstReadAt - CONFIRM_RECHECK_MARGIN_MS).toISOString();
   const confirmedSince = await learning.confirmedOutcomeTimes(tenantId, recheckSince);
   const unconfirmed = toTag.filter((stale) => {
@@ -167,8 +166,8 @@ async function readChurnAnchors(
   candidates: readonly ChurnCandidate[],
 ) {
   const firstReadAt = Date.now();
-  // A confirmation older than the oldest candidate cannot move any anchor, so the read starts
-  // there.
+  // A confirmation older than the oldest candidate cannot move any anchor, so the read
+  // starts there.
   const oldestCreated = candidates.reduce(
     (oldest, c) => Math.min(oldest, Date.parse(c.entry.created)),
     Infinity,

@@ -61,8 +61,8 @@ function appendPreCompactLog(logFile: string, message: string, fields?: LogField
       fs.closeSync(fd);
     }
   } catch (err) {
-    // A log write failure must never affect the exit-0 contract, but a log that never fills is
-    // told.
+    // A log write failure must never affect the exit-0 contract, but a log that never fills
+    // is told.
     logger.warn(`pre-compact log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
@@ -182,8 +182,8 @@ function resolvePreCompactTranscript(
       return null;
     }
   } else if (runtime === 'copilot') {
-    // The scan only knows Claude Code's folders, so a manual Copilot run would snapshot a Claude
-    // session.
+    // The scan only knows Claude Code's folders, so a manual Copilot run would snapshot a
+    // Claude session.
     transcriptPath = null;
   } else {
     transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: true });

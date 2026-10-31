@@ -113,8 +113,8 @@ function bareText(text: string): string {
   while (end > 0 && TRAILING_MARK.test(text[end - 1])) end--;
   return text.slice(0, end);
 }
-// These endings close whole sentences too ("the branch you push to"), so they are only a possible
-// cut.
+// These endings close whole sentences too ("the branch you push to"), so they are only a
+// possible cut.
 const POSSIBLE_CUT_ENDING = new RegExp(
   String.raw`\b(?:needs to|depends on|requires|while|with|without|into|for|of|by|to|is|are|was|were|` +
     String.raw`must|should|could|would|might)$`,

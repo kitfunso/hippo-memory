@@ -321,8 +321,8 @@ function buildHomePattern(home: string, probes: readonly string[]): RegExp | nul
         .filter(Boolean).length >= 2;
     for (const spell of HOME_SPELLINGS) spellings.push([spell(alias), deep]);
   }
-  // Longest first: where one home nests in another (a test home under the real one), swap the
-  // longer.
+  // Longest first: where one home nests in another (a test home under the real one), swap
+  // the longer.
   const patterns = new Map<string, string>();
   for (const [s, deep] of spellings.sort(([a], [b]) => b.length - a.length)) {
     const pattern = spellingPattern(s, deep);
@@ -375,8 +375,8 @@ function redactStrings(value: JsonValue, homePattern: RegExp | null): JsonValue 
 
 /** Read-only: builds one redacted support-ticket snapshot. Never reads a memory content column. */
 export async function buildSupportBundle(opts: SupportBundleOptions): Promise<JsonObject> {
-  // Before doctor: its read-only open leaves an empty -wal that the store's file list would then
-  // report.
+  // Before doctor: its read-only open leaves an empty -wal that the store's file list would
+  // then report.
   const stores = await buildStores(opts);
   const bundle: JsonObject = {
     format: 'hippo-support-bundle/1',
@@ -388,9 +388,8 @@ export async function buildSupportBundle(opts: SupportBundleOptions): Promise<Js
     env: listSetEnvNames(),
     logs: buildLogsSection(opts),
   };
-  // Store paths found from the working folder arrive resolved; the global root arrives as
-  // HIPPO_HOME was typed, and log lines often quote the temp folder, which usually sits under the
-  // home.
+  // Store paths from the working folder arrive resolved, the global root as HIPPO_HOME was typed,
+  // and log lines often quote the temp folder, which usually sits under the home.
   const redacted = redactStrings(
     bundle,
     buildHomePattern(opts.home, [hippoHomeDir(), os.tmpdir()]),

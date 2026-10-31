@@ -1,5 +1,5 @@
-// The dashboard's route shape: the /v1 rows' endpoint forms behind the one auth kind no /v1 row may
-// take.
+// The dashboard's route shape: the /v1 rows' endpoint forms behind the one auth kind no /v1 row
+// may take.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import type { DashboardReader } from './dashboard-reader.js';

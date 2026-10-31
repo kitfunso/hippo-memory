@@ -43,9 +43,8 @@ export const HippoPlugin = async ({ $ }) => {
 
 export { HIPPO_OPENCODE_PLUGIN_MARKER };
 
-// OpenCode plugin installer. OpenCode's config has `additionalProperties: false` and no `hooks`
-// key, so a JSON-hook install breaks its launch: write a TS plugin, migrate any old hooks block
-// out.
+// OpenCode's config has `additionalProperties: false` and no `hooks` key, so a JSON-hook install
+// breaks its launch: write a TS plugin and migrate any old hooks block out.
 
 export interface OpencodePluginInstallResult {
   installed: boolean;

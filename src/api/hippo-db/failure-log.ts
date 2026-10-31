@@ -1,5 +1,5 @@
-// A remote caller's tool failures: one log row per request id, so a retried send gets the first
-// answer.
+// A remote caller's tool failures: one log row per request id, so a retried send gets the
+// first answer.
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { FailureEvent, FailureOutcome } from '../../base/records/rejections.js';
 import type { HippoDbContext } from '../hippo-db-context.js';

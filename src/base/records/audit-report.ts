@@ -1,5 +1,5 @@
-// The audit facts the api and the stores share: the query fields an audit row keeps and the failure
-// counter.
+// The audit facts the api and the stores share: the query fields an audit row keeps and the
+// failure counter.
 import { blockHash } from '../util/token-text.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { AuditOp } from './audit-ops.js';

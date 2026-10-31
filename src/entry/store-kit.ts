@@ -150,8 +150,8 @@ export {
   RECALL_DEFAULT_DENY_SCOPES,
 } from '../base/scope/recall-scope.js';
 export type { KeysetPosition } from '../base/util/keyset.js';
-// The types HippoStore's methods take and return, so an add-on store can implement them from this
-// subpath.
+// The types HippoStore's methods take and return, so an add-on store can implement them from
+// this subpath.
 export type { ContinuityBlock } from '../api/recall/types.js';
 export type { MemoryEntry } from '../base/memory/entry.js';
 export type {
@@ -204,9 +204,8 @@ export { ALL_TENANTS, type TenantId } from '../base/util/tenant.js';
 // same ids in the same order.
 export { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 export { replacesIndex } from '../base/embeddings/index-identity.js';
-// An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the
-// same code. An add-on's ambientCandidates and summaryWithDescendants admit rows by hippo.db's
-// rule.
+// An add-on's ContextReads, ambientCandidates and summaryWithDescendants apply hippo.db's scope,
+// secret, tally and rarest-term rules with this same code, so it admits the rows hippo.db would.
 export {
   ambientRefusal,
   descendantAdmits,
@@ -219,8 +218,8 @@ export { SECRET_TAGS } from '../base/util/secret-detect.js';
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
   return tallyAmbientAt(entries, now ?? evalNow(), evalSwitches().strength);
 }
-// An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by hippo.db's
-// rule.
+// An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by
+// hippo.db's rule.
 export { diffGraph, type StoredGraph } from '../store/rules/graph-delta.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';
 // store copy --db writes the marker into the other store's folder.

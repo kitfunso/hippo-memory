@@ -213,8 +213,8 @@ function toolRun<S extends HippoStore>(name: string, ctx: McpContext<S>): ToolRu
 
 // ── Request handling ──
 
-// The MCP spec reports input validation as a tool result with isError, so the model can read it and
-// retry.
+// The MCP spec reports input validation as a tool result with isError, so the model can read it
+// and retry.
 function invalidArgs(
   id: McpResponse['id'],
   toolName: string,

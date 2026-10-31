@@ -143,8 +143,8 @@ async function copyMissingRows(
     first.twins.size === 0
       ? first
       : copiesOf(candidates, byId, rules, await refusedTexts(into.store, first));
-  // A locally rejected value must not come back through sync down: skipped per item, printed as one
-  // line.
+  // A locally rejected value must not come back through sync down: skipped per item, printed as
+  // one line.
   const written =
     copies.length === 0
       ? []

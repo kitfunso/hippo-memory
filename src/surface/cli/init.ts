@@ -1,5 +1,5 @@
-// `hippo init`: create a store and wire the detected agents' instruction files, hooks and daily
-// runner.
+// `hippo init`: create a store and wire the detected agents' instruction files, hooks and
+// daily runner.
 
 import * as path from 'node:path';
 import * as fs from 'node:fs';

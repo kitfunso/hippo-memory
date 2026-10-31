@@ -1,5 +1,5 @@
-// Store-wide status reads: counts, stats, vector index state and the correction and provenance
-// reports.
+// Store-wide status reads: counts, stats, vector index state and the correction and
+// provenance reports.
 
 import { isJsonObject, isJsonString } from '../base/util/json.js';
 import type { LegacyStats } from '../base/records/reports.js';

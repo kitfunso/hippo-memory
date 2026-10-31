@@ -299,8 +299,8 @@ function clearsShareRules(
   minScore: number,
   stats: AutoShareStats | undefined,
 ): boolean {
-  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on
-  // one.
+  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting
+  // on one.
   if (
     isQuarantineScope(entry.scope ?? null) ||
     isPersonalScope(entry.scope ?? null) ||
@@ -308,8 +308,8 @@ function clearsShareRules(
   ) {
     return false;
   }
-  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the
-  // bar.
+  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears
+  // the bar.
   if (
     entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) ||
     entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)
@@ -452,8 +452,8 @@ export async function autoShare(
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
   const to = global.store;
   await to.hippoDb.folderFiles.ensure();
-  // Every page is judged before any is written, so a copy written early cannot hide a later row's
-  // twin.
+  // Every page is judged before any is written, so a copy written early cannot hide a later
+  // row's twin.
   const candidates: MemoryEntry[] = [];
   for await (const page of autoSharePages(from.store, minScore, options.tenantId)) {
     candidates.push(...(await pageCandidates(to.hippoDb.captures, page, minScore, options.stats)));

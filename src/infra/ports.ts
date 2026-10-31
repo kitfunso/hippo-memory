@@ -1,5 +1,5 @@
-// The real outside services, built in one place: each composition root puts them in the Context it
-// builds.
+// The real outside services, built in one place: each composition root puts them in the Context
+// it builds.
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { Llm } from '../base/ports/llm.js';
 import type { RerankerLookup } from '../base/ports/reranker.js';

@@ -141,8 +141,8 @@ async function importVaultNotes(
   const importNotes = async (into: VaultImportRun): Promise<void> => {
     for (const relpath of relpaths) await importVaultNote(into, relpath);
   };
-  // A dry run probes the rejection guard once per changed note; one batch lets every probe share a
-  // handle.
+  // A dry run probes the rejection guard once per changed note; one batch lets every probe share
+  // a handle.
   if (run.dryRun) await batch((store) => importNotes({ ...run, ctx: { ...run.ctx, store } }));
   else await importNotes(run);
 }
@@ -227,9 +227,8 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
 async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, MemoryEntry[]>> {
   // One load serves both per-file idempotency and the deletion diff.
   const rows = await rawRowsUnder(ctx, `vault:${vaultName}:`);
-  // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
-  // later changed or deletion pass must archive them all or older raw vault content stays
-  // searchable.
+  // Every live row per artifactRef (several only after a concurrent double-insert): a later changed
+  // or deletion pass must archive them all or older raw vault content stays searchable.
   const existing = new Map<string, MemoryEntry[]>();
   for (const row of rows) {
     if (row.artifactRef === null) continue;

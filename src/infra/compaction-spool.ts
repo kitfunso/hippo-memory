@@ -1,5 +1,5 @@
-// Summaries post-compact could not record because the store was busy, waiting on disk for the next
-// replay.
+// Summaries post-compact could not record because the store was busy, waiting on disk for the
+// next replay.
 import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -22,8 +22,8 @@ import { promoteTmp, recoverStaleClaims } from './spool-recovery.js';
 
 const LOCK = 'replay.lock.db';
 
-// The session id stays in the body only, and the random part keeps two spools of one millisecond
-// apart.
+// The session id stays in the body only, and the random part keeps two spools of one
+// millisecond apart.
 function spoolFile(hippoRoot: string): string {
   return path.join(
     hippoRoot,

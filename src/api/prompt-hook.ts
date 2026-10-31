@@ -240,8 +240,8 @@ async function skipUnchangedStatic({
 }: SkipUnchangedStaticOptions): Promise<boolean> {
   const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
-  // Session start is the only injection Copilot gets, so a resumed session needs the whole block
-  // again.
+  // Session start is the only injection Copilot gets, so a resumed session needs the whole
+  // block again.
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') {
     return false;
   }
@@ -310,8 +310,8 @@ async function recordAdditionalContextRows(
   );
 }
 
-// The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two
-// drift.
+// The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the
+// two drift.
 const HOOK_INCLUDE_RECENT = 5;
 const HOOK_BUDGET = DEFAULT_CONTEXT_BUDGET;
 const HOOK_FRAMING = 'observe';
@@ -381,8 +381,8 @@ export async function buildPromptHookContext(
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
   if (sharedStore || sharedStoreOf(ctx)) assertCallerProject(req.project);
-  // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here
-  // either.
+  // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows
+  // here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
   const reach = ledgerReachOf(ctx, sharedStore);

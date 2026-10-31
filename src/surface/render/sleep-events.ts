@@ -1,5 +1,5 @@
-// The lines `hippo sleep` and POST /v1/sleep show for what a sleep did; one place, so both read
-// alike.
+// The lines `hippo sleep` and POST /v1/sleep show for what a sleep did; one place, so both
+// read alike.
 import type { SleepEvent } from '../../api/sleep/events.js';
 import { plural } from '../../base/util/format.js';
 

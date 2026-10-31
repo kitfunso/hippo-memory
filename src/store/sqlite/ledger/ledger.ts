@@ -25,8 +25,7 @@ import { answered, bound, type Bodies } from '../runtime/bound.js';
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate
-// in basis points in `items`; readers outside this repo depend on these rows, so their shape is
-// fixed.
+// in basis points in `items`; readers outside this repo depend on that fixed shape.
 /** The session's first stored arm, or null; never writes. */
 function readPilotArm(
   db: DatabaseSyncLike,
@@ -82,15 +81,15 @@ function ensurePilotArm(
       { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
     );
   } catch (err) {
-    // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash
-    // arm.
+    // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the
+    // hash arm.
     log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`, errorFields(err));
     return hashed;
   }
 }
 
-// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no
-// database.
+// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is
+// no database.
 const SQLITE_CORRUPT = 11;
 const SQLITE_NOTADB = 26;
 

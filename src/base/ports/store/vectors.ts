@@ -1,5 +1,4 @@
-// The vector groups: recall's vector arm, the stored vectors, their writes and a store's own
-// index.
+// The vector groups: recall's vector arm, the stored vectors, their writes and a store's own index.
 
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { RecallScopeFilter } from '../../scope/recall-scope.js';

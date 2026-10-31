@@ -593,9 +593,8 @@ const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
   'outcome_negative',
 ];
 
-// Scored in JavaScript, not with strengthSql: SQLite reads fewer date shapes than Date does, so its
-// counts would differ. rowToEntry's defaults for these columns, so a row scores as its loaded entry
-// would.
+// Scored in JavaScript, not strengthSql: SQLite reads fewer date shapes than Date, so its counts
+// would differ; rowToEntry's column defaults apply, so a row scores as its loaded entry would.
 function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
   for (const row of rows) {
     yield {

@@ -147,9 +147,8 @@ function deleteTargetRow(
       tenantId,
     });
   }
-  // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
-  // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this
-  // fails.
+  // Forgetting a summary's child marks the parent dirty. Not atomic with the DELETE, but the mark
+  // is idempotent, so the next child mutation re-marks the parent if this fails.
   if (row.dag_parent_id) {
     const actor = opts?.actor ?? CLI_ACTOR;
     markSummaryDirtyInTx(db, { summaryId: row.dag_parent_id, tenantId, actor });
@@ -289,9 +288,8 @@ function batchWriteAndDeleteOn(
     fts: { rows: [], staleIds: [] },
     dirty: { parents: new Set(), tenantById: new Map() },
   };
-  // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
-  // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the
-  // batch.
+  // IMMEDIATE: the tombstone probes read before the first write, and under a deferred BEGIN a
+  // concurrent `hippo reject` fails the lock upgrade with SQLITE_BUSY and rolls back the batch.
   const next = withWriteScope(db, 'flush_chunk', () => {
     const reached = applyUntilHold(db, {
       files,
@@ -432,8 +430,8 @@ function reportChunk(hippoRoot: string, out: ChunkLog): void {
         `hit during the batch transaction)`,
     );
   }
-  // A skipped write never landed, so mirroring it would resurrect the text the skip kept out of the
-  // DB.
+  // A skipped write never landed, so mirroring it would resurrect the text the skip kept out of
+  // the DB.
   writeMarkdownMirrors(hippoRoot, out.written);
   for (const id of out.removedIds) {
     purgeMirrorBestEffort(hippoRoot, { id, isRaw: false, logPrefix: 'batchWriteAndDelete' });
@@ -643,12 +641,11 @@ function writeBatchRow(
 ): void {
   const { written, fts, dirty } = out;
   written.push(row);
-  // Bypass the guard: merges concatenate already-guarded facts, the merge pass checks merged
-  // content, and the probe above closes the race; a mid-batch refusal would abort the whole
-  // consolidation.
+  // Skip the guard: merges join already-guarded facts, the merge pass checks merged content and the
+  // probe above closes the race; a mid-batch refusal would abort the whole consolidation.
   upsertMemoryRow(db, row);
-  // A decay refresh changes no indexed text, and re-indexing it would cost a full index scan per
-  // row.
+  // A decay refresh changes no indexed text, and re-indexing it would cost a full index scan
+  // per row.
   if (!live || row.content !== live.content || row.tags.join(' ') !== live.tags.join(' ')) {
     fts.rows.push(row);
     if (live) fts.staleIds.push(row.id);

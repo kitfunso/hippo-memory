@@ -121,8 +121,8 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   ];
 }
 
-// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep recounts
-// it.
+// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep
+// recounts it.
 function markFtsDrifted(db: DatabaseSyncLike): void {
   try {
     setFtsInSync(db, false);

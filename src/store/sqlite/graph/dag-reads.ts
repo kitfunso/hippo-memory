@@ -77,8 +77,8 @@ function pagedDescendants(
   return { summary: walk.summary, levels, sizes };
 }
 
-// Reads four short columns of every child, since the level below needs each admitted id as a
-// parent.
+// Reads four short columns of every child, since the level below needs each admitted id as
+// a parent.
 function keyedLevel(
   db: DatabaseSyncLike,
   walk: PagedWalk,

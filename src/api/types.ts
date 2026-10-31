@@ -1,5 +1,5 @@
-// Request context (caller identity and tenant) shared by every API module, plus the recall contract
-// error.
+// Request context (caller identity and tenant) shared by every API module, plus the recall
+// contract error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
 import type { HippoStore, StoreReach } from '../base/ports/store.js';

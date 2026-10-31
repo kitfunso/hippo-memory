@@ -34,8 +34,8 @@ export const MAX_FRESH_RAW = 200;
 // importance goes first.
 export const WM_MAX_ENTRIES = 20;
 
-// Session events a read returns when its caller names no limit, as `hippo session show` prints by
-// default.
+// Session events a read returns when its caller names no limit, as `hippo session show` prints
+// by default.
 export const SESSION_EVENT_LIMIT = 8;
 
 // Page size every list surface (CLI, HTTP, store) falls back to when the caller names none.

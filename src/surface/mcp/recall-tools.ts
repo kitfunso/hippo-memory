@@ -78,8 +78,8 @@ export async function runDrillTool({ args, ctx, api }: HippoDbToolCall): Promise
   if (!summaryId) return 'No summary_id provided.';
   const limit = numberArg(args, 'limit');
   const budget = numberArg(args, 'budget');
-  // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides the
-  // cap.
+  // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides
+  // the cap.
   const depth = numberArg(args, 'depth');
   const drillExtra: DrillDownExtraOptions = {};
   if (limit !== undefined && limit > 0) drillExtra.limit = limit;

@@ -1,5 +1,5 @@
-// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
-// binding.
+// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and
+// session-owner binding.
 import { freshActiveSnapshot } from '../../../base/session/session-snapshot.js';
 import {
   changedRows,
@@ -317,11 +317,11 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     () => {
       const row = { tenantId, sessionId, owner, createdAt: handleStamp(db) };
       const bound = insertOwnerRow(db, row);
-      // An older binary supersedes across owners, so the first binding shuts it out in the same
-      // transaction.
+      // An older binary supersedes across owners, so the first binding shuts it out in the
+      // same transaction.
       if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-      // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller
-      // knows.
+      // Pruned on write, as the failure log is; a pruned session id is a UUID no other
+      // caller knows.
       deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
     },
     { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },

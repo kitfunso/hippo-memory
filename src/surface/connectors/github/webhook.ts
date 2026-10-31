@@ -116,8 +116,8 @@ export async function handleGitHubEventsWebhook(
       signature: sigStr,
     });
   } catch (err) {
-    // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get
-    // through.
+    // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must
+    // get through.
     await freeHold(ports, replayKey);
     throw err;
   }

@@ -26,8 +26,8 @@ import { handleStamp } from '../runtime/handle-clock.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
 
-// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/checks/check-row-casts.mjs proves
-// it.
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/checks/check-row-casts.mjs
+// proves it.
 interface QuarantineDbRow {
   tenant_id: string;
   memory_id: string;
@@ -48,8 +48,8 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
     memoryId: row.memory_id,
     originalScope: row.original_scope,
     reason: row.reason,
-    // SAFETY: the quarantine INSERT and this module's UPDATE statements are the only writers of
-    // status.
+    // SAFETY: the quarantine INSERT and this module's UPDATE statements are the only writers
+    // of status.
     status: row.status as QuarantineStatus,
     quarantinedAt: row.quarantined_at,
     decidedAt: row.decided_at,
@@ -273,8 +273,8 @@ export function sqliteQuarantine({ on, files }: Handles) {
        * null content. No audit row. */
       list: listQuarantined,
     }),
-    // An approval rewrites the memory's mirror, so a decision opens the store with its mirror
-    // folders.
+    // An approval rewrites the memory's mirror, so a decision opens the store with its
+    // mirror folders.
     ...bound(
       on,
       {

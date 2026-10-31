@@ -126,8 +126,8 @@ export function isCrossSite(req: IncomingMessage): boolean {
   const origin = req.headers.origin;
   if (origin === undefined) return false;
   const url = tryParseUrl(origin);
-  // The socket's own scheme, never a forwarded one: a page served over http must not drive an https
-  // listener.
+  // The socket's own scheme, never a forwarded one: a page served over http must not drive an
+  // https listener.
   return (
     url?.protocol !== (req.socket instanceof TLSSocket ? 'https:' : 'http:') ||
     url.host !== req.headers.host

@@ -34,8 +34,8 @@ import { bound, type Bodies } from '../runtime/bound.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-// The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be
-// ambiguous.
+// The JOIN with both members' memories rows needs each conflict column qualified, or `id` would
+// be ambiguous.
 const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
   .map((c) => `mc.${c}`)
   .join(', ');
@@ -50,8 +50,8 @@ const memberCols = (alias: string, side: string): string =>
   MEMBER_COLS.map((c) => `${alias}.${c} AS ${side}_${c}`).join(', ');
 const CONFLICT_ROW_COLS = `${CONFLICT_COLS_MC}, ${memberCols('ma', 'a')}, ${memberCols('mb', 'b')}`;
 
-// SAFETY: every read cast to this row selects CONFLICT_ROW_COLS; scripts/checks/check-row-casts.mjs proves
-// it.
+// SAFETY: every read cast to this row selects CONFLICT_ROW_COLS; scripts/checks/check-row-casts.mjs
+// proves it.
 interface ConflictJoinRow extends ConflictWire {
   a_id: string | null;
   a_scope: string | null;

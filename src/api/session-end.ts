@@ -326,8 +326,8 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   const capture = async (turns: readonly Turn[] | undefined): Promise<boolean> => {
-    // With no transcript of its own, capture would read this as a manual run and scan every
-    // project.
+    // With no transcript of its own, capture would read this as a manual run and scan
+    // every project.
     if (!w.transcriptPath) {
       w.log('skip capture: no transcript for this session');
       return false;

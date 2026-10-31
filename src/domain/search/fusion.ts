@@ -31,8 +31,8 @@ export interface FusionInput {
   graphStream?: GraphStreamOptions;
 }
 
-// Score desc, then entry identity, so ties cannot leak fresh-ingest order into graph seeds or RRF
-// ranks.
+// Score desc, then entry identity, so ties cannot leak fresh-ingest order into graph seeds or
+// RRF ranks.
 function rankBy(eligible: number[], scores: number[], entries: MemoryEntry[]): number[] {
   return [...eligible].sort((a, b) => {
     const d = scores[b] - scores[a];
@@ -68,8 +68,8 @@ async function graphRanking(
   cosineRanked: number[],
 ): Promise<number[]> {
   const { graph, graphStream: gs } = input;
-  // Without doc vectors the dense ranking is just entry order, so seeds drawn from it would mean
-  // nothing.
+  // Without doc vectors the dense ranking is just entry order, so seeds drawn from it would
+  // mean nothing.
   const hasDocVectors = input.dense.hadVec.some(Boolean);
   if (!gs || gs.weight <= 0 || !graph || !hasDocVectors) return [];
   const seedCount = Math.min(gs.seedCount ?? DEFAULT_GRAPH_SEED_COUNT, eligibleCount);

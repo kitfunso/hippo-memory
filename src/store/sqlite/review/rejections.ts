@@ -248,8 +248,8 @@ function removeHolders(
     };
     removeLiveRows(db, files, sweep);
     removeDormantCopies(db, sweep);
-    // Still inside the write scope: a failed audit row is reported and the removal commits without
-    // it.
+    // Still inside the write scope: a failed audit row is reported and the removal commits
+    // without it.
     const { tenantId, actor, memoryId } = rejection;
     const { removedIds } = removal;
     audit(db, 'reject_value', {

@@ -246,8 +246,8 @@ async function runQualityAudit(
   options: QualityAuditOptions,
 ): Promise<AuditSummary> {
   const { dryRun, consolidateResult, dedupResult, pages } = options;
-  // The pages follow consolidation and dedup, so only a dry run still holds the rows they would
-  // remove.
+  // The pages follow consolidation and dedup, so only a dry run still holds the rows they
+  // would remove.
   const wouldGo = dryRun
     ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)]
     : [];

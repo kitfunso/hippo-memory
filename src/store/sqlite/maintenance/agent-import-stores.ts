@@ -1,6 +1,5 @@
 // The agent-memories import's stores on hippo.db: each scores by the caller's rules, its container
-// writes wait the caller's lock wait, and a dry run's stand-in lives in a scratch folder deleted at
-// close.
+// writes use the caller's lock wait, and a dry run's stand-in is a scratch folder deleted at close.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

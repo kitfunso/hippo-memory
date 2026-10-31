@@ -177,8 +177,8 @@ function settleFields(
 ): SummarySettled {
   const { id, tenantId } = settle;
   const { content, descendantCount, earliestAt, latestAt } = fields;
-  // This UPDATE bypasses the write guard, so the tombstone check runs here, inside the same
-  // transaction.
+  // This UPDATE bypasses the write guard, so the tombstone check runs here, inside the
+  // same transaction.
   const tombstone = content ? readRejectedValue(db, tenantId, rejectionDigest(content.text)) : null;
   const at = [descendantCount, earliestAt, latestAt] as const;
   const row =

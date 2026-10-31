@@ -96,8 +96,8 @@ export function lessonFromFailure(
   scrub: (text: string) => string = (text) => text,
 ): FailureReading {
   if (!isJsonObjectLiteral(payload)) return { skip: 'skipped-invalid', text: null, detail: null };
-  // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are all
-  // optional.
+  // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are
+  // all optional.
   const p = payload as ToolFailurePayload;
   if (p.is_interrupt === true) return { skip: 'skipped-interrupt', text: null, detail: null };
   if (!isJsonString(p.error) || p.error.trim().length < 12) {

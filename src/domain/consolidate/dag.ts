@@ -88,9 +88,8 @@ export interface DagBuildResult {
   rejected: number;
 }
 
-// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order, so
-// a single-tenant store iterates as before. buildEntityProfiles partitions its L2s with this same
-// key.
+// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order,
+// so a single-tenant store iterates as before. buildEntityProfiles partitions its L2s by it too.
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {

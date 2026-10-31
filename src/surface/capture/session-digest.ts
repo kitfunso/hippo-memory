@@ -299,8 +299,8 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
     turns,
     finalText: state.claudeFinal || state.codexFinal || state.codexUnphased,
     cwd: state.firstCwd,
-    // An unanswered call may never have run, so an edit counts only once its result says it
-    // applied.
+    // An unanswered call may never have run, so an edit counts only once its result says
+    // it applied.
     edits: state.pending
       .filter((e) => state.landed.has(e.callId))
       .map(({ filePath, base }) => ({ filePath, base })),
@@ -443,8 +443,8 @@ export async function recordSessionDigest(
   scan: SessionScan | null,
   opts: DigestRunOptions,
 ): Promise<void> {
-  // The digest names this repo's files, so it goes only to the repo's own store, never the global
-  // one.
+  // The digest names this repo's files, so it goes only to the repo's own store, never the
+  // global one.
   if (!isInitialized(hippoRoot)) {
     opts.log('digest: skip: this folder has no store of its own');
     return;

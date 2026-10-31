@@ -9,8 +9,8 @@ export function sqliteReadiness({ on, files }: Handles): Readiness {
   return {
     ping: () =>
       answered(() => {
-        // A probe must not create the store; the first write does, so a root with none yet is
-        // ready.
+        // A probe must not create the store; the first write does, so a root with none yet
+        // is ready.
         if (!existsSync(getHippoDbPath(files.hippoRoot))) return;
         on((db) => {
           db.prepare('SELECT 1').get();

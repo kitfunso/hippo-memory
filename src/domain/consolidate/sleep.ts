@@ -104,8 +104,8 @@ function newSleepRun(
   const { tenantId, now, config } = options;
   const dryRun = options.dryRun ?? false;
   const { start, result, rows } = parts;
-  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class
-  // object.
+  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a
+  // first-class object.
   const retirable = (entry: MemoryEntry): boolean =>
     canAutoDelete(entry) && !rows.backsObject(entry.id);
   return {

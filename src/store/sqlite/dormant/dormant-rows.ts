@@ -24,8 +24,8 @@ import type { DormantSnapshot } from '../../../base/ports/store/types.js';
 import { narrowingAnd, type FilterColumn } from '../entries/entry-filter.js';
 import { tenantAnd } from '../runtime/tenant.js';
 
-// SAFETY: every read cast to this row selects DORMANT_COLUMNS; scripts/checks/check-row-casts.mjs proves
-// it.
+// SAFETY: every read cast to this row selects DORMANT_COLUMNS; scripts/checks/check-row-casts.mjs
+// proves it.
 interface DormantRow {
   tenant_id: string;
   id: string;

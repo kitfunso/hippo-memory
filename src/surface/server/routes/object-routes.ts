@@ -1,6 +1,5 @@
-// The rows of a typed-object kind, from one config: create, list, get and close for every kind,
-// plus supersede for a kind that versions. Each handler parses and replies; the work is one api
-// call.
+// A typed-object kind's routes from one config: create, list, get and close, plus supersede for a
+// kind that versions. Each handler parses and replies; the work is one api call.
 import {
   objectClose,
   objectGet,

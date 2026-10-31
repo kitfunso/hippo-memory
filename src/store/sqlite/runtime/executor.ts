@@ -24,8 +24,8 @@ import {
   type WorkerInit,
 } from './worker-ops.js';
 
-// Resolved from the package root, so a server run from TypeScript source starts the same built
-// file.
+// Resolved from the package root, so a server run from TypeScript source starts the same
+// built file.
 const WORKER_ENTRY = fileURLToPath(
   new URL('../../../../dist/store/sqlite/runtime/worker-entry.js', import.meta.url),
 );
@@ -137,8 +137,8 @@ function laneOf(mode: OpMode, pinned = false): Lane {
   };
 }
 
-// A thread that will not stop leaves a live worker behind, so the rejection is logged rather than
-// dropped.
+// A thread that will not stop leaves a live worker behind, so the rejection is logged rather
+// than dropped.
 function terminateLogged(worker: Worker): void {
   worker
     .terminate()
@@ -315,8 +315,8 @@ class WorkerPool implements SqliteExecutor {
     else this.#stopWriter(lane, lane.worker, pending);
   }
 
-  // A read changes nothing, so its caller is answered at once; the thread is replaced when it has
-  // exited.
+  // A read changes nothing, so its caller is answered at once; the thread is replaced when it
+  // has exited.
   #stopReader(lane: Lane, worker: Worker, pending: Pending): void {
     finish(pending, () => pending.fail(new DeadlineExceededError(READ_LATE)));
     lane.stopping = worker;
@@ -362,8 +362,8 @@ class WorkerPool implements SqliteExecutor {
       // An idle thread is unreferenced, and the process must not end before the thread has closed
       // its connection.
       lane.worker?.ref();
-      // Read after the reply of a job still running; the thread then closes its connection and
-      // ends.
+      // Read after the reply of a job still running; the thread then closes its connection
+      // and ends.
       lane.worker?.postMessage('stop');
     }
     await Promise.all(this.#exits.values());
@@ -379,8 +379,8 @@ class WorkerPool implements SqliteExecutor {
 
   #pump(lane: Lane): void {
     if (lane.running !== undefined) return;
-    // Setup comes first: a reader sent a job before it would open a store whose setup it cannot
-    // write.
+    // Setup comes first: a reader sent a job before it would open a store whose setup it
+    // cannot write.
     if (lane.mode === 'read' && this.#setup !== 'done') return;
     let next = lane.queue.shift();
     // Its request was abandoned while it waited, so no one is left to read what it would do.

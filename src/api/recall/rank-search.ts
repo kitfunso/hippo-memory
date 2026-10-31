@@ -73,8 +73,8 @@ export async function loadRecallPool(
     originProjects: opts.originProjects,
     ownScope: opts.ownScope,
   };
-  // The two stores are independent, so their reads overlap; Promise.all keeps the local-then-global
-  // order.
+  // The two stores are independent, so their reads overlap; Promise.all keeps the
+  // local-then-global order.
   const reads = await Promise.all([
     ctx.store.searchRecallEntries(opts.query, load),
     ctx.global ? ctx.global.store.searchRecallEntries(opts.query, load) : Promise.resolve([]),
@@ -138,8 +138,8 @@ function graphStreamSearch(
 ): Promise<SearchResult[]> {
   const { mmr, mmrLambda } = opts;
   noteGraphStreamLimits(ctx, pool);
-  // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list
-  // fusion.
+  // With seedCount or fewer candidates every one is a seed and the stream degrades to the
+  // 2-list fusion.
   return rankHybrid(opts.query, pool.local, {
     ...engineOptions(ctx, opts),
     source: vectorSourceOf(ctx),

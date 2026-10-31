@@ -43,8 +43,8 @@ interface BestMatches {
   oneEachId(): void;
 }
 
-// One scoring loop for rows in memory and rows paged from the store, so the two can never rank
-// apart.
+// One scoring loop for rows in memory and rows paged from the store, so the two can never
+// rank apart.
 function bestMatches(query: readonly number[], k: number): BestMatches | null {
   if (k <= 0 || query.length === 0) return null;
   const q = Float32Array.from(query);

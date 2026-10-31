@@ -284,8 +284,8 @@ function tieGroups(
     const ids = group
       .map(([id]) => id)
       .sort((a, b) => compareScoresDesc(scores.get(a)!, scores.get(b)!));
-    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's doc
-    // comment.
+    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's
+    // doc comment.
     const keepN =
       ids.length < MIN_RESCUE_GROUP
         ? 0

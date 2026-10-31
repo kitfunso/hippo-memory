@@ -60,8 +60,8 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
   };
 }
 
-// Every top-level key loadConfig reads. A bad value warns once, in one wording, and reads as the
-// fallback.
+// Every top-level key loadConfig reads. A bad value warns once, in one wording, and reads as
+// the fallback.
 const CONFIG_TABLE: readonly ConfigEntry[] = [
   // Every writer starts a memory on this, and a zero or negative half-life scores zero strength.
   configKey('defaultHalfLifeDays', positive(D.defaultHalfLifeDays)),

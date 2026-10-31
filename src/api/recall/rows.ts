@@ -132,8 +132,8 @@ export function fitRecall<R>(ranked: SearchResult[], fit: RecallFit<R>): R {
   const fitted = fitBudget(ranked, fit.room, fit.floor, fit.cost);
   let kept = fitted.length;
   let rendered = fit.render(fitted.slice(0, kept));
-  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each
-  // drop.
+  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after
+  // each drop.
   while (kept > fit.floor && estimateTokens(fit.textOf(rendered)) > fit.budget) {
     kept--;
     rendered = fit.render(fitted.slice(0, kept));

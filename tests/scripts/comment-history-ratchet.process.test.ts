@@ -111,6 +111,16 @@ describe('check-comment-history.mjs', () => {
     });
   });
 
+  it('fails on a comment line holding one word, whatever the baseline allows', () => {
+    const code = ['// A wrapped comment whose last word fell onto its own', '// line.', 'export {};', ''].join('\n');
+    withFixture({ 'src/a.ts': code, 'src/b.ts': '// Two words.\n' }, { 'src/a.ts': 5 }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('src/a.ts:2 // line.');
+      expect(r.stderr).not.toContain('src/b.ts');
+    });
+  });
+
   it('counts a real leap day and scans .mts and .cts files', () => {
     const files = {
       'src/a.ts': '// Released 2028-02-29\n',

@@ -1,6 +1,5 @@
-// The project names of a store: the reads `hippo projects`, doctor and the note sync plan from, and
-// the merge and the repair, each one transaction, backed up first, whose mirror files follow the
-// commit.
+// A store's project names: the reads behind `hippo projects`, doctor and the note sync plan, and
+// the merge and repair, each one backed-up transaction whose mirror files follow the commit.
 
 import type { MemoryEntry } from '../memory/entry.js';
 import type { AuditLog } from '../ports/store/audit.js';

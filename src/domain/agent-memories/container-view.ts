@@ -152,8 +152,8 @@ async function adoptPrefix(
   }
 }
 
-// Byte order on created then id, as the store pages rows; localeCompare may skip the ISO
-// punctuation.
+// Byte order on created then id, as the store pages rows; localeCompare may skip the
+// ISO punctuation.
 const byteOrder = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 function oldestFirst(rows: readonly MemoryEntry[]): MemoryEntry[] {

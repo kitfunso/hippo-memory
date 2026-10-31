@@ -46,8 +46,8 @@ function recallScopeClause(
   if (scopeFilter.mode === 'default-deny') {
     return { sql: ` AND ${admit.sql}`, params: admit.params };
   }
-  // The trailing arm keeps a deliberately requested scope loadable, private or quarantined
-  // included.
+  // The trailing arm keeps a deliberately requested scope loadable, private or
+  // quarantined included.
   return {
     sql: ` AND (${admit.sql} OR ${col}scope = ?)`,
     params: [...admit.params, scopeFilter.value],

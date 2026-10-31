@@ -27,8 +27,8 @@ export type SleepMessage = SleepJob & { readonly deadline: number };
 
 export type SleepReply<R = SleepResult> = { readonly ok: true; readonly result: R } | FailureReply;
 
-// Resolved from the package root, so a server run from TypeScript source starts the same built
-// file.
+// Resolved from the package root, so a server run from TypeScript source starts the same
+// built file.
 const CHILD_ENTRY = fileURLToPath(
   new URL('../../../dist/surface/server/sleep-child.js', import.meta.url),
 );
@@ -208,8 +208,8 @@ function sleepLine(): SleepLine {
     // One sleep at a time, as on the server's single thread: a second one waits its turn and does
     // not fight the first for the write lock.
     const child = turn.then(() => runInChild<R>(job));
-    // A failed sleep reaches its own caller through its answer; the turn lasts until the child has
-    // exited.
+    // A failed sleep reaches its own caller through its answer; the turn lasts until the child
+    // has exited.
     turn = child
       .then((run) => run.ended)
       .finally(() => {

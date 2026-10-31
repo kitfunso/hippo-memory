@@ -129,9 +129,8 @@ function tenantConflicts(
   for (const [i, a] of rows.entries()) {
     for (const j of partnersOf(i)) {
       const b = rows[j];
-      // Traces are variants of each other, not contradictions: two strategies for the same task can
-      // both be valid, and conflict detection is for stated-rule disagreement, not strategy
-      // diversity.
+      // Traces are variants, not contradictions: two strategies for one task can both be valid, and
+      // conflict detection is for stated-rule disagreement.
       if (
         (a.trace && b.trace) ||
         a.superseded ||

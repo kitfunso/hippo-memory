@@ -52,8 +52,8 @@ function dryRunRefusal(
 
 function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   if (Array.isArray(flags[key])) {
-    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array
-    // member.
+    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other
+    // array member.
     (flags[key] as string[]).push(value);
   } else {
     flags[key] = [value];
@@ -236,8 +236,8 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
     printError(`Unknown flag ${flagNames(unknown)} for hippo ${command}. Nothing was changed.`);
     throw new CliExit(2);
   }
-  // main() refuses --dry-run by name on a verb without one, so that flag is not also called
-  // ignored.
+  // main() refuses --dry-run by name on a verb without one, so that flag is not also
+  // called ignored.
   const ignored = declared
     ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run')
     : unknown;

@@ -36,8 +36,8 @@ export function isGitRepo(git: GitRunner, cwd: string): boolean {
     stderr: 'drop',
   });
   if (probe.ok) return probe.stdout.trim() === 'true';
-  // Asking git about a folder that is no repo is the probe itself, so a failure is the expected
-  // answer.
+  // Asking git about a folder that is no repo is the probe itself, so a failure is the
+  // expected answer.
   log.debug(`autolearn: not a git repo: ${errorMessage(probe.error)}`, errorFields(probe.error));
   return false;
 }

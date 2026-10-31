@@ -261,8 +261,8 @@ function heldReader(hippoRoot: string, files: StoreFiles, migrate: () => void): 
       }
       return held;
     },
-    // The first list runs the open the other reads run, so a pending migration lands before it
-    // sorts.
+    // The first list runs the open the other reads run, so a pending migration lands before
+    // it sorts.
     listsOn: (db) => {
       if (lists !== null) return lists;
       migrate();

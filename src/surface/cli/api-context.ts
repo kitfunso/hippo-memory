@@ -299,8 +299,8 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
         detached: runtime,
       };
     };
-  // Frames interleave, so each takes a session of its own and hands it to every store its context
-  // builds.
+  // Frames interleave, so each takes a session of its own and hands it to every store its
+  // context builds.
   return {
     runFrame: (signal, run) =>
       runSqliteRequest((session) => run(contextIn(session, signal)), 'cli', runtime),

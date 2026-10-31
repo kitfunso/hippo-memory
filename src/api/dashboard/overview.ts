@@ -1,5 +1,5 @@
-// The overview and one project's detail, built from the store's per-project tallies at the stamp's
-// instant.
+// The overview and one project's detail, built from the store's per-project tallies at the
+// stamp's instant.
 import { AT_RISK_BELOW } from '../../base/memory/strength-bands.js';
 import { SERIES_DAYS, seriesDay } from '../../base/memory/memory-facts.js';
 import { pct, plural, round1 } from '../../base/util/format.js';

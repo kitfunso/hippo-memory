@@ -1,6 +1,5 @@
-// `hippo projects`: list the project names a store holds, fold one into another, and repair old
-// tags in one reversible pass. The rules here plan from reads; the store applies each plan in one
-// transaction.
+// `hippo projects`: list a store's project names, fold one into another, repair old tags in one
+// reversible pass. The rules here plan from reads; the store applies each plan in one transaction.
 import * as path from 'node:path';
 import { transcriptNotesProject } from '../agent-memories/claude-code.js';
 import { containerId, containerPrefix } from '../agent-memories/source.js';
@@ -257,8 +256,8 @@ async function planFolds(
   folder: StoreFolder,
   globalFolds: boolean,
 ): Promise<Pick<RepairResult, 'folds' | 'collisions'>> {
-  // A name someone merged into by hand stays: undoing their choice would rest on the resolver
-  // alone.
+  // A name someone merged into by hand stays: undoing their choice would rest on the
+  // resolver alone.
   const chosen = new Set(
     (await projectAudit(r.store.auditLog, r.tenantId, 'project_merge')).map((e) => e.metadata.into),
   );
@@ -380,8 +379,8 @@ async function parentOrigins(
   const parentIds = [...parents];
   const live = new Map<string, MemoryEntry>();
   for await (const e of rowsOf(r, { ids: parentIds })) live.set(e.id, e);
-  // A live row outranks a snapshot under its id, so only the parents with no live row are looked up
-  // dormant.
+  // A live row outranks a snapshot under its id, so only the parents with no live row are looked
+  // up dormant.
   const gone = parentIds.filter((id) => !live.has(id));
   const dormant = await r.store.projectTags.dormantWhere({ tenantId: r.tenantId, ids: gone });
   const origins = new Map<string, string | null>(

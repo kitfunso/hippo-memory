@@ -22,8 +22,8 @@ export async function handleReject({
   // local store (requireInit'd via resolveAuthRoot).
   const root = resolveAuthRoot(hippoRoot, flags);
 
-  // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable
-  // identity.
+  // --reason is REQUIRED: the tombstone stores no content, so reason is its only
+  // human-readable identity.
   const reason = (stringFlag(flags, 'reason') ?? '').trim();
   if (!reason) {
     fail(

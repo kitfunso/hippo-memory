@@ -44,8 +44,8 @@ export function sqliteVectorReads(
     // An empty list needs no handle.
     stored: (part, ids) =>
       ids.length === 0 ? Promise.resolve(new Map()) : reads.stored(part, ids),
-    // The scan reads a page per event-loop turn, so the handle stays open until the promise
-    // settles.
+    // The scan reads a page per event-loop turn, so the handle stays open until the
+    // promise settles.
     nearestEntries: (queryVector, spec) =>
       onAsync((db) => listVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(
         rethrowInPortTerms,

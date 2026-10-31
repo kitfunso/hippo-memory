@@ -138,8 +138,8 @@ function extractFromPatterns(
   patterns: readonly RegExp[],
   category: string,
 ): ExtractedItem | null {
-  // A keyword inside brackets does not support a detached assertion; a later one outside them still
-  // does.
+  // A keyword inside brackets does not support a detached assertion; a later one outside them
+  // still does.
   const keyed = patterns.some((pattern) =>
     [...sentence.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))].some(
       (match) => !insideBrackets(sentence.slice(0, match.index)),

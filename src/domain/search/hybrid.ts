@@ -196,8 +196,8 @@ type ArmFusion = Omit<FusionInput, 'graph' | 'graphStream'>;
 
 function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOptions): ArmFusion {
   const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
-  // A prepared corpus covers the caller's entries only, so rows the vector arm added force a
-  // rebuild.
+  // A prepared corpus covers the caller's entries only, so rows the vector arm added force
+  // a rebuild.
   const corpus =
     (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
   const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));

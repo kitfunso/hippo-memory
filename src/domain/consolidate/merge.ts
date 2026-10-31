@@ -133,9 +133,8 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
   const alreadyMergedIds = new Set<string>();
   for await (const e of run.survivors.rows()) for (const id of e.parents) alreadyMergedIds.add(id);
 
-  // Partition BEFORE the overlap loop so a cluster can never span tenants and merge cross-tenant
-  // content. Map keeps insertion order, so a single-tenant store gets one partition in the original
-  // order.
+  // Partition before the overlap loop so no cluster spans tenants; Map keeps insertion order, so
+  // a single-tenant store gets one partition in the original order.
   const buckets = new Map<string, MergeBucket>();
   for await (const e of run.survivors.rows()) {
     const candidate =
@@ -228,9 +227,8 @@ async function mergeCluster({
   const { result, dryRun } = run;
   const mergedContent = mergeContents(cluster);
 
-  // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below
-  // runs under the partition's tenant, the one every cluster member shares and the row will land
-  // in.
+  // Build the semantic entry first (createMemory is pure and cheap) so the tombstone check runs
+  // under the partition's tenant, the one every cluster member shares and the row lands in.
   const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run);
 
   if (semantic && (await mergeRejected({ run, semantic, cluster, related, used }))) return false;

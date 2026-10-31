@@ -255,8 +255,8 @@ function writePing(res: ServerResponse): boolean {
 }
 
 function endStreamWithReason(res: ServerResponse, reason: string): void {
-  // A socket that refused the write is already logged; end() on it would only log the same failure
-  // again.
+  // A socket that refused the write is already logged; end() on it would only log the same
+  // failure again.
   if (writeChunk(res, `event: closed\ndata: ${JSON.stringify({ reason })}\n\n`)) endReply(res);
   else res.destroy();
 }

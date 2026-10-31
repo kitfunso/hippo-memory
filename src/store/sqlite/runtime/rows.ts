@@ -273,8 +273,8 @@ const MEMORY_COLUMN_NAMES = [
   'rebuild_count',
 ] as const;
 
-// FTS-join columns for listSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads
-// working.
+// FTS-join columns for listSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified
+// reads working.
 export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
 export const MEMORY_SEARCH_COLUMNS = MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`).join(', ');
 

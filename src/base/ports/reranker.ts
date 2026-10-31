@@ -1,5 +1,5 @@
-// The reranker port: a recall names a reranker and the registry its root built hands back the
-// function.
+// The reranker port: a recall names a reranker and the registry its root built hands back
+// the function.
 import type { SearchResult } from '../rank/search-types.js';
 import type { ClefSettings } from '../config/config.js';
 
