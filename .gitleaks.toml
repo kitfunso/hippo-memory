@@ -44,3 +44,8 @@ targetRules = ["generic-api-key", "stripe-access-token"]
 description = "server-hardening test: made-up Slack signing secret"
 paths = ['''^tests/server/server-hardening\.server\.test\.ts$''']
 targetRules = ["generic-api-key"]
+
+[[allowlists]]
+description = "stored-source test: made-up token and password in import strings it must scrub"
+paths = ['''^tests/util/stored-source\.test\.ts$''']
+targetRules = ["generic-api-key"]
