@@ -2,6 +2,7 @@
 // closes it at once, so a writer on Windows can replace the file between reads; a record a time
 // cost a syscall for each node the walk reached.
 import * as fs from 'node:fs';
+import { fnv1a32 } from '../base/util/fnv1a.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { cachedStatement } from './statement-cache.js';
@@ -10,7 +11,6 @@ import {
   badGraphFile,
   GraphFileError,
   graphFilePath,
-  idHash,
   isReplaced,
   RECORD_AT,
   RECORD_HEAD,
@@ -232,7 +232,7 @@ function intactRowid(db: DatabaseSyncLike, file: GraphFileView): number | undefi
   for (const row of rows) {
     const node = file.nodeAt(row.rowid);
     const record = node === undefined ? undefined : file.record(node);
-    if (record && !record.replaced && record.idHash === idHash(row.id)) return row.rowid;
+    if (record && !record.replaced && record.idHash === fnv1a32(row.id)) return row.rowid;
   }
   return undefined;
 }

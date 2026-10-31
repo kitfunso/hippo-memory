@@ -1,5 +1,6 @@
 // The anchoring detector and the bias-hint switch.
 import type { HippoConfig } from '../../base/config/config.js';
+import { fnv1a32 } from '../../base/util/fnv1a.js';
 
 /**
  * Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked
@@ -78,18 +79,6 @@ export function hashQueryText(query: string): number {
   const tokens = filtered.length > 0 ? filtered : normalized;
   const deduped = Array.from(new Set(tokens)).sort();
   return fnv1a32(deduped.join(' '));
-}
-
-function fnv1a32(text: string): number {
-  // FNV-1a 32-bit. Offset basis 2166136261, prime 16777619.
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    // 32-bit multiply via Math.imul — handles overflow correctly.
-    hash = Math.imul(hash, 16777619);
-  }
-  // Coerce to unsigned 32-bit for stable comparison.
-  return hash >>> 0;
 }
 
 /**
