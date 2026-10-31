@@ -295,8 +295,8 @@ export async function remember(
   return startedWeak ? { ...result, startedWeak } : result;
 }
 
-/** The one owner of "a memory was remembered": every path that lands remembered rows calls it,
- * and a store without hippo.db's local tier keeps no counter. */
+/** The one owner of "a memory was remembered" above the store; hippo.db's capture writes count in
+ * their own transaction, and a store without the local tier keeps no counter. */
 export async function countRemembered(ctx: Pick<Context, 'enrich'>, count: number): Promise<void> {
   if (count > 0) await ctx.enrich?.remembered?.bumpRemembered(count);
 }
