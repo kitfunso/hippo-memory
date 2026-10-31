@@ -9,6 +9,7 @@ import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './a
 import { INT_PARAM, matchPath, noteAccess } from './request.js';
 import { routeLookup, type RouteLookup } from './route-lookup.js';
 import { boundRoute, notPorted } from './route-binding.js';
+import { hasHippoDb } from '../../api/hippo-db-context.js';
 import {
   handleApproveQuarantine,
   handleCreateAuthKey,
@@ -326,11 +327,11 @@ export interface BoundAddonRoute {
 export function bindAddonRoutes(
   routes: readonly AddonRoute[],
   store: HippoStore,
-  onHippoDb: boolean,
 ): ReadonlyMap<string, BoundAddonRoute> {
+  const tier = hasHippoDb(store);
   return new Map(
     routes.map((route) => {
-      const ported = route.hippoDb !== true || onHippoDb;
+      const ported = route.hippoDb !== true || tier;
       return [route.path, { route, ported }];
     }),
   );

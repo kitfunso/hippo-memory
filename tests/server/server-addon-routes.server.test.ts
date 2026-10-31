@@ -224,6 +224,37 @@ describe('an add-on route on a worker store', () => {
   });
 });
 
+describe('an add-on hippoDb route binds on the local tier, as a built-in local route does', () => {
+  const TIER = '/v1/x-tier';
+  const tierRoute: AddonRoute = { path: TIER, hippoDb: true, handler: async () => ({ ok: true }) };
+
+  /** The add-on route's status and the built-in GET /v1/quarantine's on a server over `store`. */
+  async function statuses(store: HippoStore): Promise<{ addon: number; builtIn: number }> {
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, routes: [tierRoute], store });
+    try {
+      const addon = (await post(TIER, '{}')).status;
+      const res = await fetch(`${handle.url}/v1/quarantine`, { headers: { authorization: `Bearer ${apiKey}` } });
+      await res.body?.cancel();
+      return { addon, builtIn: res.status };
+    } finally {
+      await handle.stop();
+      handle = null;
+      await store.close();
+    }
+  }
+
+  it('answers 501 on a spread of sqliteStore that cleared the tier', async () => {
+    const cleared = { ...sqliteStore(root), hippoDb: undefined };
+    expect(await statuses(cleared)).toEqual({ addon: 501, builtIn: 501 });
+  });
+
+  it('runs on a store that carries the tier without sqliteStore building it', async () => {
+    const { addon, builtIn } = await statuses(sqliteStoreOn(handlesOf(root)));
+    expect(addon).toBe(200);
+    expect(builtIn).not.toBe(501);
+  });
+});
+
 describe('serve() refuses an add-on route that could shadow or dodge core', () => {
   it.each([
     ['an exact core row', '/v1/memories'],

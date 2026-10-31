@@ -392,7 +392,7 @@ function servedOptsFor(
     routes,
     publicJsonBodies,
     v1Routes: bindV1Routes(store),
-    addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
+    addonRoutes: bindAddonRoutes(routes, store),
     mcpTools: bindMcpTools(store),
     store,
     onHippoDb: runtime.onHippoDb,
