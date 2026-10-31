@@ -202,7 +202,7 @@ describe('hippo goal (in process)', () => {
       outcome_score: null,
       ...more,
     });
-    // The repeat complete keeps the first outcome; the control character is stored as `?`.
+    // The repeat complete keeps the first outcome; the control character is dropped.
     expect(goals).toEqual([
       goal(top, 'ship the release', {
         status: 'completed',
@@ -211,7 +211,7 @@ describe('hippo goal (in process)', () => {
         completed: 1,
         outcome_score: 0.5,
       }),
-      goal(child, 'fix?[31m ci', {
+      goal(child, 'fix[31m ci', {
         level: 1,
         parent_goal_id: top,
         status: 'completed',
