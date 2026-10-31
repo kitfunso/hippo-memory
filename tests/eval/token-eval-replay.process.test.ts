@@ -3,11 +3,8 @@
  * the real per-prompt hook in both arms and checks what hippo injects.
  * No LLM calls, real CLI, real SQLite.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { replayTrace, replayAll } from '../../scripts/token-eval/replay.mjs';
-
-// Each replayed prompt runs the built hippo hook in a child process.
-vi.setConfig({ testTimeout: 38_000 });
 
 const TRACE = {
   name: 'ci-short',
