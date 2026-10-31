@@ -17,26 +17,37 @@ const OPTIONS = {
 
 const posix = (p) => p.split(sep).join('/').toLowerCase();
 
-/** The path to the first function `type` holds ('' when it is one), or null when it is data. A type declared outside
- * src is data; a src type is read through its properties, unions, intersections and array elements. */
+/** The type arguments `type` was made from: an alias's, then a generic reference's. */
+const typeArguments = (checker, type) => [
+  ...(type.aliasTypeArguments ?? []),
+  ...((type.flags & ts.TypeFlags.Object) !== 0 && (type.objectFlags & ts.ObjectFlags.Reference) !== 0
+    ? checker.getTypeArguments(type)
+    : []),
+];
+
+/** The path to the first function any of `types` holds, or null. */
+function firstIn(checker, inSrc, types, seen) {
+  for (const part of types) {
+    const inner = functionIn(checker, inSrc, part, seen);
+    if (inner !== null) return inner;
+  }
+  return null;
+}
+
+/** The path to the first function `type` holds ('' when it is one), or null when it is data. Unions, intersections,
+ * arrays and a non-src type's type arguments are read through; only a src type is read through its properties. */
 function functionIn(checker, inSrc, type, seen) {
   if (seen.has(type)) return null;
   seen.add(type);
   if (type.getCallSignatures().length > 0 || type.getConstructSignatures().length > 0) return '';
-  const parts = type.isUnionOrIntersection()
-    ? type.types
-    : checker.isArrayType(type) || checker.isTupleType(type)
-      ? checker.getTypeArguments(type)
-      : undefined;
-  if (parts !== undefined) {
-    for (const part of parts) {
-      const inner = functionIn(checker, inSrc, part, seen);
-      if (inner !== null) return inner;
-    }
-    return null;
+  if (type.isUnionOrIntersection()) return firstIn(checker, inSrc, type.types, seen);
+  if (checker.isArrayType(type) || checker.isTupleType(type)) {
+    return firstIn(checker, inSrc, checker.getTypeArguments(type), seen);
   }
   const decls = (type.aliasSymbol ?? type.getSymbol())?.declarations ?? [];
-  if ((type.flags & ts.TypeFlags.Object) === 0 || !decls.some(inSrc)) return null;
+  if ((type.flags & ts.TypeFlags.Object) === 0 || !decls.some(inSrc)) {
+    return firstIn(checker, inSrc, typeArguments(checker, type), seen);
+  }
   for (const prop of checker.getPropertiesOfType(type)) {
     const inner = functionIn(checker, inSrc, checker.getTypeOfSymbol(prop), seen);
     if (inner !== null) return `.${prop.name}${inner}`;

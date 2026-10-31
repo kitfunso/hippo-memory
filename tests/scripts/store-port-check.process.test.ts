@@ -112,6 +112,30 @@ describe('check-store-port.mjs', () => {
     expect(r.sites).toEqual(['src/store/sqlite/hippo-db.ts:2 rows.read(each)']);
   });
 
+  it('reads a function inside a generic declared outside src, and passes one that holds only data', () => {
+    const r = runOn({
+      'src/store/sqlite/hippo-db.ts': [
+        'type Hook = () => void;',
+        'export function hippoDbRepos() {',
+        '  return {',
+        '    rows: {',
+        '      table(hooks: Record<string, () => void>): void {},',
+        '      keyed(hooks: Map<string, Hook>): void {},',
+        '      later(hook: Promise<Hook>): void {},',
+        '      plain(rows: Map<string, Date>, at: Promise<number>): void {},',
+        '    },',
+        '  };',
+        '}',
+      ].join('\n'),
+    });
+    expect(r.status).toBe(1);
+    expect(r.sites.sort()).toEqual([
+      'src/store/sqlite/hippo-db.ts:5 rows.table(hooks)',
+      'src/store/sqlite/hippo-db.ts:6 rows.keyed(hooks)',
+      'src/store/sqlite/hippo-db.ts:7 rows.later(hook)',
+    ]);
+  });
+
   it('fails and names each store tenant a caller can leave out, as a parameter or an argument property, and passes the rest', () => {
     const r = runOn({
       'src/base/ports/store.ts': [
