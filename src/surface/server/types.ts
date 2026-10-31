@@ -8,7 +8,7 @@ import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
 import type { BoundAddonRoute } from './route-table.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../../base/ports/store-index.js';
-import type { RequiredStore, StoreReach } from '../../base/ports/store.js';
+import type { StoreReach } from '../../base/ports/store.js';
 import type { McpTools } from '../mcp/protocol.js';
 import type { LocalKey } from './local-key.js';
 import type { KeyVerifier } from './api-key.js';
@@ -139,7 +139,7 @@ export type ResolvedServeOptions = ServeOptions & {
   /** The /v1 rows for this store, each row's store need settled at boot. */
   v1Routes: RouteLookup<BoundRoute>;
   /** The MCP tools this store serves, each tool's store need settled at boot. */
-  mcpTools: McpTools<RequiredStore>;
+  mcpTools: McpTools<HippoStore>;
   /** The add-on routes by path, each with its store need settled at boot. */
   addonRoutes: ReadonlyMap<string, BoundAddonRoute>;
   callerLimiter?: RateLimiter;

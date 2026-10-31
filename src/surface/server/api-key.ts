@@ -10,7 +10,7 @@ import {
   type ScryptParams,
   type VerifiedApiKey,
 } from '../../base/scope/api-key.js';
-import type { RequiredStore } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { Lru } from '../../base/util/lru.js';
 import { keyAddressTries, keyCheckBounds } from './key-check-bounds.js';
 import { LIMITER_MAX_KEYS } from './rate-limit.js';
@@ -97,7 +97,7 @@ export class KeyVerifier {
    * call, so a revoke, expiry, role or scope change by any process applies on the next one. */
   async verify(
     plaintext: string,
-    store: RequiredStore,
+    store: HippoStore,
     bound?: DerivationBound,
     onUnusable?: () => void,
   ): Promise<VerifiedApiKey | null> {

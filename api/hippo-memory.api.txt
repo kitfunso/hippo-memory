@@ -247,7 +247,6 @@ entry/store-kit.d.ts: RejectionSource re-export
 entry/store-kit.d.ts: Rejections re-export
 entry/store-kit.d.ts: RepairProtection re-export
 entry/store-kit.d.ts: Reports re-export
-entry/store-kit.d.ts: RequiredStore re-export
 entry/store-kit.d.ts: RetrievalPolicy re-export
 entry/store-kit.d.ts: SECRET_TAGS re-export
 entry/store-kit.d.ts: ScopeReader re-export

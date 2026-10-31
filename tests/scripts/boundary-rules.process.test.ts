@@ -250,13 +250,15 @@ describe('oxlint.config.ts test env rule', () => {
 });
 
 describe('oxlint.config.ts store-group and grant rules', () => {
-  it('fails HippoStore and hasGroups in api and domain code, which take the groups they name', () => {
+  it('fails hasGroups in api and domain code, and passes HippoStore, which names only the core', () => {
     const hits = lint({
-      'src/api/whole.ts':
+      'src/api/core.ts':
         "import type { HippoStore } from '../base/ports/store.js';\nexport const f = (s: HippoStore): HippoStore => s;\n",
+      'src/api/narrow.ts': "import { hasGroups } from '../base/ports/store.js';\nexport const n = hasGroups;\n",
       'src/domain/narrow.ts': "import { hasGroups } from '../base/ports/store.js';\nexport const n = hasGroups;\n",
     });
-    expect(hits.get('src/api/whole.ts')).toContain(IMPORT);
+    expect(hits.get('src/api/core.ts')).toBeUndefined();
+    expect(hits.get('src/api/narrow.ts')).toContain(IMPORT);
     expect(hits.get('src/domain/narrow.ts')).toContain(IMPORT);
   });
 

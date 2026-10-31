@@ -9,7 +9,7 @@ import {
   type ResultCost,
   type SearchResult,
 } from '../../base/rank/search-types.js';
-import type { RequiredStore } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import type { GraphWalk } from '../../domain/graph/recall.js';
 import type { RecallBoostOptions } from './types.js';
 import type { Context } from '../types.js';
@@ -21,7 +21,7 @@ import { type RankState, rankStages } from './rank-stages.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {
-  readonly store: RequiredStore;
+  readonly store: HippoStore;
   /** The store's graph, as its root found it; unset, expansion adds nothing from this store. */
   readonly graph?: GraphWalk;
   readonly config: HippoConfig;

@@ -30,7 +30,7 @@ import {
   type ResultCost,
   type SearchResult,
 } from '../../base/rank/search-types.js';
-import type { RequiredStore } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import type { GraphWalk } from '../graph/recall.js';
 
 /** How BM25 and cosine combine, and whether the score breakdown is kept. */
@@ -128,7 +128,7 @@ export interface HybridFolder {
   /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
   embeddings?: EmbeddingsConfig;
   /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
-  store?: RequiredStore;
+  store?: HippoStore;
 }
 
 /** Every ranking field, flat because the published hybridSearch and the frozen eval scripts pass
@@ -243,7 +243,7 @@ export function vectorSourceOf({
   onHippoDb,
   embedderFor,
 }: {
-  store: RequiredStore;
+  store: HippoStore;
   /** The graph the store's root found; unset, the graph list has nothing to walk. */
   graph?: GraphWalk;
   config: Pick<HippoConfig, 'embeddings'>;

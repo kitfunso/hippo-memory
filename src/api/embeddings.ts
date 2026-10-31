@@ -12,13 +12,13 @@ import {
 } from '../domain/search/embed-memories.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
 import type { DetachedWork } from '../domain/search/detached-work.js';
-import type { RequiredStore, VectorCoverage } from '../base/ports/store.js';
+import type { HippoStore, VectorCoverage } from '../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 /** Embeds each row a capture writes into `folder`'s index without holding the capture up; a
  * failure is a warning. A capture has no Context: its root hands `run` and the embeds' keeper. */
 export function detachedEmbedder(
-  folder: ConfiguredFolder<RequiredStore>,
+  folder: ConfiguredFolder<HippoStore>,
   run: Pick<InfraPorts, 'failureNotices'>,
   detached: DetachedWork,
 ): (entry: MemoryEntry) => void {

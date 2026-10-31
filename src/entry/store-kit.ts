@@ -86,7 +86,6 @@ export {
   hasGroup,
   OPTIONAL_GROUPS,
   requireGroup,
-  type RequiredStore,
   type AmbientCandidateRequest,
   type CallerItemsSaved,
   type CardCreate,

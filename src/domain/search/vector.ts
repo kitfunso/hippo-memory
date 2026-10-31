@@ -6,7 +6,7 @@ import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { VectorReads } from '../../base/ports/store-index.js';
-import type { RequiredStore } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import type { GraphWalk } from '../graph/recall.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 
@@ -33,7 +33,7 @@ export interface VectorArm {
 
 /** Where the vector arm reads: the vectors `store` holds, embedded by `provider`. */
 export interface VectorSource {
-  readonly store: RequiredStore;
+  readonly store: HippoStore;
   readonly vectors: VectorReads;
   /** The store's graph, which the graph list walks; unset on a store that keeps none. */
   readonly graphReads?: GraphWalk;

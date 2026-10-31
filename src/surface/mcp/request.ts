@@ -7,7 +7,6 @@ import {
   hasGroups,
   type HippoStore,
   type OptionalGroup,
-  type RequiredStore,
   type StoreWith,
 } from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
@@ -71,13 +70,13 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpCaller)
 /** One tool: its run on a store a host proved once, checked here, and its run on a store whose
  * type holds every group, checked nowhere. */
 interface ToolRow {
-  readonly bind: (proved: HippoStore) => StoreTool<RequiredStore> | undefined;
+  readonly bind: (proved: HippoStore) => StoreTool<HippoStore> | undefined;
   readonly onAll: StoreTool<HippoDbStore>;
 }
 
 /** A tool that runs under any store. */
 function anyStore(run: ToolHandler): ToolRow {
-  const tool: StoreTool<RequiredStore> = (ctx) => (args) => run({ ...toolCall(ctx), args });
+  const tool: StoreTool<HippoStore> = (ctx) => (args) => run({ ...toolCall(ctx), args });
   return { bind: () => tool, onAll: tool };
 }
 
@@ -149,8 +148,8 @@ const TOOL_ROWS: ReadonlyMap<string, ToolRow> = new Map<string, ToolRow>([
 
 /** The tools a host serves on `proved`, each need checked here once and each call run on
  * `ctx.storeFor(proved)`; a tool left out is hidden from a list and answers not ported. */
-export function bindMcpTools(proved: HippoStore): McpTools<RequiredStore> {
-  const tools = new Map<string, StoreTool<RequiredStore>>();
+export function bindMcpTools(proved: HippoStore): McpTools<HippoStore> {
+  const tools = new Map<string, StoreTool<HippoStore>>();
   for (const [name, row] of TOOL_ROWS) {
     const bound = row.bind(proved);
     if (bound !== undefined) tools.set(name, bound);
@@ -171,7 +170,7 @@ function toolCall(ctx: McpCaller): Omit<ToolCall, 'args'> {
 }
 
 /** The tool bound to `ctx`'s host, or undefined when its store does not serve it. */
-function toolRun<S extends RequiredStore>(name: string, ctx: McpContext<S>): ToolRun | undefined {
+function toolRun<S extends HippoStore>(name: string, ctx: McpContext<S>): ToolRun | undefined {
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table
   // drifted apart.
   if (!TOOL_ROWS.has(name)) {
@@ -211,7 +210,7 @@ async function runTool(
   return text;
 }
 
-async function callTool<S extends RequiredStore>(
+async function callTool<S extends HippoStore>(
   id: McpRequest['id'],
   params: McpRequest['params'],
   ctx: McpContext<S>,
@@ -250,7 +249,7 @@ async function callTool<S extends RequiredStore>(
  * JSON-RPC message through it. Returns null for notifications. A tool's errors are the caller's
  * problem: wrap with try/catch in the transport. Only `tools/call` needs the context, so stdio
  * builds one for that method alone. */
-export async function handleMcpRequest<S extends RequiredStore>(
+export async function handleMcpRequest<S extends HippoStore>(
   req: McpRequest,
   ctx: McpContext<S> | undefined,
 ): Promise<McpResponse | null> {

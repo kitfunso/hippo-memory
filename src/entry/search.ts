@@ -5,7 +5,7 @@ import type { SearchResult } from '../base/rank/search-types.js';
 import { rankBm25, type Bm25SearchOptions } from '../domain/search/bm25-search.js';
 import { rankMultihop } from '../domain/search/multihop.js';
 import { withEvalSwitches } from './folder-search.js';
-import type { RequiredStore } from '../base/ports/store.js';
+import type { HippoStore } from '../base/ports/store.js';
 import { coreEnrichment, globalEnrichment } from '../api/hippo-db-context.js';
 import {
   graphExpandRecall as expandOnGraphs,
@@ -54,8 +54,8 @@ export { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../domain/graph/recall.js';
 /** graphExpandRecall's options: `store` and `global` are stores, and the walk reads the graph
  * each keeps on hippo.db's local tier. */
 export type GraphExpandOptions = Omit<GraphWalkOptions, 'store' | 'global'> & {
-  store: RequiredStore;
-  global?: RequiredStore;
+  store: HippoStore;
+  global?: HippoStore;
 };
 
 /** Multi-hop graph recall from `results` over `store` and `global`; a store that keeps no graph

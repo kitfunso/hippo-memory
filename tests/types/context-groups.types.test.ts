@@ -2,7 +2,7 @@
 
 import { describe, expectTypeOf, it } from 'vitest';
 import type { Context, ContextWith, EntryContext } from '../../src/api/types.js';
-import type { OptionalGroup, RequiredStore } from '../../src/base/ports/store.js';
+import type { OptionalGroup, HippoStore } from '../../src/base/ports/store.js';
 import {
   bindSessionOwner,
   captureFailureForCaller,
@@ -14,7 +14,7 @@ import {
 
 describe('Context store groups', () => {
   it("Context['store'] is the required store, with no optional group on it", () => {
-    expectTypeOf<Context['store']>().toEqualTypeOf<RequiredStore>();
+    expectTypeOf<Context['store']>().toEqualTypeOf<HippoStore>();
     expectTypeOf<Extract<keyof Context['store'], OptionalGroup>>().toEqualTypeOf<never>();
   });
 

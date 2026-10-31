@@ -10,7 +10,7 @@ import type {
   IndexStep,
   IndexStepAnswers,
   IndexStepKind,
-  RequiredStore,
+  HippoStore,
 } from '../../base/ports/store.js';
 import { chunked } from '../../base/util/chunked.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -115,7 +115,7 @@ async function withEmbedLock<T>(
 const INLINE_REINDEX_MAX_ROWS = 256;
 
 /** The rows an index embeds, read by id. */
-export type IndexRows = Pick<RequiredStore, 'entriesByIds'>;
+export type IndexRows = Pick<HippoStore, 'entriesByIds'>;
 
 /** A store's own index with the rows it embeds. */
 type IndexOf = Pick<IndexEmbedTarget, 'embeddingIndex' | 'rows' | 'failureNotices'>;

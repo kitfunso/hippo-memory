@@ -15,7 +15,7 @@ import {
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import type { Entity, GraphRows, GraphWalkQuery, Relation } from '../../base/ports/store/graph.js';
-import type { RequiredStore } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import {
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
@@ -36,12 +36,12 @@ export interface GraphWalk {
   graphRows(tenantId: string, query: GraphWalkQuery): Promise<GraphRows>;
 }
 
-type GraphStore = { readonly graphReads: GraphWalk } & Pick<RequiredStore, 'entriesByIds'>;
+type GraphStore = { readonly graphReads: GraphWalk } & Pick<HippoStore, 'entriesByIds'>;
 
 /** `store` with the graph its root found, as expansion walks it; with no graph there are no
  * neighbours to add. */
 export function graphOf(
-  store: Pick<RequiredStore, 'entriesByIds'>,
+  store: Pick<HippoStore, 'entriesByIds'>,
   graph: GraphWalk | undefined,
 ): GraphStore | undefined {
   if (graph === undefined) return undefined;

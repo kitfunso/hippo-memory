@@ -2,7 +2,7 @@
 // error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
-import type { GlobalGroup, RequiredStore, StoreReach } from '../base/ports/store.js';
+import type { GlobalGroup, HippoStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
 import type {
   GlobalTargetGroup,
@@ -76,7 +76,7 @@ export interface Context {
   actor: Actor;
   /** Built by a composition root; every api function reads and writes storage only through it,
    * and reaches an optional group only through `ContextWith`, which a surface proved at boot. */
-  readonly store: RequiredStore;
+  readonly store: HippoStore;
   /** Set by a composition root. Absent, the api reads one project and no global store, as for an
    * integrator's store. */
   reach?: ContextReach;

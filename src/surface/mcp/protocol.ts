@@ -17,12 +17,7 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import type {
-  GlobalTargetGroup,
-  OptionalGroup,
-  RequiredStore,
-  StoreWith,
-} from '../../base/ports/store.js';
+import type { GlobalTargetGroup, OptionalGroup, StoreWith } from '../../base/ports/store.js';
 import type { ContextWith } from '../../api/types.js';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
@@ -85,7 +80,7 @@ export type { McpRequest, McpResponse };
 
 /** One tool call's caller, as the transport bound it: the HTTP server's hippoRoot and
  * auth-resolved tenantId/actor, or the stdio host's folder walk and HIPPO_TENANT. */
-export interface McpCaller<S extends RequiredStore = RequiredStore> {
+export interface McpCaller<S extends HippoStore = HippoStore> {
   hippoRoot: string;
   tenantId: string;
   actor: string;
@@ -128,13 +123,13 @@ export type ToolRun = (args: Record<string, JsonValue>) => string | Promise<stri
 
 /** A tool bound to one host: its run for a call, or undefined when the call's reach has no
  * global store for it. */
-export type StoreTool<S extends RequiredStore> = (ctx: McpCaller<S>) => ToolRun | undefined;
+export type StoreTool<S extends HippoStore> = (ctx: McpCaller<S>) => ToolRun | undefined;
 
 /** The tools a host serves, by name; a tool its store lacks a group for is absent. */
-export type McpTools<S extends RequiredStore> = ReadonlyMap<string, StoreTool<S>>;
+export type McpTools<S extends HippoStore> = ReadonlyMap<string, StoreTool<S>>;
 
 /** A tool call's caller and the tools its host bound once, at boot. */
-export interface McpContext<S extends RequiredStore = RequiredStore> extends McpCaller<S> {
+export interface McpContext<S extends HippoStore = HippoStore> extends McpCaller<S> {
   tools: McpTools<S>;
 }
 
@@ -188,7 +183,7 @@ export function ownsServerCwd(ctx: McpCaller | undefined): boolean {
 // ── JSON-ish domain type for untrusted MCP tool-call arguments ──
 
 /** The context of a tool call on a folder, built by the frame's composition root. */
-export type McpContextFor<S extends RequiredStore = RequiredStore> = (
+export type McpContextFor<S extends HippoStore = HippoStore> = (
   hippoRoot: string,
   tenantId: string,
 ) => McpContext<S>;
@@ -196,7 +191,7 @@ export type McpContextFor<S extends RequiredStore = RequiredStore> = (
 /** What the stdio transport takes from its composition root: one frame's run, whose contexts
  * share the frame's store handles and carry `signal`. The root names the store adapter, so
  * src/surface/mcp does not. */
-export interface McpHost<S extends RequiredStore = RequiredStore> {
+export interface McpHost<S extends HippoStore = HippoStore> {
   runFrame<T>(signal: AbortSignal, run: (contextFor: McpContextFor<S>) => Promise<T>): Promise<T>;
   /** Waits up to `withinMs` for the work the frames handed off, such as an embed; resolves with
    * how many were still running. */
@@ -209,7 +204,7 @@ export interface ToolCall {
   args: Record<string, JsonValue>;
   ctx: McpCaller;
   hippoRoot: string;
-  store: RequiredStore;
+  store: HippoStore;
   config: HippoConfig;
   tenantId: string;
 }

@@ -39,8 +39,8 @@ import type {
 } from './store/types.js';
 
 /** Every group a store has: the required ones, then the optional capabilities, each a set of
- * groups a store sets or leaves unset together. `RequiredStore` is the smallest store, and
- * `runStoreConformance` from store-kit checks one. */
+ * groups a store sets or leaves unset together. `runStoreConformance` from store-kit checks a
+ * store's required groups. */
 export interface StoreGroups extends RequiredGroups, Omit<OptionalGroups, LocalGroup> {}
 
 /** Every capability a store may leave unset. */
@@ -279,12 +279,9 @@ export function requireGroups<G extends OptionalGroup>(
   throw new StoreNotPortedError(store.kind, missing ?? needs.join(', '));
 }
 
-/** The smallest store: every required group and base method, none of the optional groups. */
-export type RequiredStore = Omit<HippoStore, OptionalGroup>;
-
 /** A store that sets the optional groups `G`, as a surface proves once before it calls in; `F`
  * are the groups a feature reads where it states its fallback, so they may be unset. */
-export type StoreWith<G extends OptionalGroup, F extends OptionalGroup = never> = RequiredStore &
+export type StoreWith<G extends OptionalGroup, F extends OptionalGroup = never> = HippoStore &
   Pick<StoreGroups, Extract<G, keyof StoreGroups>> &
   Partial<Pick<StoreGroups, Extract<F, keyof StoreGroups>>> &
   TierWith<Extract<G, LocalGroup>, Extract<F, LocalGroup>>;

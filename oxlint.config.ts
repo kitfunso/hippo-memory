@@ -48,8 +48,8 @@ const groupProbes = (layer: string): Restricted[] =>
   }));
 const groupImports = (layer: string): ImportPattern => ({
   regex: '^[.]',
-  importNames: [...GROUP_PROBES, 'HippoStore'],
-  message: `Groups are bound at boot; ${layer} code uses the store it is given. Name the groups with RequiredStore, StoreWith or ContextWith.`,
+  importNames: GROUP_PROBES,
+  message: `Groups are bound at boot; ${layer} code uses the store it is given.`,
 });
 
 const SRC: Some<Restricted> = [STORE_ON, ENV, PROCESS, PREPARE];
@@ -213,7 +213,7 @@ export default defineConfig({
     {
       files: ['src/api/**/*.ts'],
       rules: {
-        'id-denylist': ['error', 'sqliteStoreOn', 'hippoRoot', ...GROUP_PROBES, 'HippoStore'],
+        'id-denylist': ['error', 'sqliteStoreOn', 'hippoRoot', ...GROUP_PROBES],
         'no-restricted-properties': restrict(
           STORE_ON,
           { property: 'hippoRoot', message: 'The api reads what the folder gave from a port method.' },
@@ -229,7 +229,7 @@ export default defineConfig({
     {
       files: ['src/domain/**/*.ts'],
       rules: {
-        'id-denylist': ['error', 'sqliteStoreOn', ...GROUP_PROBES, 'HippoStore'],
+        'id-denylist': ['error', 'sqliteStoreOn', ...GROUP_PROBES],
         'no-restricted-properties': restrict(...SRC, ...groupProbes('domain'), {
           object: 'globalThis',
           property: 'fetch',

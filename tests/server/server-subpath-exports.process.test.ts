@@ -148,7 +148,6 @@ const STORE_KIT_TYPES = [
   'NewApiKey',
   'OptionalGroup',
   'ConformanceRunner',
-  'RequiredStore',
   'OriginFilter',
   'OutcomeWrite',
   'PlanningFallacyEvidence',

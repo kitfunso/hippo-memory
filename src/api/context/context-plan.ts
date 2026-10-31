@@ -1,7 +1,7 @@
 // Which stores a context call reaches and what it may spend.
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import type { ContextReads, RequiredStore } from '../../base/ports/store.js';
+import type { ContextReads, HippoStore } from '../../base/ports/store.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { ProjectRef } from '../../base/scope/project-identity.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
@@ -23,7 +23,7 @@ import type { AmbientRecallRequest } from '../../base/ports/store/context-reads.
 
 /** One store contextGet reads rows from: its base search and its context reads. */
 export interface ContextSource {
-  readonly store: RequiredStore;
+  readonly store: HippoStore;
   readonly reads: ContextReads;
 }
 
@@ -59,7 +59,7 @@ export interface ContextPlan {
 }
 
 /** The operator's global store, which planContext proved present before it set hasGlobal. */
-export function globalStoreInReach(ctx: Context): RequiredStore {
+export function globalStoreInReach(ctx: Context): HippoStore {
   return globalInReach(ctx).store;
 }
 
@@ -73,7 +73,7 @@ export function globalInReach(ctx: Context): GlobalInReach {
 export const NO_QUERY = '*';
 
 /** A store's base search and context reads, both required on the port. */
-export function sourceOf(store: RequiredStore): ContextSource {
+export function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: store.contextReads };
 }
 

@@ -10,7 +10,7 @@ import {
   type PlanningFallacyDecision,
 } from '../../domain/predictions/planning-fallacy.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import type { RequiredStore, LastRecall, LastRecallWrites } from '../../base/ports/store.js';
+import type { HippoStore, LastRecall, LastRecallWrites } from '../../base/ports/store.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { estimateTokens } from '../../base/util/token-text.js';
@@ -261,7 +261,7 @@ export async function retrieveWithCliCore(
 
 async function planningFor(
   ctx: Context,
-  store: RequiredStore,
+  store: HippoStore,
   query: string,
 ): Promise<PlanningFallacyDecision | null> {
   const claim = detectPlanningClaim(query, { mode: autodebiasMode(ctx.config.runtime) });
@@ -296,7 +296,7 @@ interface ShownCliRecall {
 }
 
 interface RecordShownOptions {
-  readonly store: RequiredStore;
+  readonly store: HippoStore;
   readonly opts: CliCoreQuery;
   readonly core: CliCoreRecall;
   readonly done: ShownCliRecall;
@@ -350,7 +350,7 @@ async function recordShown(
 // hold.
 function finishSecond(
   ctx: Context,
-  second: RequiredStore,
+  second: HippoStore,
   recallRow: AppendAuditOptions,
   heldElsewhere: string[],
 ): Promise<boolean> {
@@ -380,7 +380,7 @@ function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource
 
 /** The second store takes its own recall rows, unless the caller's store is the global one
  * already. */
-function secondStore(ctx: Context, core: CliCoreRecall): RequiredStore | undefined {
+function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined {
   const sources = core.sources;
   return sources !== undefined && ctx.reach?.isGlobal !== true ? sources.store : undefined;
 }
@@ -398,7 +398,7 @@ async function finishOrReport(finish: () => Promise<number | null | void>): Prom
 }
 
 async function idsNotHeld(
-  store: RequiredStore,
+  store: HippoStore,
   ids: readonly string[],
   tenantId: string,
 ): Promise<string[]> {
@@ -430,7 +430,7 @@ function traceOf(
 // A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs
 // these ids with an older trace; an empty one leaves the marker on the previous recall.
 function finishShown(
-  store: RequiredStore,
+  store: HippoStore,
   lastRecall: LastRecall,
   writes: LastRecallWrites,
   marks: boolean,

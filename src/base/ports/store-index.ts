@@ -42,6 +42,5 @@ export {
   OPTIONAL_GROUPS,
   requireGroup,
   type OptionalGroup,
-  type RequiredStore,
   type StoreWith,
 } from './store.js';
