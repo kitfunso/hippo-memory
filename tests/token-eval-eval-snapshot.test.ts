@@ -66,6 +66,19 @@ describe('buildSnapshot', () => {
     expect(execFileSync('git', ['status', '--porcelain'], { cwd: out, encoding: 'utf8' })).toBe('');
   });
 
+  it('keeps a tracked file that the source .gitignore matches', () => {
+    const src = sourceRepo();
+    const git = (...a: string[]) => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: src.dir, encoding: 'utf8' }).trim();
+    mkdirSync(join(src.dir, 'node_modules'), { recursive: true });
+    writeFileSync(join(src.dir, 'node_modules/vendored.js'), 'module.exports = 1;\n');
+    git('add', '-f', 'node_modules/vendored.js');
+    git('commit', '-qm', 'vendor');
+    const out = join(tmp('snap-i-'), 'r');
+    buildSnapshot({ source: src.dir, commit: git('rev-parse', 'HEAD'), out });
+    expect(execFileSync('git', ['ls-files', 'node_modules'], { cwd: out, encoding: 'utf8' }).trim()).toBe('node_modules/vendored.js');
+    expect(execFileSync('git', ['status', '--porcelain', '--ignored'], { cwd: out, encoding: 'utf8' })).toBe('');
+  });
+
   it('gives the same commit for the same source, and lets the hippo-repo set keep the name', () => {
     const src = sourceRepo();
     const a = buildSnapshot({ source: src.dir, commit: src.commit, out: join(tmp('snap-a-'), 'r') });
