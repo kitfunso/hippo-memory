@@ -77,8 +77,9 @@ const barrels = Object.entries(layers.barrels).map(([file, folder]) => ({
 const { adapter, dbReach } = layers;
 const adapterPath = srcPaths([adapter.folder]);
 const entrances = [adapter.root, adapter.testKit.file];
-// The published store kit, the one surface file that names src/store: a pure rule it re-exports.
+// The published store kit, the one surface file that names src/store: the pure graph diff it re-exports.
 const STORE_KIT = 'entry/store-kit.ts';
+const GRAPH_DIFF = '^src/store/rules/graph-delta[.]ts$';
 // hippo.db's local tier: src/api's local modules take its types, and its code stays in the adapter.
 const tierDoor = '^src/store/sqlite/hippo-db\\.ts$';
 const outsideAdapter = [adapterPath, srcPaths([], entrances)];
@@ -168,10 +169,17 @@ const storeReach = [
   },
   {
     name: 'surface-through-api',
-    comment: `a surface calls src/api, never the store or the db; only ${entrances.map((f) => `src/${f}`).join(' and ')} open one, and src/${STORE_KIT} re-exports the pure graph diff from src/store/rules`,
+    comment: `a surface calls src/api, never the store or the db; only ${entrances.map((f) => `src/${f}`).join(' and ')} open one`,
     severity: 'error',
     from: { path: layerPaths('surface'), pathNot: srcPaths([], [...entrances, STORE_KIT]) },
     to: { path: [layerPaths(dbReach.layer), layerPaths(dbReach.through)] },
+  },
+  {
+    name: 'store-kit-graph-diff',
+    comment: `src/${STORE_KIT} takes only the pure graph diff from src/store or src/db`,
+    severity: 'error',
+    from: { path: srcPaths([], [STORE_KIT]) },
+    to: { path: [layerPaths(dbReach.layer), layerPaths(dbReach.through)], pathNot: GRAPH_DIFF },
   },
   {
     name: 'dashboard-not-cli',
