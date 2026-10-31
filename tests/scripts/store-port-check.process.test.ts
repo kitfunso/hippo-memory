@@ -97,6 +97,21 @@ describe('check-store-port.mjs', () => {
     ]);
   });
 
+  it('reads every overload of a local-tier method, at the overload that takes the function', () => {
+    const r = runOn({
+      'src/store/sqlite/hippo-db.ts': [
+        'function read(id: string): string;',
+        'function read(id: string, each: (row: string) => void): void;',
+        'function read(id: string, each?: (row: string) => void): string | void { return id; }',
+        'export function hippoDbRepos() {',
+        '  return { rows: { read } };',
+        '}',
+      ].join('\n'),
+    });
+    expect(r.status).toBe(1);
+    expect(r.sites).toEqual(['src/store/sqlite/hippo-db.ts:2 rows.read(each)']);
+  });
+
   it('fails and names each store tenant a caller can leave out, as a parameter or an argument property, and passes the rest', () => {
     const r = runOn({
       'src/base/ports/store.ts': [

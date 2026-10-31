@@ -44,6 +44,27 @@ function functionIn(checker, inSrc, type, seen) {
   return null;
 }
 
+/** `file:line` of `node`, relative to `root`. */
+function siteOf(root, node) {
+  const sf = node.getSourceFile();
+  const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+  return `${relative(root, sf.fileName).split(sep).join('/')}:${line}`;
+}
+
+/** Each parameter that holds a function in any of `method`'s overloads, at the overload that takes it. */
+function methodHits(checker, inSrc, root, label, method) {
+  const fallback = method.valueDeclaration ?? method.declarations?.[0];
+  const hits = [];
+  for (const signature of checker.getTypeOfSymbol(method).getCallSignatures()) {
+    const at = signature.getDeclaration() ?? fallback;
+    for (const param of signature.parameters) {
+      const path = functionIn(checker, inSrc, checker.getTypeOfSymbol(param), new Set());
+      if (path !== null && at !== undefined) hits.push(`${siteOf(root, at)} ${label}(${param.name}${path})`);
+    }
+  }
+  return hits;
+}
+
 /** `file:line repo.method(param.path)` for each parameter of a local-tier method whose type holds a function, read
  * from the type hippoDbRepos returns; [] when `root` has no tier door. */
 export function tierFunctionParams(root = '.') {
@@ -57,20 +78,11 @@ export function tierFunctionParams(root = '.') {
   const repos = sf && checker.getSymbolAtLocation(sf)?.exports?.get(REPOS);
   if (repos === undefined) return [`${TIER_DOOR}:1 exports no ${REPOS} to read the tier from`];
   const [build] = checker.getTypeOfSymbol(repos).getCallSignatures();
-  const hits = [];
-  for (const repo of checker.getPropertiesOfType(checker.getReturnTypeOfSignature(build))) {
-    for (const method of checker.getPropertiesOfType(checker.getTypeOfSymbol(repo))) {
-      const decl = method.valueDeclaration ?? method.declarations?.[0];
-      const [signature] = checker.getTypeOfSymbol(method).getCallSignatures();
-      for (const param of signature?.parameters ?? []) {
-        const path = functionIn(checker, inSrc, checker.getTypeOfSymbol(param), new Set());
-        if (path === null || decl === undefined) continue;
-        const at = decl.getSourceFile();
-        const line = at.getLineAndCharacterOfPosition(decl.getStart(at)).line + 1;
-        const file = relative(root, at.fileName).split(sep).join('/');
-        hits.push(`${file}:${line} ${repo.name}.${method.name}(${param.name}${path})`);
-      }
-    }
-  }
-  return hits;
+  return checker
+    .getPropertiesOfType(checker.getReturnTypeOfSignature(build))
+    .flatMap((repo) =>
+      checker
+        .getPropertiesOfType(checker.getTypeOfSymbol(repo))
+        .flatMap((method) => methodHits(checker, inSrc, root, `${repo.name}.${method.name}`, method)),
+    );
 }
