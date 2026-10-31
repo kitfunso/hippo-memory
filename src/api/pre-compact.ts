@@ -3,20 +3,17 @@
 
 import type { CaptureInput } from '../base/session/capture-contract.js';
 import { mergeWorkingState, type WorkingState } from '../base/session/working-state.js';
-import type { CompactionStart } from '../base/ports/store/capture.js';
-import type { TaskSnapshot } from '../base/ports/store/sessions.js';
+import type { CompactionStart } from '../base/records/capture.js';
+import type { TaskSnapshot } from '../base/records/sessions.js';
 import type { ContinuityKey } from '../base/ports/store/types.js';
 import { errorFields, errorMessage, log, type LineLog } from '../base/util/log.js';
-import type { ContextWith } from './types.js';
+import type { HippoDbContext } from './hippo-db-context.js';
 
 /** The Copilot CLI accepts both preCompact and PreCompact, so hippo.json's pair can run twice
  * for one compaction. */
 const TWIN_FIRE_MS = 10_000;
 
-export type PreCompactContext = Pick<
-  ContextWith<'compactionHooks' | 'sessions'>,
-  'tenantId' | 'store' | 'infra'
->;
+export type PreCompactContext = Pick<HippoDbContext, 'tenantId' | 'store' | 'infra'>;
 
 /** One accepted PreCompact payload and the host steps around the store's. */
 export interface PreCompactRun {
@@ -43,10 +40,7 @@ export interface CallerCompaction {
   readonly derived: WorkingState | null;
 }
 
-export type CallerPreCompactContext = Pick<
-  ContextWith<'compactions' | 'sessions'>,
-  'tenantId' | 'store'
->;
+export type CallerPreCompactContext = Pick<HippoDbContext, 'tenantId' | 'store'>;
 
 /** Where a PreCompact's steps report: its progress, and the failures it carries on past. */
 interface StepLog {
@@ -75,7 +69,7 @@ export async function preCompact(ctx: PreCompactContext, run: PreCompactRun): Pr
   // Nothing derivable skips the write, so junk never replaces a user-authored active snapshot.
   const derived = run.workingState();
   if (!derived) return;
-  const { compactionHooks } = ctx.store;
+  const { compactionHooks } = ctx.store.hippoDb;
   await saveDerivedSnapshot(ctx, {
     sessionId,
     key: null,
@@ -92,7 +86,7 @@ export async function callerPreCompact(
   ctx: CallerPreCompactContext,
   { start, key, derived }: CallerCompaction,
 ): Promise<void> {
-  const { compactions } = ctx.store;
+  const { compactions } = ctx.store.hippoDb;
   const recordId = await startRecord(
     () => compactions.start(ctx.tenantId, start),
     CALLER_LOG.failed,
@@ -113,7 +107,7 @@ async function snapshotJustSaved(
   sessionId: string | null,
 ): Promise<boolean> {
   if (sessionId === null || sessionId === '') return false;
-  const active = await ctx.store.sessions.loadSnapshot(ctx.tenantId, {}, null);
+  const active = await ctx.store.hippoDb.sessions.loadSnapshot(ctx.tenantId, {}, null);
   return (
     active?.sessionId === sessionId &&
     active.source === 'pre-compact' &&
@@ -137,7 +131,7 @@ async function markBoundary(ctx: PreCompactContext, run: PreCompactRun): Promise
       transcriptPath,
     };
     recordId = await startRecord(
-      () => ctx.store.compactionHooks.start(ctx.tenantId, start),
+      () => ctx.store.hippoDb.compactionHooks.start(ctx.tenantId, start),
       run.log,
     );
     printed = run.printInstruction();
@@ -173,13 +167,13 @@ interface DerivedSnapshot {
 }
 
 async function saveDerivedSnapshot(
-  ctx: Pick<ContextWith<'sessions'>, 'tenantId' | 'store'>,
+  ctx: Pick<HippoDbContext, 'tenantId' | 'store'>,
   { sessionId, key, derived, log: steps, markSaved }: DerivedSnapshot,
 ): Promise<void> {
   const { tenantId, store } = ctx;
   let existing: TaskSnapshot | null = null;
   try {
-    existing = await store.sessions.loadSnapshot(tenantId, {}, key);
+    existing = await store.hippoDb.sessions.loadSnapshot(tenantId, {}, key);
   } catch (err) {
     log.warn(
       `pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`,
@@ -197,7 +191,7 @@ async function saveDerivedSnapshot(
     return;
   }
   try {
-    await store.sessions.save(
+    await store.hippoDb.sessions.save(
       tenantId,
       'snapshot',
       { ...merged, source: 'pre-compact', sessionId },

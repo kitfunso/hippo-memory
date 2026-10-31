@@ -5,7 +5,7 @@ import { parseStoredObject } from '../../../base/util/stored-json.js';
 import type { AppendAuditOptions, AuditEvent } from '../../../base/ports/store/types.js';
 import type { AuditOp } from '../../../base/records/audit-ops.js';
 import { auditRowsRead, type QueryAuditOptions } from '../../../base/ports/store/audit.js';
-import type { AuditPrune } from '../../../base/ports/store/audit.js';
+import type { AuditPrune } from '../../../base/records/audit-maintenance.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 

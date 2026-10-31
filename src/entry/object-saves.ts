@@ -1,6 +1,6 @@
 // The typed-object saves as evals and tests seed them: one tenant, one half-life, the CLI actor, at
 // HIPPO_FAKE_NOW or the wall clock.
-import type { Objects } from '../base/ports/store/objects.js';
+import type { Objects } from '../base/records/objects.js';
 import type { CustomerNote, Decision, Policy, ProjectBrief } from '../base/records/object-types.js';
 import { CLI_ACTOR } from '../base/scope/actor.js';
 import { evalNow } from '../infra/eval-switches.js';

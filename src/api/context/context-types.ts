@@ -1,6 +1,6 @@
 // Option and result shapes for contextGet.
 
-import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
+import type { TaskSnapshot, SessionEvent } from '../../base/records/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';

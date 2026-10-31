@@ -4,7 +4,7 @@ import { DEFAULT_TENANT_ID } from '../../../base/util/tenant.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { dumpFrontmatter } from '../../../base/util/yaml.js';
-import type { TaskSnapshot, SessionEvent } from '../../../base/ports/store/sessions.js';
+import type { TaskSnapshot, SessionEvent } from '../../../base/records/sessions.js';
 import { PRIVATE_DIR } from '../../../host/private-dir.js';
 import { writeMirror } from '../folder-files/mirrors.js';
 

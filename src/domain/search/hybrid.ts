@@ -30,7 +30,8 @@ import {
   type ResultCost,
   type SearchResult,
 } from '../../base/rank/search-types.js';
-import type { StoreWith } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { GraphWalk } from '../graph/recall.js';
 
 /** How BM25 and cosine combine, and whether the score breakdown is kept. */
 export interface HybridBlend {
@@ -127,7 +128,7 @@ export interface HybridFolder {
   /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
   embeddings?: EmbeddingsConfig;
   /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
-  store?: StoreWith<never, 'graphReads'>;
+  store?: HippoStore;
 }
 
 /** Every ranking field, flat because the published hybridSearch and the frozen eval scripts pass
@@ -149,7 +150,7 @@ export type HybridSearchOptions = HybridRanking & HybridFolder;
 export type HybridRankOptions = HybridRanking & {
   /** The global store the graph stream also walks; the published wrapper opens it from
    * `graphStream.globalRoot`. */
-  graphGlobal?: StoreWith<never, 'graphReads'>;
+  graphGlobal?: GraphWalk;
 };
 
 /**
@@ -237,18 +238,20 @@ async function orderAndFit(
  * `config`. */
 export function vectorSourceOf({
   store,
+  graph,
   config,
   onHippoDb,
   embedderFor,
 }: {
-  store: StoreWith<never, 'graphReads'>;
+  store: HippoStore;
+  /** The graph the store's root found; unset, the graph list has nothing to walk. */
+  graph?: GraphWalk;
   config: Pick<HippoConfig, 'embeddings'>;
   onHippoDb?: boolean;
   embedderFor: EmbedderFor;
 }): VectorSource {
-  const { vectors, graphReads } = store;
   const provider = (): EmbeddingProvider => embedderFor(config.embeddings);
-  return { store, vectors, graphReads, provider, onHippoDb };
+  return { store, vectors: store.vectors, graphReads: graph, provider, onHippoDb };
 }
 
 /** The graphs the graph list walks: the source store's and the global one's, each when kept. */
@@ -258,7 +261,7 @@ function graphStoresOf(
 ): FusionInput['graph'] {
   const graphReads = source?.graphReads;
   if (graphReads === undefined) return undefined;
-  const global = options.graphGlobal?.graphReads;
+  const global = options.graphGlobal;
   return { store: { graphReads }, global: global && { graphReads: global } };
 }
 

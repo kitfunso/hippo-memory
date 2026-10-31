@@ -47,7 +47,7 @@ import type {
   SpooledSummary,
   StalledOptions,
   StalledSaved,
-} from '../../../base/ports/store/capture.js';
+} from '../../../base/records/capture.js';
 import { handleNow } from '../runtime/handle-clock.js';
 
 // A note leaves the store only as the port's answer, so a caught error also goes to the shared

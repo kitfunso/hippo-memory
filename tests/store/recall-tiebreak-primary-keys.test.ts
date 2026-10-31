@@ -26,6 +26,7 @@ import { graphExpandRecall } from '../../src/domain/graph/recall.js';
 import { compareEntryIdentity, type EntryIdentity } from '../../src/base/rank/compare.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { walkable } from '../_helpers/graph-walk.js';
 
 const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
@@ -243,7 +244,7 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     const base = [sr(a, 1.0)];
     const out = await graphExpandRecall(base, {
       hops: 2,
-      store: sqliteStore(home),
+      store: walkable(sqliteStore(home)),
       tenantId: T,
       budget: 40_000,
       includeSuperseded: true,

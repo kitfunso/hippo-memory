@@ -1,8 +1,10 @@
 // The ledgers a caller writes to: the token ledger's store and the delivery ledger's recorder, which
 // context, recall and the session hooks share.
-import type { LedgerTurn } from '../base/ports/store.js';
-import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
+import type { LedgerTurn } from '../base/records/ledger.js';
+import type { TokenSurface, TokenUse } from '../base/records/ledger.js';
 import type { LastSent } from '../base/session/skip-unchanged.js';
+import type { HippoConfig } from '../base/config/config.js';
+import type { CoreEnrichment } from './enrichment.js';
 import type { Context, GlobalInReach, LedgerHome } from './types.js';
 import {
   createDeliveryRecorder,
@@ -20,12 +22,15 @@ export interface LedgerReach {
   readonly global?: GlobalInReach;
 }
 
-function homeOf(global: GlobalInReach): LedgerHome {
-  return {
-    ledger: global.store.ledger,
-    folderFiles: global.store.folderFiles,
-    config: global.config,
-  };
+/** A store's ledger read through its enrichment, with the config that governs it; unset when the
+ * store keeps none. */
+export function ledgerHomeOf(
+  enrich: Pick<CoreEnrichment, 'ledger' | 'folderFiles'> | undefined,
+  config: HippoConfig,
+): LedgerHome | undefined {
+  const ledger = enrich?.ledger;
+  const folderFiles = enrich?.folderFiles;
+  return ledger && folderFiles ? { ledger, folderFiles, config } : undefined;
 }
 
 /** Only a store that keeps a ledger has one, and a local one needs a reach that says the caller
@@ -40,7 +45,7 @@ export function ledgerReachOf(ctx: Pick<Context, 'reach'>, shared?: boolean): Le
 export function ledgerHome(reach: LedgerReach): LedgerHome | null {
   if (reach.local !== undefined) return reach.local;
   const { global } = reach;
-  return global === undefined ? null : homeOf(global);
+  return (global && ledgerHomeOf(global.enrich, global.config)) ?? null;
 }
 
 /** Books one row in ledgerHome's store, best-effort. */

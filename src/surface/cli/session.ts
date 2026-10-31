@@ -1,6 +1,6 @@
 // `hippo session`: log, show, complete and resume one agent session.
 
-import { continuityLatest } from '../../api/continuity/continuity.js';
+import { continuityLatest } from '../../api/hippo-db/continuity-latest.js';
 import {
   isHandoffOutcome,
   formatHandoffEvidenceLine,
@@ -35,7 +35,7 @@ async function sessionLog(
     );
   }
 
-  const event = await cli.store(hippoRoot).sessions.save(tenantId, 'event', {
+  const event = await cli.store(hippoRoot).hippoDb.sessions.save(tenantId, 'event', {
     sessionId: s.sessionId,
     task: s.task || null,
     eventType: eventType || 'note',
@@ -52,7 +52,7 @@ async function sessionShow(
   { cli, hippoRoot, tenantId, flags }: CommandContext,
   s: SessionArgs,
 ): Promise<void> {
-  const events = await cli.store(hippoRoot).sessions.read(tenantId, 'event', {
+  const events = await cli.store(hippoRoot).hippoDb.sessions.read(tenantId, 'event', {
     sessionId: s.sessionId || undefined,
     task: s.task || undefined,
     limit: s.limit,
@@ -124,7 +124,7 @@ async function sessionComplete(
   const metadata: SessionCompleteMetadata = { ended_at: new Date().toISOString() };
   if (summary) metadata.summary = summary;
 
-  const event = await cli.store(hippoRoot).sessions.save(tenantId, 'event', {
+  const event = await cli.store(hippoRoot).hippoDb.sessions.save(tenantId, 'event', {
     sessionId,
     task: task || null,
     eventType: 'session_complete',
@@ -135,7 +135,7 @@ async function sessionComplete(
 
   console.log(`Completed session ${event.sessionId} with outcome=${outcome} (event #${event.id})`);
 
-  const stamped = await cli.store(hippoRoot).sessions.save(tenantId, 'handoff', {
+  const stamped = await cli.store(hippoRoot).hippoDb.sessions.save(tenantId, 'handoff', {
     sessionId,
     outcome,
   });
@@ -177,7 +177,9 @@ async function sessionResume({
   sessionId,
 }: SessionResumeOptions): Promise<void> {
   const query = { sessionId: sessionId || null };
-  const handoff = await cli.store(hippoRoot).sessions.read(tenantId, 'handoff', query, null);
+  const handoff = await cli
+    .store(hippoRoot)
+    .hippoDb.sessions.read(tenantId, 'handoff', query, null);
   if (!handoff) {
     console.log('No handoff to resume from.');
     return;

@@ -9,7 +9,7 @@ import {
   type DashboardReads,
   type ProjectTally,
   type ScatterRows,
-} from '../../base/ports/store/dashboard-reads.js';
+} from '../../base/records/dashboard-reads.js';
 import { originOfKey, projectIdentity, round3 } from './live.js';
 import type { Stamp } from './snapshot-clock.js';
 import type {

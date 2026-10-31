@@ -11,15 +11,26 @@ import type {
   NaturalKey,
   SourceObjectRef,
   SourceObjectType,
-} from '../../base/ports/store/graph.js';
+  GraphReads,
+  GraphRebuild,
+} from '../../base/records/graph.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../base/util/write-budget.js';
 import { loadDecisions } from '../objects/decisions.js';
 import { loadPolicies } from '../objects/policies.js';
 import { loadCustomerNotes } from '../objects/customer-notes.js';
 import { loadProjectBriefs } from '../objects/project-briefs.js';
-import type { Objects, StoreWith } from '../../base/ports/store.js';
+import type { Objects } from '../../base/records/objects.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { escapeRegex } from '../../base/util/escape.js';
+
+type GraphStore = HippoStore & {
+  readonly hippoDb: {
+    readonly graphRebuild: GraphRebuild;
+    readonly graphReads: GraphReads;
+    readonly objects: Objects;
+  };
+};
 
 /** Per-type load cap (the loaders default to DEFAULT_LIST_LIMIT); a type over it is truncated and
  *  `ExtractResult.truncated` records that. */
@@ -374,10 +385,7 @@ function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
 
 /** Idempotent rebuild of the tenant's graph from its consolidated objects, in one transaction; safe to re-run.
  *  Returns the derived counts and which types hit the per-type cap. */
-export async function extractGraph(
-  store: StoreWith<'graphRebuild' | 'graphReads' | 'objects'>,
-  tenantId: string,
-): Promise<ExtractResult> {
+export async function extractGraph(store: GraphStore, tenantId: string): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
   // No hold limit, so every op lands in one apply; it re-checks each insert, so a rebuild that
   // committed since this one's read adds no second row.
@@ -387,7 +395,7 @@ export async function extractGraph(
 /** extractGraph for sleep: diffs outside the lock, then applies in transactions of about `budget.holdMs` with a pause
  *  between them. A run stopped between chunks leaves a mixed graph that the next run's diff finishes. */
 export async function extractGraphChunked(
-  store: StoreWith<'graphRebuild' | 'graphReads' | 'objects'>,
+  store: GraphStore,
   tenantId: string,
   budget: WriteBudget = WRITE_BUDGET,
 ): Promise<ExtractResult> {
@@ -396,18 +404,18 @@ export async function extractGraphChunked(
 }
 
 async function rebuildGraph(
-  store: StoreWith<'graphRebuild' | 'graphReads' | 'objects'>,
+  store: GraphStore,
   tenantId: string,
   budget: WriteBudget,
 ): Promise<ExtractResult> {
-  const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
-  const ops = await store.graphReads.graphDelta(tenantId, derived);
+  const derived = deriveGraph(await loadGraphSources(store.hippoDb.objects, tenantId));
+  const ops = await store.hippoDb.graphReads.graphDelta(tenantId, derived);
   let next = 0;
   let skipped = 0;
   let committedAt = 0;
   while (next < ops.length) {
     if (next > 0) await budget.pause(committedAt);
-    const chunk = await store.graphRebuild.applyOps(tenantId, ops, {
+    const chunk = await store.hippoDb.graphRebuild.applyOps(tenantId, ops, {
       from: next,
       holdMs: budget.holdMs,
     });

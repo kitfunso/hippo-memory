@@ -20,7 +20,7 @@ import type {
   HandoffFilter,
   SessionEndHandoffRequest,
   TaskSnapshot,
-} from '../../../base/ports/store/sessions.js';
+} from '../../../base/records/sessions.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleNow, handleStamp } from '../runtime/handle-clock.js';
 

@@ -21,12 +21,8 @@ describe('WORKER_OPS', () => {
         if (place !== effect) moved.push(`${group}.${method}: ${effect} -> ${place}`);
       }
     }
-    // The adapter's own placements, each with its reason in worker-ops.ts.
-    expect(moved.sort()).toEqual([
-      'embeddingIndex.open: read -> write',
-      'sessions.loadSnapshot: read -> write',
-      'vectors.nearestEntries: read -> pinned-read',
-    ]);
+    // The adapter's own placement, with its reason in worker-ops.ts.
+    expect(moved).toEqual(['vectors.nearestEntries: read -> pinned-read']);
   });
 
   it("names, group by group, exactly the methods hippo.db's store sets", () => {
@@ -42,6 +38,16 @@ describe('WORKER_OPS', () => {
     const methods = (repos: typeof HIPPO_DB_OPS | typeof local) =>
       Object.entries(repos).map(([repo, group]) => [repo, Object.keys(group).sort()]);
     expect(methods(HIPPO_DB_OPS)).toEqual(methods(local));
-    expect(HIPPO_DB_OPS).toEqual(HIPPO_DB_EFFECTS);
+    const moved = Object.entries(HIPPO_DB_EFFECTS).flatMap(([repo, effects]) => {
+      const places = new Map(placesOf(new Map(Object.entries(HIPPO_DB_OPS)).get(repo) ?? {}));
+      return placesOf(effects)
+        .filter(([method, effect]) => places.get(method) !== effect)
+        .map(([method, effect]) => `hippoDb.${repo}.${method}: ${effect} -> ${places.get(method)}`);
+    });
+    // The adapter's own placements, each with its reason in worker-ops.ts.
+    expect(moved.sort()).toEqual([
+      'hippoDb.embeddingIndex.open: read -> write',
+      'hippoDb.sessions.loadSnapshot: read -> write',
+    ]);
   });
 });

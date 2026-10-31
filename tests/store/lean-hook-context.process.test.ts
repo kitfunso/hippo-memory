@@ -15,6 +15,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
+import { walkable } from '../_helpers/graph-walk.js';
 
 let home: string;
 let project: string;
@@ -315,8 +316,8 @@ describe('a memory with a copy in the global store', () => {
 
     const out = await graphExpandRecall([sr(seed, 1), sr(other, 0.9)], {
       hops: 1,
-      store: sqliteStore(local),
-      global: sqliteStore(global),
+      store: walkable(sqliteStore(local)),
+      global: walkable(sqliteStore(global)),
       tenantId: T,
       budget: 4000,
     });

@@ -50,8 +50,6 @@ export {
   type SleepResult,
   type SleepEvent,
   type RescueRank,
-  type SleepContext,
-  type SleepStore,
   type DetachedWork,
   sleep,
   consolidate,

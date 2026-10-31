@@ -15,7 +15,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withDetached } from '../detached.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context } from '../types.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
 
 // The tags a caller in this process adds from the folder it runs in.
@@ -117,7 +117,6 @@ export async function rememberLocally(
   if ('skipped' in written) return { status: 'skipped', ...written.skipped };
   const { id, warnings = [], startedWeak } = written;
   const entry = await storedEntry(ctx, id);
-  await ctx.store.hippoDb.stats.bumpRemembered(1);
   return withDetached(ctx, (detached): LocalRememberOutcome => {
     const embedding = indexInBackground(ctx, entry);
     detached.detach(embedding);
@@ -144,7 +143,7 @@ export type FactExtraction =
 /** Extracts facts from a row just stored and stores them beside it.
  * Best-effort: a failure is named in the result, never thrown. */
 export async function extractRememberedFacts(
-  ctx: ContextWith<'learning'>,
+  ctx: HippoDbContext,
   entry: MemoryEntry,
   request: FactExtractionRequest,
 ): Promise<FactExtraction> {

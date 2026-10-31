@@ -29,7 +29,7 @@ describe('dirtySummaries children', () => {
     } finally {
       closeHippoDb(db);
     }
-    const dirty = await sqliteStore(root).consolidation.dirtySummaries(parents.length);
+    const dirty = await sqliteStore(root).hippoDb.consolidation.dirtySummaries(parents.length);
     expect(dirty.summaries).toHaveLength(parents.length);
     expect(dirty.more).toBe(false);
     const childrenOf = new Map(dirty.summaries.map((s) => [s.summary.id, s.children.map((c) => c.id)]));

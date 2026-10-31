@@ -35,7 +35,7 @@ import { strengthenRetrievedInTx, writeEntryMirrors } from '../entries/entry-wri
 import { updateStats } from '../entries/index-and-stats.js';
 import type { StoreFiles } from '../runtime/open.js';
 import { errorFields, errorMessage, log as hippoLog } from '../../../base/util/log.js';
-import type { CompactionStart, CompactionText } from '../../../base/ports/store/capture.js';
+import type { CompactionStart, CompactionText } from '../../../base/records/capture.js';
 import { handleNow, handleStamp } from '../runtime/handle-clock.js';
 
 export type { CompactionStatus };

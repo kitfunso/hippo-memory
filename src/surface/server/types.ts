@@ -1,14 +1,13 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context, EntryContext } from '../../api/index.js';
-import type { ContextWith } from '../../api/types.js';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
 import type { BoundAddonRoute } from './route-table.js';
-import type { HippoStore, OptionalGroup, StoreGroup } from '../../base/ports/store-index.js';
-import type { RequiredStore, StoreReach, StoreWith } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
+import type { StoreReach } from '../../base/ports/store.js';
 import type { McpTools } from '../mcp/protocol.js';
 import type { LocalKey } from './local-key.js';
 import type { KeyVerifier } from './api-key.js';
@@ -54,12 +53,13 @@ export interface AddonCall {
 }
 
 /** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then
- * sends the returned value as 200 JSON. Unset, `storeReady` means the route runs on hippo.db
- * alone. */
+ * sends the returned value as 200 JSON. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
-  readonly storeReady?: StoreGroup;
+  /** Set, the route runs only on a store with hippo.db's local tier and answers 501 on another;
+   * unset, it runs on any store. */
+  readonly hippoDb?: true;
 }
 
 export interface RateLimitSpec {
@@ -122,8 +122,8 @@ export interface ServerCounts {
 
 export type ResolvedServeOptions = ServeOptions & {
   store: HippoStore;
-  /** The store is hippo.db rather than a caller's own: its folder's config.json decides
-   * shared-ness, and an add-on route naming no group runs on it alone. */
+  /** The store is hippo.db rather than a caller's own, so its folder's config.json decides
+   * shared-ness and the server runs its sleeps. */
   onHippoDb: boolean;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
   reachOf: (shared: boolean) => StoreReach;
@@ -139,7 +139,7 @@ export type ResolvedServeOptions = ServeOptions & {
   /** The /v1 rows for this store, each row's store need settled at boot. */
   v1Routes: RouteLookup<BoundRoute>;
   /** The MCP tools this store serves, each tool's store need settled at boot. */
-  mcpTools: McpTools<RequiredStore>;
+  mcpTools: McpTools<HippoStore>;
   /** The add-on routes by path, each with its store need settled at boot. */
   addonRoutes: ReadonlyMap<string, BoundAddonRoute>;
   callerLimiter?: RateLimiter;
@@ -150,11 +150,6 @@ export type ResolvedServeOptions = ServeOptions & {
   keyVerifier: KeyVerifier;
   /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
-  /** `callers` as one request reads them: the auto-sleep count runs on the request's own store,
-   * which `storeFor` maps. */
-  callersFor: (storeFor: <S extends HippoStore>(store: S) => S) => CallerState;
-  /** The served store as a ledger home, proved at boot; unset for a store that keeps no ledger. */
-  ledgerStore?: StoreWith<'ledger' | 'folderFiles'>;
   /** This server's outside services: one reranker registry for the server's life, the rest per
    * Context. */
   infra: () => InfraPorts;
@@ -176,9 +171,6 @@ export interface RouteRequest {
 export interface AuthedRouteRequest extends RouteRequest {
   ctx: Context;
 }
-
-/** A request past the gate whose store boot proved holds the optional groups `G`. */
-export type GroupRequest<G extends OptionalGroup> = AuthedRouteRequest & { ctx: ContextWith<G> };
 
 /** A request past the gate on a store boot proved holds hippo.db's local tier. */
 export type HippoDbRequest = AuthedRouteRequest & { ctx: HippoDbContext };
@@ -227,28 +219,14 @@ export type BoundRoute = { method: string; unported?: true } & (
 type AnyStoreRoute = {
   method: string;
   auth: GatedAuth;
-  storeReady?: never;
   hippoDb?: never;
 } & PathEndpoint<AuthedRouteRequest>;
-
-/** A route that needs the optional group `G`: boot hands its handler the store it proved, or
- * marks the row 501. */
-export type GroupRouteOf<G extends OptionalGroup> = {
-  method: string;
-  auth: GatedAuth;
-  storeReady: G;
-  hippoDb?: never;
-} & PathEndpoint<GroupRequest<G>>;
-
-/** A route that needs any one optional group. */
-export type GroupRoute = { [G in OptionalGroup]: GroupRouteOf<G> }[OptionalGroup];
 
 /** A connector webhook: boot hands it the connector store it proved, or answers 501 for a store
  * without one. */
 export type WebhookRoute = {
   method: string;
   auth: 'webhook-signature';
-  storeReady?: never;
   hippoDb?: never;
 } & PathEndpoint<WebhookRouteRequest>;
 
@@ -257,12 +235,11 @@ export type WebhookRoute = {
 export type HippoDbRoute = {
   method: string;
   auth: GatedAuth;
-  storeReady?: never;
   /** The handler calls the local tier, so the row binds only on a store that carries `hippoDb`. */
   hippoDb: true;
 } & PathEndpoint<HippoDbRequest>;
 
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under
- * another store it runs only with its `storeReady` group, and a `hippoDb` row not at all; its
- * hippo.db work runs on a worker thread when the store has one. */
-export type Route = AnyStoreRoute | GroupRoute | WebhookRoute | HippoDbRoute;
+ * another store a `hippoDb` row or a webhook answers 501; its hippo.db work runs on a worker
+ * thread when the store has one. */
+export type Route = AnyStoreRoute | WebhookRoute | HippoDbRoute;

@@ -34,7 +34,7 @@ function countingProvider(hold: (seen: { active: number; peak: number }) => Prom
 
 function targetOn(root: string, provider: EmbeddingProvider) {
   return {
-    embeddingIndex: storeAt(root).embeddingIndex,
+    embeddingIndex: storeAt(root).hippoDb.embeddingIndex,
     rows: storeAt(root),
     embeddings: loadConfig(root).embeddings,
     embedderFor: () => provider,

@@ -73,7 +73,7 @@ async function expandGraph(
   graph: RecallGraphHops,
   state: RankState,
 ): Promise<void> {
-  const local = graphOf(ctx.store);
+  const local = graphOf(ctx.store, ctx.graph);
   if (graph.hops <= 0 || local === undefined) return;
   const { requested } = poolScope(opts);
   // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would
@@ -83,7 +83,7 @@ async function expandGraph(
     hops: graph.hops,
     maxNeighbors: graph.maxNeighbors,
     store: local,
-    global: ctx.global && graphOf(ctx.global.store),
+    global: ctx.global && graphOf(ctx.global.store, ctx.global.graph),
     tenantId: ctx.tenantId,
     includeSuperseded: opts.includeSuperseded,
     asOf: opts.asOf,

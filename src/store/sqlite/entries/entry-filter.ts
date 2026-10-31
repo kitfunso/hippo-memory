@@ -6,7 +6,7 @@ import { ALL_TENANTS } from '../../../base/util/tenant.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { SqlFragment } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import type { EntryFilter, EntryNarrowing } from '../../../base/ports/store/reports.js';
+import type { EntryFilter, EntryNarrowing } from '../../../base/records/reports.js';
 import type { EntryCursor, EntryPage } from '../../../base/ports/store/types.js';
 import {
   entriesPage,

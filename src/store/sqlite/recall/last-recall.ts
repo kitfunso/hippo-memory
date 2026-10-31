@@ -14,7 +14,8 @@ import type { Handles, StoreFiles, StoreModel } from '../runtime/open.js';
 import type { EntryTarget } from '../../../base/ports/store/entry-writes.js';
 import { answered, bound, type Bodies } from '../runtime/bound.js';
 import { openStore } from '../runtime/handles.js';
-import type { LastRecall, RecallWrites } from '../../../base/ports/store.js';
+import type { LastRecall } from '../../../base/records/last-recall.js';
+import type { RecallWrites } from '../../../base/ports/store.js';
 import { writeRecallTrace } from './recall-trace.js';
 
 /** What a finished recall wrote after its audit rows: the trace's id, null when none was asked

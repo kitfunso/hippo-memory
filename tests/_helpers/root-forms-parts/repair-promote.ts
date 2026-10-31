@@ -3,11 +3,11 @@
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { ALL_TENANTS } from '../../../src/base/util/tenant.js';
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
-import { promote } from '../../../src/api/memories/promote.js';
+import { promote } from '../../../src/api/hippo-db/promote.js';
 import { apiCtx } from '../api-ctx.js';
 import { type StoreFiles } from '../../../src/store/sqlite/runtime/open.js';
 import type { RepairProtection } from '../../../src/base/memory/memory-audit.js';
-import type { QualityRepairResult } from '../../../src/base/ports/store/audit.js';
+import type { QualityRepairResult } from '../../../src/base/records/audit-maintenance.js';
 import { sqliteStore } from '../test-session.js';
 
 export async function copyToGlobal(
@@ -30,7 +30,7 @@ export async function repairAutomaticMemories(
   files: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
 ): Promise<QualityRepairResult> {
-  return await sqliteStore(files.hippoRoot).auditMaintenance.repairQuality(
+  return await sqliteStore(files.hippoRoot).hippoDb.auditMaintenance.repairQuality(
     opts.tenantId,
     opts.apply ?? false,
     opts.protect,
@@ -42,5 +42,5 @@ export async function repairQualityOnce(
   tenantId: string,
   protect: RepairProtection,
 ): Promise<QualityRepairResult | null> {
-  return await sqliteStore(files.hippoRoot).auditMaintenance.repairQualityOnce(tenantId, protect);
+  return await sqliteStore(files.hippoRoot).hippoDb.auditMaintenance.repairQualityOnce(tenantId, protect);
 }

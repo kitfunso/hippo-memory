@@ -9,7 +9,8 @@ import {
   type ResultCost,
   type SearchResult,
 } from '../../base/rank/search-types.js';
-import type { StoreWith } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { GraphWalk } from '../../domain/graph/recall.js';
 import type { RecallBoostOptions } from './types.js';
 import type { Context } from '../types.js';
 import type { RecallProfile } from './profiles.js';
@@ -20,7 +21,9 @@ import { type RankState, rankStages } from './rank-stages.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {
-  readonly store: StoreWith<never, 'graphReads'>;
+  readonly store: HippoStore;
+  /** The store's graph, as its root found it; unset, expansion adds nothing from this store. */
+  readonly graph?: GraphWalk;
   readonly config: HippoConfig;
   readonly onHippoDb?: boolean;
 }
@@ -172,6 +175,7 @@ function settle(request: RankRecallOptions, profile: RecallProfile): SettledOpti
 export function rankCtxOf(ctx: Context): RankRecallCtx {
   return {
     store: ctx.store,
+    graph: ctx.enrich?.graph,
     config: ctx.config,
     onHippoDb: ctx.reach?.isHippoDb,
     tenantId: ctx.tenantId,

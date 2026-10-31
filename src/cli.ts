@@ -27,7 +27,7 @@ import {
   isKnownFlag,
   undeclaredFlags,
 } from './surface/cli/flags.js';
-import { assertVerbPorted, CLI_STORE, COMMANDS } from './surface/cli/verbs.js';
+import { COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
 import { cliCommand, type CliCommand } from './surface/cli/api-context.js';
@@ -283,7 +283,6 @@ async function main(
     printUsage();
     throw new CliExit(1);
   }
-  assertVerbPorted(spec, CLI_STORE);
   const run = (verb: CliCommand): Promise<void> =>
     spec.run({ hippoRoot, tenantId: envTenant(), args, flags, cli: verb });
   await (spec.scoped ? cli.request(run) : run(cli));

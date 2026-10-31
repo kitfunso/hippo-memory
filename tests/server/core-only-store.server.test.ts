@@ -14,9 +14,9 @@ import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conform
 // The tools that run on the core port alone; every other tool is a local feature.
 const CORE_TOOLS = new Set(['hippo_recall', 'hippo_remember', 'hippo_outcome', 'hippo_context']);
 
-const LOCAL_ROWS = V1_ROWS.filter(
-  ({ route }) => route.auth === 'webhook-signature' || route.storeReady !== undefined || route.hippoDb === true,
-).map(({ key }) => requestLine(key));
+const LOCAL_ROWS = V1_ROWS.filter(({ route }) => route.auth === 'webhook-signature' || route.hippoDb === true).map(
+  ({ key }) => requestLine(key),
+);
 
 describe('serve() on a store with only the core members', () => {
   let fixture: TwoTenantFixture;

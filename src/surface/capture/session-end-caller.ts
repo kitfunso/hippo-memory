@@ -1,12 +1,13 @@
 // SessionEnd for a caller on another machine: the owner's handoff, then the owner's snapshot for
 // the session closed, both under its tenant and project.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { ContextWith, EntryContext } from '../../api/types.js';
+import type { EntryContext } from '../../api/types.js';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { bindCaller, checkedWorkingState } from './caller-session.js';
 import { snapshotFields, type WorkingState } from '../../base/session/working-state.js';
 import { withEntryInfra } from '../entry-infra.js';
+import { withHippoDb } from '../../api/hippo-db-context.js';
 
 export type CallerEvidence = Pick<HandoffEvidence, 'gitRef' | 'dirtyTree' | 'testStatus'>;
 
@@ -50,14 +51,14 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
  * sender retries, and the retry writes no second handoff.
  */
 export async function sessionEndHandoffForCaller(
-  given: EntryContext<ContextWith<'sessions'>>,
+  given: EntryContext,
   req: CallerSessionEndRequest,
 ): Promise<CallerSessionEndResult> {
-  const ctx = withEntryInfra(given);
+  const ctx = withHippoDb(withEntryInfra(given));
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const { sessions } = ctx.store;
+  const { sessions } = ctx.store.hippoDb;
   const sessionEnd = {
     sessionId: req.sessionId,
     evidence,

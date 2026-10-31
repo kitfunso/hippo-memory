@@ -1,25 +1,27 @@
-// A server binds its MCP tools once, at boot: a tool call proves no group need again.
+// A server binds its MCP tools once, at boot: a tool call proves the local tier no more.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/entry/store-kit.js';
-import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import type { HippoDbStore } from '../../src/api/hippo-db-context.js';
 import { bindMcpTools } from '../../src/surface/mcp/request.js';
-import { mcpApiContext, type GroupToolCall, type McpCaller, type McpResponse } from '../../src/surface/mcp/protocol.js';
+import {
+  mcpApiContext,
+  type HippoDbToolCall,
+  type McpCaller,
+  type McpResponse,
+} from '../../src/surface/mcp/protocol.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
 import { runAssembleTool, runDrillTool } from '../../src/surface/mcp/recall-tools.js';
 import { runStatusTool } from '../../src/surface/mcp/admin-tools.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
-import type { StoreWith } from '../../src/base/ports/store.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 
-// The groups the three called tools need.
-const NEEDED = ['dagReads', 'reports'] as const;
-type Needed = StoreWith<(typeof NEEDED)[number]>;
-type Runner = (call: GroupToolCall<(typeof NEEDED)[number]>) => Promise<string>;
+type Runner = (call: HippoDbToolCall) => Promise<string>;
 // Each call with the tool body it runs, so the tools' own reads can be counted apart from the host.
 const CALLS: readonly (readonly [string, Record<string, string>, Runner])[] = [
   ['hippo_drill', { summary_id: 'sum_none' }, runDrillTool],
@@ -33,26 +35,34 @@ function expectRan(reply: McpResponse): void {
   expect(reply).not.toMatchObject({ result: { isError: true } });
 }
 
-/** A store that counts every read of a NEEDED group property, whatever function makes it. */
+/** A store that counts every read of its local tier, and apart from those every read of the tier groups the
+ * three tools use, whatever function makes it. */
 interface CountingStore<S extends HippoStore> {
   readonly store: S;
   readonly reads: () => number;
+  readonly tierReads: () => number;
 }
 
-function counting<S extends Needed>(store: S): CountingStore<S> {
-  let reads = 0;
-  const counted = { ...store };
-  for (const group of NEEDED) {
-    const value = store[group];
-    Object.defineProperty(counted, group, {
+function counting<S extends HippoDbStore>(store: S): CountingStore<S> {
+  const counts = { group: 0, tier: 0 };
+  const countedReads = <H, K extends keyof H>(holder: H, key: K, as: keyof typeof counts): void => {
+    const value = holder[key];
+    Object.defineProperty(holder, key, {
       enumerable: true,
       get: () => {
-        reads += 1;
+        counts[as] += 1;
         return value;
       },
     });
-  }
-  return { store: counted, reads: () => reads };
+  };
+  // A tier group is read through `hippoDb`, so its count sits on the tier's copy. The store copy
+  // keeps the hippo.db mark but not the session reopen, so a request uses it as it is.
+  const tier = { ...store.hippoDb };
+  const counted = { ...store, hippoDb: tier };
+  countedReads(counted, 'hippoDb', 'tier');
+  countedReads(tier, 'dagReads', 'group');
+  countedReads(tier, 'reports', 'group');
+  return { store: counted, reads: () => counts.group, tierReads: () => counts.tier };
 }
 
 describe('MCP tools on a served store', () => {
@@ -75,11 +85,12 @@ describe('MCP tools on a served store', () => {
   });
 
   it('binds each tool on one host store once, so three tool calls read their groups only as the tools themselves do', async () => {
-    const { store, reads } = counting(portOnlyStore(fixture.dir, [...NEEDED]));
-    const alone = counting(portOnlyStore(fixture.dir, [...NEEDED]));
+    const { store, reads } = counting(sqliteStore(fixture.dir));
+    const alone = counting(sqliteStore(fixture.dir));
     bindMcpTools(alone.store);
-    // One bind reads each group a tool needs, so the count is live.
-    expect(alone.reads()).toBeGreaterThan(0);
+    // A bind proves the tier and reads no group in it, so every group read below is a tool body's.
+    expect(alone.tierReads()).toBeGreaterThan(0);
+    expect(alone.reads()).toBe(0);
 
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store });
     const atBoot = reads();
@@ -98,8 +109,8 @@ describe('MCP tools on a served store', () => {
     const served = reads() - atBoot;
 
     // The same tool bodies called directly: their reads are the tools' own and nothing else.
-    const own = counting(portOnlyStore(fixture.dir, [...NEEDED]));
-    const caller: McpCaller<Needed> = {
+    const own = counting(sqliteStore(fixture.dir));
+    const caller: McpCaller<HippoDbStore> = {
       hippoRoot: fixture.dir,
       tenantId: TENANT_A,
       actor: 'mcp',

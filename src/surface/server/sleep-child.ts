@@ -2,8 +2,7 @@
 // and nothing imports it. The sleep modules alone: the api barrel loads far more than one sleep
 // needs, and every sleep pays for the start.
 import { evalStoreRules } from '../../infra/eval-switches.js';
-import { sleepWholeStore } from '../../api/sleep/sleep.js';
-import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
+import { autoSleepConsolidate, sleepWholeStore } from '../../api/sleep/sleep.js';
 import { rootInfra } from '../../infra/ports.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';
@@ -19,7 +18,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SleepJob, SleepMessage, SleepReply } from './sleep-offload.js';
 import { failureReply } from './failure-reply.js';
 import type { SleepResult } from '../../api/sleep/sleep.js';
-import { contextReach } from '../../api/types.js';
+import { contextReach } from '../../api/hippo-db-context.js';
 
 type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 
@@ -48,7 +47,7 @@ function sleepJob(
     sqliteReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
     loadConfig,
     infra.embedderFor,
-    { ledger: store.ledger, folderFiles: store.folderFiles, config },
+    { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config },
   );
   return sleepWholeStore(
     { tenantId: job.tenantId, actor: job.actor, store, reach, config, infra },

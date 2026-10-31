@@ -13,7 +13,7 @@ import type {
   VectorWrite,
   VectorWriteResult,
   VectorWrites,
-  StoreGroups,
+  CoreGroups,
 } from '../../base/ports/store.js';
 import { errorMessage } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -148,7 +148,7 @@ async function embedMemoryInStore(
 
 /** A store's vector groups. */
 export interface StoreEmbedTarget extends EmbedWith {
-  readonly groups: Pick<StoreGroups, 'vectors' | 'vectorWrites'>;
+  readonly groups: Pick<CoreGroups, 'vectors' | 'vectorWrites'>;
 }
 
 export function storeAdapter(on: StoreEmbedTarget): EmbedAdapter {

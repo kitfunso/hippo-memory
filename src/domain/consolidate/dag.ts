@@ -12,8 +12,10 @@ import { derivationScope, derivationPartitionKey } from '../../base/scope/recall
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { applyRebuild, settleFreshSummary } from './summary-settle.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { Consolidation } from '../../base/records/consolidation.js';
+import type { LessonWrites } from '../../base/records/lesson-writes.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
@@ -21,7 +23,9 @@ const DEFAULT_REBUILD_CAP = 20;
 const CLUSTER_JACCARD_MIN = 0.5;
 
 /** Sleep's store: the summary reads and writes, and the row writes every store has. */
-type DagStore = StoreWith<'consolidation' | 'lessonWrites'>;
+type DagStore = HippoStore & {
+  readonly hippoDb: { readonly consolidation: Consolidation; readonly lessonWrites: LessonWrites };
+};
 
 /** The summary options plus the config's default half-life, which new summaries start on. */
 export type DagBuildOptions = DagSummaryOptions & { baseHalfLifeDays: number; now: Date };
@@ -176,7 +180,7 @@ async function summarizeCluster(
   result.summariesCreated++;
 
   const linked = cluster.members.map((member) => ({ ...member, dagParentId: summaryEntry.id }));
-  await store.lessonWrites.writeTogether(linked);
+  await store.hippoDb.lessonWrites.writeTogether(linked);
   result.factsLinked += linked.length;
   await settleFreshSummary(store, summaryEntry, 'buildDag', 'buildDag-clean');
 }
@@ -323,7 +327,7 @@ export async function rebuildDirtySummaries(
   opts: DagSummaryOptions & { cap?: number; now: Date },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
-  const { summaries: queue, more } = await store.consolidation.dirtySummaries(cap);
+  const { summaries: queue, more } = await store.hippoDb.consolidation.dirtySummaries(cap);
 
   const result: DagRebuildResult = {
     attempted: queue.length,
@@ -450,7 +454,7 @@ async function profileCluster(
   result.profilesCreated++;
 
   const linked = cluster.members.map((member) => ({ ...member, dagParentId: profileEntry.id }));
-  await store.lessonWrites.writeTogether(linked);
+  await store.hippoDb.lessonWrites.writeTogether(linked);
   result.l2sLinked += linked.length;
   await settleFreshSummary(store, profileEntry, 'buildEntityProfiles', 'buildEntityProfiles-clean');
 }

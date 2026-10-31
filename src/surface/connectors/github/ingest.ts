@@ -4,7 +4,7 @@
 // transaction, which is what holds when two workers race.
 
 import type { RememberOptions } from '../../../api/index.js';
-import type { ConnectorEvent } from '../../../base/ports/store.js';
+import type { ConnectorEvent } from '../../../base/records/connectors.js';
 import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
@@ -83,7 +83,7 @@ export async function ingestEvent(
   ctx: ConnectorContext,
   input: IngestInput,
 ): Promise<IngestResult> {
-  const events = ctx.store.connectorEvents;
+  const events = ctx.store.hippoDb.connectorEvents;
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
     eventUpdatedAt(input.event),

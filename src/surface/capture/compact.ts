@@ -30,9 +30,9 @@ import { exitAfterFlush } from '../../base/util/crash-handlers.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { transcriptWorkingState } from './working-state.js';
-import type { StoreGroups } from '../../base/ports/store.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { preCompact, type PreCompactContext } from '../../api/pre-compact.js';
+import type { HippoDbStore } from '../../api/hippo-db-context.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
@@ -226,7 +226,7 @@ export async function preCompactHook(
 }
 
 /** The folder's store as a PostCompact hook reaches it, built by the CLI root. */
-export type CompactionStore = Pick<StoreGroups, 'compactionHooks'>;
+export type CompactionStore = Pick<HippoDbStore, 'hippoDb'>;
 
 export interface PostCompactOptions {
   /** The tenant the CLI root resolved. */

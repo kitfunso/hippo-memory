@@ -6,6 +6,7 @@ import { rmSync } from 'node:fs';
 import { listObjects } from '../../src/domain/objects/lifecycle.js';
 import type { ServerHandle } from '../../src/server.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { onLocalTier } from '../_helpers/v1-route-rows.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
@@ -31,20 +32,18 @@ import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '..
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 const ROWS = 7;
-const skipped = (route: ListRoute): boolean => route.onTier === true && needsHippoDb('tier');
+const skipped = (route: ListRoute): boolean => needsHippoDb('tier') && onLocalTier('GET', route.path);
 const PAGE = 3;
 
 interface ListRoute {
   path: string;
   /** Body key holding the list; null for routes whose body is a bare array (cursor rides X-Next-Cursor). */
   key: string | null;
-  /** Served by hippo.db's local tier, which the port-only run has none of. */
-  onTier?: true;
 }
 
 const ROUTES: readonly ListRoute[] = [
   { path: '/v1/auth/keys', key: null },
-  { path: '/v1/quarantine', key: 'quarantine', onTier: true },
+  { path: '/v1/quarantine', key: 'quarantine' },
   { path: '/v1/audit', key: null },
   { path: '/v1/predictions', key: 'predictions' },
   { path: '/v1/decisions', key: 'decisions' },
@@ -118,7 +117,7 @@ beforeAll(async () => {
   // Paging every route makes well over the per-IP and per-caller bursts; both limiters are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
+  handle = await serve({ hippoRoot: home, port: 0 });
   vi.unstubAllEnvs();
 });
 
@@ -236,24 +235,27 @@ describe('no paging params: the body a small store got before cursors existed', 
 });
 
 describe('rows that share a sort key', () => {
-  it('tie-break on id, so a page boundary inside a tie skips and repeats nothing', async () => {
-    const db = openHippoDb(home);
-    try {
-      // The test is about SQL ordering, so it pins the timestamps with SQL.
-      db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`).run();
-      db.prepare(
-        `UPDATE memory_quarantine SET quarantined_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`,
-      ).run();
-    } finally {
-      closeHippoDb(db);
-    }
-    for (const route of [ROUTES[4]!, ROUTES[1]!].filter((r) => !skipped(r))) {
-      const whole = await getPage(route, { limit: '1000' });
-      const pages = await pageThrough(route, 2);
-      expect(pages.length).toBeGreaterThanOrEqual(4);
-      expect(pages.flat()).toEqual(whole.items);
-    }
-  });
+  it.skipIf(needsHippoDb('tier'))(
+    'tie-break on id, so a page boundary inside a tie skips and repeats nothing',
+    async () => {
+      const db = openHippoDb(home);
+      try {
+        // The test is about SQL ordering, so it pins the timestamps with SQL.
+        db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`).run();
+        db.prepare(
+          `UPDATE memory_quarantine SET quarantined_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`,
+        ).run();
+      } finally {
+        closeHippoDb(db);
+      }
+      for (const route of [ROUTES[4]!, ROUTES[1]!]) {
+        const whole = await getPage(route, { limit: '1000' });
+        const pages = await pageThrough(route, 2);
+        expect(pages.length).toBeGreaterThanOrEqual(4);
+        expect(pages.flat()).toEqual(whole.items);
+      }
+    },
+  );
 });
 
 describe('limit on the routes that had none', () => {

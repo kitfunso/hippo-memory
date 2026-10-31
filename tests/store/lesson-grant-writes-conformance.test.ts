@@ -74,7 +74,13 @@ describe('LessonWrites', () => {
       (g) => g.textsHolding(TENANT_A, [heldByB.content], null),
       (g) => g.textsHolding(TENANT_A, ['Deploy  from\nmain after the tests pass', '!!'], null),
       (_g, s) =>
-        s.rejections.apply({ tenantId: TENANT_A, actor: 'cli', reason: 'wrong', ownScope: null, value: REFUSED }),
+        s.hippoDb.rejections.apply({
+          tenantId: TENANT_A,
+          actor: 'cli',
+          reason: 'wrong',
+          ownScope: null,
+          value: REFUSED,
+        }),
       (g) => g.writeSkippingRejected([first, refused, second], 'git-learn'),
       (g) => g.writeSkippingRejected([], 'git-learn'),
       (g) => g.writeTogether(together),
@@ -87,7 +93,7 @@ describe('LessonWrites', () => {
             TENANT_A,
           )
           .then((rows) => rows.map((e) => [e.content, e.scope])),
-      (_g, s) => s.reports.stats().then((stats) => stats.total_remembered),
+      (_g, s) => s.hippoDb.reports.stats().then((stats) => stats.total_remembered),
     ]);
     const contents = (o: (typeof outcomes)[number]) =>
       'value' in o && Array.isArray(o.value) ? o.value.map((held: { content: string }) => held.content) : o;

@@ -1,21 +1,12 @@
-// Each /v1 row bound to the store boot proved: a row whose store lacks what it needs is marked
-// 501 once here, so no request checks a group or the local tier.
-import { CONNECTOR_GROUPS } from '../connectors/ingest.js';
-import {
-  hasGroup,
-  hasGroups,
-  type HippoStore,
-  type OptionalGroup,
-  type StoreWith,
-} from '../../base/ports/store.js';
+// Each /v1 row bound to the store boot proved: a local row on a store without hippo.db's local tier
+// is marked 501 once here, so no request probes the store for the tier.
+import type { HippoStore } from '../../base/ports/store.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import { hasHippoDb } from '../../api/hippo-db-context.js';
 import { closeIfBodyUnread } from '../http/http-util.js';
 import type {
   AuthedRouteRequest,
   BoundRoute,
-  GroupRequest,
-  GroupRouteOf,
   HippoDbRequest,
   HippoDbRoute,
   PathEndpoint,
@@ -30,30 +21,12 @@ export async function notPorted(): Promise<void> {
   throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
-/** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no
- * request checks a group. */
+/** A local row on a store without the tier is marked at boot, so its gate answers 501 before the
+ * role check and no request probes the store. */
 export function boundRoute(route: Route, store: HippoStore): BoundRoute {
   if (route.auth === 'webhook-signature') return boundWebhook(route, store);
-  if (route.storeReady !== undefined) return boundGroupRoute(route, store);
   if (route.hippoDb === true) return boundHippoDbRoute(route, store);
   return route;
-}
-
-/** A group row's handler gets the request's context on the store boot proved, bound to the
- * request's session and deadline; without the group it answers 501. */
-function boundGroupRoute<G extends OptionalGroup>(
-  route: GroupRouteOf<G>,
-  store: HippoStore,
-): BoundRoute {
-  const { method, auth } = route;
-  if (!hasGroup(store, route.storeReady)) {
-    return { method, auth, ...endpointOf(route), unported: true, handler: notPorted };
-  }
-  const proved: StoreWith<G> = store;
-  return boundOn(route, (r): GroupRequest<G> => ({
-    ...r,
-    ctx: { ...r.ctx, store: r.opts.storeFor(proved) },
-  }));
 }
 
 /** A local row's handler gets the request's context on the store with hippo.db's local tier,
@@ -86,11 +59,11 @@ function boundOn<R>(
   return { method, auth, pattern, handler: (r, params) => handler(toRequest(r), params) };
 }
 
-/** A webhook is handed the connector store; it skips the gate, so without the groups its handler
- * is the 501 itself. */
+/** A webhook is handed the store with its local tier; it skips the gate, so on a store without
+ * the tier its handler is the 501 itself. */
 function boundWebhook(route: WebhookRoute, store: HippoStore): BoundRoute {
   const { method, auth } = route;
-  if (!hasGroups(store, CONNECTOR_GROUPS)) {
+  if (!hasHippoDb(store)) {
     return { method, auth, ...endpointOf(route), handler: webhookNotPorted };
   }
   if ('path' in route) {

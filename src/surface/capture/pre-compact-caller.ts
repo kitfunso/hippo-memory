@@ -1,6 +1,6 @@
 // PreCompact for a caller on another machine: the record and the owner's snapshot go under its
 // tenant and project; only a refused bind or the holdout arm withholds the instruction.
-import type { ContextWith, EntryContext } from '../../api/types.js';
+import type { EntryContext } from '../../api/types.js';
 import { callerPreCompact } from '../../api/pre-compact.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
@@ -12,6 +12,7 @@ import {
 } from './caller-session.js';
 import type { WorkingState } from '../../base/session/working-state.js';
 import { withEntryInfra } from '../entry-infra.js';
+import { withHippoDb } from '../../api/hippo-db-context.js';
 
 export interface CallerPreCompactRequest {
   readonly sessionId: string;
@@ -29,10 +30,10 @@ export interface CallerHookOutput {
 /** A failed store step is logged and the instruction still goes out, as the local hook prints it
  * before any store work. */
 export async function preCompactForCaller(
-  given: EntryContext<ContextWith<'compactions' | 'sessions'>>,
+  given: EntryContext,
   req: CallerPreCompactRequest,
 ): Promise<CallerHookOutput> {
-  const ctx = withEntryInfra(given);
+  const ctx = withHippoDb(withEntryInfra(given));
   assertTrigger(req.trigger);
   const derived = checkedWorkingState(req.workingState);
   const key = await bindCaller(ctx, req.sessionId, req.project);

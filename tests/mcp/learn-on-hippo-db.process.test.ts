@@ -53,8 +53,8 @@ describe('hippo_learn over HTTP MCP on the worker store', () => {
     // SAFETY: POST /mcp answers a tools/call with a JSON-RPC envelope whose result wraps the tool's text.
     const body = (await res.json()) as { result?: { content?: Array<{ text?: string }> } };
     expect(body.result?.content?.[0]?.text).toMatch(/^Git learn: 1 new/);
-    const learned = sent.slice(before).filter(({ op }) => op.startsWith('lessonWrites.'));
-    expect(learned.map(({ op }) => op)).toContain('lessonWrites.writeSkippingRejected');
+    const learned = sent.slice(before).filter(({ op }) => op.startsWith('hippoDb.lessonWrites.'));
+    expect(learned.map(({ op }) => op)).toContain('hippoDb.lessonWrites.writeSkippingRejected');
     expect(learned.filter(({ deadlineAt }) => deadlineAt === undefined)).toEqual([]);
   });
 });

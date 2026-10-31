@@ -87,16 +87,10 @@ describe('oxlint.config.ts boundary rules', () => {
     expect(hits.get('src/base/name.ts')).toBeUndefined();
   });
 
-  it('fails a route that imports or calls requireGroup, and the api naming hippoRoot', () => {
+  it('fails the api naming hippoRoot', () => {
     const hits = lint({
-      'src/surface/server/routes/imports.ts':
-        "import { requireGroup } from '../../../base/ports/store.js';\nexport const p = requireGroup;\n",
-      'src/surface/server/routes/calls.ts':
-        "import * as ports from '../../../base/ports/store.js';\nexport const p = ports.requireGroup;\n",
       'src/api/root.ts': 'export const f = (o: { readonly hippoRoot: string }): string => o.hippoRoot;\n',
     });
-    expect(hits.get('src/surface/server/routes/imports.ts')).toContain('eslint(no-restricted-imports)');
-    expect(hits.get('src/surface/server/routes/calls.ts')).toContain('eslint(no-restricted-properties)');
     expect(hits.get('src/api/root.ts')).toContain('eslint(no-restricted-properties)');
   });
 });
@@ -249,15 +243,13 @@ describe('oxlint.config.ts test env rule', () => {
   });
 });
 
-describe('oxlint.config.ts store-group and grant rules', () => {
-  it('fails HippoStore and hasGroups in api and domain code, which take the groups they name', () => {
+describe('oxlint.config.ts store and grant rules', () => {
+  it('passes HippoStore in api code, which names only the core', () => {
     const hits = lint({
-      'src/api/whole.ts':
+      'src/api/core.ts':
         "import type { HippoStore } from '../base/ports/store.js';\nexport const f = (s: HippoStore): HippoStore => s;\n",
-      'src/domain/narrow.ts': "import { hasGroups } from '../base/ports/store.js';\nexport const n = hasGroups;\n",
     });
-    expect(hits.get('src/api/whole.ts')).toContain(IMPORT);
-    expect(hits.get('src/domain/narrow.ts')).toContain(IMPORT);
+    expect(hits.get('src/api/core.ts')).toBeUndefined();
   });
 
   it('fails an unscoped hippo.db open in src, and passes it in the db files that make one', () => {
@@ -379,6 +371,26 @@ describe('.dependency-cruiser.cjs grant rule', () => {
       'db-dynamic-import',
     );
     expect(imported).toEqual(['src/store/sqlite/late.ts']);
+  });
+});
+
+describe('.dependency-cruiser.cjs core port rule', () => {
+  it('fails a core file that reaches the adapter directly or through a local module, type-only included', () => {
+    const reached = cruise(
+      {
+        'src/store/sqlite/hippo-db.ts': 'export interface HippoDbRepos { readonly n: number }\n',
+        'src/api/hippo-db-context.ts':
+          "import type { HippoDbRepos } from '../store/sqlite/hippo-db.js';\nexport type Tier = { readonly hippoDb: HippoDbRepos };\n",
+        'src/api/recall/rows.ts': "import type { Tier } from '../hippo-db-context.js';\nexport type Rows = Tier;\n",
+        'src/base/ports/store/keys.ts':
+          "import type { HippoDbRepos } from '../../../store/sqlite/hippo-db.js';\nexport type Keys = HippoDbRepos;\n",
+        'src/api/context/context.ts': 'export const LIMIT = 5;\n',
+        'src/api/memories/forget.ts':
+          "import type { Tier } from '../hippo-db-context.js';\nexport type Forget = Tier;\n",
+      },
+      'core-port-no-sqlite',
+    );
+    expect([...new Set(reached)].sort()).toEqual(['src/api/recall/rows.ts', 'src/base/ports/store/keys.ts']);
   });
 });
 

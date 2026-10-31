@@ -1,24 +1,18 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
-import {
-  contextReach,
-  type ContextReach,
-  type ContextWith,
-  type GlobalInReach,
-} from '../../api/types.js';
+import type { ContextReach, GlobalInReach } from '../../api/types.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import type { HippoDbContext, HippoDbStore } from '../../api/hippo-db-context.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
-import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
+import { autoSleepConsolidate } from '../../api/sleep/sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpContext, McpHost } from '../mcp/protocol.js';
 import { allMcpTools } from '../mcp/request.js';
 import type { ImportFiles } from '../importers/core.js';
-import type { OptionalGroup, StoreWith } from '../../base/ports/store.js';
 import {
   askingNearestFirst,
   sqliteImportFiles,
@@ -41,15 +35,11 @@ import {
 } from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
-import {
-  createCallerState,
-  newRowsOn,
-  type AutoSleepHost,
-  type CallerState,
-} from '../../api/callers.js';
+import { createCallerState, type AutoSleepHost, type CallerState } from '../../api/callers.js';
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
+import { contextReach, coreEnrichment, globalEnrichment } from '../../api/hippo-db-context.js';
 import type { DetachedWork } from '../../domain/search/detached-work.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
@@ -70,13 +60,12 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
   return rerankerWithClef({ infra: cliInfra() }, name, envClefSettings());
 }
 
-/** The store kind the CLI opens: hippo.db, with every group and its local tier. */
+/** The store kind the CLI opens: hippo.db, with its local tier. */
 export type CliStore = HippoDbStore;
 
-/** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
+/** The CLI's store is hippo.db, which carries the local tier, so its verbs call the api
  * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
-export type CliContext = ContextWith<OptionalGroup> &
-  HippoDbContext & { readonly hippoRoot: string };
+export type CliContext = HippoDbContext & { readonly hippoRoot: string };
 
 /** One CLI command's stores, built by the CLI root and handed to its verb: each store holds the
  * command's runtime and, inside a request, that request's session. */
@@ -160,7 +149,7 @@ function reachOn(
   store: CliStore,
   embedderFor: EmbedderFor,
 ): ContextReach {
-  const { ledger, folderFiles } = store;
+  const { ledger, folderFiles } = store.hippoDb;
   return contextReach(
     sqliteReach({
       hippoRoot,
@@ -195,6 +184,7 @@ function contextOn(
     config,
     callers,
     infra,
+    enrich: coreEnrichment(store),
     detached: scope.runtime,
   };
 }
@@ -213,7 +203,10 @@ export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliC
     }),
     apiContext: (root, tenantId, callers = createCallerState()) =>
       contextOn(scope, root, tenantId, callers),
-    secondStore: (root) => ({ root, store: storeOn(scope, root), config: cliConfig(root) }),
+    secondStore: (root) => {
+      const store = storeOn(scope, root);
+      return { root, store, config: cliConfig(root), enrich: globalEnrichment(store) };
+    },
     ledgerReach: (root) =>
       ledgerReachOf({ reach: reachOn(scope, root, storeOn(scope, root), cliInfra().embedderFor) }),
     importBatch: (root) => (run) =>
@@ -274,13 +267,13 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
   // The rings span the loop; each folder keeps an auto-sleep and its latch, as a write's context
   // names no folder, and each frame counts on its own store.
   const byRoot = new Map<string, Pick<AutoSleepHost, 'run' | 'latch'>>();
-  const callersOn = (root: string, store: StoreWith<'reports'>): CallerState => {
+  const callersOn = (root: string): CallerState => {
     let sleeps = byRoot.get(root);
     if (sleeps === undefined) {
       sleeps = { run: rootAutoSleep(runtime, root, hostTenantId), latch: { held: false } };
       byRoot.set(root, sleeps);
     }
-    return { ...shared, autoSleep: { ...sleeps, hostTenantId, newSince: newRowsOn(store) } };
+    return { ...shared, autoSleep: { ...sleeps, hostTenantId } };
   };
   const contextIn =
     (session: RequestStores, signal: AbortSignal) =>
@@ -300,7 +293,7 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
         tools,
         config: cliConfig(hippoRoot),
         reach: reachOn(scope, hippoRoot, store, infra.embedderFor),
-        callers: callersOn(hippoRoot, store),
+        callers: callersOn(hippoRoot),
         infra,
         signal,
         detached: runtime,

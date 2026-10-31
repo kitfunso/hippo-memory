@@ -4,7 +4,7 @@ import {
   isStringValue,
   type PostCompactPayload,
 } from '../base/session/capture-contract.js';
-import type { CompactionText, StepFailure } from '../base/ports/store/capture.js';
+import type { CompactionText, StepFailure } from '../base/records/capture.js';
 import { tryParseJson } from '../base/util/json.js';
 
 export interface SpooledCompaction {

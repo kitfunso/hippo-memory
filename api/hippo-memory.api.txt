@@ -98,14 +98,14 @@ entry/project-identity.d.ts: ProjectIdentity re-export
 entry/project-identity.d.ts: ResolveProjectIdentityOptions re-export
 entry/project-identity.d.ts: resolveProjectIdentity re-export
 entry/search.d.ts: DEFAULT_MAX_NEIGHBORS re-export
-entry/search.d.ts: GraphExpandOptions re-export
+entry/search.d.ts: GraphExpandOptions type
 entry/search.d.ts: MAX_HOPS re-export
 entry/search.d.ts: MatchExplanation re-export
 entry/search.d.ts: SearchResult re-export
 entry/search.d.ts: computeTemporalRange re-export
 entry/search.d.ts: detectTemporalDirection re-export
 entry/search.d.ts: explainMatch re-export
-entry/search.d.ts: graphExpandRecall re-export
+entry/search.d.ts: graphExpandRecall function
 entry/search.d.ts: hybridSearch re-export
 entry/search.d.ts: multihopSearch function
 entry/search.d.ts: search function
@@ -127,11 +127,9 @@ entry/session-text.d.ts: transcriptWorkingState re-export
 entry/sleep.d.ts: ConsolidationResult re-export
 entry/sleep.d.ts: DetachedWork re-export
 entry/sleep.d.ts: RescueRank re-export
-entry/sleep.d.ts: SleepContext re-export
 entry/sleep.d.ts: SleepEvent re-export
 entry/sleep.d.ts: SleepOptions re-export
 entry/sleep.d.ts: SleepResult re-export
-entry/sleep.d.ts: SleepStore re-export
 entry/sleep.d.ts: consolidate function
 entry/sleep.d.ts: sleep function
 entry/sleep.d.ts: strengthBucket re-export
@@ -178,6 +176,7 @@ entry/store-kit.d.ts: ContextCandidateFilter re-export
 entry/store-kit.d.ts: ContextReads re-export
 entry/store-kit.d.ts: ContinuityBlock re-export
 entry/store-kit.d.ts: ContinuityKey re-export
+entry/store-kit.d.ts: CoreGroups re-export
 entry/store-kit.d.ts: CorrectionLink re-export
 entry/store-kit.d.ts: DescendantAdmission re-export
 entry/store-kit.d.ts: Dormant re-export
@@ -221,9 +220,7 @@ entry/store-kit.d.ts: LoserFate re-export
 entry/store-kit.d.ts: MemoryConflict re-export
 entry/store-kit.d.ts: MemoryEntry re-export
 entry/store-kit.d.ts: NewApiKey re-export
-entry/store-kit.d.ts: OPTIONAL_GROUPS re-export
 entry/store-kit.d.ts: OTHER_STORE_MARKER re-export
-entry/store-kit.d.ts: OptionalGroup re-export
 entry/store-kit.d.ts: OriginFilter re-export
 entry/store-kit.d.ts: OutcomeWrite re-export
 entry/store-kit.d.ts: PROTECTED_ROWS re-export
@@ -247,7 +244,6 @@ entry/store-kit.d.ts: RejectionSource re-export
 entry/store-kit.d.ts: Rejections re-export
 entry/store-kit.d.ts: RepairProtection re-export
 entry/store-kit.d.ts: Reports re-export
-entry/store-kit.d.ts: RequiredStore re-export
 entry/store-kit.d.ts: RetrievalPolicy re-export
 entry/store-kit.d.ts: SECRET_TAGS re-export
 entry/store-kit.d.ts: ScopeReader re-export
@@ -260,8 +256,6 @@ entry/store-kit.d.ts: Sessions re-export
 entry/store-kit.d.ts: SnapshotInput re-export
 entry/store-kit.d.ts: StatusCounts re-export
 entry/store-kit.d.ts: StoreBusyError re-export
-entry/store-kit.d.ts: StoreGroup re-export
-entry/store-kit.d.ts: StoreGroups re-export
 entry/store-kit.d.ts: StoredGraph re-export
 entry/store-kit.d.ts: StoredPart re-export
 entry/store-kit.d.ts: StoredParts re-export
@@ -295,7 +289,6 @@ entry/store-kit.d.ts: encodeVector re-export
 entry/store-kit.d.ts: entryAfterOutcome function
 entry/store-kit.d.ts: float32ToBuffer re-export
 entry/store-kit.d.ts: ftsTermParts re-export
-entry/store-kit.d.ts: hasGroup re-export
 entry/store-kit.d.ts: heldTexts re-export
 entry/store-kit.d.ts: isSharedStore re-export
 entry/store-kit.d.ts: loadConfig re-export
@@ -309,7 +302,6 @@ entry/store-kit.d.ts: readerReaches re-export
 entry/store-kit.d.ts: rejectionDigest re-export
 entry/store-kit.d.ts: repairKeeps re-export
 entry/store-kit.d.ts: replacesIndex re-export
-entry/store-kit.d.ts: requireGroup re-export
 entry/store-kit.d.ts: runStoreConformance re-export
 entry/store-kit.d.ts: sqliteStore const
 entry/store-kit.d.ts: tallyAmbientEntries function
@@ -379,11 +371,9 @@ index.d.ts: SalienceDecision re-export
 index.d.ts: SalienceOptions re-export
 index.d.ts: SalienceResult re-export
 index.d.ts: SessionHandoff re-export
-index.d.ts: SleepContext re-export
 index.d.ts: SleepEvent re-export
 index.d.ts: SleepOptions re-export
 index.d.ts: SleepResult re-export
-index.d.ts: SleepStore re-export
 index.d.ts: applyOutcome re-export
 index.d.ts: calculateStrength re-export
 index.d.ts: captureError re-export
@@ -432,7 +422,6 @@ server.d.ts: CallerPreCompactRequest re-export
 server.d.ts: CallerProject re-export
 server.d.ts: CallerSessionEndRequest re-export
 server.d.ts: CallerSessionEndResult re-export
-server.d.ts: CaptureContext re-export
 server.d.ts: ConflictError re-export
 server.d.ts: Context re-export
 server.d.ts: DetachedWork re-export

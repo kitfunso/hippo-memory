@@ -13,7 +13,7 @@ import type {
   RelationType,
   SourceObjectRef,
   SourceObjectType,
-} from '../../src/base/ports/store/graph.js';
+} from '../../src/base/records/graph.js';
 import {
   diffGraph,
   type StoredEntity,
@@ -251,9 +251,10 @@ describe('graphDelta on hippo.db', () => {
         );
         const stored = withDb(root, (db) => storedGraph(db, tenant, desired));
         const expected = diffGraph(stored, desired);
-        expect(await sqliteStore(root).graphReads.graphDelta(tenant, desired), `seed ${seed} ${tenant}`).toEqual(
-          expected,
-        );
+        expect(
+          await sqliteStore(root).hippoDb.graphReads.graphDelta(tenant, desired),
+          `seed ${seed} ${tenant}`,
+        ).toEqual(expected);
         for (const op of expected) seen.add(op.op);
         kept += stored.entities.length - expected.filter((op) => op.op === 'deleteEntity').length;
       }
@@ -296,7 +297,7 @@ describe('graphDelta reads', () => {
       const desired = deriveGraph(await loadGraphSources(objectsAt(root), T));
       expect(desired.relations.length).toBeGreaterThan(0);
 
-      const steady = await recordStatementsAsync(() => store.graphReads.graphDelta(T, desired));
+      const steady = await recordStatementsAsync(() => store.hippoDb.graphReads.graphDelta(T, desired));
       expect(steady.result).toEqual([]);
       expect(countMatching(steady.statements, DELTA_READ)).toBe(2);
       expect(peakRowsRead(steady.reads, DELTA_READ)).toBe(0);
@@ -305,7 +306,7 @@ describe('graphDelta reads', () => {
         db.prepare(`UPDATE policies SET policy_name = 'Renamed' WHERE id = (SELECT max(id) FROM policies)`).run(),
       );
       const renamed = deriveGraph(await loadGraphSources(objectsAt(root), T));
-      const one = await recordStatementsAsync(() => store.graphReads.graphDelta(T, renamed));
+      const one = await recordStatementsAsync(() => store.hippoDb.graphReads.graphDelta(T, renamed));
       expect(one.result.map((op) => op.op)).toEqual(['updateEntity']);
       expect(countMatching(one.statements, DELTA_READ)).toBe(2);
       expect(peakRowsRead(one.reads, DELTA_READ)).toBe(1);

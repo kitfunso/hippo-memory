@@ -4,8 +4,10 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { log } from '../../base/util/log.js';
 import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
-import type { StoreWith } from '../../base/ports/store.js';
-import type { SummarySettled } from '../../base/ports/store/consolidation.js';
+import type { SummarySettled, Consolidation } from '../../base/records/consolidation.js';
+import type { HippoStore } from '../../base/ports/store.js';
+
+type SettleStore = HippoStore & { readonly hippoDb: { readonly consolidation: Consolidation } };
 
 /** A rebuild's result for one summary; `bumpRebuildCount` is false for the zero-child case, true
  * for a normal one. */
@@ -25,7 +27,7 @@ export interface RebuildPatch {
  * settled it first, and `refused` means a tombstone kept the new content out while the counts
  * still landed. */
 export async function applyRebuild(
-  store: StoreWith<'consolidation'>,
+  store: SettleStore,
   summary: MemoryEntry,
   patch: RebuildPatch,
 ): Promise<SummarySettled> {
@@ -33,7 +35,7 @@ export async function applyRebuild(
   const content = patch.bumpRebuildCount
     ? { text: patch.content, rebuiltAt: patch.now.toISOString() }
     : undefined;
-  const settled = await store.consolidation.settleSummary({
+  const settled = await store.hippoDb.consolidation.settleSummary({
     id,
     tenantId,
     actor: patch.actor,
@@ -73,13 +75,13 @@ export async function applyRebuild(
  * would rebuild it at twice the model cost; `source` tells an L2 build from an L3 one in the
  * audit row. */
 export async function settleFreshSummary(
-  store: StoreWith<'consolidation'>,
+  store: SettleStore,
   summary: Pick<MemoryEntry, 'id' | 'tenantId' | 'dagLevel'>,
   actor: string,
   source: string,
 ): Promise<void> {
   const { id, tenantId } = summary;
-  await store.consolidation.settleSummary({
+  await store.hippoDb.consolidation.settleSummary({
     id,
     tenantId,
     actor,

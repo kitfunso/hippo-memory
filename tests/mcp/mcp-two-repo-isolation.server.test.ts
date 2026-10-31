@@ -275,7 +275,6 @@ beforeAll(async () => {
     hippoRoot: store,
     host: '127.0.0.1',
     port: 0,
-    keep: ['conflicts', 'dagReads', 'graphReads'],
   });
 });
 
@@ -309,23 +308,26 @@ describe('MCP on a shared store with two repos', () => {
     expect(beta.text).not.toContain('acmetask');
   });
 
-  it("hippo_assemble keeps one session's rows and summaries to the caller's repo", async () => {
-    const acme = await tool('acme', 'hippo_assemble', { session_id: SESSION, fresh_tail_count: 0 });
-    expect(acme.isError, acme.text).toBe(false);
-    for (const id of [ids.acmeSum, ids.acmeOdd1, ids.acmeOdd2]) {
-      expect(acme.text, `acme assemble should show ${id}`).toContain(id);
-    }
-    for (const id of [ids.betaSum, ids.betaRaw1, ids.betaRaw2, ids.nullRaw]) {
-      expect(acme.text, `acme assemble should hide ${id}`).not.toContain(id);
-    }
+  it.skipIf(needsHippoDb('tier'))(
+    "hippo_assemble keeps one session's rows and summaries to the caller's repo",
+    async () => {
+      const acme = await tool('acme', 'hippo_assemble', { session_id: SESSION, fresh_tail_count: 0 });
+      expect(acme.isError, acme.text).toBe(false);
+      for (const id of [ids.acmeSum, ids.acmeOdd1, ids.acmeOdd2]) {
+        expect(acme.text, `acme assemble should show ${id}`).toContain(id);
+      }
+      for (const id of [ids.betaSum, ids.betaRaw1, ids.betaRaw2, ids.nullRaw]) {
+        expect(acme.text, `acme assemble should hide ${id}`).not.toContain(id);
+      }
 
-    const beta = await tool('beta', 'hippo_assemble', { session_id: SESSION, fresh_tail_count: 0 });
-    expect(beta.isError, beta.text).toBe(false);
-    expect(beta.text).toContain(ids.betaSum);
-    for (const id of [ids.acmeSum, ids.acmeRaw1, ids.acmeRaw2, ids.acmeOdd1, ids.acmeOdd2, ids.nullRaw]) {
-      expect(beta.text, `beta assemble should hide ${id}`).not.toContain(id);
-    }
-  });
+      const beta = await tool('beta', 'hippo_assemble', { session_id: SESSION, fresh_tail_count: 0 });
+      expect(beta.isError, beta.text).toBe(false);
+      expect(beta.text).toContain(ids.betaSum);
+      for (const id of [ids.acmeSum, ids.acmeRaw1, ids.acmeRaw2, ids.acmeOdd1, ids.acmeOdd2, ids.nullRaw]) {
+        expect(beta.text, `beta assemble should hide ${id}`).not.toContain(id);
+      }
+    },
+  );
 
   it("assemble cut short by its row cap counts only the caller's repo rows, not beta's or the NULL-origin one", async () => {
     const r = await assemble(acmeCtx(), SESSION, { project: ACME, rowCap: 1, summarizeOlder: false });
@@ -333,29 +335,35 @@ describe('MCP on a shared store with two repos', () => {
     expect(r.totalRaw).toBe(4);
   });
 
-  it("hippo_drill answers not found for the other repo's summary and drops its children", async () => {
-    const own = await tool('acme', 'hippo_drill', { summary_id: ids.acmeSum });
-    expect(own.isError, own.text).toBe(false);
-    expect(own.text).toContain(ids.acmeRaw1);
-    expect((await tool('acme', 'hippo_drill', { summary_id: ids.betaSum })).text).toBe(
-      `No drillable summary at id=${ids.betaSum}.`,
-    );
+  it.skipIf(needsHippoDb('tier'))(
+    "hippo_drill answers not found for the other repo's summary and drops its children",
+    async () => {
+      const own = await tool('acme', 'hippo_drill', { summary_id: ids.acmeSum });
+      expect(own.isError, own.text).toBe(false);
+      expect(own.text).toContain(ids.acmeRaw1);
+      expect((await tool('acme', 'hippo_drill', { summary_id: ids.betaSum })).text).toBe(
+        `No drillable summary at id=${ids.betaSum}.`,
+      );
 
-    const beta = await tool('beta', 'hippo_drill', { summary_id: ids.betaSum });
-    expect(beta.isError, beta.text).toBe(false);
-    expect(beta.text).toContain(ids.betaRaw1);
-    expect(beta.text).not.toContain(ids.acmeOdd1);
-    expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeSum })).text).toBe(
-      `No drillable summary at id=${ids.acmeSum}.`,
-    );
-  });
+      const beta = await tool('beta', 'hippo_drill', { summary_id: ids.betaSum });
+      expect(beta.isError, beta.text).toBe(false);
+      expect(beta.text).toContain(ids.betaRaw1);
+      expect(beta.text).not.toContain(ids.acmeOdd1);
+      expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeSum })).text).toBe(
+        `No drillable summary at id=${ids.acmeSum}.`,
+      );
+    },
+  );
 
-  it("hippo_drill on the other repo's leaf answers not found, and only the owning repo hears it is a leaf", async () => {
-    expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toBe(
-      `No drillable summary at id=${ids.acmeRaw1}.`,
-    );
-    expect((await tool('acme', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toContain('is a leaf row');
-  });
+  it.skipIf(needsHippoDb('tier'))(
+    "hippo_drill on the other repo's leaf answers not found, and only the owning repo hears it is a leaf",
+    async () => {
+      expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toBe(
+        `No drillable summary at id=${ids.acmeRaw1}.`,
+      );
+      expect((await tool('acme', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toContain('is a leaf row');
+    },
+  );
 
   it("hippo_context returns the caller's repo and user-global rows only", async () => {
     expectOnly(await shown('acme', 'hippo_context'), [ids.acme, ids.global], HIDDEN_FROM_ACME(), 'acme context');
@@ -378,15 +386,18 @@ describe('MCP on a shared store with two repos', () => {
     expect(await taskState('beta')).toEqual(['betatask', 'betahandoff']);
   });
 
-  it("hippo_conflicts lists the caller's repo pairs and hides NULL-origin and private-scope pairs", async () => {
-    const acme = await tool('acme', 'hippo_conflicts');
-    expect(acme.isError, acme.text).toBe(false);
-    expect(acme.text).toContain(`conflict_${pairs.acme}:`);
-    for (const id of [pairs.beta, pairs.slack, pairs.none]) expect(acme.text).not.toContain(`conflict_${id}:`);
-    const beta = await tool('beta', 'hippo_conflicts');
-    expect(beta.text).toContain(`conflict_${pairs.beta}:`);
-    for (const id of [pairs.acme, pairs.slack, pairs.none]) expect(beta.text).not.toContain(`conflict_${id}:`);
-  });
+  it.skipIf(needsHippoDb('tier'))(
+    "hippo_conflicts lists the caller's repo pairs and hides NULL-origin and private-scope pairs",
+    async () => {
+      const acme = await tool('acme', 'hippo_conflicts');
+      expect(acme.isError, acme.text).toBe(false);
+      expect(acme.text).toContain(`conflict_${pairs.acme}:`);
+      for (const id of [pairs.beta, pairs.slack, pairs.none]) expect(acme.text).not.toContain(`conflict_${id}:`);
+      const beta = await tool('beta', 'hippo_conflicts');
+      expect(beta.text).toContain(`conflict_${pairs.beta}:`);
+      for (const id of [pairs.acme, pairs.slack, pairs.none]) expect(beta.text).not.toContain(`conflict_${id}:`);
+    },
+  );
 
   it("overflow substitution never brings in another repo's parent summary", async () => {
     const summaries = (

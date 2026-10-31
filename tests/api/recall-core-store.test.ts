@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { LastRecall, LastRecallWrites, RecallWrites, StoreWith } from '../../src/base/ports/store-index.js';
-import type { GlobalGroup } from '../../src/base/ports/store.js';
+import type { HippoStore, RecallWrites } from '../../src/base/ports/store-index.js';
+import type { LastRecall, LastRecallWrites } from '../../src/base/records/last-recall.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { adminActor } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
@@ -43,7 +43,7 @@ function cliCore(): CliCoreRecall {
       explain: false,
     },
     show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
-    lastRecall: sqliteStore(hippoRoot).lastRecall,
+    lastRecall: sqliteStore(hippoRoot).hippoDb.lastRecall,
   };
 }
 
@@ -77,7 +77,7 @@ describe('retrieve with the CLI ranking core', () => {
   it('writes the recall through a store that is not hippo.db when the context carries one', async () => {
     const inner = portOnlyStore(hippoRoot);
     const writes: RecallWrites[] = [];
-    const lastRecall = sqliteStore(hippoRoot).lastRecall;
+    const lastRecall = sqliteStore(hippoRoot).hippoDb.lastRecall;
     const traced: LastRecall = {
       ...lastRecall,
       finishRecall: async (w: LastRecallWrites, root) => {
@@ -130,9 +130,9 @@ describe('retrieve with the CLI ranking core', () => {
       id: 'mem_second_0',
       strength: 1,
     });
-    const inner = portOnlyStore(secondRoot, ['learning', 'ledger', 'folderFiles', 'sessions']);
+    const inner = sqliteStore(secondRoot);
     const writes: RecallWrites[] = [];
-    const globalStore: StoreWith<GlobalGroup> = {
+    const globalStore: HippoStore = {
       ...inner,
       finishRecall: async (w) => {
         writes.push(w);

@@ -13,7 +13,7 @@ import type {
   CaptureWriteOptions,
   CapturedOutcome,
   Captures,
-} from '../../../base/ports/store/capture.js';
+} from '../../../base/records/capture.js';
 import { listTextsHolding } from '../recall/candidates.js';
 import { EVERY_SCOPE } from '../runtime/rule-sql.js';
 import { openStore } from '../runtime/handles.js';

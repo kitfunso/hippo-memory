@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
 import { supersedeNow } from '../_helpers/supersede-now.js';
 import { gateFirstWrite } from '../_helpers/write-gate.js';
-import type { ContainerApply } from '../../src/base/ports/store/agent-import.js';
+import type { ContainerApply } from '../../src/base/records/agent-import.js';
 import type { ImportStore, ImportStores } from '../../src/domain/agent-memories/types.js';
 import { consolidate } from '../../src/index.js';
 import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/api/agent-memories.js';
@@ -37,6 +37,7 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/maintenance/agent-import-stores.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
@@ -71,14 +72,15 @@ const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 function gatedStores(gate: (plan: ContainerApply) => Promise<void>): ImportStores {
   const real = sqliteImportStores({});
   const apply = gateFirstWrite(
-    (plan: ContainerApply, store: ImportStore) => store.agentImport.applyContainer(plan),
+    (plan: ContainerApply, store: ImportStore) => store.hippoDb.agentImport.applyContainer(plan),
     gate,
   );
   return {
     ...real,
     open: (root, opts) => {
       const store = real.open(root, opts);
-      return { ...store, agentImport: { applyContainer: (plan) => apply(plan, store) } };
+      const agentImport = { applyContainer: (plan: ContainerApply) => apply(plan, store) };
+      return { ...store, hippoDb: { ...store.hippoDb, agentImport } };
     },
   };
 }
@@ -123,6 +125,20 @@ describe('agent memory sync', () => {
 
     expect(claude(await sync())).toMatchObject({ imported: 0, replaced: 0, unchanged: 1 });
     expect(agentRows(w.local).map((e) => e.id)).toEqual([first.id]);
+  });
+
+  it('moves Total remembered once per row it lands, and not for an unchanged note', async () => {
+    note(projectNotes(w), 'deploy.md', DEPLOY);
+    note(projectNotes(w), 'staging.md', STAGING);
+    await sync();
+    await sync();
+
+    const store = sqliteStore(w.local);
+    try {
+      expect(Number((await store.hippoDb.reports.stats()).total_remembered)).toBe(2);
+    } finally {
+      await store.close();
+    }
   });
 
   it('an edit past character 1500 supersedes the row, though the stored text is the same', async () => {

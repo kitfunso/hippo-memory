@@ -8,7 +8,7 @@ import type {
   FailureSummary,
   FailureLog,
   RoutineRule,
-} from '../../../base/ports/store/rejections.js';
+} from '../../../base/records/rejections.js';
 import { type RatedFailure, failuresPerSession } from '../../../base/records/failure-repeats.js';
 import type { OnHandle } from '../runtime/open.js';
 import { bound, type Bodies } from '../runtime/bound.js';

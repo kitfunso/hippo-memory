@@ -15,7 +15,7 @@ import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import type { FailureOutcome } from '../../src/base/ports/store/rejections.js';
+import type { FailureOutcome } from '../../src/base/records/rejections.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
@@ -80,7 +80,7 @@ describe('repeat-error rate', () => {
   });
 
   it('counts a repeat only when another session hit the signature first', async () => {
-    const { failureLog } = sqliteStore(home);
+    const { failureLog } = sqliteStore(home).hippoDb;
     const log = async (
       sessionId: string | null,
       sigHash: string,
@@ -116,7 +116,7 @@ describe('repeat-error rate', () => {
   });
 
   it('a session that hit a signature first never repeats it, even after another session hits it too', async () => {
-    const { failureLog } = sqliteStore(home);
+    const { failureLog } = sqliteStore(home).hippoDb;
     for (const sessionId of ['a', 'b', 'a']) {
       await failureLog.record({ tenantId: 'default', sessionId, outcome: 'duplicate', sigHash: 'E' });
     }
@@ -126,7 +126,7 @@ describe('repeat-error rate', () => {
   });
 
   it('looks back past the window and prunes rows past retention', async () => {
-    const { failureLog } = sqliteStore(home);
+    const { failureLog } = sqliteStore(home).hippoDb;
     expect(withDb(home, (db) => summarizeFailures(db, 'default', ago(30)))).toMatchObject({
       total: 0,
       rated: 0,

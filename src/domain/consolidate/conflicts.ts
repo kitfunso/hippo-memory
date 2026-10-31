@@ -10,8 +10,8 @@ import { isPersonalScope } from '../../base/scope/recall-scope.js';
 import { CONFLICT_STOPWORDS } from '../../base/util/stopwords.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { DECAY_THRESHOLD } from './decay.js';
-import type { DetectedConflict } from '../../base/ports/store/consolidation.js';
-import type { ConflictSide, LoserFate } from '../../base/ports/store/conflicts.js';
+import type { DetectedConflict } from '../../base/records/consolidation.js';
+import type { ConflictSide, LoserFate } from '../../base/records/conflicts.js';
 import { BadRequestError } from '../../base/errors/api-errors.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The

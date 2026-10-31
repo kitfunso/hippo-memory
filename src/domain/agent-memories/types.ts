@@ -2,7 +2,11 @@
 // knows no tool.
 import type { Scope, ToolId } from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
-import type { StoreWith } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { AgentImport } from '../../base/records/agent-import.js';
+import type { ProjectTags } from '../../base/records/project-tags.js';
+import type { Rejections } from '../../base/records/rejections.js';
+import type { Sharing } from '../../base/records/sharing.js';
 
 /** All an adapter may know about the machine, its disk and git included; it reads nothing else,
  * so tests can fake it all. */
@@ -48,15 +52,25 @@ export interface Adapter {
   list(ctx: AdapterContext, scope: Scope): Listing;
 }
 
-/** The one counter a sync moves outside its groups: the rows it remembered, which hippo.db keeps
- * in its local tier. */
+/** The counter a sync's caller moves for the rows it remembered, which hippo.db keeps in its local
+ * tier. */
 interface RememberedCounter {
   readonly hippoDb: { readonly stats: { bumpRemembered(count: number): Promise<void> } };
 }
 
 /** One store a sync reads and writes; the sync closes it. */
-export type ImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'> &
-  RememberedCounter;
+export type ImportStore = HippoStore & {
+  readonly hippoDb: {
+    readonly agentImport: AgentImport;
+    readonly projectTags: ProjectTags;
+    readonly sharing: Sharing;
+    readonly rejections: Rejections;
+  };
+} & RememberedCounter;
+
+/** Moves `store`'s remembered counter by `count`; the caller's, so a sync counts through the same
+ * owner as every other write. */
+export type CountRemembered = (store: ImportStore, count: number) => Promise<void>;
 
 /** How a sync reaches each store it targets: the caller's, so the sync never names a store
  * adapter. */

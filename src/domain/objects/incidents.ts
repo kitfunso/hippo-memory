@@ -20,7 +20,7 @@ import type {
   IncidentOpenRefusal,
   IncidentResolve,
   Objects,
-} from '../../base/ports/store.js';
+} from '../../base/records/objects.js';
 
 export type { Incident, IncidentStatus } from '../../base/records/object-types.js';
 

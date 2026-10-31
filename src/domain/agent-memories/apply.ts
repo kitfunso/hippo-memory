@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools.js';
-import type { ContainerApply, MirrorFailure } from '../../base/ports/store/agent-import.js';
+import type { ContainerApply, MirrorFailure } from '../../base/records/agent-import.js';
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import { addOutcomes, planSteps } from './container-steps.js';
 import {
@@ -49,7 +49,7 @@ export async function syncContainer(
 ): Promise<ContainerOutcome | null> {
   for (let round = 0; round < 2; round++) {
     const planned = await planWrites(s, work);
-    const applied = await s.store.agentImport.applyContainer(planned.apply);
+    const applied = await s.store.hippoDb.agentImport.applyContainer(planned.apply);
     if (applied.kind === 'applied') {
       addOutcomes(planned.tally, planned.apply.steps, applied.outcomes);
       return { tally: planned.tally, unpurged: applied.unpurged };
@@ -144,7 +144,7 @@ async function refusalsOf(
     entryId: '',
     content: storedText(item.text),
   }));
-  const rejected = await s.store.rejections.refusedAmong(checks);
+  const rejected = await s.store.hippoDb.rejections.refusedAmong(checks);
   asked.forEach((item, i) => {
     if (rejected[i]) out.set(item.key, 'rejected');
   });
@@ -165,7 +165,7 @@ async function dormantSnapshots(
     (item) => !refusals.has(item.key) && !liveKeys.has(item.key),
   );
   if (!needed) return [];
-  const under = await s.store.projectTags.dormantWhere({
+  const under = await s.store.hippoDb.projectTags.dormantWhere({
     tenantId: s.tenantId,
     sourcePrefix: w.prefix,
   });
@@ -199,7 +199,7 @@ async function planWithDuplicates(
 async function duplicatesAmong(s: StoreSession, texts: readonly string[]): Promise<boolean[]> {
   if (texts.length === 0) return [];
   const origins = s.visible === null ? undefined : ['', ...s.visible];
-  const rows = await s.store.sharing.textKeysHolding(
+  const rows = await s.store.hippoDb.sharing.textKeysHolding(
     { tenantId: s.tenantId, live: true, origins },
     texts,
   );

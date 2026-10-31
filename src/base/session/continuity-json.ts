@@ -1,7 +1,7 @@
 // HTTP replies and the CLI's --json keep snake_case keys, as clients read them; the port's rows are
 // camelCase. Each wire type is its serializer's return, so the keys are written once.
 import type { ContinuityBlock } from '../ports/store.js';
-import type { SessionEvent, TaskSnapshot } from '../ports/store/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../records/sessions.js';
 
 export function snapshotJson(s: TaskSnapshot) {
   return {

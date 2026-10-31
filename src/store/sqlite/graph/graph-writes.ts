@@ -25,7 +25,7 @@ import type {
   SourceObjectType,
   Entity,
   Relation,
-} from '../../../base/ports/store/graph.js';
+} from '../../../base/records/graph.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.

@@ -11,7 +11,7 @@ import { embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memo
 import type { DetachedWork } from '../search/detached-work.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { log } from '../../base/util/log.js';
-import type { EntryTextKey, Sharing } from '../../base/ports/store.js';
+import type { EntryTextKey, Sharing } from '../../base/records/sharing.js';
 import { logEmbedAllFailure } from './search-both.js';
 import { textKeyPages, type SharingStore } from './text-keys.js';
 
@@ -24,14 +24,14 @@ export async function syncGlobalToLocal(
   global: { readonly store: SharingStore },
   opts: { includeCrossProject?: boolean } & SyncEmbed,
 ): Promise<number> {
-  const home = await into.store.folderFiles.home();
+  const home = await into.store.hippoDb.folderFiles.home();
   if (home.shared) {
     throw new BadRequestError(
       `Refusing to sync into ${home.folder}: a shared store takes no copies of a personal global store, ` +
         `whose rows would reach every member.`,
     );
   }
-  if (!(await global.store.folderFiles.home()).exists) return 0;
+  if (!(await global.store.hippoDb.folderFiles.home()).exists) return 0;
 
   const rules = { project: home.project, includeCrossProject: opts.includeCrossProject };
   return copyMissingRows(into, global.store, rules, opts);
@@ -115,7 +115,7 @@ function copiesOf(
 /** The texts held twice whose first copy a rejection refuses. */
 async function refusedTexts(store: SharingStore, { copies, twins }: Copies): Promise<Set<string>> {
   const firsts = copies.filter((e) => twins.has(textKey(e)));
-  const refused = await store.rejections.refusedAmong(
+  const refused = await store.hippoDb.rejections.refusedAmong(
     firsts.map((e) => ({ tenantId: e.tenantId, entryId: e.id, content: e.content })),
   );
   return new Set(firsts.filter((_, i) => refused[i]).map(textKey));
@@ -129,7 +129,7 @@ async function copyMissingRows(
   rules: CopyRules,
   embedding: SyncEmbed,
 ) {
-  const candidates = await missingRows(into.store.sharing, from.sharing);
+  const candidates = await missingRows(into.store.hippoDb.sharing, from.hippoDb.sharing);
   if (candidates.length === 0) return 0;
   const byId = new Map<string, MemoryEntry>();
   const wanted = candidates.map((k) => k.id);
@@ -148,7 +148,7 @@ async function copyMissingRows(
   const written =
     copies.length === 0
       ? []
-      : await into.store.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
+      : await into.store.hippoDb.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
   finishSyncDown(into, written.length, copies.length - written.length, embedding);
   return written.length;
 }

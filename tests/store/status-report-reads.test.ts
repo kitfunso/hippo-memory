@@ -47,14 +47,16 @@ function seed(): void {
 describe('status report reads', () => {
   it('builds the correction-latency report from the join', async () => {
     seed();
-    const report = buildCorrectionLatency((await sqliteStore(root).reports.correctionLinks({ limit: 500 })).links);
+    const report = buildCorrectionLatency(
+      (await sqliteStore(root).hippoDb.reports.correctionLinks({ limit: 500 })).links,
+    );
     expect(report.count).toBe(2);
     expect(report.extractionCount).toBe(1);
   });
 
   it('builds the provenance report from the count and the gaps', async () => {
     seed();
-    const report = buildProvenanceCoverage(await sqliteStore(root).reports.rawProvenance({ limit: 500 }));
+    const report = buildProvenanceCoverage(await sqliteStore(root).hippoDb.reports.rawProvenance({ limit: 500 }));
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);
   });
@@ -62,7 +64,7 @@ describe('status report reads', () => {
   it('reads the same rows when the store holds five times more rows outside the reports', async () => {
     seed();
     const reports = async () => {
-      const { correctionLinks, rawProvenance } = sqliteStore(root).reports;
+      const { correctionLinks, rawProvenance } = sqliteStore(root).hippoDb.reports;
       return { links: await correctionLinks({ limit: 500 }), raw: await rawProvenance({ limit: 500 }) };
     };
     const before = await recordStatementsAsync(reports);
@@ -86,7 +88,7 @@ describe('status report reads', () => {
 describe('status report pages', () => {
   it('walks the links and the gaps one row at a time to the same rows as one big page', async () => {
     seed();
-    const { reports } = sqliteStore(root);
+    const { reports } = sqliteStore(root).hippoDb;
     const whole = await reports.correctionLinks({ limit: 500 });
     const links: typeof whole.links = [];
     for (

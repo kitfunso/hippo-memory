@@ -27,7 +27,8 @@ import {
 } from '../../domain/objects/project-briefs.js';
 import { SKILL, type SaveSkillOptions } from '../../domain/objects/skills.js';
 import { extractPathTags } from '../../domain/search/path-context.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context } from '../types.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 export type { ObjectListOptions } from '../../domain/objects/descriptor.js';
 
@@ -90,29 +91,29 @@ export function objectStates<K extends ObjectKind>(
 
 /** The caller's objects of one kind, newest first. */
 export function objectList<K extends ObjectKind>(
-  ctx: ContextWith<'objects'>,
+  ctx: HippoDbContext,
   kind: K,
   opts: ObjectListOptions<K>,
 ): Promise<ObjectByKind[K][]> {
-  return listObjects(ctx.store.objects, DESCRIPTORS[kind], ctx.tenantId, opts);
+  return listObjects(ctx.store.hippoDb.objects, DESCRIPTORS[kind], ctx.tenantId, opts);
 }
 
 /** One object by table id, or null when the caller's tenant has none. */
 export function objectGet<K extends ObjectKind>(
-  ctx: ContextWith<'objects'>,
+  ctx: HippoDbContext,
   kind: K,
   id: number,
 ): Promise<ObjectByKind[K] | null> {
-  return objectById(ctx.store.objects, DESCRIPTORS[kind], ctx.tenantId, id);
+  return objectById(ctx.store.hippoDb.objects, DESCRIPTORS[kind], ctx.tenantId, id);
 }
 
 /** Retires one object as the caller; its mirror memory stays as saved. */
 export function objectClose<K extends ObjectKind>(
-  ctx: ContextWith<'objects'>,
+  ctx: HippoDbContext,
   kind: K,
   id: number,
 ): Promise<ObjectByKind[K]> {
-  return closeObject(ctx.store.objects, DESCRIPTORS[kind], {
+  return closeObject(ctx.store.hippoDb.objects, DESCRIPTORS[kind], {
     tenantId: ctx.tenantId,
     id,
     actor: ctx.actor.subject,
@@ -123,12 +124,17 @@ export function objectClose<K extends ObjectKind>(
 /** Creates an object, or the version that replaces the one its write names, with its mirror
  * memory in one write. */
 export function objectCreate<K extends SavableKind>(
-  ctx: ContextWith<'objects'>,
+  ctx: HippoDbContext,
   kind: K,
   write: ObjectWrites[K],
   origin?: WriteOrigin,
 ): Promise<ObjectByKind[K]> {
-  return saveObject(ctx.store.objects, SAVABLE[kind], saveSiteOf(ctx), taggedFrom(write, origin));
+  return saveObject(
+    ctx.store.hippoDb.objects,
+    SAVABLE[kind],
+    saveSiteOf(ctx),
+    taggedFrom(write, origin),
+  );
 }
 
 export interface ObjectSupersedeOptions<K extends SavableKind> {
@@ -140,7 +146,7 @@ export interface ObjectSupersedeOptions<K extends SavableKind> {
 /** The version that replaces object `id`, built from it by `next`, or null when the tenant has
  * no such object; the save's own check that `id` is still active is the one that counts. */
 export async function objectSupersede<K extends SavableKind>(
-  ctx: ContextWith<'objects'>,
+  ctx: HippoDbContext,
   kind: K,
   { id, next, origin }: ObjectSupersedeOptions<K>,
 ): Promise<ObjectByKind[K] | null> {

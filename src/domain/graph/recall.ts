@@ -14,8 +14,8 @@ import {
 } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
-import type { Entity, GraphRows, Relation } from '../../base/ports/store/graph.js';
-import type { RequiredStore, StoreGroups, StoreWith } from '../../base/ports/store.js';
+import type { Entity, GraphRows, GraphWalkQuery, Relation } from '../../base/records/graph.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import {
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
@@ -30,14 +30,22 @@ export const DEFAULT_MAX_NEIGHBORS = 25;
  *  fraction per hop, so it ranks just below its seed and orders by hop-distance. */
 const HOP_DISCOUNT = 0.01;
 type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
-type GraphStore = Pick<StoreGroups, 'graphReads'> & Pick<RequiredStore, 'entriesByIds'>;
 
-/** The graph a store keeps, as expansion walks it; a store that keeps none has no neighbours to
- * add. */
-export function graphOf(store: StoreWith<never, 'graphReads'>): GraphStore | undefined {
-  const { graphReads } = store;
-  if (graphReads === undefined) return undefined;
-  return { graphReads, entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
+/** The graph reads a walk makes; only a store with hippo.db's local tier keeps a graph. */
+export interface GraphWalk {
+  graphRows(tenantId: string, query: GraphWalkQuery): Promise<GraphRows>;
+}
+
+type GraphStore = { readonly graphReads: GraphWalk } & Pick<HippoStore, 'entriesByIds'>;
+
+/** `store` with the graph its root found, as expansion walks it; with no graph there are no
+ * neighbours to add. */
+export function graphOf(
+  store: Pick<HippoStore, 'entriesByIds'>,
+  graph: GraphWalk | undefined,
+): GraphStore | undefined {
+  if (graph === undefined) return undefined;
+  return { graphReads: graph, entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
 }
 type GraphHit = SearchResult & { graphVia: GraphVia };
 

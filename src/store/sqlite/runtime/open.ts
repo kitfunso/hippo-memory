@@ -19,7 +19,7 @@ import type { StoreAt } from '../../../db/connect.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { type HippoIndex } from './rows.js';
-import type { LegacyStats } from '../../../base/ports/store/reports.js';
+import type { LegacyStats } from '../../../base/records/reports.js';
 import { audit } from '../audit/audit-event.js';
 import { deserializeEntry } from '../../../base/memory/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from '../entries/entry-row.js';

@@ -67,7 +67,7 @@ async function printRecall({
         globalRoot !== hippoRoot && priced.globalOn ? cli.secondStore(globalRoot) : undefined,
       note: (line) => printError(line),
       hostSessionId: hostSessionId(),
-      lastRecall: ctx.store.lastRecall,
+      lastRecall: ctx.store.hippoDb.lastRecall,
       show: async (rank, planning) => {
         slot.presented = await presentRecall(ctx, {
           query,

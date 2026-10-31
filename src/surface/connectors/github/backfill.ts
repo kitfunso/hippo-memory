@@ -14,7 +14,7 @@ import type {
 } from './types.js';
 import { type JsonValue, isJsonObject } from '../../../base/util/json.js';
 import { MINUTE_MS } from '../../../base/util/time.js';
-import type { CursorKey, GitHubStream } from '../../../base/ports/store/connectors.js';
+import type { CursorKey, GitHubStream } from '../../../base/records/connectors.js';
 
 const API = 'https://api.github.com';
 
@@ -281,7 +281,7 @@ async function resumeFrom(
   ctx: ConnectorContext,
   opts: BackfillOptions,
 ): Promise<Record<GitHubStream, string | null>> {
-  const events = ctx.store.connectorEvents;
+  const events = ctx.store.hippoDb.connectorEvents;
   const { sinceIso } = opts;
   if (sinceIso) {
     for (const stream of GITHUB_STREAMS) {
@@ -317,7 +317,10 @@ async function backfillStream(
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
   // unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
-    await ctx.store.connectorEvents.saveCursor(hwmOf(ctx, opts, stream.name), res.maxUpdatedAt);
+    await ctx.store.hippoDb.connectorEvents.saveCursor(
+      hwmOf(ctx, opts, stream.name),
+      res.maxUpdatedAt,
+    );
   }
   return { ingested: res.ingested, pages: res.pages };
 }

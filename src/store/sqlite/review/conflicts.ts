@@ -19,7 +19,7 @@ import { deleteEntryCore } from '../entries/delete-and-batch.js';
 import { keysetPage } from '../../../base/util/keyset.js';
 import type { SqlFragment } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import type { DetectedConflict } from '../../../base/ports/store/consolidation.js';
+import type { DetectedConflict } from '../../../base/records/consolidation.js';
 import type {
   ConflictListQuery,
   ConflictMember,
@@ -28,7 +28,7 @@ import type {
   ConflictRowPage,
   LoserFate,
   Conflicts,
-} from '../../../base/ports/store/conflicts.js';
+} from '../../../base/records/conflicts.js';
 import { openStore } from '../runtime/handles.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';

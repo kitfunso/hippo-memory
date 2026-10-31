@@ -1,12 +1,12 @@
 // DAG drill-down from a summary to its children.
 
-import type { SummaryDescendants } from '../../base/ports/store.js';
+import type { SummaryDescendants } from '../../base/records/dag-reads.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import { descendantAdmits, type DescendantAdmission } from '../../base/scope/read-admission.js';
 import type { CallerProject } from '../prompt-hook.js';
-import type { ContextWith } from '../types.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 export const DEFAULT_DRILL_DOWN_LIMIT = 50;
 export const MAX_DRILL_DOWN_DEPTH = 10;
@@ -68,7 +68,7 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
  * reachable; children get recall's scope filter. Returns `DrillDownResult` or `{failure}`; HTTP
  * maps `not_drillable` to 422. */
 export async function drillDown(
-  ctx: ContextWith<'dagReads'>,
+  ctx: HippoDbContext,
   summaryId: string,
   opts: DrillDownOptions = {},
 ): Promise<DrillDownOutcome> {
@@ -81,7 +81,7 @@ export async function drillDown(
     project: opts.project,
   };
   const pastLimit = Math.floor(limit) + 1;
-  const walked = await ctx.store.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
+  const walked = await ctx.store.hippoDb.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
     depth,
     admit,
     // A leaf answers not_drillable, so nothing under it is read.

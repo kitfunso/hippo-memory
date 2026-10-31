@@ -19,6 +19,7 @@ import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import type { VectorSource } from '../domain/search/vector.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
 import { entryInfra } from '../surface/entry-infra.js';
+import { coreEnrichment, globalEnrichment } from '../api/hippo-db-context.js';
 import type { EvalSwitches } from '../base/memory/eval-switches.js';
 
 /** A published ranker's options under the environment's eval switches and clock, unless the
@@ -41,8 +42,10 @@ export function folderVectorSource({
 }: Pick<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings'>): VectorSource | undefined {
   if (!hippoRoot) return undefined;
   const config = { embeddings: embeddings ?? loadConfig(hippoRoot).embeddings };
+  const read = store ?? sqliteStore(hippoRoot);
   return vectorSourceOf({
-    store: store ?? sqliteStore(hippoRoot),
+    store: read,
+    graph: coreEnrichment(read)?.graph,
     config,
     onHippoDb: true,
     embedderFor: resolveEmbeddingProvider,
@@ -66,7 +69,9 @@ export async function hybridSearch(
     cwd: options.cwd ?? process.cwd(),
     source: options.source ?? folderVectorSource(options),
     graphGlobal:
-      globalRoot && globalRoot !== options.hippoRoot ? sqliteStore(globalRoot) : undefined,
+      globalRoot && globalRoot !== options.hippoRoot
+        ? globalEnrichment(sqliteStore(globalRoot))?.graph
+        : undefined,
   });
 }
 

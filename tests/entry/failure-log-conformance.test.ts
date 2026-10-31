@@ -34,7 +34,7 @@ const event = (over: Partial<FailureEvent> = {}): FailureEvent => ({
 });
 
 async function seed(dir: string): Promise<void> {
-  const log = sqliteStore(dir).failureLog;
+  const log = sqliteStore(dir).hippoDb.failureLog;
   await log.record(event({ requestId: 'req-old', outcome: 'duplicate', now: '2025-10-01T00:00:00.000Z' }));
   await log.record(event({ requestId: 'req-1', outcome: 'store-failed', now: '2026-02-28T00:00:00.000Z' }));
   await log.record(

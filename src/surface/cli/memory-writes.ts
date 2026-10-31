@@ -8,7 +8,6 @@ import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { envRequireServer } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import * as api from '../../api/index.js';
-import type { ContextWith } from '../../api/types.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { callerKey } from '../server/local-key.js';
@@ -16,6 +15,7 @@ import * as client from './client.js';
 import { type CliContext, type CliScope } from './api-context.js';
 import { fail } from './exit.js';
 import { requireInit } from './shared.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 /** One `hippo remember`, every flag parsed and checked. */
 export interface RememberRequest {
@@ -80,7 +80,7 @@ const SERVED_KEY_HINT =
 
 /** What `hippo forget <id>` says when the store refuses it; the dry run says the same. */
 export async function forgetRefusal(
-  ctx: ContextWith<'dormant'>,
+  ctx: HippoDbContext,
   id: string,
   cause: unknown,
 ): Promise<string> {

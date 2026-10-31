@@ -2,7 +2,7 @@
 // dead-letter queue and workspace routing. Each `xAt(db, ...)` runs on the caller's handle.
 
 import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
-import type { ConnectorEventRecord } from '../../../base/ports/store.js';
+import type { ConnectorEventRecord } from '../../../base/records/connectors.js';
 import {
   eventMemory,
   eventRecord,
@@ -16,7 +16,7 @@ import type {
   SlackDlqInsert,
   SlackDlqItem as DlqItem,
   SlackWorkspace,
-} from '../../../base/ports/store/connectors.js';
+} from '../../../base/records/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 

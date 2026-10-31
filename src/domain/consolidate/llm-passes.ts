@@ -290,7 +290,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 /** Every unprofiled L2 summary, one keyset page per store call: clustering needs them all, a
  * statement need not. */
 async function allUnprofiledTopicSummaries(
-  store: SleepRun['store']['consolidation'],
+  store: SleepRun['store']['hippoDb']['consolidation'],
 ): Promise<MemoryEntry[]> {
   const all: MemoryEntry[] = [];
   for (let after: EntryCursor | undefined; ;) {
@@ -306,7 +306,7 @@ async function allUnprofiledTopicSummaries(
 // 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
-    const l2Summaries = await allUnprofiledTopicSummaries(run.store.consolidation);
+    const l2Summaries = await allUnprofiledTopicSummaries(run.store.hippoDb.consolidation);
     if (l2Summaries.length >= 2) {
       const profileResult = await buildEntityProfiles(run.store, l2Summaries, {
         ...llmOpts,

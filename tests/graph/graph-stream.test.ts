@@ -16,6 +16,7 @@ import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { selectGraphSeeds, graphRankStream, type GraphSeed } from '../../src/domain/graph/stream.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { walkable } from '../_helpers/graph-walk.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -97,7 +98,7 @@ describe('graphRankStream (real SQLite)', () => {
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
 
     const entries = [a, b, x];
-    const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T });
+    const out = await graphRankStream(entries, [seed(0)], { store: walkable(sqliteStore(home)), tenantId: T });
     expect(out).toEqual([1]); // only b; seed(0) and x(2) excluded
   });
 
@@ -112,10 +113,12 @@ describe('graphRankStream (real SQLite)', () => {
     insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ec, relType: 'supersedes', memoryId: b.id });
 
     const entries = [a, b, c];
-    const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, hops: 2 });
+    const out = await graphRankStream(entries, [seed(0)], { store: walkable(sqliteStore(home)), tenantId: T, hops: 2 });
     expect(out).toEqual([1, 2]); // b (1-hop) before c (2-hop)
     // hops:1 reaches only b
-    expect(await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, hops: 1 })).toEqual([1]);
+    expect(
+      await graphRankStream(entries, [seed(0)], { store: walkable(sqliteStore(home)), tenantId: T, hops: 1 }),
+    ).toEqual([1]);
   });
 
   it('enforces the per-hop fanout cap', async () => {
@@ -127,7 +130,11 @@ describe('graphRankStream (real SQLite)', () => {
       insertRelationAt(home, T, { fromEntityId: ea, toEntityId: en, relType: 'supersedes', memoryId: a.id });
     }
     const entries = [a, ...ns];
-    const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, maxNeighbors: 2 });
+    const out = await graphRankStream(entries, [seed(0)], {
+      store: walkable(sqliteStore(home)),
+      tenantId: T,
+      maxNeighbors: 2,
+    });
     expect(out.length).toBe(2); // capped at 2 of the 3 neighbors
   });
 
@@ -140,7 +147,7 @@ describe('graphRankStream (real SQLite)', () => {
     const ec = ent(home, T, c, 'C');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id });
-    const out = await graphRankStream([a, b, c], [seed(0)], { store: sqliteStore(home), tenantId: T });
+    const out = await graphRankStream([a, b, c], [seed(0)], { store: walkable(sqliteStore(home)), tenantId: T });
     expect(out).toEqual([1, 2]); // b and c both 1-hop from a -> index asc
   });
 
@@ -148,7 +155,7 @@ describe('graphRankStream (real SQLite)', () => {
     const a = mem(home, T, 'aaa');
     const b = mem(home, T, 'bbb');
     // no entities, no relations
-    expect(await graphRankStream([a, b], [seed(0)], { store: sqliteStore(home), tenantId: T })).toEqual([]);
+    expect(await graphRankStream([a, b], [seed(0)], { store: walkable(sqliteStore(home)), tenantId: T })).toEqual([]);
   });
 
   it('a reached neighbour NOT in the candidate pool is ignored', async () => {
@@ -159,7 +166,7 @@ describe('graphRankStream (real SQLite)', () => {
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     // pool excludes b
     const entries = [a, mem(home, T, 'other in pool but no path')];
-    expect(await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T })).toEqual([]);
+    expect(await graphRankStream(entries, [seed(0)], { store: walkable(sqliteStore(home)), tenantId: T })).toEqual([]);
   });
 
   it('a graph-reachable OUT-of-pool private-scoped memory never appears in the stream output (pool-only pin)', async () => {
@@ -182,7 +189,7 @@ describe('graphRankStream (real SQLite)', () => {
 
     // pool excludes priv (simulating the caller's own scope-filtered candidate pool).
     const entries = [a, pub];
-    const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T });
+    const out = await graphRankStream(entries, [seed(0)], { store: walkable(sqliteStore(home)), tenantId: T });
     expect(out).toEqual([1]); // pub ranked — the pin is exercised, not vacuous...
     expect(out.map((i) => entries[i].id)).not.toContain(priv.id); // ...and priv never appears
   });
@@ -196,7 +203,10 @@ describe('graphRankStream (real SQLite)', () => {
     const ec = ent(home, T, c, 'C');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id }); // a-b (both seeds)
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id }); // a-c (c not a seed)
-    const out = await graphRankStream([a, b, c], [seed(0), seed(1, 0.5)], { store: sqliteStore(home), tenantId: T });
+    const out = await graphRankStream([a, b, c], [seed(0), seed(1, 0.5)], {
+      store: walkable(sqliteStore(home)),
+      tenantId: T,
+    });
     expect(out).toEqual([2]); // only c; seeds 0 and 1 excluded
   });
 
@@ -237,7 +247,10 @@ describe('graphRankStream (real SQLite)', () => {
     });
 
     const entries = [seedStrong, seedWeak, nWeakOnly, filler, nShared];
-    const out = await graphRankStream(entries, [seed(0, 1.0), seed(1, 0.3)], { store: sqliteStore(home), tenantId: T });
+    const out = await graphRankStream(entries, [seed(0, 1.0), seed(1, 0.3)], {
+      store: walkable(sqliteStore(home)),
+      tenantId: T,
+    });
     expect(out).toEqual([4, 2]); // nShared (strong, index 4) ranks ABOVE nWeakOnly (weak, index 2)
   });
 
@@ -251,9 +264,9 @@ describe('graphRankStream (real SQLite)', () => {
       insertRelationAt(glob, T, { fromEntityId: eg, toEntityId: egn, relType: 'supersedes', memoryId: g.id });
       const entries = [g, gn]; // pool = the two global memories
       const out = await graphRankStream(entries, [seed(0)], {
-        store: sqliteStore(home),
+        store: walkable(sqliteStore(home)),
         tenantId: T,
-        global: sqliteStore(glob),
+        global: walkable(sqliteStore(glob)),
       });
       expect(out).toEqual([1]); // gn reached via the global graph
     } finally {

@@ -13,7 +13,7 @@ import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
-import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/tokens.js';
+import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/hippo-db/token-reports.js';
 import {
   correctionLatencyReport,
   embeddingReindexNeeded,
@@ -23,8 +23,8 @@ import {
   vectorSummary,
   type MemoryDetail,
 } from '../../api/status.js';
-import type { StatusCounts } from '../../base/ports/store/reports.js';
-import type { StoredVectorSummary } from '../../base/ports/store.js';
+import type { StatusCounts } from '../../base/records/reports.js';
+import type { StoredVectorSummary } from '../../base/records/embedding-index.js';
 import { type CliContext, type CliCommand } from './api-context.js';
 import { sqliteDiagnosticsStore } from '../open-store.js';
 

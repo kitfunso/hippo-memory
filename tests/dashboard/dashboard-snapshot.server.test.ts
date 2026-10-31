@@ -11,7 +11,7 @@ import { isLiveMemory } from '../../src/api/dashboard/live.js';
 import { buildOverview } from '../../src/api/dashboard/overview.js';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
 import type { Overview, ProjectSummary } from '../../src/api/dashboard/types.js';
-import type { DashboardTotals, ProjectTally } from '../../src/base/ports/store/dashboard-reads.js';
+import type { DashboardTotals, ProjectTally } from '../../src/base/records/dashboard-reads.js';
 import { dashboardOf, embed, isoAgo, makeStore, NOW, seed, type TmpStore } from '../_helpers/dashboard-fixture.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import {

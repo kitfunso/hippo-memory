@@ -23,7 +23,7 @@ export interface GatedConnector<C> {
 /** `ctx` whose first connector write runs `gate` first. */
 export function gateConnectorWrite<C extends ConnectorContext>(ctx: C, gate: () => Promise<void>): GatedConnector<C> {
   const preChecks: boolean[] = [];
-  const { connectorEvents, connectorWrites } = ctx.store;
+  const { connectorEvents, connectorWrites } = ctx.store.hippoDb;
   const eventRecord: typeof connectorEvents.eventRecord = async (...args) => {
     const record = await connectorEvents.eventRecord(...args);
     preChecks.push(record.seen);
@@ -35,8 +35,11 @@ export function gateConnectorWrite<C extends ConnectorContext>(ctx: C, gate: () 
   );
   const store = {
     ...ctx.store,
-    connectorEvents: { ...connectorEvents, eventRecord },
-    connectorWrites: { ...connectorWrites, writeConnectorEntry },
+    hippoDb: {
+      ...ctx.store.hippoDb,
+      connectorEvents: { ...connectorEvents, eventRecord },
+      connectorWrites: { ...connectorWrites, writeConnectorEntry },
+    },
   };
   return { ctx: { ...ctx, store }, preChecks };
 }

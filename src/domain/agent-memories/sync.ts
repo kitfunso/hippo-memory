@@ -35,7 +35,7 @@ import {
   type Scope,
   type ToolId,
 } from '../../base/memory/agent-memory-tools.js';
-import type { Adapter, ImportStore, ImportStores, Listing } from './types.js';
+import type { Adapter, CountRemembered, ImportStore, ImportStores, Listing } from './types.js';
 
 export const ADAPTERS: readonly Adapter[] = [
   claudeCodeAdapter,
@@ -148,7 +148,11 @@ function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Se
 
 /** Lists each allowed tool's containers for `pass` and syncs them into its target store; a
  * failure is a warning. */
-export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
+export async function runPass(
+  pass: Pass,
+  opts: SyncOptions,
+  countRemembered: CountRemembered,
+): Promise<ImportReport> {
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
   const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) =>
@@ -159,7 +163,9 @@ export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportRepo
   let synced: ContainerWork[] = [];
   try {
     store = await openTarget(pass.target, hasItems, opts);
-    if (store !== null) synced = await syncStore({ pass, listings, store, opts, report });
+    if (store !== null) {
+      synced = await syncStore({ pass, listings, store, opts, report, countRemembered });
+    }
   } catch (err) {
     const why = opts.stores.isBusy(err) ? 'the store was busy' : errorMessage(err);
     report.warnings.push(`agent memories not synced into ${pass.target}: ${why}`);
@@ -264,6 +270,7 @@ interface SyncStoreOptions {
   readonly store: OpenStore;
   readonly opts: SyncOptions;
   readonly report: ImportReport;
+  readonly countRemembered: CountRemembered;
 }
 
 async function syncStore({
@@ -272,6 +279,7 @@ async function syncStore({
   store,
   opts,
   report,
+  countRemembered,
 }: SyncStoreOptions): Promise<ContainerWork[]> {
   const legacy = pass.legacy ? await legacyWork(store.store, opts.tenantId, listings) : null;
   const session = storeSession(pass, store, opts, legacy);
@@ -297,7 +305,9 @@ async function syncStore({
       remembered += outcome.tally.imported + outcome.tally.replaced;
     }
   }
-  if (remembered > 0 && !session.dryRun) await bumpRemembered(store.store, remembered, report);
+  if (remembered > 0 && !session.dryRun) {
+    await countSynced(() => countRemembered(store.store, remembered), report);
+  }
   return synced;
 }
 
@@ -414,13 +424,9 @@ async function syncOne(
   }
 }
 
-async function bumpRemembered(
-  store: ImportStore,
-  remembered: number,
-  report: ImportReport,
-): Promise<void> {
+async function countSynced(count: () => Promise<void>, report: ImportReport): Promise<void> {
   try {
-    await store.hippoDb.stats.bumpRemembered(remembered);
+    await count();
   } catch (err) {
     log.debug('remembered counter not updated', errorFields(err));
     report.warnings.push(`remembered counter not updated: ${errorMessage(err)}`);

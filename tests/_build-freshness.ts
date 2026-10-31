@@ -1,4 +1,4 @@
-// vitest globalSetup for the process and server projects only: they spawn the CLI or import workers from dist, so a build older than src would test old code.
+// vitest globalSetup for the process, server and slow-dist projects: they spawn the CLI, import workers or load dist, so a build older than src would test old code.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 

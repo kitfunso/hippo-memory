@@ -3,7 +3,7 @@ import {
   freshActiveSnapshot,
   SNAPSHOT_AMBIENT_MAX_AGE_MS,
 } from '../../base/session/session-snapshot.js';
-import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/records/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import { tokenPurse } from '../../base/util/token-text.js';
 import { projectNames } from '../../base/scope/project-identity.js';
@@ -64,7 +64,7 @@ async function loadRawTaskState(
     scopeFilter: 'default-deny',
   } as const;
   // A store that keeps no session rows has no handoff to offer.
-  const { sessions } = store;
+  const sessions = ctx.enrich?.handoff;
   const handoff = sessions && (await sessions.read(ctx.tenantId, 'handoff', unfinished, key));
   return { snapshot, handoff: handoff ?? null, events: [] };
 }

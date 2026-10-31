@@ -2,24 +2,15 @@
 // switch.
 
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
-import {
-  hasGroup,
-  hasGroups,
-  type HippoStore,
-  type OptionalGroup,
-  type RequiredStore,
-  type StoreWith,
-} from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../../api/recall/request.js';
-import { globalTargetOf } from '../../api/infra.js';
 import { recordTokens } from '../../api/tokens.js';
-import { hasHippoDb, type HippoDbStore, type HippoDbTier } from '../../api/hippo-db-context.js';
+import { globalTargetOf, hasHippoDb, type HippoDbStore } from '../../api/hippo-db-context.js';
 import {
   mcpApiContext,
-  type GroupToolHandler,
   type HippoDbToolHandler,
   type LocalToolHandler,
   type McpCaller,
@@ -69,88 +60,65 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpCaller)
 // ── Tool execution ──
 
 /** One tool: its run on a store a host proved once, checked here, and its run on a store whose
- * type holds every group, checked nowhere. */
+ * type carries the local tier, checked nowhere. */
 interface ToolRow {
-  readonly bind: (proved: HippoStore) => StoreTool<RequiredStore> | undefined;
+  readonly bind: (proved: HippoStore) => StoreTool<HippoStore> | undefined;
   readonly onAll: StoreTool<HippoDbStore>;
 }
 
 /** A tool that runs under any store. */
 function anyStore(run: ToolHandler): ToolRow {
-  const tool: StoreTool<RequiredStore> = (ctx) => (args) => run({ ...toolCall(ctx), args });
+  const tool: StoreTool<HippoStore> = (ctx) => (args) => run({ ...toolCall(ctx), args });
   return { bind: () => tool, onAll: tool };
 }
 
-/** A tool that runs only on a store with every group `needs` names, handed that store and an api
+/** A tool that runs only on a store with hippo.db's local tier, handed that store and an api
  * Context on it. */
-function needing<G extends OptionalGroup>(needs: readonly G[], run: GroupToolHandler<G>): ToolRow {
+function onHippoDb(run: HippoDbToolHandler): ToolRow {
   const on =
-    (ctx: McpCaller, store: StoreWith<G>): ToolRun =>
+    (ctx: McpCaller, store: HippoDbStore): ToolRun =>
     (args) =>
       run({ ...toolCall(ctx), args, store, api: { ...mcpApiContext(ctx), store } });
   return {
-    bind: (proved) =>
-      hasGroups(proved, needs) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined,
-    onAll: (ctx) => on(ctx, ctx.store),
-  };
-}
-
-/** A tool that runs only on hippo.db's store, handed its local tier and every group `needs`
- * names. */
-function onHippoDb<G extends OptionalGroup>(
-  needs: readonly G[],
-  run: HippoDbToolHandler<G>,
-): ToolRow {
-  const on =
-    (ctx: McpCaller, store: StoreWith<G> & HippoDbTier): ToolRun =>
-    (args) => {
-      const api = { ...mcpApiContext(ctx), store };
-      return run({ ...toolCall(ctx), args, store, api });
-    };
-  return {
-    bind: (proved) =>
-      hasHippoDb(proved) && hasGroups(proved, needs)
-        ? (ctx) => on(ctx, ctx.storeFor(proved))
-        : undefined,
+    bind: (proved) => (hasHippoDb(proved) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined),
     onAll: (ctx) => on(ctx, ctx.store),
   };
 }
 
 /** A tool that runs only under a folder store with a global store in its reach. */
 function localTool(run: LocalToolHandler): ToolRow {
-  const on = (ctx: McpCaller, store: StoreWith<'folderFiles'>): ToolRun | undefined => {
+  const on = (ctx: McpCaller, store: HippoDbStore): ToolRun | undefined => {
     const globalTarget = globalTargetOf(ctx);
     return globalTarget === undefined
       ? undefined
       : (args) => run({ ...toolCall(ctx), args, store, globalTarget });
   };
   return {
-    bind: (proved) =>
-      hasGroup(proved, 'folderFiles') ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined,
+    bind: (proved) => (hasHippoDb(proved) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined),
     onAll: (ctx) => on(ctx, ctx.store),
   };
 }
 
 const TOOL_ROWS: ReadonlyMap<string, ToolRow> = new Map<string, ToolRow>([
   ['hippo_recall', anyStore(runRecallTool)],
-  ['hippo_assemble', needing(['dagReads'], runAssembleTool)],
-  ['hippo_drill', needing(['dagReads'], runDrillTool)],
-  ['hippo_predict_baserate', needing(['objects'], runPredictBaserateTool)],
+  ['hippo_assemble', onHippoDb(runAssembleTool)],
+  ['hippo_drill', onHippoDb(runDrillTool)],
+  ['hippo_predict_baserate', onHippoDb(runPredictBaserateTool)],
   ['hippo_remember', anyStore(runRememberTool)],
   ['hippo_outcome', anyStore(runOutcomeTool)],
   ['hippo_context', anyStore(runContextTool)],
-  ['hippo_status', needing(['reports'], runStatusTool)],
-  ['hippo_learn', onHippoDb(['lessonWrites'], runLearnTool)],
-  ['hippo_conflicts', needing(['conflicts'], runConflictsTool)],
-  ['hippo_resolve', needing(['conflicts'], runResolveTool)],
+  ['hippo_status', onHippoDb(runStatusTool)],
+  ['hippo_learn', onHippoDb(runLearnTool)],
+  ['hippo_conflicts', onHippoDb(runConflictsTool)],
+  ['hippo_resolve', onHippoDb(runResolveTool)],
   ['hippo_share', localTool(runShareTool)],
   ['hippo_peers', localTool(runPeersTool)],
 ]);
 
 /** The tools a host serves on `proved`, each need checked here once and each call run on
  * `ctx.storeFor(proved)`; a tool left out is hidden from a list and answers not ported. */
-export function bindMcpTools(proved: HippoStore): McpTools<RequiredStore> {
-  const tools = new Map<string, StoreTool<RequiredStore>>();
+export function bindMcpTools(proved: HippoStore): McpTools<HippoStore> {
+  const tools = new Map<string, StoreTool<HippoStore>>();
   for (const [name, row] of TOOL_ROWS) {
     const bound = row.bind(proved);
     if (bound !== undefined) tools.set(name, bound);
@@ -158,7 +126,7 @@ export function bindMcpTools(proved: HippoStore): McpTools<RequiredStore> {
   return tools;
 }
 
-/** Every tool, each run on the call's own store, whose type proves every group. */
+/** Every tool, each run on the call's own store, whose type carries the local tier. */
 export function allMcpTools(): McpTools<HippoDbStore> {
   return new Map([...TOOL_ROWS].map(([name, row]) => [name, row.onAll]));
 }
@@ -171,7 +139,7 @@ function toolCall(ctx: McpCaller): Omit<ToolCall, 'args'> {
 }
 
 /** The tool bound to `ctx`'s host, or undefined when its store does not serve it. */
-function toolRun<S extends RequiredStore>(name: string, ctx: McpContext<S>): ToolRun | undefined {
+function toolRun<S extends HippoStore>(name: string, ctx: McpContext<S>): ToolRun | undefined {
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table
   // drifted apart.
   if (!TOOL_ROWS.has(name)) {
@@ -211,7 +179,7 @@ async function runTool(
   return text;
 }
 
-async function callTool<S extends RequiredStore>(
+async function callTool<S extends HippoStore>(
   id: McpRequest['id'],
   params: McpRequest['params'],
   ctx: McpContext<S>,
@@ -250,7 +218,7 @@ async function callTool<S extends RequiredStore>(
  * JSON-RPC message through it. Returns null for notifications. A tool's errors are the caller's
  * problem: wrap with try/catch in the transport. Only `tools/call` needs the context, so stdio
  * builds one for that method alone. */
-export async function handleMcpRequest<S extends RequiredStore>(
+export async function handleMcpRequest<S extends HippoStore>(
   req: McpRequest,
   ctx: McpContext<S> | undefined,
 ): Promise<McpResponse | null> {

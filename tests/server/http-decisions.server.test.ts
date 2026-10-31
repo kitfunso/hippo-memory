@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { Decision } from '../../src/domain/objects/decisions.js';
@@ -28,7 +28,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
+  handle = await serve({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {
@@ -48,7 +48,7 @@ async function createDecision(
   });
 }
 
-describe('HTTP /v1/decisions (decision first-class object)', () => {
+describe.skipIf(needsHippoDb('tier'))('HTTP /v1/decisions (decision first-class object)', () => {
   it('GET /v1/decisions lists and filters by status', async () => {
     await createDecision('active one');
     const toClose = (await jsonAs<{ decision: Decision }>(await createDecision('to close'))).decision;

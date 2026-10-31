@@ -2,9 +2,9 @@
 
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
-import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
+import { conflictListOpen, conflictPages, conflictResolve } from '../../api/hippo-db/conflicts.js';
 import { memoryGetTouchable } from '../../api/memories/memories.js';
-import { mcpApiContext, type GroupToolCall, type LocalToolCall } from './protocol.js';
+import { mcpApiContext, type HippoDbToolCall, type LocalToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
 import { tenantStatus } from '../../api/status.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -16,10 +16,7 @@ const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
-export async function runPredictBaserateTool({
-  args,
-  api,
-}: GroupToolCall<'objects'>): Promise<string> {
+export async function runPredictBaserateTool({ args, api }: HippoDbToolCall): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no
   // surface can skip it.
   const classTag = stringArg(args, 'class_tag', MAX_ID_LEN).trim();
@@ -55,7 +52,7 @@ export async function runPredictBaserateTool({
   return lines.join('\n');
 }
 
-export async function runStatusTool({ config, api }: GroupToolCall<'reports'>): Promise<string> {
+export async function runStatusTool({ config, api }: HippoDbToolCall): Promise<string> {
   const status = await tenantStatus(api, api.infra.clock(), AT_RISK_BELOW);
   const avgStrength = status.total > 0 ? status.avgStrength.toFixed(2) : '0';
   return [
@@ -67,7 +64,7 @@ export async function runStatusTool({ config, api }: GroupToolCall<'reports'>): 
   ].join('\n');
 }
 
-export async function runConflictsTool({ ctx, api }: GroupToolCall<'conflicts'>): Promise<string> {
+export async function runConflictsTool({ ctx, api }: HippoDbToolCall): Promise<string> {
   const lines: string[] = [];
   for await (const page of conflictPages((p) =>
     conflictListOpen(api, { ...p, project: ctx.project }),
@@ -81,7 +78,7 @@ export async function runConflictsTool({ ctx, api }: GroupToolCall<'conflicts'>)
   return lines.length === 0 ? 'No open conflicts.' : lines.join('\n');
 }
 
-export async function runResolveTool({ args, api }: GroupToolCall<'conflicts'>): Promise<string> {
+export async function runResolveTool({ args, api }: HippoDbToolCall): Promise<string> {
   const conflictId = numberArg(args, 'conflict_id');
   const keepId = stringArg(args, 'keep', MAX_ID_LEN);
   const forget = boolArg(args, 'forget');

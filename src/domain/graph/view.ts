@@ -4,8 +4,8 @@
  * `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import type { ScopeActor } from '../../base/scope/recall-scope.js';
-import type { GraphReads, GraphRows } from '../../base/ports/store.js';
-import type { EntityType, RelationType } from '../../base/ports/store/graph.js';
+import type { GraphReads, GraphRows } from '../../base/records/graph.js';
+import type { EntityType, RelationType } from '../../base/records/graph.js';
 
 const DEFAULT_LAYOUT_ITERATIONS = 300;
 

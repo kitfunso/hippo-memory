@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// CI store-port shape gate: the two port rules that follow type aliases and interfaces across files, which no lint rule
-// can do. The store's import and name rules live in .dependency-cruiser.cjs and oxlint.config.ts.
+// CI store-port shape gate: the rules that follow types across files, which no lint rule can do. The core port is read
+// from its interfaces; hippo.db's local tier, which has none, from the types its repositories' bodies infer. The
+// store's import and name rules live in .dependency-cruiser.cjs and oxlint.config.ts.
 
 import { existsSync, readdirSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { looseTenants } from '../lib/loose-tenants.mjs';
 import { portFunctionParams } from '../lib/port-type-facts.mjs';
+import { tierFunctionParams } from '../lib/tier-type-facts.mjs';
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -16,13 +18,25 @@ function tsFiles(dir, out = []) {
   return out.sort();
 }
 
+// A function cannot cross to the store worker thread, so a rule reaches the store as data.
+const AS_DATA = 'Send the rule as data the store can read; a function cannot cross to the store worker.';
 const files = ['src/store', 'src/base/ports'].flatMap((dir) => (existsSync(dir) ? tsFiles(dir) : []));
+const tier = tierFunctionParams();
 const failures = [
   {
-    // A function cannot cross to the store worker thread, so a rule reaches the store as data.
     sites: files.flatMap(portFunctionParams),
     what: 'A port method takes a parameter whose type holds a function',
-    fix: 'Send the rule as data the store can read; a function cannot cross to the store worker.',
+    fix: AS_DATA,
+  },
+  {
+    sites: tier.unread,
+    what: "The scan could not read hippo.db's local tier, so none of its methods was checked",
+    fix: 'Point TIER_DOOR in scripts/lib/tier-type-facts.mjs at the file that exports hippoDbRepos(), whose return type lists each repository and its methods.',
+  },
+  {
+    sites: tier.sites,
+    what: "A method of hippo.db's local tier takes a parameter whose type holds a function",
+    fix: AS_DATA,
   },
   {
     sites: files.flatMap(looseTenants),
@@ -35,4 +49,4 @@ for (const { sites, what, fix } of failures) {
   console.error(`${what}:\n  ${sites.join('\n  ')}\n${fix}`);
 }
 if (failures.length > 0) process.exit(1);
-console.log('Store-port shape OK: port methods take data, and every tenant parameter is required.');
+console.log('Store-port shape OK: port and local-tier methods take data, and every tenant parameter is required.');

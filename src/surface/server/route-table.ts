@@ -2,13 +2,14 @@ import type { Context } from '../../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import type { WebhookPorts } from '../connectors/ingest.js';
-import { hasGroup, type HippoStore } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import { JSON_HEADERS, sendJson, type WebhookRequest } from '../http/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
 import { INT_PARAM, matchPath, noteAccess } from './request.js';
 import { routeLookup, type RouteLookup } from './route-lookup.js';
 import { boundRoute, notPorted } from './route-binding.js';
+import { hasHippoDb } from '../../api/hippo-db-context.js';
 import {
   handleApproveQuarantine,
   handleCreateAuthKey,
@@ -81,7 +82,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'GET',
     path: '/v1/graph',
     auth: 'caller',
-    storeReady: 'graphReads',
+    hippoDb: true,
     handler: handleGetGraph,
   },
   {
@@ -94,14 +95,14 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'GET',
     pattern: '/v1/sessions/:id/assemble',
     auth: 'caller',
-    storeReady: 'dagReads',
+    hippoDb: true,
     handler: handleAssembleSession,
   },
   {
     method: 'GET',
     pattern: '/v1/recall/drill/:id',
     auth: 'caller',
-    storeReady: 'dagReads',
+    hippoDb: true,
     handler: handleDrillRecall,
   },
   {
@@ -122,7 +123,7 @@ export const V1_ROUTES: readonly Route[] = [
     auth: 'caller',
     // The copy names its source folder and goes to the operator's global store, which only a folder
     // store reaches.
-    storeReady: 'folderFiles',
+    hippoDb: true,
     handler: handlePromoteMemory,
   },
   {
@@ -153,7 +154,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/sleep',
     auth: 'host-admin-local',
-    storeReady: 'consolidation',
+    hippoDb: true,
     handler: handleRunSleep,
   },
   {
@@ -322,15 +323,15 @@ export interface BoundAddonRoute {
   readonly ported: boolean;
 }
 
-/** The add-on routes by path; a route naming no group needs hippo.db alone. */
+/** The add-on routes by path; a `hippoDb` route binds only on a store with the local tier. */
 export function bindAddonRoutes(
   routes: readonly AddonRoute[],
   store: HippoStore,
-  onHippoDb: boolean,
 ): ReadonlyMap<string, BoundAddonRoute> {
+  const tier = hasHippoDb(store);
   return new Map(
     routes.map((route) => {
-      const ported = route.storeReady === undefined ? onHippoDb : hasGroup(store, route.storeReady);
+      const ported = route.hippoDb !== true || tier;
       return [route.path, { route, ported }];
     }),
   );

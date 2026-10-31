@@ -212,7 +212,7 @@ describe('hippo github CLI', () => {
   const liveRaws = (artifactRef: string) =>
     loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
   const retryCountOf = async (id: number) =>
-    (await sqliteStore(hippoRoot).connectorEvents.deadLetters('github', 'default', { limit: 100 })).find(
+    (await sqliteStore(hippoRoot).hippoDb.connectorEvents.deadLetters('github', 'default', { limit: 100 })).find(
       (row) => row.id === id,
     )?.retryCount;
 

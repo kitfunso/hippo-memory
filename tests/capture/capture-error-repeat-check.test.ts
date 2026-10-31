@@ -65,6 +65,6 @@ describe('capture-error repeat check does not read every memory', () => {
     });
     writeEntry(root, entry);
 
-    expect(await sqliteStore(root).lessonWrites.contentsWithTag('default', 'auto-captured')).toEqual([]);
+    expect(await sqliteStore(root).hippoDb.lessonWrites.contentsWithTag('default', 'auto-captured')).toEqual([]);
   });
 });

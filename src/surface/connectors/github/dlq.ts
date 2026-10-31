@@ -12,7 +12,7 @@ import type {
   GitHubDlqBucket as DlqBucket,
   GitHubDlqItem as DlqItem,
   GitHubDlqInsert,
-} from '../../../base/ports/store/connectors.js';
+} from '../../../base/records/connectors.js';
 
 export type { DlqBucket, DlqItem };
 

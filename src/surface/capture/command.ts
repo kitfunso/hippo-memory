@@ -16,10 +16,10 @@ import {
   sessionTail,
   resolveLastSessionTranscript,
 } from './transcript.js';
-import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
-import type { StoreGroups } from '../../base/ports/store.js';
+import type { CaptureDedup, CapturedOutcome } from '../../base/records/capture.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
+import type { HippoDbStore } from '../../api/hippo-db-context.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -53,7 +53,7 @@ export interface CaptureOptions {
 export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
-  readonly store: Pick<StoreGroups, 'captures' | 'folderFiles' | 'rejections'>;
+  readonly store: Pick<HippoDbStore, 'hippoDb'>;
   /** Embeds each captured row, off the capture's path. */
   readonly embed: (entry: MemoryEntry) => void;
 }
@@ -101,7 +101,7 @@ function writeLogBanner(logFile: string): boolean {
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   if (options.global) {
-    await target.store.folderFiles.ensure();
+    await target.store.hippoDb.folderFiles.ensure();
   } else if (!isInitialized(target.root)) {
     console.error(
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
@@ -160,13 +160,13 @@ async function captureFromCli(
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are
 // hidden, so they must not stop its own copy.
 async function storedKeysInView(
-  store: Pick<StoreGroups, 'captures'>,
+  store: Pick<HippoDbStore, 'hippoDb'>,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
 ): Promise<Set<string>> {
   const { tenantId, ...filter } = captureDedup(options);
   const texts = extracted.map((item) => item.content);
-  return storedTextKeys(await store.captures.textsHolding(tenantId, texts, filter));
+  return storedTextKeys(await store.hippoDb.captures.textsHolding(tenantId, texts, filter));
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its
@@ -271,7 +271,7 @@ export interface CaptureWriteOptions {
 /** A folder's store with the config its root loaded for this capture, and where its rows'
  * vectors go. */
 export interface ConfiguredStore {
-  readonly store: Pick<StoreGroups, 'captures'>;
+  readonly store: Pick<HippoDbStore, 'hippoDb'>;
   readonly config: HippoConfig;
   readonly embed: (entry: MemoryEntry) => void;
 }
@@ -318,7 +318,7 @@ export async function captureExtractedItems(
     captureEntry(item, options, config.defaultHalfLifeDays),
   );
   const { actor, lean, dedup } = options;
-  const outcomes = await store.captures.write(plan.entries, { actor, lean, dedup });
+  const outcomes = await store.hippoDb.captures.write(plan.entries, { actor, lean, dedup });
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const counted = new Set<number>();
   for (const slot of plan.slots) {
@@ -335,14 +335,19 @@ export async function captureExtractedItems(
 }
 
 interface PreviewStore {
-  readonly store: Pick<StoreGroups, 'rejections'>;
+  readonly store: Pick<HippoDbStore, 'hippoDb'>;
   readonly config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 }
 
 /** A dry run asks the store the same rejected-value question the write's gate does, so a
  * tombstoned item previews as rejected rather than captured. */
 async function previewCapture(
-  { store: { rejections }, config }: PreviewStore,
+  {
+    store: {
+      hippoDb: { rejections },
+    },
+    config,
+  }: PreviewStore,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: ReadonlySet<string>,

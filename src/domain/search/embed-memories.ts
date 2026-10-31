@@ -4,13 +4,14 @@ import type { InfraPorts } from '../../base/ports/infra.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../base/ports/embedder.js';
 import type { EmbeddingsConfig } from '../../base/config/config.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { FailureNotices } from '../../base/util/failure-notices.js';
 import { warnEmbedFailureOnce } from './embed-failures.js';
 import { type IndexRows, type IndexEmbedTarget, indexAdapter } from './embed-index-target.js';
 import { type StoreEmbedTarget, storeAdapter } from './embed-store-target.js';
 import type { DetachedWork } from './detached-work.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { EmbeddingIndex } from '../../base/records/embedding-index.js';
 
 /** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a
  * memory that stays out of the vector index. */
@@ -33,12 +34,13 @@ export interface EmbedWith {
  * the failures its embeds already warned about. */
 export type EmbedRun = Pick<InfraPorts, 'evalSwitches' | 'clock' | 'failureNotices'>;
 
-/** The store's own index when it keeps one, else its vector groups. */
+/** The store's own index when its tier keeps one, else its vector groups. */
 export function folderEmbedTarget(
   { store, config, embedderFor }: ConfiguredFolder<EmbedStore>,
   { failureNotices }: Pick<InfraPorts, 'failureNotices'>,
 ): EmbedTarget {
-  const { embeddingIndex, vectors, vectorWrites } = store;
+  const { vectors, vectorWrites } = store;
+  const embeddingIndex = store.hippoDb?.embeddingIndex;
   const { embeddings } = config;
   if (embeddingIndex !== undefined) {
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
@@ -48,8 +50,11 @@ export function folderEmbedTarget(
   return { groups, embeddings, embedderFor, failureNotices };
 }
 
-/** A store an embed reaches: its own index when it keeps one, else its vector groups. */
-export type EmbedStore = StoreWith<never, 'embeddingIndex'>;
+/** A store an embed reaches: its own index when its tier keeps one, else its vector groups. */
+export type EmbedStore = HippoStore & {
+  // `& object` keeps the maybe-tier from being a weak type, so a tier of only other repos meets it.
+  readonly hippoDb?: { readonly embeddingIndex?: EmbeddingIndex } & object;
+};
 
 /** What embedding one memory and every memory does on a target: the folder index under its lock, or
  * a store's vector groups under the same per-index turn. */

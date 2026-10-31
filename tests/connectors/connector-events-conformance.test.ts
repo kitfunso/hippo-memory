@@ -14,7 +14,7 @@ import type {
   ConnectorEventRecord,
   ConnectorWriteOutcome,
   DeadLetterRows,
-} from '../../src/base/ports/store.js';
+} from '../../src/base/records/connectors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   outcomeOf,
@@ -27,7 +27,7 @@ import {
   type FixtureStore,
 } from '../_helpers/store-conformance.js';
 import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
-import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/base/ports/store/connectors.js';
+import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/base/records/connectors.js';
 import {
   sqliteConnectorEventsSide,
   type ConnectorEventsSide,
@@ -134,7 +134,7 @@ function seed(dir: string): Seeded {
 
 /** One workspace, one installation, and a repository two tenants registered, acme first. */
 async function registerRoutes(root: string): Promise<void> {
-  await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
+  await sqliteStore(root).hippoDb.connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
@@ -159,7 +159,7 @@ async function copyOfFixture(prepare: (root: string) => void | Promise<void>): P
 }
 
 async function runSide(side: ConnectorEventsSide<FixtureStore>, calls: readonly Call[]): Promise<Side> {
-  const group = side.store.connectorEvents;
+  const group = side.store.hippoDb.connectorEvents;
   const outcomes: Outcome<Value>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => call(group, side.store)));
   await side.store.close();
@@ -217,7 +217,7 @@ const park =
 const writeRaw =
   (entry: MemoryEntry): Call =>
   (_g, store) =>
-    store.connectorWrites.writeConnectorEntry({ entry, actor: ACTOR });
+    store.hippoDb.connectorWrites.writeConnectorEntry({ entry, actor: ACTOR });
 const readBack =
   (tenantId: string, ...ids: string[]): Call =>
   async (_g, store) =>

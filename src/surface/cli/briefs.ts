@@ -2,24 +2,20 @@
 // repo's receipts.
 
 import { briefDigest, briefRefresh } from '../../api/objects/object-kinds.js';
-import type { ContextWith } from '../../api/types.js';
 import type { ProjectBrief } from '../../base/records/object-types.js';
 import { errorMessage } from '../../base/util/log.js';
 import { printError } from './output.js';
 import { boolFlag, type CliFlags } from './flag-values.js';
 import { fail } from './exit.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 function printBriefRow(b: ProjectBrief): void {
   console.log(`#${b.id} [${b.status}] v${b.version} repo="${b.repo}" memory=${b.memoryId ?? '-'}`);
   if (b.changeSummary) console.log(`    change: ${b.changeSummary}`);
 }
 
-async function refreshBrief(
-  ctx: ContextWith<'objects'>,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function refreshBrief(ctx: HippoDbContext, args: string[], flags: CliFlags): Promise<void> {
   const repoRaw = args[1];
   if (!repoRaw) {
     fail('Usage: hippo brief refresh "<repo>" [--dry-run]');

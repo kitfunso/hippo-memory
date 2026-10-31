@@ -42,8 +42,8 @@ import type {
   ContextCandidateFilter,
   RecentOrigins,
 } from '../../../base/ports/store/context-reads.js';
-import type { SourceTally } from '../../../base/ports/store/sharing.js';
-import type { StatusCounts, StrengthTallies } from '../../../base/ports/store/reports.js';
+import type { SourceTally } from '../../../base/records/sharing.js';
+import type { StatusCounts, StrengthTallies } from '../../../base/records/reports.js';
 import { SCHEMA_FIT_WINDOW_ROWS } from '../../rules/windows.js';
 
 // The status tally: each row scored by calculateStrength and confidenceFacets, summed in the order

@@ -9,7 +9,7 @@ import type {
   IndexStep,
   IndexStepAnswers,
   IndexStepKind,
-} from '../../../base/ports/store/vectors.js';
+} from '../../../base/records/embedding-index.js';
 import {
   type VectorRebuild,
   beginVectorRebuild,

@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { ProjectBrief } from '../../src/domain/objects/project-briefs.js';
@@ -33,7 +33,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
+  handle = await serve({ hippoRoot: home, port: 0 });
 });
 afterEach(async () => {
   await handle.stop();
@@ -48,7 +48,7 @@ async function createBrief(body: { repo: string; summary: string }, key: CreateA
   });
 }
 
-describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
+describe.skipIf(needsHippoDb('tier'))('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
   it('GET /v1/project-briefs lists + filters by status + repo', async () => {
     const v1 = (await jsonAs<BriefResponse>(await createBrief({ repo: 'r', summary: 'a' }))).brief;
     await createBrief({ repo: 'other', summary: 'x' });

@@ -41,7 +41,7 @@ function store(config?: MakeRootOptions['config']): FullContext {
 }
 
 const counted = async (ctx: FullContext): Promise<number> =>
-  Number((await sqliteStore(ctx.hippoRoot).reports.stats()).total_remembered);
+  Number((await sqliteStore(ctx.hippoRoot).hippoDb.reports.stats()).total_remembered);
 const rows = (ctx: FullContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
 function seed(ctx: FullContext, content: string, tags: string[]): void {

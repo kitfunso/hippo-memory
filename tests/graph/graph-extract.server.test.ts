@@ -14,7 +14,7 @@ import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { DECISION } from '../../src/domain/objects/decisions.js';
-import type { Entity } from '../../src/base/ports/store/graph.js';
+import type { Entity } from '../../src/base/records/graph.js';
 import { extractGraph, extractGraphChunked } from '../../src/domain/graph/extract.js';
 import {
   openHippoDb,
@@ -448,7 +448,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     const newestFirst = ['D2 adopts RetryPolicy', 'D1 adopts RetryPolicy'];
     expect(fromNames(loadRelations(home, 'default', { limit: 10 }))).toEqual(newestFirst);
     expect(fromNames(await loadNeighborRelations(home, 'default', [pol.id]))).toEqual(newestFirst);
-    const focus = await sqliteStore(home).graphReads.graphRows('default', { entity: pol.name, limit: 10 });
+    const focus = await sqliteStore(home).hippoDb.graphReads.graphRows('default', { entity: pol.name, limit: 10 });
     expect(new Set(focus.entities.map((e) => e.id))).toEqual(new Set([d1.id, d2.id, pol.id]));
     expect(fromNames(focus.relations)).toEqual(newestFirst);
   });

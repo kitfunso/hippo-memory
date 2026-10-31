@@ -8,7 +8,7 @@ import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../src/base/e
 import { ScopeForbiddenError } from '../../src/base/scope/recall-scope.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { decodeError, encodeError } from '../../src/store/sqlite/runtime/error-codec.js';
-import { StoreNotPortedError } from '../../src/base/util/store-blocked.js';
+import { NoLocalTierError } from '../../src/base/util/store-blocked.js';
 import { arr, both, forAll, int, map, pick, str, type Gen } from '../_helpers/property.js';
 
 // One way to throw each class the codec lists; HttpError twice, with and without its optional field.
@@ -38,7 +38,7 @@ const MAKERS: readonly ((text: string) => Error)[] = [
     }),
   (m) => new ScopeForbiddenError(m),
   (m) => new SqliteBlockedError('other', m),
-  (m) => new StoreNotPortedError('other', m),
+  (m) => new NoLocalTierError(m),
   (m) => new OtherStoreFolderError('other', m),
   (m) => new StoreBusyError(m),
   (m) => new IncompatibleBinaryError(m),

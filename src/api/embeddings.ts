@@ -12,13 +12,15 @@ import {
 } from '../domain/search/embed-memories.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
 import type { DetachedWork } from '../domain/search/detached-work.js';
-import type { RequiredStore, VectorCoverage } from '../base/ports/store.js';
-import { requireHostAdmin, type Context, type ContextWith } from './types.js';
+import type { HippoStore } from '../base/ports/store.js';
+import type { VectorCoverage } from '../base/records/embedding-index.js';
+import { requireHostAdmin, type Context } from './types.js';
+import type { HippoDbContext } from './hippo-db-context.js';
 
 /** Embeds each row a capture writes into `folder`'s index without holding the capture up; a
  * failure is a warning. A capture has no Context: its root hands `run` and the embeds' keeper. */
 export function detachedEmbedder(
-  folder: ConfiguredFolder<RequiredStore>,
+  folder: ConfiguredFolder<HippoStore>,
   run: Pick<InfraPorts, 'failureNotices'>,
   detached: DetachedWork,
 ): (entry: MemoryEntry) => void {
@@ -40,12 +42,12 @@ export async function memoryEmbedMissing(
 }
 
 /** How many vectors the store holds, live memory or not. */
-export async function storedVectorCount(ctx: ContextWith<'embeddingIndex'>): Promise<number> {
+export async function storedVectorCount(ctx: HippoDbContext): Promise<number> {
   return (await embedCoverage(ctx)).vectors;
 }
 
 /** Memories against vectors, counted in the store, for the embed status and backfill lines. */
-export async function embedCoverage(ctx: ContextWith<'embeddingIndex'>): Promise<VectorCoverage> {
+export async function embedCoverage(ctx: HippoDbContext): Promise<VectorCoverage> {
   requireHostAdmin(ctx, 'Reading the vector index');
-  return indexStep(ctx.store.embeddingIndex, { kind: 'coverage' });
+  return indexStep(ctx.store.hippoDb.embeddingIndex, { kind: 'coverage' });
 }

@@ -27,17 +27,17 @@ import {
   idPageOf,
   type EntryPageRequest,
 } from '../runtime/keyset.js';
-import type { EntryIdPage } from '../../../base/ports/store/consolidation.js';
-import type { IdPage, IdPageRequest } from '../../../base/ports/store/vectors.js';
+import type { EntryIdPage } from '../../../base/records/consolidation.js';
+import type { IdPage, IdPageRequest } from '../../../base/records/embedding-index.js';
 import type {
   SessionRawCount,
   SessionRawKey,
   SessionRawKeys,
   SessionRawQuery,
   SessionRawRows,
-} from '../../../base/ports/store/context-reads.js';
-import type { OriginTally } from '../../../base/ports/store/project-tags.js';
-import type { EntrySignals, EntryTextKeyPage } from '../../../base/ports/store/sharing.js';
+} from '../../../base/records/dag-reads.js';
+import type { OriginTally } from '../../../base/records/project-tags.js';
+import type { EntrySignals, EntryTextKeyPage } from '../../../base/records/sharing.js';
 import type { EntryCursor, EntryPage } from '../../../base/ports/store/types.js';
 
 /** Read a memory entry by ID; a row in another tenant reads as null. */

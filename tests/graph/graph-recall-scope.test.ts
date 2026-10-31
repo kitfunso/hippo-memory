@@ -25,6 +25,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { walkable } from '../_helpers/graph-walk.js';
 
 const { writeEntry, sqliteStore } = sessionPerTest();
 
@@ -90,7 +91,7 @@ describe('graph-recall scope parity', () => {
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: sqliteStore(home),
+      store: walkable(sqliteStore(home)),
       tenantId: T,
       budget: 4000,
     });
@@ -108,7 +109,7 @@ describe('graph-recall scope parity', () => {
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: sqliteStore(home),
+      store: walkable(sqliteStore(home)),
       tenantId: T,
       budget: 4000,
       recallScope: { requested: 'slack:private:dm1', additive: true },
@@ -140,7 +141,7 @@ describe('graph-recall scope parity', () => {
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: sqliteStore(home),
+      store: walkable(sqliteStore(home)),
       tenantId: T,
       budget: 4000,
       recallScope: { requested: 'slack:private:dm1' }, // additive absent -> exact-narrowing (api semantics)
@@ -159,7 +160,7 @@ describe('graph-recall scope parity', () => {
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: sqliteStore(home),
+      store: walkable(sqliteStore(home)),
       tenantId: T,
       budget: 4000,
     });
@@ -178,8 +179,8 @@ describe('graph-recall scope parity', () => {
 
       const out = await graphExpandRecall([sr(seed, 1.0)], {
         hops: 1,
-        store: sqliteStore(home),
-        global: sqliteStore(glob),
+        store: walkable(sqliteStore(home)),
+        global: walkable(sqliteStore(glob)),
         tenantId: T,
         budget: 4000,
       });
@@ -211,7 +212,7 @@ describe('graph-recall scope parity', () => {
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: sqliteStore(home),
+      store: walkable(sqliteStore(home)),
       tenantId: T,
       budget: 4000,
       recallScope: { requested: 'slack:private:dm1', additive: true },

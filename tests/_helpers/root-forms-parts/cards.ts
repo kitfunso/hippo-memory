@@ -16,16 +16,16 @@ export async function createCard(
     dependsOn?: string[];
   },
 ): Promise<Card> {
-  return await sqliteStore(hippoRoot).cards.create(tenantId, input);
+  return await sqliteStore(hippoRoot).hippoDb.cards.create(tenantId, input);
 }
 
 export async function loadCard(hippoRoot: string, tenantId: string, id: string): Promise<Card | null> {
-  return (await sqliteStore(hippoRoot).cards.detail(tenantId, id))?.card ?? null;
+  return (await sqliteStore(hippoRoot).hippoDb.cards.detail(tenantId, id))?.card ?? null;
 }
 
 export async function loadCardRuns(hippoRoot: string, tenantId: string, id: string): Promise<CardRun[]> {
   assertTenantId('loadCardRuns', tenantId);
-  return (await sqliteStore(hippoRoot).cards.detail(tenantId, id))?.runs ?? [];
+  return (await sqliteStore(hippoRoot).hippoDb.cards.detail(tenantId, id))?.runs ?? [];
 }
 
 export async function claimCard(
@@ -35,7 +35,7 @@ export async function claimCard(
   runtime: string,
   sessionId?: string,
 ): Promise<(Card & { runId: number }) | null> {
-  return await sqliteStore(hippoRoot).cards.claim(tenantId, id, runtime, sessionId);
+  return await sqliteStore(hippoRoot).hippoDb.cards.claim(tenantId, id, runtime, sessionId);
 }
 
 export async function heartbeatCard(
@@ -44,7 +44,7 @@ export async function heartbeatCard(
   id: string,
   runId: number,
 ): Promise<Card | null> {
-  return await sqliteStore(hippoRoot).cards.heartbeat(tenantId, id, runId);
+  return await sqliteStore(hippoRoot).hippoDb.cards.heartbeat(tenantId, id, runId);
 }
 
 export async function blockCard(
@@ -54,7 +54,7 @@ export async function blockCard(
   reason: string,
   runId?: number,
 ): Promise<Card | null> {
-  return await sqliteStore(hippoRoot).cards.block(tenantId, id, reason, runId);
+  return await sqliteStore(hippoRoot).hippoDb.cards.block(tenantId, id, reason, runId);
 }
 
 export async function reviewCard(
@@ -63,7 +63,7 @@ export async function reviewCard(
   id: string,
   runId?: number,
 ): Promise<Card | null> {
-  return await sqliteStore(hippoRoot).cards.review(tenantId, id, runId);
+  return await sqliteStore(hippoRoot).hippoDb.cards.review(tenantId, id, runId);
 }
 
 export async function completeCard(
@@ -73,11 +73,11 @@ export async function completeCard(
   outcome: HandoffOutcome,
   runId?: number,
 ): Promise<{ card: Card; promotedChildren: string[] } | null> {
-  return await sqliteStore(hippoRoot).cards.complete(tenantId, id, outcome, runId);
+  return await sqliteStore(hippoRoot).hippoDb.cards.complete(tenantId, id, outcome, runId);
 }
 
 export async function reclaimExpiredCards(hippoRoot: string, tenantId: string): Promise<string[]> {
-  return await sqliteStore(hippoRoot).cards.reclaimExpired(tenantId);
+  return await sqliteStore(hippoRoot).hippoDb.cards.reclaimExpired(tenantId);
 }
 
 export async function addCardComment(
@@ -87,5 +87,5 @@ export async function addCardComment(
   author: string,
   body: string,
 ): Promise<CardComment> {
-  return await sqliteStore(hippoRoot).cards.comment(tenantId, cardId, author, body);
+  return await sqliteStore(hippoRoot).hippoDb.cards.comment(tenantId, cardId, author, body);
 }
