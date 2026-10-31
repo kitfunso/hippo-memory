@@ -122,8 +122,8 @@ export interface ServerCounts {
 
 export type ResolvedServeOptions = ServeOptions & {
   store: HippoStore;
-  /** The store is hippo.db rather than a caller's own: its folder's config.json decides
-   * shared-ness, and an add-on route naming no group runs on it alone. */
+  /** The store is hippo.db rather than a caller's own, so its folder's config.json decides
+   * shared-ness and the server runs its sleeps. */
   onHippoDb: boolean;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
   reachOf: (shared: boolean) => StoreReach;

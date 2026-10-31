@@ -1,5 +1,5 @@
-// Each /v1 row bound to the store boot proved: a row whose store lacks what it needs is marked
-// 501 once here, so no request checks a group or the local tier.
+// Each /v1 row bound to the store boot proved: a local row on a store without hippo.db's local tier
+// is marked 501 once here, so no request probes the store for the tier.
 import type { HippoStore } from '../../base/ports/store.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import { hasHippoDb } from '../../api/hippo-db-context.js';
@@ -21,8 +21,8 @@ export async function notPorted(): Promise<void> {
   throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
-/** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no
- * request checks a group. */
+/** A local row on a store without the tier is marked at boot, so its gate answers 501 before the
+ * role check and no request probes the store. */
 export function boundRoute(route: Route, store: HippoStore): BoundRoute {
   if (route.auth === 'webhook-signature') return boundWebhook(route, store);
   if (route.hippoDb === true) return boundHippoDbRoute(route, store);

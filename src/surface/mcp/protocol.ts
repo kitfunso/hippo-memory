@@ -123,7 +123,8 @@ export type ToolRun = (args: Record<string, JsonValue>) => string | Promise<stri
  * global store for it. */
 export type StoreTool<S extends HippoStore> = (ctx: McpCaller<S>) => ToolRun | undefined;
 
-/** The tools a host serves, by name; a tool its store lacks a group for is absent. */
+/** The tools a host serves, by name; a local tool is absent on a store without hippo.db's local
+ * tier, so a client never lists a tool that could only refuse. */
 export type McpTools<S extends HippoStore> = ReadonlyMap<string, StoreTool<S>>;
 
 /** A tool call's caller and the tools its host bound once, at boot. */
