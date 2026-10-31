@@ -7,7 +7,6 @@ import { type VerbSpec, verb } from '../verb-row.js';
 
 export const SESSION_VERBS = {
   snapshot: verb(() => import('../continuity.js'), 'handleSnapshot', {
-    needs: ['sessions'],
     flags: {
       switches: ['json'],
       values: ['id', 'next-step', 'session', 'source', 'status', 'summary', 'task'],
@@ -28,7 +27,6 @@ export const SESSION_VERBS = {
     ],
   }),
   session: verb(() => import('../session.js'), 'handleSession', {
-    needs: ['sessions'],
     flags: {
       switches: ['json'],
       values: ['content', 'id', 'outcome', 'session', 'source', 'summary', 'task', 'type'],
@@ -56,7 +54,6 @@ export const SESSION_VERBS = {
     ],
   }),
   handoff: verb(() => import('../handoff.js'), 'handleHandoff', {
-    needs: ['sessions'],
     flags: {
       switches: ['json'],
       values: [
@@ -93,7 +90,6 @@ export const SESSION_VERBS = {
     ],
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
-    needs: ['cards'],
     checksOwnFlags: true,
     // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not
     // read.
@@ -148,7 +144,6 @@ export const SESSION_VERBS = {
     ],
   }),
   current: verb(() => import('../continuity.js'), 'handleCurrent', {
-    needs: ['sessions'],
     flags: { switches: ['json'] },
     usage: [
       `
@@ -203,7 +198,6 @@ export const SESSION_VERBS = {
     ],
   }),
   learn: verb(() => import('../learn.js'), 'handleLearn', {
-    needs: ['lessonWrites'],
     scoped: true,
     flags: { switches: ['git'], values: ['repos'], numbers: ['days'] },
     usage: [
@@ -360,7 +354,6 @@ export const SESSION_VERBS = {
     () => import('../hooks/session-end-worker.js'),
     'handleSessionEndWorker',
     {
-      needs: ['sessions', 'reports'],
       dryRun: false,
       flags: {
         switches: ['dry-run', 'no-learn', 'no-share', 'turn'],
@@ -380,7 +373,6 @@ export const SESSION_VERBS = {
     ],
   }),
   'compact-resume': verb(() => import('../hooks/compact-resume.js'), 'handleCompactResume', {
-    needs: ['sessions'],
     flags: {},
     usage: [
       `
