@@ -10,7 +10,8 @@ const REPO = join(import.meta.dirname, '..', '..');
 const TIER_DOOR = /\/store\/sqlite\/hippo-db\.(d\.)?ts$/;
 const posix = (p: string): string => p.split(sep).join('/');
 
-/** `entry: name` for each symbol an entry exports whose type reaches a type the tier door declares. */
+/** `entry: name` for each symbol an entry exports whose type reaches a type the tier door declares, and `entry: no
+ * declarations` for an entry with no file or no exports, so a missing build never passes unchecked. */
 function tierReaches(root: string, entries: readonly string[]): string[] {
   const program = ts.createProgram(
     entries.map((e) => resolve(root, e)),
@@ -50,7 +51,9 @@ function tierReaches(root: string, entries: readonly string[]): string[] {
   for (const entry of entries) {
     const file = program.getSourceFile(resolve(root, entry));
     const moduleSymbol = file && checker.getSymbolAtLocation(file);
-    for (const exported of moduleSymbol ? checker.getExportsOfModule(moduleSymbol) : []) {
+    const exports = moduleSymbol ? checker.getExportsOfModule(moduleSymbol) : [];
+    if (exports.length === 0) hits.push(`${entry}: no declarations`);
+    for (const exported of exports) {
       const symbol = exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
       const types = [checker.getTypeOfSymbol(symbol)];
       if (symbol.flags & (ts.SymbolFlags.Type | ts.SymbolFlags.Class)) {
@@ -80,7 +83,7 @@ describe('published symbols and the local tier', () => {
     expect(tierReaches(REPO, entries)).toEqual([]);
   });
 
-  it('fails a symbol that returns, narrows to or aliases the tier type, and passes data and recursive types', () => {
+  it('fails a symbol that returns, narrows to or aliases the tier type, an entry with no exports or no file, and passes data and recursive types', () => {
     const root = mkdtempSync(join(tmpdir(), 'hippo-published-tier-'));
     const files = {
       'store/sqlite/hippo-db.d.ts':
@@ -97,16 +100,19 @@ describe('published symbols and the local tier', () => {
         // As tsc emits it: without `export {}` a .d.ts exports every top-level declaration, Wrapped too.
         'export {};',
       ].join('\n'),
+      'empty.d.ts': 'export {};\n',
     };
     try {
       for (const [path, text] of Object.entries(files)) {
         mkdirSync(dirname(join(root, path)), { recursive: true });
         writeFileSync(join(root, path), text);
       }
-      expect(tierReaches(root, ['entry.d.ts'])).toEqual([
+      expect(tierReaches(root, ['entry.d.ts', 'empty.d.ts', 'missing.d.ts'])).toEqual([
+        'empty.d.ts: no declarations',
         'entry.d.ts: Leaky',
         'entry.d.ts: isTier',
         'entry.d.ts: open',
+        'missing.d.ts: no declarations',
       ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
