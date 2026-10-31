@@ -49,7 +49,7 @@ const SANCTIONED_RELS = new Set(['store/graph-writes.ts', 'store/graph-queue.ts'
 const WRITER_NAMES = 'src/store/graph-writes.ts and src/store/graph-queue.ts';
 
 /**
- * Blank out comments (block `/* *​/` and line `//`) by replacing their characters with
+ * Blank out comments (block comments and line `//`) by replacing their characters with
  * spaces, PRESERVING newlines + byte offsets, so (a) a comment that merely mentions
  * the SQL pattern is not a false positive, and (b) match offsets still map to the
  * original file's line numbers. Naive re: a `//` inside a string literal is also
