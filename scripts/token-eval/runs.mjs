@@ -101,7 +101,7 @@ export async function openContext(opts) {
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 8 * 96, log: opts.log ?? console.log,
     lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
     ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'), canaries: opts.canaries ?? [], foreignDirs: [], leakedRuns: new Map(),
-    operatorEnv: { ...process.env }, hippoBuild: hippoBuild(),
+    operatorEnv: { ...process.env }, hippoBuild: hippoBuild(), tokenSchedule: opts.tokenSchedule ?? null, tokenVar: opts.tokenVar ?? null, token: null, readToken: opts.readToken ?? null,
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
   const warmDir = path.join(outDir, 'warmup');

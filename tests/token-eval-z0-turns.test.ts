@@ -78,7 +78,7 @@ interface TaskDef {
   id: string; kind: string; baseRef: string; fixRef: string; prompt: string; testFiles: string[]; test: string;
   familyId?: string; lessonId?: string; setup?: string;
 }
-interface RunExtra { limitWaitMs?: number; limitMaxWaits?: number; sessionTimeoutMs?: number; pins?: Record<string, string>; log?: (m: string) => void }
+interface RunExtra { limitWaitMs?: number; limitMaxWaits?: number; sessionTimeoutMs?: number; pins?: Record<string, string>; log?: (m: string) => void; tokenSchedule?: string; tokenVar?: string; readToken?: (name: string) => string | null }
 /** What the toy lesson checker logs per call; the probe fields appear only with its `probe` arg. */
 interface CheckLine {
   lesson: string; pre: string; post: string; preRef: string | null; commands: string[]; resume: string[] | null; has?: boolean;
@@ -654,6 +654,29 @@ describe('usage limits around resumes', () => {
     expect(checks.slice(2).map((c) => c.has)).toEqual(Array(checks.length - 2).fill(false));
     const refs = execFileSync('git', ['for-each-ref', '--format=%(refname)', 'refs/z0'], { cwd: workDir(out, 'A2'), encoding: 'utf8' });
     expect(refs.trim()).toBe('');
+  }, 300_000);
+
+  it('after a plan limit the run moves to the newest due token of --token-schedule, and later sessions keep it (Amendment 8)', async () => {
+    const { out } = isolate('token-move');
+    const r = makeRepo();
+    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    const saved = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'fake-tok-start';
+    const schedule = join(out, '..', 'token-schedule.txt');
+    writeFileSync(schedule, '1 Z0_FAKE_START\n2 Z0_FAKE_NEXT\n99999999999 Z0_FAKE_LATER\n');
+    const said: string[] = [];
+    try {
+      await run(spec(r, [], [task(r, 't1', 'LIMIT look around'), plain(r, 'n1')]), ['A0'], out, {
+        limitWaitMs: 0, log: (m: string) => said.push(m), tokenSchedule: schedule, tokenVar: 'Z0_FAKE_START',
+        readToken: (name: string) => (name === 'Z0_FAKE_NEXT' ? 'fake-tok-next' : null),
+      });
+    } finally {
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = saved;
+    }
+    expect(find(readRecords(out), 'A0', 't1')).toMatchObject({ invalid: null, limitRetries: 1 });
+    const used = (id: string) => JSON.parse(readFileSync(join(out, 'raw', 'seqF', 'A0', 'seed1', `${id}.json`), 'utf8')).fakeToken;
+    expect([used('t1'), used('n1')]).toEqual(['fake-tok-next', 'fake-tok-next']);
+    expect(said).toContain('token moved from Z0_FAKE_START to Z0_FAKE_NEXT after a plan limit');
   }, 300_000);
 });
 

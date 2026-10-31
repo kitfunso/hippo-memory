@@ -318,6 +318,8 @@ console.log(JSON.stringify({
   envKeys: Object.keys(process.env).sort(),
   env: { ...Object.fromEntries(PLAIN.map((k) => [k, process.env[k] ?? null])), PATH: process.env[pathKey] },
   hasToken: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN),
+  // Only a test's own fake token is echoed, so a real one never lands in a fixture's output.
+  fakeToken: (process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '').startsWith('fake-tok-') ? process.env.CLAUDE_CODE_OAUTH_TOKEN : null,
   hippoProbe: { status: probe.status, stdout: probe.stdout, stderr: probe.stderr }, hippoDir,
   usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 },
   modelUsage: { 'fake-model': { inputTokens: 100, outputTokens: 50, cacheReadInputTokens: 10000, cacheCreationInputTokens: 2000 + extra, costUSD: 0.01 } },

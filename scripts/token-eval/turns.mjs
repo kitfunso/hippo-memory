@@ -9,6 +9,38 @@ import { isUsageLimit, sessionFiles, findTranscript, listTranscripts } from './r
 import { sleep } from './runs.mjs';
 import { agentGit } from './checks.mjs';
 import { instructionSnapshot, restoreInstructions } from './workspace.mjs';
+import { TOKEN_KEY } from './arms.mjs';
+import { execFileSync } from 'node:child_process';
+
+/** A Windows user env var's value from the registry, so a token set with setx after the run started is seen; null when unset. */
+export function userEnvVar(name) {
+  try {
+    const out = execFileSync('reg', ['query', 'HKCU\\Environment', '/v', name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+    const m = out.match(/REG_(?:EXPAND_)?SZ\s+(\S+)\s*$/m);
+    return m ? m[1] : null;
+  } catch (err) {
+    // reg exits 1 when the value does not exist; the caller logs the var name as unset. Any other failure stands.
+    if (err.status === 1) return null;
+    throw err;
+  }
+}
+
+/** After a plan limit, the newest due line of --token-schedule (`<epoch seconds> <user env var>`) names the token later attempts use (Amendment 8). */
+export function moveToken(ctx, now = Date.now() / 1000, read = ctx.readToken ?? userEnvVar) {
+  if (!ctx.tokenSchedule) return;
+  const due = fs.readFileSync(ctx.tokenSchedule, 'utf8').split(/\r?\n/).map((l) => l.trim().split(/\s+/))
+    .filter((f) => f.length === 2 && /^\d+$/.test(f[0]) && Number(f[0]) <= now);
+  const name = due.at(-1)?.[1];
+  if (!name || name === ctx.tokenVar) return;
+  const value = read(name);
+  if (!value) {
+    ctx.log(`token schedule names ${name}, which is not set; keeping ${ctx.tokenVar ?? 'the start token'}`);
+    return;
+  }
+  ctx.token = value;
+  ctx.log(`token moved from ${ctx.tokenVar ?? 'the start token'} to ${name} after a plan limit`);
+  ctx.tokenVar = name;
+}
 
 function claudeArgs(ctx, run) {
   const args = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--settings', JSON.stringify(run.settingsFile), '--strict-mcp-config', '--permission-mode', ctx.permissionMode];
@@ -58,7 +90,8 @@ export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset
   for (let attempt = 1; ; attempt++) {
     const start = performance.now();
     const logFile = logKind ? requestLogFile(run, t.id, logKind, attempt) : null;
-    const cc = await withRequestLog(logFile, env, (e) => spawnTree(command(), run.dirs.work, e, ctx.sessionTimeoutMs, input));
+    const tokenEnv = ctx.token && env[TOKEN_KEY] ? { ...env, [TOKEN_KEY]: ctx.token } : env;
+    const cc = await withRequestLog(logFile, tokenEnv, (e) => spawnTree(command(), run.dirs.work, e, ctx.sessionTimeoutMs, input));
     const result = lastJson(cc.stdout);
     // A hung session can print overloaded_error before it hangs; a timeout is a graded result, never a limit wait (prereg 165).
     if (cc.timedOut || !isLimit(cc, result)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
@@ -67,6 +100,7 @@ export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset
     if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
     ctx.log(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: plan limit hit, waiting ${Math.round(ctx.limitWaitMs / 60_000)} min (attempt ${attempt})`);
     await sleep(ctx.limitWaitMs);
+    moveToken(ctx);
     const stop = reset();
     cutOffMs += performance.now() - start;
     if (stop) return { cc, result: null, limitRetries: attempt, cutOffMs, stopped: true };

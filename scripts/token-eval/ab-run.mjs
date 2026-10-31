@@ -93,7 +93,8 @@ export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm], firstSe
 }
 
 /** A run's plan: wave 1 caps each arm at its prereg count (`seeds` only lowers it); wave 2 (`waveTwo`, the seed rule's counts by arm) runs seeds 4 up to each count. */
-const planFor = (spec, arms, seeds, waveTwo) => (waveTwo ? planRuns(spec, arms, (arm) => waveTwo[arm], WAVE_2_FIRST_SEED) : planRuns(spec, arms, seedCap(seeds)));
+const planFor = (spec, arms, seeds, waveTwo, onlySeed = null) => (onlySeed ? planRuns(spec, arms, () => onlySeed, onlySeed)
+  : (waveTwo ? planRuns(spec, arms, (arm) => waveTwo[arm], WAVE_2_FIRST_SEED) : planRuns(spec, arms, seedCap(seeds))));
 
 /** The `--seed-rule` file's seed counts for `arms`, refused unless the rule ran to a result (Amendment 2 item 5); `sha256` ties the wave to that file.
  * @param {string} file
@@ -151,11 +152,11 @@ export function codexPreflight(arms, mode, { codexModel = null, codexHookTrust =
 
 /** Run the whole plan in lockstep. Returns the records written; `progress.last` names the last completed step. */
 export async function runAll(opts) {
-  const { spec, arms, seeds = null, waveTwo = null, outDir } = opts;
+  const { spec, arms, seeds = null, waveTwo = null, onlySeed = null, outDir } = opts;
   const ctx = await openContext(opts);
   let records;
   try {
-    const steps = planFor(spec, arms, seeds, waveTwo);
+    const steps = planFor(spec, arms, seeds, waveTwo, onlySeed);
     writePlan(outDir, steps);
     records = await runSteps(ctx, steps);
   } catch (err) {
@@ -275,7 +276,7 @@ async function main() {
     console.log('wave 2 has no sessions');
     return;
   }
-  const steps = args.screen ? planScreen(spec) : (args.onlySeed ? planRuns(spec, arms, () => args.onlySeed, args.onlySeed) : planFor(spec, arms, seeds, waveTwo));
+  const steps = args.screen ? planScreen(spec) : planFor(spec, arms, seeds, waveTwo, args.onlySeed);
   const records = path.join(out, args.screen ? 'screen.jsonl' : 'runs.jsonl');
   // A run appends to its records file and both modes rewrite plan.json, so an earlier run's records would end up unplanned.
   const rewrite = args.screen ? '' : ' and rewrite plan.json';
@@ -301,7 +302,7 @@ async function main() {
   if (mode === 'check') return;
   const progress = { last: 'none' };
   const opts = {
-    spec, arms, seeds, waveTwo, outDir: out, passEnv, progress, model: flag('--model', null), claudeBin: flag('--claude-bin', 'claude'),
+    spec, arms, seeds, waveTwo, onlySeed: args.onlySeed, tokenSchedule: flag('--token-schedule', null), tokenVar: flag('--token-var', null), outDir: out, passEnv, progress, model: flag('--model', null), claudeBin: flag('--claude-bin', 'claude'),
     maxBudgetUsd: flag('--max-budget-usd', null), settleMs: Number(flag('--settle-ms', '5000')), warmup: !process.argv.includes('--no-warmup'),
     permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, pins: args.pins, ...codexOpts,
   };
