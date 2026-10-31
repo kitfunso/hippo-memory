@@ -1,4 +1,4 @@
-// hippo.db's graphDelta plans the ops store/rules/graph-delta.ts diffGraph plans over every stored row of the tenant,
+// hippo.db's graphDelta plans the ops base/records/graph-delta.ts diffGraph plans over every stored row of the tenant,
 // and hands back only the rows that change.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -19,7 +19,7 @@ import {
   type StoredEntity,
   type StoredGraph,
   type StoredRelation,
-} from '../../src/store/rules/graph-delta.js';
+} from '../../src/base/records/graph-delta.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph/graph-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';

@@ -2,7 +2,7 @@
 // object costs no write and a renamed one keeps its entity id and the edges that point at it.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/graph/extract.js';
-import { entityKey } from '../../src/store/rules/graph-delta.js';
+import { entityKey } from '../../src/base/records/graph-delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/records/graph.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
