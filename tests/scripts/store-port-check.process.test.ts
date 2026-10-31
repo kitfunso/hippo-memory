@@ -74,6 +74,29 @@ describe('check-store-port.mjs', () => {
     ]);
   });
 
+  it('fails on a local-tier method parameter that holds a function, read from the types hippoDbRepos infers', () => {
+    const r = runOn({
+      'src/store/sqlite/hippo-db.ts': [
+        'export interface Row { readonly at: Date; readonly hooks: { readonly onRow: () => void } }',
+        'export function hippoDbRepos() {',
+        '  return {',
+        '    rows: {',
+        '      visit(each: (row: string) => void): void {},',
+        '      read(tenantId: string, at: Date): string { return tenantId; },',
+        '      watch(row: Row): void {},',
+        '    },',
+        '  };',
+        '}',
+      ].join('\n'),
+    });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("A method of hippo.db's local tier takes a parameter whose type holds a function");
+    expect(r.sites.sort()).toEqual([
+      'src/store/sqlite/hippo-db.ts:5 rows.visit(each)',
+      'src/store/sqlite/hippo-db.ts:7 rows.watch(row.hooks.onRow)',
+    ]);
+  });
+
   it('fails and names each store tenant a caller can leave out, as a parameter or an argument property, and passes the rest', () => {
     const r = runOn({
       'src/base/ports/store.ts': [

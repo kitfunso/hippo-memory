@@ -64,8 +64,9 @@ export type {
   RejectionSource,
 } from '../base/records/rejections.js';
 
-// The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types,
-// hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
+// The hippo-memory/store-kit subpath: the core port, row types and hippo.db's rule helpers for a second HippoStore.
+// Its one known user, hippo-enterprise's Postgres store (pgStore in src/pg/store/pg-store.ts), pins hippo-memory
+// ^1.69.0 and must port to this 3.0 core port before it can take 3.0.
 
 /** hippo.db's store, which an add-on swaps for its own HippoStore in serve(); it takes only an
  * add-on's rules. Typed as the core port: hippo.db's local tier is not part of the contract. */
@@ -163,7 +164,7 @@ export type {
   WorkingMemoryItem,
 } from '../base/records/sessions.js';
 export type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
-// The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
+// The types hippo.db's Sessions, Cards, Goals, Conflicts, Dormant and Reports repositories take and return.
 export type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
 export type { CardDetail } from '../base/records/cards.js';
 export type { CompleteGoalOptions, PushGoalOptions } from '../base/records/goals.js';

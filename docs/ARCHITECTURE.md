@@ -29,6 +29,7 @@ A core path that can use the tier but works without it reads `ctx.enrich`, a `Co
 
 Domain code never imports `src/store`. A domain function that calls the tier names the repositories it calls under `hippoDb`. Their interfaces, and the record and request shapes they pass, live in `src/base/records`; their effect table is `src/store/sqlite/hippo-db-effects.ts`.
 
+Three checks hold the line. The depcruise rule `core-port-no-sqlite` fails a core file (the port, and the remember, recall, context, auth and audit api files) that reaches `src/store/sqlite` through any module, type-only imports included, so a local function in a core folder lives in `src/api/hippo-db`. `scripts/checks/check-store-port.mjs` fails a port or tier method that takes a function, which cannot cross to a store worker; it reads the tier's method types as `hippoDbRepos` infers them. `tests/api/published-tier-types.slow.test.ts` fails a symbol a package export publishes whose type reaches a type the tier door declares.
 
 ### Where the port lives
 
