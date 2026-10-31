@@ -277,7 +277,8 @@ export interface TestedEstimate extends Estimate {
   readonly dropped: number;
   /** The null the p-value tested against; {@link verdict} reads its sides from here. */
   readonly nullValue: number;
-  /** Degrees of freedom of a t test (a fixed-repository test gives a fractional Satterthwaite value); absent on a bootstrap. */
+  /** Degrees of freedom of a t test (a fixed-repository test gives a fractional Satterthwaite value);
+   *  absent on a bootstrap. */
   readonly df?: number;
   /** Standard error of a t test; absent on a bootstrap. */
   readonly se?: number;
@@ -289,7 +290,8 @@ export interface TwoLevelOpts extends BootstrapOpts {
   readonly iterations?: number;
   /** Value the p-value tests against: 0 for differences, 1 for ratios. Default 0. */
   readonly nullValue?: number;
-  /** Keep every repository in place and resample families inside each: the stratified twin of a fixed-repository t test. Default false. */
+  /** Keep every repository in place and resample families inside each: the stratified twin of a
+   *  fixed-repository t test. Default false. */
   readonly fixedRepositories?: boolean;
 }
 

@@ -1,5 +1,6 @@
-/** Student t tests for the built-in memory eval. The repositories are fixed and the family is the unit (Amendment 2): a variance-components
- *  t over family-by-seed tables with Satterthwaite df, plus the older one-value-per-repository tests (G-1 df).
+/** Student t tests for the built-in memory eval. The repositories are fixed and the family is the unit
+ *  (Amendment 2): a variance-components t over family-by-seed tables with Satterthwaite df, plus the older
+ *  one-value-per-repository tests (G-1 df).
  *  The t distribution is written here because the package carries no statistics library. */
 
 import { notANumber, type TestedEstimate } from './eval-stats.js';
@@ -63,7 +64,9 @@ export function studentTCdf(t: number, df: number): number {
 
 /** Student t quantile: the t with P(T <= t) = p, found by bisection on the CDF. */
 export function studentTQuantile(p: number, df: number): number {
-  if (!(p > 0 && p < 1) || !(df > 0)) throw new RangeError(`studentTQuantile needs 0 < p < 1 and df > 0, got p ${p}, df ${df}`);
+  if (!(p > 0 && p < 1) || !(df > 0)) {
+    throw new RangeError(`studentTQuantile needs 0 < p < 1 and df > 0, got p ${p}, df ${df}`);
+  }
   if (p < 0.5) return -studentTQuantile(1 - p, df);
   let hi = 1;
   while (studentTCdf(hi, df) < p) hi *= 2;
@@ -144,7 +147,8 @@ interface Components {
   readonly dfE: number;
 }
 
-// `ms` is null for a repository too thin to fit: its mean enters the estimate, and the pooled components give its variance.
+// `ms` is null for a repository too thin to fit: its mean enters the estimate, and the pooled components
+// give its variance.
 interface RepoFit {
   readonly est: number;
   readonly k: number;
@@ -187,7 +191,9 @@ function tableOf(units: readonly FamilyUnit[]): Table {
   return { cells, k: families.size, s: seeds.size };
 }
 
-function levelMeans(cells: readonly Cell[], size: number, level: (c: Cell) => number, value: (c: Cell) => number): number[] {
+function levelMeans(
+  cells: readonly Cell[], size: number, level: (c: Cell) => number, value: (c: Cell) => number,
+): number[] {
   const total = Array.from({ length: size }, () => 0);
   const count = Array.from({ length: size }, () => 0);
   for (const c of cells) {
@@ -246,7 +252,9 @@ function fitRepo(repo: string, units: readonly FamilyUnit[]): RepoFit {
   const n = t.cells.length;
   const dfE = n - t.k - t.s + 1;
   const base = { k: t.k, s: t.s, n };
-  if (t.k < 2 || t.s < 2 || dfE < 1 || !isConnected(t)) return { ...base, est: sum(t.cells.map((c) => c.y)) / n, ms: null };
+  if (t.k < 2 || t.s < 2 || dfE < 1 || !isConnected(t)) {
+    return { ...base, est: sum(t.cells.map((c) => c.y)) / n, ms: null };
+  }
   const { mu, rss } = additiveFit(repo, t);
   const [dfF, dfQ] = [t.k - 1, t.s - 1];
   // Clamped: both reduced fits nest the additive one, so a negative difference is float noise.
@@ -258,8 +266,9 @@ function fitRepo(repo: string, units: readonly FamilyUnit[]): RepoFit {
 const weighted = (rs: readonly Fitted[], value: (r: Fitted) => number, df: (r: Fitted) => number): number =>
   sum(rs.map((r) => value(r) * df(r))) / sum(rs.map(df));
 
-/** Mean squares pooled over the fitted repositories of a family-by-seed fit, weighted by df, with the mean seeds per family
- *  (`sBar`) and families per seed (`kBar`) that turn them into variance components; `repos` lists every repository. */
+/** Mean squares pooled over the fitted repositories of a family-by-seed fit, weighted by df, with the mean
+ *  seeds per family (`sBar`) and families per seed (`kBar`) that turn them into variance components;
+ *  `repos` lists every repository. */
 export interface PooledComponents {
   readonly repos: readonly { readonly k: number; readonly s: number; readonly n: number }[];
   readonly F: number;
@@ -323,15 +332,17 @@ function varianceOf(repos: readonly RepoFit[], fitted: readonly Fitted[]): Varia
       cE -= seed;
     }
   }
-  const terms = [[(cF * F) / (g * g), dfF], [(cQ * Q) / (g * g), dfQ], [(cE * E) / (g * g), dfE]].filter(([x]) => x !== 0);
+  const terms = [[(cF * F) / (g * g), dfF], [(cQ * Q) / (g * g), dfQ], [(cE * E) / (g * g), dfE]]
+    .filter(([x]) => x !== 0);
   const v = sum(terms.map(([x]) => x!));
   if (v > 0) return { v, df: (v * v) / sum(terms.map(([x, d]) => (x! * x!) / d!)) };
   return { v: (cF * F) / (g * g), df: dfF };
 }
 
 /** Mean of the repository estimates with repositories held fixed: the spread is family and seed variation inside each
- *  (additive model y = mu + a_f + b_s), pooled over fitted repositories (two or more families and seeds in one connected
- *  block, one residual df); a thinner or split one adds its mean and borrows the pooled spread. Fewer than two repositories or none fitted: NaN. */
+ *  (additive model y = mu + a_f + b_s), pooled over fitted repositories (two or more families and seeds in
+ *  one connected block, one residual df); a thinner or split one adds its mean and borrows the pooled spread.
+ *  Fewer than two repositories or none fitted: NaN. */
 export function fixedRepositoryT(units: readonly FamilyUnit[], nullValue = 0): TestedEstimate {
   if (units.some((u) => !Number.isFinite(u.value))) return notANumber(nullValue, 0);
   const { repos, fitted } = fitAll(units);
@@ -357,7 +368,8 @@ export function fixedRepositoryRatioT(cells: readonly RatioCell[]): TestedEstima
   if (!(totalT > 0 && totalC > 0)) return notANumber(1, 0);
   const ratio = totalT / totalC;
   const cBar = totalC / cells.length;
-  const residuals = cells.map(({ repo, family, seed, t, c }) => ({ repo, family, seed, value: (t - ratio * c) / cBar }));
+  const residuals = cells.map(({ repo, family, seed, t, c }) =>
+    ({ repo, family, seed, value: (t - ratio * c) / cBar }));
   const { se, df } = fixedRepositoryT(residuals, 0);
   if (se === undefined || df === undefined || !Number.isFinite(se)) return notANumber(1, 0);
   const log = tResult(Math.log(ratio), se / ratio, df, 0);
