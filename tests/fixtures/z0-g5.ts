@@ -26,7 +26,7 @@ function gradeOf(c: Cell) {
     lessonId: 'f1-l1', staleLessonId: null, stubRef: `refs/eval/${SEQ}/t${c.position}`, stub: 's', pre: 'p', first: 'f', final: 'f',
     finalChecked: c.finalChecked ?? false, finalCheck: c.finalChecked ? 'f' : null, stale: null,
     verdicts: { first, final: c.final ?? first, staleFollow: null }, acceptancePassed: true,
-    commandsFirst: commands, commandsFinal: [...commands, ...(c.resume ?? [])], ...(c.resume ? { commandsResume: c.resume } : {}), commandsStale: null, checkers: { 'f1-l1': 'x' },
+    commandsFirst: commands, commandsFinal: [...commands, ...(c.resume ?? [])], commandsResume: c.resume, commandsStale: null, checkers: { 'f1-l1': 'x' },
   };
 }
 export type Grade = ReturnType<typeof gradeOf>;
