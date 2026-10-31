@@ -40,17 +40,6 @@ const RECORD_AS = RECORD_AS_NAMES.map((property) => ({
   property,
   message: 'Pass recordAs to retrieve(); src/api/recall/finish.ts records it.',
 }));
-const GROUP_PROBES = ['requireGroup', 'hasGroup', 'requireGroups', 'hasGroups'];
-const groupProbes = (layer: string): Restricted[] =>
-  GROUP_PROBES.map((property) => ({
-    property,
-    message: `Groups are bound at boot; ${layer} code uses the store it is given.`,
-  }));
-const groupImports = (layer: string): ImportPattern => ({
-  regex: '^[.]',
-  importNames: GROUP_PROBES,
-  message: `Groups are bound at boot; ${layer} code uses the store it is given.`,
-});
 
 const SRC: Some<Restricted> = [STORE_ON, ENV, PROCESS, PREPARE];
 const SURFACE: Some<Restricted> = [...SRC, ...RECORD_AS];
@@ -213,24 +202,22 @@ export default defineConfig({
     {
       files: ['src/api/**/*.ts'],
       rules: {
-        'id-denylist': ['error', 'sqliteStoreOn', 'hippoRoot', ...GROUP_PROBES],
+        'id-denylist': ['error', 'sqliteStoreOn', 'hippoRoot'],
         'no-restricted-properties': restrict(
           STORE_ON,
           { property: 'hippoRoot', message: 'The api reads what the folder gave from a port method.' },
           ENV,
           PROCESS,
           PREPARE,
-          ...groupProbes('api'),
         ),
-        'no-restricted-imports': importPatterns(groupImports('api')),
         'boundaries/no-store-branch': 'error',
       },
     },
     {
       files: ['src/domain/**/*.ts'],
       rules: {
-        'id-denylist': ['error', 'sqliteStoreOn', ...GROUP_PROBES],
-        'no-restricted-properties': restrict(...SRC, ...groupProbes('domain'), {
+        'id-denylist': ['error', 'sqliteStoreOn'],
+        'no-restricted-properties': restrict(...SRC, {
           object: 'globalThis',
           property: 'fetch',
           message: 'Domain code reaches the network through a port.',
@@ -250,7 +237,6 @@ export default defineConfig({
             importNames: ['fetchWithRetry', 'resolveEmbeddingProvider', 'importTransformers'],
             message: 'Domain code reaches a model or the network through a port that src/infra implements.',
           },
-          groupImports('domain'),
         ),
       },
     },
@@ -296,21 +282,6 @@ export default defineConfig({
     {
       files: ['src/surface/cli/exit.ts'],
       rules: { 'boundaries/no-hand-fail': 'off' },
-    },
-    {
-      files: ['src/surface/server/routes/**/*.ts'],
-      rules: {
-        'id-denylist': ['error', 'sqliteStoreOn', ...RECORD_AS_NAMES, 'requireGroup'],
-        'no-restricted-properties': restrict(...SURFACE, {
-          property: 'requireGroup',
-          message: 'A route calls a src/api function that takes the Context.',
-        }),
-        'no-restricted-imports': importPatterns({
-          regex: '(ports/store|ports/store-index|entry/store-kit)[.]js$',
-          importNames: ['requireGroup'],
-          message: 'A route calls a src/api function that takes the Context.',
-        }),
-      },
     },
     {
       files: ['src/surface/open-store.ts'],

@@ -1,5 +1,4 @@
 // Which memories the churn pass checks and what it writes.
-import type { StoreWith } from '../../base/ports/store.js';
 import type { Learning } from '../../base/ports/store/learning.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
@@ -15,6 +14,7 @@ import {
   loadChurnGitView,
   churnEvidence,
 } from './churn-evidence.js';
+import type { HippoStore } from '../../base/ports/store.js';
 
 export interface DetectChurnStaleOptions {
   tenantId: string;
@@ -189,7 +189,7 @@ async function readChurnAnchors(
 }
 
 async function readChurnCandidates(
-  store: Pick<StoreWith<'learning'>, 'entriesWhere'>,
+  store: Pick<HippoStore, 'entriesWhere'>,
   opts: DetectChurnStaleOptions,
 ): Promise<ChurnCandidates> {
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
@@ -223,7 +223,7 @@ function churnNeeds(candidates: readonly ChurnCandidate[]): ChurnNeeds {
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
  * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export async function detectChurnStale(
-  store: StoreWith<'learning'>,
+  store: HippoStore & { readonly hippoDb: { readonly learning: Learning } },
   repo: ChurnRepo,
   opts: DetectChurnStaleOptions,
 ): Promise<ChurnStaleResult> {

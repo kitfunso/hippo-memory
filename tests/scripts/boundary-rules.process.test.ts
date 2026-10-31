@@ -87,16 +87,10 @@ describe('oxlint.config.ts boundary rules', () => {
     expect(hits.get('src/base/name.ts')).toBeUndefined();
   });
 
-  it('fails a route that imports or calls requireGroup, and the api naming hippoRoot', () => {
+  it('fails the api naming hippoRoot', () => {
     const hits = lint({
-      'src/surface/server/routes/imports.ts':
-        "import { requireGroup } from '../../../base/ports/store.js';\nexport const p = requireGroup;\n",
-      'src/surface/server/routes/calls.ts':
-        "import * as ports from '../../../base/ports/store.js';\nexport const p = ports.requireGroup;\n",
       'src/api/root.ts': 'export const f = (o: { readonly hippoRoot: string }): string => o.hippoRoot;\n',
     });
-    expect(hits.get('src/surface/server/routes/imports.ts')).toContain('eslint(no-restricted-imports)');
-    expect(hits.get('src/surface/server/routes/calls.ts')).toContain('eslint(no-restricted-properties)');
     expect(hits.get('src/api/root.ts')).toContain('eslint(no-restricted-properties)');
   });
 });
@@ -249,17 +243,13 @@ describe('oxlint.config.ts test env rule', () => {
   });
 });
 
-describe('oxlint.config.ts store-group and grant rules', () => {
-  it('fails hasGroups in api and domain code, and passes HippoStore, which names only the core', () => {
+describe('oxlint.config.ts store and grant rules', () => {
+  it('passes HippoStore in api code, which names only the core', () => {
     const hits = lint({
       'src/api/core.ts':
         "import type { HippoStore } from '../base/ports/store.js';\nexport const f = (s: HippoStore): HippoStore => s;\n",
-      'src/api/narrow.ts': "import { hasGroups } from '../base/ports/store.js';\nexport const n = hasGroups;\n",
-      'src/domain/narrow.ts': "import { hasGroups } from '../base/ports/store.js';\nexport const n = hasGroups;\n",
     });
     expect(hits.get('src/api/core.ts')).toBeUndefined();
-    expect(hits.get('src/api/narrow.ts')).toContain(IMPORT);
-    expect(hits.get('src/domain/narrow.ts')).toContain(IMPORT);
   });
 
   it('fails an unscoped hippo.db open in src, and passes it in the db files that make one', () => {

@@ -31,10 +31,12 @@ import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 import type { DetachedWork } from '../search/detached-work.js';
 import type { SharingStore } from './text-keys.js';
-import type { EntrySignals, PageRequest, StoreHome, StoreWith } from '../../base/ports/store.js';
+import type { EntrySignals, PageRequest, StoreHome, HippoStore } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import type { Captures } from '../../base/ports/store/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import type { FolderFiles } from '../../base/ports/store/folder-files.js';
+import type { Sharing } from '../../base/ports/store/sharing.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
@@ -148,7 +150,9 @@ export function transferScore(entry: MemoryEntry): number {
 /** Share a memory to the global store with attribution (source enriched with project path and timestamp).
  *  Returns the new entry, or null if the transfer score is too low. */
 export async function shareMemory(
-  local: { readonly store: StoreWith<'folderFiles'> },
+  local: {
+    readonly store: HippoStore & { readonly hippoDb: { readonly folderFiles: FolderFiles } };
+  },
   global: ConfiguredFolder<SharingStore>,
   id: string,
   options: {
@@ -337,7 +341,7 @@ function isNewAndClean(
 /** The local rows a page at a time: above the neutral score only a row carrying a signal can
  * share or count as a never-auto-share skip, so only those are read. */
 async function* autoSharePages(
-  store: Pick<StoreWith<'sharing'>, 'hippoDb' | 'entriesWhere'>,
+  store: Pick<HippoStore, 'entriesWhere'> & { readonly hippoDb: { readonly sharing: Sharing } },
   minScore: number,
   tenantId: TenantId,
 ): AsyncGenerator<MemoryEntry[]> {
@@ -424,9 +428,13 @@ async function shareCandidates({
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
   from: {
-    readonly store: Pick<StoreWith<'sharing' | 'folderFiles'>, 'hippoDb' | 'entriesWhere'>;
+    readonly store: Pick<HippoStore, 'entriesWhere'> & {
+      readonly hippoDb: { readonly sharing: Sharing; readonly folderFiles: FolderFiles };
+    };
   },
-  global: ConfiguredFolder<SharingStore & StoreWith<'captures'>>,
+  global: ConfiguredFolder<
+    SharingStore & HippoStore & { readonly hippoDb: { readonly captures: Captures } }
+  >,
   options: {
     minScore?: number;
     dryRun?: boolean;

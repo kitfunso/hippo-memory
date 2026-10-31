@@ -12,8 +12,10 @@ import { derivationScope, derivationPartitionKey } from '../../base/scope/recall
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { applyRebuild, settleFreshSummary } from './summary-settle.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { Consolidation } from '../../base/ports/store/consolidation.js';
+import type { LessonWrites } from '../../base/ports/store/entry-writes.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
@@ -21,7 +23,9 @@ const DEFAULT_REBUILD_CAP = 20;
 const CLUSTER_JACCARD_MIN = 0.5;
 
 /** Sleep's store: the summary reads and writes, and the row writes every store has. */
-type DagStore = StoreWith<'consolidation' | 'lessonWrites'>;
+type DagStore = HippoStore & {
+  readonly hippoDb: { readonly consolidation: Consolidation; readonly lessonWrites: LessonWrites };
+};
 
 /** The summary options plus the config's default half-life, which new summaries start on. */
 export type DagBuildOptions = DagSummaryOptions & { baseHalfLifeDays: number; now: Date };

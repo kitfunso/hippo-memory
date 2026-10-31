@@ -285,7 +285,7 @@ describe('published runtime exports', () => {
         transcriptWorkingState",
           "./store-kit": "ALL_TENANTS
         EMBEDDING_MODEL_META_KEY
-        OPTIONAL_GROUPS OTHER_STORE_MARKER
+        OTHER_STORE_MARKER
         PROTECTED_ROWS
         RECALL_DEFAULT_DENY_SCOPES RejectedValueError
         SECRET_TAGS StoreBusyError
@@ -294,13 +294,13 @@ describe('published runtime exports', () => {
         decodeVector descendantAdmits diffGraph
         encodeVector entryAfterOutcome
         float32ToBuffer ftsTermParts
-        hasGroup heldTexts
+        heldTexts
         isSharedStore
         loadConfig
         normalizeValueForRejection
         ownScopeTouches
         passesScopeFilterForRecall
-        rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex requireGroup runStoreConformance
+        rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex runStoreConformance
         sqliteStore
         tallyAmbientEntries targetReader",
           "./testing": "ambientSecretAdmit ambientSecretAdmitWire

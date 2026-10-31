@@ -2,9 +2,11 @@
 // at a time by id.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { AuditMaintenance } from '../../base/ports/store/audit.js';
+import type { Consolidation } from '../../base/ports/store/consolidation.js';
 
 /** The store's rows as this run loaded them: by created then id, with a dry run's half-life
  * preview applied. */
@@ -16,10 +18,12 @@ export class SleepRows {
   private readonly backed = new Set<string>();
 
   constructor(
-    private readonly store: Pick<
-      StoreWith<'consolidation' | 'auditMaintenance'>,
-      'entriesByIds' | 'hippoDb'
-    >,
+    private readonly store: Pick<HippoStore, 'entriesByIds'> & {
+      readonly hippoDb: {
+        readonly consolidation: Consolidation;
+        readonly auditMaintenance: AuditMaintenance;
+      };
+    },
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
   ) {

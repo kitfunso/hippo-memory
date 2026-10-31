@@ -14,9 +14,7 @@ export function resolveSpec(file, spec) {
   return [`${base}.ts`, `${base}/index.ts`].find((c) => existsSync(c));
 }
 
-// port-groups.ts holds the session and admin groups (conflicts, dormant), so it is a port file here too.
-const declaresPort = (f) =>
-  f === 'src/base/ports/store.ts' || f.startsWith('src/base/ports/store/') || f === 'src/base/ports/store-groups.ts';
+const declaresPort = (f) => f === 'src/base/ports/store.ts' || f.startsWith('src/base/ports/store/');
 const typeTables = new Map();
 
 /** The interfaces and type aliases a file declares, and the file and name each imported or re-exported name comes from. */

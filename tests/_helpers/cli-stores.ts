@@ -10,7 +10,7 @@ import { detachedEmbedder } from '../../src/api/embeddings.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { DoctorStore } from '../../src/surface/cli/doctor.js';
-import type { LocalGroups } from '../../src/base/ports/store.js';
+import type { HippoDbRepos } from '../../src/store/sqlite/hippo-db.js';
 import { TEST_DETACHED, TEST_RUN } from './test-run.js';
 
 /** hippo.db under `root` with no runtime: a test holds it across its commands and reads its mirrors
@@ -35,7 +35,7 @@ export function diagnosticsBodies(root: string): DoctorStore {
 }
 
 /** hippo.db's ledger under `root`, with the folder facts its delivery rows name. */
-export function ledgerAt(root: string): Pick<LocalGroups, 'ledger' | 'folderFiles'> {
+export function ledgerAt(root: string): Pick<HippoDbRepos, 'ledger' | 'folderFiles'> {
   const { ledger, folderFiles } = storeAt(root).hippoDb;
   return { ledger, folderFiles };
 }

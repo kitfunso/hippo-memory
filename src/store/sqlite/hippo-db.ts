@@ -60,7 +60,7 @@ import {
 } from '../../base/ports/store/connectors.js';
 import { AUDIT_MAINTENANCE_EFFECTS } from '../../base/ports/store/audit.js';
 import { sqliteAuditMaintenance } from './audit/audit-maintenance.js';
-import type { HippoStore, StoreGroups } from '../../base/ports/store.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import type { MethodEffects } from '../../base/ports/store/effects.js';
 import { SESSIONS_EFFECTS } from '../../base/ports/store/sessions.js';
 import { sqliteQuarantine } from './connectors/quarantine.js';
@@ -114,8 +114,8 @@ export interface HippoDbTier {
   readonly hippoDb: HippoDbRepos;
 }
 
-/** hippo.db's own store: the port with every optional group, and the local tier. */
-export type HippoDbStore = HippoStore & StoreGroups & HippoDbTier;
+/** hippo.db's own store: the core port and the local tier. */
+export type HippoDbStore = HippoStore & HippoDbTier;
 
 /** What each local method does to the store, which places it on a worker; a method missing here
  * fails to compile. */

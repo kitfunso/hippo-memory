@@ -60,7 +60,7 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpCaller)
 // ── Tool execution ──
 
 /** One tool: its run on a store a host proved once, checked here, and its run on a store whose
- * type holds every group, checked nowhere. */
+ * type carries the local tier, checked nowhere. */
 interface ToolRow {
   readonly bind: (proved: HippoStore) => StoreTool<HippoStore> | undefined;
   readonly onAll: StoreTool<HippoDbStore>;
@@ -126,7 +126,7 @@ export function bindMcpTools(proved: HippoStore): McpTools<HippoStore> {
   return tools;
 }
 
-/** Every tool, each run on the call's own store, whose type proves every group. */
+/** Every tool, each run on the call's own store, whose type carries the local tier. */
 export function allMcpTools(): McpTools<HippoDbStore> {
   return new Map([...TOOL_ROWS].map(([name, row]) => [name, row.onAll]));
 }

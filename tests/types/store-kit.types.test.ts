@@ -5,84 +5,30 @@ import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
   RejectedValueError,
   entryAfterOutcome,
-  hasGroup,
-  OPTIONAL_GROUPS,
-  requireGroup,
   sqliteStore,
-  type Goals,
+  type CoreGroups,
   type HippoStore,
   type MemoryEntry,
-  type OptionalGroup,
-  type StoreGroup,
   type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
 import type { DecayOptions } from '../../src/entry/memory.js';
 import type { StoreRules } from '../../src/base/ports/infra.js';
-import type { StoreWith } from '../../src/base/ports/store-index.js';
 type LossAversion = Pick<DecayOptions, 'lossAversionRatio'>;
 
-declare const store: HippoStore;
-
 describe('hippo-memory/store-kit entry types', () => {
-  it('sqliteStore takes a root path and the ratio its root read, and returns a store with every group', () => {
+  it('sqliteStore takes a root path and the ratio its root read, and returns the core store', () => {
     expectTypeOf(sqliteStore).parameters.toEqualTypeOf<[hippoRoot: string, rules?: StoreRules]>();
-    expectTypeOf(sqliteStore).returns.toEqualTypeOf<StoreWith<OptionalGroup>>();
+    expectTypeOf(sqliteStore).returns.toEqualTypeOf<HippoStore>();
     // @ts-expect-error the root is a path string
     typeOnly(() => sqliteStore({ hippoRoot: '/tmp/root' }));
   });
 
-  it('hasGroup narrows an optional group; hasGroup and requireGroup take the store first and a group name second', () => {
-    typeOnly(() => {
-      if (hasGroup(store, 'goals')) expectTypeOf(store.hippoDb.goals).toEqualTypeOf<Goals>();
-      expectTypeOf(hasGroup(store, 'base')).toEqualTypeOf<boolean>();
-      expectTypeOf(hasGroup(store, 'sessions' satisfies StoreGroup)).toEqualTypeOf<boolean>();
-    });
-    expectTypeOf(requireGroup<'goals'>).returns.toEqualTypeOf<Goals>();
-    // @ts-expect-error the group comes after the store
-    typeOnly(() => hasGroup('base', store));
-    // @ts-expect-error 'base' is always present, so it is not an optional group
-    typeOnly(() => requireGroup(store, 'base'));
-  });
-
-  it('the optional groups are a closed set of names that OPTIONAL_GROUPS lists once each, and no localFiles group is left', () => {
-    expectTypeOf<OptionalGroup>().toEqualTypeOf<
-      | 'readiness'
-      | 'lastRecall'
-      | 'ledger'
-      | 'embeddingIndex'
-      | 'promotion'
-      | 'folderFiles'
-      | 'sharing'
-      | 'consolidation'
-      | 'learning'
-      | 'graphRebuild'
-      | 'lessonWrites'
-      | 'auditMaintenance'
-      | 'dormant'
-      | 'captures'
-      | 'compactionHooks'
-      | 'compactions'
-      | 'failureLog'
-      | 'projectTags'
-      | 'diagnostics'
-      | 'agentImport'
-      | 'connectorWrites'
-      | 'connectorEvents'
-      | 'objects'
-      | 'cards'
-      | 'conflicts'
-      | 'rejections'
-      | 'dagReads'
-      | 'graphReads'
-      | 'sessions'
-      | 'goals'
-      | 'reports'
+  it('a store implements the six core groups whole, and HippoStore names no local tier', () => {
+    expectTypeOf<keyof CoreGroups>().toEqualTypeOf<
+      'keyWrites' | 'entryWrites' | 'contextReads' | 'auditLog' | 'vectors' | 'vectorWrites'
     >();
-    expectTypeOf<(typeof OPTIONAL_GROUPS)[number]>().toEqualTypeOf<OptionalGroup>();
-    expect(new Set(OPTIONAL_GROUPS).size).toBe(OPTIONAL_GROUPS.length);
-    expectTypeOf<'localFiles' extends StoreGroup ? true : false>().toEqualTypeOf<false>();
-    // @ts-expect-error hippo.db's folder work is the optional groups above, not one localFiles group
-    typeOnly(() => hasGroup(store, 'localFiles'));
+    expectTypeOf<HippoStore>().toMatchTypeOf<CoreGroups>();
+    expectTypeOf<Extract<keyof HippoStore, 'hippoDb'>>().toEqualTypeOf<never>();
   });
 
   it('SupersedeWrite names the row being replaced and its successor', () => {

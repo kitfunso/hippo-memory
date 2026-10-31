@@ -19,7 +19,7 @@ export interface HippoDbContext extends Context {
 /** Whether `store` carries hippo.db's local tier; a surface asks once, as it binds a local route
  * or tool. */
 export function hasHippoDb<S extends Context['store']>(store: S): store is S & HippoDbTier {
-  // An unset tier counts as absent, as hasGroup counts an unset group.
+  // An unset tier counts as absent, so a spread that cleared it reads as a core-only store.
   return 'hippoDb' in store && store.hippoDb !== undefined;
 }
 

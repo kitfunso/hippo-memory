@@ -3,7 +3,7 @@
 import { closeHippoDb, openHippoDb, type RequestStores } from '../../src/db/index.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { auditRowsOn } from './audit-rows.js';
-import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoStore, CoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
 /** `store` without hippo.db's local tier, as a store that is not hippo.db holds none of it; copying string keys alone
@@ -70,7 +70,7 @@ function logged<S extends HippoStore>(store: S, calls: string[]): S {
         return v.stored(part, ids);
       },
       nearestEntries: log('nearestEntries', v.nearestEntries),
-    } satisfies StoreGroups['vectors'],
+    } satisfies CoreGroups['vectors'],
   };
 }
 

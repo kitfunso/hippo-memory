@@ -4,7 +4,6 @@
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
 import type { HippoStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { OptionalGroup, StoreWith } from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
 import type { CoreEnrichment, FolderHome, GlobalEnrichment, LedgerBook } from './enrichment.js';
@@ -67,7 +66,7 @@ export interface Context {
   tenantId: string;
   actor: Actor;
   /** Built by a composition root; every api function reads and writes storage only through it,
-   * and reaches an optional group only through `ContextWith`, which a surface proved at boot. */
+   * and reaches hippo.db's local tier only through `HippoDbContext`, which a surface proved. */
   readonly store: HippoStore;
   /** Set by a composition root. Absent, the api reads one project and no global store, as for an
    * integrator's store. */
@@ -116,15 +115,6 @@ export type EntryInfraPorts = Omit<InfraPorts, 'failureNotices'> & {
 export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {
   return ctx.reach ? ctx.reach.shared : ctx.config.sharedStore;
 }
-
-/** A context whose store sets the optional groups `G`: the surface proved them once, so the api
- * checks nothing. `F` are groups the feature reads where it states its fallback. */
-export type ContextWith<
-  G extends OptionalGroup = never,
-  F extends OptionalGroup = never,
-> = Context & {
-  readonly store: StoreWith<G, F>;
-};
 
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector
  * Contexts; Bearer-authed callers build Actor from the api_keys row instead. */

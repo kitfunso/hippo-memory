@@ -1,32 +1,17 @@
-// The async store interface and its groups: every method answers a Promise and takes only data, so
-// any backend can serve it from any thread, and hippo.db is one adapter. Type-only apart from the
-// group probes and the store errors.
-import { NoLocalTierError } from '../util/store-blocked.js';
-import type { ConnectorGroups, RecordGroups, ReviewGroups } from './store-groups.js';
+// The async store interface: every method answers a Promise and takes only data, so any backend can
+// serve it from any thread, and hippo.db is one adapter. Type-only apart from the store errors.
 import type { MemoryEntry } from '../memory/entry.js';
 import type { TenantId } from '../util/tenant.js';
-import type { TokenUse, Ledger } from './store/ledger.js';
-import type { SessionEvent, Sessions, TaskSnapshot } from './store/sessions.js';
+import type { TokenUse } from './store/ledger.js';
+import type { SessionEvent, TaskSnapshot } from './store/sessions.js';
 import type { SessionHandoff } from '../session/handoff.js';
-import type { AuditMaintenance, AuditLog } from './store/audit.js';
-import type { LessonWrites, EntryWrites } from './store/entry-writes.js';
-import type { VectorReads, VectorWrites, EmbeddingIndex } from './store/vectors.js';
+import type { AuditLog } from './store/audit.js';
+import type { EntryWrites } from './store/entry-writes.js';
+import type { VectorReads, VectorWrites } from './store/vectors.js';
 import type { KeyWrites } from './store/keys.js';
-import type { ContextReads, DagReads } from './store/context-reads.js';
-import type { GraphReads, GraphRebuild } from './store/graph.js';
-import type { Readiness, Diagnostics } from './store/diagnostics.js';
-import type { LastRecall, RecallSearchArgs, RecallWrites } from './store/recall-writes.js';
-import type { Promotion, Sharing } from './store/sharing.js';
-import type { FolderFiles } from './store/folder-files.js';
-import type { Consolidation } from './store/consolidation.js';
-import type { Learning } from './store/learning.js';
-import type { Captures, CompactionHooks, Compactions } from './store/capture.js';
-import type { ProjectTags } from './store/project-tags.js';
-import type { AgentImport } from './store/agent-import.js';
-import type { Goals } from './store/goals.js';
-import type { EntryFilter, PageRequest, Reports } from './store/reports.js';
-import type { Dormant } from './store/dormant.js';
-import type { FailureLog } from './store/rejections.js';
+import type { ContextReads } from './store/context-reads.js';
+import type { RecallSearchArgs, RecallWrites } from './store/recall-writes.js';
+import type { EntryFilter, PageRequest } from './store/reports.js';
 export type { FolderStore, StoreReach } from './store/reach.js';
 import type {
   ApiKeyRecord,
@@ -38,174 +23,9 @@ import type {
   AppendAuditOptions,
 } from './store/types.js';
 
-/** Every group a store has: the required ones, then the optional capabilities, each a set of
- * groups a store sets or leaves unset together. `runStoreConformance` from store-kit checks a
- * store's required groups. */
-export interface StoreGroups extends RequiredGroups, Omit<OptionalGroups, LocalGroup> {}
-
-/** Every capability a store may leave unset. */
-interface OptionalGroups
-  extends
-    FallbackGroups,
-    FolderGroups,
-    SleepGroups,
-    CaptureGroups,
-    MaintenanceGroups,
-    ConnectorGroups,
-    RecordGroups,
-    ReviewGroups {
-  /** Without it drill and assemble answer 501. */
-  readonly dagReads: DagReads;
-  /** Without it recall expands no graph and the graph view answers 501. */
-  readonly graphReads: GraphReads;
-  /** The continuity, session-end and working-memory paths. */
-  readonly sessions: Sessions;
-  readonly goals: Goals;
-  /** Status, tokens, failures and the memory listings. */
-  readonly reports: Reports;
-}
-
-/** The groups hippo.db keeps in its local tier, `store.hippoDb`, off the port. Surfaces still
- * prove them by name, so StoreWith and the group probes look for each one in the tier. */
-const LOCAL_GROUP_NAMES = [
-  'sessions',
-  'auditMaintenance',
-  'connectorWrites',
-  'connectorEvents',
-  'rejections',
-  'lastRecall',
-  'reports',
-  'conflicts',
-  'promotion',
-  'lessonWrites',
-  'readiness',
-  'dagReads',
-  'graphReads',
-  'graphRebuild',
-  'ledger',
-  'folderFiles',
-  'sharing',
-  'consolidation',
-  'learning',
-  'dormant',
-  'captures',
-  'compactionHooks',
-  'compactions',
-  'failureLog',
-  'projectTags',
-  'diagnostics',
-  'agentImport',
-  'objects',
-  'cards',
-  'goals',
-  'embeddingIndex',
-] as const;
-
-export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];
-
-export type LocalGroups = Pick<OptionalGroups, LocalGroup>;
-
-const LOCAL_GROUPS: ReadonlySet<string> = new Set<string>(LOCAL_GROUP_NAMES);
-
-/** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
-export type OptionalGroup = keyof OptionalGroups;
-
-/** Each optional group once, for a surface or a test to walk;
- * tests/types/store-kit.types.test.ts proves it whole. */
-export const OPTIONAL_GROUPS = [
-  'readiness',
-  'lastRecall',
-  'folderFiles',
-  'sharing',
-  'promotion',
-  'embeddingIndex',
-  'ledger',
-  'consolidation',
-  'learning',
-  'graphRebuild',
-  'lessonWrites',
-  'auditMaintenance',
-  'dormant',
-  'captures',
-  'compactionHooks',
-  'compactions',
-  'failureLog',
-  'projectTags',
-  'diagnostics',
-  'agentImport',
-  'connectorWrites',
-  'connectorEvents',
-  'objects',
-  'cards',
-  'conflicts',
-  'rejections',
-  'dagReads',
-  'graphReads',
-  'sessions',
-  'goals',
-  'reports',
-] as const satisfies readonly OptionalGroup[];
-
-/** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and
- * context writes no last recall for the CLI's no-ids outcome to read. */
-interface FallbackGroups {
-  readonly readiness: Readiness;
-  readonly lastRecall: LastRecall;
-}
-
-/** A store kept as files in a folder; without these, init, share, sync down and promote answer
- * 501. */
-export interface FolderGroups {
-  readonly folderFiles: FolderFiles;
-  /** The rows a folder store shares with the operator's global store. */
-  readonly sharing: Sharing;
-  /** Set on the operator's global store, which promote copies into. */
-  readonly promotion: Promotion;
-  /** Unset, embedding goes through `vectors` and `vectorWrites`. */
-  readonly embeddingIndex: EmbeddingIndex;
-  /** Unset, a hook books no rows and every session takes the hash arm. */
-  readonly ledger: Ledger;
-}
-
-/** Sleep's reads and writes, git learn's batch and the dormant rows sleep keeps; without them,
- * sleep and consolidate answer 501. */
-export interface SleepGroups {
-  /** Over every tenant. */
-  readonly consolidation: Consolidation;
-  /** The learn passes. */
-  readonly learning: Learning;
-  readonly graphRebuild: GraphRebuild;
-  readonly lessonWrites: LessonWrites;
-  /** The audit pass's deletes and repairs, and the audit log's prune. */
-  readonly auditMaintenance: AuditMaintenance;
-  readonly dormant: Dormant;
-}
-
-/** `hippo capture`, the compaction hooks and the failure log, which a store without them
- * refuses. */
-export interface CaptureGroups {
-  /** Capture's writes and its dedup read. */
-  readonly captures: Captures;
-  /** The compaction hooks' records and their replay. */
-  readonly compactionHooks: CompactionHooks;
-  /** The compaction records a caller's hook starts and fills. */
-  readonly compactions: Compactions;
-  readonly failureLog: FailureLog;
-}
-
-/** What `hippo doctor`, the project repair and the agent-memories import read and write. */
-export interface MaintenanceGroups {
-  /** The project names a store holds, listed, folded and repaired. */
-  readonly projectTags: ProjectTags;
-  /** The store's own files, as `hippo doctor` and `hippo status` read them. */
-  readonly diagnostics: Diagnostics;
-  /** The import's reads and its container writes. */
-  readonly agentImport: AgentImport;
-}
-
 /** What remember, recall and context write and read, the vectors recall ranks by, and the key
  * writes auth makes: every store sets these whole. */
-interface RequiredGroups {
+export interface CoreGroups {
   readonly keyWrites: KeyWrites;
   readonly entryWrites: EntryWrites;
   readonly contextReads: ContextReads;
@@ -215,82 +35,11 @@ interface RequiredGroups {
   readonly vectorWrites: VectorWrites;
 }
 
-export type StoreGroup = 'base' | keyof GroupMethods;
-
-/** True when the store sets `group`; for an optional group the store is narrowed to one that
- * does. */
-export function hasGroup<G extends OptionalGroup>(
-  store: HippoStore,
-  group: G,
-): store is StoreWith<G>;
-export function hasGroup(store: HippoStore, group: StoreGroup): boolean;
-export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
-  return group === 'base' || groupOf(store, group) !== undefined;
-}
-
-/** The optional group's methods; a store without them throws
- * NoLocalTierError, which answers 501 as any unported path does. */
-export function requireGroup<G extends OptionalGroup>(
-  store: HippoStore,
-  group: G,
-): GroupMethods[G] {
-  const methods = groupOf(store, group);
-  if (methods === undefined) throw new NoLocalTierError(store.kind);
-  return methods;
-}
-
-/** Every optional group's methods, wherever the store keeps them. */
-type GroupMethods = StoreGroups & LocalGroups;
-
-/** `group`'s methods as `store` set them: a local group's in its tier, any other's on the store
- * itself, which HippoStore names only for the required groups. */
-function groupOf<G extends keyof GroupMethods>(
-  store: HippoStore,
-  group: G,
-): Partial<GroupMethods>[G] {
-  const own: Partial<GroupMethods> & { readonly hippoDb?: Partial<LocalGroups> } = store;
-  const holder: Partial<GroupMethods> = LOCAL_GROUPS.has(group) ? (own.hippoDb ?? {}) : own;
-  return holder[group];
-}
-
-/** True when the store sets every group `needs` names; a surface asks once, as it binds a verb,
- * never per request. */
-export function hasGroups<G extends OptionalGroup>(
-  store: HippoStore,
-  needs: readonly G[],
-): store is StoreWith<G> {
-  return needs.every((group) => groupOf(store, group) !== undefined);
-}
-
-/** `store` narrowed to every group `needs` names; a store without one throws NoLocalTierError. */
-export function requireGroups<G extends OptionalGroup>(
-  store: HippoStore,
-  needs: readonly G[],
-): StoreWith<G> {
-  if (hasGroups(store, needs)) return store;
-  throw new NoLocalTierError(store.kind);
-}
-
-/** A store that sets the optional groups `G`, as a surface proves once before it calls in; `F`
- * are the groups a feature reads where it states its fallback, so they may be unset. */
-export type StoreWith<G extends OptionalGroup, F extends OptionalGroup = never> = HippoStore &
-  Pick<StoreGroups, Extract<G, keyof StoreGroups>> &
-  Partial<Pick<StoreGroups, Extract<F, keyof StoreGroups>>> &
-  TierWith<Extract<G, LocalGroup>, Extract<F, LocalGroup>>;
-
-/** The local tier StoreWith asks for: `G`'s groups set, `F`'s perhaps; nothing when both are
- * empty, so a store with no tier still meets a StoreWith of port groups alone. */
-type TierWith<G extends LocalGroup, F extends LocalGroup> = ([G] extends [never]
-  ? unknown
-  : { readonly hippoDb: Pick<LocalGroups, G> }) &
-  // `& object` keeps the maybe-tier from being a weak type, so a tier of only other groups meets it.
-  ([F] extends [never] ? unknown : { readonly hippoDb?: Partial<Pick<LocalGroups, F>> & object });
-
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-blocked.js';
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
  * await, since a lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
-export interface HippoStore extends RequiredGroups {
+export interface HippoStore extends CoreGroups {
   /** A name for logs and errors. */
   readonly kind: string;
   /** The API key record for `keyId` with its scope grants, revoked or not; null when none
@@ -349,8 +98,8 @@ export interface HippoStore extends RequiredGroups {
   close(): Promise<void>;
 }
 
-/** The methods a store sets beside its groups: the `base` StoreGroup. */
-export type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
+/** The methods a store sets beside its groups. */
+export type BaseMethods = Omit<HippoStore, keyof CoreGroups | 'kind' | 'close'>;
 
 export interface ContinuityBlock {
   activeSnapshot: TaskSnapshot | null;

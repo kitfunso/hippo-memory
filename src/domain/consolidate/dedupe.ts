@@ -11,8 +11,17 @@ import { canAutoDelete } from '../../base/memory/keep-rules.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { AuditMaintenance } from '../../base/ports/store/audit.js';
+import type { Consolidation } from '../../base/ports/store/consolidation.js';
+
+type DedupeStore = HippoStore & {
+  readonly hippoDb: {
+    readonly consolidation: Consolidation;
+    readonly auditMaintenance: AuditMaintenance;
+  };
+};
 
 export interface DedupPair {
   kept: string;
@@ -154,7 +163,9 @@ async function partitionRows(pages: RowPages): Promise<Partitions> {
 }
 
 /** The candidates' partitions in the order a read of every current row first meets them. */
-async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<Partitions> {
+async function candidatePartitions(
+  store: HippoStore & { readonly hippoDb: { readonly consolidation: Consolidation } },
+): Promise<Partitions> {
   const { rows, firstSeen } = await store.hippoDb.consolidation.duplicateCandidates();
   const rank = new Map<string, number>();
   firstSeen.forEach((seen, i) => {
@@ -165,10 +176,7 @@ async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<P
   return new Map([...(await partitionRows([rows]))].sort(([a], [b]) => at(a) - at(b)));
 }
 
-async function scanPairs(
-  store: StoreWith<'consolidation' | 'auditMaintenance'>,
-  partitions: Partitions,
-): Promise<DedupPair[]> {
+async function scanPairs(store: DedupeStore, partitions: Partitions): Promise<DedupPair[]> {
   const losers = [...partitions.values()].flatMap((groups) =>
     [...groups.values()].flatMap((g) => g.losers),
   );
@@ -182,7 +190,7 @@ async function scanPairs(
  * across (isolation). Strength wins, then retrievals; `threshold` is ignored; `pages` feeds
  * every row in place of the candidates read. */
 export async function deduplicateStore(
-  store: StoreWith<'consolidation' | 'auditMaintenance'>,
+  store: DedupeStore,
   options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: RowPages } = {},
 ): Promise<DedupResult> {
   // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort
@@ -197,7 +205,7 @@ export async function deduplicateStore(
 
 /** The pairs whose loser was deleted; one store call, one transaction per batch of deletes. */
 async function deletePairs(
-  store: StoreWith<'consolidation' | 'auditMaintenance'>,
+  store: DedupeStore,
   pairs: readonly DedupPair[],
   actor: string | undefined,
 ): Promise<DedupPair[]> {

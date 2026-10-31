@@ -5,7 +5,6 @@ import {
   EmotionalValence,
   createMemory,
 } from '../../base/memory/entry.js';
-import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
@@ -19,6 +18,8 @@ import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { Learning } from '../../base/ports/store/learning.js';
 
 export interface ExtractedFact {
   content: string;
@@ -130,7 +131,7 @@ export interface StoreExtractedFactsOptions {
 }
 
 export async function storeExtractedFacts(
-  store: StoreWith<'learning'>,
+  store: HippoStore & { readonly hippoDb: { readonly learning: Learning } },
   { source, facts, baseHalfLifeDays, now }: StoreExtractedFactsOptions,
 ): Promise<MemoryEntry[]> {
   const inheritedTags = [

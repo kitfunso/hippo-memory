@@ -60,12 +60,12 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
   return rerankerWithClef({ infra: cliInfra() }, name, envClefSettings());
 }
 
-/** The store kind the CLI opens: hippo.db, with every group and its local tier. */
+/** The store kind the CLI opens: hippo.db, with its local tier. */
 export type CliStore = HippoDbStore;
 
-/** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
+/** The CLI's store is hippo.db, which carries the local tier, so its verbs call the api
  * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
-export type CliContext = HippoDbContext & HippoDbContext & { readonly hippoRoot: string };
+export type CliContext = HippoDbContext & { readonly hippoRoot: string };
 
 /** One CLI command's stores, built by the CLI root and handed to its verb: each store holds the
  * command's runtime and, inside a request, that request's session. */

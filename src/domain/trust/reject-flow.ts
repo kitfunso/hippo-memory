@@ -1,10 +1,16 @@
 // The reject, unreject and list flow the CLI verbs and the api functions share: the rules and their
 // wording live here, and the store's rejections group runs each one in one write.
 
-import type { StoreWith } from '../../base/ports/store.js';
 import { normalizeValueForRejection } from '../../base/records/rejection-digest.js';
-import type { AppliedRejection, LiftedRejection } from '../../base/ports/store/rejections.js';
-import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
+import type {
+  AppliedRejection,
+  LiftedRejection,
+  RejectedValueRow,
+  Rejections,
+} from '../../base/ports/store/rejections.js';
+import type { HippoStore } from '../../base/ports/store.js';
+
+type RejectionStore = HippoStore & { readonly hippoDb: { readonly rejections: Rejections } };
 
 export interface RejectFlowOptions {
   tenantId: string;
@@ -49,7 +55,7 @@ function assertRejectOpts(opts: RejectFlowOptions): void {
  * every row in reach that holds it.
  */
 export async function rejectValue(
-  store: StoreWith<'rejections'>,
+  store: RejectionStore,
   opts: RejectFlowOptions,
 ): Promise<RejectFlowResult> {
   assertRejectOpts(opts);
@@ -76,7 +82,7 @@ export interface UnrejectOptions {
  * way to allow a rejected value again.
  */
 export async function unrejectValue(
-  store: StoreWith<'rejections'>,
+  store: RejectionStore,
   { tenantId, digestOrPrefix, actor }: UnrejectOptions,
 ): Promise<UnrejectOutcome> {
   // A blank prefix would match every digest and list the whole tombstone set as ambiguous.
@@ -88,7 +94,7 @@ export async function unrejectValue(
 
 /** `hippo rejections` / `api.listRejections` — list tombstones for a tenant. */
 export function listRejectionsForTenant(
-  store: StoreWith<'rejections'>,
+  store: RejectionStore,
   tenantId: string,
 ): Promise<RejectedValueRow[]> {
   return store.hippoDb.rejections.list(tenantId);

@@ -6,7 +6,7 @@ import { ENTRY_WRITES_EFFECTS } from './entry-writes.js';
 import { KEY_WRITES_EFFECTS } from './keys.js';
 import { VECTORS_EFFECTS, VECTOR_WRITES_EFFECTS } from './vectors.js';
 import type { MethodEffects } from './effects.js';
-import type { BaseMethods, StoreGroups } from '../store.js';
+import type { BaseMethods, CoreGroups } from '../store.js';
 
 /** What each base method does to the store; every adapter honours it. */
 export const BASE_EFFECTS = {
@@ -33,6 +33,6 @@ export const STORE_EFFECTS = {
   entryWrites: ENTRY_WRITES_EFFECTS,
   contextReads: CONTEXT_READS_EFFECTS,
   auditLog: AUDIT_LOG_EFFECTS,
-} as const satisfies { readonly [G in keyof StoreGroups]: MethodEffects<StoreGroups[G]> } & {
+} as const satisfies { readonly [G in keyof CoreGroups]: MethodEffects<CoreGroups[G]> } & {
   readonly base: MethodEffects<BaseMethods>;
 };

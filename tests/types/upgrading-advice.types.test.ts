@@ -5,15 +5,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { typeOnly } from './_type-only.js';
 import { bindSessionOwner, type Context } from '../../dist/server.js';
-import {
-  hasGroup,
-  loadConfig,
-  requireGroup,
-  sqliteStore,
-  type HippoStore,
-  type Goals,
-  type VectorWrites,
-} from '../../dist/entry/store-kit.js';
+import { loadConfig, sqliteStore, type HippoStore, type Goals, type VectorWrites } from '../../dist/entry/store-kit.js';
 import { graphExpandRecall, hybridSearch } from '../../dist/entry/search.js';
 import { transcriptWorkingState } from '../../dist/entry/session-text.js';
 
@@ -37,10 +29,7 @@ declare const goals: Goals;
 describe('UPGRADING-3.0 advice', () => {
   it('hands an entry on the local tier the plain Context (narrowStore, Context.store, session entries)', () => {
     typeOnly(async () => {
-      const { store } = ctx;
       await bindSessionOwner(ctx, sessionId);
-      // The spread the narrowStore row warns against compiles; it drops the store's marks at run time.
-      expectTypeOf({ ...store, sessions: requireGroup(store, 'sessions') }).toHaveProperty('sessions');
     });
   });
 
@@ -48,12 +37,7 @@ describe('UPGRADING-3.0 advice', () => {
     typeOnly(async () => {
       const { store } = ctx;
       await hybridSearch(query, entries, {
-        source: {
-          store,
-          vectors: store.vectors,
-          graphReads: hasGroup(store, 'graphReads') ? store.hippoDb.graphReads : undefined,
-          provider,
-        },
+        source: { store, vectors: store.vectors, provider },
       });
       await hybridSearch(query, entries, { store });
     });

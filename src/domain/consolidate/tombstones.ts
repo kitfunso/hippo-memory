@@ -1,9 +1,10 @@
 // Sleep's tombstone lookups and refusal audit rows, each one call on the store; a dry run reads and
 // writes neither.
-import type { StoreWith } from '../../base/ports/store.js';
 import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { Consolidation } from '../../base/ports/store/consolidation.js';
 
 export interface TombstoneChecks {
   /** The tenant's tombstone for `digest`; null when there is none, and always under dryRun. */
@@ -20,7 +21,7 @@ export interface TombstoneChecks {
 
 /** The checks of one sleep on `store`; under dryRun no call reaches the store. */
 export function tombstoneChecks(
-  store: StoreWith<'consolidation'>,
+  store: HippoStore & { readonly hippoDb: { readonly consolidation: Consolidation } },
   dryRun: boolean,
 ): TombstoneChecks {
   const audit = async (event: AppendAuditOptions): Promise<void> => {

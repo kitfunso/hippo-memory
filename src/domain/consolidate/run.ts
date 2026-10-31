@@ -2,11 +2,18 @@ import { MemoryEntry } from '../../base/memory/entry.js';
 import type { DecayBasis, StrengthModel } from '../../base/memory/strength.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
-import type { DormantMove, StrengthRefresh } from '../../base/ports/store/consolidation.js';
-import type { StoreWith } from '../../base/ports/store.js';
+import type {
+  DormantMove,
+  StrengthRefresh,
+  Consolidation,
+} from '../../base/ports/store/consolidation.js';
 import type { SleepRows, Survivors } from './survivors.js';
 import type { TombstoneChecks } from './tombstones.js';
 import type { ConsolidateEvent } from './events.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { AuditMaintenance } from '../../base/ports/store/audit.js';
+import type { LessonWrites } from '../../base/ports/store/entry-writes.js';
+import type { Learning } from '../../base/ports/store/learning.js';
 
 export interface ConsolidationResult {
   decayed: number;
@@ -53,9 +60,14 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
 
 /** The store a consolidation runs on: its own group, the learning group extraction writes
  * through, and the lesson and audit writes its passes make. */
-export type ConsolidationStore = StoreWith<
-  'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'
->;
+export type ConsolidationStore = HippoStore & {
+  readonly hippoDb: {
+    readonly consolidation: Consolidation;
+    readonly learning: Learning;
+    readonly lessonWrites: LessonWrites;
+    readonly auditMaintenance: AuditMaintenance;
+  };
+};
 
 /**
  * State every sleep stage reads or appends to; the pending lists are flushed at the end, each of

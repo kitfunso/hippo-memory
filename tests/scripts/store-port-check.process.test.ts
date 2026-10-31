@@ -44,17 +44,17 @@ describe('check-store-port.mjs', () => {
       ].join('\n'),
       'src/base/ports/store/fate.ts':
         "export type Fate = { readonly kind: 'weaken' } | { readonly kind: 'reject'; readonly inReach: (scope: string) => boolean };\n",
-      'src/base/ports/store-groups.ts':
+      'src/base/ports/store/later.ts':
         'export interface Later { readonly every: { readonly on: { tick(): void } } }\nexport interface G { start(later: Later): void }\n',
       'src/api/a.ts': 'export interface NotPort { visit(each: () => void): void }\n',
     });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('A port method takes a parameter whose type holds a function');
     expect(r.sites.sort()).toEqual([
-      'src/base/ports/store-groups.ts:2 G.start(later.every.on.tick)',
       'src/base/ports/store.ts:5 Group.visit(each)',
       'src/base/ports/store.ts:6 Group.repair(protect)',
       'src/base/ports/store.ts:7 Group.resolve(fate.inReach)',
+      'src/base/ports/store/later.ts:2 G.start(later.every.on.tick)',
     ]);
   });
 

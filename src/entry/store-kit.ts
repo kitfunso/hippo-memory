@@ -7,7 +7,7 @@ import {
 } from '../base/memory/ambient.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
 import type { StoreRules } from '../base/ports/infra.js';
-import type { OptionalGroup, StoreWith } from '../base/ports/store-index.js';
+import type { HippoStore } from '../base/ports/store-index.js';
 import * as openStore from '../surface/open-store.js';
 export type {
   ApiKeyListItem,
@@ -68,8 +68,8 @@ export type {
 // hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
 
 /** hippo.db's store, which an add-on swaps for its own HippoStore in serve(); it takes only an
- * add-on's rules. Its type finds each group moved to the local tier under `hippoDb`. */
-export const sqliteStore: (hippoRoot: string, rules?: StoreRules) => StoreWith<OptionalGroup> =
+ * add-on's rules. Typed as the core port: hippo.db's local tier is not part of the contract. */
+export const sqliteStore: (hippoRoot: string, rules?: StoreRules) => HippoStore =
   openStore.sqliteStore;
 export {
   decodeVector,
@@ -83,9 +83,6 @@ export {
 export { runStoreConformance } from './store-conformance.js';
 export type { ConformanceRunner } from './conformance/kit.js';
 export {
-  hasGroup,
-  OPTIONAL_GROUPS,
-  requireGroup,
   type AmbientCandidateRequest,
   type CallerItemsSaved,
   type CardCreate,
@@ -108,7 +105,6 @@ export {
   type KeyWrites,
   type LastRecall,
   type LastRecallWrites,
-  type OptionalGroup,
   type OutcomeWrite,
   type RawArchive,
   type RecallSearchArgs,
@@ -118,8 +114,7 @@ export {
   type Reports,
   type SelfKeyMint,
   type Sessions,
-  type StoreGroup,
-  type StoreGroups,
+  type CoreGroups,
   type SupersedeWrite,
   type VectorReads,
   type VectorBackfillQuery,

@@ -8,7 +8,7 @@ import { appendAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoStore, CoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { runStoreConformance } from '../../src/entry/store-kit.js';
 import { portOnlyStore } from './port-only-store.js';
@@ -104,7 +104,7 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
 export type FixtureStore = ReturnType<typeof sqliteStore>;
 
 /** A store group, or 'base' for the methods HippoStore declares itself. */
-export type ConformanceGroup = keyof StoreGroups | LocalRepo | 'base';
+export type ConformanceGroup = keyof CoreGroups | LocalRepo | 'base';
 type LocalRepo = keyof FixtureStore['hippoDb'];
 
 /** What a call on `G` is handed: the group's methods, or the store itself for 'base'. */
@@ -112,7 +112,7 @@ export type GroupOf<G extends ConformanceGroup> = G extends 'base'
   ? FixtureStore
   : G extends LocalRepo
     ? FixtureStore['hippoDb'][G]
-    : StoreGroups[Exclude<G, 'base' | LocalRepo>];
+    : CoreGroups[Exclude<G, 'base' | LocalRepo>];
 
 /** One call on a store group; R is every value the calls in one run resolve to. */
 export type GroupCall<G extends ConformanceGroup, R> = (group: GroupOf<G>, store: FixtureStore) => Promise<R>;
@@ -120,7 +120,7 @@ export type GroupCall<G extends ConformanceGroup, R> = (group: GroupOf<G>, store
 function groupOf<G extends ConformanceGroup>(store: FixtureStore, group: G): GroupOf<G> {
   const named = ([key]: readonly [string, unknown]): boolean => key === group;
   const local = Object.entries(store.hippoDb).find(named)?.[1];
-  // SAFETY: GroupOf<G> is the store for 'base', the local tier's repo for a local G and StoreGroups[G] for the rest,
+  // SAFETY: GroupOf<G> is the store for 'base', the local tier's repo for a local G and CoreGroups[G] for the rest,
   // as each branch reads.
   return (group === 'base' ? store : (local ?? Object.entries(store).find(named)?.[1])) as GroupOf<G>;
 }

@@ -1,24 +1,24 @@
 import { adminActor, type Actor } from '../../src/api/index.js';
-import type { ContextReach, ContextWith } from '../../src/api/types.js';
-import { contextReach, coreEnrichment, type HippoDbContext } from '../../src/api/hippo-db-context.js';
+import type { ContextReach } from '../../src/api/types.js';
+import { contextReach, coreEnrichment, hasHippoDb, type HippoDbContext } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { type ProjectIdentity } from '../../src/base/scope/project-identity.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
-import { hasGroups, type HippoStore, type OptionalGroup } from '../../src/base/ports/store.js';
+import type { HippoStore } from '../../src/base/ports/store.js';
 import { inSqliteSession, sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import type { RequestStores } from '../../src/db/request-stores.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { testInfra } from './infra.js';
 import { evalStoreRules } from '../../src/infra/eval-switches.js';
 
-/** A test Context whose store holds every group and its local files, with hippo.db's local tier, as the CLI's
- * composition root hands it; the folder rides beside it for the tests that reopen it. */
-export type FullContext = ContextWith<OptionalGroup> & HippoDbContext & { readonly hippoRoot: string };
+/** A test Context on hippo.db with its local tier, as the CLI's composition root hands it; the folder rides beside it
+ * for the tests that reopen it. */
+export type FullContext = HippoDbContext & { readonly hippoRoot: string };
 
 /** The reach a root sets for `store` on `hippoRoot`, with the global store's config read as the CLI reads it, and the
  * store as the ledger home when it keeps a ledger. */
 export function testReach(hippoRoot: string, store: HippoStore): ContextReach {
-  const ledger = hasGroups(store, ['ledger', 'folderFiles'])
+  const ledger = hasHippoDb(store)
     ? { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config: loadConfig(hippoRoot) }
     : undefined;
   return contextReach(sqliteReach({ hippoRoot, store }), loadConfig, resolveEmbeddingProvider, ledger);

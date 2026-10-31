@@ -6,7 +6,7 @@ import { currentRequestId, type RequestLimits } from '../../../base/util/request
 import type {
   HippoStore,
   Readiness,
-  StoreGroups,
+  CoreGroups,
   StoredPart,
   StoredParts,
   VectorReads,
@@ -112,7 +112,7 @@ function storedOnWorkers(sender: Sender): VectorReads['stored'] {
   return stored;
 }
 
-function vectorGroups(sender: Sender, inProcess: VectorReads): Pick<StoreGroups, 'vectors'> {
+function vectorGroups(sender: Sender, inProcess: VectorReads): Pick<CoreGroups, 'vectors'> {
   return {
     vectors: {
       ...onWorkers(sender, 'vectors', WORKER_OPS.vectors, inProcess),
@@ -144,14 +144,14 @@ const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGr
 
 /** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it
  * misses a compile error. */
-function plainGroups(sender: Sender, inProcess: StoreGroups): Pick<StoreGroups, PlainGroup> {
+function plainGroups(sender: Sender, inProcess: CoreGroups): Pick<CoreGroups, PlainGroup> {
   const wrapped = PLAIN_GROUPS.map((group) => [
     group,
     onWorkers(sender, group, WORKER_OPS[group], inProcess[group]),
   ]);
   // SAFETY: each entry pairs a group name with that group's own wrapped methods, so the object has
   // every PlainGroup key.
-  return Object.fromEntries(wrapped) as Pick<StoreGroups, PlainGroup>;
+  return Object.fromEntries(wrapped) as Pick<CoreGroups, PlainGroup>;
 }
 
 // SAFETY: Object.keys of the HIPPO_DB_OPS literal lists exactly its repository keys.

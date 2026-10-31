@@ -1,9 +1,11 @@
 // Invalidation by text: finding the memories a migration, removal or deprecation names, and weakening them.
-import type { StoreWith } from '../../base/ports/store.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { LessonWrites } from '../../base/ports/store/entry-writes.js';
+import type { Learning } from '../../base/ports/store/learning.js';
 
 const HEADLINE_CHARS = 60;
 // The share of a row's tokens that must match the target's before the row counts as mentioning it.
@@ -88,7 +90,9 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
  * FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
  * mass-weaken every memory with that tag. */
 export async function invalidateMatching(
-  store: StoreWith<'learning' | 'lessonWrites'>,
+  store: HippoStore & {
+    readonly hippoDb: { readonly learning: Learning; readonly lessonWrites: LessonWrites };
+  },
   target: InvalidationTarget,
   tenantId: string,
   options?: InvalidationOptions,
@@ -129,7 +133,7 @@ export async function invalidateMatching(
  * rows, and keeps it current. Each match is read again before it is weakened, so a row another
  * writer changed since the list was read is never written back stale. */
 export async function invalidateMatchingAmong(
-  store: StoreWith<'lessonWrites'>,
+  store: HippoStore & { readonly hippoDb: { readonly lessonWrites: LessonWrites } },
   live: MemoryEntry[],
   target: InvalidationTarget,
   tenantId: string,
