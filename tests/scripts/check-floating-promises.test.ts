@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
-import { findFloatingApiCalls } from '../../scripts/checks/check-floating-api.mjs';
+import { findFloatingApiCalls, staleApiWrites } from '../../scripts/checks/check-floating-api.mjs';
 import { findFloatingPromises } from '../../scripts/checks/check-floating-promises.mjs';
 
 // Parsing the real ES2022 lib took 6.5 s on a CI runner, past the unit budget; the check only needs these globals.
@@ -106,8 +106,8 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** The hits for one test file that imports a stand-in forget from src/api/memories/forget.ts. */
-  function hitsFor(body: string): { file: string; line: number; why: string }[] {
+  /** A program of one test file that imports a stand-in forget from src/api/memories/forget.ts. */
+  function programFor(body: string): ts.Program {
     mkdirSync(join(dir, 'src', 'api', 'memories'), { recursive: true });
     mkdirSync(join(dir, 'tests'));
     const files = {
@@ -117,7 +117,7 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
       'tests/use.test.ts': `import { forget, other } from '../src/api/memories/forget';\n${body}`,
     };
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text, 'utf8');
-    const program = ts.createProgram(
+    return ts.createProgram(
       Object.keys(files).map((name) => join(dir, name)),
       {
         target: ts.ScriptTarget.ES2022,
@@ -127,8 +127,22 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
         noLib: true,
       },
     );
-    return findFloatingApiCalls(program, dir).map(({ file, line, why }) => ({ file, line, why }));
   }
+
+  function hitsFor(body: string): { file: string; line: number; why: string }[] {
+    return findFloatingApiCalls(programFor(body), dir).map(({ file, line, why }) => ({ file, line, why }));
+  }
+
+  it('names each listed write its file no longer exports, and each listed file that is gone', () => {
+    const writes = {
+      'src/api/memories/forget.ts': ['forget', 'moved'],
+      'src/api/memories/gone.ts': ['gone'],
+    };
+    expect(staleApiWrites(programFor('void forget;\nvoid other;\n'), dir, writes)).toEqual([
+      'src/api/memories/forget.ts: moved',
+      'src/api/memories/gone.ts: gone',
+    ]);
+  });
 
   it('flags a dropped api write and a sync expect callback that returns one', () => {
     const body = [

@@ -5,12 +5,12 @@ import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../../db/index.js';
 import { currentRequestId, type RequestLimits } from '../../../base/util/request-scope.js';
 import type {
   HippoStore,
-  Readiness,
-  StoreGroups,
+  CoreGroups,
   StoredPart,
   StoredParts,
   VectorReads,
 } from '../../../base/ports/store.js';
+import type { Readiness } from '../../../base/records/diagnostics.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore, sqliteStoreOn } from '../store.js';
 import type { StoreRules } from '../../../base/ports/infra.js';
@@ -112,7 +112,7 @@ function storedOnWorkers(sender: Sender): VectorReads['stored'] {
   return stored;
 }
 
-function vectorGroups(sender: Sender, inProcess: VectorReads): Pick<StoreGroups, 'vectors'> {
+function vectorGroups(sender: Sender, inProcess: VectorReads): Pick<CoreGroups, 'vectors'> {
   return {
     vectors: {
       ...onWorkers(sender, 'vectors', WORKER_OPS.vectors, inProcess),
@@ -132,26 +132,26 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
 }
 
 /** The groups with a body of their own below: base sits on the store itself, vectors rebuild a
- * Map, readiness is probed. */
-type CustomGroup = 'base' | 'vectors' | 'readiness';
+ * Map. */
+type CustomGroup = 'base' | 'vectors';
 type PlainGroup = Exclude<WorkerGroup, CustomGroup>;
 
 const isPlainGroup = (group: WorkerGroup): group is PlainGroup =>
-  group !== 'base' && group !== 'vectors' && group !== 'readiness';
+  group !== 'base' && group !== 'vectors';
 
 // SAFETY: Object.keys of the WORKER_OPS literal lists exactly its WorkerGroup keys.
 const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGroup);
 
 /** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it
  * misses a compile error. */
-function plainGroups(sender: Sender, inProcess: StoreGroups): Pick<StoreGroups, PlainGroup> {
+function plainGroups(sender: Sender, inProcess: CoreGroups): Pick<CoreGroups, PlainGroup> {
   const wrapped = PLAIN_GROUPS.map((group) => [
     group,
     onWorkers(sender, group, WORKER_OPS[group], inProcess[group]),
   ]);
   // SAFETY: each entry pairs a group name with that group's own wrapped methods, so the object has
   // every PlainGroup key.
-  return Object.fromEntries(wrapped) as Pick<StoreGroups, PlainGroup>;
+  return Object.fromEntries(wrapped) as Pick<CoreGroups, PlainGroup>;
 }
 
 // SAFETY: Object.keys of the HIPPO_DB_OPS literal lists exactly its repository keys.
@@ -186,16 +186,13 @@ export function workerSqliteStore(
   // part refuses.
   const inProcess = sqliteStoreOn(handlesOf(hippoRoot, { ...rules, runtime, workerOnly: true }));
   const sender: Sender = { executor, limits: {} };
+  const hippoDb = hippoDbOnWorkers(sender, inProcess.hippoDb);
   const store: HippoDbStore = {
     ...inProcess,
     ...onWorkers<WorkerBase>(sender, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(sender, inProcess.vectors),
     ...plainGroups(sender, inProcess),
-    hippoDb: hippoDbOnWorkers(sender, inProcess.hippoDb),
-    readiness: probing(
-      hippoRoot,
-      onWorkers(sender, 'readiness', WORKER_OPS.readiness, inProcess.readiness),
-    ),
+    hippoDb: { ...hippoDb, readiness: probing(hippoRoot, hippoDb.readiness) },
     close: () => executor.close(),
   };
   return asHippoDb(markOffLoop(store));
@@ -236,7 +233,7 @@ export function storeForRequest<S extends HippoStore>(store: S, limits: RequestL
 
 /** The operator's global stores a server opens beside its own, closed with it. */
 interface GlobalStores {
-  readonly open: (root: string) => HippoStore & StoreGroups;
+  readonly open: (root: string) => HippoDbStore;
   readonly close: () => Promise<void>;
 }
 
@@ -255,7 +252,7 @@ export function globalStoresFor(
       close: async () => {},
     };
   }
-  const opened = new Map<string, HippoStore & StoreGroups>();
+  const opened = new Map<string, HippoDbStore>();
   return {
     open(root) {
       const known = opened.get(root);

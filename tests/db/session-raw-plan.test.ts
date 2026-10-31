@@ -46,7 +46,7 @@ interface Reads {
 }
 
 async function sessionReads(root: string): Promise<Reads> {
-  const { dagReads } = sqliteStore(root);
+  const { dagReads } = sqliteStore(root).hippoDb;
   const log = await recordStatementsAsync(async () => {
     await dagReads.sessionRawRows({ ...QUERY, ids: IDS });
     await dagReads.sessionRawKeys({ ...QUERY, limit: 10 });

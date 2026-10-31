@@ -2,8 +2,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
-import type { GraphRows, GraphViewQuery, GraphWalkQuery } from '../../src/base/ports/store.js';
-import type { GraphOp } from '../../src/base/ports/store/graph.js';
+import type { GraphRows, GraphViewQuery, GraphWalkQuery } from '../../src/base/records/graph.js';
+import type { GraphOp } from '../../src/base/records/graph.js';
 import {
   runOnFixture,
   seedTwoTenants,

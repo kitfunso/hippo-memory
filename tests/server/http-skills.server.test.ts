@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { Skill } from '../../src/domain/objects/skills.js';
@@ -32,7 +32,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
+  handle = await serve({ hippoRoot: home, port: 0 });
 });
 afterEach(async () => {
   await handle.stop();
@@ -49,7 +49,7 @@ async function createSkill(body: CreateSkillBody, key: CreateApiKeyResult = apiK
   return fetch(`${handle.url}/v1/skills`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
-describe('HTTP /v1/skills (executable/exportable first-class object)', () => {
+describe.skipIf(needsHippoDb('tier'))('HTTP /v1/skills (executable/exportable first-class object)', () => {
   it('GET /v1/skills lists + filters by status', async () => {
     const v1 = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'S', instructions: 'a' }))).skill;
     await fetch(`${handle.url}/v1/skills/${v1.id}/supersede`, {

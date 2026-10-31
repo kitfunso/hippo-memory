@@ -244,7 +244,7 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
   const ROUTES: ReadonlyArray<
     readonly [route: string, swapped: (inProcess: InProcess) => Partial<InProcess>, send: Send, writesNothing: boolean]
   > = [
-    ['GET /v1/graph', (p) => ({ graphReads: p.graphReads }), graph(''), true],
+    ['GET /v1/graph', (p) => ({ hippoDb: p.hippoDb }), graph(''), true],
     ['GET /v1/quarantine', (p) => ({ hippoDb: p.hippoDb }), held(''), true],
     [
       'POST /v1/quarantine/:id/approve',

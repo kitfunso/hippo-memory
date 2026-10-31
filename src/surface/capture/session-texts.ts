@@ -1,7 +1,7 @@
 // `hippo capture --last-session` for a caller whose transcript was read on another machine: its
 // project names the rows, never the store's folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { ContextWith, EntryContext } from '../../api/types.js';
+import type { EntryContext } from '../../api/types.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
 import { storedTextKeys } from '../../base/util/same-text.js';
@@ -11,9 +11,7 @@ import { detachedEmbedder } from '../../api/embeddings.js';
 import { extractFromTexts } from './extract.js';
 import { withEntryInfra } from '../entry-infra.js';
 import { withDetached } from '../../api/detached.js';
-
-/** A context whose store has the captures group, which a session's capture reads and writes. */
-export type CaptureContext = EntryContext<ContextWith<'captures'>>;
+import { withHippoDb } from '../../api/hippo-db-context.js';
 
 const MAX_TEXTS = 30;
 const MAX_TEXT_BYTES = 32 * 1024;
@@ -53,10 +51,10 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
  * process.exit.
  */
 export async function captureSessionTexts(
-  given: CaptureContext,
+  given: EntryContext,
   req: SessionCaptureRequest,
 ): Promise<SessionCaptureResult> {
-  const ctx = withEntryInfra(given);
+  const ctx = withHippoDb(withEntryInfra(given));
   assertSessionCapture(req);
   const extracted = extractFromTexts(req.texts.map(scrubForSharing));
   // The newest items win, since the end of a session states where it landed.
@@ -65,7 +63,7 @@ export async function captureSessionTexts(
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows
   // block a copy, other projects' rows do not.
   const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
-  const held = await ctx.store.captures.textsHolding(
+  const held = await ctx.store.hippoDb.captures.textsHolding(
     dedup.tenantId,
     items.map((i) => i.content),
     { project: dedup.project },

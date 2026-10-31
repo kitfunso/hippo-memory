@@ -4,7 +4,6 @@
 import { RecentRecalls } from './recall/last-recalled.js';
 import type { RecallSurface, RingBuffer } from './recall/session-rings.js';
 import type { AutoSleepRunner } from './sleep/auto-sleep.js';
-import type { StoreWith } from '../base/ports/store.js';
 
 /** How a write starts a background sleep of one folder: the server runs it in its sleep queue's
  * child, stdio in its own process. Consolidation runs on hippo.db, so only a root whose store is
@@ -13,19 +12,11 @@ export interface AutoSleepHost {
   readonly run: AutoSleepRunner;
   /** The tenant that owns the host: consolidation is host-wide, so only its writes start one. */
   readonly hostTenantId: string;
-  /** The rows `tenantId` wrote since the store's last sleep, counted on the store of the call
-   * that wrote, so a write's count opens no second connection. */
-  readonly newSince: (tenantId: string, now: Date) => Promise<number>;
   /** Held while a sleep is counted or run, so two writes landing together start one. */
   readonly latch: { held: boolean };
 }
 
 export type AutoSleepStart = Omit<AutoSleepHost, 'latch'>;
-
-/** The count a host binds on a store that keeps the report reads. */
-export function newRowsOn(store: StoreWith<'reports'>): AutoSleepHost['newSince'] {
-  return (tenantId, now) => store.reports.createdSinceLastSleep(tenantId, now);
-}
 
 /** A host for one folder's auto-sleep, its latch free. */
 export function autoSleepHost(start: AutoSleepStart): AutoSleepHost {

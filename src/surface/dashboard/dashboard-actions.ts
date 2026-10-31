@@ -1,7 +1,6 @@
 // The four dashboard writes, each the api call the CLI makes; the router owns HTTP and the cache.
 
 import * as api from '../../api/index.js';
-import type { ContextWith } from '../../api/types.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -9,6 +8,7 @@ import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
 import { isLiveMemory } from '../../api/dashboard/live.js';
 import type { ForgetResult, ResolveResult } from '../../api/dashboard/types.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 /** What an action hands the router: a status, a JSON body, and whether the store changed. */
 export interface ActionResult {
@@ -79,7 +79,7 @@ export async function forgetMemory(ctx: api.Context, rawId: string): Promise<Act
 /** Keeps one side of an open conflict and weakens the other; the api's refusals keep their old
  * statuses and texts. */
 export async function resolveOpenConflict(
-  ctx: ContextWith<'conflicts'>,
+  ctx: HippoDbContext,
   conflictId: number,
   body: ActionBody,
 ): Promise<ActionResult> {

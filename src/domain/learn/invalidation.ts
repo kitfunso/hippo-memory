@@ -1,9 +1,11 @@
 // Invalidation by text: finding the memories a migration, removal or deprecation names, and weakening them.
-import type { StoreWith } from '../../base/ports/store.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { LessonWrites } from '../../base/records/lesson-writes.js';
+import type { Learning } from '../../base/records/learning.js';
 
 const HEADLINE_CHARS = 60;
 // The share of a row's tokens that must match the target's before the row counts as mentioning it.
@@ -88,7 +90,9 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
  * FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
  * mass-weaken every memory with that tag. */
 export async function invalidateMatching(
-  store: StoreWith<'learning' | 'lessonWrites'>,
+  store: HippoStore & {
+    readonly hippoDb: { readonly learning: Learning; readonly lessonWrites: LessonWrites };
+  },
   target: InvalidationTarget,
   tenantId: string,
   options?: InvalidationOptions,
@@ -96,11 +100,11 @@ export async function invalidateMatching(
   // Only that tenant's memories are weakened; the onlyId read is tenant-scoped, so another tenant's
   // id is invisible.
   if (options?.onlyId !== undefined) {
-    const entries = [await store.learning.readEntry(options.onlyId, tenantId)].filter(
+    const entries = [await store.hippoDb.learning.readEntry(options.onlyId, tenantId)].filter(
       (entry) => entry !== null,
     );
     const { result, weakened } = weakenMatches(entries, target, options);
-    await store.lessonWrites.writeTogether(weakened);
+    await store.hippoDb.lessonWrites.writeTogether(weakened);
     return result;
   }
   const { tokens, tag } = mentionOf(target);
@@ -108,7 +112,7 @@ export async function invalidateMatching(
   const weakened: MemoryEntry[] = [];
   let after: EntryCursor | undefined;
   do {
-    const page = await store.learning.entriesMentioning(tokens, tag, tenantId, {
+    const page = await store.hippoDb.learning.entriesMentioning(tokens, tag, tenantId, {
       limit: READ_PAGE_ROWS,
       after,
     });
@@ -121,7 +125,7 @@ export async function invalidateMatching(
     after = page.next ?? undefined;
   } while (after);
   // One write for every page, so a failed invalidation weakens none of them.
-  await store.lessonWrites.writeTogether(weakened);
+  await store.hippoDb.lessonWrites.writeTogether(weakened);
   return result;
 }
 
@@ -129,7 +133,7 @@ export async function invalidateMatching(
  * rows, and keeps it current. Each match is read again before it is weakened, so a row another
  * writer changed since the list was read is never written back stale. */
 export async function invalidateMatchingAmong(
-  store: StoreWith<'lessonWrites'>,
+  store: HippoStore & { readonly hippoDb: { readonly lessonWrites: LessonWrites } },
   live: MemoryEntry[],
   target: InvalidationTarget,
   tenantId: string,
@@ -143,7 +147,7 @@ export async function invalidateMatchingAmong(
     ids.flatMap((id) => fresh.get(id) ?? []),
     target,
   );
-  if (weakened.length > 0) await store.lessonWrites.writeTogether(weakened);
+  if (weakened.length > 0) await store.hippoDb.lessonWrites.writeTogether(weakened);
   const byId = new Map(weakened.map((entry) => [entry.id, entry]));
   for (let i = 0; i < live.length; i++) live[i] = byId.get(live[i].id) ?? live[i];
   return result;

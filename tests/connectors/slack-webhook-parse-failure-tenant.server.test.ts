@@ -44,7 +44,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
   });
 
   function rowsByTenant(tenant: string) {
-    return sqliteStore(root).connectorEvents.deadLetters('slack', tenant, {
+    return sqliteStore(root).hippoDb.connectorEvents.deadLetters('slack', tenant, {
       limit: 100,
     });
   }

@@ -24,7 +24,7 @@ import type {
   SleepCommit,
   SleepCommitted,
   SleepStart,
-} from '../../../base/ports/store/consolidation.js';
+} from '../../../base/records/consolidation.js';
 import { appendAuditEvents } from '../audit/audit.js';
 import {
   conflictResolveAudits,

@@ -31,17 +31,15 @@ import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 import type { DetachedWork } from '../search/detached-work.js';
 import type { SharingStore } from './text-keys.js';
-import type {
-  EntrySignals,
-  PageRequest,
-  RequiredStore,
-  StoreGroups,
-  StoreHome,
-  StoreWith,
-} from '../../base/ports/store.js';
+import type { EntrySignals } from '../../base/records/sharing.js';
+import type { PageRequest } from '../../base/records/reports.js';
+import type { StoreHome } from '../../base/records/folder-files.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import type { Captures } from '../../base/ports/store/capture.js';
+import type { Captures } from '../../base/records/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import type { FolderFiles } from '../../base/records/folder-files.js';
+import type { Sharing } from '../../base/records/sharing.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
@@ -155,7 +153,9 @@ export function transferScore(entry: MemoryEntry): number {
 /** Share a memory to the global store with attribution (source enriched with project path and timestamp).
  *  Returns the new entry, or null if the transfer score is too low. */
 export async function shareMemory(
-  local: { readonly store: StoreWith<'folderFiles'> },
+  local: {
+    readonly store: HippoStore & { readonly hippoDb: { readonly folderFiles: FolderFiles } };
+  },
   global: ConfiguredFolder<SharingStore>,
   id: string,
   options: {
@@ -171,7 +171,7 @@ export async function shareMemory(
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
   const globalEntry = toGlobalEntry(
-    await local.store.folderFiles.home(),
+    await local.store.hippoDb.folderFiles.home(),
     entry,
     options.force === true,
     options.embed.clock(),
@@ -252,9 +252,9 @@ export async function listPeers(
   global: { readonly store: SharingStore },
   tenantId: TenantId,
 ): Promise<Array<{ project: string; count: number; latest: string }>> {
-  if (!(await global.store.folderFiles.home()).exists) return [];
+  if (!(await global.store.hippoDb.folderFiles.home()).exists) return [];
 
-  const tallies = (await global.store.sharing.sourceTallies(tenantId)).sort((a, b) =>
+  const tallies = (await global.store.hippoDb.sharing.sourceTallies(tenantId)).sort((a, b) =>
     a.first < b.first ? -1 : a.first > b.first ? 1 : 0,
   );
   const peerMap = new Map<string, { count: number; latest: string }>();
@@ -344,7 +344,7 @@ function isNewAndClean(
 /** The local rows a page at a time: above the neutral score only a row carrying a signal can
  * share or count as a never-auto-share skip, so only those are read. */
 async function* autoSharePages(
-  store: Pick<StoreGroups, 'sharing'> & Pick<RequiredStore, 'entriesWhere'>,
+  store: Pick<HippoStore, 'entriesWhere'> & { readonly hippoDb: { readonly sharing: Sharing } },
   minScore: number,
   tenantId: TenantId,
 ): AsyncGenerator<MemoryEntry[]> {
@@ -353,7 +353,7 @@ async function* autoSharePages(
     const page: PageRequest = { limit: READ_PAGE_ROWS, after: after ?? undefined };
     const { entries, next } =
       minScore > TRANSFER_WEIGHTS.neutral
-        ? await store.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
+        ? await store.hippoDb.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
         : await store.entriesWhere({ tenantId }, page);
     yield entries;
     after = next;
@@ -386,7 +386,7 @@ async function sharePage(
   now: Date,
 ) {
   const copies = page.flatMap((entry) => toGlobalEntry(local, entry, true, now) ?? []);
-  const written = new Set(await to.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
+  const written = new Set(await to.hippoDb.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
   const shared = copies.filter((copy) => written.has(copy.id));
   return { shared, refused: copies.length - shared.length };
 }
@@ -431,10 +431,13 @@ async function shareCandidates({
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
   from: {
-    readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles'> &
-      Pick<RequiredStore, 'entriesWhere'>;
+    readonly store: Pick<HippoStore, 'entriesWhere'> & {
+      readonly hippoDb: { readonly sharing: Sharing; readonly folderFiles: FolderFiles };
+    };
   },
-  global: ConfiguredFolder<SharingStore & StoreWith<'captures'>>,
+  global: ConfiguredFolder<
+    SharingStore & HippoStore & { readonly hippoDb: { readonly captures: Captures } }
+  >,
   options: {
     minScore?: number;
     dryRun?: boolean;
@@ -448,18 +451,18 @@ export async function autoShare(
 ): Promise<MemoryEntry[]> {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
   const to = global.store;
-  await to.folderFiles.ensure();
+  await to.hippoDb.folderFiles.ensure();
   // Every page is judged before any is written, so a copy written early cannot hide a later row's
   // twin.
   const candidates: MemoryEntry[] = [];
   for await (const page of autoSharePages(from.store, minScore, options.tenantId)) {
-    candidates.push(...(await pageCandidates(to.captures, page, minScore, options.stats)));
+    candidates.push(...(await pageCandidates(to.hippoDb.captures, page, minScore, options.stats)));
   }
 
   if (dryRun) return candidates;
 
   const shared = await shareCandidates({
-    local: await from.store.folderFiles.home(),
+    local: await from.store.hippoDb.folderFiles.home(),
     to,
     candidates,
     stats: options.stats,

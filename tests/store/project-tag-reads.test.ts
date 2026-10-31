@@ -12,6 +12,7 @@ import {
   type StoreFolder,
 } from '../../src/domain/sharing/project-merge.js';
 import { mergedText } from '../../src/base/util/same-text.js';
+import type { ProjectTagReads } from '../../src/base/records/project-tags.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -40,12 +41,15 @@ function withDb<R>(fn: (db: DatabaseSyncLike) => R): R {
 }
 
 const SCOPE = { tenantId: T, actor: 'test' };
-const store = () => sqliteStore(root);
+const store = (): ProjectTagReads => {
+  const { hippoDb, entriesWhere, auditLog } = sqliteStore(root);
+  return { projectTags: hippoDb.projectTags, entriesWhere, auditLog };
+};
 const tags = () => store().projectTags;
 
 /** The store's folder as the api hands it to the repair: a project store, not the global one. */
 async function folder(): Promise<StoreFolder> {
-  const { project, shared } = await sqliteStore(root).folderFiles.home();
+  const { project, shared } = await sqliteStore(root).hippoDb.folderFiles.home();
   return { isGlobal: false, shared, project };
 }
 

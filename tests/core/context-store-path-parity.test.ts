@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contextGet, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
+import { contextReach, coreEnrichment } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
@@ -26,7 +27,6 @@ import { seedTwoTenants, TENANT_A, TENANT_B } from '../_helpers/store-conformanc
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
-import { contextReach } from '../../src/api/types.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { testInfra } from '../_helpers/infra.js';
 import { type PortOnlySide, portOnlySide } from '../_helpers/port-only-store.js';
@@ -59,6 +59,8 @@ interface Case {
   readonly reaches?: (pass: Pass) => void;
   /** Reads the port-only store must have answered, so the case cannot pass on hippo.db's copy. */
   readonly storeReads?: readonly string[];
+  /** The handoff comes from hippo.db's local tier, which a port-only store lacks, so that store answers without it. */
+  readonly tierHandoff?: true;
 }
 
 const ALICE: Actor = { subject: 'api_key:k1', role: 'member', owner: OWNER };
@@ -238,7 +240,7 @@ const CASES: readonly Case[] = [
       expect(p.result.activeSnapshot).toBeUndefined();
       expect(p.result.sessionHandoff?.summary).toBe('globex handoff');
     },
-    storeReads: ['sessions.read'],
+    tierHandoff: true,
   },
 ];
 
@@ -374,6 +376,7 @@ async function runPass(
     reach,
     config: loadConfig(root),
     infra: testInfra(),
+    enrich: coreEnrichment(served),
   };
   const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
   const result = await contextGet(ctx, opts);
@@ -471,12 +474,9 @@ describe('contextGet on a port-only store, with hippo.db blocked', () => {
     const before = embeddings.requests();
     let port: PortOnlySide | undefined;
     // The operator's global store sits under HIPPO_HOME here, and a store other than hippo.db must neither read nor write it.
-    const onPort = await runPass(
-      c,
-      { withGlobal: true, embedded: true },
-      (root) => (port = portOnlySide(root, ['graphReads', 'sessions'])),
-    );
-    expect(rounded(onPort.result)).toEqual(rounded(onHippoDb.result));
+    const onPort = await runPass(c, { withGlobal: true, embedded: true }, (root) => (port = portOnlySide(root)));
+    const want = c.tierHandoff ? { ...onHippoDb.result, sessionHandoff: undefined } : onHippoDb.result;
+    expect(rounded(onPort.result)).toEqual(rounded(want));
     expect(onPort.rows.local).toEqual(onHippoDb.rows.local);
     expect(onPort.rows.global).toEqual(globalRows);
     // The last-recall ids feed only POST /v1/outcome, which no other store serves, so the store path leaves them as seeded.

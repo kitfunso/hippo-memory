@@ -1,5 +1,6 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
-import { assembleCost, contextCost, drillCost } from '../../../api/context/context-render.js';
+import { contextCost } from '../../../api/context/context-render.js';
+import { assembleCost, drillCost } from '../../../api/hippo-db/dag-render.js';
 import {
   assemble,
   type AssembleOptions,
@@ -24,7 +25,7 @@ import {
 } from '../../../api/recall/request.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
-import type { AuthedRouteRequest, GroupRequest, RouteParams } from '../types.js';
+import type { AuthedRouteRequest, HippoDbRequest, RouteParams } from '../types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
 import { MAX_DRILL_DOWN_DEPTH } from '../../../api/objects/drill-down.js';
 import {
@@ -56,7 +57,7 @@ export async function handleRecallMemories({ res, ctx, query }: AuthedRouteReque
 // AssembledContextItem[] (fresh-tail raws, summary substitutions, bio-aware budget fit). Tenant
 // scope from the Bearer; default-deny on private rows.
 export async function handleAssembleSession(
-  { res, ctx, query }: GroupRequest<'dagReads'>,
+  { res, ctx, query }: HippoDbRequest,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'session id');
@@ -87,7 +88,7 @@ export async function handleAssembleSession(
 // level-2 summary (RecallResultItem.isSummary) to recover the originals. Tenant-scoped via Bearer;
 // default-deny on private scopes for the summary and its children.
 export async function handleDrillRecall(
-  { res, ctx, query }: GroupRequest<'dagReads'>,
+  { res, ctx, query }: HippoDbRequest,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'summary id');

@@ -1,5 +1,5 @@
 import { adminActor } from '../../../api/index.js';
-import type { ConnectorContext } from '../ingest.js';
+import { connectorContext, type ConnectorContext } from '../ingest.js';
 import {
   replayParked,
   type ConnectorDlq,
@@ -23,7 +23,7 @@ import type {
   SlackDlqBucket as DlqBucket,
   SlackDlqItem as DlqItem,
   SlackDlqInsert,
-} from '../../../base/ports/store/connectors.js';
+} from '../../../base/records/connectors.js';
 
 export type { DlqBucket, DlqItem };
 
@@ -104,12 +104,12 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
 }
 
 async function reingest(
-  { store, config, infra }: Pick<ConnectorContext, 'store' | 'config' | 'infra'>,
+  ports: Pick<ConnectorContext, 'store' | 'config' | 'infra'>,
   envelope: JsonValue & SlackEventEnvelope,
   fallback: RouteFallback,
 ): Promise<Reingest> {
   const tenantId = await resolveTenant(
-    store,
+    ports.store,
     { connector: 'slack', teamId: envelope.team_id },
     fallback,
   );
@@ -125,13 +125,7 @@ async function reingest(
     return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
   }
 
-  const replayCtx: ConnectorContext = {
-    tenantId,
-    actor: adminActor('connector:slack:replay'),
-    store,
-    config,
-    infra,
-  };
+  const replayCtx = connectorContext(ports, tenantId, adminActor('connector:slack:replay'));
   return replayMessage(replayCtx, envelope, inner);
 }
 

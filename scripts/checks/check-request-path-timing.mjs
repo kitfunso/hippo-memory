@@ -35,7 +35,7 @@ const { countAmbientInFolder: loadAmbientTallies } = await load('store/sqlite/fi
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { createApiKey } = await load('store/sqlite/keys/auth.js');
 const { contextGet, assemble, adminActor } = await load('api/index.js');
-const { contextReach } = await load('api/types.js');
+const { contextReach } = await load('api/hippo-db-context.js');
 const { loadConfig } = await load('host/config-file.js');
 const { rootInfra } = await load('infra/ports.js');
 const { handleMcpRequest } = await load('surface/mcp/server.js');
@@ -323,8 +323,12 @@ const cases = [
   ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [32, 1495, 1]],
   ['mcp hippo_status', tool('hippo_status'), [13, 4, 1]],
   ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],
-  ['served predictions list', () => served.objects.listObjects('default', 'prediction', { limit: 20 }), [0, 0, 0]],
-  ['served decisions list', () => served.objects.listObjects('default', 'decision', { limit: 20 }), [0, 0, 0]],
+  [
+    'served predictions list',
+    () => served.hippoDb.objects.listObjects('default', 'prediction', { limit: 20 }),
+    [0, 0, 0],
+  ],
+  ['served decisions list', () => served.hippoDb.objects.listObjects('default', 'decision', { limit: 20 }), [0, 0, 0]],
   ['served key lookup', keyLookup, [0, 0, 0]],
   // A running server reuses the read handle an earlier request returned to its store runtime, so it opens none.
   ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [37, 281, 0]],

@@ -13,7 +13,7 @@ import type { Machine } from '../../src/base/util/agent-homes.js';
 import type { ToolId } from '../../src/base/memory/agent-memory-tools.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import type { DormantMemory } from '../../src/base/ports/store/dormant.js';
+import type { DormantMemory } from '../../src/base/records/dormant.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { isInitialized } from '../../src/host/project-identity.js';
 import { apiCtx } from './api-ctx.js';

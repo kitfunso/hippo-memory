@@ -18,7 +18,7 @@ import {
 import type { DeliveryEventInput, DeliveryEventType } from '../../src/base/session/delivery.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { flushDeliveryRecorder } from '../../src/api/ledger-db.js';
-import type { Ledger } from '../../src/base/ports/store.js';
+import type { Ledger } from '../../src/base/records/ledger.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
@@ -59,7 +59,7 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
   ctx = { ...ctx, config: loadConfig(local) };
 }
 
-function recorder(fault?: DeliveryFault, ledger: Ledger = sqliteStore(local).ledger): DeliveryRecorder {
+function recorder(fault?: DeliveryFault, ledger: Ledger = sqliteStore(local).hippoDb.ledger): DeliveryRecorder {
   return createDeliveryRecorder({
     now: evalNow(),
     fault,
@@ -296,7 +296,7 @@ describe('the event type of a recorder', () => {
   it('takes eventType over a UserPromptSubmit payload', () => {
     const rec = createDeliveryRecorder({
       now: evalNow(),
-      ledger: sqliteStore(local).ledger,
+      ledger: sqliteStore(local).hippoDb.ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -310,7 +310,7 @@ describe('the event type of a recorder', () => {
     expect(eventOf(recorder()).eventType).toBe('prompt-submit');
     const manual = createDeliveryRecorder({
       now: evalNow(),
-      ledger: sqliteStore(local).ledger,
+      ledger: sqliteStore(local).hippoDb.ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -324,7 +324,7 @@ describe('prompt facts on a boundary or context row', () => {
   const withPrompt = (eventType?: DeliveryEventType) =>
     createDeliveryRecorder({
       now: evalNow(),
-      ledger: sqliteStore(local).ledger,
+      ledger: sqliteStore(local).hippoDb.ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -362,7 +362,7 @@ describe('the tool-failure recorder', () => {
     createDeliveryRecorder({
       now: evalNow(),
       fault,
-      ledger: sqliteStore(local).ledger,
+      ledger: sqliteStore(local).hippoDb.ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',
@@ -415,7 +415,7 @@ describe('a recorder fault at the flush boundary', () => {
     '%s: flushDeliveryRecorder returns, writes nothing and logs one ledger line',
     async (fault) => {
       const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const ledger = sqliteStore(local).ledger;
+      const ledger = sqliteStore(local).hippoDb.ledger;
       const write = vi.spyOn(ledger, 'recordTurn');
       const rec = recorder(fault, ledger);
       rec.queried('a query');

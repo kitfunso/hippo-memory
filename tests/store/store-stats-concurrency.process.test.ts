@@ -59,7 +59,7 @@ describe('updateStats under concurrent writers', () => {
       { field: 'remembered', iterations: 40 },
     ]);
 
-    expect((await sqliteStore(root).reports.stats()).total_remembered).toBe(160);
+    expect((await sqliteStore(root).hippoDb.reports.stats()).total_remembered).toBe(160);
 
     // reports.stats() coerces with Number(), so it would not notice the column
     // holding "160.0"; node:sqlite binds a JS number as REAL.
@@ -79,7 +79,7 @@ describe('updateStats under concurrent writers', () => {
       { field: 'forgotten', iterations: 60 },
     ]);
 
-    const stats = await sqliteStore(root).reports.stats();
+    const stats = await sqliteStore(root).hippoDb.reports.stats();
     expect(stats.total_remembered).toBe(60);
     expect(stats.total_forgotten).toBe(60);
   });

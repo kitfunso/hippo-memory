@@ -4,7 +4,7 @@
 import * as path from 'node:path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
-import { memoryQualityRepairOnce } from '../../api/auth/audit.js';
+import { memoryQualityRepairOnce } from '../../api/hippo-db/audit-maintenance.js';
 import type { CliScope } from './api-context.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and

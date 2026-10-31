@@ -12,7 +12,7 @@ import {
 } from './memory-value.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
 import { DAY_MS } from '../../base/util/time.js';
-import type { SleepStart } from '../../base/ports/store/consolidation.js';
+import type { SleepStart } from '../../base/records/consolidation.js';
 
 export const DECAY_THRESHOLD = 0.05;
 

@@ -189,7 +189,7 @@ describe('handoffs and failures keyed by owner and project', () => {
   });
 
   it('recordFailure stamps owner and project', async () => {
-    const { failureLog } = sqliteStore(home);
+    const { failureLog } = sqliteStore(home).hippoDb;
     await failureLog.record({
       tenantId: T,
       sessionId: 's1',

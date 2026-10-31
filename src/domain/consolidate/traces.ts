@@ -1,7 +1,7 @@
 import { MemoryEntry, Layer, createMemory, markRetrieved } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import type { SessionEvent } from '../../base/ports/store/sessions.js';
-import type { SleepBegin, UntracedSession } from '../../base/ports/store/consolidation.js';
+import type { SessionEvent } from '../../base/records/sessions.js';
+import type { SleepBegin, UntracedSession } from '../../base/records/consolidation.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { commonDerivationScope } from '../../base/scope/recall-scope.js';

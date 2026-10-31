@@ -6,7 +6,7 @@ import * as candidatesSql from '../../../src/store/sqlite/recall/candidates.js';
 import { evalSwitches } from '../../../src/infra/eval-switches.js';
 import { deleteEntriesInBatches } from '../../../src/store/sqlite/entries/delete-and-batch.js';
 import * as deleteAndBatchSql from '../../../src/store/sqlite/entries/delete-and-batch.js';
-import type { DormantMemory, ListDormantOptions } from '../../../src/base/ports/store/dormant.js';
+import type { DormantMemory, ListDormantOptions } from '../../../src/base/records/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/runtime/rule-sql.js';
 import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entries/entry-reads.js';
@@ -24,8 +24,8 @@ import type {
   ContextCandidateFilter,
   RecentOrigins,
 } from '../../../src/base/ports/store/context-reads.js';
-import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../../src/base/ports/store/sharing.js';
-import type { FlushComponent, LoadedRows } from '../../../src/base/ports/store/consolidation.js';
+import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../../src/base/records/sharing.js';
+import type { FlushComponent, LoadedRows } from '../../../src/base/records/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
 import { handlesOf, onHandle, storeFilesOf } from '../test-session.js';

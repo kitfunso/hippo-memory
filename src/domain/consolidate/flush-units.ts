@@ -5,7 +5,7 @@ import type {
   DormantMove,
   FlushComponent,
   StrengthRefresh,
-} from '../../base/ports/store/consolidation.js';
+} from '../../base/records/consolidation.js';
 
 /** Sleep's queued ops: decay's strength refreshes, then full writes, deletes and dormant moves. */
 export interface PendingOps {

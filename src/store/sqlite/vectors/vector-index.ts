@@ -39,7 +39,7 @@ import type {
   IdPageRequest,
   StoredVectorSummary,
   VectorCoverage,
-} from '../../../base/ports/store/vectors.js';
+} from '../../../base/records/embedding-index.js';
 import type { EmbeddingIndexState } from '../../../base/embeddings/index-identity.js';
 import { rethrowIfStoreBlocked } from '../../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';

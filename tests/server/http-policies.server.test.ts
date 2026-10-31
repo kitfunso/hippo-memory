@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { Policy } from '../../src/domain/objects/policies.js';
@@ -30,7 +30,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
+  handle = await serve({ hippoRoot: home, port: 0 });
 });
 afterEach(async () => {
   await handle.stop();
@@ -48,7 +48,7 @@ async function createPolicy(body: CreatePolicyBody, key: CreateApiKeyResult = ap
   return fetch(`${handle.url}/v1/policies`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
-describe('HTTP /v1/policies (bi-temporal first-class object)', () => {
+describe.skipIf(needsHippoDb('tier'))('HTTP /v1/policies (bi-temporal first-class object)', () => {
   it('GET /v1/policies lists + filters by status', async () => {
     const v1 = (await jsonAs<{ policy: Policy }>(await createPolicy({ policyName: 'P', policyText: 'a' }))).policy;
     await fetch(`${handle.url}/v1/policies/${v1.id}/supersede`, {

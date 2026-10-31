@@ -8,7 +8,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
-import type { EmbeddingIndex } from '../../src/base/ports/store.js';
+import type { EmbeddingIndex } from '../../src/base/records/embedding-index.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { storeAt } from '../_helpers/cli-stores.js';
@@ -32,7 +32,7 @@ describe('embedAll waiting on a held embedding index lock', () => {
     const root = makeRoot('embed-lock-backoff');
     const held = takeFileLock(join(root, 'embeddings.lock.db'));
     expect(held.kind).toBe('taken');
-    const index = storeAt(root).embeddingIndex;
+    const index = storeAt(root).hippoDb.embeddingIndex;
     vi.useFakeTimers({ now: Date.parse('2026-01-15T00:00:00.000Z') });
     const startedAt = Date.now();
     const asked: number[] = [];

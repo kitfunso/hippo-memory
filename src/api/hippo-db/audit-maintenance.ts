@@ -1,0 +1,119 @@
+// The memory-quality audit with its repair passes and the audit log's prune, on hippo.db's local tier.
+
+import {
+  auditMemories,
+  PROTECTED_ROWS,
+  type AuditIssue,
+  type AuditResult,
+} from '../../base/memory/memory-audit.js';
+import type { AuditMaintenance } from '../../base/records/audit-maintenance.js';
+import { DAY_MS } from '../../base/util/time.js';
+import { memoryPages } from '../memories/memories.js';
+import type { QualityRepairResult } from '../../base/records/audit-maintenance.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
+
+/** The pass that removes audit errors; it leads the reason on each forget row. */
+export type AuditPass = 'audit --fix' | 'sleep-audit';
+
+function maintenanceOf(ctx: HippoDbContext): AuditMaintenance {
+  return ctx.store.hippoDb.auditMaintenance;
+}
+
+/** Delete the memories an audit marked as errors, each with its own forget row, and answer the
+ * ids that went: a pinned or raw row stays. */
+export async function auditRemoveErrors(
+  ctx: HippoDbContext,
+  pass: AuditPass,
+  issues: readonly AuditIssue[],
+): Promise<string[]> {
+  const removals = issues
+    .filter((issue) => issue.severity === 'error')
+    .map((issue) => ({ id: issue.memoryId, reason: `${pass}: ${issue.reason}` }));
+  if (removals.length === 0) return [];
+  return maintenanceOf(ctx).deleteAutomatically(removals, ctx.actor.subject);
+}
+
+/** The caller's memories run through the quality audit a page at a time, as each row is judged
+ * alone; a memory that backs an object is never marked for removal. */
+export async function auditMemoryQuality(
+  ctx: HippoDbContext,
+  opts: { pageSize?: number } = {},
+): Promise<AuditResult> {
+  const audit: AuditResult = { total: 0, issues: [], clean: 0 };
+  for await (const page of memoryPages(ctx.store, ctx.tenantId, opts.pageSize)) {
+    const backing = await maintenanceOf(ctx).objectBackedAmong(page.map((e) => e.id));
+    const part = auditMemories(page, backing);
+    audit.total += part.total;
+    audit.clean += part.clean;
+    audit.issues.push(...part.issues);
+  }
+  return audit;
+}
+
+/** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects
+ * to dormant storage behind a backup. */
+export async function memoryQualityRepair(
+  ctx: HippoDbContext,
+  apply: boolean,
+): Promise<QualityRepairResult> {
+  return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply, PROTECTED_ROWS);
+}
+
+/** The repair sleep and the daily runner apply once per store after an upgrade; null when it
+ * already ran there. */
+export async function memoryQualityRepairOnce(
+  ctx: HippoDbContext,
+): Promise<QualityRepairResult | null> {
+  return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId, PROTECTED_ROWS);
+}
+
+export interface PruneAuditOptions {
+  /** Cutoff in days. Rows with `ts < (now - N days)` are deleted. */
+  olderThanDays: number;
+  /** When true, count matching rows but do NOT delete. Default false. */
+  dryRun?: boolean;
+}
+
+export interface PruneAuditResult {
+  /** ISO timestamp of the cutoff. Rows with ts strictly less than this were deleted. */
+  cutoff: string;
+  /** Number of audit_log rows deleted (or that would be deleted, if dryRun). */
+  count: number;
+  /** Echo back whether this was a dry run. */
+  dryRun: boolean;
+}
+
+/** Cutoff ISO timestamp for N days ago; exported so tests can pin "now" without mocking Date. */
+export function computeCutoff(days: number, now: Date): string {
+  const cutoff = new Date(now.getTime() - days * DAY_MS);
+  return cutoff.toISOString();
+}
+
+/** Delete the caller's tenant's audit_log rows older than `olderThanDays`, then record an
+ * `audit_prune` row as `ctx.actor`; opt-in, since retention floors (HIPAA, SOX, GDPR) apply. The
+ * row is written after the DELETE, so a call never prunes its own record. Throws on non-positive
+ * days or an empty tenant. */
+export async function auditPrune(
+  ctx: HippoDbContext,
+  opts: PruneAuditOptions,
+): Promise<PruneAuditResult> {
+  if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
+    throw new Error(
+      `auditPrune: olderThanDays must be a positive number, got ${opts.olderThanDays}`,
+    );
+  }
+  if (!ctx.tenantId) {
+    throw new Error('auditPrune: tenantId is required');
+  }
+  const dryRun = opts.dryRun === true;
+  const cutoff = computeCutoff(opts.olderThanDays, ctx.infra.clock());
+  const prune = {
+    tenantId: ctx.tenantId,
+    cutoff,
+    actor: ctx.actor.subject,
+    olderThanDays: opts.olderThanDays,
+    dryRun,
+  };
+  const count = await maintenanceOf(ctx).pruneAuditRows(prune);
+  return { cutoff, count, dryRun };
+}

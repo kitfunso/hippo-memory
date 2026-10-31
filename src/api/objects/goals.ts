@@ -1,49 +1,48 @@
 // The per-session goal stack that recall boosts: push, list, complete, suspend and resume.
 
-import type { CompleteGoalOptions, PushGoalOptions } from '../../base/ports/store/goals.js';
-import { requireHostAdmin, type ContextWith, type EntryContext } from '../types.js';
+import type { CompleteGoalOptions, PushGoalOptions } from '../../base/records/goals.js';
+import { requireHostAdmin, type EntryContext } from '../types.js';
 import type { Goal } from '../../base/ports/store/types.js';
+import { requireHippoDb, type HippoDbContext } from '../hippo-db-context.js';
 
 /** What a new goal carries; its tenant is always the caller's. */
 export type GoalPushOptions = Omit<PushGoalOptions, 'tenantId'>;
 
-/** Push a goal onto `sessionId`'s stack in the caller's tenant. */
-export function goalPush(
-  ctx: EntryContext<ContextWith<'goals'>>,
-  opts: GoalPushOptions,
-): Promise<Goal> {
-  return ctx.store.goals.push(ctx.tenantId, opts);
+/** Push a goal onto `sessionId`'s stack in the caller's tenant; a store without hippo.db's local
+ * tier rejects. */
+export async function goalPush(ctx: EntryContext, opts: GoalPushOptions): Promise<Goal> {
+  return requireHippoDb(ctx.store).hippoDb.goals.push(ctx.tenantId, opts);
 }
 
 /** The caller's goals for `sessionId`: active ones, or every status when `all` is set. */
 export async function goalList(
-  ctx: ContextWith<'goals'>,
+  ctx: HippoDbContext,
   opts: { sessionId: string; all: boolean },
 ): Promise<Goal[]> {
-  if (opts.all) return ctx.store.goals.sessionGoals(ctx.tenantId, opts.sessionId);
+  if (opts.all) return ctx.store.hippoDb.goals.sessionGoals(ctx.tenantId, opts.sessionId);
   return (await ctx.store.activeGoals({ sessionId: opts.sessionId, tenantId: ctx.tenantId })).goals;
 }
 
 /** Complete a goal by id; a no-op for an unknown, another tenant's or an already completed goal.
  * Host admin only. */
 export async function goalComplete(
-  ctx: ContextWith<'goals'>,
+  ctx: HippoDbContext,
   goalId: string,
   opts: CompleteGoalOptions,
 ): Promise<void> {
   requireHostAdmin(ctx, 'Completing a goal by id');
-  await ctx.store.goals.complete(ctx.tenantId, goalId, opts);
+  await ctx.store.hippoDb.goals.complete(ctx.tenantId, goalId, opts);
 }
 
 /** Suspend an active goal by id. Host admin only. */
-export async function goalSuspend(ctx: ContextWith<'goals'>, goalId: string): Promise<void> {
+export async function goalSuspend(ctx: HippoDbContext, goalId: string): Promise<void> {
   requireHostAdmin(ctx, 'Suspending a goal by id');
-  await ctx.store.goals.suspend(ctx.tenantId, goalId);
+  await ctx.store.hippoDb.goals.suspend(ctx.tenantId, goalId);
 }
 
 /** Resume a suspended goal by id, suspending the oldest active one past the depth cap. Host
  * admin only. */
-export async function goalResume(ctx: ContextWith<'goals'>, goalId: string): Promise<void> {
+export async function goalResume(ctx: HippoDbContext, goalId: string): Promise<void> {
   requireHostAdmin(ctx, 'Resuming a goal by id');
-  await ctx.store.goals.resume(ctx.tenantId, goalId);
+  await ctx.store.hippoDb.goals.resume(ctx.tenantId, goalId);
 }

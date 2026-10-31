@@ -36,7 +36,7 @@ import {
   type WebhookRequest,
 } from '../../http/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
-import type { ConnectorContext, WebhookPorts } from '../ingest.js';
+import { connectorContext, type ConnectorContext, type WebhookPorts } from '../ingest.js';
 import { errorFields, log } from '../../../base/util/log.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ
@@ -153,13 +153,13 @@ const REPLAY_HOLD_MS = 36_500 * DAY_MS;
 
 async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
   const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
-  if (!(await store.connectorEvents.claimDelivery(claim))) {
+  if (!(await store.hippoDb.connectorEvents.claimDelivery(claim))) {
     throw new HttpError(409, 'duplicate X-GitHub-Delivery');
   }
 }
 
 async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
-  await store.connectorEvents.releaseDelivery('github', key).catch((err) => {
+  await store.hippoDb.connectorEvents.releaseDelivery('github', key).catch((err) => {
     log.warn(
       'github webhook: could not free the replay hold of a failed delivery',
       errorFields(err),
@@ -230,13 +230,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     return;
   }
 
-  const ctx: ConnectorContext = {
-    tenantId: resolvedTenant,
-    actor: { subject: 'connector:github', role: 'admin' },
-    store: d.store,
-    config: d.config,
-    infra: d.infra,
-  };
+  const ctx = connectorContext(d, resolvedTenant, { subject: 'connector:github', role: 'admin' });
   if (await dispatchGitHubEvent({ d, ctx, body, deliveryId: d.deliveryId, routing })) return;
 
   // Header allow-listed but body shape didn't satisfy the matching guard.

@@ -23,7 +23,7 @@ import {
   deriveGraph,
   loadGraphSources,
 } from '../../src/domain/graph/extract.js';
-import type { EntityType } from '../../src/base/ports/store/graph.js';
+import type { EntityType } from '../../src/base/records/graph.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
@@ -191,7 +191,7 @@ describe('sleep enqueue-hook', () => {
     const phases: Partial<SleepPhases> = {
       extractGraph: async (store, tid) => {
         if (tid === T) {
-          await saveDecision(store.objects, loadConfig(tc.hippoRoot).defaultHalfLifeDays, tid, {
+          await saveDecision(store.hippoDb.objects, loadConfig(tc.hippoRoot).defaultHalfLifeDays, tid, {
             decisionText: 'Adopt Redis as the shared caching tier',
           });
         }
@@ -299,7 +299,7 @@ describe('sleep enqueue-hook', () => {
       decisionText: 'Adopt Redis as a cache',
     });
     await expect(
-      sqliteStore(tc.hippoRoot).graphRebuild.applyOps(
+      sqliteStore(tc.hippoRoot).hippoDb.graphRebuild.applyOps(
         T,
         [
           { op: 'insertEntity', entity: entity('policy', d.memoryId!) },
@@ -343,7 +343,7 @@ describe('sleep enqueue-hook', () => {
 
     expect(pending(tc.hippoRoot)).toHaveLength(0);
     const desired = deriveGraph(await loadGraphSources(objectsAt(tc.hippoRoot), T));
-    expect(await sqliteStore(tc.hippoRoot).graphReads.graphDelta(T, desired)).toEqual([]);
+    expect(await sqliteStore(tc.hippoRoot).hippoDb.graphReads.graphDelta(T, desired)).toEqual([]);
     expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
   });
 

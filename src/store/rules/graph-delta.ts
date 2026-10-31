@@ -7,7 +7,7 @@ import type {
   DesiredRelation,
   GraphOp,
   NaturalKey,
-} from '../../base/ports/store/graph.js';
+} from '../../base/records/graph.js';
 
 /** The entity columns a rebuild diffs against. */
 export interface StoredEntity {

@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import type { WriteEntryOptions } from '../../src/store/sqlite/entries/entry-writes.js';
 import { writeEntryThenFail } from '../_helpers/failing-write.js';
 import { loadRecallSearchEntries } from '../../src/entry/testing.js';
-import type { PromotedCopy } from '../../src/base/ports/store.js';
+import type { PromotedCopy } from '../../src/base/records/sharing.js';
 import { confidenceFacets } from '../../src/entry/memory.js';
 import type { ConfidenceInputs } from '../../src/base/memory/strength.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

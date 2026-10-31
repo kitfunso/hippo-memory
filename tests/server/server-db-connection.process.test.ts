@@ -163,7 +163,7 @@ describe('GET /ready', () => {
     const root = makeRoot('srv-ready-window');
     dirs.push(root);
     const store = sqliteStore(root);
-    const real = store.readiness!;
+    const real = store.hippoDb.readiness;
     const WINDOW_MS = 1000;
     let reads = 0;
     let clock = 5_000;
@@ -194,10 +194,11 @@ describe('GET /ready', () => {
     }
   });
 
-  it('answers 200 with store "unchecked" for a served store that has no readiness group', async () => {
+  it('answers 200 with store "unchecked" for a served store whose local tier has no readiness', async () => {
     const root = makeRoot('srv-ready-unchecked');
     dirs.push(root);
-    const unchecked = { ...sqliteStore(root), readiness: undefined };
+    const store = sqliteStore(root);
+    const unchecked = { ...store, hippoDb: { ...store.hippoDb, readiness: undefined } };
     const handle = await serveKeyed({ hippoRoot: root, port: 0, store: unchecked });
     try {
       expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true,"store":"unchecked"}' });

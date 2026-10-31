@@ -16,12 +16,10 @@ import {
 } from '../../src/surface/connectors/github/transform.js';
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
-import type { ConnectorEvent } from '../../src/base/ports/store.js';
+import type { ConnectorEvent } from '../../src/base/records/connectors.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { portOnlyStore } from '../_helpers/port-only-store.js';
-import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
 import { rowsOf, sqliteConnectorSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -72,11 +70,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('a served store with connectorWrites takes connector traffic', () => {
+describe('a store served from another folder takes connector traffic', () => {
   it('stores one Slack message and one GitHub event and archives on one Slack deletion, with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const served = copyOf();
-    const side = sqliteConnectorSide(served, portOnlyStore(served, CONNECTOR_GROUPS));
+    const side = sqliteConnectorSide(served);
     const ctx = {
       hippoRoot,
       tenantId: TENANT_A,
@@ -155,7 +153,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
 
   it('holds a flagged GitHub comment for review: quarantine scope on the entry, one pending record, the quarantine row ahead of the remember row', async () => {
     const served = copyOf();
-    const side = sqliteConnectorSide(served, portOnlyStore(served, CONNECTOR_GROUPS));
+    const side = sqliteConnectorSide(served);
     const ctx = {
       hippoRoot: markedFolder(),
       tenantId: TENANT_A,

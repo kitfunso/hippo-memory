@@ -20,7 +20,7 @@ import type {
   CompactionCounts,
   TokenTally,
   Diagnostics,
-} from '../../../base/ports/store/diagnostics.js';
+} from '../../../base/records/diagnostics.js';
 import { type OnHandle, readOnly } from '../runtime/open.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';

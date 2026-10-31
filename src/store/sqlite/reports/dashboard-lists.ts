@@ -19,7 +19,7 @@ import type {
   DashboardSortKey,
   FilterTally,
   ListedRow,
-} from '../../../base/ports/store/dashboard-reads.js';
+} from '../../../base/records/dashboard-reads.js';
 import {
   FACT_COLUMNS,
   factInputs,

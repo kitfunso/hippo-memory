@@ -8,7 +8,7 @@ import { insertDormantRow } from '../dormant/dormant-rows.js';
 import { calculateStrength } from '../../../base/memory/strength.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
-import type { SetAsideResult, SetAsideWhy } from '../../../base/ports/store/project-tags.js';
+import type { SetAsideResult, SetAsideWhy } from '../../../base/records/project-tags.js';
 import { handleNow } from '../runtime/handle-clock.js';
 
 export interface SetAsideRowOptions {

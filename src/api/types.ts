@@ -2,27 +2,15 @@
 // error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
-import type {
-  FolderFiles,
-  GlobalGroup,
-  Ledger,
-  RequiredStore,
-  StoreReach,
-} from '../base/ports/store.js';
+import type { HippoStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type {
-  GlobalTargetGroup,
-  OptionalGroup,
-  SleepGroup,
-  StoreWith,
-} from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
+import type { CoreEnrichment, FolderHome, GlobalEnrichment, LedgerBook } from './enrichment.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { FailureNotices } from '../base/util/failure-notices.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
 import type { StrengthModel } from '../base/memory/strength.js';
-import type { EmbedderFor } from '../base/ports/embedder.js';
 import type { DetachedWork } from '../domain/search/detached-work.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
@@ -44,18 +32,19 @@ export interface Actor {
 }
 
 /** The operator's global store in reach, with the config.json that ranks its rows and governs
- * its ledger. */
+ * its ledger; a local path proves its tier before it reads one. */
 export interface GlobalInReach {
   readonly root: string;
-  readonly store: StoreWith<GlobalGroup>;
+  readonly store: HippoStore;
   readonly config: HippoConfig;
+  readonly enrich?: GlobalEnrichment;
 }
 
 /** A store a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */
 export interface LedgerHome {
-  readonly ledger: Ledger;
+  readonly ledger: LedgerBook;
   /** Where the store sits, which its delivery rows name by hash. */
-  readonly folderFiles: FolderFiles;
+  readonly folderFiles: FolderHome;
   readonly config: HippoConfig;
 }
 
@@ -70,18 +59,15 @@ export interface ContextReach extends Omit<StoreReach, 'global' | 'globalTarget'
 
 /** The global write target a host builds: without `embedderFor` the context's own embedder
  * embeds the copy. */
-export type GlobalTargetInReach = Omit<
-  ConfiguredFolder<StoreWith<GlobalTargetGroup>>,
-  'embedderFor'
-> &
-  Partial<Pick<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'>>;
+export type GlobalTargetInReach = Omit<ConfiguredFolder<HippoStore>, 'embedderFor'> &
+  Partial<Pick<ConfiguredFolder<HippoStore>, 'embedderFor'>>;
 
 export interface Context {
   tenantId: string;
   actor: Actor;
   /** Built by a composition root; every api function reads and writes storage only through it,
-   * and reaches an optional group only through `ContextWith`, which a surface proved at boot. */
-  readonly store: RequiredStore;
+   * and reaches hippo.db's local tier only through `HippoDbContext`, which a surface proved. */
+  readonly store: HippoStore;
   /** Set by a composition root. Absent, the api reads one project and no global store, as for an
    * integrator's store. */
   reach?: ContextReach;
@@ -96,6 +82,8 @@ export interface Context {
   /** The machine, model, embedder and rerankers this context reaches past the store, set by its
    * composition root. */
   readonly infra: InfraPorts;
+  /** What a core path reads from hippo.db's local tier, filled by a root whose store has it. */
+  readonly enrich?: CoreEnrichment;
   /** Aborts when the request passes its deadline, so a call stops starting work nobody waits
    * for. Set by a server or stdio root; the deadline itself rides in the store, whose worker
    * calls wait on it. */
@@ -122,54 +110,11 @@ export type EntryInfraPorts = Omit<InfraPorts, 'failureNotices'> & {
   readonly failureNotices?: FailureNotices;
 };
 
-/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own
- * loader, and a promote embeds its copy with `embedderFor`. */
-export function contextReach(
-  reach: StoreReach,
-  configAt: (root: string) => HippoConfig,
-  embedderFor: EmbedderFor,
-  ledger?: LedgerHome,
-): ContextReach {
-  const { global, globalTarget, ...rest } = reach;
-  // Both name the operator's global store, so one load serves both.
-  let last: { readonly root: string; readonly config: HippoConfig } | undefined;
-  const at = (root: string): HippoConfig => {
-    if (last?.root !== root) last = { root, config: configAt(root) };
-    return last.config;
-  };
-  let withConfig: ContextReach = ledger === undefined ? rest : { ...rest, ledger };
-  if (global !== undefined) {
-    withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
-  }
-  if (globalTarget !== undefined) {
-    withConfig = {
-      ...withConfig,
-      globalTarget: { store: globalTarget.store, config: at(globalTarget.root), embedderFor },
-    };
-  }
-  return withConfig;
-}
-
 /** Whether the store serves many people: the root's reach says, else the store's config for an
  * integrator's store. */
 export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {
   return ctx.reach ? ctx.reach.shared : ctx.config.sharedStore;
 }
-
-/** A context whose store sets the optional groups `G`: the surface proved them once, so the api
- * checks nothing. `F` are groups the feature reads where it states its fallback. */
-export type ContextWith<
-  G extends OptionalGroup = never,
-  F extends OptionalGroup = never,
-> = Context & {
-  readonly store: StoreWith<G, F>;
-};
-
-/** A context whose store sets the groups a sleep runs on. */
-export type SleepContext = ContextWith<SleepGroup>;
-
-/** The SleepContext the published sleep entry takes. */
-export type EntrySleepContext = EntryContext<SleepContext>;
 
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector
  * Contexts; Bearer-authed callers build Actor from the api_keys row instead. */

@@ -4,10 +4,10 @@ import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { conflictLoserFate } from '../../../src/domain/consolidate/conflicts.js';
 import * as conflictsSql from '../../../src/store/sqlite/review/conflicts.js';
 import { openStore } from '../../../src/store/sqlite/runtime/handles.js';
-import type { MemoryConflict } from '../../../src/base/ports/store/conflicts.js';
+import type { MemoryConflict } from '../../../src/base/records/conflicts.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
 import { MAX_LIST_LIMIT } from '../../../src/base/util/limits.js';
-import type { DetectedConflict } from '../../../src/base/ports/store/consolidation.js';
+import type { DetectedConflict } from '../../../src/base/records/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
 import { onHandle, sqliteStore, storeFilesOf } from '../test-session.js';
 
@@ -28,7 +28,7 @@ export async function listMemoryConflicts(
   status: string = 'open',
   tenantId: TenantId = ALL_TENANTS,
 ): Promise<MemoryConflict[]> {
-  const { conflicts } = sqliteStore(hippoRoot);
+  const { conflicts } = sqliteStore(hippoRoot).hippoDb;
   const out: MemoryConflict[] = [];
   let after: KeysetPosition | undefined;
   do {
@@ -50,7 +50,7 @@ export async function resolveConflictKeeping(
   conflictId: number,
   keepId: string,
 ): Promise<boolean> {
-  const conflicts = sqliteStore(hippoRoot).conflicts;
+  const conflicts = sqliteStore(hippoRoot).hippoDb.conflicts;
   const row = await conflicts.get(tenantId, conflictId);
   if (!row) return false;
   const a = { id: row.conflict.memoryAId, scope: row.a?.scope ?? null };

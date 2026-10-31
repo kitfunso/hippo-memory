@@ -271,7 +271,7 @@ async function main(): Promise<void> {
   // three helper paths (snapshot, handoff, events) instead of fast-pathing on
   // null. Continuity-off iterations ignore these rows entirely.
   const sessionId = 'sess-bench';
-  const { sessions } = sqliteStore(home);
+  const { sessions } = sqliteStore(home).hippoDb;
   const snapshot = {
     task: 'Benchmark continuity overhead',
     summary: 'Seed continuity so the helper paths actually do work.',

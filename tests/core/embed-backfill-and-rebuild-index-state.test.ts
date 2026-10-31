@@ -21,7 +21,7 @@ import { localIndex, storeAt } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import type { EmbeddingIndex } from '../../src/base/ports/store.js';
+import type { EmbeddingIndex } from '../../src/base/records/embedding-index.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
@@ -260,7 +260,7 @@ describe('a model identity change on hippo.db', () => {
   it('stages the rebuild one page of vectors at a time, and the live index changes only at the commit', async () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
-    const index = storeAt(root).embeddingIndex;
+    const index = storeAt(root).hippoDb.embeddingIndex;
     const staged: number[] = [];
     const liveWhileStaging: IndexState[] = [];
     const watched: EmbeddingIndex = {

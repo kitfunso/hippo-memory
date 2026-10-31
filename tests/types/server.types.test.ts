@@ -12,14 +12,12 @@ import {
   isReservedActor,
   serve,
   type Context,
-  type CaptureContext,
   type HippoStore,
   type SessionCaptureRequest,
   type ServeOptions,
   type ServerHandle,
 } from '../../src/server.js';
 import type { HippoConfig } from '../../src/entry/store-kit.js';
-import { hasGroup } from '../../src/entry/store-kit.js';
 
 declare const store: HippoStore;
 declare const plain: Context;
@@ -66,13 +64,9 @@ describe('hippo-memory/server entry types', () => {
     });
   });
 
-  it('captureSessionTexts takes a Context whose store has captures, and hasGroup narrows one', () => {
-    expectTypeOf(captureSessionTexts).parameter(0).toEqualTypeOf<CaptureContext>();
-    // @ts-expect-error a store with no captures group has nowhere to read or write the session's rows
+  it('captureSessionTexts takes the published Context and proves the local tier at run time', () => {
+    expectTypeOf(captureSessionTexts).parameter(0).toEqualTypeOf<Context>();
     typeOnly(() => captureSessionTexts(plain, sessionReq));
-    typeOnly(() => {
-      if (hasGroup(plain.store, 'captures')) captureSessionTexts({ ...plain, store: plain.store }, sessionReq);
-    });
   });
 
   it('isReservedActor takes a subject string', () => {

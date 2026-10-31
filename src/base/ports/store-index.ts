@@ -12,15 +12,12 @@ export type {
   KeyMint,
   KeyRevoke,
   KeyWrites,
-  LastRecall,
-  LastRecallWrites,
   OutcomeWrite,
   RawArchive,
   RecallSearchArgs,
   RecallWrites,
   SelfKeyMint,
-  StoreGroup,
-  StoreGroups,
+  CoreGroups,
   SupersedeWrite,
   VectorBackfillQuery,
   VectorReads,
@@ -28,20 +25,4 @@ export type {
   VectorWrite,
   VectorWriteResult,
   VectorWrites,
-} from './store.js';
-export type { CardCreate, Cards } from './store/cards.js';
-export type { Conflicts } from './store/conflicts.js';
-export type { Dormant, DormantRestoreRequest } from './store/dormant.js';
-export type { Goals } from './store/goals.js';
-export type { Reports } from './store/reports.js';
-export type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from './store/sessions.js';
-export type { RejectionCheck, Rejections, FailureLog } from './store/rejections.js';
-export type { CallerItemsSaved, Compactions } from './store/capture.js';
-export {
-  hasGroup,
-  OPTIONAL_GROUPS,
-  requireGroup,
-  type OptionalGroup,
-  type RequiredStore,
-  type StoreWith,
 } from './store.js';

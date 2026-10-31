@@ -1,7 +1,7 @@
 // The `hippo doctor` checks that read the database and the compaction spool.
 
 import * as path from 'node:path';
-import type { StoreHealth } from '../../base/ports/store/diagnostics.js';
+import type { StoreHealth } from '../../base/records/diagnostics.js';
 import { needsNewerHippo } from '../../base/errors/store-open.js';
 import {
   REPLAY_AFTER_MS,

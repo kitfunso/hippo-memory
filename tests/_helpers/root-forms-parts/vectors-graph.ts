@@ -22,7 +22,7 @@ import {
   type RelationRow,
 } from '../../../src/store/sqlite/graph/graph-rows.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
-import type { Entity, EntityType, Relation } from '../../../src/base/ports/store/graph.js';
+import type { Entity, EntityType, Relation } from '../../../src/base/records/graph.js';
 import { openStore } from '../../../src/store/sqlite/runtime/handles.js';
 import * as searchRowsSql from '../../../src/store/sqlite/recall/search-rows.js';
 import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
@@ -30,7 +30,8 @@ import * as tokenLedgerSql from '../../../src/store/sqlite/ledger/token-ledger.j
 import * as vectorIndexSql from '../../../src/store/sqlite/vectors/vector-index.js';
 import { applyRebuild, type RebuildPatch } from '../../../src/domain/consolidate/summary-settle.js';
 import { loadEveryTenantEntries } from './entries.js';
-import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/base/ports/store/vectors.js';
+import type { VectorCandidateSpec } from '../../../src/base/ports/store/vectors.js';
+import type { StoredVectorSummary } from '../../../src/base/records/embedding-index.js';
 import { handlesOf, onHandle, sqliteStore } from '../test-session.js';
 
 /** The tenant's newest entities, `entityType` only when named. */
@@ -76,11 +77,12 @@ export async function loadEntitiesByMemoryId(
   tenantId: string,
   memoryIds: readonly string[],
 ): Promise<Entity[]> {
-  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'memory', ids: memoryIds })).entities;
+  return (await sqliteStore(hippoRoot).hippoDb.graphReads.graphRows(tenantId, { by: 'memory', ids: memoryIds }))
+    .entities;
 }
 
 export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry[]> {
-  const { consolidation } = sqliteStore(hippoRoot);
+  const { consolidation } = sqliteStore(hippoRoot).hippoDb;
   const out: MemoryEntry[] = [];
   let after: EntryCursor | undefined;
   do {
@@ -92,7 +94,7 @@ export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry
 }
 
 export async function loadAllDirtySummaries(hippoRoot: string, limit?: number): Promise<MemoryEntry[]> {
-  const dirty = await sqliteStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+  const dirty = await sqliteStore(hippoRoot).hippoDb.consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
   return dirty.summaries.map((s) => s.summary);
 }
 
@@ -149,7 +151,7 @@ export async function loadEntitiesByIds(
   tenantId: string,
   ids: readonly number[],
 ): Promise<Entity[]> {
-  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'entity', ids })).entities;
+  return (await sqliteStore(hippoRoot).hippoDb.graphReads.graphRows(tenantId, { by: 'entity', ids })).entities;
 }
 
 export async function loadNeighborRelations(
@@ -159,7 +161,7 @@ export async function loadNeighborRelations(
   opts: { limit?: number } = {},
 ): Promise<Relation[]> {
   const query = { by: 'neighbor', ids: entityIds, limit: opts.limit ?? 1000 } as const;
-  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, query)).relations;
+  return (await sqliteStore(hippoRoot).hippoDb.graphReads.graphRows(tenantId, query)).relations;
 }
 
 export function loadVectorCandidateEntries(

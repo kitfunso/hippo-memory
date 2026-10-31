@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { type Body, handle, apiKeyB, useObjectsServer, jsonAs, post, get } from '../_helpers/http-objects-server.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 useObjectsServer();
 
@@ -140,7 +141,7 @@ async function created(k: Kind): Promise<Wire> {
   return one(res, k.field);
 }
 
-describe.each(KINDS)('HTTP $root ($kind)', (k) => {
+describe.skipIf(needsHippoDb('tier')).each(KINDS)('HTTP $root ($kind)', (k) => {
   it('create answers 201 with the row; get finds it by id and answers 404 for a missing id', async () => {
     const row = await created(k);
     expect(row).toMatchObject(k.created);
@@ -185,7 +186,7 @@ describe.each(KINDS)('HTTP $root ($kind)', (k) => {
   });
 });
 
-describe.each(SUPERSEDING)('HTTP $root/:id/supersede ($kind)', (k) => {
+describe.skipIf(needsHippoDb('tier')).each(SUPERSEDING)('HTTP $root/:id/supersede ($kind)', (k) => {
   it('answers the successor, marks the old row superseded by it, and a second supersede answers 409', async () => {
     const old = await created(k);
     const supRes = await post(`${k.root}/${old.id}/supersede`, k.supersede.body);

@@ -1,5 +1,5 @@
 // Importing one waiting spool file: claim it, read it, hand it to the importer, settle the outcome.
-import type { StepFailure } from '../base/ports/store/capture.js';
+import type { StepFailure } from '../base/records/capture.js';
 import { isStoreBusy } from '../base/ports/store.js';
 import { errorFields, errorMessage } from '../base/util/log.js';
 import { type Log, MAX_ATTEMPTS, type SpoolFs, type Waiting, settleCode } from './spool-files.js';

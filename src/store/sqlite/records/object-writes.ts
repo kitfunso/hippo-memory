@@ -35,7 +35,7 @@ import type {
   ObjectCloseArgs,
   ObjectSave,
   ObjectSaveArgs,
-} from '../../../base/ports/store/objects.js';
+} from '../../../base/records/objects.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { closePrediction, writePrediction } from '../learning/predictions.js';

@@ -13,7 +13,7 @@ import {
   type CompleteGoalOptions,
   type PushGoalOptions,
   type Goals,
-} from '../../../base/ports/store/goals.js';
+} from '../../../base/records/goals.js';
 import type { OnHandle } from '../runtime/open.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';

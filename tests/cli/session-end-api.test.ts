@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CliContext } from '../../src/surface/cli/api-context.js';
 import { heldLog, sessionEndWork, type SessionEndWork } from '../../src/api/session-end.js';
+import { globalEnrichment } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
@@ -77,7 +78,9 @@ function withoutOwnStore(globalRoot: string | null): CliContext {
   const ctx = lastingCommand().apiContext(root, TENANT);
   const reach = { ...ctx.reach!, hasLocal: false, global: undefined };
   if (globalRoot === null) return { ...ctx, reach };
-  const global = { root: globalRoot, store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
+  const store = sqliteStore(globalRoot);
+  // As a root fills it, so session end books the global store's re-reads through its enrichment.
+  const global = { root: globalRoot, store, config: loadConfig(globalRoot), enrich: globalEnrichment(store) };
   return { ...ctx, reach: { ...reach, global } };
 }
 

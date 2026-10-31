@@ -4,19 +4,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { typeOnly } from './_type-only.js';
-import type { SleepStore } from '../../dist/index.js';
-import { bindSessionOwner, captureSessionTexts, sessionEndHandoffForCaller, type Context } from '../../dist/server.js';
-import {
-  hasGroup,
-  loadConfig,
-  requireGroup,
-  sqliteStore,
-  type HippoStore,
-  type StoreGroups,
-  type VectorWrites,
-} from '../../dist/entry/store-kit.js';
+import { bindSessionOwner, type Context } from '../../dist/server.js';
+import { loadConfig, sqliteStore, type HippoStore, type Goals, type VectorWrites } from '../../dist/entry/store-kit.js';
 import { graphExpandRecall, hybridSearch } from '../../dist/entry/search.js';
-import { goalPush } from '../../dist/entry/eval-scripts.js';
 import { transcriptWorkingState } from '../../dist/entry/session-text.js';
 
 type Source = NonNullable<NonNullable<Parameters<typeof hybridSearch>[2]>['source']>;
@@ -26,7 +16,6 @@ type GlobalStore = GlobalInReach['store'];
 
 declare const ctx: Context;
 declare const sessionId: string;
-declare const hippoRoot: string;
 declare const transcriptPath: string;
 declare const globalRoot: string;
 declare const tenantId: string;
@@ -34,41 +23,13 @@ declare const query: string;
 declare const entries: Parameters<typeof hybridSearch>[1];
 declare const results: Parameters<typeof graphExpandRecall>[0];
 declare const provider: Source['provider'];
-declare const consolidation: SleepStore['consolidation'];
-declare const req: Parameters<typeof captureSessionTexts>[1];
-declare const end: Omit<Parameters<typeof sessionEndHandoffForCaller>[1], 'sessionId'>;
 declare const base: HippoStore;
-declare const sessions: StoreGroups['sessions'];
+declare const goals: Goals;
 
 describe('UPGRADING-3.0 advice', () => {
-  it('narrows the store and hands the entry a Context built around it (narrowStore, Context.store, session entries)', () => {
+  it('hands an entry on the local tier the plain Context (narrowStore, Context.store, session entries)', () => {
     typeOnly(async () => {
-      const { store } = ctx;
-      if (hasGroup(store, 'sessions')) await bindSessionOwner({ ...ctx, store }, sessionId);
-      if (hasGroup(store, 'sessions')) {
-        await sessionEndHandoffForCaller({ ...ctx, store }, { ...end, sessionId });
-      }
-      if (hasGroup(ctx.store, 'sessions')) {
-        // @ts-expect-error narrowing ctx.store does not narrow ctx
-        await bindSessionOwner(ctx, sessionId);
-      }
-      // @ts-expect-error a Context whose store names no sessions is refused
       await bindSessionOwner(ctx, sessionId);
-      // The spread row 18 warns against compiles; it drops the store's marks at run time.
-      expectTypeOf({ ...store, sessions: requireGroup(store, 'sessions') }).toHaveProperty('sessions');
-    });
-  });
-
-  it('narrows the store for a capture entry (captureSessionTexts)', () => {
-    typeOnly(async () => {
-      if (hasGroup(ctx.store, 'captures')) await captureSessionTexts({ ...ctx, store: ctx.store }, req);
-    });
-  });
-
-  it('pushes a goal on a store narrowed to goals (goalPush)', () => {
-    typeOnly(async () => {
-      const { store } = ctx;
-      if (hasGroup(store, 'goals')) await goalPush({ ...ctx, store }, { sessionId, goalName: 'g' });
     });
   });
 
@@ -76,21 +37,16 @@ describe('UPGRADING-3.0 advice', () => {
     typeOnly(async () => {
       const { store } = ctx;
       await hybridSearch(query, entries, {
-        source: {
-          store,
-          vectors: store.vectors,
-          graphReads: hasGroup(store, 'graphReads') ? store.graphReads : undefined,
-          provider,
-        },
+        source: { store, vectors: store.vectors, provider },
       });
       await hybridSearch(query, entries, { store });
     });
   });
 
-  it('expands recall on a store narrowed to graphReads (graphExpandRecall)', () => {
+  it('expands recall on any store, walking the graph its local tier keeps (graphExpandRecall)', () => {
     typeOnly(async () => {
       const { store } = ctx;
-      if (hasGroup(store, 'graphReads')) await graphExpandRecall(results, { store, hops: 1, tenantId });
+      await graphExpandRecall(results, { store, hops: 1, tenantId });
     });
   });
 
@@ -105,23 +61,13 @@ describe('UPGRADING-3.0 advice', () => {
     expectTypeOf<VectorWrites['indexKey']>().toEqualTypeOf<() => Promise<string>>();
   });
 
-  it('names the optional groups a store literal sets in its type (HippoStore)', () => {
+  it('sets the required groups alone on a store literal typed HippoStore (HippoStore)', () => {
     typeOnly(() => {
-      const store: HippoStore & Pick<StoreGroups, 'sessions'> = { ...base, sessions };
-      // @ts-expect-error HippoStore names no optional group, so a literal typed HippoStore may not set one
-      const refused: HippoStore = { ...base, sessions };
-      expectTypeOf(store).toHaveProperty('sessions');
-      expectTypeOf(refused).not.toHaveProperty('sessions');
-    });
-  });
-
-  it('sleeps only on a store that sets graphReads (SleepStore)', () => {
-    typeOnly(() => {
-      const sleeper: SleepStore = { ...sqliteStore(hippoRoot), consolidation };
-      const twoX: Omit<SleepStore, 'graphReads'> = sleeper;
-      // @ts-expect-error the 2.x sleep groups on a 3.0 store, without graphReads
-      const refused: SleepStore = twoX;
-      expectTypeOf(refused).toEqualTypeOf<SleepStore>();
+      const store: HippoStore = { ...base };
+      // @ts-expect-error HippoStore names no group of hippo.db's local tier, so a literal typed HippoStore may not set one
+      const refused: HippoStore = { ...base, goals };
+      expectTypeOf(store).not.toHaveProperty('goals');
+      expectTypeOf(refused).not.toHaveProperty('goals');
     });
   });
 

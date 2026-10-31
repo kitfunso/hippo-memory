@@ -1,7 +1,6 @@
 // The rows of a typed-object kind, from one config: create, list, get and close for every kind,
 // plus supersede for a kind that versions. Each handler parses and replies; the work is one api
 // call.
-import type { ContextWith } from '../../../api/types.js';
 import {
   objectClose,
   objectGet,
@@ -21,6 +20,7 @@ import { byCreatedAt, pageOf } from '../cursor.js';
 import type { Route } from '../types.js';
 import { isSetMember, parseJsonBody, parseLimitParam } from '../validation.js';
 import { kindRows, type IdHandler, type NamedRoute, type ObjectRequest } from './kind-routes.js';
+import type { HippoDbContext } from '../../../api/hippo-db-context.js';
 
 type Body = Record<string, JsonValue>;
 
@@ -37,7 +37,7 @@ export interface ObjectRouteConfig<K extends ObjectKind> {
   /** List query parameter matched against the kind's filter column, e.g. "customer". */
   readonly filterParam?: string;
   /** Checks the body, then saves the new object. */
-  readonly create: (ctx: ContextWith<'objects'>, body: Body) => Promise<ObjectByKind[K]>;
+  readonly create: (ctx: HippoDbContext, body: Body) => Promise<ObjectByKind[K]>;
   readonly named?: readonly NamedRoute[];
   /** `POST /:id/<action>` rows only this kind has; they come before close. */
   readonly actions?: Readonly<Record<string, IdHandler>>;

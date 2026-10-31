@@ -5,16 +5,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isInitialized } from '../../../host/project-identity.js';
-import { isStoreBusy, type StoreWith } from '../../../base/ports/store.js';
+import { isStoreBusy } from '../../../base/ports/store.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { handlesOf, initStore } from '../runtime/handles.js';
 import { inPortTerms } from '../runtime/port-errors.js';
 import { sqliteStore } from '../store.js';
-import type { HippoDbTier } from '../hippo-db.js';
+import type { HippoDbTier, HippoDbStore } from '../hippo-db.js';
 import type { SqliteStoreOptions } from '../runtime/grant.js';
 
-type SqliteImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'> &
-  HippoDbTier;
+type SqliteImportStore = HippoDbStore & HippoDbTier;
 
 interface SqliteImportStores {
   open(root: string, opts: { readonly busyWaitMs?: number }): SqliteImportStore;
@@ -28,10 +27,11 @@ interface SqliteImportStores {
  * session, which every store it opens takes. */
 export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores {
   return {
-    open: (root, { busyWaitMs }) => ({
-      ...sqliteStore(root, opts),
-      agentImport: sqliteAgentImport(handlesOf(root, opts), busyWaitMs),
-    }),
+    open: (root, { busyWaitMs }) => {
+      const store = sqliteStore(root, opts);
+      const agentImport = sqliteAgentImport(handlesOf(root, opts), busyWaitMs);
+      return { ...store, hippoDb: { ...store.hippoDb, agentImport } };
+    },
     exists: isInitialized,
     create: async (root) => inPortTerms(() => initStore(root, opts)),
     // Its folder is deleted at close, so no session of the caller's may keep one of its handles

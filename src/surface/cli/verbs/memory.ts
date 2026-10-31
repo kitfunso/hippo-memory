@@ -303,7 +303,6 @@ export const MEMORY_VERBS = {
     ],
   }),
   sleep: verb(() => import('../sleep.js'), 'handleSleep', {
-    needs: ['graphReads'],
     repairsCodexWrapper: true,
     destructive: true,
     scoped: true,
@@ -321,7 +320,6 @@ export const MEMORY_VERBS = {
     ],
   }),
   'daily-runner': verb(() => import('../daily-runner.js'), 'handleDailyRunner', {
-    needs: ['reports'],
     flags: {},
     usage: [
       `
@@ -329,7 +327,6 @@ export const MEMORY_VERBS = {
     ],
   }),
   dedup: verb(() => import('../maintenance.js'), 'handleDedup', {
-    needs: ['reports'],
     destructive: true,
     flags: { switches: ['dry-run'], numbers: ['threshold'] },
     usage: [

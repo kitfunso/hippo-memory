@@ -29,8 +29,11 @@ function seed(count: number, opts: { tenantId?: string; tags?: string[] } = {}):
 }
 
 const tagAll = async (ids: readonly string[]) =>
-  (await recordStatementsAsync(async () => await sqliteStore(root).learning.addTagToEntries('default', ids, TAG)))
-    .statements;
+  (
+    await recordStatementsAsync(
+      async () => await sqliteStore(root).hippoDb.learning.addTagToEntries('default', ids, TAG),
+    )
+  ).statements;
 
 describe('addTagToEntries', () => {
   it('commits one transaction for one row and for many', async () => {

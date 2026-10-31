@@ -7,7 +7,7 @@ import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import type { RecallSearchArgs } from '../../src/base/ports/store/recall-writes.js';
 import type { ContinuityKey } from '../../src/base/ports/store/types.js';
-import type { PredictionSave } from '../../src/base/ports/store/objects.js';
+import type { PredictionSave } from '../../src/base/records/objects.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   runOnFixture,
@@ -132,25 +132,31 @@ describe('HippoStore continuity', () => {
   it('reads the keyed snapshot with its session handoff and newest events, oldest first', async () => {
     const { outcomes } = await conforms([
       (s) =>
-        s.sessions.save(
+        s.hippoDb.sessions.save(
           TENANT_A,
           'snapshot',
           { task: 'ship', summary: 'half', nextStep: 'merge', sessionId: 's1' },
           KEY,
         ),
       (s) =>
-        s.sessions.save(TENANT_A, 'handoff', { handoff: { version: 1, sessionId: 's1', summary: 'carry on' } }, KEY),
+        s.hippoDb.sessions.save(
+          TENANT_A,
+          'handoff',
+          { handoff: { version: 1, sessionId: 's1', summary: 'carry on' } },
+          KEY,
+        ),
       (s) =>
-        s.sessions.save(
+        s.hippoDb.sessions.save(
           TENANT_A,
           'handoff',
           { handoff: { version: 1, sessionId: 's1', summary: 'carry on again' } },
           KEY,
         ),
-      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'one' }),
-      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'two' }),
-      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'three' }),
-      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's2', eventType: 'note', content: 'other session' }),
+      (s) => s.hippoDb.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'one' }),
+      (s) => s.hippoDb.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'two' }),
+      (s) => s.hippoDb.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'three' }),
+      (s) =>
+        s.hippoDb.sessions.save(TENANT_A, 'event', { sessionId: 's2', eventType: 'note', content: 'other session' }),
       (s) => s.continuity(TENANT_A, 2, KEY),
       (s) => s.continuity(TENANT_A, 8, null),
       (s) => s.continuity(TENANT_A, 8, { owner: 'bob', project: ['proj'] }),
@@ -180,10 +186,20 @@ describe('HippoStore base writes', () => {
       ...saves.map(
         (save): GroupCall<'base', unknown> =>
           (s) =>
-            s.objects.saveObject(TENANT_A, 'prediction', save),
+            s.hippoDb.objects.saveObject(TENANT_A, 'prediction', save),
       ),
-      (s) => s.objects.closeObject(TENANT_A, 'prediction', 1, { closureState: 'closed', actualValue: 4, actor: 'cli' }),
-      (s) => s.objects.closeObject(TENANT_A, 'prediction', 2, { closureState: 'closed', actualValue: 3, actor: 'cli' }),
+      (s) =>
+        s.hippoDb.objects.closeObject(TENANT_A, 'prediction', 1, {
+          closureState: 'closed',
+          actualValue: 4,
+          actor: 'cli',
+        }),
+      (s) =>
+        s.hippoDb.objects.closeObject(TENANT_A, 'prediction', 2, {
+          closureState: 'closed',
+          actualValue: 3,
+          actor: 'cli',
+        }),
       (s) => s.planningFallacyEvidence(TENANT_A, ['deploy', 'work']),
       (s) => s.planningFallacyEvidence(TENANT_A, ['work']),
       (s) => s.planningFallacyEvidence(TENANT_A, ['nothing']),
@@ -216,7 +232,7 @@ describe('HippoStore base writes', () => {
           .then((found) => found.map((e) => [e.retrievalCount, e.strength, e.lastRetrieved])),
       (s) => s.entriesByIds([id('b')], TENANT_B).then((found) => found.map((e) => e.retrievalCount)),
       (s) => s.bumpRecallStats(2),
-      (s) => s.reports.stats().then((stats) => stats.total_recalled),
+      (s) => s.hippoDb.reports.stats().then((stats) => stats.total_recalled),
       (s) =>
         s.recordTokens({
           tenantId: TENANT_A,
@@ -236,8 +252,8 @@ describe('HippoStore base writes', () => {
           tokens: 80,
           hash: 'h1',
         }),
-      (s) => s.reports.tokenUse(TENANT_A, new Date(START).toISOString()),
-      (s) => s.reports.tokenUse(TENANT_B, new Date(START).toISOString()),
+      (s) => s.hippoDb.reports.tokenUse(TENANT_A, new Date(START).toISOString()),
+      (s) => s.hippoDb.reports.tokenUse(TENANT_B, new Date(START).toISOString()),
     ]);
     expect(outcomes[5]).toMatchObject({
       value: { classTag: 'deploy-work', tiebreak: false, baserate: { nClosed: 2 } },

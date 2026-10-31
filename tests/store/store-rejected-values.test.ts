@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
-import type { Rejection } from '../../src/base/ports/store/rejections.js';
+import type { Rejection } from '../../src/base/records/rejections.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -16,7 +16,7 @@ const { writeEntry, readEntry, sqliteStore } = sessionPerTest();
 let root: string;
 // Another person's personal scope, which a rejection with no personal scope of its own leaves alone.
 const ELSEWHERE = 'personal:private:someone-else';
-const rejections = (): ReturnType<typeof sqliteStore>['rejections'] => sqliteStore(root).rejections;
+const rejections = (): ReturnType<typeof sqliteStore>['hippoDb']['rejections'] => sqliteStore(root).hippoDb.rejections;
 
 beforeEach(() => {
   root = makeRoot('rejected-values');
@@ -136,7 +136,7 @@ describe('rejections.lift', () => {
 });
 
 const refused = (tenantId: string, entryId: string, content: string): Promise<boolean[]> =>
-  sqliteStore(root).rejections.refusedAmong([{ tenantId, entryId, content }]);
+  sqliteStore(root).hippoDb.rejections.refusedAmong([{ tenantId, entryId, content }]);
 
 describe('rejections.refusedAmong', () => {
   it('is true only for the rejected text in the tenant that rejected it, and writes neither a row nor a refusal', async () => {
@@ -144,7 +144,7 @@ describe('rejections.refusedAmong', () => {
     const entry = createMemory('Never  store this AGAIN', { tags: [] });
 
     expect(
-      await sqliteStore(root).rejections.refusedAmong([
+      await sqliteStore(root).hippoDb.rejections.refusedAmong([
         { tenantId: 'tenant-a', entryId: entry.id, content: entry.content },
         { tenantId: 'tenant-b', entryId: entry.id, content: entry.content },
         { tenantId: 'tenant-a', entryId: entry.id, content: 'some other text' },

@@ -22,7 +22,7 @@ import type {
   DirtySummaries,
   SummarySettle,
   SummarySettled,
-} from '../../../base/ports/store/consolidation.js';
+} from '../../../base/records/consolidation.js';
 import type {
   AppendAuditOptions,
   EntryCursor,

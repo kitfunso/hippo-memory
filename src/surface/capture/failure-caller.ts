@@ -1,7 +1,7 @@
 // PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's
 // owner and project, and a retried request id gets the first answer.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { ContextWith, EntryContext } from '../../api/types.js';
+import type { EntryContext } from '../../api/types.js';
 import { storeLesson } from './capture-error.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
@@ -13,9 +13,10 @@ import type {
   CaptureErrorOutcome,
   FailureOutcome,
   RoutineRule,
-} from '../../base/ports/store/rejections.js';
+} from '../../base/records/rejections.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { withEntryInfra } from '../entry-infra.js';
+import { withHippoDb, type HippoDbContext } from '../../api/hippo-db-context.js';
 
 type FailureSkip = Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'>;
 
@@ -88,13 +89,13 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
 }
 
 export async function captureFailureForCaller(
-  given: EntryContext<ContextWith<'failureLog' | 'lessonWrites' | 'sessions'>>,
+  given: EntryContext,
   req: CallerFailureRequest,
 ): Promise<CallerFailureResult> {
-  const ctx = withEntryInfra(given);
+  const ctx = withHippoDb(withEntryInfra(given));
   const failure = checkedFailure(req);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const earlier = await ctx.store.failureLog.requestOutcome(
+  const earlier = await ctx.store.hippoDb.failureLog.requestOutcome(
     ctx.tenantId,
     req.requestId,
     req.sessionId,
@@ -130,16 +131,16 @@ interface LogOutcomeOptions {
 /** Runs after the outcome in its own try, so a log error never hides the store's error or its
  * outcome. */
 async function logOutcome(
-  ctx: ContextWith<'failureLog'>,
+  ctx: HippoDbContext,
   { req, key, outcome, retried }: LogOutcomeOptions,
 ): Promise<void> {
   try {
     // The request id allows one row, so a retry rewrites the first try's outcome.
     if (retried) {
-      await ctx.store.failureLog.settleOutcome(ctx.tenantId, req.requestId, outcome);
+      await ctx.store.hippoDb.failureLog.settleOutcome(ctx.tenantId, req.requestId, outcome);
       return;
     }
-    await ctx.store.failureLog.record({
+    await ctx.store.hippoDb.failureLog.record({
       tenantId: ctx.tenantId,
       sessionId: req.sessionId,
       tool: req.tool,

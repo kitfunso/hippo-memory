@@ -3,6 +3,8 @@
 import type { InfraPorts } from '../base/ports/infra.js';
 import { FailureNotices } from '../base/util/failure-notices.js';
 import type { Context, EntryContext, EntryInfraPorts } from '../api/types.js';
+import type { CoreEnrichment } from '../api/enrichment.js';
+import { coreEnrichment } from '../api/hippo-db-context.js';
 import { createHost } from '../host/host.js';
 import { rootInfra } from '../infra/ports.js';
 
@@ -17,13 +19,19 @@ const entryNotices = new FailureNotices();
 /** The published entries' infra source, built on first use. */
 export const entryInfra = rootInfra(entryHost, entryNotices);
 
-/** `ctx` with the real ports when its builder set none, as EntryContext documents. */
-export function withEntryInfra<C extends { readonly infra?: EntryInfraPorts }>(
-  ctx: C,
-): C & { readonly infra: InfraPorts } {
-  const { infra } = ctx;
-  if (infra === undefined) return { ...ctx, infra: entryInfra() };
-  return { ...ctx, infra: { ...infra, failureNotices: infra.failureNotices ?? entryNotices } };
+/** `ctx` with the real ports when its builder set none, as EntryContext documents, and its
+ * store's local tier as the core paths read it when the builder set no `enrich`. */
+export function withEntryInfra<C extends EntryFields>(ctx: C): C & { readonly infra: InfraPorts } {
+  const { infra, store } = ctx;
+  const enrich = ctx.enrich ?? (store && coreEnrichment(store));
+  const notices = infra && { ...infra, failureNotices: infra.failureNotices ?? entryNotices };
+  return { ...ctx, infra: notices ?? entryInfra(), ...(enrich && { enrich }) };
+}
+
+interface EntryFields {
+  readonly infra?: EntryInfraPorts;
+  readonly store?: Context['store'];
+  readonly enrich?: CoreEnrichment;
 }
 
 /** `fn` with the entry's real ports filled into a Context its caller built without them. It keeps

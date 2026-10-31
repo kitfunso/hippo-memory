@@ -22,7 +22,7 @@ import type {
   DormantRestoreOutcome,
   Dormant,
   DormantRestoreRequest,
-} from '../../../base/ports/store/dormant.js';
+} from '../../../base/records/dormant.js';
 import { updateStatsUnlessBusy } from '../entries/index-and-stats.js';
 import { openStore } from '../runtime/handles.js';
 import { bound, type Bodies } from '../runtime/bound.js';

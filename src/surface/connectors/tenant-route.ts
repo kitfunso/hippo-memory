@@ -1,7 +1,7 @@
 // The tenant a webhook lands in, by one rule for every connector: its routing rows, else the host's
 // on an install that registered none.
 import type { ConnectorStore } from './ingest.js';
-import type { RouteQuery } from '../../base/ports/store/connectors.js';
+import type { RouteQuery } from '../../base/records/connectors.js';
 
 /** The host's tenant, which the root resolved, and the root's allow-unknown escape for the
  * connector. */
@@ -17,7 +17,7 @@ export async function resolveTenant(
   query: RouteQuery,
   { hostTenant, allowUnknown }: RouteFallback,
 ): Promise<string | null> {
-  const route = await store.connectorEvents.route(query);
+  const route = await store.hippoDb.connectorEvents.route(query);
   if (route.tenantId !== null) return route.tenantId;
   return route.routes === 0 || allowUnknown ? hostTenant : null;
 }

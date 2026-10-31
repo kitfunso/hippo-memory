@@ -1,4 +1,4 @@
-import type { CorrectionLink } from '../base/ports/store/reports.js';
+import type { CorrectionLink } from '../base/records/reports.js';
 
 export interface CorrectionPair {
   oldId: string;

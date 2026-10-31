@@ -133,8 +133,8 @@ async function loadStoreEntries(
   // With an admission filter, lift the per-store candidate cap (DEFAULT_SEARCH_CANDIDATE_LIMIT) to
   // a bounded window: excluded rows could otherwise fill it first.
   const searchWindow = entryFilter ? FILTERED_SEARCH_WINDOW : undefined;
-  const { sharing } = store;
-  if (!(await store.folderFiles.home()).exists) return [];
+  const { sharing } = store.hippoDb;
+  if (!(await store.hippoDb.folderFiles.home()).exists) return [];
   return recallScope
     ? sharing.recallEntries(query, {
         limit: searchWindow,

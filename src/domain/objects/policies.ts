@@ -11,7 +11,7 @@ import type { SavableDescriptor } from './descriptor.js';
 import { requireText } from './fields.js';
 import { listObjects } from './lifecycle.js';
 import type { Policy, PolicyStatus } from '../../base/records/object-types.js';
-import type { Objects, PoliciesInForceQuery } from '../../base/ports/store.js';
+import type { Objects, PoliciesInForceQuery } from '../../base/records/objects.js';
 
 export type { Policy, PolicyStatus } from '../../base/records/object-types.js';
 

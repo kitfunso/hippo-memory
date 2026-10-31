@@ -1,27 +1,28 @@
 // The checks every caller call shares: ids, project, the session's owner and the pilot arm, all
 // from the request, never the server's env or folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import { ownerOrSubject, type Context, type ContextWith } from '../../api/types.js';
+import { ownerOrSubject, type Context } from '../../api/types.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { ledgerReachOf } from '../../api/ledger-db.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { bindSessionOwner } from '../../api/auth/session-owners.js';
+import { bindSessionOwner } from '../../api/hippo-db/session-owners.js';
 import {
   fitWorkingState,
   WORKING_STATE_CAPS,
   type WorkingState,
 } from '../../base/session/working-state.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 /**
  * Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner
  * holds it). Returns the key the call's rows go under.
  */
 export async function bindCaller(
-  ctx: ContextWith<'sessions'>,
+  ctx: HippoDbContext,
   sessionId: string,
   project: CallerProject,
 ): Promise<ContinuityKey> {

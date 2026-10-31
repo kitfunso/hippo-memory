@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 const claimOn = async (store: ReturnType<typeof sqliteStore>, key: string, nowMs: number) =>
-  await store.connectorEvents.claimDelivery({ connector: 'slack', key, nowMs, ttlMs: TTL });
+  await store.hippoDb.connectorEvents.claimDelivery({ connector: 'slack', key, nowMs, ttlMs: TTL });
 /** Each call builds a store of its own, as a restarted server would. */
 const claim = async (key: string, nowMs: number) => await claimOn(sqliteStore(root), key, nowMs);
 
@@ -40,7 +40,7 @@ describe('claimDelivery', () => {
 
   it('frees a released key, and keeps a failed delivery from holding its retry back', async () => {
     await claim('sig-a', 0);
-    await sqliteStore(root).connectorEvents.releaseDelivery('slack', 'sig-a');
+    await sqliteStore(root).hippoDb.connectorEvents.releaseDelivery('slack', 'sig-a');
     expect(await claim('sig-a', 1)).toBe(true);
   });
 

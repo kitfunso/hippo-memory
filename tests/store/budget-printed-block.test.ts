@@ -9,7 +9,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import { assemble, drillDown, type Context } from '../../src/api/index.js';
-import { assembleCost, drillCost } from '../../src/api/context/context-render.js';
+import { assembleCost, drillCost } from '../../src/api/hippo-db/dag-render.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';

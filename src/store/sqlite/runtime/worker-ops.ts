@@ -23,13 +23,16 @@ const PINNED_READS: Placement = { vectors: ['nearestEntries'] };
 /** Methods the port calls reads that hippo.db runs on the one writer thread. */
 const ON_WRITER: Placement = {
   // A snapshot load rewrites the active-task mirror file.
-  sessions: ['loadSnapshot'],
+  'hippoDb.sessions': ['loadSnapshot'],
   // A session's lock token and staged vectors sit on the thread that opened it.
-  embeddingIndex: ['open'],
+  'hippoDb.embeddingIndex': ['open'],
 };
 
-type Placement = { readonly [G in keyof StoreEffects]?: readonly (keyof StoreEffects[G])[] };
+type Placement = { readonly [G in keyof StoreEffects]?: readonly (keyof StoreEffects[G])[] } & {
+  readonly [R in keyof HippoDbEffects as `hippoDb.${R}`]?: readonly (keyof HippoDbEffects[R])[];
+};
 type StoreEffects = typeof STORE_EFFECTS;
+type HippoDbEffects = typeof HIPPO_DB_EFFECTS;
 type EffectTable = Readonly<Record<string, Readonly<Record<string, OpMode>>>>;
 type PlacedOps<E> = { readonly [G in keyof E]: { readonly [M in keyof E[G]]: OpRoute } };
 

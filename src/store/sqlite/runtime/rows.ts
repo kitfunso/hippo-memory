@@ -16,7 +16,7 @@ import {
   warnDamagedColumn,
   type StoredJsonSite,
 } from '../../../base/util/stored-json.js';
-import type { SessionEvent, TaskSnapshot } from '../../../base/ports/store/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../../../base/records/sessions.js';
 import type { ConflictWire, MemoryConflict } from '../../../base/memory/conflict-wire.js';
 import type { TaskSnapshotJson } from '../../../base/session/continuity-json.js';
 

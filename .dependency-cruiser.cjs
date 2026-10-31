@@ -1,5 +1,5 @@
 // Import rules for src/, built from layers.json so the map and the rules cannot drift.
-// Run: npm run check:deps. Name and syntax rules (requireGroup in routes, SQLite words, process.env)
+// Run: npm run check:deps. Name and syntax rules (SQLite words, process.env)
 // live in oxlint.config.ts; runtime cycles between features are .dependency-cruiser-cycles.cjs.
 'use strict';
 const { existsSync, readdirSync } = require('node:fs');
@@ -82,6 +82,14 @@ const STORE_KIT = 'entry/store-kit.ts';
 // hippo.db's local tier: src/api's local modules take its types, and its code stays in the adapter.
 const tierDoor = '^src/store/sqlite/hippo-db\\.ts$';
 const outsideAdapter = [adapterPath, srcPaths([], entrances)];
+// The core files, which run on any store: the port and the api's remember, recall, context, auth and audit paths.
+const coreFiles = [
+  '^src/base/ports/store(-index)?\\.ts$',
+  '^src/base/ports/store/',
+  '^src/api/(types|enrichment)\\.ts$',
+  '^src/api/memories/remember\\.ts$',
+  '^src/api/(recall|context|auth)/',
+];
 
 const adapterRules = [
   {
@@ -150,6 +158,13 @@ const storeReach = [
     severity: 'error',
     from: { path: '^src/api/' },
     to: { path: '^src/store/', pathNot: tierDoor },
+  },
+  {
+    name: 'core-port-no-sqlite',
+    comment: `a core file reaches src/${adapter.folder} through no module, type-only imports included; its local work lives in src/api/hippo-db`,
+    severity: 'error',
+    from: { path: coreFiles },
+    to: { path: adapterPath, reachable: true },
   },
   {
     name: 'surface-through-api',

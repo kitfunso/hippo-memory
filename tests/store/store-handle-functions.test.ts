@@ -9,7 +9,7 @@ import { duplicateKey } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
-import type { Captures } from '../../src/base/ports/store/capture.js';
+import type { Captures } from '../../src/base/records/capture.js';
 import { captureExtractedItems } from '../../src/surface/capture/command.js';
 import type { ExtractedItem } from '../../src/surface/capture/extract.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
@@ -44,7 +44,7 @@ function reject(text: string): void {
 }
 
 describe('failure log functions', () => {
-  const log = () => sqliteStore(root).failureLog;
+  const log = () => sqliteStore(root).hippoDb.failureLog;
 
   it('record writes a row that a later read finds', async () => {
     await log().record({
@@ -72,7 +72,7 @@ describe('failure log functions', () => {
 
 describe('compactions.start and compactions.markSnapshotSaved', () => {
   it('inserts a started record and marks its snapshot saved', async () => {
-    const { compactions } = sqliteStore(root);
+    const { compactions } = sqliteStore(root).hippoDb;
     const id = await compactions.start('default', {
       sessionId: 's1',
       originProject: 'acme/app',
@@ -105,7 +105,7 @@ describe('compactions.saveCallerItems', () => {
   };
 
   it('writes the items once and answers a retry with the first count', async () => {
-    const { compactions } = sqliteStore(root);
+    const { compactions } = sqliteStore(root).hippoDb;
     expect(await compactions.saveCallerItems('default', req)).toEqual({ written: 1, notes: [] });
     expect(await compactions.saveCallerItems('default', req)).toEqual({ written: 1, notes: [] });
     expect(loadAllEntries(root, 'default')).toHaveLength(1);
@@ -113,7 +113,8 @@ describe('compactions.saveCallerItems', () => {
 });
 
 describe('captures.write', () => {
-  const write = async (...args: Parameters<Captures['write']>) => await sqliteStore(root).captures.write(...args);
+  const write = async (...args: Parameters<Captures['write']>) =>
+    await sqliteStore(root).hippoDb.captures.write(...args);
   const entry = (content: string) => createMemory(content, { source: 'capture' });
 
   it('writes each new entry and counts a rejected value', async () => {
@@ -166,14 +167,21 @@ describe('captureExtractedItems', () => {
     const text = 'Rotate the deploy key before the quarterly audit starts.';
     const { store, config, embed } = captureTarget(root);
     const captures: Captures = {
-      ...store.captures,
+      ...store.hippoDb.captures,
       write: (entries, opts) => {
         writeEntry(root, createMemory(text, { source: 'capture' }));
-        return store.captures.write(entries, opts);
+        return store.hippoDb.captures.write(entries, opts);
       },
     };
     const keys = new Set<string>();
-    expect(await captureExtractedItems({ store: { captures }, config, embed }, options, [item(text)], keys)).toEqual({
+    expect(
+      await captureExtractedItems(
+        { store: { hippoDb: { ...store.hippoDb, captures } }, config, embed },
+        options,
+        [item(text)],
+        keys,
+      ),
+    ).toEqual({
       captured: 0,
       skipped: 1,
       rejected: 0,

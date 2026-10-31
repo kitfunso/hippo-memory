@@ -9,7 +9,6 @@ import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed, type KeyedServer } from '../_helpers/keyed-server.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
-import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
 
 /** An admin key, since only an admin passes the mint route's gate to its body read. */
 function adminKey(root: string): string {
@@ -138,11 +137,11 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   });
 
   // A webhook's credential is its signature, so the signature headers stand where the bearer token does.
-  it.each(WEBHOOKS)(
+  it.skipIf(needsHippoDb('tier')).each(WEBHOOKS)(
     'POST %s drops a caller whose body never arrives: 404 with no signing secret, 401 with no signature, 408 once a signed body stalls',
     async (path, secretEnv, signatureHeaders) => {
       await handle.stop();
-      handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50, keep: CONNECTOR_GROUPS });
+      handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
       vi.stubEnv(secretEnv, undefined);
       expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe('HTTP/1.1 404 Not Found');
       // Test-only signing material, not a real secret.
@@ -152,9 +151,9 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     },
   );
 
-  // A store without the connector groups refuses each webhook at once, and closes the body it never reads.
+  // A store without the local tier refuses each webhook at once, and closes the body it never reads.
   it.each(WEBHOOKS)(
-    'POST %s on a store without the connector groups is a 501 that drops a caller whose body never arrives',
+    'POST %s on a store without the local tier is a 501 that drops a caller whose body never arrives',
     async (path, secretEnv, signatureHeaders) => {
       await handle.stop();
       const store = portOnlyStore(root);
@@ -166,40 +165,46 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     },
   );
 
-  it('POST /v1/connectors/slack/events answers 401 to a stale timestamp or a signature that is no v0= digest, without waiting for the body', async () => {
-    await handle.stop();
-    handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50, keep: CONNECTOR_GROUPS });
-    vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
-    const now = Math.floor(Date.now() / 1000);
-    const digest = '0'.repeat(64);
-    const refused = [
-      `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: 1\r\n`,
-      `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: ${now - 6 * 60}\r\n`,
-      `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: ${now + 6 * 60}\r\n`,
-      `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: soon\r\n`,
-      `X-Slack-Signature: v0=00\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
-      `X-Slack-Signature: v1=${digest}\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
-      `X-Slack-Signature: v0=${'g'.repeat(64)}\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
-    ];
-    for (const headers of refused) {
-      expect(await statusUntilServerCloses(handle.port, '/v1/connectors/slack/events', headers), headers).toBe(
-        'HTTP/1.1 401 Unauthorized',
-      );
-    }
-  });
+  it.skipIf(needsHippoDb('tier'))(
+    'POST /v1/connectors/slack/events answers 401 to a stale timestamp or a signature that is no v0= digest, without waiting for the body',
+    async () => {
+      await handle.stop();
+      handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+      vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
+      const now = Math.floor(Date.now() / 1000);
+      const digest = '0'.repeat(64);
+      const refused = [
+        `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: 1\r\n`,
+        `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: ${now - 6 * 60}\r\n`,
+        `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: ${now + 6 * 60}\r\n`,
+        `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: soon\r\n`,
+        `X-Slack-Signature: v0=00\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
+        `X-Slack-Signature: v1=${digest}\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
+        `X-Slack-Signature: v0=${'g'.repeat(64)}\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
+      ];
+      for (const headers of refused) {
+        expect(await statusUntilServerCloses(handle.port, '/v1/connectors/slack/events', headers), headers).toBe(
+          'HTTP/1.1 401 Unauthorized',
+        );
+      }
+    },
+  );
 
-  it('POST /v1/connectors/github/events answers 401 to a signature header that is no SHA-256 digest, without waiting for the body', async () => {
-    await handle.stop();
-    handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50, keep: CONNECTOR_GROUPS });
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'test-only-webhook-signing-material');
-    for (const malformed of ['sha256=00', 'sha1=' + '0'.repeat(40), `sha256=${'g'.repeat(64)}`]) {
-      expect(
-        await statusUntilServerCloses(
-          handle.port,
-          '/v1/connectors/github/events',
-          `X-Hub-Signature-256: ${malformed}\r\n`,
-        ),
-      ).toBe('HTTP/1.1 401 Unauthorized');
-    }
-  });
+  it.skipIf(needsHippoDb('tier'))(
+    'POST /v1/connectors/github/events answers 401 to a signature header that is no SHA-256 digest, without waiting for the body',
+    async () => {
+      await handle.stop();
+      handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+      vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'test-only-webhook-signing-material');
+      for (const malformed of ['sha256=00', 'sha1=' + '0'.repeat(40), `sha256=${'g'.repeat(64)}`]) {
+        expect(
+          await statusUntilServerCloses(
+            handle.port,
+            '/v1/connectors/github/events',
+            `X-Hub-Signature-256: ${malformed}\r\n`,
+          ),
+        ).toBe('HTTP/1.1 401 Unauthorized');
+      }
+    },
+  );
 });

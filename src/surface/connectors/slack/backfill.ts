@@ -35,7 +35,7 @@ export async function backfillChannel(
   // `oldest` (numeric ts) is the resume bound for the first page only; `cursor` starts null and
   // Slack mints the next-page token. Mixing the two would feed a numeric ts as an opaque cursor and
   // break on rerun.
-  const cursors = ctx.store.connectorEvents;
+  const cursors = ctx.store.hippoDb.connectorEvents;
   const at = { connector: 'slack', tenantId: ctx.tenantId, channelId: opts.channel.id } as const;
   const resumeFrom: string | null = await cursors.cursor(at);
   let cursor: string | null = null;

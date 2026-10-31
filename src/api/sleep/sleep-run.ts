@@ -14,9 +14,8 @@ import {
 } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { strengthOf, type Context, type ContextWith, type SleepContext } from '../types.js';
-import { auditRemoveErrors } from '../auth/audit.js';
-import { globalTargetOf } from '../infra.js';
+import { strengthOf, type Context } from '../types.js';
+import { auditRemoveErrors } from '../hippo-db/audit-maintenance.js';
 import { withDetached } from '../detached.js';
 import type { SleepOptions, SleepResult } from './sleep.js';
 import type { SleepEvent } from './events.js';
@@ -24,8 +23,8 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import type { SleepGroup, StoreWith } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
+import { globalTargetOf, type HippoDbContext, type HippoDbStore } from '../hippo-db-context.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial:
  * true` row, or shrink the pages dedup, the audit and ambient read; production never sets them. */
@@ -36,12 +35,9 @@ export interface SleepPhases {
   autoShare: typeof autoShare;
   computeAmbientState: typeof ambientStateFromTallies;
   loadPendingExtractionTenants: (
-    store: StoreWith<'consolidation'>,
+    store: HippoDbStore,
   ) => Promise<DirtyTenantSnapshot['dirtyTenants']>;
-  extractGraph: (
-    store: StoreWith<'graphRebuild' | 'graphReads' | 'objects'>,
-    tenantId: string,
-  ) => ExtractResult | Promise<ExtractResult>;
+  extractGraph: (store: HippoDbStore, tenantId: string) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
 }
 
@@ -51,7 +47,7 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   auditMemories,
   autoShare,
   computeAmbientState: ambientStateFromTallies,
-  loadPendingExtractionTenants: (store) => store.consolidation.dirtyGraphTenants(),
+  loadPendingExtractionTenants: (store) => store.hippoDb.consolidation.dirtyGraphTenants(),
   extractGraph: extractGraphChunked,
   pageSize: 1000,
 };
@@ -75,7 +71,7 @@ interface DirtyTenantSnapshot {
 /** `sleepWholeStore` with its phase dependencies overridable; tests pass stubs here, so the seam
  * never touches the public `SleepOptions`. */
 export async function runSleep(
-  ctx: SleepContext,
+  ctx: HippoDbContext,
   opts: SleepOptions,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
@@ -98,7 +94,7 @@ export async function runSleep(
 }
 
 async function runSleepPhases(
-  ctx: SleepContext,
+  ctx: HippoDbContext,
   opts: SleepOptions,
   phases: SleepPhases,
   counts: SleepCounts,
@@ -132,7 +128,7 @@ interface CorePhasesRun {
 
 /** Phases 1 to 3, the ones a dry run also runs. */
 async function runCorePhases(
-  ctx: SleepContext,
+  ctx: HippoDbContext,
   phases: SleepPhases,
   dryRun: boolean,
   counts: SleepCounts,
@@ -174,7 +170,7 @@ async function runCorePhases(
 // read would miss tenants dedup touched. Fail-soft: a failed read skips the graph refresh this
 // sleep and never aborts core sleep.
 async function snapshotDirtyTenants(
-  ctx: SleepContext,
+  ctx: HippoDbContext,
   phases: SleepPhases,
   dryRun: boolean,
 ): Promise<DirtyTenantSnapshot> {
@@ -224,10 +220,7 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
 }
 
 /** Every row of every tenant in load order, `limit` per read. */
-async function* entryPages(
-  store: StoreWith<'consolidation'>,
-  limit: number,
-): AsyncGenerator<MemoryEntry[]> {
+async function* entryPages(store: HippoDbStore, limit: number): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | undefined;
   do {
     const page = await store.entriesWhere({ tenantId: ALL_TENANTS }, { limit, after });
@@ -248,7 +241,7 @@ type AuditSummary = NonNullable<SleepResult['audit']>;
 /** The audit errors deleted (or that would be under dryRun) and the warnings; each row is judged
  * alone, so pages need no shared state beyond the issues found. */
 async function runQualityAudit(
-  ctx: SleepContext,
+  ctx: HippoDbContext,
   phases: SleepPhases,
   options: QualityAuditOptions,
 ): Promise<AuditSummary> {
@@ -262,7 +255,9 @@ async function runQualityAudit(
   const issues: AuditIssue[] = [];
   for await (const page of pages()) {
     const rows = page.filter((e) => !planned.has(e.id));
-    const backing = await ctx.store.auditMaintenance.objectBackedAmong(rows.map((e) => e.id));
+    const backing = await ctx.store.hippoDb.auditMaintenance.objectBackedAmong(
+      rows.map((e) => e.id),
+    );
     issues.push(...phases.auditMemories(rows, backing).issues);
   }
   if (issues.length === 0) return { errorsRemoved: 0, warningCount: 0 };
@@ -277,21 +272,14 @@ async function runQualityAudit(
 /** The auto-share counts, each set only when non-zero so an idle share leaves the result as it
  * was. */
 async function shareOnSleep(
-  ctx: ContextWith<SleepGroup, 'sharing' | 'folderFiles'>,
+  ctx: HippoDbContext,
   phases: SleepPhases,
 ): Promise<Pick<SleepResult, 'shared' | 'secretSkipped' | 'rejectedSkipped'>> {
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = globalTargetOf(ctx);
+  if (!ctx.config.autoShareOnSleep || target === undefined) return {};
   const { store } = ctx;
-  const { sharing, folderFiles } = store;
-  if (
-    !ctx.config.autoShareOnSleep ||
-    target === undefined ||
-    sharing === undefined ||
-    folderFiles === undefined
-  ) {
-    return {};
-  }
+  const { sharing, folderFiles } = store.hippoDb;
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable,
   // not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
@@ -299,8 +287,7 @@ async function shareOnSleep(
     phases.autoShare(
       {
         store: {
-          sharing,
-          folderFiles,
+          hippoDb: { sharing, folderFiles },
           entriesWhere: (filter, page) => store.entriesWhere(filter, page),
         },
       },
@@ -348,7 +335,7 @@ async function summarizeAmbient(
 // runs on fresh data. Fault-isolated: consolidation has already committed, so no failure here
 // aborts sleep; a failed tenant stays pending.
 async function drainGraphQueue(
-  ctx: SleepContext,
+  ctx: HippoDbContext,
   phases: SleepPhases,
   snapshot: DirtyTenantSnapshot,
 ): Promise<GraphDrain> {
@@ -393,7 +380,7 @@ interface TenantRebuild {
 /** Rebuilds one dirty tenant's graph and drains its queue; on a failure the tenant stays
  * pending. */
 async function rebuildDirtyTenant(
-  ctx: SleepContext,
+  ctx: HippoDbContext,
   phases: SleepPhases,
   dirty: DirtyTenantSnapshot['dirtyTenants'][number],
 ): Promise<TenantRebuild> {
@@ -407,7 +394,7 @@ async function rebuildDirtyTenant(
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals
     // stay pending. Marked only after the last chunk, so a run stopped between chunks leaves the
     // tenant for the next one.
-    await ctx.store.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
+    await ctx.store.hippoDb.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
   } catch (tenantErr) {
     log.warn(
       `sleep: graph extract failed for tenant ${dirty.tenantId}, left pending: ${errorMessage(tenantErr)}`,
@@ -441,7 +428,7 @@ interface EmitSleepAuditOptions {
 // One 'consolidate' row per sleep, emitted from finally so a partial failure still reports what got
 // done. An audit failure is logged and never replaces the original phase error.
 async function emitSleepAudit(
-  ctx: SleepContext,
+  ctx: HippoDbContext,
   { opts, dryRun, counts, phaseError }: EmitSleepAuditOptions,
 ): Promise<void> {
   try {

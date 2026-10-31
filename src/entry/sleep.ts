@@ -1,7 +1,7 @@
 // The root entry's sleep and consolidation: each opens one handle per store and fills the outside
 // services that a caller's Context or options leave out.
 import { sqliteStore, inSqliteSession, withSharedStoreHandles } from '../surface/open-store.js';
-import type { SleepStore } from '../base/ports/store.js';
+import type { HippoStore } from '../base/ports/store.js';
 import {
   runConsolidation,
   type ConsolidateOptions,
@@ -15,24 +15,27 @@ import { loadConfig } from '../host/config-file.js';
 import { DEFAULT_TENANT_ID } from '../base/util/tenant.js';
 import type { ConsolidationResult } from '../domain/consolidate/run.js';
 import { sleepWholeStore, type SleepOptions, type SleepResult } from '../api/sleep/sleep.js';
-import type { EntrySleepContext as SleepContext } from '../api/types.js';
+import type { EntryContext } from '../api/types.js';
+import { requireHippoDb, withHippoDb } from '../api/hippo-db-context.js';
 import { withEntryInfra } from '../surface/entry-infra.js';
 
 export { ConsolidationResult } from '../domain/consolidate/run.js';
 export type { SleepOptions, SleepResult } from '../api/sleep/sleep.js';
 export type { SleepEvent } from '../api/sleep/events.js';
 export type { RescueRank } from '../domain/consolidate/events.js';
-// Named in the signatures of sleep and consolidate, so a caller needs them to type its own
-// variable.
-export type { SleepContext, SleepStore };
 export type { DetachedWork } from '../domain/search/detached-work.js';
 
-/** Sleeps the whole store under `ctx`, whose store sets the groups a sleep pass works on. */
-export async function sleep(ctx: SleepContext, opts?: SleepOptions): Promise<SleepResult> {
+/** Sleeps the whole store under `ctx`; a store without hippo.db's local tier rejects before any
+ * pass runs. */
+export async function sleep(ctx: EntryContext, opts?: SleepOptions): Promise<SleepResult> {
+  const local = withHippoDb(ctx);
   // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close
   // hippo.db's last, which checkpoints and deletes the WAL.
   return withSharedStoreHandles((session) =>
-    sleepWholeStore(withEntryInfra({ ...ctx, store: inSqliteSession(ctx.store, session) }), opts),
+    sleepWholeStore(
+      withEntryInfra({ ...local, store: inSqliteSession(local.store, session) }),
+      opts,
+    ),
   );
 }
 
@@ -43,10 +46,11 @@ type PublishedConsolidateOptions = Omit<ConsolidateOptions, 'llm'> & { fetcher?:
 /** Run a full consolidation pass on `store`, or on the hippo.db under a folder. With no
  * `options.config`, a folder reads its config.json and a store the defaults. */
 export async function consolidate(
-  target: string | SleepStore,
+  target: string | HippoStore,
   options: PublishedConsolidateOptions = {},
 ): Promise<ConsolidationResult> {
-  const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
+  const [opened, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
+  const store = requireHippoDb(opened);
   const { fetcher, ...rest } = options;
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
@@ -63,7 +67,7 @@ export async function consolidate(
   );
 }
 
-function isFolder(target: string | SleepStore): target is string {
+function isFolder(target: string | HippoStore): target is string {
   return typeof target === 'string';
 }
 

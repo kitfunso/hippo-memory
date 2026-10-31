@@ -32,8 +32,8 @@ import type {
   ImportStep,
   RestoreStep,
   StepOutcome,
-} from '../../../base/ports/store/agent-import.js';
-import type { SetAsideWhy } from '../../../base/ports/store/project-tags.js';
+} from '../../../base/records/agent-import.js';
+import type { SetAsideWhy } from '../../../base/records/project-tags.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 
 /** What the steps did, and the rows whose mirror files follow the commit. */

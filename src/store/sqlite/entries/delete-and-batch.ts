@@ -6,7 +6,7 @@ import type { SqlFragment } from '../../../db/sql.js';
 import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { introducesContent, rejectedValues } from '../review/rejection.js';
 import { rejectionDigest } from '../../../base/records/rejection-digest.js';
-import type { RejectedValueRow } from '../../../base/ports/store/rejections.js';
+import type { RejectedValueRow } from '../../../base/records/rejections.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { insertDormantRow } from '../dormant/dormant-rows.js';
 import { log } from '../../../base/util/log.js';
@@ -27,7 +27,7 @@ import type {
   LoadedRows,
   DormantMove,
   StrengthRefresh,
-} from '../../../base/ports/store/consolidation.js';
+} from '../../../base/records/consolidation.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET
  * NULL); tests/store/dormant-memories.test.ts pins it to the schema. */

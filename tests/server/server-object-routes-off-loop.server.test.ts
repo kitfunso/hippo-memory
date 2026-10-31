@@ -418,15 +418,18 @@ describe('the server-thread block of the object routes', () => {
     ).toEqual([...SENDS.keys()].sort());
   });
 
-  it('answers every one of them from the workers with no open of hippo.db on the server thread', async () => {
-    const info = vi.spyOn(log, 'trail');
-    const steps = routeSteps(objectRoutes());
+  it.skipIf(needsHippoDb('tier'))(
+    'answers every one of them from the workers with no open of hippo.db on the server thread',
+    async () => {
+      const info = vi.spyOn(log, 'trail');
+      const steps = routeSteps(objectRoutes());
 
-    const { replies } = await runSteps(steps, false);
+      const { replies } = await runSteps(steps, false);
 
-    expect(replies.map((reply) => [reply.label, reply.status])).toEqual(statuses(steps));
-    expect(blockedLines(info)).toEqual([]);
-  });
+      expect(replies.map((reply) => [reply.label, reply.status])).toEqual(statuses(steps));
+      expect(blockedLines(info)).toEqual([]);
+    },
+  );
 
   it('fails every one of them when its handler opens hippo.db on the server thread', async () => {
     const root = newRoot('object-routes');
@@ -435,7 +438,9 @@ describe('the server-thread block of the object routes', () => {
     const info = vi.spyOn(log, 'trail');
     const steps = routeSteps(objectRoutes());
     // The worker-backed store with the objects group run on its server-thread part, as a group the op table missed runs: the defect the grant exists to catch.
-    const store = Object.assign(workerSqliteStore(root), { objects: serverThreadPart(root).objects });
+    const worker = workerSqliteStore(root);
+    const objects = serverThreadPart(root).hippoDb.objects;
+    const store = Object.assign(worker, { hippoDb: { ...worker.hippoDb, objects } });
     const run: Run = { server: await start(root, store), ...seeded, newest: new Map() };
 
     const answered: Array<[string, number]> = [];
@@ -461,7 +466,7 @@ describe('an object write waiting for the write lock', () => {
       ...routes.filter(([label]) => label.startsWith('GET ')),
       ['the receipts read', 'POST /v1/project-briefs/refresh', { body: { repo: 'hippo', dryRun: true }, status: 200 }],
     ];
-    const saves = ops.filter((op) => op === 'objects.saveObject').length;
+    const saves = ops.filter((op) => op === 'hippoDb.objects.saveObject').length;
 
     const lock = holdWriteLock(root);
     let landed = false;
@@ -473,7 +478,7 @@ describe('an object write waiting for the write lock', () => {
       landed = true;
       return res;
     });
-    await sent('objects.saveObject', saves + 1);
+    await sent('hippoDb.objects.saveObject', saves + 1);
     const answered: Array<[string, number]> = [];
     for (const step of reads) {
       // A read sent to the writer thread waits behind the blocked save until the lock is released, so it hangs here.
@@ -489,11 +494,11 @@ describe('an object write waiting for the write lock', () => {
     expect(
       storedRows(root).filter((row) => row.includes('behind the lock') && row.startsWith('customer_notes ')),
     ).toHaveLength(1);
-    expect([...new Set(ops.filter((op) => op.startsWith('objects.')))].sort()).toEqual([
-      'objects.briefReceipts',
-      'objects.listObjects',
-      'objects.objectById',
-      'objects.saveObject',
+    expect([...new Set(ops.filter((op) => op.startsWith('hippoDb.objects.')))].sort()).toEqual([
+      'hippoDb.objects.briefReceipts',
+      'hippoDb.objects.listObjects',
+      'hippoDb.objects.objectById',
+      'hippoDb.objects.saveObject',
     ]);
   });
 });

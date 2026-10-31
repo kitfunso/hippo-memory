@@ -1,7 +1,11 @@
 // consolidate() handed an integrator's store changes that store, never the folder a path form or the environment names.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
-import { consolidate, type SleepStore } from '../../src/index.js';
+import { consolidate, sleep } from '../../src/index.js';
+import type { HippoStore } from '../../src/entry/store-kit.js';
+import { NoLocalTierError } from '../../src/base/util/store-blocked.js';
+import { loadConfig } from '../../src/host/config-file.js';
+import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -44,9 +48,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('consolidate on an integrator store with the sleep groups', () => {
+describe("consolidate on an integrator store with hippo.db's local tier", () => {
   it("repairs the integrator's store and leaves another folder's drift alone", async () => {
-    const store: SleepStore = { ...sqliteStore(b) };
+    const store: HippoStore = { ...sqliteStore(b) };
 
     const result = await consolidate(store);
 
@@ -59,6 +63,19 @@ describe('consolidate on an integrator store with the sleep groups', () => {
     await consolidate(a);
 
     expect(withDb(a, ftsRowCounts)).toEqual({ memories: 1, fts: 1 });
+    expect(withDb(b, ftsRowCounts)).toEqual({ memories: 1, fts: 0 });
+  });
+
+  it('consolidate and sleep reject a store without the local tier before any pass runs', async () => {
+    const store = portOnlyStore(b);
+    await expect(consolidate(store)).rejects.toBeInstanceOf(NoLocalTierError);
+    const ctx = {
+      store,
+      config: loadConfig(b),
+      tenantId: 'default',
+      actor: { subject: 'cli', role: 'admin' as const },
+    };
+    await expect(sleep(ctx)).rejects.toBeInstanceOf(NoLocalTierError);
     expect(withDb(b, ftsRowCounts)).toEqual({ memories: 1, fts: 0 });
   });
 });

@@ -11,14 +11,14 @@ import {
   ENTITY_COLS,
   RELATION_COLS,
 } from './graph-rows.js';
-import { GRAPH_ID_BATCH, type Entity, type Relation } from '../../../base/ports/store/graph.js';
+import { GRAPH_ID_BATCH, type Entity, type Relation } from '../../../base/records/graph.js';
 import { chunked } from '../../../base/util/chunked.js';
 import type {
   GraphRows,
   GraphReads,
   GraphViewQuery,
   GraphWalkQuery,
-} from '../../../base/ports/store.js';
+} from '../../../base/records/graph.js';
 import { canReadScope } from '../../../base/scope/recall-scope.js';
 import type { OnHandle } from '../runtime/open.js';
 import { bound, type Bodies } from '../runtime/bound.js';

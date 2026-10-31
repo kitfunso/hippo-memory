@@ -57,7 +57,7 @@ function count(root: string, sql: string, ...params: string[]): number {
 }
 
 async function forgottenTotal(root: string): Promise<number> {
-  return Number((await sqliteStore(root).reports.stats()).total_forgotten);
+  return Number((await sqliteStore(root).hippoDb.reports.stats()).total_forgotten);
 }
 
 /** Holds the store's write lock while `fn` runs, or until `fn` calls the release it is handed. */

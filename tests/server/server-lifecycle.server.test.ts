@@ -4,7 +4,7 @@ import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serveKeyed } from '../_helpers/keyed-server.js';
-import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
@@ -209,20 +209,19 @@ describe('server lifecycle', () => {
 
   it('answers an upload still streaming past 1 MB with its 413, then closes the connection', async () => {
     const home = makeRoot();
-    const handle = await serveKeyed({ hippoRoot: home, port: 0, keep: CONNECTOR_GROUPS });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     try {
       // The cap lives in readBody, shared by every route: the generic /v1 route reads a keyed caller's body, and a
-      // webhook route reads one once a secret and a signature header are there.
+      // webhook route, which runs on hippo.db's local tier alone, reads one once a secret and a signature are there.
       vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
       // Well formed, as the checks made before the body demand: a v0= digest and a timestamp inside the skew window.
       const signed = {
         'x-slack-signature': `v0=${'0'.repeat(64)}`,
         'x-slack-request-timestamp': String(Math.floor(Date.now() / 1000)),
       };
-      for (const [path, headers] of [
-        ['/v1/memories', handle.auth],
-        ['/v1/connectors/slack/events', signed],
-      ] as const) {
+      const sends: [string, Record<string, string>][] = [['/v1/memories', handle.auth]];
+      if (!needsHippoDb('tier')) sends.push(['/v1/connectors/slack/events', signed]);
+      for (const [path, headers] of sends) {
         const reply = await uploadUnpaced(handle.port, path, headers);
         expect(reply.status).toBe(413);
         expect(JSON.parse(reply.body)).toEqual({ error: 'request body exceeds 1MB' });

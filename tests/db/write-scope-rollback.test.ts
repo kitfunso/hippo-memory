@@ -1,7 +1,7 @@
 // A failure in the middle of a write scope leaves nothing behind. Real SQLite; a trigger makes the second write refuse.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { auditPrune } from '../../src/api/auth/audit.js';
+import { auditPrune } from '../../src/api/hippo-db/audit-maintenance.js';
 import { adminActor } from '../../src/api/types.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall/recall-trace.js';
 import { savePrediction } from '../_helpers/save-prediction.js';

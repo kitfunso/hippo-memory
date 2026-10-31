@@ -11,7 +11,7 @@ import type {
   ReportPage,
   Reports,
   StrengthTallies,
-} from '../../../base/ports/store/reports.js';
+} from '../../../base/records/reports.js';
 import { statusCounts, strengthTallies } from '../recall/candidates.js';
 import { countOpenConflicts } from '../review/conflicts.js';
 import { countAllEntries } from '../entries/entry-reads.js';

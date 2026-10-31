@@ -15,7 +15,7 @@ import type { StoreAt } from '../../../db/connect.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
-import type { SleepStart } from '../../../base/ports/store/consolidation.js';
+import type { SleepStart } from '../../../base/records/consolidation.js';
 import { META_KEY, getMetaNumber } from '../../../db/meta.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and
@@ -46,9 +46,10 @@ export function sqliteStats({ on, files }: Handles) {
   return bound(
     on,
     {
-      /** Adds `count` to the one store-wide remembered counter, no tenant. */
+      /** Adds `count` to the one store-wide remembered counter, no tenant. Its rows have
+       * committed, so a busy store never fails the write; a store runtime holds the count. */
       bumpRemembered: (db: DatabaseSyncLike, count: number) =>
-        updateStats(db, files, { remembered: count }),
+        updateStatsUnlessBusy(db, files, { remembered: count }, `remembered ${count}`),
     },
     openStore,
   );

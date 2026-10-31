@@ -14,7 +14,7 @@ import type {
   ObjectRefusal,
   SavableKind,
 } from '../../src/base/records/object-types.js';
-import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/base/ports/store.js';
+import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/base/records/objects.js';
 import {
   runOnFixture,
   seedTwoTenants,

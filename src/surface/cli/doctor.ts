@@ -7,8 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir, isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
-import type { StoreGroups } from '../../base/ports/store.js';
-import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
+import type { Diagnostics } from '../../base/records/diagnostics.js';
+import type { ProjectTagReads } from '../../base/records/project-tags.js';
 import { loadConfig } from '../../host/config-file.js';
 import { type SpoolFs } from '../../infra/spool-files.js';
 import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
@@ -63,7 +63,7 @@ export interface DoctorOptions {
 
 /** What doctor reads of a store: its health and, for the global store, what a project repair
  * plans from. */
-export type DoctorStore = Pick<StoreGroups, 'diagnostics'> & ProjectTagReads;
+export type DoctorStore = { readonly diagnostics: Diagnostics } & ProjectTagReads;
 
 /** Minimum Node.js version hippo supports (package.json engines). */
 export const MIN_NODE = '22.16.0';

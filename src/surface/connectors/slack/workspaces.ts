@@ -3,7 +3,7 @@
 // moving a workspace needs no delete first.
 
 import type { ConnectorStore } from '../ingest.js';
-import type { SlackWorkspace } from '../../../base/ports/store/connectors.js';
+import type { SlackWorkspace } from '../../../base/records/connectors.js';
 
 export type { SlackWorkspace };
 
@@ -16,13 +16,13 @@ export function addWorkspace(
   store: ConnectorStore,
   opts: AddWorkspaceOptions,
 ): Promise<SlackWorkspace> {
-  return store.connectorEvents.registerSlackWorkspace(opts.teamId, opts.tenantId);
+  return store.hippoDb.connectorEvents.registerSlackWorkspace(opts.teamId, opts.tenantId);
 }
 
 export function listWorkspaces(store: ConnectorStore): Promise<SlackWorkspace[]> {
-  return store.connectorEvents.slackWorkspaces();
+  return store.hippoDb.connectorEvents.slackWorkspaces();
 }
 
 export function removeWorkspace(store: ConnectorStore, teamId: string): Promise<boolean> {
-  return store.connectorEvents.removeSlackWorkspace(teamId);
+  return store.hippoDb.connectorEvents.removeSlackWorkspace(teamId);
 }

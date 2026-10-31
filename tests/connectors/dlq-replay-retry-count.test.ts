@@ -18,14 +18,14 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
     items.find((i) => i.id === id)?.retryCount ?? -1;
   const githubCount = async (id: number): Promise<number> =>
     countOf(
-      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+      await sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', 'default', {
         limit: 100,
       }),
       id,
     );
   const slackCount = async (id: number): Promise<number> =>
     countOf(
-      await sqliteStore(root).connectorEvents.deadLetters('slack', 'default', {
+      await sqliteStore(root).hippoDb.connectorEvents.deadLetters('slack', 'default', {
         limit: 100,
       }),
       id,

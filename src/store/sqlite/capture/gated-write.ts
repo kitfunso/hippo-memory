@@ -9,7 +9,7 @@ import { auditRejectionRefusal } from '../audit/audit-event.js';
 import { stampOriginProject } from '../entries/entry-row.js';
 import { writeEntryDbOnly } from '../entries/entry-writes.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
-import type { GatedWriteResult } from '../../../base/ports/store/agent-import.js';
+import type { GatedWriteResult } from '../../../base/records/agent-import.js';
 import type { StoreFiles } from '../runtime/open.js';
 
 /** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a

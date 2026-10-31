@@ -27,7 +27,7 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
     const badRoot: string = JSON.parse('42');
     const store = sqliteStore(badRoot);
     const config = { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } };
-    const ledger = { ledger: store.ledger, folderFiles: store.folderFiles, config };
+    const ledger = { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config };
     const ctx = {
       hippoRoot: badRoot,
       store,

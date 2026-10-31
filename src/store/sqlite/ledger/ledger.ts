@@ -18,7 +18,7 @@ import {
   deliveryPruneSchedule,
   writeDeliveryEventVia,
 } from './delivery-ledger.js';
-import type { Ledger, LedgerTurn, PilotArmOptions } from '../../../base/ports/store/ledger.js';
+import type { Ledger, LedgerTurn, PilotArmOptions } from '../../../base/records/ledger.js';
 import type { DeliveryEventInput } from '../../../base/session/delivery.js';
 import type { OnHandle } from '../runtime/open.js';
 import { answered, bound, type Bodies } from '../runtime/bound.js';

@@ -1,6 +1,7 @@
 // The error reply of each typed-object route for a bad request, one table row per case.
 import { describe, it, expect } from 'vitest';
 import { handle, useObjectsServer, authHeaders } from '../_helpers/http-objects-server.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 import {
   type Reply,
   DECISION_REPLIES,
@@ -33,7 +34,7 @@ const REPLIES: readonly Reply[] = [
   ...named('skill', SKILL_REPLIES),
 ];
 
-describe('HTTP typed-object replies', () => {
+describe.skipIf(needsHippoDb('tier'))('HTTP typed-object replies', () => {
   it.each(REPLIES)('%s', async (_name, method, path, body, status, error) => {
     const init = { method, headers: authHeaders(), body: body && JSON.stringify(body) };
     const res = await fetch(`${handle.url}${path}`, init);

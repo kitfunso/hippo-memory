@@ -7,7 +7,6 @@ import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
-import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -194,7 +193,7 @@ describe('server hardening', () => {
   describe('PUBLIC_ROUTES bypass attempts', () => {
     beforeEach(async () => {
       vi.stubEnv('SLACK_SIGNING_SECRET', SLACK_SECRET);
-      handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0, keep: CONNECTOR_GROUPS });
+      handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
     });
 
     it('trailing slash on slack events does NOT bypass auth (still HMAC-required)', async () => {
@@ -221,19 +220,22 @@ describe('server hardening', () => {
       expect([401, 404, 405]).toContain(res.status);
     });
 
-    it('query string on public route does not change routing (still HMAC-verified)', async () => {
-      // Adding ?bypass=1 must not affect routing — pathname is matched,
-      // search is ignored. A request without a valid signature still 401s.
-      const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events?bypass=1`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      });
-      // No x-slack-signature header → HMAC verify fails → 401.
-      expect(res.status).toBe(401);
-    });
+    it.skipIf(needsHippoDb('tier'))(
+      'query string on public route does not change routing (still HMAC-verified)',
+      async () => {
+        // Adding ?bypass=1 must not affect routing — pathname is matched,
+        // search is ignored. A request without a valid signature still 401s.
+        const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events?bypass=1`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        });
+        // No x-slack-signature header → HMAC verify fails → 401.
+        expect(res.status).toBe(401);
+      },
+    );
 
-    it('valid POST with HMAC still works (positive control)', async () => {
+    it.skipIf(needsHippoDb('tier'))('valid POST with HMAC still works (positive control)', async () => {
       const body = JSON.stringify({ type: 'url_verification', challenge: 'positive' });
       const ts = String(Math.floor(Date.now() / 1000));
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events`, {

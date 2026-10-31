@@ -4,7 +4,7 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { AgentMemoryTool } from '../../base/memory/agent-memory-tools.js';
-import type { ImportStep, PlannedRow } from '../../base/ports/store/agent-import.js';
+import type { ImportStep, PlannedRow } from '../../base/records/agent-import.js';
 import type { DormantSnapshot, EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { itemSource } from './source.js';
@@ -140,7 +140,7 @@ async function adoptPrefix(
   }
   if (rows.length === 0 && (w.container.items.length === 0 || draft.live.length > 0)) return;
   draft.steps.push({ kind: 'moveDormant', from: old, to: w.prefix, origin });
-  for (const snap of await s.store.projectTags.dormantWhere({
+  for (const snap of await s.store.hippoDb.projectTags.dormantWhere({
     tenantId: s.tenantId,
     sourcePrefix: old,
   })) {
