@@ -249,9 +249,8 @@ describe('an add-on hippoDb route binds on the local tier, as a built-in local r
   });
 
   it('runs on a store that carries the tier without sqliteStore building it', async () => {
-    const { addon, builtIn } = await statuses(sqliteStoreOn(handlesOf(root)));
-    expect(addon).toBe(200);
-    expect(builtIn).not.toBe(501);
+    // The built-in route passes the tier gate and stops at its admin check, which this key's role fails.
+    expect(await statuses(sqliteStoreOn(handlesOf(root)))).toEqual({ addon: 200, builtIn: 403 });
   });
 });
 
