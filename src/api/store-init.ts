@@ -1,7 +1,7 @@
 // Creating a store for `hippo init`: the database, its mirror folders and first-run setup.
 
 import { requireHostAdmin } from './types.js';
-import type { HippoDbContext } from './hippo-db-context.js';
+import { hasHippoDb, type HippoDbContext } from './hippo-db-context.js';
 import type { HippoDbTier } from '../base/ports/hippo-db.js';
 import type { HippoStore } from '../base/ports/store.js';
 
@@ -16,7 +16,7 @@ export async function initMemoryStore(ctx: HippoDbContext): Promise<void> {
 export async function ensureStoreFiles(
   store: HippoStore | HippoDbTier | undefined,
 ): Promise<boolean> {
-  if (store === undefined || !('hippoDb' in store) || store.hippoDb === undefined) return false;
+  if (store === undefined || !hasHippoDb(store)) return false;
   await store.hippoDb.folderFiles.ensure();
   return true;
 }
