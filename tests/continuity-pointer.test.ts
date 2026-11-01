@@ -172,6 +172,19 @@ describe('task state in a project store', () => {
       expect(await markdown()).toContain(handoffPointer(handoff));
     });
 
+    it("a newer handoff from another session hides the caller's own (known limit, decision 2026-11-01)", async () => {
+      // No fresh snapshot, so the read returns the newest handoff of any session; row id breaks a same-millisecond tie.
+      const own = saveHandoff('own', { summary: 'Unfinished: the caller left this one first' });
+      const newer = saveHandoff('earlier', { summary: 'Unfinished: a parallel session left this one later' });
+      const text = await hookText('own');
+      expect(text).not.toContain('Session Handoff');
+      expect(text).not.toContain(own.summary);
+      expect(text).not.toContain(newer.summary);
+      const full = await markdown('own');
+      expect(full).toContain(handoffPointer(newer));
+      expect(full).not.toContain(own.summary);
+    });
+
     it('is still printed as a pointer by `--pinned-only --format copilot`, the one injection Copilot gets', async () => {
       const handoff = saveHandoff('earlier');
       const text = additionalContext(await cli({ 'pinned-only': true, 'include-recent': '5', format: 'copilot' }, 'now'));

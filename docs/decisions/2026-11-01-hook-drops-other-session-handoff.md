@@ -9,7 +9,7 @@ The 2026-10-29 record cut the hook's cost by printing another session's handoff 
 
 ## Constraints and evidence
 - Z0 Amendment 9, set N: 249 of 252 hook injections carried a Session Handoff pointer. The mean injection was 1,657 characters.
-- One pointer block is 194 characters: the `## Session Handoff` heading plus the one-line pointer, measured on the 2.3.0 hook.
+- One pointer block is 194 characters: the `## Session Handoff` heading plus the one-line pointer. Measured as the length of that section in `hippo context --pinned-only --include-recent 5 --format additional-context` output on a store holding one unfinished handoff from another session, hippo 2.3.0.
 - That is about 50 tokens, or about 12% of the mean injection, on each prompt where another session's unfinished handoff exists.
 - A Z0 rerun must confirm the saving. This record makes no cost claim before it.
 - Claude Code and Codex install the same UserPromptSubmit command (`src/hooks/json-hooks.ts:217-218`), so one change covers both.
@@ -29,7 +29,7 @@ The 2026-10-29 record cut the hook's cost by printing another session's handoff 
 - Keep the owner's handoff in the hook on a shared store: rejected, to keep one rule for every store. The owner runs `hippo context` to resume.
 
 ## Consequences
-- Limit 1: with no fresh snapshot, the read returns the newest unfinished handoff of any session (`src/api/context.ts:392-398`). A newer handoff from another session hides the caller's own, and now neither prints.
+- Limit 1: with no fresh snapshot, the read returns the newest unfinished handoff of any session (`src/api/context.ts:392-398`). A newer handoff from another session hides the caller's own, and now neither prints. A test pins it (`tests/continuity-pointer.test.ts`).
 - Limit 2: with no session id, the hook drops every handoff, the caller's own included.
 - Limit 3: a shared store drops the owner's handoff from the hook too. The owner runs `hippo context` to resume.
 - Limit 4: the freed budget can admit one more memory. `obs.sections` counts the omitted handoff as neither shown nor dropped.

@@ -473,10 +473,13 @@ function contextResult(recorded: RecordedRetrieval, tokens: number, s: TaskSecti
   };
 }
 
-function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
-  const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
+function ambientAdmission(
+  opts: ContextOpts, plan: ContextPlan, digestHandoff: SessionHandoff | null,
+): ContextAdmission {
+  const transcriptHandoffSession =
+    digestHandoff?.evidence?.derivedFrom === 'transcript' ? digestHandoff.sessionId : null;
   const ambientAdmit = (e: MemoryEntry): boolean => {
-    // A shown handoff, whole or as a pointer, stands for the session's closing message; its command prints it.
+    // A shown or omitted handoff stands for its session's closing message, so that session's digest stays out.
     if (
       transcriptHandoffSession !== null &&
       e.source_session_id === transcriptHandoffSession &&
