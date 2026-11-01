@@ -26,8 +26,8 @@ const FRAGMENT_MAX_CHARS = 50;
 /** Fewer substantive words than this leave a memory too vague to act on. */
 export const MIN_SUBSTANTIVE_WORDS = 2;
 
-/** `reason` names a defect even when `accepted`: a possible fragment is stored and listed for
- * review. */
+/** `reason` names a defect even when `accepted`: a possible fragment is stored and listed
+ * for review. */
 export interface AutomaticMemoryAssessment {
   readonly accepted: boolean;
   readonly reason: AutomaticMemoryDefect | null;
@@ -143,8 +143,8 @@ function isDanglingAssertion(text: string): boolean {
   return /^(?:if|unless|when|while|until)\b/.test(bare) && isBareCondition(bare);
 }
 
-/** A capitalised short condition may carry its rule with no comma: "When CI fails we retry
- * once". */
+/** A capitalised short condition may carry its rule with no comma: "When CI fails we
+ * retry once". */
 function isPossibleFragment(text: string): boolean {
   const bare = bareText(text);
   return (
@@ -245,8 +245,8 @@ export function isCertainReason(reason: AutomaticMemoryDefect | null): boolean {
   return reason !== null && !UNCERTAIN_REASONS.has(reason);
 }
 
-/** The bar for sleep's derived memories and for repair: a defect the checks are sure of, else
- * null. */
+/** The bar for sleep's derived memories and for repair: a defect the checks are sure of,
+ * else null. */
 export function certainDefect(content: string): AutomaticMemoryDefect | null {
   const { reason } = assessAutomaticMemory(content);
   return isCertainReason(reason) ? reason : null;

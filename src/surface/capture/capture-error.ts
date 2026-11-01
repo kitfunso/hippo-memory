@@ -4,7 +4,7 @@
 // goes to the failure log.
 import type { InfraPorts } from '../../base/ports/infra.js';
 import { CLI_ACTOR } from '../../base/records/audit-ops.js';
-import { createMemory, ERROR_TAG } from '../../base/memory/entry.js';
+import { createMemoryAt, ERROR_TAG } from '../../base/memory/entry.js';
 import {
   failureHash,
   failureSignature,
@@ -105,7 +105,7 @@ export async function storeLesson(
   const sig = failureSignature(text);
   const held = await heldLessons({ store, tenantId }, caller?.origins);
   if (held.some((content) => failureSignature(content) === sig)) return 'duplicate';
-  const entry = createMemory(
+  const entry = createMemoryAt(
     text,
     {
       tags: [ERROR_TAG, 'auto-captured'],

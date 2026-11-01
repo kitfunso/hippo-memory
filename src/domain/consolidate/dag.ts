@@ -1,5 +1,5 @@
 import {
-  createMemory,
+  createMemoryAt,
   DAG_LEVEL,
   EXTRACTED_TAG,
   Layer,
@@ -119,7 +119,7 @@ function createClusterSummaryEntry(
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
   // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the
   // facts' tenant, not 'default'.
-  const summaryEntry = createMemory(
+  const summaryEntry = createMemoryAt(
     summary,
     {
       layer: Layer.Semantic,
@@ -392,7 +392,7 @@ function createProfileEntry(
 ): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
   const nowIso = home.now.toISOString();
-  const profileEntry = createMemory(
+  const profileEntry = createMemoryAt(
     summary,
     {
       layer: Layer.Semantic,

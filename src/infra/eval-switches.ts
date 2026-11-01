@@ -1,20 +1,21 @@
-// The eval-only switches (HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS) and the HIPPO_FAKE_NOW clock as
-// the environment holds them, read when a root builds its ports; each strength switch becomes a
-// StrengthModel value, never a branch.
+// The eval-only switches (HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS), which only eval roots read, and
+// the HIPPO_FAKE_NOW clock every root reads; each strength switch becomes a StrengthModel value.
 import { type EvalSwitches, type RankAblation } from '../base/memory/eval-switches.js';
 import { PRODUCTION_STRENGTH, type StrengthModel } from '../base/memory/strength.js';
-import type { Clock, StoreRules } from '../base/ports/infra.js';
+import type { Clock } from '../base/ports/infra.js';
 import { hostClock } from '../host/clock.js';
-import {
-  envAblateDecay,
-  envAblateOutcome,
-  envAblateOutcomeFast,
-  envAblateOutcomeSlow,
-  envAblateRecallBoost,
-  envAblateRecency,
-  envEvalRecencyDays,
-  envFakeNowMs,
-} from '../base/util/env.js';
+import { envByName, envFakeNowMs, envFlagOn } from '../base/util/env.js';
+
+const ABLATE = {
+  decay: 'HIPPO_ABLATE_DECAY',
+  recallBoost: 'HIPPO_ABLATE_RECALL_BOOST',
+  outcome: 'HIPPO_ABLATE_OUTCOME',
+  outcomeSlow: 'HIPPO_ABLATE_OUTCOME_SLOW',
+  outcomeFast: 'HIPPO_ABLATE_OUTCOME_FAST',
+  recency: 'HIPPO_ABLATE_RECENCY',
+} as const;
+
+const ablated = (cut: keyof typeof ABLATE): boolean => envFlagOn(ABLATE[cut]);
 
 /** The three strength switches an eval cuts one mechanism with. */
 export interface StrengthAblation {
@@ -40,47 +41,47 @@ export function strengthModelUnder(
 }
 
 export function isRecallBoostAblated(): boolean {
-  return envAblateRecallBoost();
+  return ablated('recallBoost');
 }
 
 export function isOutcomeFastAblated(): boolean {
-  return envAblateOutcome() || envAblateOutcomeFast();
+  return ablated('outcome') || ablated('outcomeFast');
+}
+
+/** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null. */
+function evalRecencyDays(): number | null {
+  const days = Number(envByName('HIPPO_EVAL_RECENCY_DAYS'));
+  return Number.isFinite(days) && days > 0 ? days : null;
 }
 
 /** The strength switches as the environment holds them. */
 function strengthAblation(): StrengthAblation {
   return {
-    decay: envAblateDecay(),
-    recallBoost: envAblateRecallBoost(),
-    outcomeSlow: envAblateOutcome() || envAblateOutcomeSlow(),
+    decay: ablated('decay'),
+    recallBoost: ablated('recallBoost'),
+    outcomeSlow: ablated('outcome') || ablated('outcomeSlow'),
   };
 }
 
 /** The rank switches as the environment holds them. */
 function rankAblation(): RankAblation {
   return {
-    recency: envAblateRecency(),
-    recencyDays: envEvalRecencyDays(),
+    recency: ablated('recency'),
+    recencyDays: evalRecencyDays(),
     outcomeFast: isOutcomeFastAblated(),
   };
 }
 
-/** The strength model and rank switches as the environment holds them, for a root to hand its
- * rankings. */
+/** The strength model and rank switches as the environment holds them, for an eval root to hand
+ * its rankings. */
 export function evalSwitches(): EvalSwitches {
   return { strength: strengthModelUnder(strengthAblation()), rank: rankAblation() };
 }
 
-/** The clock a root's Context reads: fixed at HIPPO_FAKE_NOW as it stands now, else the wall
- * clock. */
+/** The clock a root's Context reads: fixed at HIPPO_FAKE_NOW as it stands now, else the
+ * wall clock. */
 export function evalClock(): Clock {
   return hostClock(envFakeNowMs());
-}
-
-/** What a root opens its store with: the eval strength model at its HIPPO_LOSS_AVERSION_RATIO,
- * and HIPPO_FAKE_NOW. */
-export function evalStoreRules(lossAversionRatio: number | undefined): StoreRules {
-  return { strength: evalSwitches().strength, lossAversionRatio, fakeNowMs: envFakeNowMs() };
 }
 
 /** HIPPO_FAKE_NOW when set and parseable, else the wall clock, read at each call: the entry

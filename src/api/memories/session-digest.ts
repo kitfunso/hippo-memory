@@ -2,7 +2,7 @@
 // per session.
 import type { HippoConfig } from '../../base/config/config.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { createMemoryAt, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { SESSION_DIGEST_TAG, sessionDigestId } from '../../base/session/session-digest-row.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../base/session/session-snapshot.js';
 import { buildSessionDigest } from '../../domain/learn/session-digest.js';
@@ -126,7 +126,7 @@ export async function writeSessionDigest(
   });
   if (!draft) return skipped('nothing left after the filters');
   const entry: MemoryEntry = {
-    ...createMemory(
+    ...createMemoryAt(
       draft.content,
       {
         layer: Layer.Episodic,

@@ -14,7 +14,7 @@ entry/eval-scripts.d.ts: judgeAll function
 entry/eval-scripts.d.ts: outcome re-export
 entry/eval-scripts.d.ts: outcomeMultiplier function
 entry/eval-scripts.d.ts: rankHybridWithEvalSwitches function
-entry/eval-scripts.d.ts: remember function
+entry/eval-scripts.d.ts: remember const
 entry/eval-scripts.d.ts: retrieve const
 entry/eval-scripts.d.ts: retrieveRanking const
 entry/eval-scripts.d.ts: retrieveWithCliCore const

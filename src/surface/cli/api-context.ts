@@ -1,4 +1,3 @@
-import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
 import type { ContextReach, GlobalInReach } from '../../api/types.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
@@ -38,7 +37,7 @@ import {
 } from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { createCallerState, type AutoSleepHost, type CallerState } from '../../api/callers.js';
-import { rootInfra } from '../../infra/ports.js';
+import { rootInfra, rootStoreRules } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
 import { contextReach, coreEnrichment, globalEnrichment } from '../../api/hippo-db-context.js';
@@ -128,7 +127,7 @@ interface Scope {
 // share one.
 function storeOptions({ runtime, session }: Scope): SqliteStoreOptions {
   return {
-    ...evalStoreRules(envLossAversionRatio()),
+    ...rootStoreRules(envLossAversionRatio()),
     runtime: session?.runtime ?? runtime,
     session,
   };

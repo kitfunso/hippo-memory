@@ -32,12 +32,12 @@ import {
   type CardRunRow,
 } from './card-rows.js';
 import {
-  blockCard,
-  claimCard,
-  completeCard,
-  heartbeatCard,
-  reclaimExpiredCards,
-  reviewCard,
+  blockCardRow,
+  claimCardRow,
+  completeCardRow,
+  heartbeatCardRow,
+  reclaimExpiredCardRows,
+  reviewCardRow,
 } from './card-runs.js';
 
 const unknownParentCard = (id: string): Error => new Error(`unknown parent card id: ${id}`);
@@ -238,12 +238,12 @@ const cardsBodies: Bodies<Cards> = {
   create: createCard,
   detail: readCardDetail,
   list: listCards,
-  claim: claimCard,
-  heartbeat: heartbeatCard,
-  block: blockCard,
-  review: reviewCard,
-  complete: completeCard,
-  reclaimExpired: reclaimExpiredCards,
+  claim: claimCardRow,
+  heartbeat: heartbeatCardRow,
+  block: blockCardRow,
+  review: reviewCardRow,
+  complete: completeCardRow,
+  reclaimExpired: reclaimExpiredCardRows,
   comment: addCardComment,
 };
 

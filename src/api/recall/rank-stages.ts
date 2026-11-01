@@ -1,7 +1,7 @@
 // The stages after the search: graph expansion, re-rank, goal boost, salience and the filters.
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
-import { graphExpandRecall, graphOf } from '../../domain/graph/recall.js';
+import { expandOnGraphs, graphOf } from '../../domain/graph/recall.js';
 import { Layer } from '../../base/memory/entry.js';
 import {
   outcomeNudge,
@@ -79,7 +79,7 @@ async function expandGraph(
   // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would
   // hide both.
   const beforeGraphIds = new Set(state.results.map((r) => r.entry.id));
-  state.results = await graphExpandRecall(state.results, {
+  state.results = await expandOnGraphs(state.results, {
     hops: graph.hops,
     maxNeighbors: graph.maxNeighbors,
     store: local,

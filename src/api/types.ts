@@ -8,8 +8,7 @@ import type { CallerState } from './callers.js';
 import type { CoreEnrichment, FolderHome, GlobalEnrichment, LedgerBook } from './enrichment.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { FailureNotices } from '../base/util/failure-notices.js';
-import { strengthModelFor } from '../base/memory/eval-switches.js';
-import type { StrengthModel } from '../base/memory/strength.js';
+import { withLossAversion, type StrengthModel } from '../base/memory/strength.js';
 import type { DetachedWork } from '../domain/search/embed-memories.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
@@ -91,10 +90,14 @@ export interface Context {
   readonly detached?: DetachedWork | undefined;
 }
 
-/** The strength model `ctx` scores by: its root's eval switches with its config's
- * loss-aversion ratio. */
+/** The strength model `ctx` scores by: its root's model at its config's loss-aversion ratio. */
 export function strengthOf(ctx: Pick<Context, 'infra' | 'config'>): StrengthModel {
-  return strengthModelFor(ctx.infra.evalSwitches, ctx.config.runtime);
+  return withLossAversion(ctx.infra.strength, ctx.config.runtime?.lossAversionRatio);
+}
+
+/** The strength model and rank boosts `ctx`'s rankings run under, as its root set them. */
+export function scoringOf(ctx: Pick<Context, 'infra'>): Pick<InfraPorts, 'strength' | 'rank'> {
+  return { strength: ctx.infra.strength, rank: ctx.infra.rank };
 }
 
 /** A Context as a published entry takes it: without `infra`, the entry fills in the real ports. */
@@ -103,10 +106,11 @@ export type EntryContext<C extends Context = Context> = Omit<C, 'infra'> & {
 };
 
 /** The ports a published entry's caller may hand in; without `failureNotices` the entry warns
- * through its own. */
-export type EntryInfraPorts = Omit<InfraPorts, 'failureNotices'> & {
-  readonly failureNotices?: FailureNotices;
-};
+ * through its own, and without `strength` and `rank` it scores by production. */
+export type EntryInfraPorts = Omit<InfraPorts, 'failureNotices' | 'strength' | 'rank'> &
+  Partial<Pick<InfraPorts, 'strength' | 'rank'>> & {
+    readonly failureNotices?: FailureNotices;
+  };
 
 /** Whether the store serves many people: the root's reach says, else the store's config for an
  * integrator's store. */

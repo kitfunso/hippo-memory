@@ -8,7 +8,7 @@ import type { HybridVectorCandidates, VectorSource } from '../../domain/search/v
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { ContextResultEntry } from './context-types.js';
 import { heldIds } from '../recall/finish.js';
-import type { Context } from '../types.js';
+import { scoringOf, type Context } from '../types.js';
 import type { AmbientLoadResult } from '../../base/ports/store/context-reads.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import { type ContextPlan, globalStoreInReach, globalInReach } from './context-plan.js';
@@ -89,7 +89,7 @@ function engineSettings(ctx: Context, plan: ContextPlan) {
     scope: plan.activeScope,
     runtime: ctx.config.runtime,
     cwd: ctx.infra.machine.cwd,
-    switches: ctx.infra.evalSwitches,
+    switches: scoringOf(ctx),
     now: plan.now,
   };
 }

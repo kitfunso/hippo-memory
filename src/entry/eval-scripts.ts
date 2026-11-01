@@ -2,7 +2,7 @@
 // ports wired in: a frozen script re-points its import line here and keeps every call as written.
 import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
 import { rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
-import { outcomeMultiplier as outcomeNudge } from '../domain/search/boosts.js';
+import { outcomeBoostFor } from '../domain/search/boosts.js';
 import { evalNow, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
 // Frozen eval scripts set HIPPO_FAKE_NOW per simulated session and read the clock and the
 // recall-boost switch here.
@@ -26,7 +26,7 @@ import type {
 import { ingestEvent as ingestGithubEvent } from '../surface/connectors/github/ingest.js';
 import { ingestMessage as ingestSlackMessage } from '../surface/connectors/slack/ingest.js';
 import type { ConnectorContext } from '../surface/connectors/ingest.js';
-import { entryInfra, filled, withEntryInfra } from '../surface/entry-infra.js';
+import { entryInfra, filled } from '../surface/entry-infra.js';
 
 // The target a folderIndex builds carries the embedder, so embedAll needs no wiring of its own.
 export { embedAll } from '../domain/search/embed-memories.js';
@@ -63,7 +63,7 @@ export function outcomeMultiplier(
   entry: MemoryEntry,
   ablated: boolean = isOutcomeFastAblated(),
 ): number {
-  return outcomeNudge(entry, ablated);
+  return outcomeBoostFor(entry, ablated);
 }
 
 /** judgeAll's options as a script passes them: the real fetch unless `fetcher` names another. */
@@ -78,18 +78,11 @@ export function judgeAll(
   return judgeOver(contents, { ...rest, http: httpOver(fetcher) });
 }
 
-export function remember(
-  ctx: EntryContext,
-  opts: GatedRememberOptions,
-): Promise<RememberResult | RememberSkipped>;
-export function remember(ctx: EntryContext, opts: RememberOptions): Promise<RememberResult>;
-export function remember(
-  ctx: EntryContext,
-  opts: RememberOptions | GatedRememberOptions,
-): Promise<RememberResult | RememberSkipped> {
-  // A plain RememberOptions is a GatedRememberOptions with the gate off.
-  return api.remember(withEntryInfra(ctx), { salienceGate: false, ...opts });
-}
+// filled() types a function by its last overload, so the gated form is named here.
+export const remember: {
+  (ctx: EntryContext, opts: GatedRememberOptions): Promise<RememberResult | RememberSkipped>;
+  (ctx: EntryContext, opts: RememberOptions): Promise<RememberResult>;
+} = filled(api.remember);
 export const retrieve = filled(api.retrieve);
 export const retrieveRanking = filled(api.retrieveRanking);
 export const retrieveWithCliCore = filled(api.retrieveWithCliCore);

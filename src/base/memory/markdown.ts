@@ -118,8 +118,8 @@ export function serializeEntry(entry: MemoryEntry): string {
   return `${fm}\n\n${wire.content}\n`;
 }
 
-/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no creation
- * time. */
+/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no
+ * creation time. */
 export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
   const { data, content } = parseFrontmatter(raw);
 

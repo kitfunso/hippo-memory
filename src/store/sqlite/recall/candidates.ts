@@ -3,8 +3,8 @@ import { type MemoryEntry, ERROR_TAG, Layer, schemaFitFrom } from '../../../base
 import {
   FALLBACK_HALF_LIFE_DAYS,
   PRODUCTION_STRENGTH,
-  calculateStrength,
-  confidenceFacets,
+  calculateStrengthAt,
+  confidenceFacetsAt,
   type ConfidenceInputs,
   type StrengthInputs,
   type StrengthModel,
@@ -62,8 +62,8 @@ function tallyStatus(
   const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
   const sums = { total: 0, strength: 0, pinned: 0, atRisk: 0, agedOut: 0 };
   for (const row of rows) {
-    const strength = calculateStrength(row, now, rules.strength);
-    const facets = confidenceFacets(row, now);
+    const strength = calculateStrengthAt(row, now, rules.strength);
+    const facets = confidenceFacetsAt(row, now);
     sums.total++;
     sums.strength += strength;
     byLayer[row.layer] = (byLayer[row.layer] ?? 0) + 1;

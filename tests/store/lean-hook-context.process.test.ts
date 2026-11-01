@@ -7,7 +7,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { graphExpandRecall } from '../../src/domain/graph/recall.js';
+import { expandOnGraphs } from '../../src/domain/graph/recall.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -314,7 +314,7 @@ describe('a memory with a copy in the global store', () => {
       });
     }
 
-    const out = await graphExpandRecall([sr(seed, 1), sr(other, 0.9)], {
+    const out = await expandOnGraphs([sr(seed, 1), sr(other, 0.9)], {
       hops: 1,
       store: walkable(sqliteStore(local)),
       global: walkable(sqliteStore(global)),

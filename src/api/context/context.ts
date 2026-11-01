@@ -1,6 +1,6 @@
 // Ambient context injection: contextGet, the selection it drives and the retrieval it records.
 import type { TaskSnapshot } from '../../base/records/sessions.js';
-import { markRetrieved } from '../../base/memory/entry.js';
+import { markRetrievedAt } from '../../base/memory/entry.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -220,7 +220,7 @@ async function recordRetrieval(
   { opts, plan, selected, activeSnapshot }: RecordRetrievalOptions,
 ): Promise<RecordedRetrieval> {
   const toUpdate = selected.map((s) => s.entry);
-  const updatedEntries = markRetrieved(toUpdate, plan.now, plan.strength);
+  const updatedEntries = markRetrievedAt(toUpdate, plan.now, plan.strength);
   const retrievedIds = updatedEntries.map((u) => u.id);
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,

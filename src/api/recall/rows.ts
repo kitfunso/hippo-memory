@@ -1,7 +1,7 @@
 // What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume
 // packet and the JSON rows.
 
-import { confidenceFacets } from '../../base/memory/strength.js';
+import { confidenceFacetsAt } from '../../base/memory/strength.js';
 import { Layer } from '../../base/memory/entry.js';
 import type { ResultCost, SearchResult } from '../../base/rank/search-types.js';
 import type { ClefSettings } from '../../base/config/config.js';
@@ -154,8 +154,8 @@ export interface RecallJsonRow {
   superseded?: boolean;
   superseded_by?: SearchResult['entry']['supersededBy'];
   graph_via?: SearchResult['graphVia'];
-  confidence?: ReturnType<typeof confidenceFacets>['tier'];
-  aged_out?: ReturnType<typeof confidenceFacets>['agedOut'];
+  confidence?: ReturnType<typeof confidenceFacetsAt>['tier'];
+  aged_out?: ReturnType<typeof confidenceFacetsAt>['agedOut'];
   source?: 'global' | 'local';
   reason?: ReturnType<typeof explainMatch>['reason'];
   bm25?: SearchResult['bm25'];
@@ -200,7 +200,7 @@ export function recallJsonRow({
   }
   if (showWhy) {
     const explanation = explainMatch(query, r);
-    const facets = confidenceFacets(r.entry, now);
+    const facets = confidenceFacetsAt(r.entry, now);
     base.confidence = facets.tier;
     base.aged_out = facets.agedOut;
     base.source = isGlobal ? 'global' : 'local';

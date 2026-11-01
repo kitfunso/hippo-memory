@@ -9,7 +9,7 @@ import { inSqliteSession, sqliteReach, sqliteStore } from '../../src/store/sqlit
 import type { RequestStores } from '../../src/db/request-stores.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { testInfra } from './infra.js';
-import { evalStoreRules } from '../../src/infra/eval-switches.js';
+import { rootStoreRules } from '../../src/infra/ports.js';
 
 /** A test Context on hippo.db with its local tier, as the CLI's composition root hands it; the folder rides beside it
  * for the tests that reopen it. */
@@ -24,9 +24,9 @@ export function testReach(hippoRoot: string, store: HippoStore): ContextReach {
   return contextReach(sqliteReach({ hippoRoot, store }), loadConfig, resolveEmbeddingProvider, ledger);
 }
 
-/** A Context on hippo.db under `hippoRoot` with its store built at the eval rules and clock, as the CLI root hands it. */
+/** A Context on hippo.db under `hippoRoot` with its store built at the root's rules and clock, as the CLI root hands it. */
 export function apiCtx(hippoRoot: string, tenantId = 'default', actor: Actor = adminActor('test')): FullContext {
-  const store = sqliteStore(hippoRoot, evalStoreRules(undefined));
+  const store = sqliteStore(hippoRoot, rootStoreRules(undefined));
   const reach = testReach(hippoRoot, store);
   const config = loadConfig(hippoRoot);
   return { hippoRoot, tenantId, actor, store, reach, config, infra: testInfra(), enrich: coreEnrichment(store) };

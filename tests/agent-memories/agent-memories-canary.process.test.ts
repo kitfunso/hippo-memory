@@ -31,10 +31,11 @@ const { homedir } = await import('node:os');
 const { loadConfig } = await import(new URL('../host/config-file.js', syncUrl).href);
 const { sqliteImportStores } = await import(new URL('../store/sqlite/maintenance/agent-import-stores.js', syncUrl).href);
 const { evalNow } = await import(new URL('../infra/eval-switches.js', syncUrl).href);
+const { PRODUCTION_STRENGTH } = await import(new URL('../base/memory/strength.js', syncUrl).href);
 const machine = mode === 'negative' ? { ...currentMachine(), home: cleanHome, env: {} }
   : mode === 'env' ? currentMachine() : { ...currentMachine(), home: homedir(), env: {} };
-const warnings = [...(await importForStore(root, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine, run: { clock: evalNow } })).warnings];
-if (mode === 'negative') warnings.push(...(await importAtSessionEnd(storeless, undefined, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine, run: { clock: evalNow } })).warnings);
+const warnings = [...(await importForStore(root, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine, run: { strength: PRODUCTION_STRENGTH, clock: evalNow } })).warnings];
+if (mode === 'negative') warnings.push(...(await importAtSessionEnd(storeless, undefined, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine, run: { strength: PRODUCTION_STRENGTH, clock: evalNow } })).warnings);
 process.stdout.write(JSON.stringify({ warnings }));
 `;
 const CLEAN_PROJECT = 'Clean project note for the injected machine.';

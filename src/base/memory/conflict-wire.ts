@@ -2,8 +2,8 @@
 // prints it with: `hippo conflicts --json` and the conflict markdown mirrors. The type renames its
 // fields freely; these names stay.
 
-/** A detected contradiction between two memories; the pair is stored with the smaller id as
- * `memoryAId`. */
+/** A detected contradiction between two memories; the pair is stored with the smaller id
+ * as `memoryAId`. */
 export interface MemoryConflict {
   id: number;
   memoryAId: string;

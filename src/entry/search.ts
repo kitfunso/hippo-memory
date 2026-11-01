@@ -8,7 +8,7 @@ import { withEvalSwitches } from './folder-search.js';
 import type { HippoStore } from '../base/ports/store.js';
 import { coreEnrichment, globalEnrichment } from '../api/hippo-db-context.js';
 import {
-  graphExpandRecall as expandOnGraphs,
+  expandOnGraphs,
   graphOf,
   type GraphExpandOptions as GraphWalkOptions,
 } from '../domain/graph/recall.js';

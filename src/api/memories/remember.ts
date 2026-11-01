@@ -9,7 +9,7 @@ import {
 } from '../instruction-detect.js';
 import { quarantineScopeFor } from '../../domain/trust/quarantine.js';
 import {
-  createMemory,
+  createMemoryAt,
   type ConfidenceLevel,
   type Layer,
   type MemoryEntry,
@@ -156,7 +156,7 @@ export function prepareRemember(
     !untrusted && memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
   const tags = trustTagged(opts.tags, untrusted, flagged);
   const local = opts.local ?? {};
-  const created = createMemory(
+  const created = createMemoryAt(
     vetted.content,
     {
       layer: local.layer,

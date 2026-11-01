@@ -12,7 +12,7 @@ import {
 import type { HippoStore } from '../../base/ports/store.js';
 import type { GraphWalk } from '../../domain/graph/recall.js';
 import type { RecallBoostOptions } from './types.js';
-import type { Context } from '../types.js';
+import { scoringOf, type Context } from '../types.js';
 import type { RecallProfile } from './profiles.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 import type { ActiveGoals } from '../../base/ports/store/types.js';
@@ -38,7 +38,7 @@ export interface RankRecallCtx extends RankSource {
   embedderFor: EmbedderFor;
   /** The folder whose path segments boost a memory. Without it, no path boost applies. */
   cwd?: string;
-  /** The strength model and rank switches the context's root read; absent, production ranking. */
+  /** The strength model and rank switches the context's root set; absent, production ranking. */
   switches?: EvalSwitches;
   /** The instant every memory is scored at. */
   now: Date;
@@ -181,7 +181,7 @@ export function rankCtxOf(ctx: Context): RankRecallCtx {
     tenantId: ctx.tenantId,
     embedderFor: ctx.infra.embedderFor,
     cwd: ctx.infra.machine.cwd,
-    switches: ctx.infra.evalSwitches,
+    switches: scoringOf(ctx),
     now: ctx.infra.clock(),
     signal: ctx.signal,
   };

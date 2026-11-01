@@ -3,7 +3,7 @@
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/recall/candidates.js';
-import { evalSwitches } from '../../../src/infra/eval-switches.js';
+import { PRODUCTION_STRENGTH, type StrengthModel } from '../../../src/base/memory/strength.js';
 import { deleteEntriesInBatches } from '../../../src/store/sqlite/entries/delete-entries.js';
 import * as deleteEntriesSql from '../../../src/store/sqlite/entries/delete-entries.js';
 import * as batchFlushSql from '../../../src/store/sqlite/entries/batch-flush.js';
@@ -66,12 +66,9 @@ export function loadContextCandidates(
   hippoRoot: string,
   tenantId: string,
   filter: ContextCandidateFilter,
+  model: StrengthModel = PRODUCTION_STRENGTH,
 ): MemoryEntry[] {
-  return onHandle(
-    hippoRoot,
-    (db) => candidatesSql.listContextCandidates(db, evalSwitches().strength, tenantId, filter),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => candidatesSql.listContextCandidates(db, model, tenantId, filter), openStore);
 }
 
 export function loadTextsHolding(

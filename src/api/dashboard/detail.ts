@@ -1,6 +1,6 @@
 // The dashboard drawer's detail of one memory, read fresh through the api and stamped with the id
 // the client holds.
-import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
+import { calculateStrengthAt, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
 import { round1 } from '../../base/util/format.js';
@@ -38,7 +38,7 @@ async function openConflictsOf(
   for (const c of conflicts) {
     const other = others.get(otherId(c));
     if (!other || !isLiveMemory(other)) continue;
-    const strength = round3(calculateStrength(other, new Date(at.nowMs), at.strength));
+    const strength = round3(calculateStrengthAt(other, new Date(at.nowMs), at.strength));
     out.push({
       id: c.id,
       reason: c.reason,

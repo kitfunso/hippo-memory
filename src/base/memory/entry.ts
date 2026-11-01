@@ -7,7 +7,7 @@ import { isJsonString } from '../util/json.js';
 import { tokenize } from '../util/tokenize.js';
 import { ID_SUFFIX_CHARS } from '../util/token-text.js';
 import {
-  calculateStrength,
+  calculateStrengthAt,
   netWrong,
   PRODUCTION_STRENGTH,
   type StrengthModel,
@@ -158,8 +158,8 @@ export interface CreateMemoryOptions {
   source?: string;
   confidence?: ConfidenceLevel;
   /**
-   * The store config's `defaultHalfLifeDays`; required so no writer silently gets the compiled
-   * default.
+   * The store config's `defaultHalfLifeDays`; required so no writer silently gets the
+   * compiled default.
    */
   baseHalfLifeDays: number;
   traceOutcome?: TraceOutcome;
@@ -177,7 +177,7 @@ export interface CreateMemoryOptions {
 
 /** A new memory entry created at `now`; hippo's own writers name the half-life base, so the type
  * asks for it. */
-export function createMemory(
+export function createMemoryAt(
   content: string,
   options: CreateMemoryOptions,
   now: Date,
@@ -213,7 +213,7 @@ export function createMemory(
     ...newLineage(options, at),
   };
 
-  entry.strength = calculateStrength(entry, now, PRODUCTION_STRENGTH);
+  entry.strength = calculateStrengthAt(entry, now, PRODUCTION_STRENGTH);
   return entry;
 }
 
@@ -299,7 +299,7 @@ export function createSuccessor(
     sourceSessionId: old.sourceSessionId,
     baseHalfLifeDays: opts.baseHalfLifeDays,
   };
-  const next = createMemory(content, fields, now);
+  const next = createMemoryAt(content, fields, now);
   // A legacy null origin has nothing to carry, so the store stamps it from its own location.
   if (isJsonString(old.originProject)) {
     next.originProject = old.originProject;
@@ -405,7 +405,7 @@ function inferValence(tags: string[]): EmotionalValence {
 /** Copies with the retrieval count, clock and half-life updated at `now`; the caller persists
  * them. A model whose recall does not strengthen returns the entries unchanged, not empty, since
  * callers derive last_retrieval_ids. */
-export function markRetrieved(
+export function markRetrievedAt(
   entries: MemoryEntry[],
   now: Date,
   model: StrengthModel,
@@ -422,7 +422,7 @@ export function markRetrieved(
       lastRetrieved: wrong ? e.lastRetrieved : now.toISOString(),
       halfLifeDays: wrong ? e.halfLifeDays : e.halfLifeDays + RETRIEVAL_HALF_LIFE_GAIN_DAYS,
     };
-    updated.strength = calculateStrength(updated, now, model);
+    updated.strength = calculateStrengthAt(updated, now, model);
     return updated;
   });
 }

@@ -1,7 +1,7 @@
 // The JS tally and the SQL aggregate share one freshness window and one schema-fit threshold, so they agree at the edges.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { AMBIENT_FRESH_WINDOW_MS, tallyAmbientEntries } from '../../src/base/memory/ambient.js';
+import { AMBIENT_FRESH_WINDOW_MS, tallyAmbientEntriesAt } from '../../src/base/memory/ambient.js';
 import { HIGH_SCHEMA_FIT } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -32,7 +32,7 @@ describe('ambient tallies at the window and threshold edges', () => {
     });
 
     const sql = countAmbientInFolder(root, 'default', { currentProject: [], now: NOW });
-    const js = tallyAmbientEntries(loadAllEntries(root, 'default'), NOW, PRODUCTION_STRENGTH);
+    const js = tallyAmbientEntriesAt(loadAllEntries(root, 'default'), NOW, PRODUCTION_STRENGTH);
 
     expect(js.fresh).toBe(1);
     expect(js.highSchemaFit).toBe(1);

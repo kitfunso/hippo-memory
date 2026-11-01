@@ -1,4 +1,3 @@
-import { evalStoreRules } from '../../infra/eval-switches.js';
 import {
   envAllowCleartext,
   envLossAversionRatio,
@@ -9,7 +8,7 @@ import {
   validateFlags,
 } from '../../base/util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { rootInfra } from '../../infra/ports.js';
+import { rootInfra, rootStoreRules } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { issueLocalKey, type LocalKey } from './local-key.js';
 import { KeyVerifier } from './api-key.js';
@@ -304,7 +303,7 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
   const runtime = sqliteServerRuntimeWithExitHook(opts.hippoRoot, {
     store: opts.store,
     queueMax: envStoreQueueMax(),
-    ...evalStoreRules(envLossAversionRatio()),
+    ...rootStoreRules(envLossAversionRatio()),
     vectorGraphMaxVectors: loadConfig(opts.hippoRoot).vectorGraph.maxVectors,
   });
   // Before the listen, so the first request already has the key it is checked against.

@@ -1,7 +1,7 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
 import { envActiveScope } from '../../base/util/env.js';
-import { confidenceFacets } from '../../base/memory/strength.js';
+import { confidenceFacetsAt } from '../../base/memory/strength.js';
 import {
   DEFAULT_RECALL_BUDGET,
   type ScoreBreakdown,
@@ -206,8 +206,8 @@ function printExplainJson({
     rank: rank + 1,
     id: r.entry.id,
     layer: r.entry.layer,
-    confidence: confidenceFacets(r.entry, now).tier,
-    aged_out: confidenceFacets(r.entry, now).agedOut,
+    confidence: confidenceFacetsAt(r.entry, now).tier,
+    aged_out: confidenceFacetsAt(r.entry, now).agedOut,
     score: r.score,
     tokens: r.tokens,
     tags: r.entry.tags,

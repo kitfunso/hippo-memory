@@ -4,14 +4,8 @@ import { envHippoSessionId } from '../../base/util/env.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as api from '../../api/index.js';
 import { printError } from './output.js';
-import {
-  type CliFlags,
-  type CommandContext,
-  boolFlag,
-  flagValueless,
-  stringFlag,
-  stringFlagOrExit,
-} from './flag-values.js';
+import { sanitizeLogMessage } from '../capture/compact.js';
+import { type CliFlags, type CommandContext, boolFlag, stringFlagOrExit } from './flag-values.js';
 import { fail } from './exit.js';
 import type { PolicyType } from '../../base/ports/store/types.js';
 
@@ -28,11 +22,6 @@ function isGoalPolicyType(value: string): value is PolicyType {
   return GOAL_POLICY_TYPES.some((type) => type === value);
 }
 
-function sanitizeGoalName(s: string): string {
-  // Strip C0 control chars + DEL to prevent terminal escape injection.
-  return s.replace(/[^\x20-\x7e\u0080-\uffff]/g, '?');
-}
-
 function resolveGoalSession(flags: CliFlags, defaultTenantId: string) {
   const sessionId = (stringFlagOrExit(flags, 'session-id') ?? envHippoSessionId() ?? '').trim();
   if (!sessionId) {
@@ -44,10 +33,7 @@ function resolveGoalSession(flags: CliFlags, defaultTenantId: string) {
 }
 
 function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined {
-  if (flagValueless(flags, 'policy')) {
-    fail('--policy requires a value (e.g., --policy error-prioritized)');
-  }
-  const policyRaw = stringFlag(flags, 'policy');
+  const policyRaw = stringFlagOrExit(flags, 'policy');
   if (policyRaw === undefined) return undefined;
   if (!isGoalPolicyType(policyRaw)) {
     fail(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
@@ -56,10 +42,7 @@ function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined
 }
 
 function readGoalLevel(flags: CliFlags): number | undefined {
-  if (flagValueless(flags, 'level')) {
-    fail('--level requires a value (e.g., --level 1)');
-  }
-  const levelRaw = stringFlag(flags, 'level');
+  const levelRaw = stringFlagOrExit(flags, 'level');
   if (levelRaw === undefined) return undefined;
   const parsed = Number(levelRaw);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
@@ -76,13 +59,14 @@ async function pushGoal({
   flags,
 }: CommandContext): Promise<void> {
   const rawName = args.join(' ').trim();
-  if (!rawName) {
+  // Sanitize at WRITE time so corrupt names never enter the DB, and before the empty check so a
+  // name of control characters alone is no name.
+  const name = sanitizeLogMessage(rawName).trim();
+  if (!name) {
     fail(
       'Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]',
     );
   }
-  // Sanitize at WRITE time so corrupt names never enter the DB.
-  const name = sanitizeGoalName(rawName);
   if (name !== rawName) {
     printError('note: stripped control characters from goal name');
   }
@@ -90,17 +74,9 @@ async function pushGoal({
 
   const policy = readGoalPolicy(flags);
 
-  if (flagValueless(flags, 'success')) {
-    fail('--success requires a value (e.g., --success "<condition>")');
-  }
-  const successCondition = stringFlag(flags, 'success');
-
+  const successCondition = stringFlagOrExit(flags, 'success');
   const level = readGoalLevel(flags);
-
-  if (flagValueless(flags, 'parent')) {
-    fail('--parent requires a value (e.g., --parent <goalId>)');
-  }
-  const parentGoalId = stringFlag(flags, 'parent');
+  const parentGoalId = stringFlagOrExit(flags, 'parent');
 
   const goal = await api.goalPush(cli.apiContext(hippoRoot, tenantId), {
     sessionId,
@@ -136,7 +112,7 @@ async function listGoals({
   const rows = goals.map((g) => ({
     id: g.id,
     status: g.status,
-    name: sanitizeGoalName(g.goalName),
+    name: sanitizeLogMessage(g.goalName),
     outcome: g.outcomeScore !== undefined ? g.outcomeScore.toString() : '-',
   }));
   const widths = {
@@ -170,10 +146,7 @@ async function completeGoal({
     fail('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
   }
   let outcomeScore: number | undefined;
-  if (flagValueless(flags, 'outcome')) {
-    fail('--outcome requires a value (e.g., --outcome 0.9)');
-  }
-  const outcomeRaw = stringFlag(flags, 'outcome');
+  const outcomeRaw = stringFlagOrExit(flags, 'outcome');
   if (outcomeRaw !== undefined) {
     const parsed = Number(outcomeRaw);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {

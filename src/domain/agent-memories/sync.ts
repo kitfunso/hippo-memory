@@ -5,7 +5,7 @@ import { plural } from '../../base/util/format.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { strengthModelFor } from '../../base/memory/eval-switches.js';
+import { withLossAversion } from '../../base/memory/strength.js';
 import type { EmbedRun } from '../search/embed-memories.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { namesFoldedInto } from './project-folds.js';
@@ -62,7 +62,7 @@ export interface SyncOptions {
   readonly busyWaitMs?: number;
   /** Opens each target store; the caller's, so this module never builds a store adapter. */
   readonly stores: ImportStores;
-  /** The root's eval switches and clock, which score and stamp each revived or new row. */
+  /** The root's strength model and clock, which score and stamp each revived or new row. */
   readonly run: EmbedRun;
 }
 
@@ -239,7 +239,7 @@ function storeSession(
     store: store.store,
     tenantId: opts.tenantId,
     baseHalfLifeDays: config.defaultHalfLifeDays,
-    strength: strengthModelFor(opts.run.evalSwitches, config.runtime),
+    strength: withLossAversion(opts.run.strength, config.runtime?.lossAversionRatio),
     now: opts.run.clock(),
     originProject: pass.originProject,
     visible: store.global ? [pass.originProject ?? '', ...pass.legacyOrigins] : null,

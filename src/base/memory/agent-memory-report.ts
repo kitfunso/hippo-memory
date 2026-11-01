@@ -70,8 +70,8 @@ export interface ToolReport {
   readonly homes: string[];
   readonly containers: ContainerSeen[];
   readonly tally: Tally;
-  /** Dry run only: kept rows in containers this run did not list, such as a moved project's old
-   * folder. */
+  /** Dry run only: kept rows in containers this run did not list, such as a moved project's
+   * old folder. */
   unlisted: number;
 }
 

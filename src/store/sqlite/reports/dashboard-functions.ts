@@ -4,7 +4,7 @@
 import type { DatabaseSyncLike, SqlValue } from '../../../db/index.js';
 import type { StoreModel } from '../runtime/open.js';
 import {
-  calculateStrength,
+  calculateStrengthAt,
   FALLBACK_HALF_LIFE_DAYS,
   type ConfidenceInputs,
   type StrengthInputs,
@@ -258,7 +258,7 @@ function addGridRow(t: Float64Array, v: readonly SqlValue[], rules: StoreModel):
   const nowMs = Number(v[FACT_ARGS]);
   const maxLog = Number(v[FACT_ARGS + 1]);
   const age = daysBetween(row.created, nowMs);
-  const strength = calculateStrength(row, new Date(nowMs), rules.strength);
+  const strength = calculateStrengthAt(row, new Date(nowMs), rules.strength);
   const col = Math.min(SCATTER_COLS - 1, Math.floor((Math.log10(age + 1) / maxLog) * SCATTER_COLS));
   const cell = Math.min(SCATTER_ROWS - 1, Math.floor(strength * SCATTER_ROWS));
   t[layerIndex(row.layer) * GRID_CELLS + cell * SCATTER_COLS + col]++;
@@ -289,7 +289,7 @@ export function useDashboardFunctions(db: DatabaseSyncLike, rules: StoreModel): 
   const fixed = { deterministic: true };
   const many = { deterministic: true, varargs: true };
   db.function('hippo_strength', many, (...v) =>
-    calculateStrength(factsOf(v), new Date(Number(v[FACT_ARGS])), rules.strength),
+    calculateStrengthAt(factsOf(v), new Date(Number(v[FACT_ARGS])), rules.strength),
   );
   db.function('hippo_band', many, (...v) =>
     bandAt(factsOf(v), Number(v[FACT_ARGS]), rules.strength),

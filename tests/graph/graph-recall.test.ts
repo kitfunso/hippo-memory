@@ -15,7 +15,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { graphExpandRecall } from '../../src/domain/graph/recall.js';
+import { expandOnGraphs } from '../../src/domain/graph/recall.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntitiesByMemoryId, loadNeighborRelations, loadEntitiesByIds } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
@@ -69,7 +69,7 @@ describe('graph-recall engine', () => {
 
     // base = only A (B is lexically orthogonal, would NOT be in any candidate set).
     const base = [sr(a, 1.0)];
-    const out = await graphExpandRecall(base, {
+    const out = await expandOnGraphs(base, {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -96,7 +96,7 @@ describe('graph-recall engine', () => {
 
     // b and c are reached as the `to` endpoint of supersedes edges (superseded), so
     // --include-superseded is needed to surface them; this test is about hop-distance.
-    const one = await graphExpandRecall(base, {
+    const one = await expandOnGraphs(base, {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -106,7 +106,7 @@ describe('graph-recall engine', () => {
     expect(one.map((r) => r.entry.id)).toContain(b.id);
     expect(one.map((r) => r.entry.id)).not.toContain(c.id);
 
-    const two = await graphExpandRecall(base, {
+    const two = await expandOnGraphs(base, {
       hops: 2,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -124,7 +124,7 @@ describe('graph-recall engine', () => {
     const eo = ent(home, T, other, 'O');
     // Edge points O -> S; seed is the `to` endpoint. Traversal must still reach O.
     insertRelationAt(home, T, { fromEntityId: eo, toEntityId: es, relType: 'supersedes', memoryId: other.id });
-    const out = await graphExpandRecall([sr(seed, 1.0)], {
+    const out = await expandOnGraphs([sr(seed, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -141,7 +141,7 @@ describe('graph-recall engine', () => {
     const eb = ent(home, T, b, 'B');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
-    const out = await graphExpandRecall([sr(a, 1.0)], {
+    const out = await expandOnGraphs([sr(a, 1.0)], {
       hops: 3,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -161,7 +161,7 @@ describe('graph-recall engine', () => {
       insertRelationAt(home, T, { fromEntityId: es, toEntityId: e, relType: 'supersedes', memoryId: seed.id });
       return m;
     });
-    const out = await graphExpandRecall([sr(seed, 1.0)], {
+    const out = await expandOnGraphs([sr(seed, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -185,7 +185,7 @@ describe('graph-recall engine', () => {
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eo, relType: 'supersedes', memoryId: a.id });
     const base = [sr(a, 1.0)];
 
-    const dflt = await graphExpandRecall(base, {
+    const dflt = await expandOnGraphs(base, {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -193,7 +193,7 @@ describe('graph-recall engine', () => {
     });
     expect(dflt.map((r) => r.entry.id)).not.toContain(old.id); // superseded dropped by default
 
-    const incl = await graphExpandRecall(base, {
+    const incl = await expandOnGraphs(base, {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -213,7 +213,7 @@ describe('graph-recall engine', () => {
 
     // Seed = the OLD decision (lexical hit). --hops reaches NEW as the `from` endpoint
     // (the current version) -> shown by DEFAULT (no --include-superseded).
-    const fromOld = await graphExpandRecall([sr(oldD, 1.0)], {
+    const fromOld = await expandOnGraphs([sr(oldD, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -224,14 +224,14 @@ describe('graph-recall engine', () => {
 
     // Seed = the NEW decision. --hops reaches OLD as the `to` endpoint (superseded) ->
     // DROPPED by default, surfaced only with --include-superseded.
-    const fromNewDefault = await graphExpandRecall([sr(newD, 1.0)], {
+    const fromNewDefault = await expandOnGraphs([sr(newD, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
       budget: 4000,
     });
     expect(fromNewDefault.map((r) => r.entry.id)).not.toContain(oldD.id);
-    const fromNewIncl = await graphExpandRecall([sr(newD, 1.0)], {
+    const fromNewIncl = await expandOnGraphs([sr(newD, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -248,7 +248,7 @@ describe('graph-recall engine', () => {
     const ef = ent(home, T, future, 'F');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ef, relType: 'supersedes', memoryId: a.id });
     // future.valid_from is "now"; ask as-of a date in the past -> it must be dropped.
-    const out = await graphExpandRecall([sr(a, 1.0)], {
+    const out = await expandOnGraphs([sr(a, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -274,7 +274,7 @@ describe('graph-recall engine', () => {
 
     // as-of AFTER the successor became valid -> the predecessor is no longer the valid
     // version, must be DROPPED (not merely valid_from <= asOf).
-    const after = await graphExpandRecall([sr(seed, 1.0)], {
+    const after = await expandOnGraphs([sr(seed, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -285,7 +285,7 @@ describe('graph-recall engine', () => {
 
     // as-of BEFORE the successor became valid -> the predecessor WAS the valid version,
     // must be surfaced.
-    const before = await graphExpandRecall([sr(seed, 1.0)], {
+    const before = await expandOnGraphs([sr(seed, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -304,7 +304,7 @@ describe('graph-recall engine', () => {
       const es = ent(glob, T, seed, 'S');
       const el = ent(glob, T, linked, 'L');
       insertRelationAt(glob, T, { fromEntityId: es, toEntityId: el, relType: 'supersedes', memoryId: seed.id });
-      const out = await graphExpandRecall([sr(seed, 1.0)], {
+      const out = await expandOnGraphs([sr(seed, 1.0)], {
         hops: 1,
         store: walkable(sqliteStore(home)),
         global: walkable(sqliteStore(glob)),
@@ -322,15 +322,15 @@ describe('graph-recall engine', () => {
   it('--hops 0 is a no-op (identity)', async () => {
     const a = mem(home, T, 'a');
     const base = [sr(a, 1.0)];
-    expect(
-      await graphExpandRecall(base, { hops: 0, store: walkable(sqliteStore(home)), tenantId: T, budget: 4000 }),
-    ).toBe(base);
+    expect(await expandOnGraphs(base, { hops: 0, store: walkable(sqliteStore(home)), tenantId: T, budget: 4000 })).toBe(
+      base,
+    );
   });
 
   it('empty graph is a no-op (no throw)', async () => {
     const a = mem(home, T, 'a');
     const base = [sr(a, 1.0)];
-    const out = await graphExpandRecall(base, {
+    const out = await expandOnGraphs(base, {
       hops: 2,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -347,7 +347,7 @@ describe('graph-recall engine', () => {
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     // Budget already nearly consumed by the base entry; the big neighbor overflows it.
     // includeSuperseded so the exclusion under test is the BUDGET, not the superseded-endpoint drop.
-    const out = await graphExpandRecall([sr(a, 1.0)], {
+    const out = await expandOnGraphs([sr(a, 1.0)], {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -364,7 +364,7 @@ describe('graph-recall engine', () => {
     const eb = ent(home, T, b, 'B');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     const base = [sr(a, 1.0), sr(b, 0.9)]; // b already returned lexically -> it is a seed too
-    const out = await graphExpandRecall(base, {
+    const out = await expandOnGraphs(base, {
       hops: 1,
       store: walkable(sqliteStore(home)),
       tenantId: T,
@@ -384,7 +384,7 @@ describe('graph-recall engine', () => {
     expect(() =>
       insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eo, relType: 'supersedes', memoryId: a.id }),
     ).toThrow(/another tenant/i);
-    const out = await graphExpandRecall([sr(a, 1.0)], {
+    const out = await expandOnGraphs([sr(a, 1.0)], {
       hops: 2,
       store: walkable(sqliteStore(home)),
       tenantId: T,

@@ -2,8 +2,13 @@
  * Pure unit tests for validateOwner (B2 v1.12.6).
  */
 
-import { describe, it, expect } from 'vitest';
-import { validateOwner, isStrictOwnerEnv } from '../../src/surface/cli/owner-validation.js';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { validateOwner } from '../../src/surface/cli/owner-validation.js';
+import { envStrictOwner } from '../../src/base/util/env.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('owner format', () => {
   it.each([
@@ -73,16 +78,19 @@ describe('validateOwner', () => {
   });
 });
 
-describe('isStrictOwnerEnv', () => {
+describe('envStrictOwner', () => {
   it('returns true when HIPPO_STRICT_OWNER=1', () => {
-    expect(isStrictOwnerEnv({ HIPPO_STRICT_OWNER: '1' })).toBe(true);
+    vi.stubEnv('HIPPO_STRICT_OWNER', '1');
+    expect(envStrictOwner()).toBe(true);
   });
 
   it('returns false when HIPPO_STRICT_OWNER unset', () => {
-    expect(isStrictOwnerEnv({})).toBe(false);
+    vi.stubEnv('HIPPO_STRICT_OWNER', undefined);
+    expect(envStrictOwner()).toBe(false);
   });
 
   it.each(['0', 'true', 'yes', ''])('returns false for HIPPO_STRICT_OWNER=%s (only 1 enables)', (v) => {
-    expect(isStrictOwnerEnv({ HIPPO_STRICT_OWNER: v })).toBe(false);
+    vi.stubEnv('HIPPO_STRICT_OWNER', v);
+    expect(envStrictOwner()).toBe(false);
   });
 });

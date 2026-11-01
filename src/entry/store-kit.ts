@@ -1,10 +1,7 @@
 import type { MemoryEntry } from '../base/memory/entry.js';
-import { entryAfterOutcome as outcomeAt } from '../base/memory/keep-rules.js';
+import { entryAfterOutcomeAt } from '../base/memory/keep-rules.js';
 import { PRODUCTION_STRENGTH, withLossAversion } from '../base/memory/strength.js';
-import {
-  tallyAmbientEntries as tallyAmbientAt,
-  type AmbientTallies,
-} from '../base/memory/ambient.js';
+import { tallyAmbientEntriesAt, type AmbientTallies } from '../base/memory/ambient.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
 import type { StoreRules } from '../base/ports/infra.js';
 import type { HippoStore } from '../base/ports/store-index.js';
@@ -125,7 +122,7 @@ export function entryAfterOutcome(
   good: boolean,
   rules: { lossAversionRatio?: number } = {},
 ): MemoryEntry {
-  return outcomeAt(
+  return entryAfterOutcomeAt(
     entry,
     good,
     evalNow(),
@@ -216,7 +213,7 @@ export {
 export { SECRET_TAGS } from '../base/util/secret-detect.js';
 /** An add-on's ambient tallies, scored as hippo.db's are under the environment's eval switches. */
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
-  return tallyAmbientAt(entries, now ?? evalNow(), evalSwitches().strength);
+  return tallyAmbientEntriesAt(entries, now ?? evalNow(), evalSwitches().strength);
 }
 // An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by
 // hippo.db's rule.

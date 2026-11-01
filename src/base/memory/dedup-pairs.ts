@@ -2,8 +2,8 @@
 // same groups.
 import { Layer } from './entry.js';
 
-/** A dedup run's pairs by how the two rows relate: both semantic, both episodic, or across
- * layers. */
+/** A dedup run's pairs by how the two rows relate: both semantic, both episodic, or
+ * across layers. */
 export interface DedupGroups<P> {
   readonly semantic: P[];
   readonly episodic: P[];

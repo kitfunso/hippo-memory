@@ -1,5 +1,5 @@
 // A prediction's closure states, shared by the store, the routes and the CLI flag checks.
-import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory/entry.js';
+import { createMemoryAt, Layer, type MemoryEntry, type MemoryKind } from '../memory/entry.js';
 
 export type ClosureState = 'open' | 'closed' | 'closed-unknown';
 
@@ -17,7 +17,7 @@ export function predictionMirror(
   baseHalfLifeDays: number,
   now: Date,
 ): MemoryEntry {
-  return createMemory(
+  return createMemoryAt(
     claim.claimText,
     {
       tags: ['prediction', claim.classTag],

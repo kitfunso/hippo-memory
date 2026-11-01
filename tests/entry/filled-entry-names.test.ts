@@ -8,6 +8,7 @@ const ENTRIES = [
   ['authCreate', server.authCreate, 2],
   ['authCreateSelf', server.authCreateSelf, 2],
   ['authRevoke', server.authRevoke, 2],
+  ['remember', evalScripts.remember, 2],
   ['retrieve', evalScripts.retrieve, 2],
   ['retrieveRanking', evalScripts.retrieveRanking, 3],
   ['retrieveWithCliCore', evalScripts.retrieveWithCliCore, 3],

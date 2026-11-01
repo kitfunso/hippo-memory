@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
 import { requireHippoDb } from '../../api/hippo-db-context.js';
 import { configReader } from '../../host/config-file.js';
-import { evalClock, evalStoreRules } from '../../infra/eval-switches.js';
+import { evalClock } from '../../infra/eval-switches.js';
 import { loadStaticFiles } from '../dashboard/static-file.js';
 import { sqliteServerRuntimeWithExitHook, type SqliteServerRuntime } from '../open-store.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
@@ -26,7 +26,7 @@ import {
 } from './lifecycle.js';
 import { createListener } from './tls.js';
 import type { ServerHandle } from './types.js';
-import { rootInfra } from '../../infra/ports.js';
+import { rootInfra, rootStoreRules } from '../../infra/ports.js';
 
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
@@ -105,7 +105,7 @@ function servingFor(
 export async function serveDashboard(opts: DashboardOptions): Promise<DashboardHandle> {
   const runtime = sqliteServerRuntimeWithExitHook(
     opts.hippoRoot,
-    evalStoreRules(envLossAversionRatio()),
+    rootStoreRules(envLossAversionRatio()),
   );
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();

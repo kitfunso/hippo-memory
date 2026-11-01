@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir, isInitialized } from '../../host/project-identity.js';
-import { hippoHomeDir } from '../../host/agent-homes.js';
+import { hippoHomeDir, processHomes } from '../../host/agent-homes.js';
 import type { Diagnostics } from '../../base/records/diagnostics.js';
 import type { ProjectTagReads } from '../../base/records/project-tags.js';
 import { loadConfig } from '../../host/config-file.js';
@@ -15,7 +15,6 @@ import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { CODEX_TRUST_LINE } from '../hooks-install/json-hooks.js';
 import { isCodexPresent } from '../hooks-install/detect.js';
 import { claudeConfigDir, codexHomeDir } from '../../base/util/agent-homes.js';
-import { processEnv } from '../../base/util/env.js';
 import { type JsonValue, isJsonObjectLiteral } from '../../base/util/json.js';
 import { tryReadJsonFile } from '../../host/json-file.js';
 import { databaseChecks, projectsCheck } from './doctor-store-checks.js';
@@ -86,7 +85,7 @@ function readJson(file: string): JsonValue | null {
 
 // Trust lives in Codex's own config.toml rows; doctor reads only the hooks file and reminds.
 function codexCheck(home: string): DoctorCheck {
-  const file = path.join(codexHomeDir(home, processEnv()), 'hooks.json');
+  const file = path.join(codexHomeDir(home, processHomes().env), 'hooks.json');
   const parsed = readJson(file);
   // Codex drops every hook in a hooks.json it cannot parse, hippo's included.
   if (fs.existsSync(file) && !isJsonObjectLiteral(parsed)) {
@@ -195,7 +194,7 @@ const CLAUDE_CODE_HOOKS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 function claudeCodeCheck(home: string): DoctorCheck {
-  const claudeDir = claudeConfigDir(home, processEnv());
+  const claudeDir = claudeConfigDir(home, processHomes().env);
   if (!fs.existsSync(claudeDir)) {
     return {
       id: 'claude-code',

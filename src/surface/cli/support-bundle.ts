@@ -1,6 +1,6 @@
 /** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (a store
  * may leave empty -wal and -shm files); never touches memory content. */
-import { envByName, processEnv } from '../../base/util/env.js';
+import { envByName, envNamesStarting } from '../../base/util/env.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -155,10 +155,7 @@ async function buildStores(opts: SupportBundleOptions): Promise<JsonValue[]> {
 }
 
 function listSetEnvNames(): string[] {
-  const names = new Set<string>();
-  for (const key of Object.keys(processEnv())) {
-    if (key.startsWith('HIPPO_')) names.add(key);
-  }
+  const names = new Set<string>(envNamesStarting('HIPPO_'));
   for (const key of OTHER_ENV_NAMES) {
     if (envByName(key) !== undefined) names.add(key);
   }

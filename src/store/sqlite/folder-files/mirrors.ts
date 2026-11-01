@@ -318,8 +318,8 @@ export function buildStatsFromDb(db: DatabaseSyncLike): LegacyStats {
   };
 }
 
-/** Write the `index.json` mirror file for an already-derived index. Exported for the longmemeval
- * benchmark. */
+/** Write the `index.json` mirror file for an already-derived index. Exported for the
+ * longmemeval benchmark. */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   mirrorBestEffort('index.json', () =>
     overwriteInPlace(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2)),

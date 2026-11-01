@@ -7,7 +7,7 @@ import type { DatabaseSyncLike } from '../../../db/sqlite.js';
 import { tableColumns } from '../../../db/tables.js';
 import { assertBinaryCompatible } from '../../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from '../dormant/dormant-rows.js';
-import { calculateStrength } from '../../../base/memory/strength.js';
+import { calculateStrengthAt } from '../../../base/memory/strength.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import {
   isRepairCandidate,
@@ -251,7 +251,7 @@ function setAsideIssue(
   if (removed === null) return false;
   insertDormantRow(db, {
     entry,
-    strength: calculateStrength(entry, now, move.rules.strength),
+    strength: calculateStrengthAt(entry, now, move.rules.strength),
     reason: 'quality-repair',
     dormantAt: now.toISOString(),
   });

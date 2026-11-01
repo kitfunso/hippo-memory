@@ -17,14 +17,9 @@ import { calculateStrength, createMemory, applyOutcome, markRetrieved } from '..
 import { calculateRewardFactor, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
-import { outcomeMultiplier } from '../../src/domain/search/boosts.js';
+import { outcomeBoostFor } from '../../src/domain/search/boosts.js';
 import { evalNow, evalSwitches, type StrengthAblation } from '../../src/infra/eval-switches.js';
-import {
-  envAblateDecay,
-  envAblateOutcome,
-  envAblateOutcomeSlow,
-  envAblateRecallBoost,
-} from '../../src/base/util/env.js';
+import { envFlagOn } from '../../src/base/util/env.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -36,9 +31,9 @@ afterEach(() => {
 // Core no longer reads the environment: each call hands it the flags the test just set.
 // The cuts the stubbed env names, as the entry functions take them.
 const ablation = (): StrengthAblation => ({
-  decay: envAblateDecay(),
-  recallBoost: envAblateRecallBoost(),
-  outcomeSlow: envAblateOutcome() || envAblateOutcomeSlow(),
+  decay: envFlagOn('HIPPO_ABLATE_DECAY'),
+  recallBoost: envFlagOn('HIPPO_ABLATE_RECALL_BOOST'),
+  outcomeSlow: envFlagOn('HIPPO_ABLATE_OUTCOME') || envFlagOn('HIPPO_ABLATE_OUTCOME_SLOW'),
 });
 const abl = () => ({ ablation: ablation() });
 
@@ -135,8 +130,8 @@ describe('HIPPO_ABLATE_RECENCY / HIPPO_EVAL_RECENCY_DAYS', () => {
   it('outcomeMultiplier matches the breakdown outcomeBoost', async () => {
     const m = applyOutcome(createMemory('outcome parity memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), true);
     const [r] = await hybridSearch('outcome parity', [m], { budget: 10000, explain: true });
-    expect(outcomeMultiplier(m, false)).toBe(r.breakdown!.outcomeBoost);
-    expect(outcomeMultiplier(m, false)).toBeGreaterThan(1);
+    expect(outcomeBoostFor(m, false)).toBe(r.breakdown!.outcomeBoost);
+    expect(outcomeBoostFor(m, false)).toBeGreaterThan(1);
   });
 });
 

@@ -18,8 +18,8 @@ import { memoryGet } from './memories/memories.js';
 import type { ConfidenceLevel, MemoryEntry } from '../base/memory/entry.js';
 import {
   calculateRewardFactor,
-  calculateStrength,
-  resolveConfidence,
+  calculateStrengthAt,
+  resolveConfidenceAt,
 } from '../base/memory/strength.js';
 import type { StoredVectorSummary } from '../base/records/embedding-index.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
@@ -78,8 +78,8 @@ export async function memoryDetail(
   const model = strengthOf(ctx);
   return {
     entry,
-    liveStrength: calculateStrength(entry, now, model),
-    confidence: resolveConfidence(entry, now),
+    liveStrength: calculateStrengthAt(entry, now, model),
+    confidence: resolveConfidenceAt(entry, now),
     rewardFactor: calculateRewardFactor(entry, model),
   };
 }

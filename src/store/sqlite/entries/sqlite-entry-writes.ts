@@ -1,6 +1,6 @@
 // hippo.db's EntryWrites group: the remember, outcome, pin, supersede, archive and forget writes.
 import { type MemoryEntry } from '../../../base/memory/entry.js';
-import { entryAfterOutcome } from '../../../base/memory/keep-rules.js';
+import { entryAfterOutcomeAt } from '../../../base/memory/keep-rules.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../../db/index.js';
 import {
   ConflictError,
@@ -150,7 +150,7 @@ function applyOutcomeInOwnTx(
     for (const id of outcome.ids) {
       const entry = latest.get(id) ?? read.get(id);
       if (!entry || !readerReaches(targetReader(outcome), entry.scope)) continue;
-      const updated = entryAfterOutcome(entry, outcome.good, rules.clock(), rules.strength);
+      const updated = entryAfterOutcomeAt(entry, outcome.good, rules.clock(), rules.strength);
       latest.set(id, updated);
       applied.push(updated);
     }

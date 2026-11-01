@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
-import { envAblateDecay, envAllowCleartext, envRuntimeSettings, validateFlags } from '../../src/base/util/env.js';
+import { envAllowCleartext, envRuntimeSettings, validateFlags } from '../../src/base/util/env.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const KEYS = ['HIPPO_ALLOW_CLEARTEXT', 'HIPPO_ABLATE_DECAY', 'HIPPO_AUTODEBIAS'] as const;
+const KEYS = ['HIPPO_ALLOW_CLEARTEXT', 'HIPPO_AUTODEBIAS'] as const;
 
 beforeEach(() => {
   for (const key of KEYS) vi.stubEnv(key, undefined);
@@ -18,13 +18,13 @@ beforeEach(() => {
 
 describe('flag spellings', () => {
   it.each(['1', 'true', 'TRUE', ' on '])('reads %j as on', (value) => {
-    vi.stubEnv('HIPPO_ABLATE_DECAY', value);
-    expect(envAblateDecay()).toBe(true);
+    vi.stubEnv('HIPPO_ALLOW_CLEARTEXT', value);
+    expect(envAllowCleartext()).toBe(true);
   });
 
   it.each(['', '0', 'false', 'off'])('reads %j as off', (value) => {
-    vi.stubEnv('HIPPO_ABLATE_DECAY', value);
-    expect(envAblateDecay()).toBe(false);
+    vi.stubEnv('HIPPO_ALLOW_CLEARTEXT', value);
+    expect(envAllowCleartext()).toBe(false);
     expect(validateFlags()).toEqual([]);
   });
 

@@ -3,13 +3,7 @@
 
 import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../../base/records/connectors.js';
-import {
-  eventMemory,
-  eventRecord,
-  eventSeen,
-  markEventSeen,
-  type EventLogSpec,
-} from './event-log.js';
+import { eventMemory, keyRecord, eventSeen, markKeySeen, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type {
   TenantRoute,
@@ -67,7 +61,7 @@ export function markSlackEventSeen(
   eventId: string,
   memoryId: string | null,
 ): boolean {
-  return markEventSeen(db, { log: SLACK_LOG, key: eventId, extra: [], memoryId });
+  return markKeySeen(db, { log: SLACK_LOG, key: eventId, extra: [], memoryId });
 }
 
 export function slackEventMemory(db: DatabaseSyncLike, eventId: string): string | null {
@@ -75,7 +69,7 @@ export function slackEventMemory(db: DatabaseSyncLike, eventId: string): string 
 }
 
 export function slackEventRecord(db: DatabaseSyncLike, eventId: string): ConnectorEventRecord {
-  return eventRecord(db, SLACK_LOG, eventId);
+  return keyRecord(db, SLACK_LOG, eventId);
 }
 
 export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [

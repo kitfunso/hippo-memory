@@ -1,7 +1,7 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { MemoryEntry, ERROR_TAG, createMemory, Layer } from '../../base/memory/entry.js';
+import { MemoryEntry, ERROR_TAG, createMemoryAt, Layer } from '../../base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../base/memory/strength.js';
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
@@ -21,7 +21,7 @@ export interface FailedCommand {
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch`
  * stores its text and tags through remember. */
-export function captureError(
+export function captureErrorAt(
   { command, exitCode, stderr }: FailedCommand,
   tenantId: string | undefined,
   now: Date,
@@ -42,7 +42,7 @@ export function captureError(
   const tags = [ERROR_TAG, 'autolearn'];
   if (cmdBase) tags.push(cmdBase.toLowerCase().slice(0, AUTOLEARN_TAG_CHARS));
 
-  return createMemory(
+  return createMemoryAt(
     content,
     {
       layer: Layer.Episodic,

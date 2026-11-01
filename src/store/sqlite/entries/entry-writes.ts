@@ -1,6 +1,6 @@
 // The entry write path every writer shares, and the retrieval strengthen. A name ending InTx writes
 // inside the caller's transaction; one ending InOwnTx opens a write scope of its own on its handle.
-import { type MemoryEntry, markRetrieved } from '../../../base/memory/entry.js';
+import { type MemoryEntry, markRetrievedAt } from '../../../base/memory/entry.js';
 import {
   closeHippoDb,
   type DatabaseSyncLike,
@@ -270,7 +270,7 @@ function strengthenRows(
   const found = new Set<string>();
   const byId = readEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
-  const updated = markRetrieved(live, rules.clock(), rules.strength);
+  const updated = markRetrievedAt(live, rules.clock(), rules.strength);
   if (updated.length === 0) return found;
   const rows = updated.map((e) => [
     e.id,

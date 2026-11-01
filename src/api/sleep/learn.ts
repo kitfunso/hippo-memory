@@ -17,7 +17,7 @@ import {
   type InvalidationTarget,
 } from '../../domain/learn/invalidation.js';
 import {
-  createMemory,
+  createMemoryAt,
   ERROR_TAG,
   Layer,
   schemaFitFrom,
@@ -185,7 +185,7 @@ function newLessonMemory(
   inputs: LessonMemoryInputs,
 ): MemoryEntry {
   const { tenantId, config, fitSource, pathTags, now } = inputs;
-  const entry = createMemory(
+  const entry = createMemoryAt(
     lesson,
     {
       layer: Layer.Episodic,

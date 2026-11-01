@@ -1,4 +1,4 @@
-import { MemoryEntry, Layer, createMemory, markRetrieved } from '../../base/memory/entry.js';
+import { MemoryEntry, Layer, createMemoryAt, markRetrievedAt } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { SessionEvent } from '../../base/records/sessions.js';
 import type { SleepBegin, UntracedSession } from '../../base/records/consolidation.js';
@@ -83,7 +83,7 @@ function sessionTrace(
     .filter((e) => e.eventType !== 'session_complete')
     .map((e) => ({ action: e.content, observation: '' }));
 
-  const trace = createMemory(
+  const trace = createMemoryAt(
     renderTraceContent({ task: summary, steps, outcome }),
     {
       layer: Layer.Trace,
@@ -165,7 +165,7 @@ export async function replayPass(run: SleepRun): Promise<void> {
     }),
   );
   if (picked.length === 0) return;
-  const rehearsed = markRetrieved(picked, now, run.strength);
+  const rehearsed = markRetrievedAt(picked, now, run.strength);
   // Update survivors in place so downstream passes see rehearsed state.
   await survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;

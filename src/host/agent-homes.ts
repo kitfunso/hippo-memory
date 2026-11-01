@@ -3,11 +3,11 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { HIPPO_DIR, userHome, type Homes } from '../base/util/agent-homes.js';
-import { envHippoHome, envXdgDataHome, processEnv } from '../base/util/env.js';
+import { envHippoHome, envMachine, envXdgDataHome } from '../base/util/env.js';
 
 /** The profile folder and the environment of this process. */
 export function processHomes(): Homes {
-  return { home: os.homedir(), env: processEnv() };
+  return { home: os.homedir(), env: envMachine() };
 }
 
 /** This process's home as a HOME or USERPROFILE variable names it, else the profile folder. */

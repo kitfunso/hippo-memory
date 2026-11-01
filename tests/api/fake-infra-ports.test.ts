@@ -18,6 +18,7 @@ import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { cwdProject } from '../_helpers/api-ctx.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { PRODUCTION_SWITCHES } from '../../src/base/memory/eval-switches.js';
 
 let network: ReturnType<typeof vi.fn>;
 
@@ -87,6 +88,7 @@ function fakeInfra(cwd: string): FakeInfra {
     isGlobalRoot: read('isGlobalRoot'),
   };
   const infra: InfraPorts = {
+    ...PRODUCTION_SWITCHES,
     clock: evalNow,
     machine,
     llm,

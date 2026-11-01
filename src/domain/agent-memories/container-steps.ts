@@ -1,7 +1,7 @@
 // A container plan as the store's steps, the rows each writes built here, and the tally read back
 // from the outcomes.
-import { Layer, createMemory, type MemoryEntry } from '../../base/memory/entry.js';
-import { calculateStrength } from '../../base/memory/strength.js';
+import { Layer, createMemoryAt, type MemoryEntry } from '../../base/memory/entry.js';
+import { calculateStrengthAt } from '../../base/memory/strength.js';
 import type { ImportStep, StepOutcome } from '../../base/records/agent-import.js';
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import type { ContainerWork, StoreSession } from './container-view.js';
@@ -60,7 +60,7 @@ function found<T>(value: T | undefined, missing: string): T {
 }
 
 function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntry {
-  const base = createMemory(
+  const base = createMemoryAt(
     storedText(item.text),
     {
       layer: Layer.Episodic,
@@ -89,12 +89,12 @@ function revived(s: StoreSession, w: ContainerWork, snap: DormantSnapshot): Memo
     ? snap.entry.tags.filter((t) => t !== w.tool.tag)
     : [];
   const row: MemoryEntry = {
-    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: s.baseHalfLifeDays }, now),
+    ...createMemoryAt('dormant snapshot defaults', { baseHalfLifeDays: s.baseHalfLifeDays }, now),
     ...snap.entry,
     tags: [...tags, w.tool.tag],
     lastRetrieved: now.toISOString(),
   };
-  return { ...row, strength: calculateStrength(row, now, s.strength) };
+  return { ...row, strength: calculateStrengthAt(row, now, s.strength) };
 }
 
 /** `tally` plus what each step did. */
