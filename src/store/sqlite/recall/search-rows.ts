@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { isFtsAvailable, type DatabaseSyncLike } from '../../../db/index.js';
-import { tokenize } from '../../../base/util/tokenize.js';
+import { cjkIndexTerms, partitionCjkTerms, tokenize } from '../../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../../base/scope/recall-scope.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import type { SqlFragment } from '../../../db/sql.js';
@@ -8,6 +8,7 @@ import {
   ftsTermParts,
   RAREST_TERM_COUNT,
   rarestFtsQuery,
+  spreadCjkTerms,
 } from '../../../base/rank/prompt-recall.js';
 import { errorMessage, log, errorFields } from '../../../base/util/log.js';
 import { topVectorMatches, type VectorIndex } from '../../../db/vector-match.js';
@@ -30,7 +31,7 @@ import {
 } from '../../../base/ports/store/vectors.js';
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 import { tenantAnd } from '../runtime/tenant.js';
-import { LIKE_WINDOW_ROWS } from '../../rules/windows.js';
+import { LIKE_WINDOW_ROWS, LIKE_WINDOW_TERMS } from '../../rules/windows.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
  * in recall-scope.ts is its JS twin. */
@@ -112,17 +113,47 @@ function listSearchRows(
     return listAllCandidates(db, p, limit);
   }
 
-  if (isFtsAvailable(db)) {
-    const rows = listFtsCandidates(db, terms, p, limit);
-    if (rows.length > 0) return rows;
-  }
-
-  const rows = listLikeCandidates(db, terms, p, limit);
+  // The run's trigrams reach the trigram index, which the 2-letter tokens cannot.
+  const { words, cjk } = partitionCjkTerms(terms);
+  const rows = interleaveRows(
+    words.length > 0 ? listWordCandidates(db, words, p, limit) : [],
+    cjk.length > 0
+      ? listLikeCandidates(db, [...new Set([...cjk, ...cjkIndexTerms(query)])], p, limit)
+      : [],
+    limit,
+  );
   if (rows.length > 0) return rows;
 
   // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded
   // fallback would misstate the candidate-pool size.
   return listAllCandidates(db, p, limit);
+}
+
+/** FTS5 matches for `terms`, else their substring matches. */
+function listWordCandidates(
+  db: DatabaseSyncLike,
+  terms: string[],
+  p: SearchPredicates,
+  limit: number,
+): MemoryRow[] {
+  if (isFtsAvailable(db)) {
+    const rows = listFtsCandidates(db, terms, p, limit);
+    if (rows.length > 0) return rows;
+  }
+  return listLikeCandidates(db, terms, p, limit);
+}
+
+/** `a` and `b` taken in turn, each row once, up to `limit`; with one list empty, the other as it
+ * is. */
+function interleaveRows(a: MemoryRow[], b: MemoryRow[], limit: number): MemoryRow[] {
+  if (a.length === 0 || b.length === 0) return a.length === 0 ? b : a;
+  const out = new Map<string, MemoryRow>();
+  for (let i = 0; out.size < limit && i < Math.max(a.length, b.length); i++) {
+    for (const row of [a[i], b[i]]) {
+      if (row !== undefined && out.size < limit) out.set(row.id, row);
+    }
+  }
+  return [...out.values()];
 }
 
 function searchPredicates(
@@ -252,13 +283,11 @@ function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment 
 /** LIKE over the newest admitted rows: the bound is what keeps a short term from reading the
  * whole store. */
 function windowArm(terms: readonly string[], p: SearchPredicates, limit: number): SqlFragment {
-  const where = terms
-    .map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`)
-    .join(' OR ');
-  const likes = terms.flatMap((term) => {
-    const like = `%${escapeLike(term)}%`;
-    return [like, like];
-  });
+  // One JSON array, not an OR per term: a long CJK query has 1,000s of terms, past SQLite's
+  // expression depth.
+  const likes = JSON.stringify(
+    terms.slice(0, LIKE_WINDOW_TERMS).map((term) => `%${escapeLike(term)}%`),
+  );
   // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own
   // order needs no sort.
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
@@ -266,8 +295,9 @@ function windowArm(terms: readonly string[], p: SearchPredicates, limit: number)
     sql:
       `SELECT * FROM (SELECT ${MEMORY_SELECT_COLUMNS}, updated_at ` +
       `FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias} ` +
-      `ORDER BY ${newestFirst} LIMIT ?) WHERE (${where})`,
-    params: [...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...likes],
+      `ORDER BY ${newestFirst} LIMIT ?) WHERE EXISTS (SELECT 1 FROM json_each(?) j WHERE ` +
+      `LOWER(content) LIKE j.value ESCAPE '\\' OR LOWER(tags_json) LIKE j.value ESCAPE '\\')`,
+    params: [...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), likes],
   };
 }
 
@@ -361,7 +391,7 @@ export function entriesInOrder(db: DatabaseSyncLike, ids: readonly string[]): Me
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
-// The vocabulary view is a temp table, so it lives and dies with its connection.
+// The vocabulary views are temp tables, so they live and die with their connection.
 const vocabReady = new WeakSet<DatabaseSyncLike>();
 
 function ensureRarestVocab(db: DatabaseSyncLike): void {
@@ -369,27 +399,55 @@ function ensureRarestVocab(db: DatabaseSyncLike): void {
   db.exec(
     `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`,
   );
+  db.exec(
+    `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_trigram_vocab USING fts5vocab(main, 'memories_trigram', 'row')`,
+  );
   vocabReady.add(db);
 }
 
-/** Rarest-K prompt terms for this connection's FTS index, as a space-joined query string.
- *  Without FTS, returns the first 32 terms, as before rarest-term selection. */
+/** Rarest-K prompt terms for this connection's FTS indexes, as a space-joined query string: words
+ * count in the word index, CJK terms in the trigram index. Without FTS, the first 32 terms. */
 export function pickRarestFtsQuery(
   db: DatabaseSyncLike,
   terms: readonly string[],
   maxTerms = RAREST_TERM_COUNT,
 ): string {
   // The LIKE path has no bm25 ranking to bound, so it keeps the pre-rarest 32-term query.
-  if (!isFtsAvailable(db)) return terms.slice(0, 32).join(' ');
+  if (!isFtsAvailable(db)) return spreadCjkTerms(terms, 32).join(' ');
   ensureRarestVocab(db);
-  const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
-  if (vocab.length === 0) return '';
+  const { words, cjk } = partitionCjkTerms(terms);
+  const wordCounts = wordDocCounts(db, words);
+  const cjkCounts = trigramDocCounts(db, cjk);
+  return rarestFtsQuery(
+    terms,
+    (part) => wordCounts.get(part) ?? 0,
+    maxTerms,
+    (term) => cjkCounts.get(term) ?? 0,
+  );
+}
+
+function wordDocCounts(db: DatabaseSyncLike, words: readonly string[]): Map<string, number> {
+  const vocab = Array.from(new Set(words.flatMap(ftsTermParts)));
+  if (vocab.length === 0) return new Map();
   // One cached shape per term count: an IN list over a virtual table needs one mark per term to
   // keep its lookups.
   const rows = cachedStatement(
     db,
     `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,
   ).all(...vocab) as Array<{ term: string; doc: number }>;
-  const counts = new Map(rows.map((r) => [r.term, r.doc]));
-  return rarestFtsQuery(terms, (part) => counts.get(part) ?? 0, maxTerms);
+  return new Map(rows.map((r) => [r.term, r.doc]));
+}
+
+/** Rows holding each CJK term by the trigram index: a trigram's own count, and for a shorter run
+ * the summed counts of the trigrams it opens, a rarity estimate, not an exact row count. */
+function trigramDocCounts(db: DatabaseSyncLike, cjk: readonly string[]): Map<string, number> {
+  // SHORTCUT: prefix seeks only, as a suffix count scans the whole vocabulary; a 0 keeps a short run.
+  if (cjk.length === 0) return new Map();
+  // CROSS JOIN keeps the term list outside, so each term is one range seek into the vocabulary.
+  const rows = cachedStatement(
+    db,
+    `SELECT j.value AS term, SUM(v.doc) AS doc FROM json_each(?) j CROSS JOIN temp.z1_trigram_vocab v ` +
+      `ON v.term >= j.value AND v.term < j.value || char(1114111) GROUP BY j.value`,
+  ).all(JSON.stringify(cjk)) as Array<{ term: string; doc: number }>;
+  return new Map(rows.map((r) => [r.term, r.doc]));
 }

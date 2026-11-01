@@ -21,7 +21,7 @@ import {
   type SearchResult,
 } from '../../base/rank/search-types.js';
 import { isJsonNumber } from '../../base/util/json.js';
-import { textOverlap, tokenize as tokenizeQuery } from '../../base/util/tokenize.js';
+import { indexTokenize, textOverlap, tokenize as tokenizeQuery } from '../../base/util/tokenize.js';
 import type { RecallProfile } from './profiles.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 import type { ActiveGoals } from '../../base/ports/store/types.js';
@@ -222,7 +222,7 @@ function newestOnTopicFirst(query: string, results: SearchResult[]): SearchResul
   for (const r of pool) {
     let hits = 0;
     if (queryTokens.size > 0) {
-      const candTokens = new Set(tokenizeQuery(r.entry.content));
+      const candTokens = new Set(indexTokenize(r.entry.content));
       for (const t of queryTokens) if (candTokens.has(t)) hits++;
     }
     const queryCoverage = queryTokens.size > 0 ? hits / queryTokens.size : 0;

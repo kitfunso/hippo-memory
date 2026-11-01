@@ -116,6 +116,25 @@ describe('hybridSearch over stored vectors', () => {
     expect(results[0]!.breakdown?.mode).toBe('hybrid');
   });
 
+  it('ranks a Chinese query by its words and its vector', async () => {
+    const query = '数据库连接池';
+    const q = hashedVector(query);
+    const [near, far] = orthogonalTo(q, 2);
+    const pool = memory('数据库连接池的大小必须设置为二十');
+    const deploy = memory('部署前必须先运行迁移脚本');
+    const root = vectorRoot({ [pool.id]: withCosine(q, near!, 0.9), [deploy.id]: withCosine(q, far!, -0.1) });
+
+    const results = await hybridSearch(query, [pool, deploy], {
+      hippoRoot: root,
+      budget: 10_000,
+      scope: null,
+      explain: true,
+    });
+    expect(results.map((r) => r.entry.id)).toEqual([pool.id]);
+    expect(results[0]!.bm25).toBeGreaterThan(0);
+    expect(results[0]!.breakdown?.mode).toBe('hybrid');
+  });
+
   it('blends normalised BM25 and cosine by embeddingWeight, 0.6 to cosine by default', async () => {
     const query = 'cache failure';
     const q = hashedVector(query);

@@ -4,6 +4,7 @@
  * noise dominates hint UX; `recall_autodebias_hint_no_class_match` audits are the telemetry.
  */
 import { FORWARD_CLAIM_STOPWORDS } from '../../base/util/stopwords.js';
+import { CJK_LETTERS } from '../../base/util/tokenize.js';
 
 /**
  * Each pattern is deliberately narrow (add one only on audit evidence); word boundaries are
@@ -72,12 +73,14 @@ export function detectForwardClaim(queryText: string): ForwardClaimMatch | null 
   return null;
 }
 
+const NOT_CLASS_WORD = new RegExp(String.raw`[^a-z0-9\s_${CJK_LETTERS}-]`, 'gu');
+
 function extractClassQueryTokens(queryText: string): string[] {
   return (
     queryText
       .toLowerCase()
-      // Strip everything that's not alphanum or whitespace or hyphen / underscore.
-      .replace(/[^a-z0-9\s_-]/g, ' ')
+      // Strip everything that's not alphanum, CJK, whitespace, hyphen or underscore.
+      .replace(NOT_CLASS_WORD, ' ')
       // Split on whitespace, hyphen and underscore, matching the class-tag split in resolveClass.
       .split(/[\s_-]+/)
       .filter((t) => t.length >= 3 && !FORWARD_CLAIM_STOPWORDS.has(t) && !/^\d+$/.test(t))

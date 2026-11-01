@@ -5,7 +5,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { listRecallEntries } from '../../src/store/sqlite/recall/search-rows.js';
 import { loadSearchEntries, writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { createRequire } from 'node:module';
+import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
+import { LIKE_WINDOW_TERMS } from '../../src/store/rules/windows.js';
+import { tokenize } from '../../src/base/util/tokenize.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -15,6 +18,11 @@ import { removeDir } from '../_helpers/remove-dir.js';
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+
+// SAFETY: node:sqlite has no bundled types; `all` takes SQL params and returns the rows.
+const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
+  StatementSync: { prototype: { all(...params: unknown[]): unknown[] } };
+};
 
 function makeRaw(text: string): MemoryEntry {
   return createMemory(text, {
@@ -169,6 +177,89 @@ describe('loadSearchEntries paths', () => {
       const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail);
       expect(plan).toContainEqual(expect.stringMatching(/^SCAN t VIRTUAL TABLE INDEX \d+:/));
       expect(plan).toContainEqual(expect.stringMatching(/^SEARCH m USING INTEGER PRIMARY KEY \(rowid=\?\)/));
+    } finally {
+      closeHippoDb(db);
+    }
+  }, 30_000);
+
+  it('CJK path: a Chinese query returns only the rows holding its words', () => {
+    writeEntry(root, makeRaw('数据库连接池的大小必须设置为二十'));
+    writeEntry(root, makeRaw('部署前必须先运行迁移脚本'));
+    writeEntry(root, makeRaw('alpha beta'));
+    const results = loadSearchEntries(root, '数据库连接池', 200, 'default');
+    expect(results.map((e) => e.content)).toEqual(['数据库连接池的大小必须设置为二十']);
+  });
+
+  it('CJK path: a row holding a Korean word as a whole FTS5 token does not hide the row holding it with a particle', () => {
+    writeEntry(root, makeRaw('크기 확인'));
+    writeEntry(root, makeRaw('연결 풀 크기는 이십'));
+    writeEntry(root, makeRaw('alpha beta'));
+    const results = loadSearchEntries(root, '크기', 200, 'default');
+    expect(results.map((e) => e.content).sort()).toEqual(['연결 풀 크기는 이십', '크기 확인']);
+  });
+
+  it('mixed query: a Chinese-only row joins the FTS rows of the English word', () => {
+    writeEntry(root, makeRaw('postgres tuning notes'));
+    writeEntry(root, makeRaw('连接池在部署后泄漏'));
+    writeEntry(root, makeRaw('alpha beta'));
+    const results = loadSearchEntries(root, 'postgres 连接池', 200, 'default');
+    expect(results.map((e) => e.content).sort()).toEqual(['postgres tuning notes', '连接池在部署后泄漏'].sort());
+  });
+
+  it('a long CJK query stays under the SQL expression depth limit and still finds its rows', () => {
+    const han = Array.from({ length: 1000 }, (_, i) => String.fromCodePoint(0x4e00 + i)).join('');
+    const cjkRow = `${han.slice(0, 6)} 的说明`;
+    writeEntry(root, makeRaw('postgres tuning notes'));
+    writeEntry(root, makeRaw(cjkRow));
+    writeEntry(root, makeRaw('alpha beta'));
+    const results = loadSearchEntries(root, `postgres ${han}`, 200, 'default');
+    expect(results.map((e) => e.content).sort()).toEqual([cjkRow, 'postgres tuning notes'].sort());
+  });
+
+  it('a query of 2,000 CJK bigrams binds at most LIKE_WINDOW_TERMS patterns for the window LIKE', () => {
+    writeEntry(root, makeRaw('alpha beta'));
+    const han = Array.from({ length: 2001 }, (_, i) => String.fromCodePoint(0x4e00 + i)).join('');
+    const all = vi.spyOn(StatementSync.prototype, 'all');
+    try {
+      loadSearchEntries(root, han, 200, 'default');
+      const likes = all.mock.calls
+        .flat()
+        .map(String)
+        .filter((v) => v.startsWith('["%'));
+      expect(likes).toHaveLength(1);
+      expect(JSON.parse(likes[0] ?? '')).toHaveLength(LIKE_WINDOW_TERMS);
+    } finally {
+      all.mockRestore();
+    }
+  });
+
+  // The tokenizer drops `%`, so `_` is the one LIKE wildcard a term can carry.
+  it.each([
+    ['FTS5 on, a 2-letter term', '1', '_z', 'a_zeta marker', 'bzeta marker'],
+    ['FTS5 off, every term', '0', 'a_zeta', 'a_zeta marker', 'a-zeta marker'],
+  ])('window LIKE path, %s: `_` in a term matches only itself', (_name, fts, query, hit, miss) => {
+    expect(tokenize('a%z 50%')).toEqual(['50']);
+    const db = openHippoDb(root);
+    try {
+      setMeta(db, 'fts5_available', fts);
+      writeEntryDbOnly(db, makeRaw(hit));
+      writeEntryDbOnly(db, makeRaw(miss));
+      const found = listRecallEntries(db, query, { limit: 200, tenantId: 'default' });
+      expect(found.map((e) => e.content)).toEqual([hit]);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('CJK substring path: a Chinese row older than the 2,000 newest is found through the trigram index', () => {
+    const db = openHippoDb(root);
+    try {
+      db.exec('BEGIN');
+      writeEntryDbOnly(db, makeRaw('数据库连接池的大小必须设置为二十'));
+      for (let i = 0; i < 2500; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
+      db.exec('COMMIT');
+      const found = listRecallEntries(db, '数据库连接池', { limit: 200, tenantId: 'default' });
+      expect(found.map((e) => e.content)).toEqual(['数据库连接池的大小必须设置为二十']);
     } finally {
       closeHippoDb(db);
     }

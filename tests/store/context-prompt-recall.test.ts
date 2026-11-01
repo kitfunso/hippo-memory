@@ -11,6 +11,7 @@ import { type HippoConfig } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { contextGet } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -104,6 +105,97 @@ describe('contextGet prompt recall (api-level)', () => {
       prompt: 'how should the postgres migration rollback plan work',
     });
 
+    expect(ids(result)).toEqual([relevant.id]);
+  });
+
+  it('recalls a Chinese memory older than the 2,000 newest rows, through the trigram index', async () => {
+    enablePromptRecall(local);
+    const relevant = seed(local, '数据库连接池的大小必须设置为二十', { created: '2026-01-01T00:00:00.000Z' });
+    // A newer row sharing one character pair keeps the LIKE window non-empty, so no fallback reads old rows.
+    seed(local, '连接测试', { created: '2026-06-02T00:00:00.000Z' });
+    const db = openHippoDb(local);
+    try {
+      db.exec('BEGIN');
+      for (let i = 0; i < 2100; i++) {
+        writeEntryDbOnly(db, {
+          ...createMemory(`deploy note ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+          originProject: PROJECT,
+          created: '2026-06-01T00:00:00.000Z',
+        });
+      }
+      db.exec('COMMIT');
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const result = await contextGet(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: '数据库连接池应该多大',
+    });
+
+    expect(ids(result)).toContain(relevant.id);
+  }, 30_000);
+
+  // The overlap gate is opened wide in the next two: the store's search for the prompt is under test.
+  it('recalls a Chinese memory from a prompt that also holds 8+ indexed English words', async () => {
+    enablePromptRecall(local, { promptRecallThreshold: 0.01, promptRecallMaxItems: 20 });
+    const english = 'kubernetes ingress certificate renewal pipeline staging cluster rollout canary';
+    // Two rows each, so every English word counts 2 and the Chinese phrase, in one row, counts 1.
+    for (const n of [1, 2]) seed(local, `${english} runbook ${n}`);
+    const chinese = seed(local, '数据库连接池的大小必须设置为二十');
+
+    const result = await contextGet(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: `${english} 连接池的大小`,
+    });
+
+    expect(ids(result)).toContain(chinese.id);
+  });
+
+  it('recalls a memory from a 4,000-character Chinese prompt whose matching phrase is at the end', async () => {
+    enablePromptRecall(local, { promptRecallThreshold: 0.01, promptRecallMaxItems: 20 });
+    const filler = '今天天气很好我们去公园散步';
+    for (const n of ['一', '二']) seed(local, `${filler}${n}`);
+    const relevant = seed(local, '数据库连接池的大小必须设置为二十');
+    const phrase = '数据库连接池应该多大';
+    const prompt = filler.repeat(400).slice(0, 4000 - phrase.length) + phrase;
+    expect(prompt).toHaveLength(4000);
+
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt });
+
+    expect(ids(result)).toContain(relevant.id);
+  });
+
+  it('recalls a memory holding a one-letter Korean prompt word inside a longer word', async () => {
+    enablePromptRecall(local, { promptRecallThreshold: 0.01 });
+    const relevant = seed(local, '연결 풀은 이십으로 설정한다');
+    seed(local, '배포 전에 스크립트를 실행한다');
+
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt: '풀' });
+
+    expect(ids(result)).toEqual([relevant.id]);
+  });
+
+  it('recalls a memory from a two-letter Chinese prompt that only ends the memory', async () => {
+    enablePromptRecall(local, { promptRecallThreshold: 0.01 });
+    const relevant = seed(local, '生产数据库必须使用连接池');
+
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt: '接池' });
+
+    expect(ids(result)).toEqual([relevant.id]);
+  });
+
+  it('clears the default gate for a long Chinese note from a three-letter prompt', async () => {
+    const relevant = seed(
+      local,
+      '上线前在预发布环境执行数据库迁移脚本确认全部服务健康检查通过后再切换生产流量并通知值班同事',
+    );
+
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt: '数据库' });
+
+    expect(fs.existsSync(path.join(local, 'config.json'))).toBe(false);
     expect(ids(result)).toEqual([relevant.id]);
   });
 

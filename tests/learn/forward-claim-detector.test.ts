@@ -148,6 +148,11 @@ describe('detectForwardClaim — token extraction', () => {
     expect(m!.classQueryTokens).not.toContain('take');
   });
 
+  it('keeps a CJK class word whole, so it reaches the class match', () => {
+    const m = detectForwardClaim('数据库迁移 will take 3 days');
+    expect(m!.classQueryTokens).toContain('数据库迁移');
+  });
+
   it('drops pure-numeric tokens', () => {
     const m = detectForwardClaim('refactor will take 5 days');
     expect(m).not.toBeNull();

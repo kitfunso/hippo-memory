@@ -8,7 +8,7 @@ import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../../base/scope/recall-scope.js';
 import { CONFLICT_STOPWORDS } from '../../base/util/stopwords.js';
-import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
+import { jaccardSets, tokenizeMin } from '../../base/util/tokenize.js';
 import { DECAY_THRESHOLD } from './decay.js';
 import type { DetectedConflict } from '../../base/ports/store/consolidation.js';
 import type { ConflictSide, LoserFate } from '../../base/ports/store/conflicts.js';
@@ -209,7 +209,7 @@ function describeConflict(
 }
 
 function distinctiveTokens(text: string): Set<string> {
-  return new Set(tokenize(text).filter((t) => t.length > 2 && !CONFLICT_STOPWORDS.has(t)));
+  return new Set(tokenizeMin(text, 3).filter((t) => !CONFLICT_STOPWORDS.has(t)));
 }
 
 function openingWindow(text: string): string {

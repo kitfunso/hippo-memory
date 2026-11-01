@@ -5,6 +5,10 @@
  * answer. */
 export const LIKE_WINDOW_ROWS = 2000;
 
+/** Most terms LIKE tests on each of those rows: the trigram index looks up every longer term over
+ * the whole store, so a long CJK query's 1,000s of bigrams need not all be tested here. */
+export const LIKE_WINDOW_TERMS = 64;
+
 /** How many of a tenant's newest rows schemaFit reads; older rows no longer move the fit. */
 export const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
