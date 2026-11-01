@@ -1,6 +1,8 @@
-/** Han, kana and Hangul, as the body of a `u`-flag character class; ー, the kana prolonged-sound
- * mark, is a Common-script letter inside katakana words. */
-export const CJK_LETTERS = String.raw`\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}ー`;
+/** Han, kana and Hangul, as the body of a `u`-flag character class. */
+export const CJK_SCRIPTS = String.raw`\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}`;
+/** CJK_SCRIPTS and ー, the kana prolonged-sound mark, a Common-script letter inside katakana
+ * words. */
+export const CJK_LETTERS = `${CJK_SCRIPTS}ー`;
 const HAS_CJK = new RegExp(`[${CJK_LETTERS}]`, 'u');
 // Other non-ASCII letters still split words, so `caf` keeps matching `café` as the recall goldens
 // pin.
