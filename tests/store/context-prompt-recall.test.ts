@@ -137,6 +137,37 @@ describe('contextGet prompt recall (api-level)', () => {
     expect(ids(result)).toContain(relevant.id);
   }, 30_000);
 
+  // The overlap gate is opened wide in the next two: the store's search for the prompt is under test.
+  it('recalls a Chinese memory from a prompt that also holds 8+ indexed English words', async () => {
+    enablePromptRecall(local, { promptRecallThreshold: 0.01, promptRecallMaxItems: 20 });
+    const english = 'kubernetes ingress certificate renewal pipeline staging cluster rollout canary';
+    // Two rows each, so every English word counts 2 and the Chinese phrase, in one row, counts 1.
+    for (const n of [1, 2]) seed(local, `${english} runbook ${n}`);
+    const chinese = seed(local, '数据库连接池的大小必须设置为二十');
+
+    const result = await contextGet(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: `${english} 连接池的大小`,
+    });
+
+    expect(ids(result)).toContain(chinese.id);
+  });
+
+  it('recalls a memory from a 4,000-character Chinese prompt whose matching phrase is at the end', async () => {
+    enablePromptRecall(local, { promptRecallThreshold: 0.01, promptRecallMaxItems: 20 });
+    const filler = '今天天气很好我们去公园散步';
+    for (const n of ['一', '二']) seed(local, `${filler}${n}`);
+    const relevant = seed(local, '数据库连接池的大小必须设置为二十');
+    const phrase = '数据库连接池应该多大';
+    const prompt = filler.repeat(400).slice(0, 4000 - phrase.length) + phrase;
+    expect(prompt).toHaveLength(4000);
+
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt });
+
+    expect(ids(result)).toContain(relevant.id);
+  });
+
   it('is on by default: no config swaps the newest memory for the matching one', async () => {
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy', {
       created: '2026-01-01T00:00:00.000Z',

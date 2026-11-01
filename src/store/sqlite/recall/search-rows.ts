@@ -8,6 +8,7 @@ import {
   ftsTermParts,
   RAREST_TERM_COUNT,
   rarestFtsQuery,
+  spreadCjkTerms,
 } from '../../../base/rank/prompt-recall.js';
 import { errorMessage, log, errorFields } from '../../../base/util/log.js';
 import { topVectorMatches, type VectorIndex } from '../../../db/vector-match.js';
@@ -388,7 +389,7 @@ export function entriesInOrder(db: DatabaseSyncLike, ids: readonly string[]): Me
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
-// The vocabulary view is a temp table, so it lives and dies with its connection.
+// The vocabulary views are temp tables, so they live and die with their connection.
 const vocabReady = new WeakSet<DatabaseSyncLike>();
 
 function ensureRarestVocab(db: DatabaseSyncLike): void {
@@ -396,27 +397,54 @@ function ensureRarestVocab(db: DatabaseSyncLike): void {
   db.exec(
     `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`,
   );
+  db.exec(
+    `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_trigram_vocab USING fts5vocab(main, 'memories_trigram', 'row')`,
+  );
   vocabReady.add(db);
 }
 
-/** Rarest-K prompt terms for this connection's FTS index, as a space-joined query string.
- *  Without FTS, returns the first 32 terms, as before rarest-term selection. */
+/** Rarest-K prompt terms for this connection's FTS indexes, as a space-joined query string: words
+ * count in the word index, CJK terms in the trigram index. Without FTS, the first 32 terms. */
 export function pickRarestFtsQuery(
   db: DatabaseSyncLike,
   terms: readonly string[],
   maxTerms = RAREST_TERM_COUNT,
 ): string {
   // The LIKE path has no bm25 ranking to bound, so it keeps the pre-rarest 32-term query.
-  if (!isFtsAvailable(db)) return terms.slice(0, 32).join(' ');
+  if (!isFtsAvailable(db)) return spreadCjkTerms(terms, 32).join(' ');
   ensureRarestVocab(db);
-  const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
-  if (vocab.length === 0) return '';
+  const { words, cjk } = partitionCjkTerms(terms);
+  const wordCounts = wordDocCounts(db, words);
+  const cjkCounts = trigramDocCounts(db, cjk);
+  return rarestFtsQuery(
+    terms,
+    (part) => wordCounts.get(part) ?? 0,
+    maxTerms,
+    (term) => cjkCounts.get(term) ?? 0,
+  );
+}
+
+function wordDocCounts(db: DatabaseSyncLike, words: readonly string[]): Map<string, number> {
+  const vocab = Array.from(new Set(words.flatMap(ftsTermParts)));
+  if (vocab.length === 0) return new Map();
   // One cached shape per term count: an IN list over a virtual table needs one mark per term to
   // keep its lookups.
   const rows = cachedStatement(
     db,
     `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,
   ).all(...vocab) as Array<{ term: string; doc: number }>;
-  const counts = new Map(rows.map((r) => [r.term, r.doc]));
-  return rarestFtsQuery(terms, (part) => counts.get(part) ?? 0, maxTerms);
+  return new Map(rows.map((r) => [r.term, r.doc]));
+}
+
+/** Rows holding each CJK term by the trigram index: a trigram's own count, and for a shorter run
+ * the summed counts of the trigrams it opens, a rarity estimate, not an exact row count. */
+function trigramDocCounts(db: DatabaseSyncLike, cjk: readonly string[]): Map<string, number> {
+  if (cjk.length === 0) return new Map();
+  // CROSS JOIN keeps the term list outside, so each term is one range seek into the vocabulary.
+  const rows = cachedStatement(
+    db,
+    `SELECT j.value AS term, SUM(v.doc) AS doc FROM json_each(?) j CROSS JOIN temp.z1_trigram_vocab v ` +
+      `ON v.term >= j.value AND v.term < j.value || char(1114111) GROUP BY j.value`,
+  ).all(JSON.stringify(cjk)) as Array<{ term: string; doc: number }>;
+  return new Map(rows.map((r) => [r.term, r.doc]));
 }

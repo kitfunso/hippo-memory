@@ -196,7 +196,7 @@ describe('rarestFtsQuery', () => {
     expect(rarestFtsQuery(terms, () => 1, 2)).toBe('t00 t01');
   });
 
-  it('fills the slots the counted terms leave with CJK terms, in order, since a word index cannot count them', () => {
+  it('without a CJK count, never asks the word index about a CJK term and gives CJK terms the slots words leave', () => {
     const counts = new Map([['postgres', 3]]);
     const asked: string[] = [];
     const docCount = (part: string): number => {
@@ -205,6 +205,39 @@ describe('rarestFtsQuery', () => {
     };
     expect(rarestFtsQuery(['数据', 'postgres', '据库', 'never'], docCount, 2)).toBe('postgres 数据');
     expect(asked.sort()).toEqual(['never', 'postgres']);
+  });
+
+  it('without a CJK count, keeps half the slots for CJK terms at even steps, however many words count', () => {
+    const words = Array.from({ length: 10 }, (_, i) => `w${i}`);
+    const cjk = ['甲乙丙', '乙丙丁', '丙丁戊', '丁戊己', '戊己庚', '己庚辛', '庚辛壬'];
+    expect(rarestFtsQuery([...words, ...cjk], () => 1, 8)).toBe('w0 w1 w2 w3 甲乙丙 丙丁戊 戊己庚 庚辛壬');
+  });
+
+  it('with a CJK count, ranks CJK and word terms in one rarest-first pick and drops a zero-count CJK term', () => {
+    const wordCounts = new Map([
+      ['postgres', 5],
+      ['deploy', 2],
+    ]);
+    const cjkCounts = new Map([
+      ['数据库', 1],
+      ['据库连', 0],
+      ['连接池', 3],
+    ]);
+    const asked: string[] = [];
+    const cjkAsked: string[] = [];
+    const counter = (log: string[], counts: Map<string, number>) => (term: string) => {
+      log.push(term);
+      return counts.get(term) ?? 0;
+    };
+    const out = rarestFtsQuery(
+      ['postgres', 'deploy', '数据库', '据库连', '连接池'],
+      counter(asked, wordCounts),
+      3,
+      counter(cjkAsked, cjkCounts),
+    );
+    expect(out).toBe('数据库 deploy 连接池');
+    expect(asked.sort()).toEqual(['deploy', 'postgres']);
+    expect(cjkAsked.sort()).toEqual(['据库连', '数据库', '连接池'].sort());
   });
 
   it('is the empty query when no term is indexed', () => {

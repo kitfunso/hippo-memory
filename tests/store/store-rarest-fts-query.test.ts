@@ -8,6 +8,7 @@ import { openHippoDb, closeHippoDb, setMeta } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { recordStatements } from '../_helpers/count-statements.js';
 
 let root: string;
 
@@ -64,6 +65,59 @@ describe('pickRarestFtsQuery', () => {
       setMeta(db, 'fts5_available', '0');
       const terms = Array.from({ length: 40 }, (_, i) => `t${i}`);
       expect(pickRarestFtsQuery(db, terms, 2)).toBe(terms.slice(0, 32).join(' '));
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('without FTS, keeps 16 of the 32 slots for CJK terms after 40 words', () => {
+    const db = openHippoDb(root);
+    try {
+      setMeta(db, 'fts5_available', '0');
+      const words = Array.from({ length: 40 }, (_, i) => `t${i}`);
+      const cjk = Array.from({ length: 20 }, (_, i) => String.fromCodePoint(0x4e00 + i).repeat(3));
+      const picked = pickRarestFtsQuery(db, [...words, ...cjk], 8).split(' ');
+      expect(picked).toHaveLength(32);
+      expect(picked.filter((t) => cjk.includes(t))).toHaveLength(16);
+      expect(picked).toContain(cjk.at(-1));
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('ranks CJK trigrams by their trigram-index count in the same pick as words', () => {
+    const english = 'kubernetes ingress certificate renewal pipeline staging cluster rollout canary';
+    for (const n of [1, 2]) writeEntry(root, createMemory(`${english} runbook ${n}`));
+    writeEntry(root, createMemory('数据库连接池的大小必须设置为二十'));
+    const db = openHippoDb(root);
+    try {
+      const terms = [...english.split(' '), '连接池', '接池的', '池的大', '的大小', '从未见'];
+      const picked = pickRarestFtsQuery(db, terms, 8).split(' ');
+      expect(picked.slice(0, 4)).toEqual(['池的大', '接池的', '的大小', '连接池'].sort());
+      expect(picked).toHaveLength(8);
+      expect(picked).not.toContain('从未见');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('counts a CJK run shorter than a trigram by the trigrams it opens', () => {
+    writeEntry(root, createMemory('배포 전에 캐시를 비워야 한다'));
+    const db = openHippoDb(root);
+    try {
+      expect(pickRarestFtsQuery(db, ['캐시', '없음'], 8)).toBe('캐시');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('asks the word vocabulary about words only, never about CJK terms', () => {
+    writeEntry(root, createMemory('postgres 数据库连接池'));
+    const db = openHippoDb(root);
+    try {
+      const { statements } = recordStatements(() => pickRarestFtsQuery(db, ['postgres', '数据库', '据库连'], 8));
+      const wordReads = statements.filter((sql) => sql.includes('z1_rarest_vocab WHERE term IN'));
+      expect(wordReads).toEqual(['SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (?)']);
     } finally {
       closeHippoDb(db);
     }

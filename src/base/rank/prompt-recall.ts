@@ -101,19 +101,36 @@ export function ftsTermParts(term: string): string[] {
 }
 
 /** The rarest terms as a space-joined FTS query, given each part's document count; a term counts as its rarest part, an
- *  upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. */
+ *  upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. A CJK term counts
+ *  by `cjkDocCount`, a trigram index's count, in the same pick; without one, CJK terms take `spreadCjkTerms` slots. */
 export function rarestFtsQuery(
   terms: readonly string[],
   docCount: (part: string) => number,
   maxTerms = RAREST_TERM_COUNT,
+  cjkDocCount?: (term: string) => number,
 ): string {
   const termCount = (t: string): number => {
     const parts = ftsTermParts(t);
     return parts.length === 0 ? 0 : Math.min(...parts.map(docCount));
   };
-  // A word index holds a CJK run as one token, so it has no count for a CJK term.
-  // SHORTCUT: CJK terms in prompt order; rarest-first needs their counts from the trigram index.
-  const { words: counted, cjk } = partitionCjkTerms(terms);
-  const picked = rarestPromptTerms(counted, termCount, maxTerms);
-  return [...picked, ...cjk.slice(0, maxTerms - picked.length)].join(' ');
+  const { words, cjk } = partitionCjkTerms(terms);
+  if (cjkDocCount === undefined) {
+    return spreadCjkTerms([...rarestPromptTerms(words, termCount, maxTerms), ...cjk], maxTerms).join(' ');
+  }
+  const counts = new Map([
+    ...words.map((t) => [t, termCount(t)] as const),
+    ...cjk.map((t) => [t, cjkDocCount(t)] as const),
+  ]);
+  return rarestPromptTerms(counts.keys(), (t) => counts.get(t) ?? 0, maxTerms).join(' ');
+}
+
+/** Up to `maxTerms` of `terms` when no index counts their CJK terms: those keep half the slots, at even
+ *  steps through the prompt, so neither a long run of words nor the prompt's opening letters starve them. */
+export function spreadCjkTerms(terms: readonly string[], maxTerms: number): string[] {
+  // SHORTCUT: even steps, not rarest first; a store with a trigram index ranks CJK terms by its counts.
+  const { words, cjk } = partitionCjkTerms(terms);
+  const cjkSlots = Math.min(cjk.length, Math.max(Math.ceil(maxTerms / 2), maxTerms - words.length));
+  const step = cjkSlots > 1 ? (cjk.length - 1) / (cjkSlots - 1) : 0;
+  const kept = new Set(Array.from({ length: cjkSlots }, (_, i) => Math.round(i * step)));
+  return [...words.slice(0, maxTerms - cjkSlots), ...cjk.filter((_, k) => kept.has(k))];
 }
