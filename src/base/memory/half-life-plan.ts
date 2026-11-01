@@ -18,8 +18,8 @@ const TYPED_SOURCES: ReadonlySet<string> = new Set([
  * only others, null when it backs none. */
 export type ObjectLink = 'retired' | 'live' | null;
 
-/** A row a move is planned from; `object` is read only while the typed move is pending, else
- * null. */
+/** A row a move is planned from; `object` is read only while the typed move is pending,
+ * else null. */
 export interface HalfLifeRow {
   entry: MemoryEntry;
   object: ObjectLink;
@@ -32,8 +32,8 @@ export interface HalfLifeRows {
   from: number;
   /** True until the store has moved its object memories off their old flat half-life. */
   typedPending: boolean;
-  /** Every row once, by created then id, through one cursor: the plan keeps only what a move
-   * needs. */
+  /** Every row once, by created then id, through one cursor: the plan keeps only what a
+   * move needs. */
   rows: Iterable<HalfLifeRow>;
   conflictAudits: Array<{ conflictId: number; loserId: string }>;
   resolvedConflicts: Array<{ id: number; memory_a_id: string; memory_b_id: string }>;
@@ -135,8 +135,8 @@ export function planHalfLifeMoves(rows: HalfLifeRows, to: number): HalfLifePlan 
 /** A row either move may change, kept in place of the row while the cursor runs. */
 interface Movable {
   change: Omit<HalfLifeChange, 'halfLifeDays'>;
-  /** On the flat LEGACY_TYPED_HALF_LIFE an object's writer gave, by source and recall bonus
-   * alone. */
+  /** On the flat LEGACY_TYPED_HALF_LIFE an object's writer gave, by source and recall
+   * bonus alone. */
   typedBase: boolean;
   base: number | null;
   typed: number | null;

@@ -239,8 +239,8 @@ function loadEvalBaseline(baselinePath: string): EvalBaseline | undefined {
   );
 }
 
-/** Loads the corpus file, exiting with the usage line or the read error when there is none to
- * score. */
+/** Loads the corpus file, exiting with the usage line or the read error when there is none
+ * to score. */
 function readCorpus(corpusPath: string | null): EvalCase[] {
   if (!corpusPath) {
     fail(

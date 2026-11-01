@@ -78,8 +78,8 @@ export function evalSwitches(): EvalSwitches {
   return { strength: strengthModelUnder(strengthAblation()), rank: rankAblation() };
 }
 
-/** The clock a root's Context reads: fixed at HIPPO_FAKE_NOW as it stands now, else the wall
- * clock. */
+/** The clock a root's Context reads: fixed at HIPPO_FAKE_NOW as it stands now, else the
+ * wall clock. */
 export function evalClock(): Clock {
   return hostClock(envFakeNowMs());
 }

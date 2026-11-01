@@ -38,8 +38,8 @@ function flagState(name: string): FlagState {
   return 'unknown';
 }
 
-/** Never throws, since accessors run per request; an unknown spelling takes the flag's safe
- * side. */
+/** Never throws, since accessors run per request; an unknown spelling takes the flag's
+ * safe side. */
 function bool(name: FlagName): () => boolean {
   return () => {
     const state = flagState(name);
@@ -153,8 +153,8 @@ export function envFlagOn(name: string): boolean {
   return flagState(name) === 'on';
 }
 
-/** HIPPO_FAKE_NOW as epoch millis, or null unless it is byte-identical to Date.toISOString
- * output. */
+/** HIPPO_FAKE_NOW as epoch millis, or null unless it is byte-identical to
+ * Date.toISOString output. */
 export function envFakeNowMs(): number | null {
   const value = raw('HIPPO_FAKE_NOW');
   if (value === undefined || value === '') return null;
@@ -178,8 +178,8 @@ const envAnchoringOff = boolOff('HIPPO_ANCHORING');
 const envAvailabilityOff = boolOff('HIPPO_AVAILABILITY');
 const envDagRebuildCap = posInt('HIPPO_DAG_REBUILD_CAP');
 
-/** The settings a root hands down in HippoConfig.runtime; an unset number or scope stays
- * undefined. */
+/** The settings a root hands down in HippoConfig.runtime; an unset number or scope
+ * stays undefined. */
 export function envRuntimeSettings(): RuntimeSettings {
   const deboost = envSummaryDeboost();
   return {
@@ -250,8 +250,8 @@ export const envStdinWaitMs = posInt('HIPPO_STDIN_WAIT_MS');
 export function envLogLevel(): string {
   return raw('HIPPO_LOG')?.trim().toLowerCase() ?? '';
 }
-/** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the text
- * line. */
+/** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the
+ * text line. */
 export function envLogJson(): boolean {
   return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json';
 }
@@ -270,8 +270,8 @@ export const envV1Rps = text('HIPPO_V1_RPS');
 export const envCallerRps = trimmedText('HIPPO_CALLER_RPS');
 /** How long a request body may take to arrive; http-util.ts holds the default. */
 export const envBodyTimeoutMs = posInt('HIPPO_BODY_TIMEOUT_MS');
-/** How long POST /v1/sleep lets its consolidation run; surface/server/sleep-offload.ts holds the
- * default. */
+/** How long POST /v1/sleep lets its consolidation run; surface/server/sleep-offload.ts holds
+ * the default. */
 export const envSleepTimeoutMs = posInt('HIPPO_SLEEP_TIMEOUT_MS');
 /** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP request
  * before its timeout error; 0 for no deadline; base/util/request-scope.ts holds the default. */

@@ -1,6 +1,6 @@
 // What a ranking runs under as plain values: the strength model and the rank switches. An eval root
-// reads them (src/infra/eval-switches.ts) and hands them down, so no code path reads an env var to
-// rank.
+// reads them (src/infra/eval-switches.ts) and hands them down, so no code path reads an env var
+// to rank.
 import type { RuntimeSettings } from '../config/config.js';
 import { PRODUCTION_STRENGTH, withLossAversion, type StrengthModel } from './strength.js';
 
@@ -25,8 +25,8 @@ export interface EvalSwitches {
   readonly rank: RankAblation;
 }
 
-/** The model a ranking scores strength by: the switches' model with the root's
- * HIPPO_LOSS_AVERSION_RATIO. */
+/** The model a ranking scores strength by: the switches' model with the
+ * root's HIPPO_LOSS_AVERSION_RATIO. */
 export function strengthModelFor(
   switches: EvalSwitches | undefined,
   runtime: Pick<RuntimeSettings, 'lossAversionRatio'> | undefined,

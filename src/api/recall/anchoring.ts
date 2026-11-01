@@ -40,8 +40,8 @@ export interface RecallHistoryEntry {
 export type RecallHistorySnapshot = readonly RecallHistoryEntry[];
 
 export interface DetectAnchoringOptions {
-  /** memory_dominance threshold: number of distinct queryHashes that must have returned the same topMemoryId. Default
-   *  DEFAULT_MIN_DOMINANCE. */
+  /** memory_dominance threshold: number of distinct queryHashes that must have returned the same topMemoryId.
+   * Default DEFAULT_MIN_DOMINANCE. */
   minDominance?: number;
   /** query_repeat window: how many recent history entries to scan for query repeat.
    *  Default DEFAULT_RECENT_REPEAT_WINDOW. */

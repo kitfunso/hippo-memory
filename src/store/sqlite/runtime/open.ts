@@ -29,8 +29,8 @@ import { createHost, type Host } from '../../../host/host.js';
 import { META_KEY } from '../../../db/meta.js';
 import { handleNow, handleStamp } from './handle-clock.js';
 
-/** The strength model a store scores by and the clock its writes stamp by, both fixed when it
- * opens. */
+/** The strength model a store scores by and the clock its writes stamp by, both fixed when
+ * it opens. */
 export interface StoreModel {
   readonly strength: StrengthModel;
   readonly clock: Clock;
@@ -104,8 +104,8 @@ export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   setMeta(db, META_KEY.typedHalfLife, '1');
 }
 
-/** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported any
- * row. */
+/** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported
+ * any row. */
 export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): boolean {
   if (holdsMemory(db)) return false;
   // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the

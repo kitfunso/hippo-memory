@@ -18,8 +18,8 @@ export interface InfraPorts {
   /** The rerankers a recall names, built once per root so the cross-encoder loads once; absent,
    * no name resolves. */
   readonly reranker?: RerankerLookup;
-  /** Reads the model calls of a session's transcript for its re-read count; absent, the count is
-   * skipped. */
+  /** Reads the model calls of a session's transcript for its re-read count; absent, the count
+   * is skipped. */
   readonly transcriptCalls?: ReadApiCalls;
   /** The time every api and domain step reads: the root's wall clock, or the fixed instant an
    * eval set. */

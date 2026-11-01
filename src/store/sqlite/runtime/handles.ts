@@ -22,8 +22,8 @@ import { bindHandleClock } from './handle-clock.js';
 import { createHost } from '../../../host/host.js';
 import { grantFor, type HandleOptions, type SqliteStoreOptions } from './grant.js';
 
-/** Creates the store, or finishes one partly made; `opts` is what the store that asks opens
- * with. */
+/** Creates the store, or finishes one partly made; `opts` is what the store that asks
+ * opens with. */
 export function initStore(hippoRoot: string, opts: SqliteStoreOptions = {}): void {
   const grant = grantFor(opts);
   reproveStoreSchema({ hippoRoot, runtime: grant.runtime });

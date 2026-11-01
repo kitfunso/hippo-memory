@@ -28,23 +28,6 @@ const PATTERNS = [
 const LABEL_PATTERN = /\bFeature \d+:|\bW\d+[a-z]?:|\b[Pp]lan designs? \d+|\bCHANGELOG \d/;
 // A wrapped `//` comment's last word left alone on its line; any hit fails.
 const ONE_WORD = /^ [A-Za-z]+\.?\r?$/;
-// Paths r-tail-c edits keep their one-word lines, so either merge order passes; the list goes when a follow-up
-// rejoins them after both lanes merge.
-const ORPHAN_PENDING = [
-  'src/base/memory/',
-  'src/api/recall/anchoring.ts',
-  'src/base/ports/infra.ts',
-  'src/base/util/env.ts',
-  'src/entry/eval.ts',
-  'src/infra/eval-switches.ts',
-  'src/infra/ports.ts',
-  'src/store/sqlite/entries/entry-writes.ts',
-  'src/store/sqlite/folder-files/mirrors.ts',
-  'src/store/sqlite/runtime/handles.ts',
-  'src/store/sqlite/runtime/open.ts',
-  'src/surface/cli/eval.ts',
-];
-
 const PRECEDES_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
 /** Index just past the string literal that opens at `start`, and how many escaped newlines it spans. */
@@ -193,12 +176,11 @@ function findHits() {
   const hits = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const src = readFileSync(file, 'utf8');
-    const pending = ORPHAN_PENDING.some((p) => file.startsWith(p));
     for (const [line, text, ownLine, endsDoc] of commentLines(src)) {
       const kind = LABEL_PATTERN.test(text) ? 'label' : PATTERNS.find(([, re]) => re.test(text))?.[0];
       if (kind) hits.push({ file, line, kind, text: text.trim() });
       const orphan = (ownLine && ONE_WORD.test(text)) || (endsDoc && /^\S+$/.test(docText(text)));
-      if (orphan && !pending) hits.push({ file, line, kind: 'orphan', text: (ownLine ? `//${text}` : text).trim() });
+      if (orphan) hits.push({ file, line, kind: 'orphan', text: (ownLine ? `//${text}` : text).trim() });
     }
   }
   return hits;

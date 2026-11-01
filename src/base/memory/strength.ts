@@ -4,8 +4,8 @@
 import type { ConfidenceLevel, EmotionalValence, MemoryEntry } from './entry.js';
 import { DAY_MS } from '../util/time.js';
 
-/** The slopes, bases and channels strength scoring runs on; an eval builds another value at its
- * root. */
+/** The slopes, bases and channels strength scoring runs on; an eval builds another value at
+ * its root. */
 export interface StrengthModel {
   /** Strength left after one half-life; also what each wrong mark multiplies by. */
   readonly decayBase: number;
@@ -18,8 +18,8 @@ export interface StrengthModel {
   readonly maxWrongHalvings: number;
   /** Multiplies the `negative` valence weight, after parseLossAversionRatio's floor. */
   readonly lossAversionRatio: number;
-  /** Strength fades with time since the decay anchor; off, it holds at the boost and emotional
-   * weight. */
+  /** Strength fades with time since the decay anchor; off, it holds at the boost and
+   * emotional weight. */
   readonly decays: boolean;
   /** A recall boosts strength, moves the decay anchor and lengthens the half-life; off, the
    * anchor is `created`. */
@@ -41,8 +41,8 @@ export const PRODUCTION_STRENGTH: StrengthModel = Object.freeze({
 export const FALLBACK_HALF_LIFE_DAYS = 7;
 
 /** Base half-life before deriveHalfLife's multipliers: 7 lost the current fact far more often
- * and 730 did no better. `hippo sleep` moves memories still on an older base
- * (src/domain/consolidate/half-life-migration.ts). */
+ * and 730 did no better. `hippo sleep` moves memories still on an older
+ * base (src/domain/consolidate/half-life-migration.ts). */
 export const DEFAULT_HALF_LIFE_DAYS = 365;
 
 /** The flat half-life the object writers gave their memories before they took the default. */
@@ -67,8 +67,8 @@ export function parseLossAversionRatio(raw: string | number | undefined): number
   return Number.isFinite(parsed) && parsed >= LOSS_AVERSION_RATIO_MIN ? parsed : 1.0;
 }
 
-/** `model` with the root's HIPPO_LOSS_AVERSION_RATIO, floored as parseLossAversionRatio floors
- * it. */
+/** `model` with the root's HIPPO_LOSS_AVERSION_RATIO, floored as parseLossAversionRatio
+ * floors it. */
 export function withLossAversion(
   model: StrengthModel,
   ratio: string | number | undefined,
@@ -199,8 +199,8 @@ function decayExponentFor(basis: DecayBasis, daysSince: number, halfLifeDays: nu
   return daysSince / effectiveHalfLife;
 }
 
-/** What the confidence facets read, so a caller can derive them from a row it loaded only in
- * part. */
+/** What the confidence facets read, so a caller can derive them from a row it loaded only
+ * in part. */
 export type ConfidenceInputs = Pick<MemoryEntry, 'pinned' | 'confidence' | 'lastRetrieved'>;
 
 // Days without a retrieval before trust lapses; pinned and verified rows are exempt by policy.

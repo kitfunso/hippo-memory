@@ -105,14 +105,14 @@ export function strengthBucket(value: number): 0 | 1 | 2 {
   return value >= STRONG_FROM ? 0 : value >= AT_RISK_BELOW ? 1 : 2;
 }
 
-/** Whole days from `timeMs` back from `nowMs`, held to 0 through SERIES_DAYS; a time to come is
- * today. */
+/** Whole days from `timeMs` back from `nowMs`, held to 0 through SERIES_DAYS; a time to come
+ * is today. */
 export function seriesDay(timeMs: number, nowMs: number): number {
   return Math.min(SERIES_DAYS, Math.max(0, Math.floor((nowMs - timeMs) / DAY_MS)));
 }
 
-/** Strength now and at +7d and +30d, band, age and the confidence split for one entry at
- * `nowMs`. */
+/** Strength now and at +7d and +30d, band, age and the confidence split for one entry
+ * at `nowMs`. */
 export function memoryFacts(
   entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>,
   nowMs: number,

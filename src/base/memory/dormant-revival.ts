@@ -3,15 +3,15 @@
 import { calculateStrengthAt, type StrengthModel } from './strength.js';
 import { createMemoryAt, type MemoryEntry } from './entry.js';
 
-/** A revived row's scoring: a fresh half-life of `halfLifeDays` days, and its strength under
- * `strength`. */
+/** A revived row's scoring: a fresh half-life of `halfLifeDays` days, and its strength
+ * under `strength`. */
 export interface DormantRevival {
   readonly halfLifeDays: number;
   readonly strength: StrengthModel;
 }
 
-/** The dormant row as if just recalled at `now`; a row set aside by audit repair comes back
- * `verified`. */
+/** The dormant row as if just recalled at `now`; a row set aside by audit repair comes
+ * back `verified`. */
 export function reviveDormant(
   dormant: { readonly entry: MemoryEntry; readonly reason: string },
   now: Date,
