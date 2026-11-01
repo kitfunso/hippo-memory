@@ -144,6 +144,24 @@ describe('check-comment-history.mjs', () => {
     });
   });
 
+  it('reads the prose after a closing fence as prose again', () => {
+    const code = [
+      '/**',
+      ' * Call it once per folder:',
+      ' * ```ts',
+      ' * setup();',
+      ' * ```',
+      ' * and again after a move, whose last word fell onto its own',
+      ' * line.',
+      ' */',
+      'export const a = 1;',
+      '',
+    ].join('\n');
+    withFixture({ 'src/a.ts': code }, (run) => {
+      expect(run('--list').stdout.trim().split('\n')).toEqual(['src/a.ts:7 [orphan] * line.']);
+    });
+  });
+
   it('counts a real leap day and scans .mts and .cts files', () => {
     const files = {
       'src/a.ts': '// Released 2028-02-29\n',
