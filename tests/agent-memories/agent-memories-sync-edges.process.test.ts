@@ -9,7 +9,7 @@ import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { removeEntryMirrors } from '../../src/store/sqlite/folder-files/mirrors.js';
-import { deleteEntryRowInTx } from '../../src/store/sqlite/entries/entry-writes.js';
+import { deleteEntryRowInTx } from '../../src/store/sqlite/entries/entry-row.js';
 import {
   auditCount,
   auditTotal,

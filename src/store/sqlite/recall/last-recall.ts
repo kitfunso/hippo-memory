@@ -2,7 +2,8 @@
 // on the outcome's own handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../../db/index.js';
 import { appendAuditEvents } from '../audit/audit.js';
-import { strengthenRetrieved, writeOutcome } from '../entries/entry-writes.js';
+import { strengthenRetrieved } from '../entries/entry-writes.js';
+import { writeOutcome } from '../entries/sqlite-entry-writes.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../sessions/goals.js';
 import { saveIndex } from '../entries/index-and-stats.js';
 import { readLastRecall } from '../folder-files/mirrors.js';

@@ -27,7 +27,7 @@ import {
   type ScatterRows,
   type SearchTally,
 } from '../../../base/records/dashboard-reads.js';
-import { openConflictsNaming } from '../review/conflicts.js';
+import { openConflictsNaming } from '../review/conflict-reads.js';
 import {
   FACT_COLUMNS,
   GRID_CELLS,

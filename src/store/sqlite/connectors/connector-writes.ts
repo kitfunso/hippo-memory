@@ -12,7 +12,8 @@ import type {
   ConnectorWrites,
 } from '../../../base/records/connectors.js';
 import { recordQuarantine } from './quarantine.js';
-import { archiveRaw, writeEntryInOwnTx } from '../entries/entry-writes.js';
+import { writeEntryInOwnTx } from '../entries/entry-writes.js';
+import { archiveRaw } from '../entries/sqlite-entry-writes.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever
  * sees it. */

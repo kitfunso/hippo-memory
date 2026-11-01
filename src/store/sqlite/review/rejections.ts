@@ -5,7 +5,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { heldTexts } from '../../../base/util/same-text.js';
 import { audit } from '../audit/audit-event.js';
-import { deleteEntryCore } from '../entries/delete-and-batch.js';
+import { deleteEntryCore } from '../entries/delete-entries.js';
 import {
   deleteDormantRow,
   dormantSnapshotsByIds,

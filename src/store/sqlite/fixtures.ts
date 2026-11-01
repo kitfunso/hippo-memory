@@ -8,7 +8,7 @@ import type { DormantMove } from '../../base/records/consolidation.js';
 import type { AmbientStoreFilter } from '../../base/ports/store/context-reads.js';
 import type { RecallSearchEntriesOptions } from '../../base/records/sharing.js';
 import * as ambient from './recall/ambient.js';
-import * as batches from './entries/delete-and-batch.js';
+import { batchWriteAndDelete } from './entries/batch-flush.js';
 import * as entryReads from './entries/entry-reads.js';
 import * as entryWrites from './entries/entry-writes.js';
 import type { WriteEntryOptions } from './entries/entry-writes.js';
@@ -128,7 +128,7 @@ export function batchWriteAndDeleteInFolder(
   const files = storeFilesOf(hippoRoot);
   return onHandle(
     hippoRoot,
-    (db) => batches.batchWriteAndDelete(db, { files, toWrite, toDeleteIds, opts }),
+    (db) => batchWriteAndDelete(db, { files, toWrite, toDeleteIds, opts }),
     openOn(files),
   );
 }

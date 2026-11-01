@@ -12,15 +12,15 @@ import {
   readDormantSnapshot,
   replaceDormantEntry,
 } from '../dormant/dormant-rows.js';
-import { stampOriginProject } from '../entries/entry-row.js';
 import { entryIdTaken, readEntriesInIdOrder } from '../entries/entry-reads.js';
 import { listEntriesWhere } from '../entries/entry-filter.js';
 import {
   renameEntrySourceAndOrigin,
   renameEntrySource,
   setEntryTagsInTx,
+  stampOriginProject,
   supersedeEntry,
-} from '../entries/entry-writes.js';
+} from '../entries/entry-row.js';
 import { gatedWrite } from '../capture/gated-write.js';
 import type { StoreFiles } from '../runtime/open.js';
 import { setAsideRow } from '../entries/set-aside.js';

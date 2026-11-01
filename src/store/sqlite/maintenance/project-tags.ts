@@ -25,12 +25,12 @@ import {
   replaceDormantEntry,
 } from '../dormant/dormant-rows.js';
 import { readEntriesByIds, countByOrigin } from '../entries/entry-reads.js';
+import { writeEntryMirrors } from '../entries/entry-writes.js';
 import {
   deleteEntryRowInTx,
   restampOriginProject,
   stampOriginProjects,
-  writeEntryMirrors,
-} from '../entries/entry-writes.js';
+} from '../entries/entry-row.js';
 import { removeEntryMirrors } from '../folder-files/mirrors.js';
 import type { Handles, HandleOpener, StoreFiles } from '../runtime/open.js';
 import { setAsideRow } from '../entries/set-aside.js';

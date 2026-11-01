@@ -4,7 +4,7 @@ import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import type { CompactionOrigin } from '../../../base/records/project-tags.js';
-import type { OriginMoveOptions } from '../entries/entry-writes.js';
+import type { OriginMoveOptions } from '../entries/entry-row.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 

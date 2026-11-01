@@ -14,7 +14,7 @@ import { listEntriesWhere } from './entries/entry-filter.js';
 import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
-import { sqliteEntryWrites } from './entries/entry-writes.js';
+import { sqliteEntryWrites } from './entries/sqlite-entry-writes.js';
 import { finishRecall } from './recall/last-recall.js';
 import { sqliteVectorReads } from './vectors/vector-reads.js';
 import { readLatestHandoff } from './sessions/handoffs.js';

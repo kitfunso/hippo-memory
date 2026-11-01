@@ -13,7 +13,7 @@ import type {
   StrengthTallies,
 } from '../../../base/records/reports.js';
 import { statusCounts, strengthTallies } from '../recall/candidates.js';
-import { countOpenConflicts } from '../review/conflicts.js';
+import { countOpenConflicts } from '../review/conflict-reads.js';
 import { countAllEntries } from '../entries/entry-reads.js';
 import { createdSinceLastSleep } from '../entries/index-and-stats.js';
 import { buildStatsFromDb } from '../folder-files/mirrors.js';

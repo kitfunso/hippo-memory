@@ -8,7 +8,7 @@ import {
   SLEEP_DB_WAIT_MS,
 } from '../../../db/index.js';
 import { rejectedValues } from '../review/rejection.js';
-import { ftsDrift } from '../entries/entry-row.js';
+import { ftsDrift, setHalfLives } from '../entries/entry-row.js';
 import { ALL_TENANTS } from '../../../base/util/tenant.js';
 import { WRITE_BUDGET } from '../../../base/util/write-budget.js';
 import {
@@ -26,17 +26,13 @@ import type {
   SleepStart,
 } from '../../../base/records/consolidation.js';
 import { appendAuditEvents } from '../audit/audit.js';
-import {
-  conflictResolveAudits,
-  resolvedConflicts,
-  replaceDetectedConflicts,
-} from '../review/conflicts.js';
+import { replaceDetectedConflicts } from '../review/conflicts.js';
+import { conflictResolveAudits, resolvedConflicts } from '../review/conflict-reads.js';
 import { iterateEveryTenantEntries, listEntryIdsPage } from '../entries/entry-reads.js';
 import { iterateRowsWithObjects, listDuplicateCandidates } from './sleep-scans.js';
-import { setHalfLives } from '../entries/entry-writes.js';
 import { type Handles, type StoreFiles, waitingOpener } from '../runtime/open.js';
 import { halfLifeAuditRows, recordedHalfLifeBase } from '../../rules/half-life.js';
-import { commitInChunks } from '../entries/delete-and-batch.js';
+import { commitInChunks } from '../entries/batch-flush.js';
 import { expireDormantBefore } from '../dormant/dormant.js';
 import { listPendingExtractionTenants, markPendingProcessedUpTo } from '../graph/graph-queue.js';
 import {
