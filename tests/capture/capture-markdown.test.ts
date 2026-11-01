@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractFromTexts, withoutUnpairedBold } from '../../src/surface/capture/extract.js';
+import { extractFromTexts, legacyBoldAlias } from '../../src/surface/capture/extract.js';
 import { startsInsideCut } from '../../src/base/memory/memory-quality.js';
 
 const contents = (text: string) => extractFromTexts([text]).map((item) => item.content);
@@ -20,51 +20,66 @@ describe('capture reads markdown the way it renders', () => {
     expect(items.some(startsInsideCut)).toBe(false);
   });
 
-  it('keeps an aside whole when the segmenter would split inside it', () => {
-    const rule = 'Always run the check (see the docs. Then run it again) before you merge';
-    expect(contents(`${rule}.`)).toEqual([rule]);
-    const longAside = `Note (${'x'.repeat(1100)}. Never deploy on Fridays because the on-call rota is thin.`;
-    expect(contents(longAside)).toEqual(['Never deploy on Fridays because the on-call rota is thin']);
-  });
-
-  it('keeps the segmenter split when the open bracket gets no closer within the cap', () => {
-    const farCloser = `Note (${'x'.repeat(1100)}. Never deploy on Fridays because the rota is thin. Skip it) ok.`;
-    expect(contents(farCloser)).toContain('Never deploy on Fridays because the rota is thin');
-  });
-
+  // Each expected list is what base 3.1.0 gives; the aside rule must leave these alone.
   it.each([
+    ['(Important: never push to main. Always run tests first.)', ['Always run tests first.)']],
+    [
+      'See docs [1. Never push to main. Always run tests first. 2] for more.',
+      ['Never push to main', 'Always run tests first. 2] for more'],
+    ],
+    [
+      'I was sad :( about it. Never push to main. Fixed it :) Always run tests first.',
+      ['Never push to main', 'Fixed it :) Always run tests first'],
+    ],
+    [':( today. Never push to main. Then pick 1) rebuild.', ['Never push to main']],
+    [
+      'The debug call is ``console.log(`(cache`)``. Never skip step a) before deploying.',
+      ['Never skip step a) before deploying'],
+    ],
     [
       'I was sad :( about it. Never push to main. Always run tests first.',
       ['Never push to main', 'Always run tests first'],
     ],
-    ['Use :( as the sad face. Never deploy on Fridays.', ['Never deploy on Fridays']],
     [
       "The parser expected '('. Never bypass validation for API requests.",
       ['Never bypass validation for API requests'],
     ],
     [
-      "The parser expected '('. Never bypass validation for API requests, per item 2) below.",
-      ['Never bypass validation for API requests, per item 2) below'],
-    ],
-    [
       'Never use (foo as a name. Always run the linter before you push.',
       ['Never use (foo as a name', 'Always run the linter before you push'],
     ],
-  ])('splits sentences as usual around a bracket that never closes: %s', (text, expected) => {
+    // No "(" before it, a list-marker ")", an emoticon "(", and a digit before the ")".
+    ['Skip that line) Always run tests first.', ['Skip that line) Always run tests first']],
+    ['Note (see below. Never skip step a) before deploying.', ['Never skip step a) before deploying']],
+    ['I was sad :( about it. Skip that line) Always run tests first.', ['Skip that line) Always run tests first']],
+    ['Note (see below. Never pick 1) rebuild the index.', ['Never pick 1) rebuild the index']],
+  ])('gives the sentences base 3.1.0 gives for %s', (text, expected) => {
     expect(contents(text)).toEqual(expected);
   });
 
-  it('splits the sentences of a long unclosed aside in one pass', () => {
+  it('drops a rule glued to the tail of an aside, which base 3.1.0 also stored as a cut row', () => {
+    const text = 'Status (draft. Never push to main. Always run tests first.) is pending.';
+    expect(contents(text)).toEqual(['Never push to main']);
+  });
+
+  it('drops the one sentence that starts inside an aside the split cut', () => {
+    const text = 'Always run the check (see the docs. Then always run it again) before you merge.';
+    expect(contents(text)).toEqual(['Always run the check (see the docs']);
+  });
+
+  it('judges the sentences of a long unclosed aside in one pass', () => {
     const hostile = `Never skip the check (${'see the docs. '.repeat(40_000)}`;
     expect(contents(hostile)).toEqual([]);
   });
 
-  it('removes only the markers withoutBold leaves unpaired', () => {
-    expect(withoutUnpairedBold('Always run **npm test before deploying')).toBe('Always run npm test before deploying');
-    expect(withoutUnpairedBold('**Never deploy before tests')).toBe('Never deploy before tests');
-    expect(withoutUnpairedBold('Always ignore cache** files')).toBe('Always ignore cache files');
-    for (const same of ['Never compute 2**10 by hand', 'Always lint **/*.ts first', '** Never backfill them']) {
-      expect(withoutUnpairedBold(same)).toBe(same);
+  it('finds the opener a lost closing "**" belonged to, and nothing else', () => {
+    expect(legacyBoldAlias('**Never deploy before tests')).toBe('Never deploy before tests');
+    expect(legacyBoldAlias('Always run **npm test before deploying')).toBe('Always run npm test before deploying');
+    expect(legacyBoldAlias('Never call f(**kwargs) or g(**options) without validation')).toBe(
+      'Never call f(**kwargs) or g(options) without validation',
+    );
+    for (const none of ['Never compute 2**10 by hand', 'Always lint **/*.ts first', '** Never backfill them']) {
+      expect(legacyBoldAlias(none), none).toBeNull();
     }
   });
 

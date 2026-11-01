@@ -250,6 +250,18 @@ describe('captureSessionTexts', () => {
     },
   );
 
+  it('stores a rule that differs from a held one only by "**" marks no lost closer explains', async () => {
+    const stored = 'Never call f(**kwargs) or g(**options) without validation';
+    const twin = 'Never call f(kwargs) or g(options) without validation';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    expect(await captureSessionTexts(ctxFor(root), req([`${stored}.`, `${twin}.`]))).toEqual({
+      captured: 1,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(contents(root)).toEqual([stored, twin]);
+  });
+
   it('reads a held row without pinned, as an external store adapter returns it, as unpinned', () => {
     const external: HeldText = { content: '** Never backfill them', source: 'capture', originProject: 'acme-web' };
     expect(heldKeysOf([external]).has('Never backfill them')).toBe(false);

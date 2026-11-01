@@ -38,10 +38,26 @@ function withoutEmphasis(line: string): string {
   pending.push(withoutEmphasis(bullet?.[1] ?? trimmed));
 </script>
       </doc-code>
-      <doc-claim at="src/surface/capture/extract.ts:118">
-        <p><b>extract.ts:118</b> · proseBlocks() line push</p>
-        <doc-code src="src/surface/capture/extract.ts" lines="103-130" hl="118,126"></doc-code>
+      <doc-claim at="src/surface/capture/extract.ts:152">
+        <p><b>extract.ts:152</b> · proseBlocks() line push</p>
+        <doc-code src="src/surface/capture/extract.ts" lines="135-156" hl="140,152"></doc-code>
       </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>Capture splits sentences as 3.1.0 does and skips the one sentence that starts inside an aside the split cut.</p>
+      <doc-code caption="Sketch, src/surface/capture/extract.ts asideCutter(): a sentence is skipped only when all three hold.">
+<script type="text/plain">
+(a) the block text before the sentence, code spans blanked, has an unclosed "(";
+    a "(" right after ":" or ";" is an emoticon and does not count
+(b) the sentence has a ")" before any "(" that closes an aside (asideCloseOffset, shared with repair)
+(c) the sentence has a letter or digit after that ")"
+
+"Always run the check (see the docs. Then always run it again) before you merge."
+  -> stores "Always run the check (see the docs"; skips "Then always run it again) before you merge"
+"Never use (foo as a name. Always run the linter before you push."  -> both sentences, as 3.1.0
+"Note (see below. Never skip step a) before deploying."             -> "Never skip step a) before deploying"
+</script>
+      </doc-code>
     </doc-claim>
     <doc-claim>
       <p>Text with code, globs or kwargs keeps its markers.</p>
@@ -74,28 +90,28 @@ decision, spec, compaction, shared, consolidation:   0 flagged
       <doc-code caption="Sketch, src/base/memory/memory-quality.ts startsInsideCut(): code spans are blanked first; only the first marker counts.">
 <script type="text/plain">
 // Text that opens inside a bold span or an aside was cut from the middle of a sentence.
-return opensInsideBold(blanked) || opensInsideAside(blanked);
+return opensInsideBold(blanked) || asideCloseOffset(blanked) >= 0;
 
 opensInsideBold:  the first "**" (not between word chars, not next to "/" or "*")
                   has a non-space before it and a space, mark or end after it
-opensInsideAside: a ")" attached to a word comes before any "(";
+asideCloseOffset: a ")" attached to a word comes before any "(" or "[";
                   "1)", "a)", "ii)" list markers and ":)" do not count
 </script>
       </doc-code>
-      <doc-claim at="src/base/memory/memory-quality.ts:202">
-        <p><b>memory-quality.ts:202</b> · startsInsideCut()</p>
-        <doc-code src="src/base/memory/memory-quality.ts" lines="199-204" hl="203"></doc-code>
+      <doc-claim at="src/base/memory/memory-quality.ts:204">
+        <p><b>memory-quality.ts:204</b> · startsInsideCut()</p>
+        <doc-code src="src/base/memory/memory-quality.ts" lines="202-206" hl="205"></doc-code>
       </doc-claim>
     </doc-claim>
     <doc-claim>
       <p>Only repair and the audit run the cut checks, and none loses a whole row.</p>
       <doc-calls title="who calls the gate" caption="Bundles are judged by part, so one cut part never sets a bundle aside.">
 <script type="text/plain">
-~ assessAutomaticMemory()       @ src/base/memory/memory-quality.ts:298   -- capture, compaction admission: no cut checks
+~ assessAutomaticMemory()       @ src/base/memory/memory-quality.ts:300   -- capture, compaction admission: no cut checks
   certainDefect()               @ src/domain/learn/extract.ts:145          -- LLM facts: no cut checks
   certainDefect()               @ src/domain/consolidate/dag-summary.ts:50 -- summaries: no cut checks
   storedDefect()                @ src/base/memory/memory-audit.ts:192      -- repair: set-aside
-  storedDefect()                @ src/base/memory/memory-quality.ts:389    -- the audit warns about the same rows
+  storedDefect()                @ src/base/memory/memory-quality.ts:394    -- the audit warns about the same rows
 </script>
       </doc-calls>
     </doc-claim>
@@ -159,6 +175,8 @@ compare the new set-aside ids with every id in $SP/cap-flagged3.tsv
     <ul>
       <li>No lowercase cut-start check. Capture strips labels such as "Decision:", so a lowercase start is often a whole statement, and user text is not marked.</li>
       <li>Changed after review: the 19 stored rows that start with "** " also go dormant. A new capture of the same line stores a clean copy. So each old row is a duplicate with a stray marker. <code>hippo dormant restore &lt;id&gt;</code> brings one back.</li>
+      <li>A held row blocks a new capture through one extra key only when it lost a closing "**" at its end and that closer pairs with an opener in it. So <code>f(**kwargs)</code> and <code>f(kwargs)</code> stay separate rules.</li>
+      <li>The text before a cut aside, such as "Always run the check (see the docs", is stored as 3.1.0 stored it.</li>
       <li>The other stored lowercase fragments (approximately 100) stay for a later fix with a labelled sample.</li>
       <li>Chat stored as a rule is a separate fix in the rule patterns.</li>
       <li>No cost claim and no Z0 rerun in this episode.</li>

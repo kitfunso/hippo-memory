@@ -185,22 +185,24 @@ function closesAside(text: string, i: number): boolean {
   return before === '.' && /[A-Za-z]/.test(text[i - 2] ?? '');
 }
 
-// A ")" before any "(" or open "[" closes an aside the text began inside.
-function opensInsideAside(text: string): boolean {
+/** The offset of the ")" that closes an aside the text began inside, or -1: a ")" before any "(" or
+ * open "[". Code spans do not count. */
+export function asideCloseOffset(text: string): number {
+  const blanked = blankCodeSpans(text, CODE_AS_LETTER);
   let brackets = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '(') return false;
-    if (text[i] === '[') brackets++;
-    else if (text[i] === ']') brackets = Math.max(0, brackets - 1);
-    else if (text[i] === ')' && brackets === 0 && closesAside(text, i)) return true;
+  for (let i = 0; i < blanked.length; i++) {
+    if (blanked[i] === '(') return -1;
+    if (blanked[i] === '[') brackets++;
+    else if (blanked[i] === ']') brackets = Math.max(0, brackets - 1);
+    else if (blanked[i] === ')' && brackets === 0 && closesAside(blanked, i)) return i;
   }
-  return false;
+  return -1;
 }
 
 /** Whether `text` starts inside a bold span or an aside, as rows the old capture segmenter cut do.
- * Repair reads this; admission does not, since capture now removes bold pairs and keeps brackets whole. */
+ * Repair reads this; admission does not, since capture drops a sentence the split cut out of an aside. */
 export function startsInsideCut(text: string): boolean {
-  return opensInsideBold(text) || opensInsideAside(blankCodeSpans(text, CODE_AS_LETTER));
+  return opensInsideBold(text) || asideCloseOffset(text) >= 0;
 }
 
 function isDanglingAssertion(text: string): boolean {

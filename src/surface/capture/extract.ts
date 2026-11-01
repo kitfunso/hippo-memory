@@ -1,5 +1,5 @@
 import { duplicateKey } from '../../base/util/same-text.js';
-import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
+import { assessAutomaticMemory, asideCloseOffset } from '../../base/memory/memory-quality.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
 import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
@@ -40,7 +40,6 @@ const CATEGORIES = [
   ['preference', PREFERENCE_PATTERNS],
 ] as const;
 const MAX_CHARS = 500;
-const QUOTE = /['"]/;
 const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
 const LABEL = /^(?:decision|rule|error|bug|gotcha|important|critical|remember|plan):/i;
 const SENTENCE_END = /[.!?]["')\]]*$/;
@@ -104,16 +103,9 @@ function continues(line: string, previous: string | undefined): boolean {
 
 type LineCleaner = (line: string) => string;
 
-interface BoldMarks {
-  /** Offsets of each opener and closer that pair up. */
-  readonly paired: number[];
-  /** Offsets of each `**` that can open or close a span but has no partner. */
-  readonly loose: number[];
-}
-
-function boldMarks(line: string): BoldMarks {
+/** Offsets of each `**` that pairs with the nearest opener before it. */
+function pairedBold(line: string): number[] {
   const paired: number[] = [];
-  const loose: number[] = [];
   const openers: number[] = [];
   // Blanked code spans keep every offset, so the markers found here are cut from the source.
   for (const marker of strongMarkers(blankCodeSpans(line, '`'))) {
@@ -121,27 +113,23 @@ function boldMarks(line: string): BoldMarks {
     const opener = marker.close ? openers.pop() : undefined;
     if (opener !== undefined) paired.push(opener, marker.index);
     else if (marker.open) openers.push(marker.index);
-    else if (marker.close) loose.push(marker.index);
   }
-  return { paired, loose: [...loose, ...openers] };
-}
-
-function withoutMarkers(line: string, offsets: readonly number[]): string {
-  return [...offsets]
-    .sort((a, b) => a - b)
-    .reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
+  return paired;
 }
 
 /** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so each
  * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
 export function withoutBold(line: string): string {
-  return withoutMarkers(line, boldMarks(line).paired);
+  return pairedBold(line)
+    .sort((a, b) => a - b)
+    .reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
 }
 
-/** `line` without each `**` that could open or close a span but has no partner, as an old capture
- * stored a line whose closer it lost. */
-export function withoutUnpairedBold(line: string): string {
-  return withoutMarkers(line, boldMarks(line).loose);
+/** What `withoutBold` gives for `held` plus a closing `**` that pairs with an opener in it, as an
+ * old capture lost that closer at the end of a line; null when the closer pairs with none. */
+export function legacyBoldAlias(held: string): string | null {
+  const closed = `${held}**`;
+  return pairedBold(closed).includes(held.length) ? withoutBold(closed) : null;
 }
 
 function proseBlocks(text: string, clean: LineCleaner): string[] {
@@ -167,47 +155,31 @@ function proseBlocks(text: string, clean: LineCleaner): string[] {
   return blocks;
 }
 
-/** The `(...)` and `[...]` spans of masked text as [open, close] offsets; a bracket between quotes is text. */
-function bracketSpans(hidden: string): [number, number][] {
-  const spans: [number, number][] = [];
-  const open: number[] = [];
-  for (let at = 0; at < hidden.length; at++) {
-    const char = hidden[at];
-    const quoted = QUOTE.test(hidden[at - 1] ?? '') && QUOTE.test(hidden[at + 1] ?? '');
-    if (!'()[]'.includes(char) || quoted) continue;
-    const last = open.at(-1);
-    if (char === '(' || char === '[') open.push(at);
-    else if (last !== undefined && hidden[last] === (char === ')' ? '(' : '[')) {
-      open.pop();
-      spans.push([last, at]);
-    }
-  }
-  return spans;
-}
-
 function completeSentences(text: string): string[] {
   // Masking keeps offsets, so each sentence is cut from the unchanged source.
-  const hidden = masked(text);
-  // The segmenter splits inside "(see the docs. Then ...)"; a span over the cap is dropped anyway.
-  const spans = bracketSpans(hidden)
-    .filter(([open, close]) => close - open <= 2 * MAX_CHARS)
-    .sort((a, b) => a[0] - b[0]);
-  const sentences: string[] = [];
-  let start = 0;
-  let next = 0;
-  let reach = -1;
-  for (const { index } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(hidden)) {
-    while (next < spans.length && spans[next][0] < index) {
-      reach = Math.max(reach, spans[next][1]);
-      next++;
+  const segments = new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(text));
+  return [...segments].map(({ index, segment }) =>
+    text.slice(index, index + segment.length).trim(),
+  );
+}
+
+// A sentence starts inside a cut aside: an unclosed "(" before it, an aside-closing ")" in it, and
+// a word after that ")". A "(" after ":" or ";" is an emoticon.
+function asideCutter(block: string): (sentence: string, at: number) => boolean {
+  const blanked = blankCodeSpans(block);
+  let depth = 0;
+  let seen = 0;
+  return (sentence, at) => {
+    while (seen < at) {
+      const char = blanked[seen];
+      if (char === '(' && !/[:;]/.test(blanked[seen - 1] ?? '')) depth++;
+      else if (char === ')') depth = Math.max(0, depth - 1);
+      seen++;
     }
-    if (index > start && reach < index) {
-      sentences.push(text.slice(start, index).trim());
-      start = index;
-    }
-  }
-  if (start < text.length) sentences.push(text.slice(start).trim());
-  return sentences;
+    if (depth === 0) return false;
+    const close = asideCloseOffset(sentence);
+    return close >= 0 && /[\p{L}\p{N}]/u.test(sentence.slice(close + 1));
+  };
 }
 
 function insideBrackets(lead: string): boolean {
@@ -277,9 +249,14 @@ function extractOne(text: string, clean: LineCleaner = withoutBold): ExtractedIt
   const prose = proseOnly(text);
   const items = extractSpecSections(prose, clean);
   for (const block of proseBlocks(prose, clean)) {
+    const cutByAside = asideCutter(block);
+    let cursor = 0;
     for (const sentence of completeSentences(block)) {
+      const at = Math.max(block.indexOf(sentence, cursor), cursor);
+      cursor = at + sentence.length;
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
+      if (cutByAside(sentence, at)) continue;
       for (const [category, patterns] of CATEGORIES) {
         const item = extractFromPatterns(sentence, patterns, category);
         if (item) {

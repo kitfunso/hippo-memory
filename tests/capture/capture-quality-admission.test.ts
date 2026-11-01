@@ -291,6 +291,24 @@ describe('automatic quality does not govern manual or trusted import storage', (
     },
   );
 
+  it('capture stores a rule that differs from a held one only by "**" marks no lost closer explains', async () => {
+    const stored = 'Never call f(**kwargs) or g(**options) without validation';
+    const twin = 'Never call f(kwargs) or g(options) without validation';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [
+        { role: 'user', text: `${stored}.` },
+        { role: 'user', text: `${twin}.` },
+      ],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, twin]);
+  });
+
   it('session capture stores a rule from the turn after one that left a fence open', async () => {
     const turns: SessionTurn[] = [
       { role: 'user', text: 'Here is the log:\n```\nError: build failed' },
