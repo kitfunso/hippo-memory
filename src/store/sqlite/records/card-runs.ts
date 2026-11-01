@@ -131,14 +131,14 @@ function transitionCards(
 /** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race.
  * Throws on an unknown card id; returns null for a card not ready/blocked or already claimed.
  * Sets a CARD_LEASE_MS lease and returns the new run's id as runId. */
-export function claimCard(
+export function claimCardRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
   runtime: string,
   sessionId?: string,
 ): (Card & { runId: number }) | null {
-  assertTenantId('claimCard', tenantId);
+  assertTenantId('claimCardRow', tenantId);
   assertFilled('runtime', runtime);
   const runId = withWriteScopeOr(db, 'claim_card', (rollback) => {
     const changes = transitionCard(db, tenantId, id, {
@@ -172,13 +172,13 @@ export function claimCard(
 /** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at
  * is left alone. Throws on an unknown card id or a run id that is not a positive integer;
  * returns null unless the card is running and runId is its live run. */
-export function heartbeatCard(
+export function heartbeatCardRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
   runId: number,
 ): Card | null {
-  assertTenantId('heartbeatCard', tenantId);
+  assertTenantId('heartbeatCardRow', tenantId);
   assertRunId(runId);
   const beat = withWriteScopeOr(db, 'heartbeat_card', (rollback) => {
     const card = readCardRow(db, tenantId, id);
@@ -201,14 +201,14 @@ export function heartbeatCard(
 /** Requires the card be running; closes the live run as blocked and files reason as a comment.
  * Throws on an unknown card id; returns null for a card not running. When runId is given,
  * returns null unless it is the card's live run. */
-export function blockCard(
+export function blockCardRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
   reason: string,
   runId?: number,
 ): Card | null {
-  assertTenantId('blockCard', tenantId);
+  assertTenantId('blockCardRow', tenantId);
   assertFilled('reason', reason);
   if (runId !== undefined) assertRunId(runId);
   const blocked = withWriteScopeOr(db, 'block_card', (rollback) => {
@@ -227,7 +227,7 @@ export function blockCard(
       return rollback(false);
     }
     const now = handleStamp(db);
-    // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the
+    // Close the interrupted run here so completeCardRow's ended IS NULL scope only ever matches the
     // live run.
     closeLiveRun(db, { tenantId, cardId: id, outcome: 'blocked', now });
     insertCardComment(db, { tenantId, cardId: id, author: 'system', body: reason });
@@ -239,13 +239,13 @@ export function blockCard(
 /** Requires the card be running; moves it to review, clearing its lease and heartbeat and
  * keeping its live run. When runId is given, returns null unless it is the card's live run.
  * Throws on an unknown card id; returns null for a card not running. */
-export function reviewCard(
+export function reviewCardRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
   runId?: number,
 ): Card | null {
-  assertTenantId('reviewCard', tenantId);
+  assertTenantId('reviewCardRow', tenantId);
   if (runId !== undefined) assertRunId(runId);
   const moved = withWriteScopeOr(db, 'review_card', (rollback) => {
     const allowed = runId === undefined || liveRunIs(db, tenantId, id, runId);
@@ -267,14 +267,14 @@ export function reviewCard(
  * whose parents are all done; 'failure'/'partial' shelves it. Throws on an unknown card id;
  * returns null for a card not in review, or when `runId` is given and is not the card's
  * live run. */
-export function completeCard(
+export function completeCardRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
   outcome: HandoffOutcome,
   runId?: number,
 ): { card: Card; promotedChildren: string[] } | null {
-  assertTenantId('completeCard', tenantId);
+  assertTenantId('completeCardRow', tenantId);
   assertCardOutcome(outcome);
   if (runId !== undefined) assertRunId(runId);
   const promoted = withWriteScopeOr(db, 'complete_card', (rollback) => {
@@ -337,8 +337,8 @@ function promoteUnblockedChildren(
 /** Returns to ready every running card of the tenant whose lease has expired or is missing:
  * clears its assignee, closes its live run as 'reclaimed' and leaves its handoffs alone, all in
  * one write transaction. Returns the reclaimed card ids in id order. */
-export function reclaimExpiredCards(db: DatabaseSyncLike, tenantId: string): string[] {
-  assertTenantId('reclaimExpiredCards', tenantId);
+export function reclaimExpiredCardRows(db: DatabaseSyncLike, tenantId: string): string[] {
+  assertTenantId('reclaimExpiredCardRows', tenantId);
   return withWriteScope(db, 'reclaim_expired_cards', () => {
     // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
     const now = handleStamp(db);
