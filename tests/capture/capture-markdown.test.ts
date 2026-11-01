@@ -60,6 +60,9 @@ describe('capture reads markdown the way it renders', () => {
   it('keeps globs, kwargs, exponents and dunder names as written', () => {
     for (const rule of [
       'Always lint **/*.ts and src/** first',
+      'Never commit **/*.env files',
+      'Never commit **/*.env and **/*.ts files',
+      'Always lint src/**/*.ts before a push',
       'Never pass **kwargs to the store writer',
       'Never compute 2**10 by hand',
       'Never edit __init__.py',
@@ -72,6 +75,13 @@ describe('capture reads markdown the way it renders', () => {
     ]) {
       expect(contents(`${rule}.`), rule).toEqual([rule]);
     }
+  });
+
+  it('reads a bold path as bold when a closer follows it', () => {
+    expect(contents('Never edit **/etc/hosts**.')).toEqual(['Never edit /etc/hosts']);
+    expect(contents('Always use **/usr/bin/python** (the system interpreter).')).toEqual([
+      'Always use /usr/bin/python (the system interpreter)',
+    ]);
   });
 
   it('closes a fence only with a bare run of the same character at least as long', () => {

@@ -40,11 +40,15 @@ describe('strongMarkers', () => {
     ['2**10', ['open close word']],
     ['foo**bar**', ['open close word', 'close']],
     ['Volume data.**Next', ['open']],
+    ['Never edit **/etc/hosts**.', ['open', 'close']],
   ])('gives %s its roles', (text, expected) => {
     expect(roles(text)).toEqual(expected);
   });
 
-  it.each(['src/** first', '**/*.ts', 'a *** b', 'a \\** b'])('leaves a glob or an escape out: %s', (text) => {
-    expect(strongMarkers(text)).toEqual([]);
-  });
+  it.each(['src/** first', '**/*.ts', 'src/**/*.ts', 'Never commit **/*.env and **/*.ts files', 'a *** b', 'a \\** b'])(
+    'leaves a glob or an escape out: %s',
+    (text) => {
+      expect(strongMarkers(text)).toEqual([]);
+    },
+  );
 });

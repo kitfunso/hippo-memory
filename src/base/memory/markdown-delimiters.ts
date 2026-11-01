@@ -75,21 +75,30 @@ function charAfter(text: string, i: number): string {
 const isSpace = (char: string): boolean => char === '' || /\s/u.test(char);
 const isPunctuation = (char: string): boolean => char !== '' && PUNCTUATION.test(char);
 
-/** Each `**` of `text` (code spans blanked) in order; a run next to `/`, `\` or `*` is a glob. */
+/** Each `**` of `text` (code spans blanked) in order; a run after `/`, `*` or a backslash, or before `*`, is a glob. */
 export function strongMarkers(text: string): StrongMarker[] {
-  const markers: StrongMarker[] = [];
+  const found: { marker: StrongMarker; slashed: boolean }[] = [];
   for (const { index } of text.matchAll(/\*\*/g)) {
     const before = charBefore(text, index);
     const after = charAfter(text, index + 2);
-    if (['/', '*', '\\'].includes(before) || ['/', '*'].includes(after)) continue;
+    if (['/', '*', '\\'].includes(before) || after === '*') continue;
     const [spaceBefore, spaceAfter] = [isSpace(before), isSpace(after)];
     const [markBefore, markAfter] = [isPunctuation(before), isPunctuation(after)];
-    markers.push({
+    const marker = {
       index,
       open: !spaceAfter && (!markAfter || spaceBefore || markBefore),
       close: !spaceBefore && (!markBefore || spaceAfter || markAfter),
       inWord: WORD.test(before) && WORD.test(after),
-    });
+    };
+    found.push({ marker, slashed: after === '/' });
   }
-  return markers;
+  // "**/etc/hosts**" is bold when a real closer follows; with none it is the glob "**/".
+  const markers: StrongMarker[] = [];
+  let closerAhead = false;
+  for (const { marker, slashed } of found.reverse()) {
+    if (slashed && !closerAhead) continue;
+    if (!slashed && marker.close) closerAhead = true;
+    markers.push(marker);
+  }
+  return markers.reverse();
 }

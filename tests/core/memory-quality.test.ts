@@ -51,7 +51,6 @@ describe('automatic assertion quality', () => {
     ['a model launches)', 'sentence-fragment'],
     ['** Never backfill them', 'sentence-fragment'],
     ['** Ship it as the web app', 'sentence-fragment'],
-    ['sleep** (when plugged in)', 'sentence-fragment'],
     ['`git add -A`) before the commit', 'sentence-fragment'],
     ['falls back to discovery")', 'sentence-fragment'],
     ['must score a signal-week feature row") so a real staleness bug can never ship', 'sentence-fragment'],
@@ -59,10 +58,6 @@ describe('automatic assertion quality', () => {
     ['was mild) so the deploy went through on the retry', 'sentence-fragment'],
     ['it is vivid) in the logs', 'sentence-fragment'],
     ['done.** — then run the tests', 'sentence-fragment'],
-    ['sleep** (when plugged in) the job runs', 'sentence-fragment'],
-    ['the hook entirely** — run the check first', 'sentence-fragment'],
-    ['close and volume** (11 volume columns) in the feed', 'sentence-fragment'],
-    ['skip the `data/optuna.db`**', 'sentence-fragment'],
     ['done.**— then run the tests', 'sentence-fragment'],
     ['done.**– then run the tests', 'sentence-fragment'],
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
@@ -75,6 +70,18 @@ describe('automatic assertion quality', () => {
     'finished), which strongly suggests the plugin is the client',
   ])('counts a text cut inside bold or an aside as a certain defect: %s', (content) => {
     expect(certainDefect(content)).toBe('sentence-fragment');
+  });
+
+  // A cut right after a word looks like "2** (n + 1)" or "cache** files", so it is never certain and stays stored.
+  it.each([
+    'sleep** (when plugged in)',
+    'sleep** (when plugged in) the job runs',
+    'the hook entirely** — run the check first',
+    'close and volume** (11 volume columns) in the feed',
+    'skip the `data/optuna.db`**',
+  ])('does not call a "**" right after a word a certain cut: %s', (content) => {
+    expect(certainDefect(content)).toBeNull();
+    expect(assessAutomaticMemory(content).accepted).toBe(true);
   });
 
   // At this length the old regexes, which rescanned to the end from every start, ran past the test timeout.
@@ -159,6 +166,12 @@ describe('automatic assertion quality', () => {
     'Never compute 2**-1 by hand',
     'Never compute 2** -1 by hand',
     'Always ignore cache** files when deploying',
+    'Always allocate 2** (n + 1) bytes for the cache',
+    'Never compute 2** .5 by hand',
+    'the hook entirely**" he said, so run it first',
+    'Never edit **/etc/hosts**.',
+    'Always use **/usr/bin/python** (the system interpreter).',
+    'Never commit **/*.env files',
     'Always use 2**(n + 1) for the buffer size',
     'Use "**" for bold markup in the docs',
     "Python uses '**' for powers in every module",
