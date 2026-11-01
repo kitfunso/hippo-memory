@@ -28,7 +28,8 @@ const PATTERNS = [
 const LABEL_PATTERN = /\bFeature \d+:|\bW\d+[a-z]?:|\b[Pp]lan designs? \d+|\bCHANGELOG \d/;
 // A wrapped `//` comment's last word left alone on its line; any hit fails.
 const ONE_WORD = /^ [A-Za-z]+\.?\r?$/;
-// Paths the concurrent tail lane edits keep their one-word lines until it lands, so either merge order passes.
+// Paths r-tail-c edits keep their one-word lines, so either merge order passes; the list goes when a follow-up
+// rejoins them after both lanes merge.
 const ORPHAN_PENDING = [
   'src/base/memory/',
   'src/api/recall/anchoring.ts',
