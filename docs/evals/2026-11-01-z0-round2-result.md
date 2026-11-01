@@ -27,9 +27,14 @@ Full log: `z0-scored-set-record.md`, entries from 31 Oct 23:55 to 1 Nov 12:10. P
 | A5 | Sham hippo, capture removed | 624 |
 
 - 16 repositories. Model `claude-opus-5-5`, Claude Code 2.1.288 (`pins-h4a9.json`).
-- The A2 build is hippo-memory `1739d96cd`: the 2.2.0 token diet plus the 2.3.0 Claude Code
-  block change. It predates 3.0.0, so the 3.0.0 hook change that drops another session's
-  handoff (PR #1126) is not in these runs.
+- The A2 build is `8bea03fbd` on branch `z0/h4-diet`, in all 624 A2 records (A5 used
+  `2fcda7b39`). It is the round 2 frozen build `2fcda7b39` with the 2.2.0 token diet and the
+  2.3.0 Claude Code block change (`1739d96cd`) ported onto it. It predates 3.0.0, so the
+  3.0.0 hook change that drops another session's handoff (PR #1126) is not in these runs.
+- Correction (1 Nov 2026): this line first named `1739d96cd` as the A2 build. Both frozen
+  builds also hold `88c47f67d`, which captures a person's follow-up turns as rules. That
+  commit is in no release, so a released hippo does not capture those turns as A2 did.
+  Check: `git merge-base --is-ancestor 88c47f67d origin/master` exits 1.
 - Status valid. G1 to G5 pass. G2 (positive control): -0.918 [-1.018, -0.817]. G5: 3 of 45
   reader-sampled grades disagree.
 - Drop list: `z0-r2/drop-list-h4a9.json`. Analyzer hashes: `z0-r2-freeze/analyzer.sha256`.
