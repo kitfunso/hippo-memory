@@ -85,6 +85,13 @@ describe('check-comment-history.mjs', () => {
     });
   });
 
+  it('reads a one-word line inside a template literal or after code as no orphan', () => {
+    const code = ['const help = `', '// usage', '`;', 'const n = 1; // done', 'export { help, n };', ''].join('\n');
+    withFixture({ 'src/a.ts': code }, (run) => {
+      expect(run().status).toBe(0);
+    });
+  });
+
   it('counts a real leap day and scans .mts and .cts files', () => {
     const files = {
       'src/a.ts': '// Released 2028-02-29\n',

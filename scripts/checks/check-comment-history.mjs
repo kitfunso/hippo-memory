@@ -26,8 +26,8 @@ const PATTERNS = [
 
 // Section labels that name a plan, wave or feature number instead of what the code is; no baseline, any hit fails.
 const LABEL_PATTERN = /\bFeature \d+:|\bW\d+[a-z]?:|\b[Pp]lan designs? \d+|\bCHANGELOG \d/;
-// A wrapped comment's last word left alone on its line; no baseline, any hit fails.
-const ORPHAN_LINE = /^\s*\/\/ [A-Za-z]+\.?$/;
+// A wrapped `//` comment's last word left alone on its line; any hit fails.
+const ONE_WORD = /^ [A-Za-z]+\.?\r?$/;
 
 const PRECEDES_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
@@ -60,7 +60,8 @@ function opensRegex(src, i, prev) {
   return /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i));
 }
 
-/** Returns [lineNumber, text] for every comment line: `//` tails and each line of a block comment. */
+/** Returns [lineNumber, text, ownLine] for every comment line: `//` tails and each line of a block comment.
+ * ownLine is true for a `//` comment with only space before it on its line. */
 function commentLines(src) {
   const out = [];
   const templateDepth = []; // brace depth inside each open `${ }`
@@ -93,7 +94,7 @@ function commentLines(src) {
     if (c === '/' && src[i + 1] === '/') {
       const end = src.indexOf('\n', i);
       const stop = end < 0 ? src.length : end;
-      out.push([line, src.slice(i + 2, stop)]);
+      out.push([line, src.slice(i + 2, stop), /^\s*$/.test(src.slice(src.lastIndexOf('\n', i - 1) + 1, i))]);
       i = stop;
       continue;
     }
@@ -101,7 +102,7 @@ function commentLines(src) {
       const end = src.indexOf('*/', i + 2);
       const stop = end < 0 ? src.length : end;
       const parts = src.slice(i + 2, stop).split('\n');
-      parts.forEach((part, k) => out.push([line + k, part]));
+      parts.forEach((part, k) => out.push([line + k, part, false]));
       line += parts.length - 1;
       i = stop + 2;
       continue;
@@ -153,13 +154,11 @@ function findHits() {
   const hits = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const src = readFileSync(file, 'utf8');
-    for (const [line, text] of commentLines(src)) {
+    for (const [line, text, ownLine] of commentLines(src)) {
       const kind = LABEL_PATTERN.test(text) ? 'label' : PATTERNS.find(([, re]) => re.test(text))?.[0];
       if (kind) hits.push({ file, line, kind, text: text.trim() });
+      if (ownLine && ONE_WORD.test(text)) hits.push({ file, line, kind: 'orphan', text: `//${text}`.trim() });
     }
-    src.split(/\r?\n/).forEach((text, i) => {
-      if (ORPHAN_LINE.test(text)) hits.push({ file, line: i + 1, kind: 'orphan', text: text.trim() });
-    });
   }
   return hits;
 }
