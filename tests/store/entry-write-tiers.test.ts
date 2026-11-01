@@ -37,8 +37,7 @@ function retrievals(db: DatabaseSyncLike, id: string): number | undefined {
   return row?.retrieval_count;
 }
 
-const stored = (root: string, id: string): number | undefined =>
-  onHandle(root, (db) => retrievals(db, id), openStore);
+const stored = (root: string, id: string): number | undefined => onHandle(root, (db) => retrievals(db, id), openStore);
 
 describe('writeEntriesTogether', () => {
   it('lands all or none: a refused row in the batch undoes the good one before it', () => {
