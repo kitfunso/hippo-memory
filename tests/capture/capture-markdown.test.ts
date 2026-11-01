@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { boldTwins, extractFromTexts } from '../../src/surface/capture/extract.js';
 import { startsInsideCut } from '../../src/base/memory/memory-quality.js';
+import { scanWithinWatchdog } from '../_helpers/scan-watchdog.js';
 
 const contents = (text: string) => extractFromTexts([text]).map((item) => item.content);
 const TAG_RULE = 'Always tag releases from main because CI publishes tags.';
@@ -111,6 +112,48 @@ describe('capture reads markdown the way it renders', () => {
   it('runs the scrubber over the clean side of a twin', () => {
     const [twin] = boldTwins(['Never contact **reviewer**@example.invalid without approval.'], () => '[scrubbed]');
     expect(twin).toEqual({ old: 'Never contact **reviewer**@example.invalid without approval', clean: '[scrubbed]' });
+  });
+
+  it('removes the pairs of a line with 100,000 bold words before the watchdog fires', () => {
+    // A slice per marker is quadratic here: seconds at 25,000 pairs, minutes at 100,000.
+    const text = `Always ${'**word** '.repeat(100_000)}.`;
+    expect(() => scanWithinWatchdog((line) => extractFromTexts([line]), text, 5_000)).not.toThrow();
+    expect(() => scanWithinWatchdog((line) => boldTwins([line], (value) => value), text, 5_000)).not.toThrow();
+  }, 30_000);
+
+  // The first two lists are what base 3.1.0 gives; base cut the capital-letter lines at the bold label.
+  it.each([
+    [
+      'Never change `**Warning.**\ncontinued text\nend` in the help text.',
+      [['rule', 'Never change `**Warning.** continued text end` in the help text']],
+    ],
+    [
+      '## Plan\n- Never change `**Warning.**\ncontinued text\nend` in the help text.',
+      [
+        ['spec', 'Never change `**Warning.** continued text end` in the help text.'],
+        ['rule', 'Never change `**Warning.** continued text end` in the help text'],
+      ],
+    ],
+    [
+      'Never change `**Warning.**\nContinued text\nend` in the help text.',
+      [['rule', 'Never change `**Warning.** Continued text end` in the help text']],
+    ],
+    [
+      '## Plan\n- Never change `**Warning.**\nContinued text\nend` in the help text.',
+      [
+        ['spec', 'Never change `**Warning.** Continued text end` in the help text.'],
+        ['rule', 'Never change `**Warning.** Continued text end` in the help text'],
+      ],
+    ],
+    [
+      'Never open `a\nbc` here.\nAlways run the tests.',
+      [
+        ['rule', 'Never open `a bc` here'],
+        ['rule', 'Always run the tests'],
+      ],
+    ],
+  ])('keeps the next line attached while a code span is open: %j', (text, expected) => {
+    expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
   });
 
   it('pairs a closer with the nearest opener and keeps code spans whole', () => {

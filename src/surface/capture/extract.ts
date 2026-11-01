@@ -5,7 +5,11 @@ import {
   QUOTE_MARK,
 } from '../../base/memory/memory-quality.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
-import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
+import {
+  blankCodeSpans,
+  strongMarkers,
+  unclosedRuns,
+} from '../../base/memory/markdown-delimiters.js';
 
 export interface ExtractedItem {
   content: string;
@@ -124,18 +128,25 @@ function pairedBold(line: string): number[] {
 /** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so each
  * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
 function withoutBold(line: string): string {
-  return pairedBold(line)
-    .sort((a, b) => a - b)
-    .reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
+  let out = '';
+  let kept = 0;
+  for (const at of pairedBold(line).sort((a, b) => a - b)) {
+    out += line.slice(kept, at);
+    kept = at + 2;
+  }
+  return out + line.slice(kept);
 }
 
 function proseBlocks(text: string, clean: LineCleaner): string[] {
   const blocks: string[] = [];
   let pending: string[] = [];
+  // The backtick runs the pending lines leave open: the next line continues that code span.
+  let open: number[] = [];
   const flush = (): void => {
     // Cleaned once the lines are joined, as a spec bullet is, so a span that wraps a line stays whole.
     if (pending.length > 0) blocks.push(clean(pending.join(' ')));
     pending = [];
+    open = [];
   };
   for (const line of text.split('\n')) {
     const trimmed = line.trim();
@@ -145,8 +156,10 @@ function proseBlocks(text: string, clean: LineCleaner): string[] {
     }
     const bullet = trimmed.match(BULLET);
     const previous = pending.at(-1);
-    if (bullet || !continues(trimmed, previous === undefined ? previous : clean(previous))) flush();
+    const detached = open.length === 0 && !continues(trimmed, previous && clean(previous));
+    if (bullet || detached) flush();
     pending.push(bullet?.[1] ?? trimmed);
+    open = unclosedRuns(pending[pending.length - 1], open);
   }
   flush();
   return blocks;
@@ -220,6 +233,8 @@ function extractSpecSections(text: string, clean: LineCleaner): ExtractedItem[] 
   const bullets: string[] = [];
   let inSpecSection = false;
   let open = false;
+  // The backtick runs the bullet's lines leave open: the next line continues that code span.
+  let runs: number[] = [];
   for (const line of text.split('\n')) {
     const trimmed = line.trim();
     if (SPEC_HEADING_PATTERNS.some((pattern) => pattern.test(trimmed))) {
@@ -236,9 +251,17 @@ function extractSpecSections(text: string, clean: LineCleaner): ExtractedItem[] 
       !bullet &&
       trimmed !== '' &&
       (/^\s/.test(line) ||
+        runs.length > 0 ||
         continues(trimmed, previousBullet === undefined ? previousBullet : clean(previousBullet)));
-    if (inSpecSection && bullet) bullets.push(bullet[1].trim());
-    else if (wrapped) bullets[bullets.length - 1] += ` ${trimmed}`;
+    if (inSpecSection && bullet) {
+      bullets.push(bullet[1].trim());
+      runs = unclosedRuns(bullet[1]);
+    } else if (wrapped) {
+      bullets[bullets.length - 1] += ` ${trimmed}`;
+      runs = unclosedRuns(trimmed, runs);
+    } else {
+      runs = [];
+    }
     open = inSpecSection && (bullet !== null || wrapped);
   }
   // Cleaned once the lines are joined, so a code span or a pair that wraps a line keeps its text.
