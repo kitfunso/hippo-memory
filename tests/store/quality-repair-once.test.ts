@@ -21,7 +21,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 
 const CUT = 'Found local migration files to be';
 const DOUBTFUL = 'When CI fails we retry once';
-const BOLD_CUT = 'Skip the stores.** Ship it as the web app';
+const BOLD_CUT = '** Never backfill them';
 const ASIDE_CUT = 'finished), which strongly suggests the plugin is the client';
 
 function seed(store: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -111,6 +111,10 @@ describe('repairQualityOnce', () => {
 
     const again = await repairQualityOnce(storeFilesOf(root), 'default');
     expect(again?.appliedIds).toEqual([cut.id]);
+    expect(again?.issues.find((issue) => issue.id === pinned.id)).toMatchObject({
+      disposition: 'protected',
+      protection: 'pinned',
+    });
     expect(ids(root)).toEqual([pinned.id]);
     expect(flag(root)).toBe('2');
     expect(flag(root, 'quality_repair_auto')).toBe('1');

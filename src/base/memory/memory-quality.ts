@@ -4,6 +4,7 @@ import {
   DAG_LEVEL,
   type MemoryEntry,
 } from './entry.js';
+import { blankCodeSpans, strongMarkers } from './markdown-delimiters.js';
 import { heldTexts } from '../util/same-text.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
@@ -129,56 +130,43 @@ function isBareCondition(bare: string): boolean {
   return !/[,;]|\bthen\b/i.test(bare) && !RULE_WORD.test(bare) && bare.split(/\s+/).length <= 6;
 }
 
-const WORD_CHAR = /[A-Za-z0-9_]/;
-const BOLD_CLOSE_MARK = /[.,;:!?)\]"'’]/;
-const BOLD_OPEN_MARK = /[(["'‘]/;
-const ASIDE_PLAIN_MARK = /[\s:;]/;
-const QUOTE_MARK = /['"‘’“”]/;
+// A blanked code span reads as a letter that is no roman numeral, so it is never a list marker.
+const CODE_AS_LETTER = 'q';
+const LIST_MARKER_START = /[\s(,;:]/;
 
-/** Same length, so a backtick span never counts as a marker and offsets stay put. */
-function blankInlineCode(text: string): string {
-  return text.replace(/(`+)[^`]*?\1/g, (span) => 'x'.repeat(span.length));
-}
-
-// A first "**" that closes a span means the text began inside it: "never closed.** The run ends".
+// A "**" that only closes, or a bare one opening the text, shows the text began inside a bold span.
 function opensInsideBold(text: string): boolean {
-  for (const { index } of text.matchAll(/\*\*/g)) {
-    const before = text[index - 1] ?? ' ';
-    const after = text[index + 2] ?? ' ';
-    // "2**10", "**/*.ts" and "src/**" are not bold markers.
-    if (WORD_CHAR.test(before) && WORD_CHAR.test(after)) continue;
-    if ('/*'.includes(before) || '/*'.includes(after)) continue;
-    const closes = !/\s/.test(before) && (/\s/.test(after) || BOLD_CLOSE_MARK.test(after));
-    const opens = (/\s/.test(before) || BOLD_OPEN_MARK.test(before)) && !/\s/.test(after);
-    return closes && !opens;
-  }
-  return false;
+  const first = strongMarkers(blankCodeSpans(text, '`'))[0];
+  if (first === undefined) return false;
+  if (first.close && !first.open) return true;
+  return text.slice(0, first.index).trim() === '' && /^\s/.test(text.slice(first.index + 2));
 }
 
-/** "1)", "a)" and "ii)" mark list items; ":)", ";)" and a quoted ")" close no aside. */
-function closesNoAside(text: string, close: number): boolean {
-  const before = text[close - 1] ?? ' ';
-  if (ASIDE_PLAIN_MARK.test(before)) return true;
-  // A quote on both sides quotes the mark ("expected ')'"); a quote before it only ends a phrase.
-  if (QUOTE_MARK.test(before) && QUOTE_MARK.test(text[close + 1] ?? ' ')) return true;
+/** "1)", "a)" and "ii)" mark list items: 1 to 3 letters or digits, or any run of roman numerals. */
+function isListMarker(text: string, close: number): boolean {
   let start = close;
-  while (start > 0 && close - start < 4 && /[A-Za-z0-9]/.test(text[start - 1])) start--;
-  const length = close - start;
-  return length >= 1 && length <= 3 && (start === 0 || /[\s(,;:]/.test(text[start - 1]));
+  while (start > 0 && /[A-Za-z0-9]/.test(text[start - 1])) start--;
+  const token = text.slice(start, close);
+  const short = token.length <= 3 || /^[ivxlcdm]+$/i.test(token);
+  return short && (start === 0 || LIST_MARKER_START.test(text[start - 1]));
 }
 
-// A ")" before any "(" closes an aside the text began inside: "finished), which suggests ...".
+// A ")" after a letter, before any "(" or open "[", closes an aside the text began inside.
 function opensInsideAside(text: string): boolean {
+  let brackets = 0;
   for (let i = 0; i < text.length; i++) {
     if (text[i] === '(') return false;
-    if (text[i] === ')' && !closesNoAside(text, i)) return true;
+    if (text[i] === '[') brackets++;
+    else if (text[i] === ']') brackets = Math.max(0, brackets - 1);
+    else if (text[i] === ')' && brackets === 0 && /[A-Za-z]/.test(text[i - 1] ?? '')) {
+      if (!isListMarker(text, i)) return true;
+    }
   }
   return false;
 }
 
 function isDanglingAssertion(text: string): boolean {
-  const code = blankInlineCode(text);
-  if (opensInsideBold(code) || opensInsideAside(code)) return true;
+  if (opensInsideBold(text) || opensInsideAside(blankCodeSpans(text, CODE_AS_LETTER))) return true;
   const bare = bareText(text);
   // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
   if (/^(?:to|and|for)\s/.test(bare) && bare.length < FRAGMENT_MAX_CHARS) return true;

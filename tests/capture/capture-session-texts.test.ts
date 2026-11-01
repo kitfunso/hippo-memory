@@ -194,6 +194,17 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([...ITEMS].sort());
   });
 
+  it('is blocked by a row stored with the bold markers capture once kept', async () => {
+    const stored = 'Always run **npm test** first';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    expect(await captureSessionTexts(ctxFor(root), req([`${stored}.`]))).toEqual({
+      captured: 0,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(contents(root)).toEqual([stored]);
+  });
+
   it('is blocked by the caller project and user-global copies, never by another project', async () => {
     writeEntry(root, { ...createMemory(ITEMS[0]!), originProject: 'other' });
     writeEntry(root, { ...createMemory(ITEMS[1]!), originProject: '' });

@@ -9,7 +9,7 @@ import { isInitialized } from '../../host/project-identity.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { extractFromTexts, type ExtractedItem } from './extract.js';
+import { extractFromTexts, textsAsOnceStored, withoutBold, type ExtractedItem } from './extract.js';
 import {
   type SessionTurn,
   collectSessionTurns,
@@ -17,6 +17,7 @@ import {
   resolveLastSessionTranscript,
 } from './transcript.js';
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
+import type { HeldText } from '../../base/ports/store/types.js';
 import type { StoreGroups } from '../../base/ports/store.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
@@ -123,17 +124,15 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 
   // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md:
   // no secrets in memories).
-  const extracted = extractFromTexts(
-    texts.map((text) => maskEmails(redactSecretsStrict(text))),
-    userTexts,
-  );
+  const scrubbed = texts.map((text) => maskEmails(redactSecretsStrict(text)));
+  const extracted = extractFromTexts(scrubbed, userTexts);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
     return;
   }
 
-  const keys = await storedKeysInView(target.store, options, extracted);
+  const keys = await storedKeysInView(target.store, options, extracted, scrubbed);
 
   printCaptureTally(options, await captureFromCli(target, options, extracted, keys));
 }
@@ -157,16 +156,26 @@ async function captureFromCli(
   return previewCapture({ store, config }, writeOpts, extracted, keys);
 }
 
+/** The keys of the held rows, each also with its bold markers removed as capture now writes it, so a
+ * row stored before that still holds its line. */
+export function heldKeysOf(rows: readonly HeldText[]): Set<string> {
+  const keys = storedTextKeys(rows);
+  for (const key of Array.from(keys, (held) => duplicateKey(withoutBold(held)))) keys.add(key);
+  return keys;
+}
+
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are
 // hidden, so they must not stop its own copy.
 async function storedKeysInView(
   store: Pick<StoreGroups, 'captures'>,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
+  scrubbed: readonly string[],
 ): Promise<Set<string>> {
   const { tenantId, ...filter } = captureDedup(options);
-  const texts = extracted.map((item) => item.content);
-  return storedTextKeys(await store.captures.textsHolding(tenantId, texts, filter));
+  // The lookup matches stored text exactly, so it also asks for the lines as capture once stored them.
+  const texts = [...extracted.map((item) => item.content), ...textsAsOnceStored(scrubbed)];
+  return heldKeysOf(await store.captures.textsHolding(tenantId, texts, filter));
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its

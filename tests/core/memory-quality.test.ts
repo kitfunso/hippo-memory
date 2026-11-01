@@ -49,7 +49,10 @@ describe('automatic assertion quality', () => {
     ['Skip the stores.** Ship it as the web app', 'sentence-fragment'],
     ['finished), which strongly suggests the plugin is the client', 'sentence-fragment'],
     ['a model launches)', 'sentence-fragment'],
-    ['must score a signal-week feature row") so a real staleness bug can never ship', 'sentence-fragment'],
+    ['** Never backfill them', 'sentence-fragment'],
+    ['** Ship it as the web app', 'sentence-fragment'],
+    ['sleep** (when plugged in)', 'sentence-fragment'],
+    ['`git add -A`) before the commit', 'sentence-fragment'],
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: false, reason });
     expect(isContentWorthStoring(content)).toBe(false);
@@ -126,6 +129,19 @@ describe('automatic assertion quality', () => {
     'Never pass **kwargs to the store writer',
     'Always lint **/*.ts before a push',
     'Never edit `__init__.py` by hand',
+    'Always parse ``foo)`bar`` as a single code span',
+    'Never change foo**bar** without review',
+    'Use the Hippo**Memory** API for every recall call',
+    'Indices are in [0, length) for every slice call',
+    'Never use [^)] to match closing delimiters',
+    'Always match \\) as a literal parenthesis',
+    'it works :-) once the cache is warm',
+    'Option viii) is the default for the store',
+    'step 1.) deploys to staging',
+    'Keep 100%) coverage on the parser',
+    'Ranges run 1-10) in the table',
+    'Step1) deploys to staging',
+    'must score a signal-week feature row") so a real staleness bug can never ship',
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
   });

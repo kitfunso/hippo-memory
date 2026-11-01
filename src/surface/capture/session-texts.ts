@@ -4,11 +4,10 @@ import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { ContextWith, EntryContext } from '../../api/types.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
-import { storedTextKeys } from '../../base/util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
-import { captureExtractedItems, type CaptureTally } from './command.js';
+import { captureExtractedItems, heldKeysOf, type CaptureTally } from './command.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
-import { extractFromTexts } from './extract.js';
+import { extractFromTexts, textsAsOnceStored } from './extract.js';
 import { withEntryInfra } from '../entry-infra.js';
 
 /** A context whose store has the captures group, which a session's capture reads and writes. */
@@ -57,7 +56,8 @@ export async function captureSessionTexts(
 ): Promise<SessionCaptureResult> {
   const ctx = withEntryInfra(given);
   assertSessionCapture(req);
-  const extracted = extractFromTexts(req.texts.map(scrubForSharing));
+  const scrubbed = req.texts.map(scrubForSharing);
+  const extracted = extractFromTexts(scrubbed);
   // The newest items win, since the end of a session states where it landed.
   const items = extracted.slice(-MAX_ITEMS);
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
@@ -66,7 +66,7 @@ export async function captureSessionTexts(
   const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
   const held = await ctx.store.captures.textsHolding(
     dedup.tenantId,
-    items.map((i) => i.content),
+    [...items.map((i) => i.content), ...textsAsOnceStored(scrubbed)],
     { project: dedup.project },
   );
   const { store, config } = ctx;
@@ -86,7 +86,7 @@ export async function captureSessionTexts(
       now: ctx.infra.clock(),
     },
     items,
-    storedTextKeys(held),
+    heldKeysOf(held),
   );
   return { ...tally, skipped: tally.skipped + extracted.length - items.length };
 }

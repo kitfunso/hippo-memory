@@ -13,6 +13,31 @@ describe('capture reads markdown the way it renders', () => {
     expect(contents('- **Volume data.** Never backfill them.')).toEqual(['Never backfill them']);
   });
 
+  it('pairs a closer with the nearest opener and keeps code spans whole', () => {
+    expect(contents('Never pass **kwargs to **the** store writer.')).toEqual([
+      'Never pass **kwargs to the store writer',
+    ]);
+    expect(contents('Always keep `**kwargs**` in the signature and **never** drop it.')).toEqual([
+      'Always keep `**kwargs**` in the signature and never drop it',
+    ]);
+    expect(contents('Always parse ``a**`b`` and **never** split the span.')).toEqual([
+      'Always parse ``a**`b`` and never split the span',
+    ]);
+  });
+
+  it('pairs nothing when the closer cannot close, so the segmenter leaves a bare opener', () => {
+    expect(contents('- **Volume data.**Never backfill them.')).toEqual(['**Never backfill them']);
+  });
+
+  it('cleans a spec bullet the way it cleans a prose line', () => {
+    const text = ['## Plan', '- **Cache.** Move the cache to Redis so restarts keep', '  **warm** entries'].join('\n');
+    expect(
+      extractFromTexts([text])
+        .filter((item) => item.category === 'spec')
+        .map((item) => item.content),
+    ).toEqual(['Cache. Move the cache to Redis so restarts keep warm entries']);
+  });
+
   it('keeps globs, kwargs, exponents and dunder names as written', () => {
     for (const rule of [
       'Always lint **/*.ts and src/** first',
@@ -20,6 +45,10 @@ describe('capture reads markdown the way it renders', () => {
       'Never compute 2**10 by hand',
       'Never edit __init__.py',
       'Never import `__init__.py` from tests',
+      'Never call f(**kwargs) or g(**options) without validation',
+      'Never pass **kwargs and call f(**opts)',
+      'Never compute 2**10 and 3**4 by hand',
+      'Always use the Hippo**Memory** client for recall',
     ]) {
       expect(contents(`${rule}.`), rule).toEqual([rule]);
     }

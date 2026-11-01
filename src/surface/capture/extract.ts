@@ -1,6 +1,7 @@
 import { duplicateKey } from '../../base/util/same-text.js';
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
+import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
 export interface ExtractedItem {
   content: string;
@@ -100,29 +101,25 @@ function continues(line: string, previous: string | undefined): boolean {
   return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
 }
 
-/** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so paired
- * markers go; a glob, `2**10` or `**kwargs` has no partner. */
-function withoutBold(line: string): string {
-  // masked() keeps offsets, so markers found there are cut from the source and code spans stay whole.
-  const flat = masked(line);
+type LineCleaner = (line: string) => string;
+
+/** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so each
+ * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
+export function withoutBold(line: string): string {
   const cuts: number[] = [];
-  let open = -1;
-  for (const { index } of flat.matchAll(/\*\*/g)) {
-    const before = flat[index - 1] ?? ' ';
-    const after = flat[index + 2] ?? ' ';
-    if (/\w/.test(before) && /\w/.test(after)) continue;
-    if ('/*'.includes(before) || '/*'.includes(after)) continue;
-    if (open < 0) {
-      if (!/\s/.test(after)) open = index;
-    } else if (!/\s/.test(before)) {
-      cuts.push(open, index);
-      open = -1;
-    }
+  const openers: number[] = [];
+  // Blanked code spans keep every offset, so the markers found here are cut from the source.
+  for (const marker of strongMarkers(blankCodeSpans(line, '`'))) {
+    if (marker.inWord) continue;
+    const opener = marker.close ? openers.pop() : undefined;
+    if (opener !== undefined) cuts.push(opener, marker.index);
+    else if (marker.open) openers.push(marker.index);
   }
+  cuts.sort((a, b) => a - b);
   return cuts.reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
 }
 
-function proseBlocks(text: string): string[] {
+function proseBlocks(text: string, clean: LineCleaner): string[] {
   const blocks: string[] = [];
   let pending: string[] = [];
   const flush = (): void => {
@@ -137,7 +134,7 @@ function proseBlocks(text: string): string[] {
     }
     const bullet = trimmed.match(BULLET);
     if (bullet || !continues(trimmed, pending.at(-1))) flush();
-    pending.push(withoutBold(bullet?.[1] ?? trimmed));
+    pending.push(clean(bullet?.[1] ?? trimmed));
   }
   flush();
   return blocks;
@@ -182,7 +179,7 @@ function extractFromPatterns(
   return content.length <= MAX_CHARS ? { content, category, tags: [category, 'captured'] } : null;
 }
 
-function extractSpecSections(text: string): ExtractedItem[] {
+function extractSpecSections(text: string, clean: LineCleaner): ExtractedItem[] {
   const bullets: string[] = [];
   let inSpecSection = false;
   let open = false;
@@ -201,8 +198,8 @@ function extractSpecSections(text: string): ExtractedItem[] {
       !bullet &&
       trimmed !== '' &&
       (/^\s/.test(line) || continues(trimmed, bullets.at(-1)));
-    if (inSpecSection && bullet) bullets.push(bullet[1].trim());
-    else if (wrapped) bullets[bullets.length - 1] += ` ${trimmed}`;
+    if (inSpecSection && bullet) bullets.push(clean(bullet[1].trim()));
+    else if (wrapped) bullets[bullets.length - 1] += ` ${clean(trimmed)}`;
     open = inSpecSection && (bullet !== null || wrapped);
   }
   return bullets
@@ -210,10 +207,10 @@ function extractSpecSections(text: string): ExtractedItem[] {
     .map((content) => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
 }
 
-function extractOne(text: string): ExtractedItem[] {
+function extractOne(text: string, clean: LineCleaner = withoutBold): ExtractedItem[] {
   const prose = proseOnly(text);
-  const items = extractSpecSections(prose);
-  for (const block of proseBlocks(prose)) {
+  const items = extractSpecSections(prose, clean);
+  for (const block of proseBlocks(prose, clean)) {
     for (const sentence of completeSentences(block)) {
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
@@ -243,4 +240,11 @@ export function extractFromTexts(texts: readonly string[], userTexts = 0): Extra
       seen.add(key);
       return true;
     });
+}
+
+/** What capture stored before it removed bold markers: the texts an older row may hold for the same
+ * lines. */
+export function textsAsOnceStored(texts: readonly string[]): string[] {
+  if (!texts.some((text) => text.includes('**'))) return [];
+  return texts.flatMap((text) => extractOne(text, (line) => line).map((item) => item.content));
 }
