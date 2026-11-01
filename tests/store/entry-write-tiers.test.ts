@@ -21,7 +21,7 @@ const NOW = new Date('2026-06-01T00:00:00Z');
 const RULES = { strength: PRODUCTION_STRENGTH, clock: () => NOW };
 const OPTS = { tenantId: 'default', recallBoostAblated: false };
 
-function seeded(): { root: string; id: string } {
+function seeded() {
   const root = makeRoot('entry-write-tiers');
   roots.push(root);
   const entry = createMemory('the deploy runs on fridays after the freeze window closes');
