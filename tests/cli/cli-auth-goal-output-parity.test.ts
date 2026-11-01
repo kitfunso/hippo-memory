@@ -133,6 +133,20 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
 });
 
 describe('hippo goal (in process)', () => {
+  it('refuses a name of control characters alone, and drops DEL and C1 from a name', async () => {
+    const push = (name: string) =>
+      runInProcess((cli) =>
+        handleGoal({ cli, hippoRoot: root, tenantId: 'default', args: ['push', name], flags: { 'session-id': 's1' } }),
+      );
+    const bare = await push('\x1b');
+    expect(bare.status).toBe(1);
+    expect(bare.stderr).toContain('Usage: hippo goal push <name>');
+    expect(rows('SELECT goal_name FROM goal_stack')).toEqual([]);
+
+    expect((await push('ship\x7f\u0085it')).status).toBe(0);
+    expect(rows('SELECT goal_name FROM goal_stack')).toEqual([{ goal_name: 'shipit' }]);
+  });
+
   it('prints each command output and exit code, and leaves these rows', async () => {
     const mask = masker(/\b(?:g|rp)_[0-9a-f]{16}\b/g, 'id');
     const transcript: string[] = [];

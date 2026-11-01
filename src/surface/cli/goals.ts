@@ -59,13 +59,14 @@ async function pushGoal({
   flags,
 }: CommandContext): Promise<void> {
   const rawName = args.join(' ').trim();
-  if (!rawName) {
+  // Sanitize at WRITE time so corrupt names never enter the DB, and before the empty check so a
+  // name of control characters alone is no name.
+  const name = sanitizeLogMessage(rawName).trim();
+  if (!name) {
     fail(
       'Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]',
     );
   }
-  // Sanitize at WRITE time so corrupt names never enter the DB.
-  const name = sanitizeLogMessage(rawName);
   if (name !== rawName) {
     printError('note: stripped control characters from goal name');
   }
