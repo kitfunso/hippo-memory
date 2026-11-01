@@ -117,6 +117,33 @@ describe('check-comment-history.mjs', () => {
     });
   });
 
+  it('reads a lone JSDoc tag or code fence as no doc ending, and checks the prose before them', () => {
+    const code = [
+      '/**',
+      ' * Kept out of the published types.',
+      ' * @internal',
+      ' */',
+      'export const a = 1;',
+      '/**',
+      ' * Call it once per folder:',
+      ' * ```ts',
+      ' * setup();',
+      ' * ```',
+      ' */',
+      'export const b = 1;',
+      '/**',
+      ' * A wrapped doc whose last prose word fell onto its own',
+      ' * line.',
+      ' * @deprecated',
+      ' */',
+      'export const c = 1;',
+      '',
+    ].join('\n');
+    withFixture({ 'src/a.ts': code }, (run) => {
+      expect(run('--list').stdout.trim().split('\n')).toEqual(['src/a.ts:15 [orphan] * line.']);
+    });
+  });
+
   it('counts a real leap day and scans .mts and .cts files', () => {
     const files = {
       'src/a.ts': '// Released 2028-02-29\n',

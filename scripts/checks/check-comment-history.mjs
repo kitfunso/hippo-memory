@@ -76,8 +76,8 @@ function opensRegex(src, i, prev) {
 }
 
 /** Returns [lineNumber, text, ownLine, endsDoc] for every comment line: `//` tails and each line of a block comment.
- * ownLine is true for a `//` comment with only space before it on its line; endsDoc for a block's last line of text
- * when an earlier line holds text too. */
+ * ownLine is true for a `//` comment with only space before it on its line; endsDoc for a block's last line of prose
+ * when an earlier line holds prose too. */
 function commentLines(src) {
   const out = [];
   const templateDepth = []; // brace depth inside each open `${ }`
@@ -118,8 +118,8 @@ function commentLines(src) {
       const end = src.indexOf('*/', i + 2);
       const stop = end < 0 ? src.length : end;
       const parts = src.slice(i + 2, stop).split('\n');
-      const texts = parts.flatMap((part, k) => (docText(part) === '' ? [] : [k]));
-      const last = texts.length > 1 ? texts[texts.length - 1] : -1;
+      const prose = proseLines(parts);
+      const last = prose.length > 1 ? prose[prose.length - 1] : -1;
       parts.forEach((part, k) => out.push([line + k, part, false, k === last]));
       line += parts.length - 1;
       i = stop + 2;
@@ -161,6 +161,21 @@ function commentLines(src) {
 /** A block comment line's words, past its leading `*`s. */
 function docText(part) {
   return part.replace(/^\s*\*+/, '').trim();
+}
+
+/** Indexes of a block's prose lines: a code fence's lines are code, and a JSDoc tag such as `@internal` holds the
+ * rest of the block, so a lone fence or tag never reads as a wrapped word. */
+function proseLines(parts) {
+  const out = [];
+  let fenced = false;
+  for (const [k, part] of parts.entries()) {
+    const text = docText(part);
+    if (text.startsWith('```')) fenced = !fenced;
+    else if (fenced || text === '') continue;
+    else if (text.startsWith('@')) break;
+    else out.push(k);
+  }
+  return out;
 }
 
 function tsFiles(dir, out = []) {
