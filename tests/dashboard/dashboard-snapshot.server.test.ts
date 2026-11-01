@@ -227,7 +227,7 @@ describe('dashboard tallies', () => {
 
     expect(got.excluded).toEqual({ superseded: 3, archived: 1, quarantined: 2 });
     expect(got.openConflicts).toBe(1);
-    expect(got.projects.map(({ openConflicts: _, ...rest }) => rest)).toEqual(foldOf(live, vectors));
+    expect(got.projects.map((p) => ({ ...p, openConflicts: undefined }))).toEqual(foldOf(live, vectors));
     expect(got.projects.map((p) => [p.origin, p.openConflicts])).toEqual(
       got.projects.map((p) => [p.origin, p.origin === 'alpha' ? 1 : 0]),
     );

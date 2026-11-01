@@ -12,6 +12,7 @@ import { stateCommit, holdPre, dropPre, runCheck } from '../../scripts/token-eva
 import { stubBaseCommit, STUB_CLAUDE_MD } from '../../scripts/token-eval/workspace.mjs';
 import { runScreen } from '../../scripts/token-eval/screen.mjs';
 import { loadHippo } from '../../scripts/token-eval/runs.mjs';
+import { hippoBuild } from '../../scripts/token-eval/pins.mjs';
 import { validateCorpus, type Z0Record, type Z0PlanCell } from '../fixtures/z0-contract.js';
 
 const FAKE = resolve(__dirname, '..', 'fixtures', 'fake-claude.mjs');
@@ -70,10 +71,10 @@ interface TaskDef {
   id: string; kind: string; baseRef: string; fixRef: string; prompt: string; testFiles: string[]; test: string;
   familyId?: string; lessonId?: string; setup?: string;
 }
-interface RunExtra { limitWaitMs?: number; limitMaxWaits?: number; sessionTimeoutMs?: number; log?: (m: string) => void }
+interface RunExtra { limitWaitMs?: number; limitMaxWaits?: number; sessionTimeoutMs?: number; pins?: Record<string, string>; log?: (m: string) => void }
 /** What the toy lesson checker logs per call; the probe fields appear only with its `probe` arg. */
 interface CheckLine {
-  lesson: string; pre: string; post: string; preRef: string | null; commands: string[]; has?: boolean;
+  lesson: string; pre: string; post: string; preRef: string | null; commands: string[]; resume: string[] | null; has?: boolean;
   head?: string; symbolic?: string | null; logAll?: string; reflog?: string | null; refs?: string;
 }
 const lesson = (id: string, rule: string, extra: Partial<LessonDef> = {}): LessonDef => ({ id, rule, reason: `the ${id} checker reads it`, keyPhrase: `zq-${id}`, check: { script: 'lesson.mjs', args: [] }, ...extra });
@@ -221,6 +222,10 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
     await run(s, ['A0', 'A1', 'A2', 'A4', 'A5'], out);
     const recs = readRecords(out);
     expect(recs).toHaveLength(40);
+    // Every record names the hippo build the runner checkout holds (stage 2 pins).
+    const build = hippoBuild();
+    expect(build).toMatchObject({ hippoCommit: expect.stringMatching(/^[0-9a-f]{40}$/), hippoDistHash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    for (const x of recs) expect(x, `${x.arm} ${x.taskId}`).toMatchObject(build);
     const plan = readPlan(out);
     expect(validateCorpus(recs, plan)).toEqual([]);
     const cells = (xs: Z0PlanCell[]) => xs.map((x) => JSON.stringify([x.seed, x.position, x.arm, x.sequence, x.taskId, x.set, x.kind, x.familyId])).sort();
@@ -240,14 +245,27 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
         expect('scored' in x).toBe(false);
       }
     }
-    // Z0_COMMANDS: session one's commands at the first check, then the correction turn's too at the final check.
+    // CHECK_COMMANDS: session one's commands at the first check, then the correction turn's too at the final check.
     const a1Checks = checkLog(log).filter((c) => c.commands.includes('npm run lint'));
     expect(a1Checks).toHaveLength(10);
     for (const c of a1Checks) expect(c.commands.slice(0, 2)).toEqual(['git status && cat lib.js', 'npm run lint']);
     expect(a1Checks.filter((c) => c.commands.length === 3).map((c) => c.commands[2])).toEqual(Array(5).fill('echo resumed No:'));
+    expect(a1Checks.map((c) => c.resume)).toEqual(a1Checks.map((c) => (c.commands.length === 3 ? ['echo resumed No:'] : null)));
   }, 600_000);
 
-  it('a checker diffs Z0_PRE_COMMIT against Z0_POST_COMMIT: unstaged new files count, runner writes never do', async () => {
+  it('--pins refuses a run off its pins before any session, so it writes no record', async () => {
+    const { out, log } = isolate('pins');
+    const r = makeRepo();
+    const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file')])], [
+      teach(r, 't1', 'f1-l1', 'LESSON_OK'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'), apply(r, 'a2', 'f1-l1', 'LESSON_OK'),
+    ]);
+    await expect(run(s, ['A0'], out, { pins: { claudeVersion: '0.0.0', model: 'claude-sonnet-5-5' } }))
+      .rejects.toThrow(/differs from --pins: model is pinned claude-sonnet-5-5, this run has null; hippoCommit is not pinned/);
+    expect(existsSync(join(out, 'runs.jsonl'))).toBe(false);
+    expect(logLines(log)).toEqual([]);
+  }, 120_000);
+
+  it('a checker diffs CHECK_PRE_COMMIT against CHECK_POST_COMMIT: unstaged new files count, runner writes never do', async () => {
     const { out } = isolate('diff');
     const r = makeRepo();
     const want = family('f1', [lesson('f1-l1', 'Add a changelog fragment', { check: { script: 'diff.mjs', args: ['want=changelog.d/x.md'] } })]);
@@ -461,7 +479,7 @@ describe('an instruction file the agent leaves above work/', () => {
 });
 
 describe('session evidence', () => {
-  it('Z0_COMMANDS and the work counts take in subagent transcripts', async () => {
+  it('CHECK_COMMANDS and the work counts take in subagent transcripts', async () => {
     const { out, log } = isolate('subagent');
     const r = makeRepo();
     const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file')])], [
@@ -472,6 +490,9 @@ describe('session evidence', () => {
     const checks = checkLog(log).filter((c) => c.lesson === 'f1-l1');
     expect(checks[0].commands).toEqual(['git status && cat lib.js', 'npm run lint']);
     expect(checks[1].commands).toEqual(['git status && cat lib.js', 'echo resumed No:', 'npm run lint']);
+    // CHECK_RESUME_COMMANDS: what each transcript gained since the first check, so the subagent's earlier command stays out. The applies' first checks get none.
+    expect(checks.map((c) => c.resume)).toEqual([null, ['echo resumed No:'], null, null]);
+    expect(JSON.parse(readFileSync(join(out, 'grading', 'seqF', 'A0', 'seed1', 't1.grade.json'), 'utf8')).commandsResume).toEqual(['echo resumed No:']);
     // Session 1 makes 3 tool calls, its subagent 1 and the resume 1.
     expect(find(recs, 'A0', 'n1').toolCalls).toBe(3);
     expect(find(recs, 'A0', 't1').toolCalls).toBe(5);
@@ -608,7 +629,7 @@ describe('usage limits around resumes', () => {
     expect(logs.some((m) => /runner git on the agent's workspace failed/.test(m))).toBe(true);
   }, 120_000);
 
-  it('a session-1 retry rebuilds Z0_PRE_COMMIT, and the held ref keeps nothing reachable after the task', async () => {
+  it('a session-1 retry rebuilds CHECK_PRE_COMMIT, and the held ref keeps nothing reachable after the task', async () => {
     const { out, log } = isolate('retry');
     const r = makeRepo();
     const newer = stubBaseCommit(r.repo, r.fix);
@@ -620,7 +641,7 @@ describe('usage limits around resumes', () => {
     await run(s, ['A2'], out, { limitWaitMs: 0, log: (m: string) => said.push(m) });
     const t1 = find(readRecords(out), 'A2', 't1');
     expect(t1).toMatchObject({ invalid: null, limitRetries: 1, baseCommit: newer, lessons: [{ first: 'fail', final: 'pass' }] });
-    expect(said.some((m) => /t1 A2 seed1: Z0_PRE_COMMIT rebuilt/.test(m))).toBe(true);
+    expect(said.some((m) => /t1 A2 seed1: CHECK_PRE_COMMIT rebuilt/.test(m))).toBe(true);
     expect(seen(out, 'A2', 't1')['CLAUDE.md']).toContain('hippo:start');
     const checks = checkLog(log);
     for (const c of checks) expect(c.preRef).toBe(c.pre);

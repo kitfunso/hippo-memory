@@ -455,7 +455,7 @@ function expectAudit(state: HostState, rescued: boolean): void {
     },
   ]);
   const rescues = auditMeta(state, 'mv_rescue');
-  expect(rescues.map(({ score: _, ...rank }) => rank)).toEqual(
+  expect(rescues.map((r) => ({ ...r, score: undefined }))).toEqual(
     rescues.map(() => ({ rank: 1, totalNonPinned: 15, keepN: 5 })),
   );
   expect(rescues.every((m) => Number(m['score']) > 0)).toBe(true);

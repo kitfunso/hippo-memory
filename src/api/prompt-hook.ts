@@ -1,9 +1,14 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for
-// promptHookContext (a remote hook route's call). promptHookContext keeps the server-side copy of
-// the CLI's contextGet flags (surface/cli/context.ts); only the CLI parity case in
-// tests/store/prompt-hook-context.process.test.ts ties the two.
+// promptHookContext (a remote hook route's call). promptHookContext copies the CLI's contextGet
+// flags (surface/cli/context.ts) bar `continuity` and `ownHandoffOnly`, both opt-in here. Parity:
+// tests/store/prompt-hook-context.process.test.ts.
 import type { Context } from './types.js';
-import type { ContextOptions, ContextResult, ContextResultEntry } from './context/context-types.js';
+import type {
+  ContextOptions,
+  ContextResult,
+  ContextResultEntry,
+  ContinuityMode,
+} from './context/context-types.js';
 import { assembleContext } from './context/context.js';
 import { sharedStoreOf, strengthOf } from './types.js';
 import type { StrengthModel } from '../base/memory/strength.js';
@@ -13,10 +18,10 @@ import {
   contextBlockLines,
   contextCost,
   crossProjectLines,
-  handoffText,
+  handoffSectionText,
   sessionTrailText,
   settleTokens,
-  snapshotText,
+  snapshotSectionText,
 } from './context/context-render.js';
 import type { DeliveryRecorder } from './delivery/delivery-recorder.js';
 import { MAX_ID_LEN } from '../base/util/limits.js';
@@ -124,8 +129,12 @@ function renderStaticBlock(
   const { result, framing } = view;
   return settleTokens((t) =>
     [
-      ...(result.activeSnapshot ? [snapshotText(result.activeSnapshot)] : []),
-      ...(result.sessionHandoff ? [handoffText(result.sessionHandoff)] : []),
+      ...(result.activeSnapshot
+        ? [snapshotSectionText(result.activeSnapshot, result.snapshotMode ?? 'full')]
+        : []),
+      ...(result.sessionHandoff
+        ? [handoffSectionText(result.sessionHandoff, result.handoffMode ?? 'full')]
+        : []),
       ...(result.recentEvents && result.recentEvents.length > 0
         ? [sessionTrailText(result.recentEvents)]
         : []),
@@ -342,6 +351,10 @@ export interface PromptHookOptions {
   /** The store serves many people, so the caller is not its owner: no global store, no user-global recent rows, task
    *  state only for the caller's own owner and project, and no ledger rows outside this store. */
   readonly sharedStore?: true;
+  /** Default 'full': a pointer names a command that cannot reach this store, so the caller opts in. */
+  readonly continuity?: ContinuityMode;
+  /** Default off, so the published default keeps another session's handoff; the caller opts in as the CLI hook does. */
+  readonly ownHandoffOnly?: true;
 }
 
 /** The caps on a hook caller's session id and project names, so a caller other than an HTTP
@@ -390,7 +403,7 @@ export async function buildPromptHookContext(
   const arm = await sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const now = ctx.infra.clock();
-  const result = await assembleContext(ctx, hookContextOptions(req, now, sharedStore));
+  const result = await assembleContext(ctx, hookContextOptions(req, now, opts));
   const rendered = hasContextData(result)
     ? await renderAdditionalContext({
         config: ctx.config,
@@ -414,7 +427,7 @@ export async function buildPromptHookContext(
 function hookContextOptions(
   req: PromptHookRequest,
   now: Date,
-  sharedStore: PromptHookOptions['sharedStore'],
+  { sharedStore, continuity, ownHandoffOnly }: PromptHookOptions,
 ): ContextOptions {
   const prompt = req.payload?.prompt;
   return {
@@ -427,5 +440,7 @@ function hookContextOptions(
     prompt: isJsonString(prompt) ? prompt : undefined,
     cost: contextCost('additional-context', HOOK_FRAMING, now),
     sharedStore,
+    continuity: continuity ?? 'full',
+    ownHandoffOnly,
   };
 }

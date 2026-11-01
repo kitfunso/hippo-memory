@@ -10,7 +10,7 @@ import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import { hashArm } from '../../src/base/session/pilot-arm.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
-import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
+import { buildPromptHookContext, type PromptHookOptions } from '../../src/api/prompt-hook.js';
 import { HIPPO_PINNED_INJECT_COMMAND } from '../../src/surface/hooks-install/rules/shared.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
@@ -156,6 +156,11 @@ describe('promptHookContext', () => {
     expect(expected[0]).toContain('Active Task Snapshot');
     expect(expected[0]).toContain('Prompt-Relevant Memory');
     expect(expected[1]).toContain('Release train');
+    // 'parity' saved the snapshot, so it reads the whole text; 'parity-recent' is another session and reads a pointer.
+    expect(expected[0]).toContain('half done');
+    expect(expected[0]).not.toContain('hippo session latest');
+    expect(expected[1]).toContain('run `hippo session latest --id=parity`');
+    expect(expected[1]).not.toContain('half done');
     for (const out of expected) {
       expect(out).toContain('rollback plan');
       expect(out).toContain('remote-named rows');
@@ -166,16 +171,34 @@ describe('promptHookContext', () => {
     expect(project).toMatchObject({ name: 'acme-proj', legacyName: 'proj', aliases: ['github.com/acme/proj', 'proj'] });
     const ctx = ctxFor(srvStore);
     const staticHash = expect.stringMatching(BLOCK_HASH_RE);
-    expect(await buildPromptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt })).toEqual({
+    // The local hook points to another session's snapshot and drops its handoff, so the remote route needs both opt-ins to match it byte for byte.
+    const pointers: PromptHookOptions = { continuity: 'pointer', ownHandoffOnly: true };
+    expect(await buildPromptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt }, pointers)).toEqual({
       arm: null,
       stdout: expected[0],
       staticHash,
     });
-    expect(await buildPromptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt })).toEqual({
-      arm: null,
-      stdout: expected[1],
-      staticHash,
+    expect(
+      await buildPromptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt }, pointers),
+    ).toEqual({ arm: null, stdout: expected[1], staticHash });
+  });
+
+  it("prints another session's snapshot whole unless the caller opts in to the pointer", async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    saveActiveTaskSnapshot(store, 'default', {
+      task: 'ship',
+      summary: 'half done',
+      nextStep: 'run tests',
+      sessionId: 'owner',
     });
+    const ask = (opts?: PromptHookOptions) =>
+      buildPromptHookContext(ctxFor(store), { sessionId: 'reader', project: PROJECT_P }, opts);
+    const whole = await ask();
+    expect(whole.stdout).toContain('half done');
+    expect(whole.stdout).not.toContain('hippo session latest');
+    const pointer = await ask({ continuity: 'pointer' });
+    expect(pointer.stdout).toContain('run `hippo session latest --id=owner`');
+    expect(pointer.stdout).not.toContain('half done');
   });
 
   it('prints the task state when no pin or memory is there to pick, as the local hook does', async () => {
@@ -189,8 +212,13 @@ describe('promptHookContext', () => {
     });
     const payload: HookPayload = { session_id: 'state-only', hook_event_name: 'UserPromptSubmit' };
     const out = await buildPromptHookContext(ctxFor(store), { sessionId: 'state-only', project: PROJECT_P, payload });
+    // The saving session reads it whole; the local hook, for another session, reads a pointer.
     expect(out.stdout).toContain('Active Task Snapshot');
-    expect(localHook(dir, { ...payload, session_id: 'state-only-cli' })).toContain('Active Task Snapshot');
+    expect(out.stdout).toContain('half done');
+    const local = localHook(dir, { ...payload, session_id: 'state-only-cli' });
+    expect(local).toContain('Active Task Snapshot');
+    expect(local).toContain('run `hippo session latest --id=state-only`');
+    expect(local).not.toContain('half done');
   });
 
   it('rate 10000: books a holdout arm row and prints nothing, as the local holdout does', async () => {

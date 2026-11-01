@@ -1,0 +1,849 @@
+{
+  "schema": "z0-size/1",
+  "settings": {
+    "repos": [
+      15
+    ],
+    "effects": [
+      0.15
+    ],
+    "power": 0.8,
+    "sims": 2000,
+    "seed": 1,
+    "searchSims": 200,
+    "maxFamilies": 60,
+    "maxFamiliesPerRepo": 4,
+    "maxNTasks": 600,
+    "spreadBound": 0.8,
+    "seedCap": 9,
+    "targetZ": 3.5,
+    "levelSims": 20000,
+    "firstWave": 3,
+    "holmLevel": 0.025,
+    "quota": {
+      "claude-code": {
+        "usdPerDay": 229.2,
+        "source": "flag"
+      },
+      "codex": {
+        "usdPerDay": 100,
+        "source": "default assumption"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-cj4/runs.regraded.jsonl",
+      "sha256": "4b553cba71dbff53002d35232bf493ccc5648f2bd5c44713cf505692a061d43d"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-bm4/runs.regraded.jsonl",
+      "sha256": "142957fe4d138d6f164a51df31a71eb2cb991f31d706c393ece329cbcd95791b"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-ml2/runs.jsonl",
+      "sha256": "68b5916525ee3d65f376fed291d274bc79f67c1090386e13ce6646550d8acb4b"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-bmx/runs.regraded.jsonl",
+      "sha256": "136f95923cdf7f5daaa9b45436daa926ff5bfebd0923f670e71c6d8af7fcc026"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-cj4/plan.json",
+      "sha256": "13f8432f81d3eec5bf95282635f6b6ad52219bbed6a40e4ad3a2a3e6841300fd"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-bm4/plan.json",
+      "sha256": "fed1f59fb564b20bd83193b22dee5ab72a51bb9b34c7b4823ab786fb343822b2"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-ml2/plan.json",
+      "sha256": "5b6de6fc68ea4a3317c31e4c6ca71a99106dc9f79766860140320e69aca68334"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-bmx/plan.json",
+      "sha256": "53466068e693ce64aa131f2148d3c141fd20c4694655c64193e2b4a90984c143"
+    },
+    {
+      "role": "prices",
+      "file": "C:/z0-runs/s7/prices.json",
+      "sha256": "8978b782e6a85656828ac6aea5c47a8f813c2482671645001a9ed7f9a6423393"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-records.mjs",
+      "sha256": "74b5c7628e15d3a7e6ede4ae5dd7342681cacd8741bd475ba3e3568360e93281"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-filters.mjs",
+      "sha256": "ce05ed2922bef1df9ed0b93f28d6c11ac0a4a01d0ae045be480eb4f8f30effff"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-hypotheses.mjs",
+      "sha256": "eb7ef8d54a15adfc9c64d86e89b37533681da566ff4d73cfaf5ef26925fe52ca"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-gates.mjs",
+      "sha256": "49936d0769a9038756a8e8774cd69425c0a4159d837d1bab03d850a0698672d0"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-blind.mjs",
+      "sha256": "9ea5b6cb50e562b3be393e44e3f4ac6fac12f346bf315265bd13f2d981bf4d30"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-analyze.mjs",
+      "sha256": "e6e7df1644b48e40f4ffb32c70b2959bfdd3f5581c4bb3b98e453d84225446e4"
+    },
+    {
+      "role": "source",
+      "file": "src/eval/eval-stats.ts",
+      "sha256": "83bb5f2c0a6b8616fc6a415eb8a0c99427d3cc36f82e41c8ed8dd265a7d8e6ee"
+    },
+    {
+      "role": "source",
+      "file": "dist/eval/eval-stats.js",
+      "sha256": "a5b06d32b21bfccdfa3cf2c73970d94e073267e324dba1860620266578c0fba4"
+    },
+    {
+      "role": "source",
+      "file": "src/eval/repository-t.ts",
+      "sha256": "ebbb3de2744580c628892dc8d8b5a4a3fc7844b9bd0c4ed4b518df2defffaac1"
+    },
+    {
+      "role": "source",
+      "file": "dist/eval/repository-t.js",
+      "sha256": "967ad624fe71f0d1caebec2fa501eaf316b21f1759c610c9a9a018c8e05e0f34"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-size.mjs",
+      "sha256": "8ec20cc30d29ad99e177fbbcbd0e7231b48a588abc4912b2cb9ee2c1bec79111"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-size-sim.mjs",
+      "sha256": "d1f60f83c4815be3a56ba6137a8b284a56ccd293af76b1f9271994ced8970401"
+    }
+  ],
+  "warnings": [],
+  "calibration": {
+    "records": 470,
+    "scored": 470,
+    "abandoned": [],
+    "H1": {
+      "naRate": 0,
+      "violation": {
+        "components": {
+          "repos": 2,
+          "families": 6,
+          "units": 12,
+          "noise": 0.1412037037037037,
+          "family": 0,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.3425660023474545,
+            "family": 0,
+            "sequence": 0
+          },
+          "df": {
+            "family": 4,
+            "sequence": 2,
+            "noise": 4
+          },
+          "sBar": 2,
+          "kBar": 3
+        },
+        "loss": 0
+      },
+      "excluded": {
+        "components": {
+          "repos": 2,
+          "families": 6,
+          "units": 12,
+          "noise": 0.1412037037037037,
+          "family": 0,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.3425660023474545,
+            "family": 0,
+            "sequence": 0
+          },
+          "df": {
+            "family": 4,
+            "sequence": 2,
+            "noise": 4
+          },
+          "sBar": 2,
+          "kBar": 3
+        },
+        "loss": 0
+      }
+    },
+    "H2": {
+      "naRate": 0,
+      "violation": {
+        "components": {
+          "repos": 2,
+          "families": 6,
+          "units": 12,
+          "noise": 0.16666666666666666,
+          "family": 0,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.40434019949207745,
+            "family": 0,
+            "sequence": 0
+          },
+          "df": {
+            "family": 4,
+            "sequence": 2,
+            "noise": 4
+          },
+          "sBar": 2,
+          "kBar": 3
+        },
+        "loss": 0
+      },
+      "excluded": {
+        "components": {
+          "repos": 2,
+          "families": 6,
+          "units": 12,
+          "noise": 0.16666666666666666,
+          "family": 0,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.40434019949207745,
+            "family": 0,
+            "sequence": 0
+          },
+          "df": {
+            "family": 4,
+            "sequence": 2,
+            "noise": 4
+          },
+          "sBar": 2,
+          "kBar": 3
+        },
+        "loss": 0
+      }
+    },
+    "H4": {
+      "components": {
+        "repos": 2,
+        "families": 11,
+        "units": 22,
+        "noise": 0.07295309512428619,
+        "family": 0,
+        "sequence": 0,
+        "upper": {
+          "noise": 0.12203928665273635,
+          "family": 0,
+          "sequence": 0
+        },
+        "df": {
+          "family": 9,
+          "sequence": 2,
+          "noise": 9
+        },
+        "sBar": 2,
+        "kBar": 5.5
+      },
+      "controlSd": 0.3688877705506565,
+      "resolve": {
+        "pairs": 22,
+        "discordant": 0,
+        "both": 1,
+        "oneSide": 0.03527221309066533,
+        "oneSideEstimate": 0
+      }
+    },
+    "plan": {
+      "R": {
+        "families": 6,
+        "teachPerFamily": 1.1666666666666667,
+        "applyPerFamily": 2.1666666666666665,
+        "familySizes": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          5
+        ],
+        "noLessonRatio": 0.55
+      },
+      "X": {
+        "families": 6,
+        "teachPerFamily": 1.1666666666666667,
+        "applyPerFamily": 2.1666666666666665,
+        "familySizes": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          5
+        ],
+        "noLessonRatio": 0
+      }
+    },
+    "perRecord": {
+      "A1/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.4652429857142857,
+          "codex": 0
+        }
+      },
+      "A*/teach": {
+        "records": 70,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.4300802857142858,
+          "codex": 0
+        }
+      },
+      "A2/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.49902977142857136,
+          "codex": 0
+        }
+      },
+      "A4/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.3759489714285714,
+          "codex": 0
+        }
+      },
+      "A5/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.4299949714285714,
+          "codex": 0
+        }
+      },
+      "A0/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.3801847285714285,
+          "codex": 0
+        }
+      },
+      "A2/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3077292090909091,
+          "codex": 0
+        }
+      },
+      "A*/no-lesson": {
+        "records": 110,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.30164589818181825,
+          "codex": 0
+        }
+      },
+      "A4/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3237837,
+          "codex": 0
+        }
+      },
+      "A5/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3005585454545456,
+          "codex": 0
+        }
+      },
+      "A0/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.2859712636363636,
+          "codex": 0
+        }
+      },
+      "A1/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.2901867727272727,
+          "codex": 0
+        }
+      },
+      "A2/apply": {
+        "records": 26,
+        "sessions": 1.0384615384615385,
+        "usd": {
+          "claude-code": 0.22717776153846153,
+          "codex": 0
+        }
+      },
+      "A*/apply": {
+        "records": 130,
+        "sessions": 1.2538461538461538,
+        "usd": {
+          "claude-code": 0.25204081846153836,
+          "codex": 0
+        }
+      },
+      "A4/apply": {
+        "records": 26,
+        "sessions": 1.0769230769230769,
+        "usd": {
+          "claude-code": 0.20060894615384617,
+          "codex": 0
+        }
+      },
+      "A5/apply": {
+        "records": 26,
+        "sessions": 1.1538461538461537,
+        "usd": {
+          "claude-code": 0.24289104615384616,
+          "codex": 0
+        }
+      },
+      "A0/apply": {
+        "records": 26,
+        "sessions": 1.8846153846153846,
+        "usd": {
+          "claude-code": 0.3731553923076923,
+          "codex": 0
+        }
+      },
+      "A1/apply": {
+        "records": 26,
+        "sessions": 1.1153846153846154,
+        "usd": {
+          "claude-code": 0.21637094615384614,
+          "codex": 0
+        }
+      },
+      "X2/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.6608559857142858,
+          "codex": 0
+        }
+      },
+      "X*/teach": {
+        "records": 56,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.5311549,
+          "codex": 0
+        }
+      },
+      "X3/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.4970365285714286,
+          "codex": 0
+        }
+      },
+      "X4/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.48016024285714287,
+          "codex": 0
+        }
+      },
+      "X1/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.48656684285714286,
+          "codex": 0
+        }
+      },
+      "X1/apply": {
+        "records": 26,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.25968153846153846
+        }
+      },
+      "X*/apply": {
+        "records": 104,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.3605034538461539
+        }
+      },
+      "X2/apply": {
+        "records": 26,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.3667207076923077
+        }
+      },
+      "X3/apply": {
+        "records": 26,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.39624689230769233
+        }
+      },
+      "X4/apply": {
+        "records": 26,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0,
+          "codex": 0.41936467692307705
+        }
+      }
+    }
+  },
+  "unavailable": [],
+  "effects": [
+    {
+      "minimumEffect": 0.15,
+      "rows": [
+        {
+          "repos": 15,
+          "H1": {
+            "familiesPerRepo": 2,
+            "families": 30,
+            "power": {
+              "win": 0.904,
+              "tie": 0.8945,
+              "falseWin": 0.011,
+              "meanSeeds": 3.9705,
+              "stopShare": 0.03825
+            },
+            "boundsPower": {
+              "win": 0.479,
+              "tie": 0.507,
+              "meanSeeds": 5.54575,
+              "stopShare": 0.448
+            }
+          },
+          "H2": {
+            "familiesPerRepo": 2,
+            "families": 30,
+            "power": {
+              "win": 0.8605,
+              "tie": 0.8645,
+              "falseWin": 0.004,
+              "meanSeeds": 4.44375,
+              "stopShare": 0.08125
+            },
+            "boundsPower": {
+              "win": 0.308,
+              "tie": 0.304,
+              "meanSeeds": 4.83875,
+              "stopShare": 0.6445
+            }
+          },
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 45,
+            "power": {
+              "pass": 0.928
+            }
+          },
+          "fits": true,
+          "boundsPass": false,
+          "setR": {
+            "familiesPerRepo": 2,
+            "families": 30
+          },
+          "setN": {
+            "tasksPerRepo": 4,
+            "tasks": 60
+          },
+          "setX": {
+            "familiesPerRepo": 2,
+            "families": 30
+          },
+          "sessions": 5181.965,
+          "usd": {
+            "claude-code": 1050.4380992232955,
+            "codex": 325.5337307125001
+          },
+          "days": {
+            "claude-code": 4.583063260136543,
+            "codex": 3.255337307125001
+          },
+          "usageAtCap": {
+            "sessions": 9455,
+            "usd": {
+              "claude-code": 1976.0640313636359,
+              "codex": 551.491354
+            }
+          },
+          "daysAtCap": {
+            "claude-code": 8.621570817467871,
+            "codex": 5.51491354
+          },
+          "fallbacks": []
+        }
+      ],
+      "chosen": {
+        "repos": 15,
+        "H1": {
+          "familiesPerRepo": 2,
+          "families": 30,
+          "power": {
+            "win": 0.904,
+            "tie": 0.8945,
+            "falseWin": 0.011,
+            "meanSeeds": 3.9705,
+            "stopShare": 0.03825
+          },
+          "boundsPower": {
+            "win": 0.479,
+            "tie": 0.507,
+            "meanSeeds": 5.54575,
+            "stopShare": 0.448
+          }
+        },
+        "H2": {
+          "familiesPerRepo": 2,
+          "families": 30,
+          "power": {
+            "win": 0.8605,
+            "tie": 0.8645,
+            "falseWin": 0.004,
+            "meanSeeds": 4.44375,
+            "stopShare": 0.08125
+          },
+          "boundsPower": {
+            "win": 0.308,
+            "tie": 0.304,
+            "meanSeeds": 4.83875,
+            "stopShare": 0.6445
+          }
+        },
+        "H4": {
+          "tasksPerRepo": 3,
+          "tasks": 45,
+          "power": {
+            "pass": 0.928
+          }
+        },
+        "fits": true,
+        "boundsPass": false,
+        "setR": {
+          "familiesPerRepo": 2,
+          "families": 30
+        },
+        "setN": {
+          "tasksPerRepo": 4,
+          "tasks": 60
+        },
+        "setX": {
+          "familiesPerRepo": 2,
+          "families": 30
+        },
+        "sessions": 5181.965,
+        "usd": {
+          "claude-code": 1050.4380992232955,
+          "codex": 325.5337307125001
+        },
+        "days": {
+          "claude-code": 4.583063260136543,
+          "codex": 3.255337307125001
+        },
+        "usageAtCap": {
+          "sessions": 9455,
+          "usd": {
+            "claude-code": 1976.0640313636359,
+            "codex": 551.491354
+          }
+        },
+        "daysAtCap": {
+          "claude-code": 8.621570817467871,
+          "codex": 5.51491354
+        },
+        "fallbacks": []
+      },
+      "level": {
+        "H1": {
+          "cells": [
+            {
+              "name": "rule at bounds",
+              "coding": "violation",
+              "level": 0.019457013574660634,
+              "runs": 11050,
+              "stopShare": 0.4475,
+              "ceiling": 0.027970442628930024
+            },
+            {
+              "name": "rule at bounds",
+              "coding": "excluded",
+              "level": 0.019457013574660634,
+              "runs": 11050,
+              "stopShare": 0.4475,
+              "ceiling": 0.027970442628930024
+            },
+            {
+              "name": "three seeds",
+              "coding": "violation",
+              "level": 0.0154,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "three seeds",
+              "coding": "excluded",
+              "level": 0.0154,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "violation",
+              "level": 0.01285,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "excluded",
+              "level": 0.01285,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "violation",
+              "level": 0.0146,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "excluded",
+              "level": 0.0146,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            }
+          ],
+          "held": true
+        },
+        "H2": {
+          "cells": [
+            {
+              "name": "rule at bounds",
+              "coding": "violation",
+              "level": 0.022859576884850207,
+              "runs": 7043,
+              "stopShare": 0.64785,
+              "ceiling": 0.02872068979969386
+            },
+            {
+              "name": "rule at bounds",
+              "coding": "excluded",
+              "level": 0.022859576884850207,
+              "runs": 7043,
+              "stopShare": 0.64785,
+              "ceiling": 0.02872068979969386
+            },
+            {
+              "name": "three seeds",
+              "coding": "violation",
+              "level": 0.01485,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "three seeds",
+              "coding": "excluded",
+              "level": 0.01485,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "violation",
+              "level": 0.0145,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "two seeds at bounds",
+              "coding": "excluded",
+              "level": 0.0145,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "violation",
+              "level": 0.015,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            },
+            {
+              "name": "0/1 values",
+              "coding": "excluded",
+              "level": 0.015,
+              "runs": 20000,
+              "stopShare": 0,
+              "ceiling": 0.027207940216581964
+            }
+          ],
+          "held": true
+        },
+        "held": true
+      }
+    }
+  ],
+  "notes": [
+    "Power runs through the analyzer's own fixed-repository t tests (family is the unit) at Holm's strictest level, 0.05/2 over H1 and H2 (prereg 209, Amendment 2); a win needs both codings.",
+    "H3 is reported with no verdict, so it sets no size; set R is sized by H1 alone.",
+    "Seeds follow the blind rule: wave 1 runs 3 seeds, then the fewest up to seedCap whose predicted standard error is at most the minimum effect over targetZ, the larger of the two codings. A run the rule cannot size stops and counts as neither win nor tie.",
+    "A size passes at the calibration's point estimates. boundsPower repeats that size with every spread at its one-sided spreadBound upper bound, and choose prefers the rows that pass there.",
+    "Set N's one-sided resolve share is taken at its exact one-sided spreadBound upper bound (Clopper-Pearson); resolve.oneSideEstimate is the point value.",
+    "Families per repository are capped at maxFamiliesPerRepo. Each size is found by a search at searchSims, then confirmed at sims one size at a time; reported power is from the full sim count.",
+    "Sessions count each record's first session plus its teach and correction resumes, at the rule's mean seeds; screen sessions are not counted. usageAtCap prices the rule's arms at seedCap.",
+    "Days are list-price dollars of usage over the per-day quota; a quota marked \"default assumption\" is a placeholder, not a measurement.",
+    "level is the share of true-zero runs below Holm's strictest 0.025, at the chosen design under the seed rule at the bounds, 3 seeds, 2 seeds at the bounds and 0/1 values. Each cell is read against 0.025 plus 2 simulation errors of the runs it kept (the rule's cell drops the runs it stopped), and a cell with no run fails; held: false stops the freeze."
+  ]
+}

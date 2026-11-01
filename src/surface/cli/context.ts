@@ -270,6 +270,10 @@ function buildContextOpts(
     currentProject: ctx.infra.machine.projectIdentity(workingFolder(ctx)),
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
+    // JSON stays whole for the programs that parse it; every text format points to another session's state.
+    continuity: input.format === 'json' ? 'full' : 'pointer',
+    // Only the per-prompt hook text; copilot's session start is its one injection, so it keeps the pointer.
+    ownHandoffOnly: input.pinnedOnly && input.format === 'additional-context',
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in
     // every format.
     cost: contextCost(
@@ -337,6 +341,7 @@ async function renderContextMarkdown(view: ContextView): Promise<void> {
       result.activeSnapshot,
       result.sessionHandoff,
       result.recentEvents,
+      result,
     );
     if (renderItems.length > 0) {
       lines.push(

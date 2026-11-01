@@ -188,6 +188,7 @@ export type {
   ContextOptions,
   ContextResult,
   ContextResultEntry,
+  ContinuityMode,
 } from './context/context-types.js';
 export { DEFAULT_CONTEXT_BUDGET, contextGet } from './context/context.js';
 export { NO_QUERY } from './context/context-plan.js';

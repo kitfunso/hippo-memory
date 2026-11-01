@@ -17,7 +17,7 @@ import {
   isStringValue,
   type ProgressCursor,
 } from '../../base/session/capture-contract.js';
-import { SESSION_ID_RE } from './copilot-transcript.js';
+import { SESSION_ID_RE } from '../../base/util/session-id.js';
 import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';

@@ -55,13 +55,13 @@ import { v53 } from './v53.js';
 import { v54 } from './v54.js';
 import { v55 } from './v55.js';
 import { v56 } from './v56.js';
+import { v57 } from './v57.js';
+import { v58 } from './v58.js';
+import { v59 } from './v59.js';
 import { v60 } from './v60.js';
 import { v61 } from './v61.js';
-import { v62 } from './v62.js';
-import { v63 } from './v63.js';
-import { v64 } from './v64.js';
 
-export const CURRENT_SCHEMA_VERSION = 64;
+export const CURRENT_SCHEMA_VERSION = 61;
 
 /** Every schema migration in version order; runMigrations applies each one above the stored
  * version. */
@@ -122,9 +122,9 @@ export const MIGRATIONS: Migration[] = [
   v54,
   v55,
   v56,
+  v57,
+  v58,
+  v59,
   v60,
   v61,
-  v62,
-  v63,
-  v64,
 ];

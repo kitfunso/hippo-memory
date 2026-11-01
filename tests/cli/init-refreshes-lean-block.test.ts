@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runCli } from '../../src/cli.js';
+import { HOOKS, hippoBlock } from '../../src/surface/hooks-install/rules/hook-blocks.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
@@ -71,8 +72,8 @@ hippo capture --stdin <<< '<decisions, errors, lessons ${EM_DASH} 2-5 bullets>'
 \`\`\`
 `.trim();
 
-// The Claude Code block as it stands: Claude Code's own auto memory saves what it learns, so it has no plain remember line.
-const CLAUDE_CURRENT = `
+// The Claude Code block hippo 2.1.0 wrote, which told the agent to load context at the start of every task.
+const CLAUDE_BEFORE_ONE_CHANNEL = `
 ## Project Memory (Hippo)
 
 Pinned rules and recent writes auto-inject at every prompt via the installed
@@ -80,6 +81,57 @@ UserPromptSubmit hook; never re-run that part manually. At the START of a
 task (not per prompt), additionally load task-specific context: git-aware
 recall over the full store that per-prompt injection does not cover. Also
 run it if the hook is not installed:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+
+When you find out why something failed, record it right then, while you
+work, never as a closing step:
+\`\`\`bash
+hippo remember "<what went wrong and why>" --error
+\`\`\`
+
+The installed hooks store failed tool calls and capture the session when it
+ends, so there is nothing to run before you finish.
+`.trim();
+
+// The AGENTS.md block hippo 2.1.0 wrote for Codex, which told the agent to load context at the start of every task.
+const CODEX_BEFORE_ONE_CHANNEL = `
+## Project Memory (Hippo)
+
+At the start of every task, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
+\`\`\`
+
+When Hippo's Codex wrapper is installed, session-end capture runs automatically.
+If the wrapper is not installed, capture a brief summary manually:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+`.trim();
+
+// The previous Claude Code block, which asked for a remember on every failure.
+const CLAUDE_CURRENT = `
+## Project Memory (Hippo)
+
+The installed UserPromptSubmit hook injects pinned rules and the memories
+that match each prompt, so never load them yourself. If no hippo memory
+block has appeared in this session, run this at the start of a task:
 \`\`\`bash
 hippo context --auto --budget 1500
 \`\`\`
@@ -243,21 +295,42 @@ const write = (f: string, text: string) => fs.writeFileSync(path.join(proj, f), 
 const read = (f: string, dir = proj) => fs.readFileSync(path.join(dir, f), 'utf8');
 const inner = (text: string) => text.slice(text.indexOf(START) + START.length, text.indexOf(END)).trim();
 const outside = (text: string) => [text.slice(0, text.indexOf(START) + START.length), text.slice(text.indexOf(END))];
+// Every hippo command in a fenced block or a code span; a command in plain prose is not seen.
+function hippoCommands(text: string): string[] {
+  const fenced: string[] = [];
+  const prose = text.replace(/```[^\n]*\n([\s\S]*?)```/g, (_m, body: string) => {
+    fenced.push(...body.split('\n'));
+    return '\n';
+  });
+  const spans = [...prose.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
+  return [...fenced, ...spans].map((s) => s.trim()).filter((s) => s.startsWith('hippo '));
+}
 
 describe('the instruction block', () => {
-  it('asks Claude Code only for task context and error causes, since its hooks capture the session', async () => {
+  it('asks Claude Code only for the context fallback, since its hooks store failures and capture the session', async () => {
     write('CLAUDE.md', '# Rules\n');
     write('AGENTS.md', '# Agents\n');
     await init();
     const claude = inner(read('CLAUDE.md'));
     expect(claude).toContain('hippo context --auto --budget 1500');
-    expect(claude).toContain('hippo remember "<what went wrong and why>" --error');
+    expect(hippoCommands(claude)).toEqual(['hippo context --auto --budget 1500']);
+    // Plain prose too: "hippo memory" is the noun in "no hippo memory block", so it is skipped; toEqual names any other command.
+    const proseCommands = [...claude.matchAll(/\bhippo\s+(?!memory\b)[a-z][\w-]*/g)].map((m) =>
+      m[0].replace(/\s+/g, ' '),
+    );
+    expect([...new Set(proseCommands)]).toEqual(['hippo context']);
     expect(claude).not.toContain('hippo remember "<lesson>"');
     expect(claude).not.toContain(REMEMBER_LINE);
     expect(claude).not.toContain('hippo outcome');
     expect(claude).not.toContain('hippo capture');
+    expect(claude).toContain(
+      'If no hippo memory\nblock has appeared in this session, run this at the start of a task:',
+    );
+    expect(claude).not.toContain('additionally load');
     const codex = inner(read('AGENTS.md'));
     expect(codex).toContain('hippo context --auto --budget 1500');
+    expect(codex).toContain("When Hippo's prompt hook is installed, it injects pinned rules and the");
+    expect(codex).not.toContain('At the start of every task, run:');
     expect(codex).not.toContain('hippo outcome');
     expect(codex).toContain('hippo capture --stdin');
     expect(codex).toContain(REMEMBER_LINE);
@@ -356,12 +429,47 @@ describe('hippo init on a file that already has a hippo block', () => {
     },
   );
 
-  it('leaves the current Claude Code block as it is, since its own auto memory saves what it learns', async () => {
+  it.each([
+    ['claude-code', 'CLAUDE.md', '# Rules\n', CLAUDE_BEFORE_ONE_CHANNEL],
+    ['codex', 'AGENTS.md', '# Agents\n', CODEX_BEFORE_ONE_CHANNEL],
+  ])(
+    'refreshes the %s block that told the agent to load context every task to the one-channel block',
+    async (agent, file, empty, previous) => {
+      expect(hippoBlock(`${START}\n${previous}\n${END}`)?.owner).toBe(agent);
+      const before = `${empty}\nKeep this line.\n\n${START}\n${previous}\n${END}\n\nAnd this one.\n`;
+      write(file, before);
+      expect(await init()).toContain(`Refreshed the ${agent} hippo block in ${file}`);
+
+      const fresh = path.join(home, 'fresh');
+      fs.mkdirSync(fresh);
+      fs.writeFileSync(path.join(fresh, file), empty);
+      await init(fresh);
+
+      const after = read(file);
+      expect(outside(after)).toEqual(outside(before));
+      expect(inner(after)).toBe(inner(read(file, fresh)));
+      expect(inner(after)).not.toBe(previous);
+      expect(inner(after)).toContain('hippo context --auto --budget 1500');
+      expect(inner(after)).toContain('run this at the start of a task');
+      const out = await init();
+      expect(read(file)).toBe(after);
+      expect(out).not.toMatch(/Refreshed|Left the edited/);
+    },
+  );
+
+  it('refreshes the 2.2.0 Claude Code block, which asked for a remember on every failure', async () => {
     const before = `# Rules\n\n${START}\n${CLAUDE_CURRENT}\n${END}\n`;
     write('CLAUDE.md', before);
-    const out = await init();
-    expect(read('CLAUDE.md')).toBe(before);
-    expect(out).not.toMatch(/Refreshed|Left the edited/);
+    expect(await init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
+    expect(inner(read('CLAUDE.md'))).toBe(HOOKS['claude-code'].content);
+    expect(await init()).not.toMatch(/Refreshed|Left the edited/);
+  });
+
+  it('leaves the 2.2.0 Claude Code block alone once a line is added to it', async () => {
+    const edited = `# Rules\n\n${START}\n${CLAUDE_CURRENT}\nAlso run the linter.\n${END}\n`;
+    write('CLAUDE.md', edited);
+    expect(await init()).toMatch(/Left the edited/);
+    expect(read('CLAUDE.md')).toBe(edited);
   });
 
   it('changes nothing on a second run', async () => {

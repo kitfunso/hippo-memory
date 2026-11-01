@@ -126,7 +126,7 @@ async function loadAmbientEntries(
 export function ambientAdmission(
   opts: ContextOptions,
   plan: ContextPlan,
-  shownHandoff: SessionHandoff | null,
+  digestHandoff: SessionHandoff | null,
 ): ContextAdmission {
   const rule: AmbientAdmission = {
     currentProject: plan.currentProject,
@@ -136,7 +136,7 @@ export function ambientAdmission(
     // Inside admit, not after the load, so the loader's window widens past a session's own items.
     ownSessionId: opts.currentSessionId || undefined,
     handoffSessionId:
-      shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : undefined,
+      digestHandoff?.evidence?.derivedFrom === 'transcript' ? digestHandoff.sessionId : undefined,
   };
   const admit = (e: MemoryEntry): boolean => ambientAdmits(e, rule);
   // The two-store search has always ranked a session's own compaction items; only the local search

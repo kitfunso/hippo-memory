@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// next/3.0 skips v57 to v59 until their branches land, and a store opened by a build with a gap would never run the
-// skipped ones. First step of prepublishOnly, not CI: CI stays green while the gap is open, a publish must not.
+// The migrations form one unbroken line v01..vN: a store opened by a build with a gap would never run the skipped ones.
+// First step of prepublishOnly, not CI: CI stays green while a gap is open, a publish must not.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

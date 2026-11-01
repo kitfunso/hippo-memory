@@ -1,0 +1,18 @@
+import type { Migration } from './types.js';
+
+const PREDICTIONS_PAGE =
+  'idx_predictions_tenant_created ON predictions(tenant_id, created_at DESC, id DESC)';
+const MEMORIES_ORIGIN =
+  'idx_memories_tenant_origin_created ON memories(tenant_id, origin_project, created, id)';
+
+export const v58: Migration = {
+  version: 58,
+  up: (db) => {
+    // Sort keys in the page's own direction, so listAllPredictions reads a page without sorting the
+    // tenant.
+    db.exec(`CREATE INDEX IF NOT EXISTS ${PREDICTIONS_PAGE}`);
+    // The (created, id) order of an entry page of one origin; the origin tally's GROUP BY reads the
+    // same index.
+    db.exec(`CREATE INDEX IF NOT EXISTS ${MEMORIES_ORIGIN}`);
+  },
+};

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>No Hippo Turns Plan</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+<header>
+  <h1>No Agent Remember Turns in Claude Code</h1>
+  <doc-changes new="1" changed="4"></doc-changes>
+  <details class="thread"><summary>Why · 2 requests</summary>
+    <doc-quote via="prompt" from="Keith">i need eval results asap</doc-quote>
+    <doc-quote via="prompt" from="Keith">go on 1,2,3 and then /dev-framework-rl to improve hippo-memory so that it will costs less</doc-quote>
+  </details>
+</header>
+<main>
+<doc-plan>
+  <doc-claim>
+    <p>A Claude Code agent with hippo no longer runs <code>hippo remember</code> mid-task.</p>
+    <doc-code diff file="src/hooks/hook-blocks.ts" start="63" caption="The context fallback stays word for word. The remember ask goes.">
+<script type="text/plain">
+   'claude-code': {
+     file: 'CLAUDE.md',
+     description: 'Claude Code',
+     content: `
+ ## Project Memory (Hippo)
+
+ The installed UserPromptSubmit hook injects pinned rules and the memories
+ that match each prompt, so never load them yourself. If no hippo memory
+ block has appeared in this session, run this at the start of a task:
+ \`\`\`bash
+ hippo context --auto --budget 1500
+ \`\`\`
+
+-When you find out why something failed, record it right then, while you
+-work, never as a closing step:
+-\`\`\`bash
+-hippo remember "<what went wrong and why>" --error
+-\`\`\`
+-
+-The installed hooks store failed tool calls and capture the session when it
+-ends, so there is nothing to run before you finish.
++The installed hooks store failed tool calls and capture the session when it
++ends, so there is nothing to record or run by hand.
+ `.trim(),
+   },
+</script>
+    </doc-code>
+    <doc-claim>
+      <p>Agent hippo commands cause the extra cost on no-lesson tasks.</p>
+      <doc-mock frame="terminal" title="Z0 Amendment 8, set N, A2 vs A1" w="470"><template><span class="dim">$</span> node a8-hippo-calls3.mjs
+set N A2 sessions 283, hippo calls 159
+by subcommand { remember: <span class="r">118</span>, context: 31, handoff: 6, other: 4 }
+<span class="dim">$</span> cost ratio by hippo calls in the A2 session
+0 hippo calls   143 pairs  cost <span class="g">0.998</span>  turns 0.979
+1+ hippo calls  136 pairs  cost <span class="r">1.141</span>  turns 1.125</template></doc-mock>
+    </doc-claim>
+    <doc-claim>
+      <p>Capture stores the taught corrections, and the agent copy never stood alone.</p>
+      <doc-mock frame="terminal" title="48 A2 stores, 116 taught lessons, rule prefix match" w="470"><template><span class="dim">$</span> node a8-teach-miss.mjs
+{ capture: <span class="g">105</span>, cliOnly: <span class="g">0</span>, none: 11 }
+<span class="dim"># cliOnly: only the agent remember holds the rule prefix</span>
+<span class="dim"># none: 11 teach turns of 4 lessons, no row holds the prefix</span></template></doc-mock>
+      <doc-note tone="warn"><strong>Limit</strong> The script checks taught lessons by a 30-character prefix only. It does not check causes that the agent found itself. Amendment 9 reports set R recall and H1 against Amendment 8 to show any loss.</doc-note>
+    </doc-claim>
+    <doc-claim>
+      <p>An agent that sees no hippo block still loads context once.</p>
+      <doc-code src="src/cli/init.ts" lines="247-256" hl="254-255" caption="init writes the block before it installs the hooks, so the block can outlive a failed install."></doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>The next init replaces an unedited 2.2.0 block with the new block.</p>
+    <doc-code diff file="src/hooks/hook-blocks.ts" start="129" caption="The hash of the block that 2.2.0 wrote joins the list.">
+<script type="text/plain">
+ const SHIPPED_HOOK_HASHES = new Map([
+   ['c80e760208aed70f6094757736b9a2f496ba5c30d88bc2a7ae3e128b403dcc6b', 'claude-code'],
++  ['75937be6b7fdc2b87bcb08b7fec56757808075db129d99eff3e9f769f80a7781', 'claude-code'],
+   ['f1e5815a4b7205c43e2db792215df1943e7853635a1e0f4561b150a41b756451', 'codex'],
+</script>
+    </doc-code>
+    <doc-claim at="src/cli/init.ts:300">
+      <p><b>init.ts:300</b> · refreshShippedBlock() keeps an edited block</p>
+      <doc-code src="src/cli/init.ts" lines="300-314" hl="305-307"></doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>The tests fail if the Claude Code block asks for any other hippo command.</p>
+    <doc-code diff file="tests/init-refreshes-lean-block.test.ts" start="285" caption="Every hippo command in a fence or a code span is collected. Only context is allowed.">
+<script type="text/plain">
+-  it('asks Claude Code only for task context and error causes, since its hooks capture the session', () => {
++  it('asks Claude Code only for the context fallback, since its hooks store failures and capture the session', () => {
+     write('CLAUDE.md', '# Rules\n');
+     write('AGENTS.md', '# Agents\n');
+     init();
+     const claude = inner(read('CLAUDE.md'));
+     expect(claude).toContain('hippo context --auto --budget 1500');
+-    expect(claude).toContain('hippo remember "<what went wrong and why>" --error');
++    expect(hippoCommands(claude)).toEqual(['hippo context --auto --budget 1500']);
+</script>
+    </doc-code>
+    <doc-claim>
+      <p>The 2.2.0 block test becomes a refresh test.</p>
+      <doc-code diff file="tests/init-refreshes-lean-block.test.ts" start="416" caption="CLAUDE_CURRENT holds the 2.2.0 text, so init now refreshes it.">
+<script type="text/plain">
+-  it('leaves the current Claude Code block as it is, since its own auto memory saves what it learns', () => {
++  it('refreshes the 2.2.0 Claude Code block, which asked for a remember on every failure', () => {
+     const before = `# Rules\n\n${START}\n${CLAUDE_CURRENT}\n${END}\n`;
+     write('CLAUDE.md', before);
+-    const out = init();
+-    expect(read('CLAUDE.md')).toBe(before);
+-    expect(out).not.toMatch(/Refreshed|Left the edited/);
++    expect(init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
++    expect(inner(read('CLAUDE.md'))).toBe(HOOKS['claude-code'].content);
++    expect(init()).not.toMatch(/Refreshed|Left the edited/);
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>The README describes the new block and the limit of capture.</p>
+    <doc-code src="README.md" lines="827-836" hl="829,836"></doc-code>
+  </doc-claim>
+  <doc-claim>
+    <p>A Z0 A2 rerun shows if the set N cost ratio clears 1.10.</p>
+    <doc-mock frame="terminal" title="Amendment 9 read" w="470"><template><span class="dim">$</span> bash h4a9-read.sh
+status: valid
+H4: set N cost ratio, upper bound must be below 1.10
+drift: A1 seed 1 rerun / Amendment 8 A1 seed 1
+also: H1, set R recall, hippo calls a session
+<span class="dim"># A2 from the rerun, A1 from Amendment 8</span></template></doc-mock>
+    <doc-ask id="rerun">
+      <p>Which arms does the rerun run?</p>
+      <label><input type="radio" name="rerun" value="a2drift" checked> A2, plus A1 seed 1 as a drift check <small>about 900 sessions</small></label>
+      <label><input type="radio" name="rerun" value="a2"> A2 only <small>about 690 sessions</small></label>
+      <label><input type="radio" name="rerun" value="both"> A2 and all of A1 <small>about 1,380 sessions</small></label>
+    </doc-ask>
+    <div data-if="rerun=a2drift"><doc-note tone="info">Amendment 9 states the rule before any data. If the drift ratio interval excludes 1, H4 waits for a full A1 rerun.</doc-note></div>
+  </doc-claim>
+  <doc-claim aux="scope">
+    <p>Not changing: the fallback text, other agents, the plugin skill, capture and the handoff pointer.</p>
+    <ul>
+      <li>The context fallback keeps its words, so README:1104 and the two website pages stay true. It caused 31 calls. A follow-up can let the SessionStart hook print a one-line sign that the hooks run.</li>
+      <li>The Codex, Cursor, OpenClaw, OpenCode and Pi blocks keep their asks.</li>
+      <li><code>extensions/claude-code-plugin/skills/memory/SKILL.md</code> and <code>integrations/claude-code.md</code> describe commands a person runs by hand.</li>
+      <li>Capture keeps its window of the last 20 user messages.</li>
+      <li>The handoff pointer (<code>src/api/context-render.ts:60</code>) caused 6 calls in 283 sessions.</li>
+    </ul>
+  </doc-claim>
+</doc-plan>
+</main>
+</body></html>

@@ -138,8 +138,9 @@ export function trailPiece(events: readonly SessionEvent[]): string {
 export const contextCostAt = (now: Date): ContextCost => ({
   entry: memoryCostAt(now),
   fixed: (budget) => memoriesReserve(budget),
-  snapshot: (s) => estimateTokens(snapshotPiece(s)),
-  handoff: (h) => estimateTokens(handoffPiece(h)),
+  // hippo_context passes no continuity opt-in, so the mode is always 'full' and the full piece is the price.
+  snapshot: (s, _mode) => estimateTokens(snapshotPiece(s)),
+  handoff: (h, _mode) => estimateTokens(handoffPiece(h)),
   trail: (events) => estimateTokens(trailPiece(events)),
 });
 

@@ -1,4 +1,4 @@
-// Past the cap, loadContextCandidates reads the v60 decay-key subset and must return the rows the full-tenant rank would.
+// Past the cap, loadContextCandidates reads the v57 decay-key subset and must return the rows the full-tenant rank would.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../../src/db/decay-key.js';
@@ -59,7 +59,7 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-// The full-tenant rank as it was before v60, frozen here so a change to the live rank cannot move the expectation.
+// The full-tenant rank as it was before v57, frozen here so a change to the live rank cannot move the expectation.
 function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
   const { sql: where, params } = contextRowsWhere(tenant, {});
   const sql = `SELECT id FROM memories WHERE id IN (SELECT id FROM memories WHERE ${where}
@@ -168,7 +168,7 @@ describe('loadContextCandidates past the cap', () => {
     }
   });
 
-  it('reads the subset through the v60 index with no full scan of memories', () => {
+  it('reads the subset through the v57 index with no full scan of memories', () => {
     const { statements } = recordStatements(() =>
       loadContextCandidates(home, 'default', { cap: 40, now: new Date(BASE) }),
     );

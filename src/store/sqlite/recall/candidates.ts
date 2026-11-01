@@ -345,7 +345,7 @@ export function contextRowsWhere(
 const RANK_COLUMNS =
   'id, pinned, half_life_days, last_retrieved, outcome_positive, outcome_negative';
 
-// The `cap` best of the pinned rows and the unpinned rows the v60 key puts within
+// The `cap` best of the pinned rows and the unpinned rows the v57 key puts within
 // DECAY_KEY_HALF_LIVES; nothing unless every unpinned winner is within it too, since then each row
 // left out has decayed further and the rank is the scan's.
 function decayKeySubsetSql(whereSql: string): string {

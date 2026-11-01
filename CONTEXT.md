@@ -287,6 +287,22 @@ folder and apart from the parent's own transcript. Each turn ends in a text-only
 back to the parent; the last one is its final report. Session-end capture reads only the parent's.
 _Avoid_: sidechain log, child transcript
 
+**Task snapshot**:
+One session's current task, summary and next step, saved by `hippo pre-compact` or `hippo snapshot
+save`. A store holds one active snapshot (one per owner and project on a shared store).
+_Avoid_: working state, active task (as a name for the row)
+
+**Session handoff**:
+What a session leaves for the one after it: summary, next action, artifacts and constraints. Session
+end writes one from the transcript; `hippo handoff create` writes one by hand.
+_Avoid_: handover, session summary
+
+**Continuity pointer**:
+The one line the per-prompt hook and the text formats of `hippo context` print in place of another
+session's task snapshot or session handoff. It names the command that prints the full text. A
+session's own snapshot and handoff print whole, as do JSON, MCP and shared stores.
+_Avoid_: stub, teaser, short handoff
+
 ### Support
 
 **Support bundle**:

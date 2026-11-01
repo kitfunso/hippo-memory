@@ -3,7 +3,8 @@
 import * as fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { defaultSleepLogPath, resolveJsonHookPaths } from '../../hooks-install/json-hooks.js';
-import { copilotTranscriptFor, SESSION_ID_RE } from '../../capture/copilot-transcript.js';
+import { copilotTranscriptFor } from '../../capture/copilot-transcript.js';
+import { SESSION_ID_RE } from '../../../base/util/session-id.js';
 import {
   readSessionEnd,
   readVscodeStop,

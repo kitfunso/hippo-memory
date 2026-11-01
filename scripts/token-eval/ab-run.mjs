@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Z0 Claude Code runner: arms A0, A1, A2, A4 and A5 in lockstep, one record per (task, arm, seed) for z0-analyze.mjs.
 // Protocol: docs/evals/2026-09-29-z0-built-in-memory-prereg.md. Usage, tasks file and fairness: benchmarks/token-eval/README.md.
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ARMS, ARM_SEEDS, TOKEN_KEY, armSet } from './arms.mjs';
-import { assertNoAncestorInstructions, checkHomes } from './homes.mjs';
+import { assertNoAncestorInstructions, checkHomes, formatHomesReport } from './homes.mjs';
 import { validateFamilies, drawOrder, taskRoles } from './lessons.mjs';
 import { openContext, cacheTaskRepos } from './runs.mjs';
 import { assertNoPhraseLeaks } from './leaks.mjs';
@@ -14,6 +15,7 @@ import { planScreen, screenLines, runScreen, SCREEN_ARMS } from './screen.mjs';
 import { parseHookTrust } from './codex.mjs';
 import { finishCodex } from './codex-task.mjs';
 import { checkInstaller } from './codex-install.mjs';
+import { objectLockRetries } from './exec.mjs';
 
 export { cacheTaskRepos } from './runs.mjs';
 export { usageFromResult, isUsageLimit, transcriptWork } from './records.mjs';
@@ -60,14 +62,19 @@ function assertArmsPair(spec, arms) {
 
 // --seeds only lowers a count: E7 refuses an A0 or A4 seed past the prereg's two (prereg 122-124).
 const seedCap = (seeds) => (arm) => Math.min(seeds ?? ARM_SEEDS[arm], ARM_SEEDS[arm]);
+// Wave 2 (Amendment 2 item 5) runs seeds 4 up to the seed rule's count; 9 is SEED_CAP in z0-records.mjs, which the tests tie to this.
+const WAVE_1_SEEDS = 3;
+const WAVE_2_FIRST_SEED = WAVE_1_SEEDS + 1;
+const WAVE_2_MAX_SEEDS = 9;
 
-/** Every session in execution order, `{ seed, position, arm, sequence, taskId, t, role }`: position-major, each arm set's order rotated by position + seed. */
-export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
+/** Every session in execution order, `{ seed, position, arm, sequence, taskId, t, role }`: position-major, each arm set's order rotated by position + seed.
+ * `firstSeed` 4 plans wave 2; rotation and drawn order key on the real seed number, so a seed's cells match a plan that started at 1. */
+export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm], firstSeed = 1) {
   assertArmsPair(spec, arms);
   const steps = [];
   const maxSeed = Math.max(...arms.map(seedsFor));
   const maxTasks = Math.max(...spec.sequences.map((s) => s.tasks.length));
-  for (let seed = 1; seed <= maxSeed; seed++) {
+  for (let seed = firstSeed; seed <= maxSeed; seed++) {
     const active = arms.filter((a) => seed <= seedsFor(a));
     // Each set rotates alone and the sets run one after the other (RN, then X), so a set's order balance never depends on the other set's arm count (prereg 120).
     const sets = [active.filter((a) => armSet(a) !== 'X'), active.filter((a) => armSet(a) === 'X')];
@@ -83,6 +90,34 @@ export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
     }
   }
   return steps;
+}
+
+/** A run's plan: wave 1 caps each arm at its prereg count (`seeds` only lowers it); wave 2 (`waveTwo`, the seed rule's counts by arm) runs seeds 4 up to each count. */
+const planFor = (spec, arms, seeds, waveTwo) => (waveTwo ? planRuns(spec, arms, (arm) => waveTwo[arm], WAVE_2_FIRST_SEED) : planRuns(spec, arms, seedCap(seeds)));
+
+/** The `--seed-rule` file's seed counts for `arms`, refused unless the rule ran to a result (Amendment 2 item 5); `sha256` ties the wave to that file.
+ * @param {string} file
+ * @param {string[]} arms */
+function readSeedRule(file, arms) {
+  const bytes = fs.readFileSync(file);
+  let rule;
+  try {
+    rule = JSON.parse(bytes.toString('utf8'));
+  } catch (err) {
+    throw new Error(`--seed-rule ${file} is not JSON: ${err.message}`);
+  }
+  if (rule?.schema !== 'z0-seed-rule/1') throw new Error(`--seed-rule ${file}: schema must be "z0-seed-rule/1"`);
+  if (rule.stop !== false) throw new Error(`--seed-rule ${file}: the rule did not say go (stop is not false), so there is no wave 2`);
+  const seeds = rule.seeds;
+  if (seeds === null || seeds === undefined || seeds.constructor !== Object) throw new Error(`--seed-rule ${file}: seeds must be an object of seed counts by arm`);
+  const counts = {};
+  for (const arm of arms) {
+    if (!Object.hasOwn(seeds, arm)) throw new Error(`arm ${arm} is not listed in the seed rule's seeds (${Object.keys(seeds).join(', ')}); pass --arms with arms the rule lists`);
+    const n = seeds[arm];
+    if (!Number.isInteger(n) || n < WAVE_1_SEEDS || n > WAVE_2_MAX_SEEDS) throw new Error(`--seed-rule ${file}: ${arm} needs a seed count from ${WAVE_1_SEEDS} to ${WAVE_2_MAX_SEEDS}, got ${JSON.stringify(n)}`);
+    counts[arm] = n;
+  }
+  return { counts, sha256: createHash('sha256').update(bytes).digest('hex') };
 }
 
 /** The expected cells, written before any session so the analysis can tell a run cut off in lockstep; kind, familyId and set match the records. */
@@ -116,11 +151,11 @@ export function codexPreflight(arms, mode, { codexModel = null, codexHookTrust =
 
 /** Run the whole plan in lockstep. Returns the records written; `progress.last` names the last completed step. */
 export async function runAll(opts) {
-  const { spec, arms, seeds = null, outDir } = opts;
+  const { spec, arms, seeds = null, waveTwo = null, outDir } = opts;
   const ctx = await openContext(opts);
   let records;
   try {
-    const steps = planRuns(spec, arms, seedCap(seeds));
+    const steps = planFor(spec, arms, seeds, waveTwo);
     writePlan(outDir, steps);
     records = await runSteps(ctx, steps);
   } catch (err) {
@@ -161,7 +196,7 @@ function orderReport(steps) {
   return lines;
 }
 
-const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
+const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N | --seed-rule FILE] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--pins FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
 const CODEX_FLAGS = { codexBin: '--codex-bin', codexModel: '--codex-model', codexAuth: '--codex-auth', codexHookTrust: '--codex-hook-trust', codexMemoryWait: '--codex-memory-wait', codexMemories: '--codex-memories', codexWrapperWaitMs: '--codex-wrapper-wait-ms' };
 
 /** The arms a run uses: the named ones, else every arm the tasks file has a sequence for; a screen's are always A0 and A4 (prereg 68), so an X arm named with it is refused. */
@@ -191,7 +226,13 @@ function parseArgs(argv) {
   const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')), path.dirname(path.resolve(tasksFile)));
   const named = flag('--arms', null);
   const screen = argv.includes('--screen');
-  const arms = chooseArms(spec, named === null ? null : named.split(',').map((a) => a.trim()), screen);
+  const ruleFile = flag('--seed-rule', null);
+  if (argv.includes('--seed-rule') && ruleFile === null) throw new Error('--seed-rule needs the seed rule\'s output file');
+  if (ruleFile !== null && (argv.includes('--seeds') || screen)) throw new Error('--seed-rule sets the seeds itself, so it cannot be combined with --seeds or --screen');
+  const chosen = chooseArms(spec, named === null ? null : named.split(',').map((a) => a.trim()), screen);
+  const rule = ruleFile === null ? null : readSeedRule(ruleFile, chosen);
+  // An arm at 3 seeds has finished in wave 1 and runs nothing now.
+  const arms = rule === null ? chosen : chosen.filter((a) => rule.counts[a] > WAVE_1_SEEDS);
   const timeoutArg = flag('--session-timeout-min', '60');
   if (!/^[1-9]\d*$/.test(timeoutArg)) throw new Error(`--session-timeout-min must be a positive integer, got ${timeoutArg}`);
   const seedsArg = flag('--seeds', null);
@@ -199,9 +240,10 @@ function parseArgs(argv) {
   const canariesFile = flag('--canaries', null);
   const canaries = canariesFile ? fs.readFileSync(canariesFile, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : [];
   if (canariesFile && canaries.length === 0) throw new Error(`--canaries ${canariesFile} holds no canary; one per line`);
+  const pinsFile = flag('--pins', null);
   return {
-    canaries,
-    flag, spec, arms, seeds: seedsArg === null ? null : Number(seedsArg), sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen,
+    canaries, pins: pinsFile ? JSON.parse(fs.readFileSync(pinsFile, 'utf8')) : null,
+    flag, spec, arms, rule, seeds: seedsArg === null ? null : Number(seedsArg), sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen,
     passEnv: argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : [])),
     mode: argv.includes('--dry-run') ? 'dry' : (argv.includes('--check-homes') ? 'check' : 'real'),
   };
@@ -220,8 +262,13 @@ function dryRun(args, steps) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const { flag, spec, arms, seeds, out, mode, passEnv } = args;
-  const steps = args.screen ? planScreen(spec) : planRuns(spec, arms, seedCap(seeds));
+  const { flag, spec, arms, rule, seeds, out, mode, passEnv } = args;
+  const waveTwo = rule?.counts ?? null;
+  if (rule && arms.length === 0) {
+    console.log('wave 2 has no sessions');
+    return;
+  }
+  const steps = args.screen ? planScreen(spec) : planFor(spec, arms, seeds, waveTwo);
   const records = path.join(out, args.screen ? 'screen.jsonl' : 'runs.jsonl');
   // A run appends to its records file and both modes rewrite plan.json, so an earlier run's records would end up unplanned.
   const rewrite = args.screen ? '' : ' and rewrite plan.json';
@@ -237,18 +284,20 @@ async function main() {
   // Outside the try below: a task the runner refuses is not a run abandoned partway, so it must not leave ABANDONED.
   preflight(spec, out, mode, stopAt, { screen: args.screen });
   if (args.screen) console.log(`${steps.length} screen sessions: A0 and A4 only, seeds 1 and 2.`);
-  else console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => `${a}:${seedCap(seeds)(a)}`).join(' ')}.`);
+  else console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => (waveTwo ? `${a}:${WAVE_2_FIRST_SEED}-${waveTwo[a]}` : `${a}:${seedCap(seeds)(a)}`)).join(' ')}.`);
+  if (rule) console.log(`seed rule sha256 ${rule.sha256}`);
   if (mode === 'dry') return dryRun(args, steps);
   const dirName = (st) => st.runName ?? st.sequence.id;
   const runs = [...new Map(steps.map((st) => [`${dirName(st)}|${st.arm}|${st.seed}`, { seq: dirName(st), arm: st.arm, seed: st.seed }])).values()];
-  checkHomes({ outDir: out, runs, passEnv, install: arms.includes('X2') ? checkInstaller(codexOpts.codexBin) : null });
+  const reports = checkHomes({ outDir: out, runs, passEnv, install: arms.includes('X2') ? checkInstaller(codexOpts.codexBin) : null });
   console.log(`Homes check passed for ${runs.length} runs.`);
+  console.log(formatHomesReport(reports).join('\n'));
   if (mode === 'check') return;
   const progress = { last: 'none' };
   const opts = {
-    spec, arms, seeds, outDir: out, passEnv, progress, model: flag('--model', null), claudeBin: flag('--claude-bin', 'claude'),
+    spec, arms, seeds, waveTwo, outDir: out, passEnv, progress, model: flag('--model', null), claudeBin: flag('--claude-bin', 'claude'),
     maxBudgetUsd: flag('--max-budget-usd', null), settleMs: Number(flag('--settle-ms', '5000')), warmup: !process.argv.includes('--no-warmup'),
-    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, ...codexOpts,
+    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, pins: args.pins, ...codexOpts,
   };
   try {
     if (args.screen) {
@@ -261,9 +310,11 @@ async function main() {
     // Under lockstep a mid-run throw leaves every run partial, so the out dir says so.
     fs.writeFileSync(path.join(out, 'ABANDONED'), `${err.message}\nlast completed: ${progress.last}\n`);
     throw err;
+  } finally {
+    if (objectLockRetries.count) console.log(`Git object-lock retries (antivirus holding a fresh object): ${objectLockRetries.count}.`);
   }
   // ab-analyze averages unequal seed counts unpaired, so Z0 records go to the Z0 analyzer, which pairs shared seeds.
-  console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs (pairs shared seeds; it lands with PR #357), never ab-analyze.mjs.`);
+  console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs, which pairs shared seeds; never ab-analyze.mjs.`);
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

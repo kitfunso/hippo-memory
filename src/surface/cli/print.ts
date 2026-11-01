@@ -6,7 +6,14 @@ import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
 import { type RecallJsonRow, recallJsonRow } from '../../api/recall/rows.js';
 import { type ImportReport, summaryLine } from '../../base/memory/agent-memory-report.js';
-import { snapshotText, sessionTrailText, handoffText } from '../../api/context/context-render.js';
+import {
+  handoffSectionText,
+  snapshotSectionText,
+  snapshotText,
+  sessionTrailText,
+  handoffText,
+} from '../../api/context/context-render.js';
+import type { ContextResult } from '../../api/context/context-types.js';
 import { printError } from './output.js';
 
 export function fmt(n: number, digits = 2): string {
@@ -103,15 +110,16 @@ export function printHandoff(handoff: SessionHandoff): void {
 }
 
 /** The continuity sections in print order (snapshot, handoff, session trail); a missing or empty
- * one is left out. */
+ * one is left out, and a section `modes` marks as a pointer prints as one. */
 export function continuityTexts(
   snapshot: TaskSnapshot | null | undefined,
   handoff: SessionHandoff | null | undefined,
   events: SessionEvent[] | undefined,
+  modes: Pick<ContextResult, 'snapshotMode' | 'handoffMode'> = {},
 ): string[] {
   const texts: string[] = [];
-  if (snapshot) texts.push(snapshotText(snapshot));
-  if (handoff) texts.push(handoffText(handoff));
+  if (snapshot) texts.push(snapshotSectionText(snapshot, modes.snapshotMode ?? 'full'));
+  if (handoff) texts.push(handoffSectionText(handoff, modes.handoffMode ?? 'full'));
   if (events && events.length > 0) texts.push(sessionTrailText(events));
   return texts;
 }

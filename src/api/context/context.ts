@@ -29,7 +29,7 @@ import {
   openBlockBudget,
 } from './context-plan.js';
 import { ambientAdmission, loadPools } from './context-pools.js';
-import { type TaskSections, loadTaskSections } from './context-task-state.js';
+import { type TaskSections, loadTaskSections, pointerModes } from './context-task-state.js';
 
 /** Tokens a context block may use when the caller sets no budget; the hook command and the CLI
  * default match it. */
@@ -57,7 +57,7 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
 
   const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
-  const admission = ambientAdmission(opts, plan, sections.shownHandoff);
+  const admission = ambientAdmission(opts, plan, sections.shownHandoff ?? sections.omittedHandoff);
   const recallRequest = promptRecallRequest(opts, plan);
   const pools = await loadPools(ctx, { plan, admission, recallRequest, left: sections.left });
   const noSections =
@@ -102,6 +102,7 @@ function contextResult(
     tokens,
     activeSnapshot: sections.shownSnapshot ?? undefined,
     sessionHandoff: sections.shownHandoff ?? undefined,
+    ...pointerModes(sections),
     recentEvents: sections.shownEvents.length > 0 ? sections.shownEvents : undefined,
     ambientState: recorded.ambientState,
   };
