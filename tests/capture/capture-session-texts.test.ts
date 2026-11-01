@@ -262,9 +262,21 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored, twin]);
   });
 
+  it('stores the twin of a held rule when no input shows the closer its row lost', async () => {
+    const stored = 'Never call f(**kwargs) without validation';
+    const twin = 'Never call f(kwargs) without validation';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    expect(await captureSessionTexts(ctxFor(root), req([stored, `${twin}.`]))).toEqual({
+      captured: 1,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(contents(root)).toEqual([stored, twin]);
+  });
+
   it('reads a held row without pinned, as an external store adapter returns it, as unpinned', () => {
     const external: HeldText = { content: '** Never backfill them', source: 'capture', originProject: 'acme-web' };
-    expect(heldKeysOf([external]).has('Never backfill them')).toBe(false);
+    expect(heldKeysOf([external], []).has('Never backfill them')).toBe(false);
   });
 
   it('is blocked by the caller project and user-global copies, never by another project', async () => {

@@ -1,5 +1,9 @@
 import { duplicateKey } from '../../base/util/same-text.js';
-import { assessAutomaticMemory, asideCloseOffset } from '../../base/memory/memory-quality.js';
+import {
+  assessAutomaticMemory,
+  asideCloseOffset,
+  QUOTE_MARK,
+} from '../../base/memory/memory-quality.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
 import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
@@ -163,17 +167,23 @@ function completeSentences(text: string): string[] {
   );
 }
 
+// A "(" after ":" or ";" is an emoticon, and one with a quote mark on both sides is quoted text.
+function opensAside(text: string, at: number): boolean {
+  const before = text[at - 1] ?? '';
+  const quoted = QUOTE_MARK.test(before) && QUOTE_MARK.test(text[at + 1] ?? '');
+  return text[at] === '(' && !/[:;]/.test(before) && !quoted;
+}
+
 // A sentence starts inside a cut aside: an unclosed "(" before it, an aside-closing ")" in it, and
-// a word after that ")". A "(" after ":" or ";" is an emoticon.
+// a word after that ")".
 function asideCutter(block: string): (sentence: string, at: number) => boolean {
   const blanked = blankCodeSpans(block);
   let depth = 0;
   let seen = 0;
   return (sentence, at) => {
     while (seen < at) {
-      const char = blanked[seen];
-      if (char === '(' && !/[:;]/.test(blanked[seen - 1] ?? '')) depth++;
-      else if (char === ')') depth = Math.max(0, depth - 1);
+      if (opensAside(blanked, seen)) depth++;
+      else if (blanked[seen] === ')') depth = Math.max(0, depth - 1);
       seen++;
     }
     if (depth === 0) return false;

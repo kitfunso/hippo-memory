@@ -166,16 +166,20 @@ const BARE_LEADING_MARKER = /^\*\*\s+/;
 
 /** Held keys, each also without its bold pairs. A pinned "** X" survives repair, so it holds "X". An unpinned
  * one is set aside unless an object names it (a captured rule is never raw or trusted); that twin is fine. */
-export function heldKeysOf(rows: readonly HeldText[]): Set<string> {
+export function heldKeysOf(rows: readonly HeldText[], inputs: readonly string[]): Set<string> {
   const keys = storedTextKeys(rows);
+  const seen = inputs.map(duplicateKey);
   const pinned = Array.from(storedTextKeys(rows.filter((row) => row.pinned)), (held) =>
     held.replace(BARE_LEADING_MARKER, ''),
   );
-  // An old capture lost the closing "**" at the end of a line; that row still holds the paired text.
+  // An old capture lost the closing "**" at the end of a line, so that row holds the paired text
+  // only when an input still shows the lost closer after the row's text.
+  const lostCloser = (form: string): boolean =>
+    ['', '.', '!', '?'].some((end) => seen.some((text) => text.includes(`${form}${end}**`)));
   for (const form of [...Array.from(keys), ...pinned]) {
     keys.add(duplicateKey(withoutBold(form)));
     const alias = legacyBoldAlias(form);
-    if (alias !== null) keys.add(duplicateKey(alias));
+    if (alias !== null && lostCloser(form)) keys.add(duplicateKey(alias));
   }
   return keys;
 }
@@ -191,7 +195,7 @@ async function storedKeysInView(
   const { tenantId, ...filter } = captureDedup(options);
   // The lookup matches stored text exactly, so it also asks for the lines as capture once stored them.
   const texts = [...extracted.map((item) => item.content), ...textsAsOnceStored(scrubbed)];
-  return heldKeysOf(await store.captures.textsHolding(tenantId, texts, filter));
+  return heldKeysOf(await store.captures.textsHolding(tenantId, texts, filter), scrubbed);
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its

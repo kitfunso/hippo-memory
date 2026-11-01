@@ -85,7 +85,7 @@ export async function captureSessionTexts(
         now: ctx.infra.clock(),
       },
       items,
-      heldKeysOf(held),
+      heldKeysOf(held, scrubbed),
     ),
   );
   return { ...tally, skipped: tally.skipped + extracted.length - items.length };

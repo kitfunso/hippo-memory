@@ -48,6 +48,15 @@ describe('capture reads markdown the way it renders', () => {
       'Never use (foo as a name. Always run the linter before you push.',
       ['Never use (foo as a name', 'Always run the linter before you push'],
     ],
+    // A "(" between quote marks is text, so a later quoted ")" is not an aside close.
+    [
+      `The parser expected '('. Never use the suffix "test)" for generated filenames.`,
+      ['Never use the suffix "test)" for generated filenames'],
+    ],
+    [
+      'The parser expected ‘(’. Never use the suffix “test)” for generated filenames.',
+      ['Never use the suffix “test)” for generated filenames'],
+    ],
     // No "(" before it, a list-marker ")", an emoticon "(", and a digit before the ")".
     ['Skip that line) Always run tests first.', ['Skip that line) Always run tests first']],
     ['Note (see below. Never skip step a) before deploying.', ['Never skip step a) before deploying']],

@@ -141,7 +141,7 @@ const SENTENCE_MARK = /[.!?;:,]/;
 const WORD_CODE_OR_CLOSER = /[\p{L}\p{N}`)\]]/u;
 const DASH_OR_SPACE = /[\s—–]/;
 const CLOSING_QUOTE = /['"’”]/;
-const QUOTE_MARK = /['"‘’“”]/;
+export const QUOTE_MARK = /['"‘’“”]/;
 
 // A "**" that only closes (not after a word), a dual-role one after a sentence mark with no closer,
 // or a bare one opening the text shows the text began inside a bold span.
