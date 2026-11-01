@@ -152,10 +152,19 @@ function proseBlocks(text: string, clean: LineCleaner): string[] {
 
 function completeSentences(text: string): string[] {
   // Masking keeps offsets, so each sentence is cut from the unchanged source.
-  const segments = new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(text));
-  return [...segments].map(({ index, segment }) =>
-    text.slice(index, index + segment.length).trim(),
-  );
+  const hidden = masked(text);
+  const sentences: string[] = [];
+  let start = 0;
+  for (const { index } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(hidden)) {
+    // The segmenter splits inside "(see the docs. Then ...)"; a span over the cap is dropped anyway.
+    const joined = hidden.slice(start, index);
+    if (index > start && !(joined.length <= 2 * MAX_CHARS && insideBrackets(joined))) {
+      sentences.push(text.slice(start, index).trim());
+      start = index;
+    }
+  }
+  if (start < text.length) sentences.push(text.slice(start).trim());
+  return sentences;
 }
 
 function insideBrackets(lead: string): boolean {

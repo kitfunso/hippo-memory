@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
+import { startsInsideCut } from '../../src/base/memory/memory-quality.js';
 
 const contents = (text: string) => extractFromTexts([text]).map((item) => item.content);
 const TAG_RULE = 'Always tag releases from main because CI publishes tags.';
@@ -11,6 +12,24 @@ describe('capture reads markdown the way it renders', () => {
 
   it('drops the markers of a bold label, so the rule after it is stored whole', () => {
     expect(contents('- **Volume data.** Never backfill them.')).toEqual(['Never backfill them']);
+  });
+
+  it('removes the bold pair of a label itself, so no cut text reaches admission', () => {
+    const items = contents('- **Volume data.** Never backfill them.');
+    expect(items).toEqual(['Never backfill them']);
+    expect(items.some(startsInsideCut)).toBe(false);
+  });
+
+  it('keeps an aside whole when the segmenter would split inside it', () => {
+    const rule = 'Always run the check (see the docs. Then run it again) before you merge';
+    expect(contents(`${rule}.`)).toEqual([rule]);
+    const longAside = `Note (${'x'.repeat(1100)}. Never deploy on Fridays because the on-call rota is thin.`;
+    expect(contents(longAside)).toEqual(['Never deploy on Fridays because the on-call rota is thin']);
+  });
+
+  it('splits the sentences of a long unclosed aside in one pass', () => {
+    const hostile = `Never skip the check (${'see the docs. '.repeat(40_000)}`;
+    expect(contents(hostile)).toEqual([]);
   });
 
   it('pairs a closer with the nearest opener and keeps code spans whole', () => {
@@ -62,6 +81,13 @@ describe('capture reads markdown the way it renders', () => {
       'Always lint **/*.ts and src/** first',
       'Never commit **/*.env files',
       'Never commit **/*.env and **/*.ts files',
+      'Always lint **/*.ts and keep cache** files out',
+      'Never commit **/*.env or dist** builds',
+      'Always ignore cache_** files when deploying',
+      'Never use the suffix "test)" for generated filenames',
+      'Always allocate 2** (n + 1) bytes for the cache',
+      'Always compute (n + 1)** 2 for the buffer size',
+      'Never use x[0]** 2 in hot loops',
       'Always lint src/**/*.ts before a push',
       'Never pass **kwargs to the store writer',
       'Never compute 2**10 by hand',

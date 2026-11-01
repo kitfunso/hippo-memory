@@ -6,8 +6,9 @@ import {
   isContentWorthStoring,
   isReusable,
   isWorthSurfacing,
+  startsInsideCut,
 } from '../../src/base/memory/memory-quality.js';
-import { auditMemory } from '../../src/base/memory/memory-audit.js';
+import { auditMemory, previewDefect, repairDefect } from '../../src/base/memory/memory-audit.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { CreateMemoryOptions } from '../../src/base/memory/entry.js';
@@ -45,42 +46,63 @@ describe('automatic assertion quality', () => {
     ['increment iOS build number to 79', 'release-activity'],
     ['deployed build 78 to TestFlight', 'release-activity'],
     ['release v1.63.1', 'release-activity'],
-    ['never closed.** The run ends by sending to Telegram', 'sentence-fragment'],
-    ['Skip the stores.** Ship it as the web app', 'sentence-fragment'],
-    ['finished), which strongly suggests the plugin is the client', 'sentence-fragment'],
-    ['a model launches)', 'sentence-fragment'],
-    ['** Never backfill them', 'sentence-fragment'],
-    ['** Ship it as the web app', 'sentence-fragment'],
-    ['`git add -A`) before the commit', 'sentence-fragment'],
-    ['falls back to discovery")', 'sentence-fragment'],
-    ['must score a signal-week feature row") so a real staleness bug can never ship', 'sentence-fragment'],
-    ['never lets a weight go below zero.) The mix is 0.345 CatBoost', 'sentence-fragment'],
-    ['was mild) so the deploy went through on the retry', 'sentence-fragment'],
-    ['it is vivid) in the logs', 'sentence-fragment'],
-    ['done.** — then run the tests', 'sentence-fragment'],
-    ['done.**— then run the tests', 'sentence-fragment'],
-    ['done.**– then run the tests', 'sentence-fragment'],
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: false, reason });
     expect(isContentWorthStoring(content)).toBe(false);
   });
 
+  // A text the old capture segmenter cut: admission accepts it now, so only repair looks for the start.
   it.each([
     'never closed.** The run ends by sending to Telegram',
+    'Skip the stores.** Ship it as the web app',
     'finished), which strongly suggests the plugin is the client',
-  ])('counts a text cut inside bold or an aside as a certain defect: %s', (content) => {
-    expect(certainDefect(content)).toBe('sentence-fragment');
+    'a model launches)',
+    '** Never backfill them',
+    '** Ship it as the web app',
+    '`git add -A`) before the commit',
+    'falls back to discovery")',
+    'must score a signal-week feature row") so a real staleness bug can never ship',
+    'never lets a weight go below zero.) The mix is 0.345 CatBoost',
+    'was mild) so the deploy went through on the retry',
+    'it is vivid) in the logs',
+    'Deploy is done.** — then run the tests',
+    'Deploy is done.**— then run the tests',
+    'Deploy is done.**– then run the tests',
+  ])('repair sets aside a captured row that starts inside a bold span or an aside: %s', (content) => {
+    expect(startsInsideCut(content)).toBe(true);
+    const row = captured(content);
+    expect(repairDefect(row, new Map())).toEqual({ reason: 'sentence-fragment', disposition: 'set-aside' });
+    expect(previewDefect(row)).toBe('sentence-fragment');
   });
 
-  // A cut right after a word looks like "2** (n + 1)" or "cache** files", so it is never certain and stays stored.
+  it.each([
+    'finished), which strongly suggests the plugin is the client',
+    '** Never backfill them',
+    'Deploy is done.**— then run the tests',
+  ])('does not refuse a text that starts inside a cut at admission: %s', (content) => {
+    expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
+  });
+
+  // Repair reads only the text, so it may set these valid rows aside; admission stores them.
+  it.each(['Always ignore cache_** files when deploying', 'Never use the suffix "test)" for generated filenames'])(
+    'admits a rule the repair check would misread: %s',
+    (content) => {
+      expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
+    },
+  );
+
+  // A cut right after a word or bracket looks like "2** (n + 1)" or "cache** files": repair keeps it stored.
   it.each([
     'sleep** (when plugged in)',
     'sleep** (when plugged in) the job runs',
     'the hook entirely** — run the check first',
     'close and volume** (11 volume columns) in the feed',
     'skip the `data/optuna.db`**',
-  ])('does not call a "**" right after a word a certain cut: %s', (content) => {
-    expect(certainDefect(content)).toBeNull();
+    'Always compute (n + 1)** 2 for the buffer size',
+    'Never use x[0]** 2 in hot loops',
+  ])('repair does not set aside a text with a "**" right after a word or bracket: %s', (content) => {
+    expect(startsInsideCut(content)).toBe(false);
+    expect(repairDefect(captured(content), new Map())?.disposition).not.toBe('set-aside');
     expect(assessAutomaticMemory(content).accepted).toBe(true);
   });
 
@@ -168,6 +190,8 @@ describe('automatic assertion quality', () => {
     'Always ignore cache** files when deploying',
     'Always allocate 2** (n + 1) bytes for the cache',
     'Never compute 2** .5 by hand',
+    'Always compute (n + 1)** 2 for the buffer size',
+    'Never use x[0]** 2 in hot loops',
     'the hook entirely**" he said, so run it first',
     'Never edit **/etc/hosts**.',
     'Always use **/usr/bin/python** (the system interpreter).',
@@ -183,6 +207,7 @@ describe('automatic assertion quality', () => {
     'Mark the step as done.**— then run **the tests** after it',
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
+    expect(startsInsideCut(content)).toBe(false);
   });
 
   it('only flags an ending that can close a whole sentence', () => {

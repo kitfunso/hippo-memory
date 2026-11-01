@@ -138,7 +138,7 @@ const ROMAN_MARKER_START = /[(,;]/;
 const ROMAN_AFTER_WORD = /(?:^|[^A-Za-z])(?:option|step|item)\s+$/i;
 const BOLD_CLOSE_NEXT = /[\s.,;:!?)\]"'’”—–]/;
 const SENTENCE_MARK = /[.!?;:,]/;
-const LETTER_DIGIT_OR_CODE = /[\p{L}\p{N}`]/u;
+const WORD_CODE_OR_CLOSER = /[\p{L}\p{N}`)\]]/u;
 const DASH_OR_SPACE = /[\s—–]/;
 const CLOSING_QUOTE = /['"’”]/;
 const QUOTE_MARK = /['"‘’“”]/;
@@ -150,8 +150,8 @@ function opensInsideBold(text: string): boolean {
   if (first === undefined) return false;
   const next = text[first.index + 2] ?? ' ';
   if (first.close && !first.open) {
-    // After a word or code span, "2** (n + 1)" and "cache** files" have too many literal uses to be certain.
-    if (LETTER_DIGIT_OR_CODE.test(text[first.index - 1] ?? '')) return false;
+    // After a word, code span or closing bracket, "2** (n + 1)" and "(n + 1)** 2" are too often literal to be certain.
+    if (WORD_CODE_OR_CLOSER.test(text[first.index - 1] ?? '')) return false;
     return BOLD_CLOSE_NEXT.test(next);
   }
   // A quoted "**", "(**.env**)" and "foo**bar**" can open too: only "done.**— then" with no closer is a cut.
@@ -197,8 +197,13 @@ function opensInsideAside(text: string): boolean {
   return false;
 }
 
+/** Whether `text` starts inside a bold span or an aside, as rows the old capture segmenter cut do.
+ * Repair reads this; admission does not, since capture now removes bold pairs and keeps brackets whole. */
+export function startsInsideCut(text: string): boolean {
+  return opensInsideBold(text) || opensInsideAside(blankCodeSpans(text, CODE_AS_LETTER));
+}
+
 function isDanglingAssertion(text: string): boolean {
-  if (opensInsideBold(text) || opensInsideAside(blankCodeSpans(text, CODE_AS_LETTER))) return true;
   const bare = bareText(text);
   // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
   if (/^(?:to|and|for)\s/.test(bare) && bare.length < FRAGMENT_MAX_CHARS) return true;

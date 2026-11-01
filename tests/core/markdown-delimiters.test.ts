@@ -41,6 +41,8 @@ describe('strongMarkers', () => {
     ['foo**bar**', ['open close word', 'close']],
     ['Volume data.**Next', ['open']],
     ['Never edit **/etc/hosts**.', ['open', 'close']],
+    ['Always lint **/*.ts and keep cache** files out', ['close']],
+    ['Never commit **/*.env or dist** builds', ['close']],
   ])('gives %s its roles', (text, expected) => {
     expect(roles(text)).toEqual(expected);
   });

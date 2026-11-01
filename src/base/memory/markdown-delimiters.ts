@@ -75,9 +75,15 @@ function charAfter(text: string, i: number): string {
 const isSpace = (char: string): boolean => char === '' || /\s/u.test(char);
 const isPunctuation = (char: string): boolean => char !== '' && PUNCTUATION.test(char);
 
+interface Candidate {
+  readonly marker: StrongMarker;
+  /** A `/` follows: the `**` may start a path or a glob. */
+  readonly slashed: boolean;
+}
+
 /** Each `**` of `text` (code spans blanked) in order; a run after `/`, `*` or a backslash, or before `*`, is a glob. */
 export function strongMarkers(text: string): StrongMarker[] {
-  const found: { marker: StrongMarker; slashed: boolean }[] = [];
+  const found: Candidate[] = [];
   for (const { index } of text.matchAll(/\*\*/g)) {
     const before = charBefore(text, index);
     const after = charAfter(text, index + 2);
@@ -92,13 +98,12 @@ export function strongMarkers(text: string): StrongMarker[] {
     };
     found.push({ marker, slashed: after === '/' });
   }
-  // "**/etc/hosts**" is bold when a real closer follows; with none it is the glob "**/".
-  const markers: StrongMarker[] = [];
-  let closerAhead = false;
-  for (const { marker, slashed } of found.reverse()) {
-    if (slashed && !closerAhead) continue;
-    if (!slashed && marker.close) closerAhead = true;
-    markers.push(marker);
-  }
-  return markers.reverse();
+  // "**/etc/hosts**" is bold when the next marker closes it with no space between; else it is "**/".
+  const bold = ({ marker, slashed }: Candidate, i: number): boolean => {
+    const next = found[i + 1];
+    if (!slashed) return true;
+    if (next === undefined || next.slashed || !next.marker.close) return false;
+    return !/\s/.test(text.slice(marker.index + 2, next.marker.index));
+  };
+  return found.filter(bold).map(({ marker }) => marker);
 }
