@@ -38,12 +38,12 @@ import { PRIVATE_DIR } from '../../host/private-dir.js';
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
 
-/** Log-forgery guard: strip C0 control chars (newlines above all) from payload-controlled values
- * so a crafted value cannot inject fake `[hippo]` log lines. Exported as the one shared guard
- * for every `[hippo]`-prefixed log writer that interpolates payload values. */
+/** Log-forgery guard: strip control chars (U+0000-U+001F, DEL, U+0080-U+009F; newlines and NEL
+ * above all) so a crafted value cannot inject fake `[hippo]` lines or terminal escapes. The one
+ * shared guard for every log line and printed name that interpolates payload values. */
 export function sanitizeLogMessage(message: string): string {
   // eslint-disable-next-line no-control-regex
-  return message.replace(/[\x00-\x1f]/g, '');
+  return message.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
 }
 
 function appendPreCompactLog(logFile: string, message: string, fields?: LogFields): void {

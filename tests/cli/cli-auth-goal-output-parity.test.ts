@@ -133,6 +133,20 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
 });
 
 describe('hippo goal (in process)', () => {
+  it('refuses a name of control characters alone, and drops DEL and C1 from a name', async () => {
+    const push = (name: string) =>
+      runInProcess(() =>
+        handleGoal({ hippoRoot: root, tenantId: 'default', args: ['push', name], flags: { 'session-id': 's1' } }),
+      );
+    const bare = await push('\x1b');
+    expect(bare.status).toBe(1);
+    expect(bare.stderr).toContain('Usage: hippo goal push <name>');
+    expect(rows('SELECT goal_name FROM goal_stack')).toEqual([]);
+
+    expect((await push('ship\x7f\u0085it')).status).toBe(0);
+    expect(rows('SELECT goal_name FROM goal_stack')).toEqual([{ goal_name: 'shipit' }]);
+  });
+
   it('prints each command output and exit code, and leaves these rows', async () => {
     const mask = masker(/\b(?:g|rp)_[0-9a-f]{16}\b/g, 'id');
     const transcript: string[] = [];
@@ -202,7 +216,7 @@ describe('hippo goal (in process)', () => {
       outcome_score: null,
       ...more,
     });
-    // The repeat complete keeps the first outcome; the control character is stored as `?`.
+    // The repeat complete keeps the first outcome; the control character is dropped.
     expect(goals).toEqual([
       goal(top, 'ship the release', {
         status: 'completed',
@@ -211,7 +225,7 @@ describe('hippo goal (in process)', () => {
         completed: 1,
         outcome_score: 0.5,
       }),
-      goal(child, 'fix?[31m ci', {
+      goal(child, 'fix[31m ci', {
         level: 1,
         parent_goal_id: top,
         status: 'completed',
