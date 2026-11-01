@@ -31,7 +31,7 @@ import {
 } from '../../../base/ports/store/vectors.js';
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 import { tenantAnd } from '../runtime/tenant.js';
-import { LIKE_WINDOW_ROWS } from '../../rules/windows.js';
+import { LIKE_WINDOW_ROWS, LIKE_WINDOW_TERMS } from '../../rules/windows.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
  * in recall-scope.ts is its JS twin. */
@@ -285,7 +285,9 @@ function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment 
 function windowArm(terms: readonly string[], p: SearchPredicates, limit: number): SqlFragment {
   // One JSON array, not an OR per term: a long CJK query has 1,000s of terms, past SQLite's
   // expression depth.
-  const likes = JSON.stringify(terms.map((term) => `%${escapeLike(term)}%`));
+  const likes = JSON.stringify(
+    terms.slice(0, LIKE_WINDOW_TERMS).map((term) => `%${escapeLike(term)}%`),
+  );
   // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own
   // order needs no sort.
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';

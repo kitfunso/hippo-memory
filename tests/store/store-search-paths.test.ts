@@ -5,7 +5,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { listRecallEntries } from '../../src/store/sqlite/recall/search-rows.js';
 import { loadSearchEntries, writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { createRequire } from 'node:module';
+import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
+import { LIKE_WINDOW_TERMS } from '../../src/store/rules/windows.js';
+import { tokenize } from '../../src/base/util/tokenize.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -15,6 +18,11 @@ import { removeDir } from '../_helpers/remove-dir.js';
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+
+// SAFETY: node:sqlite has no bundled types; `all` takes SQL params and returns the rows.
+const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
+  StatementSync: { prototype: { all(...params: unknown[]): unknown[] } };
+};
 
 function makeRaw(text: string): MemoryEntry {
   return createMemory(text, {
@@ -206,6 +214,38 @@ describe('loadSearchEntries paths', () => {
     writeEntry(root, makeRaw('alpha beta'));
     const results = loadSearchEntries(root, `postgres ${han}`, 200, 'default');
     expect(results.map((e) => e.content).sort()).toEqual([cjkRow, 'postgres tuning notes'].sort());
+  });
+
+  it('a query of 2,000 CJK bigrams binds at most LIKE_WINDOW_TERMS patterns for the window LIKE', () => {
+    writeEntry(root, makeRaw('alpha beta'));
+    const han = Array.from({ length: 2001 }, (_, i) => String.fromCodePoint(0x4e00 + i)).join('');
+    const all = vi.spyOn(StatementSync.prototype, 'all');
+    try {
+      loadSearchEntries(root, han, 200, 'default');
+      const likes = all.mock.calls.flat().filter((v) => typeof v === 'string' && v.startsWith('["%'));
+      expect(likes).toHaveLength(1);
+      expect(JSON.parse(String(likes[0]))).toHaveLength(LIKE_WINDOW_TERMS);
+    } finally {
+      all.mockRestore();
+    }
+  });
+
+  // The tokenizer drops `%`, so `_` is the one LIKE wildcard a term can carry.
+  it.each([
+    ['FTS5 on, a 2-letter term', '1', '_z', 'a_zeta marker', 'bzeta marker'],
+    ['FTS5 off, every term', '0', 'a_zeta', 'a_zeta marker', 'a-zeta marker'],
+  ])('window LIKE path, %s: `_` in a term matches only itself', (_name, fts, query, hit, miss) => {
+    expect(tokenize('a%z 50%')).toEqual(['50']);
+    const db = openHippoDb(root);
+    try {
+      setMeta(db, 'fts5_available', fts);
+      writeEntryDbOnly(db, makeRaw(hit));
+      writeEntryDbOnly(db, makeRaw(miss));
+      const found = listRecallEntries(db, query, { limit: 200, tenantId: 'default' });
+      expect(found.map((e) => e.content)).toEqual([hit]);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('CJK substring path: a Chinese row older than the 2,000 newest is found through the trigram index', () => {
