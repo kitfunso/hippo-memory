@@ -1,7 +1,7 @@
 // The vector side of a store for the embed and import verbs: embed what is missing and count
 // coverage. Vectors carry no tenant, so each op covers the whole store and needs the host admin.
 
-import type { ConfiguredFolder, EmbeddingProvider } from '../base/ports/embedder.js';
+import type { EmbeddingProvider } from '../base/ports/embedder.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import {
@@ -11,7 +11,7 @@ import {
 } from '../domain/search/embed-memories.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
 import type { DetachedWork } from '../domain/search/embed-memories.js';
-import type { HippoStore } from '../base/ports/store.js';
+import type { ConfiguredFolder, HippoStore } from '../base/ports/store.js';
 import type { VectorCoverage } from '../base/records/embedding-index.js';
 import { requireHostAdmin, type Context } from './types.js';
 import type { HippoDbContext } from './hippo-db-context.js';

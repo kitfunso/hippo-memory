@@ -18,7 +18,7 @@ import type { CallerProject } from '../../api/prompt-hook.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import type { HippoDbStore } from '../../base/ports/hippo-db.js';
-import type { ConfiguredFolder } from '../../base/ports/embedder.js';
+import type { ConfiguredFolder } from '../../base/ports/store.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import type { DetachedWork } from '../../domain/search/embed-memories.js';

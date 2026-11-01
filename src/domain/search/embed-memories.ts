@@ -1,18 +1,14 @@
 // Embeds memories into the vector index: picks the adapter for a target and runs embedAll and embedMemoryInto on it.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
-import type {
-  ConfiguredFolder,
-  EmbedderFor,
-  EmbeddingProvider,
-} from '../../base/ports/embedder.js';
+import type { EmbedderFor, EmbeddingProvider } from '../../base/ports/embedder.js';
 import type { EmbeddingsConfig } from '../../base/config/config.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { FailureNotices } from '../../base/util/failure-notices.js';
 import { warnEmbedFailureOnce } from './embed-failures.js';
 import { type IndexRows, type IndexEmbedTarget, indexAdapter } from './embed-index-target.js';
 import { type StoreEmbedTarget, storeAdapter } from './embed-store-target.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import type { ConfiguredFolder, HippoStore } from '../../base/ports/store.js';
 import type { EmbeddingIndex } from '../../base/records/embedding-index.js';
 
 /** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a

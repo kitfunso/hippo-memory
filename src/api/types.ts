@@ -2,9 +2,8 @@
 // contract error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
-import type { HippoStore, StoreReach } from '../base/ports/store.js';
+import type { ConfiguredFolder, HippoStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { ConfiguredFolder } from '../base/ports/embedder.js';
 import type { CallerState } from './callers.js';
 import type { CoreEnrichment, FolderHome, GlobalEnrichment, LedgerBook } from './enrichment.js';
 import type { InfraPorts } from '../base/ports/infra.js';

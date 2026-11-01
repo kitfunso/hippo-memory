@@ -3,7 +3,8 @@
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
-import type { EmbedderFor, ConfiguredFolder } from '../../base/ports/embedder.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
+import type { ConfiguredFolder } from '../../base/ports/store.js';
 import {
   passesScopeFilterForRecall,
   passesCliRecallScopeFilter,

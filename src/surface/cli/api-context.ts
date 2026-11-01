@@ -1,7 +1,8 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
 import type { ContextReach, GlobalInReach } from '../../api/types.js';
-import type { ConfiguredFolder, EmbedderFor } from '../../base/ports/embedder.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
+import type { ConfiguredFolder } from '../../base/ports/store.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';

@@ -22,7 +22,6 @@ import {
   folderEmbedTarget,
   type EmbedRun,
 } from '../search/embed-memories.js';
-import type { ConfiguredFolder } from '../../base/ports/embedder.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
@@ -34,7 +33,7 @@ import type { SharingStore } from './text-keys.js';
 import type { EntrySignals } from '../../base/records/sharing.js';
 import type { PageRequest } from '../../base/records/reports.js';
 import type { StoreHome } from '../../base/records/folder-files.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import type { ConfiguredFolder, HippoStore } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import type { Captures } from '../../base/records/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';

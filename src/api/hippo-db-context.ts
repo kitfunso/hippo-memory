@@ -3,8 +3,8 @@
 import type { HippoDbStore, HippoDbTier } from '../base/ports/hippo-db.js';
 import { NoLocalTierError } from '../base/util/store-blocked.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { ConfiguredFolder, EmbedderFor } from '../base/ports/embedder.js';
-import type { StoreReach } from '../base/ports/store.js';
+import type { EmbedderFor } from '../base/ports/embedder.js';
+import type { ConfiguredFolder, StoreReach } from '../base/ports/store.js';
 import type { Context, ContextReach, LedgerHome } from './types.js';
 import type { CoreEnrichment, GlobalEnrichment, SleepCount } from './enrichment.js';
 

@@ -9,7 +9,7 @@ import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/pr
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
 import type { DetachedWork } from '../search/embed-memories.js';
-import type { ConfiguredFolder } from '../../base/ports/embedder.js';
+import type { ConfiguredFolder } from '../../base/ports/store.js';
 import { log } from '../../base/util/log.js';
 import type { EntryTextKey, Sharing } from '../../base/records/sharing.js';
 import { logEmbedAllFailure } from './search-both.js';

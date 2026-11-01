@@ -9,8 +9,7 @@ import { evalNow, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switc
 export { evalNow, isRecallBoostAblated } from '../infra/eval-switches.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
-import type { ConfiguredFolder } from '../base/ports/embedder.js';
-import type { HippoStore } from '../base/ports/store.js';
+import type { ConfiguredFolder, HippoStore } from '../base/ports/store.js';
 import { withHippoDb } from '../api/hippo-db-context.js';
 import { judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';

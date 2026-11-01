@@ -1,5 +1,6 @@
 // The async store interface: every method answers a Promise and takes only data, so any backend can
 // serve it from any thread, and hippo.db is one adapter. Type-only apart from the store errors.
+import type { HippoConfig } from '../config/config.js';
 import type { MemoryEntry } from '../memory/entry.js';
 import type { TenantId } from '../util/tenant.js';
 import type { TokenUse } from '../records/ledger.js';
@@ -12,6 +13,7 @@ import type { KeyWrites } from './store/keys.js';
 import type { ContextReads } from './store/context-reads.js';
 import type { RecallSearchArgs, RecallWrites } from './store/recall-writes.js';
 import type { EntryFilter, PageRequest } from '../records/reports.js';
+import type { EmbedderFor } from './embedder.js';
 import type {
   ApiKeyRecord,
   ActiveGoals,
@@ -146,6 +148,14 @@ export { BASE_EFFECTS, STORE_EFFECTS } from './store/store-effects.js';
 export interface FolderStore<S extends HippoStore = HippoStore> {
   readonly root: string;
   readonly store: S;
+}
+
+/** A store with the config its root loaded and the root's embedder, so a write into it embeds
+ * with the provider that config names. */
+export interface ConfiguredFolder<S> {
+  readonly store: S;
+  readonly config: HippoConfig;
+  readonly embedderFor: EmbedderFor;
 }
 
 /** Which stores a call reaches, probed once by a composition root so the api reads this instead of
