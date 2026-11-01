@@ -17,7 +17,6 @@ const UNROUTABLE_TENANT = '__unroutable__';
 
 const DEFAULT_BUCKET = 'parse_error';
 
-/** The caller's tenant and the store its dead letters live in. */
 export type DeadLetterContext = Pick<HippoDbContext, 'tenantId' | 'store'>;
 
 /** A webhook parks before it has routed the payload, so the row's tenant comes with the row. */

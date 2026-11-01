@@ -40,7 +40,6 @@ export interface AuthCreateResult {
   keyId: string;
   plaintext: string;
   tenantId: string;
-  /** The role bound to the new key (admin | member). */
   role: 'admin' | 'member';
   /** ISO time the key stops working; null for a key that never expires. */
   expiresAt: string | null;

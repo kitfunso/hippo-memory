@@ -66,7 +66,6 @@ function retrievalPolicyOf(
   };
 }
 
-/** The goal a push stores. */
 function pushedGoal(
   id: string,
   opts: PushGoalOptions,

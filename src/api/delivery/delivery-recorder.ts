@@ -127,7 +127,6 @@ export interface DeliveryRecorderInit {
   /** Makes this recorder throw at one stage; only tests set it, and no CLI flag or environment
    * variable reaches it. */
   fault?: DeliveryFault;
-  /** The instant the event is stamped with. */
   now: Date;
 }
 

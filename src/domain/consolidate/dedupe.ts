@@ -83,7 +83,7 @@ function dedupRow(entry: MemoryEntry): DedupRow {
   };
 }
 
-/** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then
+/** The survivor total order: strength bucket desc, then retrievalCount desc, then
  * compareEntryIdentity. */
 function survivorOrder(a: DedupRow, b: DedupRow): number {
   const bucketDiff = strengthTieKey(b.strength) - strengthTieKey(a.strength);
@@ -152,7 +152,7 @@ async function partitionRows(pages: RowPages): Promise<Partitions> {
   for await (const page of pages) {
     for (const entry of page) {
       if (!isCurrentDistilled(entry)) continue;
-      // EI2: also split by restricted scope, else a private copy can delete the readable one.
+      // Also split by restricted scope, else a private copy can delete the readable one.
       const partition = derivationPartitionKey(entry.tenantId, entry.scope, entry.originProject);
       let groups = partitions.get(partition);
       if (!groups) partitions.set(partition, (groups = new Map()));

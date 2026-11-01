@@ -19,7 +19,6 @@ import type { ContextOptions } from './context-types.js';
 import type { Context } from '../types.js';
 import { NO_QUERY, globalSource, type ContextPlan, type ContextSource } from './context-plan.js';
 
-/** The ambient admit rules. */
 export interface ContextAdmission {
   /** `admit` as data, for a store to apply. */
   rule: AmbientAdmission;

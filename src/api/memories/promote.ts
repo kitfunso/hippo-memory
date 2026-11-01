@@ -71,7 +71,6 @@ export interface ArchiveRawResult {
   archivedAt: string;
 }
 
-/** The archive request for `id`, as the caller. */
 export function archiveOf(ctx: Context, id: string, reason: string): RawArchive {
   return {
     tenantId: ctx.tenantId,

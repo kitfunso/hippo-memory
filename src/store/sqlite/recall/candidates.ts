@@ -46,13 +46,10 @@ import type { SourceTally } from '../../../base/records/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../../../base/records/reports.js';
 import { SCHEMA_FIT_WINDOW_ROWS } from '../../rules/windows.js';
 
-// The status tally: each row scored by calculateStrength and confidenceFacets, summed in the order
-// given so the average rounds the same on every run.
-
-/** What one row's status reads: its strength and confidence inputs and its layer. */
 type StatusInputs = StrengthInputs & ConfidenceInputs & { readonly layer: Layer };
 
-/** The counts over `rows`; the caller adds the conflict and vector counts. */
+/** The counts over `rows`, summed in the order given so the average rounds the same on every run;
+ * the caller adds the conflict and vector counts. */
 function tallyStatus(
   rows: Iterable<StatusInputs>,
   now: Date,

@@ -244,7 +244,6 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
     after: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => readonly Turn[];
     save: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => void;
   };
-  /** The project the session ran in. */
   currentProject: () => ProjectRef;
   /** Captures `turns`, or the whole transcript when undefined, into `into`; false when it
    * failed, having said why. */

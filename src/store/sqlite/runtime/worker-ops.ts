@@ -80,7 +80,6 @@ export type HippoDbRepo = keyof typeof HIPPO_DB_OPS;
 /** The group part of an op's name. */
 export type OpGroup = WorkerGroup | `hippoDb.${HippoDbRepo}`;
 
-/** The base methods the op table names. */
 export type WorkerBase = Pick<HippoStore, keyof typeof WORKER_OPS.base>;
 
 export interface WorkerInit {

@@ -103,7 +103,6 @@ export function rowToCardComment(row: CardCommentRow): CardComment {
   };
 }
 
-/** A tenant's card and the comment its author leaves on it. */
 interface CardCommentOptions {
   readonly tenantId: string;
   readonly cardId: string;

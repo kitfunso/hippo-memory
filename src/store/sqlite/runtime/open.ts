@@ -53,11 +53,9 @@ export interface GrantedOpens {
 
 export type HandleOpener = (hippoRoot: string, opts: GrantedOpens) => DatabaseSyncLike;
 
-/** A read-write handle on the store's grant. */
 export const readWrite: HandleOpener = (hippoRoot, { grant, busyWaitMs }) =>
   grant.open(hippoRoot, busyWaitMs);
 
-/** A read-only handle on the store's grant, which leaves the store as it is. */
 export const readOnly: HandleOpener = (hippoRoot, { grant }) => grant.openReadOnly(hippoRoot);
 
 /** One call on a handle of the store's own, closed after; `open` defaults to a bare handle,

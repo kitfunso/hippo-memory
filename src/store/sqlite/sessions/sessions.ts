@@ -258,7 +258,6 @@ export function listUntracedSessions(
   return ids.map((sessionId) => ({ sessionId, events: events.get(sessionId) ?? [] }));
 }
 
-/** The owner a session id is bound to, or null. */
 function readSessionOwner(
   db: DatabaseSyncLike,
   tenantId: string,

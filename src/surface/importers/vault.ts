@@ -23,7 +23,7 @@ import {
 import { realpathOrResolve } from '../../host/real-path.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
-// K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
+// The vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
 // (src/surface/connectors/slack|github). A changed note appends a new raw row after rawArchive of
 // the old one; NEVER `supersede` a raw row (it yields 'distilled' and escapes the deletion rescan).
 

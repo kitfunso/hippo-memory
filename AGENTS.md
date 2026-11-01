@@ -29,7 +29,7 @@ npm run smoke:openclaw-install
 - Do not commit generated `dist/` or UI build output unless the repo expects it for a release.
 - A PR's changelog entry goes in its own `changelog.d/<branch-with-dashes>.md`, never in `CHANGELOG.md`; the release commit folds them in (`changelog.d/README.md`).
 - CI fails when any oxlint rule's hit count rises above `.oxlint-baseline.json`. Fix new hits in the files you touch; after clearing old ones, `node scripts/checks/check-lint-ratchet.mjs --update` and commit the lower baseline.
-- Comments say why, in one line. Ticket codes, versions, reviewer notes and dates go to docs or the git log; CI fails when a file's count of them rises above `.comment-history-baseline.json`. After rewriting old ones, `node scripts/checks/check-comment-history.mjs --update` and commit the lower baseline.
+- Comments say why, in one line. Ticket codes, versions, reviewer notes and dates go to docs or the git log; `node scripts/checks/check-comment-history.mjs` fails CI on any src comment line that carries one.
 - No `src/` or test file over 800 lines, no `src/` function over 50 lines (80 in `scripts/`) and no function over 5 positional parameters: oxlint's `max-lines`, `max-lines-per-function` and `max-params` hold them through the lint ratchet. No new `src/` line over 120 characters: `node scripts/checks/check-long-lines.mjs`, with `--update` after removing old ones.
 - An eval that reads host transcripts (`~/.claude/projects/*.jsonl`) copies its corpus outside the repo at registration and names the copy in the prereg: Claude Code deletes sessions after 30 days by default, so a live-path corpus cannot be re-run.
 - Use Hippo memory commands when useful, but do not store secrets.

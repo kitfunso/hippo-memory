@@ -1,20 +1,19 @@
 #!/usr/bin/env node
-// CI comment gate. Ticket codes, version tags, reviewer notes, dates and plan paths in src/ comments belong in docs
-// or git log, and may fall but never rise above .comment-history-baseline.json; a one-word comment line always fails.
-// Usage: check-comment-history.mjs [--list [file...]] [--update]. --update rewrites the baseline; run it only after clearing hits.
+// CI comment gate. A src/ comment line carrying a ticket code, version tag, reviewer note, date, plan path or
+// section number fails, as does a one-word comment line; the history belongs in docs or the git log.
+// Usage: check-comment-history.mjs [--list [file...]].
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const BASELINE = '.comment-history-baseline.json';
-
 // Each pattern skips domain words it would otherwise hit: schema versions (v39, not a release tag), DAG layers L0-L3,
-// BM25, FTS5, SHA1, UTF8, P95 percentiles, a prereg "amendment A1", invalid example dates, and the Codex product.
+// markdown headers H1-H6, BM25, FTS5, SHA1, UTF8, P95 percentiles, a prereg "amendment A1", invalid example dates,
+// and the Codex product.
 const PATTERNS = [
   ['version', /\bv\d+\.\d+(?:\.\d+)?\b/],
   [
     'ticket',
-    /\b(?!(?:BM25|FTS5|FP32|NAT64|C0|H1|MD5|X509|V\d|SHA\d|UTF\d|IPV\d|HTTP\d|P\d\d|L[0-3])\b)(?<!amendment )[A-Z]{1,4}\d{1,2}(?:\.\d+)?\b/,
+    /\b(?!(?:BM25|FTS5|FP32|NAT64|C0|H[1-6]|MD5|X509|V\d|SHA\d|UTF\d|IPV\d|HTTP\d|P\d\d|L[0-3])\b)(?<!amendment )[A-Z]{1,4}\d{1,2}(?:\.\d+)?\b/,
   ],
   [
     'review',
@@ -165,21 +164,14 @@ function findHits() {
   return hits;
 }
 
-const UNCOUNTED = {
+const HEADERS = {
+  history:
+    'Comment lines carrying ticket codes, versions, reviewer notes, dates or plan paths (say why in one line; the history goes to docs or the commit message):',
   label: 'Comments that label a section with a feature, wave or plan number (say what the code is):',
   orphan: 'Comment lines holding one word (rejoin it to the line above):',
 };
 const hits = findHits();
-const uncounted = hits.filter((h) => h.kind in UNCOUNTED);
-const counts = {};
-for (const h of hits.filter((x) => !(x.kind in UNCOUNTED))) counts[h.file] = (counts[h.file] ?? 0) + 1;
 const args = process.argv.slice(2);
-
-if (args.includes('--update')) {
-  writeFileSync(BASELINE, JSON.stringify(counts, null, 2) + '\n');
-  console.log(`Wrote ${BASELINE}: ${hits.length} lines over ${Object.keys(counts).length} files.`);
-  process.exit(0);
-}
 
 if (args.includes('--list')) {
   const only = args.filter((a) => a !== '--list');
@@ -189,31 +181,12 @@ if (args.includes('--list')) {
   process.exit(0);
 }
 
-if (uncounted.length > 0) {
-  for (const [kind, header] of Object.entries(UNCOUNTED)) {
-    const found = uncounted.filter((h) => h.kind === kind);
+if (hits.length > 0) {
+  for (const [group, header] of Object.entries(HEADERS)) {
+    const found = hits.filter((h) => (h.kind in HEADERS ? h.kind : 'history') === group);
     if (found.length > 0) console.error(header);
     for (const h of found) console.error(`  ${h.file}:${h.line} ${h.text}`);
   }
   process.exit(1);
 }
-
-const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};
-const rose = Object.entries(counts).filter(([file, n]) => n > (baseline[file] ?? 0));
-const fell = Object.entries(baseline).filter(([file, n]) => (counts[file] ?? 0) < n);
-
-if (rose.length > 0) {
-  console.error(
-    'Comment lines carrying ticket codes, versions, reviewer notes, dates or plan paths rose above the baseline:',
-  );
-  for (const [file, n] of rose) console.error(`  ${file}: ${baseline[file] ?? 0} -> ${n}`);
-  console.error('Say why in one line and move the history to docs or the commit message.');
-  console.error('`node scripts/checks/check-comment-history.mjs --list <file>` shows the matching lines.');
-  process.exit(1);
-}
-if (fell.length > 0) {
-  console.log(
-    `${fell.length} files fell below the baseline; run \`node scripts/checks/check-comment-history.mjs --update\` to lock that in.`,
-  );
-}
-console.log(`Comment history ratchet OK: ${hits.length} lines, none above ${BASELINE}.`);
+console.log('Comment history check OK: no history, section labels or one-word lines in src comments.');

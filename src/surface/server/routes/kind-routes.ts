@@ -36,7 +36,6 @@ function byId(handler: IdHandler): (rr: ObjectRequest, params: RouteParams) => P
   return (rr, { id }) => handler(rr, Number.parseInt(id, 10));
 }
 
-/** Every row of one kind, each gated as any caller's and on a store with hippo.db's local tier. */
 export function kindRows(kind: KindRoutes): Route[] {
   const { base } = kind;
   return [

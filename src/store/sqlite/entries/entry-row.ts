@@ -342,7 +342,6 @@ export function stampOriginProjects(
   cachedStatement(db, ORIGIN_STAMP_SQL).run(lastPerId(rows.map((r) => [r.id, r.origin])), tenantId);
 }
 
-/** A tenant's row `id` and the source names it moves `from` and `to`. */
 interface RenameEntrySourceOptions {
   readonly tenantId: string;
   readonly id: string;
