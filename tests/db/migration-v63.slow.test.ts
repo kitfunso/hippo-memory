@@ -15,7 +15,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { readEntry, replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 const CONFLICTED = 'idx_memories_conflicted';
 const TRACES_BY_TS = 'idx_recall_traces_ts';
@@ -132,7 +132,6 @@ describe('schema v63', () => {
     writeEntriesTogether(local, [held]);
     const copy = await shareMemory(...sharingStores(local, global), held.id, {
       embed: TEST_RUN,
-      detached: TEST_DETACHED,
       tenantId: 'default',
       force: true,
       skipEmbed: true,

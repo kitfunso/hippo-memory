@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { cleanupArchivedMirrors } from '../../src/db/raw-archive-mirror-cleanup.js';
-import { conflictResolveAudits } from '../../src/store/sqlite/review/conflict-reads.js';
+import { conflictResolveAudits } from '../../src/store/sqlite/review/conflicts.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { DAG_LEVEL } from '../../src/base/memory/entry.js';

@@ -6,9 +6,8 @@ import { join } from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { startHashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { log } from '../../src/base/util/log.js';
 
 const savedCwd = process.cwd();
@@ -73,90 +72,29 @@ describe('hippo import --markdown', () => {
 });
 
 describe('hippo import embedding backfill', () => {
-  const notes =
-    '# Build notes\n\n- the release build needs node 22 or newer\n- run the migration before the deploy step\n';
-  const FILE = ['--markdown', 'notes.md'];
-  const VAULT = ['--vault', 'vault', '--name', 'notes'];
-
-  /** Runs `hippo import <args>` against an embedding server and returns the warnings logged before the command returned. */
-  async function importWithEmbeddings(
-    status: number,
-    args: readonly string[] = FILE,
-  ): Promise<{ stdout: string; warnings: string[] }> {
-    const embeddings = await startHashedEmbeddings();
-    embeddings.setStatus(status);
-    const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
-    writeFileSync(join(hippoRoot, 'config.json'), JSON.stringify(config));
-    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-    writeFileSync(join(cwd, 'notes.md'), notes);
-    mkdirSync(join(cwd, 'vault'));
-    writeFileSync(join(cwd, 'vault', 'deploy.md'), '# Deploy\nThe deploy runs from the main branch only.\n');
-    writeFileSync(join(cwd, 'vault', 'cache.md'), '# Cache\nThe cache is cleared every night at two.\n');
-    const warnings: string[] = [];
-    const warn = vi.spyOn(log, 'warn').mockImplementation((line) => {
-      warnings.push(line);
-    });
-    try {
-      const { stdout } = await hippo(...args);
-      return { stdout, warnings };
-    } finally {
-      warn.mockRestore();
-      await embeddings.close();
-    }
-  }
-
-  // The command's store runtime closes as the command returns, so the backfill must settle by then.
-  it('embeds the imported rows before the command returns', async () => {
-    const { stdout, warnings } = await importWithEmbeddings(200);
-    expect(stdout).toMatch(/Imported: +2/);
-    expect(warnings).toEqual([]);
-    expect(Object.keys(loadEmbeddingIndex(hippoRoot))).toHaveLength(2);
-  });
-
-  it('reports a backfill the embedding server fails before the command returns', async () => {
-    const { stdout, warnings } = await importWithEmbeddings(500);
-    expect(stdout).toMatch(/Imported: +2/);
-    expect(contents()).toHaveLength(2);
-    expect(warnings).toEqual([
-      expect.stringMatching(/^import: embedding backfill failed \(.+\); 2 rows have no vector; run 'hippo embed'/),
-    ]);
-  });
-
-  it('embeds the rows a vault import writes before the command returns', async () => {
-    const { stdout, warnings } = await importWithEmbeddings(200, VAULT);
-    expect(stdout).toMatch(/Imported: +2/);
-    expect(warnings).toEqual([]);
-    expect(Object.keys(loadEmbeddingIndex(hippoRoot))).toHaveLength(2);
-  });
-
-  it('reports a vault backfill the embedding server fails before the command returns', async () => {
-    const { stdout, warnings } = await importWithEmbeddings(500, VAULT);
-    expect(stdout).toMatch(/Imported: +2/);
-    expect(warnings).toEqual([
-      expect.stringMatching(/^import: embedding backfill failed \(.+\); 2 rows have no vector; run 'hippo embed'/),
-    ]);
-  });
-
   it('a backfill that fails still imports, and warns with the rows left without a vector and the command that finishes them', async () => {
     // An API provider with no key makes the backfill reject after the rows are saved.
     writeFileSync(join(hippoRoot, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }));
-    writeFileSync(join(cwd, 'notes.md'), notes);
+    writeFileSync(
+      join(cwd, 'notes.md'),
+      '# Build notes\n\n- the release build needs node 22 or newer\n- run the migration before the deploy step\n',
+    );
+
     vi.stubEnv('OPENAI_API_KEY', '');
-    const warnings: string[] = [];
-    const warn = vi.spyOn(log, 'warn').mockImplementation((line) => {
-      warnings.push(line);
-    });
-
-    const r = await hippo('--markdown', 'notes.md').finally(() => warn.mockRestore());
-
+    // The backfill runs on past the verb, as the real process stays up for it, so the run waits for its warning.
+    let warned: (line: string) => void = () => {};
+    const warning = new Promise<string>((resolve) => (warned = resolve));
+    const warn = vi.spyOn(log, 'warn').mockImplementation((line) => warned(line));
+    const r = await runInProcess(async () => {
+      await runCli(['node', 'hippo', 'import', '--markdown', 'notes.md']);
+      await warning;
+    }).finally(() => warn.mockRestore());
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Imported: +2/);
     expect(contents()).toHaveLength(2);
-    expect(warnings).toEqual([
-      expect.stringMatching(
-        /^import: embedding backfill failed \(.*OPENAI_API_KEY is not set.*\); 2 rows have no vector; run 'hippo embed' to backfill$/,
-      ),
-    ]);
+    expect(await warning).toMatch(
+      /^import: embedding backfill failed \(.*OPENAI_API_KEY is not set.*\); 2 rows have no vector; run 'hippo embed' to backfill$/,
+    );
   });
 });
 

@@ -24,7 +24,7 @@ import {
   type Project,
 } from '../_helpers/delivery-boundary.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { hookStore } from '../_helpers/cli-stores.js';
 import { stubExit } from '../_helpers/process-stubs.js';
 
 const T0 = '2099-01-01T00:00:00.000Z';
@@ -193,7 +193,8 @@ describe('boundary row contents and a boundary callback that throws', () => {
     try {
       const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
       const logFile = path.join(p.dir, 'u1.log');
-      await preCompactHook(p.hippoRoot, apiCtx(p.hippoRoot), {
+      await preCompactHook(p.hippoRoot, hookStore(p.hippoRoot), {
+        tenantId: 'default',
         stdinText: normalizeHookPayload(copilotPayload('preCompact', p.cwd, transcript)),
         runtime: 'copilot',
         logFile,

@@ -49,7 +49,7 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
   const reranker = q.stages.reranker ? getReranker(q.stages.reranker) : null;
   let shown: readonly SearchResult[] = [];
   const [, retrieveMs] = await timed(() => retrieveWithCliCore(
-    { ...ctx, enrich: { lastRecall: ctx.store.hippoDb.lastRecall } },
+    ctx,
     { query: q.text, boost: { sessionId: q.stages.sessionId ?? '', goalTag: q.stages.goalTag ?? '' } },
     {
       rank: {
@@ -73,6 +73,7 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
       sources: globalRoot !== ctx.hippoRoot && isInitialized(globalRoot)
         ? { root: globalRoot, store: sqliteStore(globalRoot), config: loadConfig(globalRoot) }
         : undefined,
+      lastRecall: ctx.store.lastRecall,
       show: (ranking) => {
         shown = ranking.results;
         return { results: ranking.results, hints: { anchoring: null, availability: null }, tokens: ranking.results.reduce((n, r) => n + r.tokens, 0) };
@@ -92,6 +93,7 @@ async function sqlBm25(ctx: Context, q: EvalQuery): Promise<Ranked> {
 
 /** Arm C: the options the MCP recall tool passes, with the ranked list cut to the shown rows in place of its rendering. */
 async function showRanked(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
+  const mode = loadConfig(ctx.hippoRoot).physics?.enabled !== false ? 'physics' : 'hybrid';
   let shown: SearchResult[] = [];
   const [, retrieveMs] = await timed(() => retrieveRanking(
     ctx,
@@ -99,7 +101,7 @@ async function showRanked(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
       query: q.text,
       boost: session(q),
       window: { limit: 50 },
-      mode: 'hybrid',
+      mode,
       hints: { suppressAvailabilityHint: true },
       filter: { keepHeldCopies: true },
     },

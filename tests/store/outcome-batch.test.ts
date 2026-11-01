@@ -9,15 +9,15 @@ import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/d
 import { CHURN_STALE_TAG, DAG_LEVEL, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { createMemory } from '../../src/entry/memory.js';
-import { entryAfterOutcomeAt } from '../../src/base/memory/keep-rules.js';
+import { entryAfterOutcome } from '../../src/base/memory/keep-rules.js';
 import { readerReaches, targetReader } from '../../src/base/scope/recall-scope.js';
 import {
   writeEntriesTogether,
   writeEntryDbOnly,
   writeEntryMirrors,
+  writeOutcome,
   auditingRefusal,
 } from '../../src/store/sqlite/entries/entry-writes.js';
-import { writeOutcome } from '../../src/store/sqlite/entries/sqlite-entry-writes.js';
 import { readEntriesByIds } from '../../src/store/sqlite/entries/entry-reads.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import type { OutcomeWrite } from '../../src/base/ports/store/entry-writes.js';
@@ -49,7 +49,7 @@ function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeW
       for (const id of outcome.ids) {
         const entry = live.get(id);
         if (!entry || !readerReaches(targetReader(outcome), entry.scope)) continue;
-        const updated = entryAfterOutcomeAt(entry, outcome.good, evalNow(), PRODUCTION_STRENGTH);
+        const updated = entryAfterOutcome(entry, outcome.good, evalNow(), PRODUCTION_STRENGTH);
         writeEntryDbOnly(db, updated, { actor: outcome.actor });
         live.set(id, updated);
         appendAuditEvents(db, [

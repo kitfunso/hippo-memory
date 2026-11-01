@@ -2,8 +2,8 @@
 
 import {
   calculateRewardFactor,
-  calculateStrengthAt,
-  confidenceFacetsAt,
+  calculateStrength,
+  confidenceFacets,
   confidenceLabel,
 } from '../../base/memory/strength.js';
 import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
@@ -43,7 +43,7 @@ export async function traceRecord(ctx: Context, input: TraceInput): Promise<{ id
 export function traceStats(entry: MemoryEntry, ctx: Pick<Context, 'infra' | 'config'>) {
   const now = ctx.infra.clock();
   const model = strengthOf(ctx);
-  const strength = calculateStrengthAt(entry, now, model);
+  const strength = calculateStrength(entry, now, model);
   const halfLife = entry.halfLifeDays;
   const rewardFactor = calculateRewardFactor(entry, model);
   const effHalfLife = halfLife * rewardFactor;
@@ -51,12 +51,12 @@ export function traceStats(entry: MemoryEntry, ctx: Pick<Context, 'infra' | 'con
   const ageDays = (now.getTime() - createdMs) / DAY_MS;
   const lastMs = new Date(entry.lastRetrieved).getTime();
   const sinceLast = (now.getTime() - lastMs) / DAY_MS;
-  const facets = confidenceFacetsAt(entry, now);
+  const facets = confidenceFacets(entry, now);
   const conf = confidenceLabel(entry, now).text;
 
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
-    calculateStrengthAt(entry, new Date(now.getTime() + days * DAY_MS), model);
+    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), model);
   return {
     strength,
     halfLife,

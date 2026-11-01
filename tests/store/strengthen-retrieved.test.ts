@@ -36,10 +36,11 @@ describe('strengthenRetrieved', () => {
     writeEntry(root, { ...returned, tags: ['edited-meanwhile'] });
 
     const found = strengthenRetrieved(
-      { hippoRoot: root, grant: grantFor({}) },
+      root,
       [e.id, 'no-such-id'],
       { tenantId: 'default', recallBoostAblated: false },
       { strength: PRODUCTION_STRENGTH, clock: evalNow },
+      grantFor({}),
     );
 
     expect([...found]).toEqual([e.id]);
@@ -62,10 +63,11 @@ describe('strengthenRetrieved', () => {
     const runs = [entries.slice(0, 1), entries].map((batch) =>
       recordStatements(() =>
         strengthenRetrieved(
-          { hippoRoot: root, grant: grantFor({}) },
+          root,
           batch.map((e) => e.id),
           opts,
           { strength: PRODUCTION_STRENGTH, clock: evalNow },
+          grantFor({}),
         ),
       ),
     );
@@ -89,10 +91,11 @@ describe('strengthenRetrieved', () => {
 
     expect(
       strengthenRetrieved(
-        { hippoRoot: root, grant: grantFor({}) },
+        root,
         [e.id],
         { tenantId: 'some-other-tenant', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ).size,
     ).toBe(0);
     expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
@@ -105,10 +108,11 @@ describe('strengthenRetrieved', () => {
 
     expect(
       strengthenRetrieved(
-        { hippoRoot: root, grant: grantFor({}) },
+        root,
         [e.id],
         { tenantId: 'default', recallBoostAblated: true },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ).size,
     ).toBe(0);
     expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
@@ -121,10 +125,11 @@ describe('strengthenRetrieved', () => {
 
     expect(
       strengthenRetrieved(
-        { hippoRoot: notAStore, grant: grantFor({}) },
+        notAStore,
         ['any-id'],
         { tenantId: 'default', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ).size,
     ).toBe(0);
     expect(errors).toHaveBeenCalledTimes(1);

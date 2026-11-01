@@ -221,7 +221,7 @@ describe('one open reads the store once', () => {
       expect(afterPragmas(() => opts.grant.open(root))).toHaveLength(1);
       expect(afterPragmas(() => openStore(root, opts))).toHaveLength(1);
     } finally {
-      runtime.closeNow();
+      runtime.dispose();
     }
   });
 

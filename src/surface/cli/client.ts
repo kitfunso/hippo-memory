@@ -13,12 +13,12 @@ import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isObjectLike } from '../../base/session/capture-contract.js';
 
-/** A write the local server has not answered in this long is stuck; the caller treats it
- * as delivery-unknown. */
+/** A write the local server has not answered in this long is stuck; the caller treats it as
+ * delivery-unknown. */
 const SERVER_TIMEOUT_MS = 30_000;
 
 /**
- * This many tries at the server's 1 s Retry-After keep the roughly 5 s wait the CLI had before the
+ * Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the
  * server answered busy with 503.
  */
 const STORE_BUSY_ATTEMPTS = 5;
@@ -202,8 +202,8 @@ export interface NearestIdsBody {
   readonly spec: JsonValue;
 }
 
-/** The ids the server finds nearest `body.vector`, nearest first, in one try that gives up
- * after `timeoutMs`. */
+/** The ids the server finds nearest `body.vector`, nearest first, in one try that gives up after
+ * `timeoutMs`. */
 export async function nearestIds(
   serverUrl: string,
   apiKey: string | undefined,
@@ -226,8 +226,8 @@ export async function nearestIds(
 
 /**
  * 'never-sent': connection never opened, safe to replay locally. 'delivery-unknown': the request
- * was on the wire and may have committed, so never replay a write. 'none': not a
- * transport failure. */
+ * was on the wire and may have committed, so never replay a write. 'none': not a transport
+ * failure. */
 export type TransportFailure = 'none' | 'never-sent' | 'delivery-unknown';
 
 /**

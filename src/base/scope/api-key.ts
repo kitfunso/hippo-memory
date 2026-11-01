@@ -50,12 +50,12 @@ function hashKey(plaintext: string): string {
   return `scrypt2$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
-/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working
- * by itself. */
+/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by
+ * itself. */
 export const DEFAULT_KEY_TTL_DAYS = 90;
 
-/** A fresh key: the plaintext its caller sees once, and the scrypt hash a store keeps in
- * its place. */
+/** A fresh key: the plaintext its caller sees once, and the scrypt hash a store keeps in its
+ * place. */
 export interface MintedApiKey {
   keyId: string;
   plaintext: string;

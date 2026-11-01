@@ -13,15 +13,17 @@ export class StoreBlockedError extends Error {
   }
 }
 
-/** A store without hippo.db's local tier, refusing a path that runs on the tier alone: the same 501 for every such
- * path, whichever surface asked. */
-export class NoLocalTierError extends StoreBlockedError {
-  constructor(storeKind: string) {
+/** A store that lacks a whole group of port methods; the same 501, and the log names the group. */
+export class StoreNotPortedError extends StoreBlockedError {
+  constructor(
+    storeKind: string,
+    readonly group: string,
+  ) {
     super(
       storeKind,
-      `the '${storeKind}' store has no local tier; this code path runs on hippo.db only`,
+      `the '${storeKind}' store has no '${group}' group; this code path is not ported to the store yet`,
     );
-    this.name = 'NoLocalTierError';
+    this.name = 'StoreNotPortedError';
   }
 }
 

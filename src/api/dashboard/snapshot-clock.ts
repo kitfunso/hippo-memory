@@ -1,7 +1,7 @@
 // The dashboard's snapshot ids. The UI refetches every panel when the id rises and drops a reply
 // with a lower one, so an id holds while the data and the clock stand still, and rises on a commit,
 // a refresh, the TTL or a restart.
-import type { DashboardReads } from '../../base/records/dashboard-reads.js';
+import type { DashboardReads } from '../../base/ports/store/dashboard-reads.js';
 
 /** An outside commit moves the id at most this often. */
 const COALESCE_MS = 10_000;
@@ -45,8 +45,8 @@ function stillServes(
   );
 }
 
-/** Stamps over the store's commit signal; `now` dates the strengths, `cacheClock` ages
- * the stamp. */
+/** Stamps over the store's commit signal; `now` dates the strengths, `cacheClock` ages the
+ * stamp. */
 export function createSnapshotClock(
   reads: Pick<DashboardReads, 'commitCount'>,
   now: () => number,

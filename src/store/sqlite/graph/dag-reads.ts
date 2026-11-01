@@ -11,17 +11,17 @@ import {
 } from '../entries/entry-reads.js';
 import { TENANT_IS } from '../runtime/tenant.js';
 import { chunked } from '../../../base/util/chunked.js';
-import type { DescendantOrigin } from '../../../base/ports/store.js';
 import type {
+  DescendantOrigin,
   SummaryDescendants,
   DagReads,
   DescendantWalk,
-} from '../../../base/records/dag-reads.js';
+} from '../../../base/ports/store.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../runtime/rows.js';
 import { descendantAdmits } from '../../../base/scope/read-admission.js';
 import type { OnHandle } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
-import { bound, type Bodies } from '../runtime/bound.js';
+import { bound } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
 interface PagedWalk {
@@ -77,8 +77,8 @@ function pagedDescendants(
   return { summary: walk.summary, levels, sizes };
 }
 
-// Reads four short columns of every child, since the level below needs each admitted id as
-// a parent.
+// Reads four short columns of every child, since the level below needs each admitted id as a
+// parent.
 function keyedLevel(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -178,8 +178,8 @@ function firstRows(
   return childrenInOrder(db, walk, whole, -1);
 }
 
-/** Children parent by parent, each parent's by created then id; a negative `limit` reads
- * them all. */
+/** Children parent by parent, each parent's by created then id; a negative `limit` reads them
+ * all. */
 function childrenInOrder(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -203,14 +203,14 @@ function childrenInOrder(
 }
 
 export function sqliteDagReads(on: OnHandle): DagReads {
-  return bound(
+  return bound<DagReads>(
     on,
     {
       sessionRawCount: countSessionRawMemories,
       sessionRawKeys: listSessionRawKeys,
       sessionRawRows: readSessionRawRows,
       summaryWithDescendants: summaryWithDescendants,
-    } satisfies Bodies<DagReads>,
+    },
     openStore,
   );
 }

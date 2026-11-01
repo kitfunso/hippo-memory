@@ -10,7 +10,7 @@ import type {
   ConnectorEvent,
   ConnectorEventRecord,
   EventMarked,
-} from '../../../base/records/connectors.js';
+} from '../../../base/ports/store/connectors.js';
 import {
   githubEventMemory,
   githubEventRecord,

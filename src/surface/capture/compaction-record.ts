@@ -21,7 +21,8 @@ import type {
   ItemsOptions,
   OpenCompaction,
   StepFailure,
-} from '../../base/records/capture.js';
+} from '../../base/ports/store/capture.js';
+import type { StoreGroups } from '../../base/ports/store.js';
 import { loadConfig } from '../../host/config-file.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';
@@ -37,11 +38,11 @@ export const PRE_COMPACT_INSTRUCTION =
   "earlier summary already listed under 'Memories for hippo', and anything this session already saved with " +
   "`hippo remember`. Write '- none' if nothing new remains.";
 
-/** A store folder, its store's compaction hooks and the tenant a compaction hook writes as, which
- * the CLI root resolved. */
+/** A store folder, its store and the tenant a compaction hook writes as, which the CLI root
+ * resolved. */
 export interface CompactionFolder {
   readonly root: string;
-  readonly hooks: CompactionHooks;
+  readonly store: Pick<StoreGroups, 'compactionHooks'>;
   readonly tenantId: string;
 }
 
@@ -59,8 +60,8 @@ interface ScrubbedSummary {
   found: boolean;
 }
 
-/** What the record keeps of a compact_summary: the scrubbed body, and every parsed
- * item scrubbed. */
+/** What the record keeps of a compact_summary: the scrubbed body, and every parsed item
+ * scrubbed. */
 export function readCompactionText(compactSummary: string): ScrubbedSummary {
   const body = compactSummaryBody(compactSummary);
   const parsed = parseCompactionItems(body);
@@ -109,7 +110,7 @@ export async function saveCompaction(
   payload: PostCompactPayload,
   log: Log,
 ): Promise<CompactionSaveResult> {
-  const { root, hooks, tenantId } = folder;
+  const { root, store, tenantId } = folder;
   const { compactSummary, ...meta } = payload;
   if (compactSummary === null) {
     log('skip: payload has no compact_summary');
@@ -120,7 +121,7 @@ export async function saveCompaction(
   if (!found) log('no memories section');
 
   const { defaultHalfLifeDays } = loadConfig(root);
-  const { result, spoolReason, notes } = await hooks.save({
+  const { result, spoolReason, notes } = await store.compactionHooks.save({
     tenantId,
     meta,
     text,
@@ -190,8 +191,8 @@ function transcriptSummary(
   return null;
 }
 
-/** How long a replay waits on a locked store, and the Date.now() after which it starts no
- * new record. */
+/** How long a replay waits on a locked store, and the Date.now() after which it starts no new
+ * record. */
 export interface ReplayOptions {
   busyWaitMs?: number;
   deadline?: number;
@@ -284,12 +285,12 @@ async function replayOpen(run: Replay): Promise<number> {
  * (`summarised` records, spool files, and `started` records the transcript can fill), never
  * throws. Returns how many compactions it saved. */
 export async function replayCompactions(
-  { root, hooks, tenantId }: CompactionFolder,
+  { root, store, tenantId }: CompactionFolder,
   log: Log,
   opts: ReplayOptions = {},
 ): Promise<number> {
   const run: Replay = {
-    hooks,
+    hooks: store.compactionHooks,
     root,
     tenantId,
     log,

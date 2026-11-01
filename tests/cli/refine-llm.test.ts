@@ -7,7 +7,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { refineOne } from '../_helpers/refine-one.js';
 import { removeDir } from '../_helpers/remove-dir.js';
-import { asCommand } from '../_helpers/test-cli.js';
 
 function tmpStore(): string {
   const dir = makeRoot('refine');
@@ -104,9 +103,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('Clean refined summary.');
-      const result = await asCommand((cli) =>
-        refineStore(cli, dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) }),
-      );
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(1);
       expect(result.refined).toBe(1);
@@ -130,9 +127,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('would-be refined');
-      const result = await asCommand((cli) =>
-        refineStore(cli, dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) }),
-      );
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(1);
       expect(result.refined).toBe(0);
@@ -155,12 +150,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('new refined content');
-      const result = await asCommand((cli) =>
-        refineStore(cli, dir, {
-          llm: anthropicLlm({ apiKey: 'test', fetcher }),
-          all: true,
-        }),
-      );
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }), all: true });
 
       expect(result.refined).toBe(1);
       expect(readEntry(dir, semantic.id)?.content).toBe('new refined content');
@@ -178,12 +168,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('would-be new content');
-      const result = await asCommand((cli) =>
-        refineStore(cli, dir, {
-          llm: anthropicLlm({ apiKey: 'test', fetcher }),
-          dryRun: true,
-        }),
-      );
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }), dryRun: true });
 
       expect(result.refined).toBe(1);
       expect(readEntry(dir, semantic.id)?.content).toContain('[Consolidated from');
@@ -204,9 +189,7 @@ describe('refineStore', () => {
       writeEntry(dir, plainSemantic);
 
       const fetcher = mockFetcher('nope');
-      const result = await asCommand((cli) =>
-        refineStore(cli, dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) }),
-      );
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(0);
       expect(result.refined).toBe(0);
@@ -224,9 +207,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('ignored', false); // API error
-      const result = await asCommand((cli) =>
-        refineStore(cli, dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) }),
-      );
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(1);
       expect(result.refined).toBe(0);

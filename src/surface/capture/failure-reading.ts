@@ -5,7 +5,7 @@ import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { type JsonValue, isJsonObjectLiteral, isJsonString } from '../../base/util/json.js';
-import type { CaptureErrorOutcome, RoutineRule } from '../../base/records/rejections.js';
+import type { CaptureErrorOutcome, RoutineRule } from '../../base/ports/store/rejections.js';
 
 const COMMAND_HEAD_WORDS = 2;
 
@@ -96,8 +96,8 @@ export function lessonFromFailure(
   scrub: (text: string) => string = (text) => text,
 ): FailureReading {
   if (!isJsonObjectLiteral(payload)) return { skip: 'skipped-invalid', text: null, detail: null };
-  // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are
-  // all optional.
+  // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are all
+  // optional.
   const p = payload as ToolFailurePayload;
   if (p.is_interrupt === true) return { skip: 'skipped-interrupt', text: null, detail: null };
   if (!isJsonString(p.error) || p.error.trim().length < 12) {
@@ -145,8 +145,8 @@ export interface FailureReport {
   detail_hash: string | null;
 }
 
-/** {@link lessonFromFailure} plus the detail's hash, for a writer whose store is
- * elsewhere. Pure. */
+/** {@link lessonFromFailure} plus the detail's hash, for a writer whose store is elsewhere.
+ * Pure. */
 export function failureReport(payload: JsonValue): FailureReport {
   const reading = lessonFromFailure(payload, scrubForSharing);
   return {

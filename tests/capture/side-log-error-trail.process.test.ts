@@ -11,7 +11,7 @@ import { normalizeHookPayload } from '../../src/surface/cli/stdin.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 import { dispose, project, type Project } from '../_helpers/delivery-boundary.js';
 import type { LogFields } from '../../src/base/util/log.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { hookStore } from '../_helpers/cli-stores.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 let p: Project;
@@ -42,7 +42,8 @@ describe('the pre-compact log file', () => {
     try {
       const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
       const logFile = path.join(p.dir, 'trail.log');
-      await preCompactHook(p.hippoRoot, apiCtx(p.hippoRoot), {
+      await preCompactHook(p.hippoRoot, hookStore(p.hippoRoot), {
+        tenantId: 'default',
         stdinText: normalizeHookPayload(copilotPayload('preCompact', p.cwd, transcript)),
         runtime: 'copilot',
         logFile,

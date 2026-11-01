@@ -21,6 +21,8 @@ import {
   stringFlag,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
+import { cliApiContext } from './api-context.js';
+import type { ContextWith } from '../../api/types.js';
 import {
   closeObjectVerb,
   foundOrExit,
@@ -32,7 +34,6 @@ import {
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { shellFolder } from './versioned-verbs.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };
 
@@ -43,7 +44,7 @@ function printDecisionRow(d: Decision): void {
   if (d.context) console.log(`    context: ${d.context}`);
 }
 
-function decideList(ctx: HippoDbContext, flags: CliFlags): Promise<void> {
+function decideList(ctx: ContextWith<'objects'>, flags: CliFlags): Promise<void> {
   return listObjectsVerb(flags, {
     plural: 'decisions',
     states: objectStates('decision'),
@@ -52,7 +53,7 @@ function decideList(ctx: HippoDbContext, flags: CliFlags): Promise<void> {
   });
 }
 
-async function decideGet(ctx: HippoDbContext, args: string[]): Promise<void> {
+async function decideGet(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo decide get <id>', DECISION.idLabel);
   const decision = foundOrExit(await objectGet(ctx, 'decision', id), DECISION.noun, id);
   console.log(`Decision #${decision.id}`);
@@ -62,7 +63,7 @@ async function decideGet(ctx: HippoDbContext, args: string[]): Promise<void> {
   printLifecycleTail(decision);
 }
 
-function decideClose(ctx: HippoDbContext, args: string[]): Promise<void> {
+function decideClose(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   return closeObjectVerb(args, DECISION, (id) => objectClose(ctx, 'decision', id));
 }
 
@@ -71,11 +72,10 @@ export async function handleDecide({
   tenantId,
   args,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  const ctx = cli.apiContext(hippoRoot, tenantId);
+  const ctx = cliApiContext(hippoRoot, tenantId);
   if (subcommand === 'list') return decideList(ctx, flags);
   if (subcommand === 'get') return decideGet(ctx, args);
   if (subcommand === 'close') return decideClose(ctx, args);
@@ -84,7 +84,7 @@ export async function handleDecide({
 }
 
 async function decideCreate(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'objects'>,
   decisionText: string,
   flags: CliFlags,
 ): Promise<void> {
@@ -128,7 +128,7 @@ function exitWithDecideUsage(): never {
 }
 
 async function weakenOrWarn(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'objects'>,
   oldEntry: MemoryEntry,
   supersedesMemId: string | null,
 ): Promise<void> {

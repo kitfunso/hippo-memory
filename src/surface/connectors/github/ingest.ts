@@ -4,10 +4,9 @@
 // transaction, which is what holds when two workers race.
 
 import type { RememberOptions } from '../../../api/index.js';
-import type { ConnectorEvent } from '../../../base/records/connectors.js';
-import type { ConnectorContext, IngestResult } from '../ingest.js';
+import type { ConnectorEvent } from '../../../base/ports/store.js';
+import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
-import { rememberOncePerEvent } from '../../../api/hippo-db/connector-writes.js';
 import {
   issueEventToRememberOpts,
   issueCommentEventToRememberOpts,
@@ -84,6 +83,7 @@ export async function ingestEvent(
   ctx: ConnectorContext,
   input: IngestInput,
 ): Promise<IngestResult> {
+  const events = ctx.store.connectorEvents;
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
     eventUpdatedAt(input.event),
@@ -95,7 +95,12 @@ export async function ingestEvent(
     eventName: input.event.eventName,
   };
 
-  const done = await rememberOncePerEvent(ctx, event, () => transformEvent(input.event));
-  // GitHub auto-retries with the same body; any logged event, an empty body's too, is a duplicate.
-  return done.status === 'logged' ? { status: 'duplicate', memoryId: done.memoryId } : done;
+  // Fast path: pre-check. Avoids running the transform / opening a write tx for the common
+  // already-seen case (GitHub auto-retries with the same body).
+  const seen = await events.eventRecord(event);
+  if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
+
+  // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the
+  // transform.
+  return rememberWithEventLog(ctx, event, transformEvent(input.event));
 }

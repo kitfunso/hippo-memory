@@ -18,8 +18,8 @@ export interface ObjectDescriptor<K extends ObjectKind> {
   readonly states: ReadonlySet<ObjectByKind[K]['status']>;
   /** The statuses a close may start from. */
   readonly closableFrom: readonly ObjectByKind[K]['status'][];
-  /** Said in place of "not <closable statuses>" when a close is refused; incidents say
-   * "already closed". */
+  /** Said in place of "not <closable statuses>" when a close is refused; incidents say "already
+   * closed". */
   readonly closeRefusal?: string;
 }
 

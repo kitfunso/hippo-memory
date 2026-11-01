@@ -20,7 +20,7 @@ import type {
   Objects,
   PoliciesInForceQuery,
   SkillsByNameQuery,
-} from '../../../base/records/objects.js';
+} from '../../../base/ports/store/objects.js';
 import { rowSpec, type RowByKind } from './object-rows.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { listPredictions, readPrediction } from '../learning/predictions.js';

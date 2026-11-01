@@ -8,8 +8,8 @@ import { DAY_MS, MINUTE_MS } from '../../base/util/time.js';
 import { isForeignPage } from './auth.js';
 
 /** The secret a dashboard started with, which keys its cookies and never leaves the server, the
- * port it asked for, which names the cookie until the socket says, and the tickets it
- * handed out. */
+ * port it asked for, which names the cookie until the socket says, and the tickets it handed
+ * out. */
 export interface DashboardAccess {
   readonly token: string;
   readonly port: number;
@@ -45,8 +45,8 @@ function sameSecret(given: string | undefined, secret: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Tickets held in memory with their mint times; a late one is dropped at the next mint
- * or redeem. */
+/** Tickets held in memory with their mint times; a late one is dropped at the next mint or
+ * redeem. */
 export function dashboardTickets(): DashboardTickets {
   const minted = new Map<string, number>();
   const dropLate = (nowMs: number): void => {
@@ -123,8 +123,8 @@ export function passDashboardSession({
 }: PassDashboardSessionOptions): DashboardSession {
   if (isForeignPage(req)) throw new HttpError(403, 'cross-site or non-local request refused');
   const port = req.socket.localPort ?? access.port;
-  // Cookies ignore the port, so the name carries it: two dashboards on one host keep
-  // separate sessions.
+  // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate
+  // sessions.
   const cookieName = `hippo_dashboard_${port}`;
   // The ticket rides under the `token` key, so the URL keeps the shape users and scripts know.
   if (access.tickets.redeem(query.get('token') ?? undefined, now())) {

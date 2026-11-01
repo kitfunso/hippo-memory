@@ -1,14 +1,12 @@
 // sessionEndWork runs from the api with no CLI: real store, host steps passed in, store choice and sleep, capture and
 // cursor policy decided by the api.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { CliContext } from '../../src/surface/cli/api-context.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { cliApiContext, type CliContext } from '../../src/surface/cli/api-context.js';
 import { heldLog, sessionEndWork, type SessionEndWork } from '../../src/api/session-end.js';
-import { globalEnrichment } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
-import { asCommand, endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
 const { sqliteStore } = sessionPerTest();
 
@@ -28,8 +26,6 @@ beforeEach(() => {
   lines = [];
   steps = [];
 });
-
-afterEach(() => endLastingCommands());
 
 function work(over: Partial<Work> = {}): Work {
   return {
@@ -75,26 +71,22 @@ function work(over: Partial<Work> = {}): Work {
 
 /** The folder's Context as if it had no store of its own, reaching `globalRoot` (or no global store when null). */
 function withoutOwnStore(globalRoot: string | null): CliContext {
-  const ctx = lastingCommand().apiContext(root, TENANT);
+  const ctx = cliApiContext(root, TENANT);
   const reach = { ...ctx.reach!, hasLocal: false, global: undefined };
   if (globalRoot === null) return { ...ctx, reach };
-  const store = sqliteStore(globalRoot);
-  // As a root fills it, so session end books the global store's re-reads through its enrichment.
-  const global = { root: globalRoot, store, config: loadConfig(globalRoot), enrich: globalEnrichment(store) };
+  const global = { root: globalRoot, store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
   return { ...ctx, reach: { ...reach, global } };
 }
 
 function withAutoSleep(threshold: number): CliContext {
-  const ctx = lastingCommand().apiContext(root, TENANT);
+  const ctx = cliApiContext(root, TENANT);
   return { ...ctx, config: { ...ctx.config, autoSleep: { enabled: true, threshold } } };
 }
 
 describe('sessionEndWork', () => {
   it('runs the steps in order and closes the session snapshot', async () => {
     saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
-    await asCommand((cli) =>
-      sessionEndWork(cli.apiContext(root, TENANT), work({ transcriptPath: `${root}/s1.jsonl` })),
-    );
+    await sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath: `${root}/s1.jsonl` }));
     expect(steps).toEqual(['sleep', 'scan', 'capture:own:t1,t2,t3:-', 'digest:3:s1']);
     expect(loadActiveTaskSnapshot(root, TENANT)).toBeNull();
     expect(lines.some((l) => l.includes('closed 1 active snapshot(s) for session s1'))).toBe(true);
@@ -147,12 +139,10 @@ describe('sessionEndWork', () => {
   });
 
   it('captures nothing without a transcript, and keys the digest on the transcript name without a session id', async () => {
-    await asCommand((cli) => sessionEndWork(cli.apiContext(root, TENANT), work()));
+    await sessionEndWork(cliApiContext(root, TENANT), work());
     expect(lines).toContain('skip capture: no transcript for this session');
     steps = [];
-    await asCommand((cli) =>
-      sessionEndWork(cli.apiContext(root, TENANT), work({ sessionId: null, transcriptPath: `${root}/abc.jsonl` })),
-    );
+    await sessionEndWork(cliApiContext(root, TENANT), work({ sessionId: null, transcriptPath: `${root}/abc.jsonl` }));
     expect(steps).toContain('digest:3:abc');
   });
 
@@ -161,7 +151,7 @@ describe('sessionEndWork', () => {
     saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
     const before = process.listenerCount('exit');
     const transcriptPath = `${root}-missing.jsonl`;
-    await asCommand((cli) => sessionEndWork(cli.apiContext(root, TENANT), work({ transcriptPath })));
+    await sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath }));
     await sessionEndWork(withoutOwnStore(null), work({ transcriptPath }));
     expect(process.listenerCount('exit')).toBe(before);
     const reread = lines.filter((l) => l.startsWith('skip re-read count: cannot read the transcript'));
@@ -176,9 +166,7 @@ describe('sessionEndWork', () => {
       throw new Error('sleep failed');
     };
     await expect(
-      asCommand((cli) =>
-        sessionEndWork(cli.apiContext(root, TENANT), work({ transcriptPath: `${root}-missing.jsonl`, sleep })),
-      ),
+      sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath: `${root}-missing.jsonl`, sleep })),
     ).rejects.toThrow('sleep failed');
     expect(process.listenerCount('exit')).toBe(before);
     expect(lines.some((l) => l.startsWith('skip re-read count'))).toBe(true);

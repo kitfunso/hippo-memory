@@ -1,6 +1,5 @@
 // The anchoring detector and the bias-hint switch.
 import type { HippoConfig } from '../../base/config/config.js';
-import { fnv1a32 } from '../../base/util/fnv1a.js';
 
 /**
  * Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked
@@ -16,7 +15,7 @@ export interface AnchoringHint {
   /** The memory ID that is anchoring the agent's reasoning. */
   memoryId: string;
   /** For 'memory_dominance': how many distinct queries in the recent window had this memory as their top-1 result.
-   *  Always at least `minDominance` when emitted. */
+   *  Always >= 3 when emitted. */
   queryCount?: number;
   /** Human-readable summary surfaced to the agent. */
   summary: string;
@@ -40,15 +39,15 @@ export interface RecallHistoryEntry {
 export type RecallHistorySnapshot = readonly RecallHistoryEntry[];
 
 export interface DetectAnchoringOptions {
-  /** memory_dominance threshold: number of distinct queryHashes that must have returned the same topMemoryId.
-   * Default DEFAULT_MIN_DOMINANCE. */
+  /** memory_dominance threshold: number of distinct queryHashes that must have returned the same topMemoryId. Default
+   *  3. */
   minDominance?: number;
   /** query_repeat window: how many recent history entries to scan for query repeat.
-   *  Default DEFAULT_RECENT_REPEAT_WINDOW. */
+   *  Default 5. */
   recentRepeatWindow?: number;
   /**
    * Cooldown: suppress when the prior fire (per `anchoredOn`) was for the same topMemoryId within
-   * this many history entries. Default DEFAULT_COOLDOWN.
+   * this many history entries. Default 3.
    */
   cooldown?: number;
 }
@@ -81,11 +80,22 @@ export function hashQueryText(query: string): number {
   return fnv1a32(deduped.join(' '));
 }
 
+function fnv1a32(text: string): number {
+  // FNV-1a 32-bit. Offset basis 2166136261, prime 16777619.
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    // 32-bit multiply via Math.imul — handles overflow correctly.
+    hash = Math.imul(hash, 16777619);
+  }
+  // Coerce to unsigned 32-bit for stable comparison.
+  return hash >>> 0;
+}
+
 /**
  * Detects anchoring against the current (queryHash, topMemoryId); memory_dominance wins when both
  * rules fire, since it spans DIFFERENT queries. Cooldown is per memory: a hint on the SAME
- * topMemoryId within `cooldown` history entries (DEFAULT_COOLDOWN by default) is suppressed.
- * Returns an AnchoringHint or null.
+ * topMemoryId within `cooldown=3` history entries is suppressed. Returns an AnchoringHint or null.
  */
 export function detectAnchoring(
   history: RecallHistorySnapshot,

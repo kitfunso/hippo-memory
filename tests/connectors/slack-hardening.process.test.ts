@@ -5,11 +5,11 @@ import { rememberUntrusted } from '../../src/api/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../../src/db/index.js';
-import { resolveTenant, type RouteFallback } from '../../src/api/hippo-db/connector-events.js';
+import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/tenant-route.js';
 import { ingestMessage, type IngestInput } from '../../src/surface/connectors/slack/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
-import { parkInDlq } from '../../src/api/dead-letters.js';
+import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { replaySlackDlqEntry, slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { archiveRawMemory } from '../../src/store/sqlite/entries/raw-archive.js';
 import { verifySlackSignature } from '../../src/surface/connectors/slack/signature.js';
@@ -88,9 +88,9 @@ describe('Slack hardening + migration v19', () => {
     const restore = withEnv('HIPPO_TENANT', 'env-tenant-A');
     const db = openHippoDb(root);
     try {
-      expect(
-        await resolveTenant({ store: sqliteStore(root) }, { connector: 'slack', teamId: 'TUNKNOWN' }, fallback()),
-      ).toBe('env-tenant-A');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TUNKNOWN' }, fallback())).toBe(
+        'env-tenant-A',
+      );
     } finally {
       closeHippoDb(db);
       restore();
@@ -107,9 +107,7 @@ describe('Slack hardening + migration v19', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      expect(
-        await resolveTenant({ store: sqliteStore(root) }, { connector: 'slack', teamId: 'TUNKNOWN' }, fallback()),
-      ).toBeNull();
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TUNKNOWN' }, fallback())).toBeNull();
     } finally {
       closeHippoDb(db);
       restore();
@@ -126,9 +124,9 @@ describe('Slack hardening + migration v19', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      expect(
-        await resolveTenant({ store: sqliteStore(root) }, { connector: 'slack', teamId: 'TUNKNOWN' }, fallback(true)),
-      ).toBe('env-fallback');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TUNKNOWN' }, fallback(true))).toBe(
+        'env-fallback',
+      );
     } finally {
       closeHippoDb(db);
       r2();
@@ -382,7 +380,7 @@ describe('Slack hardening + migration v19', () => {
     }
 
     // Seed the DLQ row.
-    const dlqId = await parkInDlq({ store: sqliteStore(root) }, slackDlq, {
+    const dlqId = await parkInDlq(slackDlq, sqliteStore(root), {
       tenantId: 'default',
       teamId: 'TREPLAY',
       rawPayload: body,

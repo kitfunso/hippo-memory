@@ -66,26 +66,26 @@ describe('graph-view personal scope', () => {
   });
 
   it('A sees its own entity and the edge to it; B sees neither; a NULL-memory entity stays for both', async () => {
-    const a = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { reader: alice });
+    const a = await buildGraphModel(sqliteStore(home).graphReads, T, { reader: alice });
     expect(names(a)).toEqual(['ANCHORED', 'PRIV-A', 'TEAM']);
     expect(a.edges).toHaveLength(1);
 
-    const b = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { reader: bob });
+    const b = await buildGraphModel(sqliteStore(home).graphReads, T, { reader: bob });
     expect(names(b)).toEqual(['ANCHORED', 'TEAM']);
     expect(b.edges).toHaveLength(0);
   });
 
   it('focus on a hidden name is empty for B, and B focusing a neighbour does not reach it', async () => {
-    const a = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { entity: 'PRIV-A', reader: alice });
+    const a = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: alice });
     expect(names(a)).toEqual(['PRIV-A', 'TEAM']);
     expect(a.edges).toHaveLength(1);
 
-    expect(await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { entity: 'PRIV-A', reader: bob })).toEqual({
+    expect(await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: bob })).toEqual({
       nodes: [],
       edges: [],
       truncated: false,
     });
-    const viaTeam = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { entity: 'TEAM', reader: bob });
+    const viaTeam = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'TEAM', reader: bob });
     expect(names(viaTeam)).toEqual(['TEAM']);
     expect(viaTeam.edges).toHaveLength(0);
   });

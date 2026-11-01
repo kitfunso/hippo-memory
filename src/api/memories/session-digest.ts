@@ -2,26 +2,26 @@
 // per session.
 import type { HippoConfig } from '../../base/config/config.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { createMemoryAt, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { SESSION_DIGEST_TAG, sessionDigestId } from '../../base/session/session-digest-row.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../base/session/session-snapshot.js';
 import { buildSessionDigest } from '../../domain/learn/session-digest.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import type { Context } from '../types.js';
-import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 
 /** The repo store's reads and the digest's write. */
-export type DigestStore = Pick<HippoDbStore, 'entriesWhere' | 'hippoDb' | 'entryWrites'>;
+export type DigestStore = Pick<StoreWith<'sessions'>, 'entriesWhere' | 'sessions' | 'entryWrites'>;
 
-/** Where a digest writes: the repo's own store, its tenant and config, and the actor its
- * audit names. */
+/** Where a digest writes: the repo's own store, its tenant and config, and the actor its audit
+ * names. */
 export type DigestContext = Pick<Context, 'tenantId' | 'actor'> & {
   readonly store: DigestStore;
   readonly config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 };
 
-/** The repo's paths as the disk has them; the surface reads them, so the api names no
- * file system. */
+/** The repo's paths as the disk has them; the surface reads them, so the api names no file
+ * system. */
 export interface DigestRepo {
   /** The repo folder with links followed, or null when it sits on a network path. */
   root(): string | null;
@@ -74,7 +74,7 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
   const digests = entries
     .filter((e) => !e.extractedFrom && e.sourceSessionId !== key)
     .map((e) => e.content);
-  const handoff = await ctx.store.hippoDb.sessions.read(
+  const handoff = await ctx.store.sessions.read(
     ctx.tenantId,
     'handoff',
     {
@@ -93,8 +93,8 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
   ];
 }
 
-/** The reason a session earns no digest, in the order the checks run, else the repo root it
- * ran in. */
+/** The reason a session earns no digest, in the order the checks run, else the repo root it ran
+ * in. */
 function skipReason(req: SessionDigestRequest): { reason: string } | { root: string } {
   if (req.prompts.length === 0) return { reason: 'no human prompt' };
   if (!req.finalText.trim() && req.editCount === 0) {
@@ -126,7 +126,7 @@ export async function writeSessionDigest(
   });
   if (!draft) return skipped('nothing left after the filters');
   const entry: MemoryEntry = {
-    ...createMemoryAt(
+    ...createMemory(
       draft.content,
       {
         layer: Layer.Episodic,

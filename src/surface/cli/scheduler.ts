@@ -57,8 +57,8 @@ function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
       workspaces: [...new Set(strings.map(normalizeWorkspace).filter(Boolean))].sort(),
     };
   } catch (err) {
-    // The next registration rewrites the file, so keep the bad copy for the user to recover
-    // entries from.
+    // The next registration rewrites the file, so keep the bad copy for the user to recover entries
+    // from.
     setAsideCorruptRegistry(registryPath, err);
     return defaultRegistry();
   }
@@ -148,8 +148,8 @@ export function quoteInsideWindowsArg(text: string): string {
   return text.replace(/(\\*)"/g, '$1$1\\"').replace(/\\+$/, '$&$&');
 }
 
-/** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split
- * the command. */
+/** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split the
+ * command. */
 export function buildSchtasksCreateArgs(taskName: string, cmd: string): string[] {
   return [
     '/create',
@@ -180,8 +180,8 @@ export function runDailyMaintenance(
     const store = path.join(resolved, HIPPO_DIR);
     if (!fs.existsSync(store)) continue;
     runCommand(resolved, ['learn', '--git', '--days', '1']);
-    // The home folder is registered and its .hippo is the global store, which the runner
-    // already sleeps.
+    // The home folder is registered and its .hippo is the global store, which the runner already
+    // sleeps.
     if (globalReal !== undefined && realpathOrSelf(store) === globalReal) continue;
     runCommand(resolved, ['sleep']);
   }

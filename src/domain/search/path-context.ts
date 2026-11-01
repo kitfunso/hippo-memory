@@ -64,8 +64,8 @@ export function pathOverlapScore(memoryPathTags: string[], currentPathTags: stri
 const PATH_BOOST_WEIGHT = 0.3;
 
 /**
- * Multiplier (1.0 plus PATH_BOOST_WEIGHT at most) applied to a composite recall score for path
- * locality; filters the memory's tags to path:* itself so call sites cannot drift.
+ * Multiplier (1.0..1.3) applied to a composite recall score for path locality; filters the memory's
+ * tags to path:* itself so call sites cannot drift.
  */
 export function pathBoostMultiplier(memoryTags: string[], currentPathTags: string[]): number {
   const memPathTags = memoryTags.filter((t) => t.startsWith('path:'));

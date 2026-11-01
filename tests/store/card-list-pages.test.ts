@@ -35,7 +35,7 @@ function seed(root: string, n: number): string[] {
 }
 
 async function walk(root: string, limit: number, status?: 'ready') {
-  const cards = sqliteStore(root).hippoDb.cards;
+  const cards = sqliteStore(root).cards;
   return recordStatementsAsync(async () => {
     const ids: string[] = [];
     for await (const page of keysetPages((after) => cards.list(TENANT, { status, limit, after }))) {
@@ -59,7 +59,7 @@ describe('card list pages', () => {
   it('pages one status in the same order the whole list keeps', async () => {
     const root = makeStore('card-pages-status').root;
     const whole = seed(root, 50);
-    const sqlite = sqliteStore(root).hippoDb.cards;
+    const sqlite = sqliteStore(root).cards;
     const ready = (await sqlite.list(TENANT, { status: 'ready', limit: 1000 })).cards.map((c) => c.id);
     expect((await walk(root, 4, 'ready')).result).toEqual(ready);
     expect(ready).toEqual(whole.filter((id) => Number(id.slice(5)) % 2 === 0));
@@ -68,7 +68,7 @@ describe('card list pages', () => {
   it('reads one page of a 1,200-card board in one statement of limit plus one rows', async () => {
     const root = makeStore('card-pages-one').root;
     seed(root, 1200);
-    const cards = sqliteStore(root).hippoDb.cards;
+    const cards = sqliteStore(root).cards;
     const { result, statements, reads } = await recordStatementsAsync(() => cards.list(TENANT, { limit: 100 }));
     expect(result.cards).toHaveLength(100);
     expect(result.next).toEqual({ key: result.cards[99]!.updatedAt, id: result.cards[99]!.id });

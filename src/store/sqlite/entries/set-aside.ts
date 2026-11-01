@@ -5,10 +5,10 @@ import type { StoreModel } from '../runtime/open.js';
 import { SYNC_ACTOR } from '../../../base/memory/agent-memory-tools.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { insertDormantRow } from '../dormant/dormant-rows.js';
-import { calculateStrengthAt } from '../../../base/memory/strength.js';
+import { calculateStrength } from '../../../base/memory/strength.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
-import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-row.js';
-import type { SetAsideResult, SetAsideWhy } from '../../../base/records/project-tags.js';
+import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
+import type { SetAsideResult, SetAsideWhy } from '../../../base/ports/store/project-tags.js';
 import { handleNow } from '../runtime/handle-clock.js';
 
 export interface SetAsideRowOptions {
@@ -44,7 +44,7 @@ export function setAsideRow(
   // Sleep's dormant move skips kept rows, so the steps are written out here without its filter.
   insertDormantRow(db, {
     entry: untagged,
-    strength: calculateStrengthAt(row, now, rules.strength),
+    strength: calculateStrength(row, now, rules.strength),
     reason: 'source-deleted',
     dormantAt: now.toISOString(),
   });

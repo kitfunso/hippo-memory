@@ -8,15 +8,12 @@ import type {
   FailureSummary,
   FailureLog,
   RoutineRule,
-} from '../../../base/records/rejections.js';
-import {
-  type RatedFailure,
-  failuresPerSession,
-  FAILURE_LOG_RETENTION_DAYS,
-} from '../../../base/records/failure-repeats.js';
+} from '../../../base/ports/store/rejections.js';
+import { type RatedFailure, failuresPerSession } from '../../../base/records/failure-repeats.js';
 import type { OnHandle } from '../runtime/open.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../../../base/records/failure-log-retention.js';
 import { MAX_HOOK_FIELD_LEN } from '../../../base/util/limits.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { handleNow } from '../runtime/handle-clock.js';

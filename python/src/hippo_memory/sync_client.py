@@ -181,7 +181,7 @@ class HippoSync:
         q: str,
         *,
         limit: int | None = None,
-        mode: Literal["bm25", "hybrid"] | None = None,
+        mode: Literal["bm25", "hybrid", "physics"] | None = None,
         scope: str | None = None,
         include_continuity: bool = False,
         fresh_tail_count: int | None = None,

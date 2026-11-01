@@ -1,14 +1,20 @@
-// `hippo init`: create a store and wire the detected agents' instruction files, hooks and
-// daily runner.
+// `hippo init`: create a store and wire the detected agents' instruction files, hooks and daily
+// runner.
 
+import { envSkipAutoIntegrations } from '../../base/util/env.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import { installJsonHooks } from '../hooks-install/json-hooks.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
+import { isCodexPresent } from '../hooks-install/detect.js';
+import { isCodexWrapperInstalled } from '../hooks-install/codex-wrapper.js';
+import { installOpencodePlugin } from '../hooks-install/opencode.js';
 import { initMemoryStore } from '../../api/store-init.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryList } from '../../api/memories/memories.js';
-import { cliInitGlobal, type CliCommand, type CliScope } from './api-context.js';
+import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
 import {
@@ -19,17 +25,22 @@ import {
 import { currentMachine } from '../../infra/machine.js';
 import { emptyReport, mergeReports } from '../../base/memory/agent-memory-report.js';
 import { registerWorkspace } from './scheduler.js';
-import { numberFlag, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  numberFlag,
+  stringFlag,
+  type CommandContext,
+  boolFlag,
+} from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
-import { setupDailySchedule } from './install-steps.js';
 import {
-  autoInstallHooks,
-  detectAgentHooks,
-  initInstallsIntegrations,
-  installUserLevelHooks,
-} from './init-integrations.js';
+  installCodexMemoryHooks,
+  setupDailySchedule,
+  warnClaudeSettingsUnusable,
+} from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
+import { appendHookBlock, HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks-install/instructions.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
 import { SEED_DAYS_SCAN, SEED_DAYS_SINGLE } from './flag-defaults.js';
 
@@ -70,7 +81,6 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
 }
 
 interface InitScannedRepoOptions {
-  readonly cli: CliCommand;
   readonly repo: string;
   readonly tenantId: string;
   readonly globalRoot: string;
@@ -78,7 +88,6 @@ interface InitScannedRepoOptions {
 
 /** Creates the repo's store when absent and registers it; returns whether it already existed. */
 async function initScannedRepo({
-  cli,
   repo,
   tenantId,
   globalRoot,
@@ -86,14 +95,13 @@ async function initScannedRepo({
   const repoHippo = path.join(repo, HIPPO_DIR);
   const alreadyExists = isInitialized(repoHippo);
   if (!alreadyExists) {
-    await initMemoryStore(cli.apiContext(repoHippo, tenantId));
+    await initMemoryStore(cliApiContext(repoHippo, tenantId));
   }
   registerWorkspace(globalRoot, repo);
   return alreadyExists;
 }
 
 interface LearnScannedRepoOptions {
-  cli: CliCommand;
   repo: string;
   tenantId: string;
   seedDays: number;
@@ -106,13 +114,14 @@ interface LearnScannedRepoOptions {
 async function learnScannedRepo(
   options: LearnScannedRepoOptions,
 ): Promise<Pick<Awaited<ReturnType<typeof learnFromRepo>>, 'added' | 'lowInfo'>> {
-  const { cli, repo, tenantId, seedDays, learn, machine, agentImport } = options;
+  const { repo, tenantId, seedDays, learn, machine, agentImport } = options;
   const repoHippo = path.join(repo, HIPPO_DIR);
   let added = 0;
   let lowInfo = 0;
   if (learn && isGitRepo(machine.git, repo)) {
     const result = await learnFromRepo({
-      ctx: cli.apiContext(repoHippo, tenantId),
+      hippoRoot: repoHippo,
+      tenantId,
       repoPath: repo,
       days: seedDays,
       label: path.basename(repo),
@@ -123,7 +132,7 @@ async function learnScannedRepo(
   if (learn) {
     mergeReports(
       agentImport,
-      await importProjectMemories(repoHippo, cli.syncOptions(tenantId, machine)),
+      await importProjectMemories(repoHippo, cliSyncOptions(tenantId, machine)),
     );
   }
   return { added, lowInfo };
@@ -173,14 +182,13 @@ async function initEachScannedRepo(
   repos: readonly string[],
   scan: RepoScan,
 ): Promise<Omit<ScanSummary, 'repoCount'>> {
-  const { cli, tenantId, globalRoot, seedDays, learn, machine, agentImport } = scan;
+  const { tenantId, globalRoot, seedDays, learn, machine, agentImport } = scan;
   let totalLessons = 0;
   // Rolled up so the cross-repo summary reports the gate too: a dropped subject is never invisible.
   let totalLowInfo = 0;
   for (const repo of repos) {
-    const alreadyExists = await initScannedRepo({ cli, repo, tenantId, globalRoot });
+    const alreadyExists = await initScannedRepo({ repo, tenantId, globalRoot });
     const { added, lowInfo } = await learnScannedRepo({
-      cli,
       repo,
       tenantId,
       seedDays,
@@ -192,7 +200,7 @@ async function initEachScannedRepo(
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = await memoryList(cli.apiContext(path.join(repo, HIPPO_DIR), tenantId), {
+    const entries = await memoryList(cliApiContext(path.join(repo, HIPPO_DIR), tenantId), {
       everyTenant: true,
     });
     console.log(
@@ -203,10 +211,7 @@ async function initEachScannedRepo(
   return { totalLessons, totalLowInfo };
 }
 
-async function initScannedRepos(
-  { cli, tenantId, flags }: CommandContext,
-  scanDir: string,
-): Promise<void> {
+async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFlags): Promise<void> {
   const resolved = path.resolve(scanDir);
   console.log(`Scanning ${resolved} for git repositories...\n`);
 
@@ -223,14 +228,14 @@ async function initScannedRepos(
   const machine = currentMachine();
   const agentImport = emptyReport();
   const learn = !boolFlag(flags, 'no-learn');
-  const scan: RepoScan = { cli, tenantId, globalRoot, seedDays, learn, machine, agentImport };
+  const scan: RepoScan = { tenantId, globalRoot, seedDays, learn, machine, agentImport };
   const totals = await initEachScannedRepo(repos, scan);
 
   printScanSummary({ repoCount: repos.length, ...totals });
   if (learn) {
     mergeReports(
       agentImport,
-      await importUserMemories(globalRoot, cli.syncOptions(tenantId, machine)),
+      await importUserMemories(globalRoot, cliSyncOptions(tenantId, machine)),
     );
     printAgentImport(agentImport, '');
   }
@@ -242,7 +247,7 @@ async function initScannedRepos(
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
 }
 
-async function initGlobalOnly({ cli, tenantId, flags }: CommandContext): Promise<void> {
+async function initGlobalOnly(tenantId: string, flags: CliFlags): Promise<void> {
   const globalRoot = hippoHomeDir();
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
@@ -252,17 +257,18 @@ async function initGlobalOnly({ cli, tenantId, flags }: CommandContext): Promise
   }
   if (!boolFlag(flags, 'no-learn')) {
     printAgentImport(
-      await importUserMemories(globalRoot, cli.syncOptions(tenantId, currentMachine())),
+      await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())),
     );
   }
 }
 
-async function seedFromGitHistory({ cli, hippoRoot, tenantId }: CliScope): Promise<void> {
+async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<void> {
   if (!isGitRepo(processGit, process.cwd())) return;
   const seedDays = SEED_DAYS_SINGLE;
   console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
   const { added, skipped } = await learnFromRepo({
-    ctx: cli.apiContext(hippoRoot, tenantId),
+    hippoRoot,
+    tenantId,
     repoPath: process.cwd(),
     days: seedDays,
   });
@@ -273,16 +279,15 @@ async function seedFromGitHistory({ cli, hippoRoot, tenantId }: CliScope): Promi
   }
 }
 
-export async function handleInit(cmd: CommandContext): Promise<void> {
-  const { hippoRoot, tenantId, flags, cli } = cmd;
+export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   if (boolFlag(flags, 'scan')) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
-    await initScannedRepos(cmd, scanDir);
+    await initScannedRepos(scanDir, tenantId, flags);
     return;
   }
 
   if (boolFlag(flags, 'global')) {
-    await initGlobalOnly(cmd);
+    await initGlobalOnly(tenantId, flags);
     return;
   }
 
@@ -290,7 +295,7 @@ export async function handleInit(cmd: CommandContext): Promise<void> {
   if (alreadyExists) {
     console.log('Already initialized at', hippoRoot);
   } else {
-    await initMemoryStore(cli.apiContext(hippoRoot, tenantId));
+    await initMemoryStore(cliApiContext(hippoRoot, tenantId));
     console.log('Initialized Hippo at', hippoRoot);
     console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
     console.log('   Files: hippo.db stats.json');
@@ -311,11 +316,182 @@ export async function handleInit(cmd: CommandContext): Promise<void> {
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
   if (!alreadyExists && learn && !boolFlag(flags, 'global')) {
-    await seedFromGitHistory(cmd);
+    await seedFromGitHistory(hippoRoot, tenantId);
   }
 
   // Every run, not only the first: an agent's notes change between inits.
   if (learn) {
-    printAgentImport(await importForStore(hippoRoot, cli.syncOptions(tenantId, currentMachine())));
+    printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())));
+  }
+}
+
+/**
+ * Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic
+ * integration, so one switch skips them all.
+ */
+function initInstallsIntegrations(flags: CliFlags): boolean {
+  if (boolFlag(flags, 'no-hooks')) return false;
+  if (!envSkipAutoIntegrations()) return true;
+  console.log(
+    '   HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.',
+  );
+  return false;
+}
+
+/** Plain init: patch the detected agents' instruction files in cwd, then install their
+ * user-level hooks. */
+function autoInstallHooks(): void {
+  const cwd = process.cwd();
+  const agents = detectAgentHooks([cwd]);
+  const agentsMd = path.join(cwd, HOOKS.codex.file);
+  // Read before patching: a re-run of init finds its own block and skips the Codex hint.
+  const codexHint = !(
+    fs.existsSync(agentsMd) && fs.readFileSync(agentsMd, 'utf8').includes(HOOK_MARKERS.start)
+  );
+  patchInstructionFiles(cwd, agents);
+  installUserLevelHooks(agents, codexHint);
+}
+
+/** HOOKS keys of the agents with a marker file in any of dirs, in detector order. */
+function detectAgentHooks(dirs: readonly string[]): string[] {
+  // Map: filename to check -> hook key(s) to install
+  const detectors: Array<{ files: string[]; hook: string }> = [
+    { files: ['CLAUDE.md', '.claude/settings.json'], hook: 'claude-code' },
+    { files: ['AGENTS.md', '.codex'], hook: 'codex' },
+    // No Cursor row: Cursor reads the root AGENTS.md, which the rows either side patch.
+    { files: ['.openclaw', 'AGENTS.md'], hook: 'openclaw' },
+    { files: ['.opencode', 'opencode.json'], hook: 'opencode' },
+    { files: ['.pi', '.pi/agent'], hook: 'pi' },
+  ];
+
+  return detectors
+    .filter(({ files }) => dirs.some((dir) => files.some((f) => fs.existsSync(path.join(dir, f)))))
+    .map(({ hook }) => hook);
+}
+
+function patchInstructionFiles(dir: string, agents: readonly string[]): void {
+  // One block per file: several agents share AGENTS.md.
+  const seen = new Set<string>();
+  for (const hook of agents) {
+    const hookDef = HOOKS[hook];
+    if (!hookDef) continue;
+
+    const targetPath = path.resolve(dir, hookDef.file);
+    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a
+    // new AGENTS.md or CLAUDE.md.
+    if (!fs.existsSync(targetPath) || seen.has(targetPath)) continue;
+    seen.add(targetPath);
+    const existing = fs.readFileSync(targetPath, 'utf8');
+    if (existing.includes(HOOK_MARKERS.start)) {
+      refreshShippedBlock({ filePath: targetPath, text: existing, hook });
+      continue;
+    }
+    appendHookBlock(targetPath, existing, hookDef);
+    console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
+  }
+}
+
+interface ShippedBlockOptions {
+  readonly filePath: string;
+  readonly text: string;
+  readonly hook: string;
+}
+
+/** Swap an unedited block from an earlier hippo for the current one; an edited block stays, with
+ * a hint. */
+function refreshShippedBlock({ filePath, text, hook }: ShippedBlockOptions): void {
+  const block = hippoBlock(text);
+  if (!block || (block.owner && HOOKS[block.owner].content === block.inner)) return;
+  const { start, end, eol, owner } = block;
+  const name = path.basename(filePath);
+  if (!owner) {
+    console.log(
+      `   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`,
+    );
+    return;
+  }
+  writeFileAtomic(
+    filePath,
+    `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`,
+  );
+  console.log(`   Refreshed the ${owner} hippo block in ${name}`);
+}
+
+function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
+  const result = installJsonHooks(hook);
+  warnClaudeSettingsUnusable(result, '   ');
+  if (result.installedSessionEnd) {
+    console.log(`   Auto-installed hippo session-end SessionEnd hook in ${hook} settings`);
+  }
+  if (result.installedSessionStart) {
+    console.log(`   Auto-installed hippo last-sleep SessionStart hook in ${hook} settings`);
+  }
+  if (result.installedUserPromptSubmit) {
+    console.log(`   Auto-installed hippo pinned-inject UserPromptSubmit hook in ${hook} settings`);
+  }
+  if (result.installedPreCompact) {
+    console.log(`   Auto-installed hippo pre-compact PreCompact hook in ${hook} settings`);
+  }
+  if (result.installedCompactResume) {
+    console.log(
+      `   Auto-installed hippo compact-resume SessionStart(compact) hook in ${hook} settings`,
+    );
+  }
+  if (result.installedPostCompact) {
+    console.log(`   Auto-installed hippo post-compact PostCompact hook in ${hook} settings`);
+  }
+  if (result.installedCaptureError) {
+    console.log(
+      `   Auto-installed hippo capture-error PostToolUseFailure hook in ${hook} settings`,
+    );
+  }
+  if (result.migratedFromStop) {
+    console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
+  }
+  if (result.migratedSplitSessionEnd) {
+    console.log(
+      `   Migrated split sleep+capture SessionEnd entries → single detached hippo session-end`,
+    );
+  } else if (result.migratedLegacySessionEnd) {
+    console.log(`   Migrated legacy SessionEnd entry to the new detached form`);
+  }
+}
+
+function installOpencodeUserPlugin(): void {
+  // opencode uses a TS plugin, not Claude Code's JSON-hook schema (see OPENCODE_PLUGIN_SOURCE in
+  // src/surface/hooks-install/rules/opencode.ts).
+  const result = installOpencodePlugin();
+  if (result.installed) {
+    console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);
+  }
+  if (result.migratedLegacyHooks) {
+    console.log(
+      `   Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`,
+    );
+  }
+  if (result.jsonRepairFailed) {
+    console.log(
+      `   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`,
+    );
+  }
+}
+
+/**
+ * Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory;
+ * idempotent, so re-running init adds newer hooks.
+ */
+function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
+  for (const hook of agents) {
+    // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in.
+    if (hook === 'codex' && codexHint && !isCodexWrapperInstalled()) {
+      console.log('   Codex detected. To capture Codex sessions: hippo hook install codex');
+    }
+    // Checked first so init never creates ~/.codex on a machine without Codex.
+    if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
+
+    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping
+    // `hippo init` in lockstep with `hippo hook install claude-code` and `hippo setup`.
+    if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
+    else if (hook === 'opencode') installOpencodeUserPlugin();
   }
 }

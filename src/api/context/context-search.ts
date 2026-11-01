@@ -3,12 +3,13 @@ import { recallScopeFilter } from '../../base/scope/recall-scope.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { auditQueryFields } from '../../base/records/audit-report.js';
 import { rankBothStores } from '../../domain/sharing/search-both.js';
-import { rankHybrid, vectorSourceOf } from '../../domain/search/hybrid.js';
+import { searchByEngine } from '../../domain/search/engine.js';
+import { vectorSourceOf } from '../../domain/search/hybrid.js';
 import type { HybridVectorCandidates, VectorSource } from '../../domain/search/vector.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { ContextResultEntry } from './context-types.js';
 import { heldIds } from '../recall/finish.js';
-import { scoringOf, type Context } from '../types.js';
+import type { Context } from '../types.js';
 import type { AmbientLoadResult } from '../../base/ports/store/context-reads.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import { type ContextPlan, globalStoreInReach, globalInReach } from './context-plan.js';
@@ -21,8 +22,8 @@ export interface SelectBySearchOptions {
   readonly admission: ContextAdmission;
 }
 
-/** Real query: hybrid search over both stores, or over the local rows; emits the 'recall'
- * audit row. */
+/** Real query: hybrid search over both stores, or physics/hybrid over the local rows; emits the
+ * 'recall' audit row. */
 export async function selectBySearch(
   ctx: Context,
   { plan, left, pools, admission }: SelectBySearchOptions,
@@ -89,7 +90,7 @@ function engineSettings(ctx: Context, plan: ContextPlan) {
     scope: plan.activeScope,
     runtime: ctx.config.runtime,
     cwd: ctx.infra.machine.cwd,
-    switches: scoringOf(ctx),
+    switches: ctx.infra.evalSwitches,
     now: plan.now,
   };
 }
@@ -120,8 +121,8 @@ function bothVectorSources(ctx: Context, plan: ContextPlan) {
       onHippoDb: ctx.reach?.isHippoDb,
       embedderFor: ctx.infra.embedderFor,
     }),
-    // Its own config.json names the global store's embedding model, read only when the vector
-    // arm runs.
+    // Its own config.json names the global store's embedding model, read only when the vector arm
+    // runs.
     global: globalVectorSource(ctx),
   };
 }
@@ -154,21 +155,27 @@ async function searchLocalRows(
 ): Promise<ContextResultEntry[]> {
   const { left, minResults, localEntries, admit } = options;
   const { cost, price, primaryIsGlobal, query, config: ctxConfig } = plan;
+  const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
-  const ctxResults = await rankHybrid(query, localEntries, {
-    ...engineSettings(ctx, plan),
+  const ctxResults = await searchByEngine({
     source: vectorSourceOf({
       store,
       config: ctxConfig,
       onHippoDb: ctx.reach?.isHippoDb,
       embedderFor: ctx.infra.embedderFor,
     }),
-    budget: left,
-    minResults,
-    cost: localCost,
-    vectorCandidates,
+    query,
+    pool: localEntries,
+    physics: usePhysicsCtx ? ctxConfig.physics : null,
+    options: {
+      ...engineSettings(ctx, plan),
+      budget: left,
+      minResults,
+      cost: localCost,
+      vectorCandidates,
+    },
   });
   return ctxResults.map((r) => ({
     entry: r.entry,

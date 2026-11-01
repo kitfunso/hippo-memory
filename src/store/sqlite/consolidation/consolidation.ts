@@ -8,7 +8,7 @@ import {
   SLEEP_DB_WAIT_MS,
 } from '../../../db/index.js';
 import { rejectedValues } from '../review/rejection.js';
-import { ftsDrift, setHalfLives } from '../entries/entry-row.js';
+import { ftsDrift } from '../entries/entry-row.js';
 import { ALL_TENANTS } from '../../../base/util/tenant.js';
 import { WRITE_BUDGET } from '../../../base/util/write-budget.js';
 import {
@@ -24,15 +24,19 @@ import type {
   SleepCommit,
   SleepCommitted,
   SleepStart,
-} from '../../../base/records/consolidation.js';
+} from '../../../base/ports/store/consolidation.js';
 import { appendAuditEvents } from '../audit/audit.js';
-import { replaceDetectedConflicts } from '../review/conflicts.js';
-import { conflictResolveAudits, resolvedConflicts } from '../review/conflict-reads.js';
+import {
+  conflictResolveAudits,
+  resolvedConflicts,
+  replaceDetectedConflicts,
+} from '../review/conflicts.js';
 import { iterateEveryTenantEntries, listEntryIdsPage } from '../entries/entry-reads.js';
 import { iterateRowsWithObjects, listDuplicateCandidates } from './sleep-scans.js';
+import { setHalfLives } from '../entries/entry-writes.js';
 import { type Handles, type StoreFiles, waitingOpener } from '../runtime/open.js';
 import { halfLifeAuditRows, recordedHalfLifeBase } from '../../rules/half-life.js';
-import { commitInChunks } from '../entries/batch-flush.js';
+import { commitInChunks } from '../entries/delete-and-batch.js';
 import { expireDormantBefore } from '../dormant/dormant.js';
 import { listPendingExtractionTenants, markPendingProcessedUpTo } from '../graph/graph-queue.js';
 import {
@@ -41,6 +45,11 @@ import {
   readSleepHistory,
 } from '../entries/index-and-stats.js';
 import { listUntracedSessions } from '../sessions/sessions.js';
+import {
+  saveStoredParticles,
+  storedParticleIds,
+  storedParticlesByRecall,
+} from '../vectors/vector-index.js';
 import { openStore } from '../runtime/handles.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { rethrowInPortTerms } from '../runtime/port-errors.js';
@@ -112,7 +121,7 @@ function begin(db: DatabaseSyncLike, to: number, opts: SleepBegin): SleepStart {
   return { from, outcome, fts, ...readSleepHistory(db), sessions };
 }
 
-// The wait is sleep's own, not a server request's SERVER_DB_WAIT_MS.
+// The wait is sleep's own, not a server request's 250 ms.
 const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
 const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
 
@@ -173,13 +182,22 @@ function recordSleepBody(files: StoreFiles): Bodies<Pick<Consolidation, 'recordS
   };
 }
 
-type BareBodies = 'rejected' | 'auditEachRow' | 'dirtyGraphTenants';
+type BareBodies =
+  | 'rejected'
+  | 'particleIds'
+  | 'particlesByRecall'
+  | 'saveParticles'
+  | 'auditEachRow'
+  | 'dirtyGraphTenants';
 
 const bareBodies: Bodies<Pick<Consolidation, BareBodies | 'markGraphDrained'>> = {
   rejected: (db, tenantId, digests) => {
     const found = rejectedValues(db, tenantId, digests);
     return [...new Set(digests)].flatMap((digest) => found.get(digest) ?? []);
   },
+  particleIds: storedParticleIds,
+  particlesByRecall: storedParticlesByRecall,
+  saveParticles: saveStoredParticles,
   auditEachRow: auditRows,
   dirtyGraphTenants: listPendingExtractionTenants,
   markGraphDrained: markPendingProcessedUpTo,

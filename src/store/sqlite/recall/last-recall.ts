@@ -2,17 +2,19 @@
 // on the outcome's own handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../../db/index.js';
 import { appendAuditEvents } from '../audit/audit.js';
-import { strengthenRetrieved } from '../entries/entry-writes.js';
-import { writeOutcome } from '../entries/sqlite-entry-writes.js';
+import {
+  strengthenRetrieved,
+  strengthenRetrievedInOwnTx,
+  writeOutcome,
+} from '../entries/entry-writes.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../sessions/goals.js';
 import { saveIndex } from '../entries/index-and-stats.js';
 import { readLastRecall } from '../folder-files/mirrors.js';
 import type { Handles, StoreFiles, StoreModel } from '../runtime/open.js';
 import type { EntryTarget } from '../../../base/ports/store/entry-writes.js';
-import { answered, bound, type Bodies } from '../runtime/bound.js';
+import { answered, bound } from '../runtime/bound.js';
 import { openStore } from '../runtime/handles.js';
-import type { LastRecall } from '../../../base/records/last-recall.js';
-import type { RecallWrites } from '../../../base/ports/store.js';
+import type { LastRecall, RecallWrites } from '../../../base/ports/store.js';
 import { writeRecallTrace } from './recall-trace.js';
 
 /** What a finished recall wrote after its audit rows: the trace's id, null when none was asked
@@ -31,7 +33,7 @@ export function finishRecall(
   const traceAndStrengthen = (): RecallFinish => ({
     traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
     strengthened: writes.strengthen
-      ? strengthenRetrieved({ inOwnTx: db }, writes.strengthen.ids, writes.strengthen.opts, rules)
+      ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts, rules)
       : new Set<string>(),
   });
   // Alone, the fail-soft trace and strengthen keep their own scopes so a busy lock loses them,
@@ -65,11 +67,9 @@ function applyOutcomeToLast(
 
 export function sqliteLastRecall({ on, files }: Handles): LastRecall {
   return {
-    ...bound(
+    ...bound<Pick<LastRecall, 'applyOutcomeToLast'>>(
       on,
-      {
-        applyOutcomeToLast: (db, ...args) => applyOutcomeToLast(db, files, ...args),
-      } satisfies Bodies<Pick<LastRecall, 'applyOutcomeToLast'>>,
+      { applyOutcomeToLast: (db, ...args) => applyOutcomeToLast(db, files, ...args) },
       openStore,
     ),
     finishRecall: (writes, globalRoot) =>
@@ -78,10 +78,11 @@ export function sqliteLastRecall({ on, files }: Handles): LastRecall {
         const { traceId, strengthened } = on((db) => finishRecall(db, files, writes));
         if (globalRoot !== undefined) {
           strengthenRetrieved(
-            { hippoRoot: globalRoot, grant: files.opens.grant },
+            globalRoot,
             ids.filter((id) => !strengthened.has(id)),
             opts,
             files,
+            files.opens.grant,
           );
         }
         // One write for both keys, so an outcome never pairs these ids with an older trace; a lost

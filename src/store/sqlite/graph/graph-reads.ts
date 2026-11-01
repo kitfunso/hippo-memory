@@ -11,19 +11,18 @@ import {
   ENTITY_COLS,
   RELATION_COLS,
 } from './graph-rows.js';
-import { GRAPH_ID_BATCH, type Entity, type Relation } from '../../../base/records/graph.js';
+import { GRAPH_ID_BATCH, type Entity, type Relation } from '../../../base/ports/store/graph.js';
 import { chunked } from '../../../base/util/chunked.js';
 import type {
   GraphRows,
   GraphReads,
   GraphViewQuery,
   GraphWalkQuery,
-} from '../../../base/records/graph.js';
+} from '../../../base/ports/store.js';
 import { canReadScope } from '../../../base/scope/recall-scope.js';
 import type { OnHandle } from '../runtime/open.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { newestFirst } from '../../rules/order.js';
 import { graphDeltaOn } from './graph-delta.js';
 
 const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
@@ -114,15 +113,15 @@ function neighborRowsOf(
   ).all(tenantId, ids, ids, limit) as RelationRow[];
 }
 
-const relationsNewestFirst = newestFirst<RelationRow>({
-  key: (r) => r.created_at,
-  intId: (r) => r.id,
-});
+function newestFirst(a: RelationRow, b: RelationRow): number {
+  if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1;
+  return b.id - a.id;
+}
 
 /** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbor query for
  * multi-hop traversal, one query for the whole frontier (no N+1). `limit` caps the rows of the
- * whole call, not of each id chunk, and must be a non-negative integer (raw `LIMIT ?` rejects
- * a fraction). */
+ * whole call, not of each id chunk, and must be a non-negative integer (raw `LIMIT ?` rejects a
+ * fraction). */
 function listNeighborRelations(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -142,7 +141,7 @@ function listNeighborRelations(
   const merged = Array.from(byId.values());
   // Each chunk's own LIMIT keeps its newest rows, so the newest `limit` of the union are all in
   // `merged`.
-  if (merged.length > limit) merged.sort(relationsNewestFirst).length = limit;
+  if (merged.length > limit) merged.sort(newestFirst).length = limit;
   return merged.map(rowToRelation);
 }
 

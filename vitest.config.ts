@@ -71,14 +71,8 @@ const UNIT_MS = 5_000;
 // Seeded stores in the thousands and a TypeScript program over src; none of them starts a process.
 const SLOW_MS = 180_000;
 const SETUP = ['tests/_install-freshness.ts', 'tests/_real-store-guard.ts', 'tests/_store-template.ts'];
-// Only tests that run or read dist (child processes, the server, workers, SLOW_ON_DIST) need a build.
+// Only tests that run dist (child processes, the server, workers) need a build, so the unit project starts without one.
 const BUILD = ['tests/_build-freshness.ts'];
-// The slow tests that load dist, directly or through scripts/ and benchmarks/; the rest of the slow project runs src.
-const SLOW_ON_DIST = [
-  'tests/api/published-tier-types.slow.test.ts',
-  'tests/benchmarks/memory-value-determinism.slow.test.ts',
-  'tests/scripts/e1-harness.slow.test.ts',
-];
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
 
 export default defineConfig({
@@ -113,18 +107,7 @@ export default defineConfig({
         test: {
           name: 'slow',
           include: SLOW_GLOBS,
-          exclude: [...SKIPPED, ...SLOW_ON_DIST],
-          testTimeout: SLOW_MS,
-          hookTimeout: SLOW_MS,
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: 'slow-dist',
-          include: SLOW_ON_DIST,
           exclude: SKIPPED,
-          globalSetup: BUILD,
           testTimeout: SLOW_MS,
           hookTimeout: SLOW_MS,
         },

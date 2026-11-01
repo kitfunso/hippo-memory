@@ -6,7 +6,7 @@ import { ALL_TENANTS } from '../../../base/util/tenant.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { SqlFragment } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import type { EntryFilter, EntryNarrowing } from '../../../base/records/reports.js';
+import type { EntryFilter, EntryNarrowing } from '../../../base/ports/store/reports.js';
 import type { EntryCursor, EntryPage } from '../../../base/ports/store/types.js';
 import {
   entriesPage,
@@ -30,8 +30,8 @@ export type FilterColumn =
   | 'source_session_id';
 
 type ColumnOf = (column: FilterColumn) => string;
-// An alias, not `keyof` inline: a mapped type over it lets TERMS[key] read as Term<K> for a
-// generic key.
+// An alias, not `keyof` inline: a mapped type over it lets TERMS[key] read as Term<K> for a generic
+// key.
 type Field = keyof EntryNarrowing;
 type Term<K extends Field> = (
   value: NonNullable<EntryNarrowing[K]>,
@@ -58,8 +58,8 @@ function inList(column: string, values: readonly string[]): SqlFragment {
     : { sql: `${column} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(values)] };
 }
 
-// A BINARY range is startsWith in byte order, and it is what
-// idx_memories_source_tenant_created seeks.
+// A BINARY range is startsWith in byte order, and it is what idx_memories_source_tenant_created
+// seeks.
 function startsWith(column: string, prefix: string): SqlFragment {
   const upper = prefixUpperBound(prefix);
   return upper === null
@@ -110,8 +110,8 @@ export function narrowingAnd(
   };
 }
 
-/** A page of the rows `filter` keeps, in loadAllEntries' order or, with `page.newest`,
- * newest first. */
+/** A page of the rows `filter` keeps, in loadAllEntries' order or, with `page.newest`, newest
+ * first. */
 export function listEntriesWhere(
   db: DatabaseSyncLike,
   filter: EntryFilter,

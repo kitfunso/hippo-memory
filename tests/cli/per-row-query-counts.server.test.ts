@@ -5,7 +5,7 @@ import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } fr
 import { closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { outcome } from '../../src/api/memories/outcome.js';
-import { quarantineList } from '../../src/api/hippo-db/quarantine.js';
+import { quarantineList } from '../../src/api/auth/quarantine.js';
 import { drillDown } from '../../src/api/objects/drill-down.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
 import { recordQuarantine } from '../../src/store/sqlite/connectors/quarantine.js';
@@ -166,10 +166,11 @@ describe('strengthenRetrieved', () => {
       seed(ctxFor(root), entries);
       const { result, statements } = recordStatements(() =>
         strengthenRetrieved(
-          { hippoRoot: root, grant: grantFor({}) },
+          root,
           entries.map((e) => e.id),
           { tenantId: 'default', recallBoostAblated: false },
           { strength: PRODUCTION_STRENGTH, clock: evalNow },
+          grantFor({}),
         ),
       );
       expect(result.size).toBe(n);
@@ -183,10 +184,11 @@ describe('strengthenRetrieved', () => {
     seed(ctxFor(root), [entry]);
     expect([
       ...strengthenRetrieved(
-        { hippoRoot: root, grant: grantFor({}) },
+        root,
         [entry.id, entry.id],
         { tenantId: 'default', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ),
     ]).toEqual([entry.id]);
     const after = readEntry(root, entry.id);
@@ -313,7 +315,7 @@ describe('an id-list read of one tenant', () => {
       const listed = await ctx.store.entriesByIds(ids, 'default');
       return { held: listed.some((e) => e.id === ids[0]), listed: listed.length };
     });
-    await runtime.dispose();
+    runtime.dispose();
     expect(result).toEqual({ held: true, listed: 10 });
 
     const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];

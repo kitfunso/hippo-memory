@@ -14,10 +14,10 @@ import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { flushDeliveryRecorder, startDeliveryRecorder } from '../../../api/ledger-db.js';
 import type { DeliveryRecorder } from '../../../api/delivery/delivery-recorder.js';
 import { normalizeHookPayload, readStdinBounded, type BoundedStdin } from '../stdin.js';
+import { cliApiContext, cliHookRequest } from '../api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';
 import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../hook-runtime.js';
 import { handleSessionEndWorker } from './session-end-worker.js';
-import type { CliCommand, CliScope } from '../api-context.js';
 
 /** Copilot's hook command and OpenCode's plugin carry no path, since one quoted into them would
  * need escaping for each shell. Copilot's log goes where its hook table used to point,
@@ -35,7 +35,6 @@ export async function handleSessionEnd({
   hippoRoot,
   tenantId,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const runtime = hookRuntime(flags);
   const turn = boolFlag(flags, 'turn');
@@ -51,17 +50,17 @@ export async function handleSessionEnd({
   // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
-  // Only a host payload ends a session: a manual run and a reply's end (turn mode) are
-  // not boundaries.
+  // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not
+  // boundaries.
   const rec =
     !turn && input !== null && !input.manual
-      ? await startSessionEndRecorder({ cli, hippoRoot: root, tenantId }, stdinText, runtime)
+      ? await startSessionEndRecorder(root, tenantId, stdinText, runtime)
       : null;
   const sessionId = input?.sessionId ?? null;
   const transcriptPath = workerTranscriptPath(input, runtime);
 
   const worker: SessionEndWorkerInput = { logFile, transcriptPath, sessionId, turn };
-  await runSessionEndWorker(worker, { cli, root, tenantId, flags, rec });
+  await runSessionEndWorker(worker, { root, tenantId, flags, rec });
 }
 
 function workerTranscriptPath(input: CaptureInput | null, runtime: HookRuntime): string | null {
@@ -77,7 +76,6 @@ function workerTranscriptPath(input: CaptureInput | null, runtime: HookRuntime):
 }
 
 interface SessionEndRun {
-  readonly cli: CliCommand;
   readonly root: string;
   readonly tenantId: string;
   readonly flags: CliFlags;
@@ -86,7 +84,7 @@ interface SessionEndRun {
 
 async function runSessionEndWorker(
   worker: SessionEndWorkerInput,
-  { cli, root, tenantId, flags, rec }: SessionEndRun,
+  { root, tenantId, flags, rec }: SessionEndRun,
 ): Promise<void> {
   try {
     spawnSessionEndWorker(sessionEndWorkerArgs(worker));
@@ -98,38 +96,39 @@ async function runSessionEndWorker(
     // Inline is the last resort, handed what the child's argv would have carried.
     try {
       await handleSessionEndWorker({
-        cli,
         hippoRoot: root,
         tenantId,
         args: [],
         flags: inlineWorkerFlags(flags, worker),
       });
     } finally {
-      await flushOnHook({ cli, hippoRoot: root, tenantId }, rec);
+      await flushOnHook(rec, root, tenantId);
     }
     return;
   }
   // After the spawn, so a locked store delays only the row; the hook's short lock wait bounds it.
-  await flushOnHook({ cli, hippoRoot: root, tenantId }, rec);
+  await flushOnHook(rec, root, tenantId);
 }
 
 /** Flushes on the hook's own request, started after the spawn, so its short lock wait bounds the
  * row's write. */
 async function flushOnHook(
-  { cli, hippoRoot: root, tenantId }: CliScope,
   rec: DeliveryRecorder | null,
+  root: string,
+  tenantId: string,
 ): Promise<void> {
-  await cli.hookRequest((hook) =>
-    flushDeliveryRecorder(rec, hook.apiContext(hookStoreRoot(root), tenantId)),
+  await cliHookRequest(() =>
+    flushDeliveryRecorder(rec, cliApiContext(hookStoreRoot(root), tenantId)),
   );
 }
 
 async function startSessionEndRecorder(
-  { cli, hippoRoot: root, tenantId }: CliScope,
+  root: string,
+  tenantId: string,
   stdinText: string | undefined,
   runtime: HookRuntime,
 ): Promise<DeliveryRecorder | null> {
-  return startDeliveryRecorder(cli.apiContext(hookStoreRoot(root), tenantId), {
+  return startDeliveryRecorder(cliApiContext(hookStoreRoot(root), tenantId), {
     stdinText,
     runtime,
     eventType: 'session-end',
@@ -190,8 +189,8 @@ function spawnSessionEndWorker(workerArgs: readonly string[]): void {
     stdio: 'ignore',
     windowsHide: true,
   });
-  // An async spawn failure arrives as an 'error' event, which with no listener is an
-  // uncaught exception.
+  // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught
+  // exception.
   child.on('error', (err) =>
     log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`, errorFields(err)),
   );

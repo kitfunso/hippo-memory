@@ -29,6 +29,7 @@ export function useObjectsServer() {
       hippoRoot: home,
       port: 0,
       rateLimits: { perCaller: 'off', perAddress: 'off' },
+      keep: ['objects'],
     });
   });
 

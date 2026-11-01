@@ -10,8 +10,8 @@ import type {
   IndexStep,
   IndexStepAnswers,
   IndexStepKind,
-} from '../../base/records/embedding-index.js';
-import type { HippoStore } from '../../base/ports/store.js';
+  RequiredStore,
+} from '../../base/ports/store.js';
 import { chunked } from '../../base/util/chunked.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { FailureNotices } from '../../base/util/failure-notices.js';
@@ -25,8 +25,8 @@ const ENTRIES_BY_ID_PAGE = 64;
 // Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.
 const ID_PAGE = 1000;
 
-/** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed
- * is skipped. */
+/** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed is
+ * skipped. */
 async function* entryPages(rows: IndexRows, ids: readonly string[]): AsyncGenerator<MemoryEntry[]> {
   for (const page of chunked(ids, ENTRIES_BY_ID_PAGE)) {
     const byId = new Map((await rows.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]));
@@ -74,14 +74,23 @@ async function stageEmbeddingIndex(
   return staged;
 }
 
+async function resetPhysicsFromIndex({ step }: IndexTurn): Promise<void> {
+  try {
+    await step({ kind: 'reset' });
+  } catch (err) {
+    // Best effort: retrieval still falls back without physics state.
+    log.warn(`physics reset after reindex failed: ${errorMessage(err)}`, errorFields(err));
+  }
+}
+
 const EMBED_LOCK_WAIT_MS = 10_000;
-// A held lock is usually a whole embed run, so the polls back off rather than wake 200 times in
-// the budget.
+// A held lock is usually a whole embed run, so the polls back off rather than wake 200 times in the
+// budget.
 const EMBED_LOCK_FIRST_POLL_MS = 50;
 const EMBED_LOCK_MAX_POLL_MS = 1_000;
 
-/** Waits up to EMBED_LOCK_WAIT_MS for the index's lock, which the turn's session holds until
- * it closes. */
+/** Waits up to EMBED_LOCK_WAIT_MS for the index's lock, which the turn's session holds until it
+ * closes. */
 async function acquireIndexLock({ step }: IndexTurn): Promise<void> {
   const deadline = Date.now() + EMBED_LOCK_WAIT_MS;
   for (let wait = EMBED_LOCK_FIRST_POLL_MS; ; wait = Math.min(wait * 2, EMBED_LOCK_MAX_POLL_MS)) {
@@ -115,7 +124,7 @@ async function withEmbedLock<T>(
 const INLINE_REINDEX_MAX_ROWS = 256;
 
 /** The rows an index embeds, read by id. */
-export type IndexRows = Pick<HippoStore, 'entriesByIds'>;
+export type IndexRows = Pick<RequiredStore, 'entriesByIds'>;
 
 /** A store's own index with the rows it embeds. */
 type IndexOf = Pick<IndexEmbedTarget, 'embeddingIndex' | 'rows' | 'failureNotices'>;
@@ -202,6 +211,7 @@ async function embedMemoryLocked(
       model: embeddingIndexIdentity(identity),
     });
     await step({ kind: 'saveModel', providerId: identity });
+    await initializePhysicsIfMissing(on, entry, vector);
     return 'indexed';
   } catch (err) {
     // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
@@ -222,11 +232,29 @@ async function rebuildIndexForProvider(
   await on.step({ kind: 'begin' });
   const staged = await stageEmbeddingIndex(on, provider);
   await on.step({ kind: 'commit', model: embeddingIndexIdentity(provider.id) });
+  await resetPhysicsFromIndex(on);
   return staged;
 }
 
-/** One step on a session of its own, closed after, for an index read or write that takes
- * no lock. */
+async function initializePhysicsIfMissing(
+  { step }: IndexTurn,
+  entry: MemoryEntry,
+  vector: number[],
+): Promise<void> {
+  try {
+    await step({ kind: 'seed', entry, vector });
+  } catch (err) {
+    // Physics init is best-effort and must not fail the embedding that just landed.
+    log.warnThenDebug(
+      'physics-state-seed',
+      `physics state not initialised for ${entry.id}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+  }
+}
+
+/** One step on a session of its own, closed after, for an index read or write that takes no
+ * lock. */
 export async function indexStep<K extends IndexStepKind>(
   index: EmbeddingIndex,
   step: IndexStep<K>,

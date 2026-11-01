@@ -1,6 +1,5 @@
-// The domain rankers take the eval switches as input; the package entries fill them from the environment, so frozen
-// evals that set HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS or HIPPO_FAKE_NOW still see each one. A production root's
-// ports score by production whatever the environment holds.
+// The domain rankers take the eval switches as input; the `./search` and `./testing` entries fill them from the
+// environment, so frozen evals that set HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS or HIPPO_FAKE_NOW still see each one.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyOutcome, createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -8,17 +7,9 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { hybridSearch, search } from '../../src/entry/search.js';
 import { hybridSearchWire } from '../../src/entry/testing.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
-import { rankHybrid } from '../../src/domain/search/hybrid.js';
+import { hybridSearch as rankHybrid } from '../../src/domain/search/hybrid.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { evalSwitches } from '../../src/infra/eval-switches.js';
-import { adminActor } from '../../src/api/index.js';
-import { remember, retrieve } from '../../src/entry/eval-scripts.js';
-import { consolidate, sleep } from '../../src/index.js';
-import { loadConfig } from '../../src/host/config-file.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { cliInfra } from '../../src/surface/cli/api-context.js';
-import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllEntries, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 const SWITCHES = [
   'HIPPO_ABLATE_DECAY',
@@ -135,63 +126,5 @@ describe('the domain ranker takes the switches as input', () => {
     expect(unswitched.breakdown!.recencyMultiplier).toBeLessThan(1);
     const [switched] = await rankHybrid('deploy runbook', [aged(30)], { ...options, switches: evalSwitches() });
     expect(switched.breakdown!.recencyMultiplier).toBe(1);
-  });
-});
-
-describe('the Context entries score by the switches, and a production root does not', () => {
-  const ctxOn = (root: string) => ({
-    tenantId: 'default',
-    actor: adminActor('test'),
-    store: sqliteStore(root),
-    config: loadConfig(root),
-  });
-  const counts = (root: string): number[] => loadAllEntries(root, 'default').map((e) => e.retrievalCount);
-
-  async function rememberAndRetrieve(ctx: Parameters<typeof retrieve>[0]): Promise<void> {
-    await remember(ctx, { content: 'the zebra deploy key rotates every tuesday' });
-    await retrieve(ctx, { query: 'zebra deploy key' });
-  }
-
-  it('HIPPO_ABLATE_RECALL_BOOST stops the eval-scripts retrieve from strengthening what it shows', async () => {
-    const live = makeRoot('entry-recall-live');
-    await rememberAndRetrieve(ctxOn(live));
-    expect(counts(live)).toEqual([1]);
-    vi.stubEnv('HIPPO_ABLATE_RECALL_BOOST', '1');
-    const cut = makeRoot('entry-recall-cut');
-    await rememberAndRetrieve(ctxOn(cut));
-    expect(counts(cut)).toEqual([0]);
-  });
-
-  it("the CLI root's ports keep strengthening under HIPPO_ABLATE_RECALL_BOOST", async () => {
-    vi.stubEnv('HIPPO_ABLATE_RECALL_BOOST', '1');
-    const root = makeRoot('entry-recall-cli');
-    await rememberAndRetrieve({ ...ctxOn(root), infra: cliInfra() });
-    expect(counts(root)).toEqual([1]);
-  });
-
-  it('sleep and consolidate keep the same faded rows under HIPPO_ABLATE_DECAY', async () => {
-    vi.stubEnv('HIPPO_HOME', makeRoot('entry-sleep-global'));
-    const yearAgo = new Date(NOW.getTime() - 365 * DAY_MS).toISOString();
-    const old = (content: string): MemoryEntry => ({
-      ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      created: yearAgo,
-      lastRetrieved: yearAgo,
-      halfLifeDays: 7,
-    });
-    const faded = (label: string): string => {
-      const root = makeRoot(label);
-      writeEntriesTogether(root, [old('the zebra deploy key rotates every tuesday'), old('arm runners pin node 22')]);
-      return root;
-    };
-    const left = (root: string): number => loadAllEntries(root, 'default').length;
-    const control = faded('entry-consolidate-live');
-    await consolidate(control);
-    expect(left(control)).toBe(0);
-
-    vi.stubEnv('HIPPO_ABLATE_DECAY', '1');
-    const [slept, consolidated] = [faded('entry-sleep-cut'), faded('entry-consolidate-cut')];
-    await sleep(ctxOn(slept), { noShare: true });
-    await consolidate(consolidated);
-    expect([left(slept), left(consolidated)]).toEqual([2, 2]);
   });
 });

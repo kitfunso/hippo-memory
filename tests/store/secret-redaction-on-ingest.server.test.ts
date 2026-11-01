@@ -16,10 +16,9 @@ import {
 import { type ImportOptions, type ImportResult } from '../../src/surface/importers/core.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import { captureErrorAt, partitionLessons } from '../../src/domain/learn/autolearn.js';
+import { captureError, partitionLessons } from '../../src/domain/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { mapSlackWorkspace } from '../../src/api/hippo-db/connector-events.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { addWorkspace } from '../../src/surface/connectors/slack/workspaces.js';
 import { replaySlackDlqEntry } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -156,7 +155,7 @@ describe('connector webhooks', () => {
   };
 
   it('an unroutable Slack message lands in the dead-letter table redacted, and replays once routed', async () => {
-    await mapSlackWorkspace(apiCtx(root), 'T_OTHER', 'default');
+    await addWorkspace(sqliteStore(root), { teamId: 'T_OTHER', tenantId: 'default' });
     const body = JSON.stringify({
       type: 'event_callback',
       team_id: 'T1',
@@ -179,7 +178,7 @@ describe('connector webhooks', () => {
     expect(row.signature).toBeNull();
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
-    await mapSlackWorkspace(apiCtx(root), 'T1', 'default');
+    await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
     expect(
       (
         await replaySlackDlqEntry(
@@ -287,7 +286,7 @@ describe('machine-captured lessons', () => {
   });
 
   it('hippo watch drops a token from the failed command and its stderr', () => {
-    const entry = captureErrorAt(
+    const entry = captureError(
       {
         command: `curl -H "Authorization: Bearer ${GHP}" https://api.example.com`,
         exitCode: 1,

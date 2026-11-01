@@ -7,13 +7,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
+import { OPTIONAL_GROUPS } from '../../src/base/ports/store-index.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { hippoHomeDir } from '../../src/host/agent-homes.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
-import { localFileRoutes, requestLine } from '../_helpers/other-store-server.js';
-import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { localFileRoutes } from '../_helpers/other-store-server.js';
+import { FOLDER_GROUPS, portOnlyStore } from '../_helpers/port-only-store.js';
 import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 
 const SECRETS = { slack: randomBytes(24).toString('hex'), github: randomBytes(24).toString('hex') };
@@ -156,18 +157,11 @@ const TOOL_ARGS = {
   hippo_predict_baserate: { class_tag: 'cutover' },
 } satisfies Record<string, JsonValue>;
 
-// The tools that need hippo.db's local tier answer 501 by design under any other store.
-const LOCAL_TOOLS = new Set([
-  'hippo_assemble',
-  'hippo_drill',
-  'hippo_status',
-  'hippo_learn',
-  'hippo_conflicts',
-  'hippo_resolve',
-  'hippo_share',
-  'hippo_peers',
-  'hippo_predict_baserate',
-]);
+// The two routes and two tools that need hippo.db's local files answer 501 by design under any other store.
+const LOCAL_FILE_TOOLS = new Set(['hippo_share', 'hippo_peers']);
+// Every group but the folder ones, so a 501 here comes only from a direct open, not from a group the store lacks.
+const FOLDER: ReadonlySet<string> = new Set(FOLDER_GROUPS);
+const SERVED_GROUPS = OPTIONAL_GROUPS.filter((group) => !FOLDER.has(group));
 
 describe('serve() under a store that is not hippo.db, on a folder that refuses hippo.db', () => {
   let fixture: TwoTenantFixture;
@@ -188,7 +182,7 @@ describe('serve() under a store that is not hippo.db, on a folder that refuses h
     mkdirSync(served);
     writeFileSync(join(served, OTHER_STORE_MARKER), 'port-only\n');
     homeBefore = existsSync(join(hippoHomeDir(), 'hippo.db'));
-    handle = await serve({ hippoRoot: served, port: 0, store: portOnlyStore(fixture.dir) });
+    handle = await serve({ hippoRoot: served, port: 0, store: portOnlyStore(fixture.dir, SERVED_GROUPS) });
   });
 
   afterAll(async () => {
@@ -228,11 +222,11 @@ describe('serve() under a store that is not hippo.db, on a folder that refuses h
   });
 
   it('answers every /v1 route without opening hippo.db by its folder', async () => {
-    const local = new Set(localFileRoutes());
+    const local = new Set(localFileRoutes().map((line) => line.split(' ')[1]?.replace('/1/', '/:id/')));
     const refused: string[] = [];
     for (const [key, sent] of Object.entries(SENDS)) {
       const { status, text } = await send(key, sent);
-      if (status === 501 && text.includes(STORE_NOT_PORTED_MESSAGE) && !local.has(requestLine(key))) {
+      if (status === 501 && text.includes(STORE_NOT_PORTED_MESSAGE) && !local.has(key.split(' ')[1])) {
         refused.push(key);
       }
     }
@@ -261,7 +255,7 @@ describe('serve() under a store that is not hippo.db, on a folder that refuses h
         }),
       });
       const text = await res.text();
-      if (text.includes(STORE_NOT_PORTED_MESSAGE) && !LOCAL_TOOLS.has(name)) refused.push(name);
+      if (text.includes(STORE_NOT_PORTED_MESSAGE) && !LOCAL_FILE_TOOLS.has(name)) refused.push(name);
     }
     expect(refused).toEqual([]);
   });

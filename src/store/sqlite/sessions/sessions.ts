@@ -1,8 +1,7 @@
-// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and
-// session-owner binding.
+// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
+// binding.
 import { freshActiveSnapshot } from '../../../base/session/session-snapshot.js';
 import {
-  changedRows,
   HOOK_DB_WAIT_MS,
   sessionOf,
   withWriteScope,
@@ -23,8 +22,8 @@ import type {
   WorkingMemoryItem,
   WorkingMemoryFilter,
   WorkingMemoryPush,
-} from '../../../base/records/sessions.js';
-import type { UntracedSession } from '../../../base/records/consolidation.js';
+} from '../../../base/ports/store/sessions.js';
+import type { UntracedSession } from '../../../base/ports/store/consolidation.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './session-mirrors.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { continuityStamp, type ContinuityKey } from '../../../base/ports/store/types.js';
@@ -46,14 +45,9 @@ import {
   saveActiveTaskSnapshot,
 } from './task-snapshots.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { RECENT_MIRROR_EVENTS, TRACE_EVENT_ROWS } from '../../rules/windows.js';
 import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../../../base/util/limits.js';
 import { handleNow, handleStamp } from '../runtime/handle-clock.js';
-
-/** Events of one completed session a sleep reads to render its trace, the newest kept. */
-const TRACE_EVENT_ROWS = 1000;
-
-/** Newest session events the recent-session mirror file holds after each append. */
-const RECENT_MIRROR_EVENTS = 20;
 
 /** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
 function clearActiveTaskSnapshot(
@@ -109,7 +103,7 @@ function closeTaskSnapshotsForSession(
     `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
       `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
   ).run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
-  return changedRows(result);
+  return Number(result.changes ?? 0);
 }
 
 function insertSessionEventRow(
@@ -263,6 +257,7 @@ export function listUntracedSessions(
   return ids.map((sessionId) => ({ sessionId, events: events.get(sessionId) ?? [] }));
 }
 
+/** The owner a session id is bound to, or null. */
 function readSessionOwner(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -292,7 +287,7 @@ function insertOwnerRow(
     db,
     `INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
   ).run(tenantId, sessionId, owner, createdAt);
-  return changedRows(result);
+  return Number(result.changes ?? 0);
 }
 
 // SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred
@@ -321,11 +316,11 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     () => {
       const row = { tenantId, sessionId, owner, createdAt: handleStamp(db) };
       const bound = insertOwnerRow(db, row);
-      // An older binary supersedes across owners, so the first binding shuts it out in the
-      // same transaction.
+      // An older binary supersedes across owners, so the first binding shuts it out in the same
+      // transaction.
       if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-      // Pruned on write, as the failure log is; a pruned session id is a UUID no other
-      // caller knows.
+      // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller
+      // knows.
       deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
     },
     { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
@@ -488,7 +483,7 @@ function wmClear(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFi
   const result = cachedStatement(db, `DELETE FROM working_memory ${where.sql}`).run(
     ...where.params,
   );
-  return changedRows(result);
+  return Number(result.changes ?? 0);
 }
 
 function saveAny(
@@ -551,9 +546,7 @@ function sessionBodies(files: StoreFiles): Bodies<Omit<SessionCalls, 'bindSessio
 export function sqliteSessions({ on, files }: Handles): Sessions {
   const sessions: SessionCalls = {
     ...bound(on, sessionBodies(files), openStore),
-    ...bound(on, { bindSessionOwner: sessionOwnerOrBind } satisfies Bodies<
-      Pick<Sessions, 'bindSessionOwner'>
-    >),
+    ...bound<Pick<Sessions, 'bindSessionOwner'>>(on, { bindSessionOwner: sessionOwnerOrBind }),
   };
   // SAFETY: each body picks its statement from the kind and the payload's shape, the pairs the
   // port's overloads name, so every overload gets the answer its kind declares.

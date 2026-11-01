@@ -19,13 +19,12 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { expandOnGraphs } from '../../src/domain/graph/recall.js';
+import { graphExpandRecall } from '../../src/domain/graph/recall.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
-import { walkable } from '../_helpers/graph-walk.js';
 
 const { writeEntry, sqliteStore } = sessionPerTest();
 
@@ -89,9 +88,9 @@ describe('graph-recall scope parity', () => {
     // superseded endpoint and would surface by default absent the scope fix.
     insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
-    const out = await expandOnGraphs([sr(seed, 1.0)], {
+    const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: walkable(sqliteStore(home)),
+      store: sqliteStore(home),
       tenantId: T,
       budget: 4000,
     });
@@ -107,9 +106,9 @@ describe('graph-recall scope parity', () => {
     const ePriv = ent(home, T, priv, 'PRIV');
     insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
-    const out = await expandOnGraphs([sr(seed, 1.0)], {
+    const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: walkable(sqliteStore(home)),
+      store: sqliteStore(home),
       tenantId: T,
       budget: 4000,
       recallScope: { requested: 'slack:private:dm1', additive: true },
@@ -139,9 +138,9 @@ describe('graph-recall scope parity', () => {
       memoryId: privNeighbor.id,
     });
 
-    const out = await expandOnGraphs([sr(seed, 1.0)], {
+    const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: walkable(sqliteStore(home)),
+      store: sqliteStore(home),
       tenantId: T,
       budget: 4000,
       recallScope: { requested: 'slack:private:dm1' }, // additive absent -> exact-narrowing (api semantics)
@@ -158,9 +157,9 @@ describe('graph-recall scope parity', () => {
     const eLegacy = ent(home, T, legacy, 'LEGACY');
     insertRelationAt(home, T, { fromEntityId: eLegacy, toEntityId: eSeed, relType: 'supersedes', memoryId: legacy.id });
 
-    const out = await expandOnGraphs([sr(seed, 1.0)], {
+    const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: walkable(sqliteStore(home)),
+      store: sqliteStore(home),
       tenantId: T,
       budget: 4000,
     });
@@ -177,10 +176,10 @@ describe('graph-recall scope parity', () => {
       const ePriv = ent(glob, T, priv, 'PRIV');
       insertRelationAt(glob, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
-      const out = await expandOnGraphs([sr(seed, 1.0)], {
+      const out = await graphExpandRecall([sr(seed, 1.0)], {
         hops: 1,
-        store: walkable(sqliteStore(home)),
-        global: walkable(sqliteStore(glob)),
+        store: sqliteStore(home),
+        global: sqliteStore(glob),
         tenantId: T,
         budget: 4000,
       });
@@ -210,9 +209,9 @@ describe('graph-recall scope parity', () => {
     insertRelationAt(home, T, { fromEntityId: eDm1, toEntityId: eSeed, relType: 'supersedes', memoryId: dm1.id });
     insertRelationAt(home, T, { fromEntityId: eDm2, toEntityId: eSeed, relType: 'supersedes', memoryId: dm2.id });
 
-    const out = await expandOnGraphs([sr(seed, 1.0)], {
+    const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
-      store: walkable(sqliteStore(home)),
+      store: sqliteStore(home),
       tenantId: T,
       budget: 4000,
       recallScope: { requested: 'slack:private:dm1', additive: true },

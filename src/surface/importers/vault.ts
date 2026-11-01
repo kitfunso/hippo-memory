@@ -2,12 +2,12 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { createMemoryAt, MemoryEntry } from '../../base/memory/entry.js';
+import { createMemory, MemoryEntry } from '../../base/memory/entry.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
-import { rawRowsUnder } from '../../api/memories/memories.js';
-import { wouldRefuse } from '../../api/hippo-db/rejections.js';
-import { coreEnrichment, type HippoDbContext } from '../../api/hippo-db-context.js';
-import type { HippoDbStore } from '../../base/ports/hippo-db.js';
+import type { ContextWith } from '../../api/types.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
+import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../host/config-file.js';
@@ -23,21 +23,21 @@ import {
 import { realpathOrResolve } from '../../host/real-path.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
-// The vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
+// K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
 // (src/surface/connectors/slack|github). A changed note appends a new raw row after rawArchive of
 // the old one; NEVER `supersede` a raw row (it yields 'distilled' and escapes the deletion rescan).
 
 /** The store a vault import writes to, and the batch whose store a dry run's guard probes share;
  * a composition root builds it. */
 export interface VaultTarget {
-  readonly store: HippoDbStore;
-  readonly batch: <T>(run: (store: HippoDbStore) => Promise<T>) => Promise<T>;
+  readonly store: StoreWith<'rejections'>;
+  readonly batch: <T>(run: (store: StoreWith<'rejections'>) => Promise<T>) => Promise<T>;
   readonly infra: InfraPorts;
 }
 
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on
- * the in-memory `existing` Map loaded once, so two concurrent runs over one vault
- * can double-insert. */
+ * the in-memory `existing` Map loaded once, so two concurrent runs over one vault can
+ * double-insert. */
 export async function importVaultInto(
   folderPath: string,
   options: ImportOptions,
@@ -67,7 +67,7 @@ function vaultContext(
   hippoRoot: string,
   tenantId: string,
   { store, infra }: VaultTarget,
-): HippoDbContext {
+): ContextWith<'rejections'> {
   return {
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not a bearer-authed
@@ -76,7 +76,6 @@ function vaultContext(
     store,
     config: loadConfig(hippoRoot),
     infra,
-    enrich: coreEnrichment(store),
   };
 }
 
@@ -138,8 +137,8 @@ async function importVaultNotes(
   const importNotes = async (into: VaultImportRun): Promise<void> => {
     for (const relpath of relpaths) await importVaultNote(into, relpath);
   };
-  // A dry run probes the rejection guard once per changed note; one batch lets every probe share
-  // a handle.
+  // A dry run probes the rejection guard once per changed note; one batch lets every probe share a
+  // handle.
   if (run.dryRun) await batch((store) => importNotes({ ...run, ctx: { ...run.ctx, store } }));
   else await importNotes(run);
 }
@@ -174,7 +173,7 @@ interface VaultTally {
 }
 
 interface VaultImportRun {
-  ctx: HippoDbContext;
+  ctx: ContextWith<'rejections'>;
   folderPath: string;
   vaultName: string;
   scope: string | null;
@@ -223,9 +222,17 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
 
 async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, MemoryEntry[]>> {
   // One load serves both per-file idempotency and the deletion diff.
-  const rows = await rawRowsUnder(ctx, `vault:${vaultName}:`);
-  // Every live row per artifactRef (several only after a concurrent double-insert): a later changed
-  // or deletion pass must archive them all or older raw vault content stays searchable.
+  const under = {
+    tenantId: ctx.tenantId,
+    kinds: ['raw'],
+    artifactRefPrefix: `vault:${vaultName}:`,
+  } as const;
+  const rows = await readAll((after?: EntryCursor) =>
+    ctx.store.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
+  );
+  // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
+  // later changed or deletion pass must archive them all or older raw vault content stays
+  // searchable.
   const existing = new Map<string, MemoryEntry[]>();
   for (const row of rows) {
     if (row.artifactRef === null) continue;
@@ -297,7 +304,7 @@ async function writeChangedNote({
   // remember() owns the write; the `echo` from createMemory only fills the ImportResult, with its
   // id reconciled to the row that landed.
   const content = vetSecrets(body).content;
-  const echo = createMemoryAt(
+  const echo = createMemory(
     content,
     {
       kind: 'raw',
@@ -413,7 +420,10 @@ async function storeVaultNote({
   // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches
   // what a real run would refuse.
   if (run.dryRun) {
-    return !(await wouldRefuse(run.ctx, echo));
+    const [refused] = await run.ctx.store.rejections.refusedAmong([
+      { tenantId: run.ctx.tenantId, entryId: echo.id, content: echo.content },
+    ]);
+    return !refused;
   }
   try {
     // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now,

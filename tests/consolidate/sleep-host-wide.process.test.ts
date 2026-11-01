@@ -1,6 +1,6 @@
 // One sleep over three tenants: the rows it keeps, moves, merges, retires, makes dormant and removes, and the audit,
-// conflict, run, full-text and mirror rows it leaves. Every host-wide step runs: the half-life move, decay, a trace,
-// replay, a retired text, merges with a tombstone refusal, the conflict replace and the run counters.
+// conflict, particle, run, full-text and mirror rows it leaves. Every host-wide step runs: the half-life move, decay, a
+// trace, replay, physics, a retired text, merges with a tombstone refusal, the conflict replace and the run counters.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import * as fs from 'node:fs';
@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
+import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import {
@@ -18,6 +19,7 @@ import {
   type DatabaseSyncLike,
   withSharedStoreHandles,
 } from '../../src/db/index.js';
+import { savePhysicsState } from '../../src/db/physics-state.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entries/entry-row.js';
 import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
@@ -33,6 +35,7 @@ import { META_KEY } from '../../src/db/meta.js';
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const TENANTS = ['default', 'acme', 'globex'] as const;
+const SEEDED_SIM = '2000-01-01T00:00:00.000Z';
 const CLUSTER_HEADER = '[Consolidated pattern from 3 related memories, newest first]';
 
 type Tenant = (typeof TENANTS)[number];
@@ -107,6 +110,20 @@ function rowsOf(tenant: Tenant): MemoryEntry[] {
   ];
 }
 
+function particle(memoryId: string, i: number): PhysicsParticle {
+  const raw = [Math.cos(i), Math.sin(i), Math.cos(i * 0.7), Math.sin(i * 1.3)];
+  const norm = Math.hypot(...raw);
+  return {
+    memoryId,
+    position: raw.map((v) => v / norm),
+    velocity: [0, 0, 0, 0],
+    mass: 1,
+    charge: 0,
+    temperature: 1,
+    lastSimulation: SEEDED_SIM,
+  };
+}
+
 function onStore<T>(root: string, work: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
@@ -116,16 +133,20 @@ function onStore<T>(root: string, work: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** Three tenants on the legacy half-life base, with a completed session, an open conflict and a tombstoned merge. */
+/** Three tenants on the legacy half-life base, with particles, a completed session, an open conflict and a tombstoned merge. */
 async function seed(config: { memoryValue?: { enabled: boolean } }): Promise<string> {
   const root = makeRoot('sleep-host-golden', {
-    config,
+    config: { physics: { enabled: true }, ...config },
   });
   const rows = TENANTS.flatMap(rowsOf);
   onStore(root, (db) => {
     db.exec('BEGIN');
     for (const row of rows) upsertEntryRow(db, row);
     db.exec('COMMIT');
+    savePhysicsState(
+      db,
+      rows.filter((_, i) => i % 3 === 0).map((r, i) => particle(r.id, i)),
+    );
     setMeta(db, META_KEY.halfLifeBase, '7');
     setMeta(db, META_KEY.typedHalfLife, '');
     const globex = rowsOf('globex')
@@ -194,7 +215,7 @@ function columnsBut(db: DatabaseSyncLike, table: string, skip: readonly string[]
   return names.filter((name) => !skip.includes(name)).join(', ');
 }
 
-// node:sqlite cells.
+// node:sqlite cells; the particle blobs are read as hex text.
 type Row = Record<string, string | number | null>;
 type Json = string | number | boolean | null | readonly Json[] | { readonly [key: string]: Json };
 type JsonObject = { readonly [key: string]: Json };
@@ -212,6 +233,10 @@ function hostState(root: string) {
       sleepCount: getMeta(db, META_KEY.sleepCount, '0'),
       halfLifeBase: [getMeta(db, META_KEY.halfLifeBase), getMeta(db, META_KEY.typedHalfLife)],
       audit: lines('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id'),
+      particles: lines(
+        `SELECT memory_id, hex(position_blob) AS position, hex(velocity_blob) AS velocity, mass, charge, temperature, ` +
+          `last_simulation != '${SEEDED_SIM}' AS simulated FROM memory_physics ORDER BY memory_id`,
+      ),
       fts: lines('SELECT id, content, tags FROM memories_fts ORDER BY id, content'),
       mirrors: fs
         .readdirSync(root, { recursive: true, withFileTypes: true })
@@ -375,6 +400,7 @@ function sleepDetails(rescued: boolean, replayed: readonly string[]): unknown[] 
     `promoted trace ${TRACE} from session sess-golden (success)`,
     'promoted 1 trace from completed session',
     `replayed 5 memories: ${replayed.join(', ')}`,
+    expect.stringMatching(/^physics: 16 particles, avg vel \d\.\d{4}$/),
     ...RETIRED.map((t, i) => `${idOf(t, 15)} held a retired text, ${minted('sem', i + 2)} holds the rest`),
     ...CLUSTERED.map(() => MERGED_LINE),
     'detected 3 memory conflicts',
@@ -386,12 +412,14 @@ function sleepCounts(o: { decayed: number; dormant: number; extractionCandidates
     ...IDLE_STEPS,
     ...o,
     dryRun: false,
+    phaseFailures: [],
     removed: 6,
     removedIds: [...BY_NAME.map((t) => idOf(t, 10)), ...RETIRED.map((t) => idOf(t, 15))],
     merged: 6,
     semanticCreated: 2,
     promotedTraces: 1,
     replayed: 5,
+    physicsSimulated: 16,
   };
 }
 
@@ -433,8 +461,16 @@ function expectAudit(state: HostState, rescued: boolean): void {
   expect(rescues.every((m) => Number(m['score']) > 0)).toBe(true);
 }
 
-/** The full-text rows follow the live rows; mirrors name only live rows and open conflicts. */
-function expectFollowers(state: HostState): void {
+/** Particles of rows that left are dropped, every other one moved; mirrors name only live rows and open conflicts. */
+function expectFollowers(state: HostState, liveRows: Readonly<Record<string, string>>): void {
+  const seeded = TENANTS.flatMap(rowsOf).filter((_, i) => i % 3 === 0);
+  expect(state.particles.map((p) => p['memory_id'])).toEqual(
+    seeded
+      .map((r) => r.id)
+      .filter((id) => id in liveRows)
+      .sort(),
+  );
+  expect(state.particles.every((p) => p['simulated'] === 1)).toBe(true);
   expect(state.fts.map((f) => [f['id'], f['content']])).toEqual(state.memories.map((m) => [m['id'], m['content']]));
   const liveFiles = new Set(state.memories.map((m) => `${String(m['layer'])}/${String(m['id'])}.md`));
   const rowMirrors = state.mirrors.filter((f) => /^(episodic|semantic|trace)\//.test(f));
@@ -468,7 +504,7 @@ function expectSleptStore(
   expect(state.runs).toEqual([{ timestamp: NOW.toISOString(), decayed: o.decayed, merged: 6, removed: 6 }]);
   expect([state.sleepCount, state.halfLifeBase]).toEqual(['1', ['365', '1']]);
   expectAudit(state, o.rescued);
-  expectFollowers(state);
+  expectFollowers(state, liveRows);
 }
 
 describe('one sleep over three tenants', () => {
@@ -523,6 +559,7 @@ describe('one sleep over three tenants', () => {
       merged: 9,
       semanticCreated: 0,
       promotedTraces: 0,
+      physicsSimulated: 0,
     });
     expect(detailText(result)).toEqual([
       'would move 33 memories from the 7-day to the 365-day half-life',

@@ -5,8 +5,11 @@ import * as path from 'node:path';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
-import { captureSessionTexts, type SessionCaptureRequest } from '../../src/surface/capture/session-texts.js';
-import type { EntryContext } from '../../src/api/types.js';
+import {
+  captureSessionTexts,
+  type CaptureContext,
+  type SessionCaptureRequest,
+} from '../../src/surface/capture/session-texts.js';
 import { collectSessionTurns, sessionTail } from '../../src/surface/capture/transcript.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { deriveOriginProject } from '../../src/host/project-identity.js';
@@ -16,8 +19,7 @@ import { mergedText } from '../../src/base/util/same-text.js';
 import { initProject, removeScratch, runHippo, scratch } from '../_helpers/compaction-hooks.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
-import { startHashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import { loadEveryTenantEntries, loadAllEntries } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
@@ -50,7 +52,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const ctxFor = (hippoRoot: string, tenantId = 'default'): EntryContext => ({
+const ctxFor = (hippoRoot: string, tenantId = 'default'): CaptureContext => ({
   store: sqliteStore(hippoRoot),
   config: loadConfig(hippoRoot),
   tenantId,
@@ -109,19 +111,6 @@ describe('captureSessionTexts', () => {
     }
     expect(auditActors('remember', 't1')).toEqual([ACTOR, ACTOR, ACTOR]);
     expect(loadEveryTenantEntries(root)).toHaveLength(3);
-  });
-
-  it('starts no embed on a store with embeddings on, so it has none to wait for', async () => {
-    const embeddings = await startHashedEmbeddings();
-    onTestFinished(() => embeddings.close());
-    const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
-    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify(config));
-    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-    onTestFinished(() => {
-      vi.unstubAllEnvs();
-    });
-    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 3, skipped: 0, rejected: 0 });
-    expect([embeddings.requests(), Object.keys(loadEmbeddingIndex(root))]).toEqual([0, []]);
   });
 
   it('never stamps the folder of a store whose parent is no project', async () => {

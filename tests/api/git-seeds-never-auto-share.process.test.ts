@@ -24,7 +24,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
@@ -64,12 +64,7 @@ describe('git-learned rows and the global store', () => {
 
   it('autoShare copies the ordinary error row and skips the git-learned one', async () => {
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    const shared = await autoShare(...sharingStores(hippoRoot), {
-      embed: TEST_RUN,
-      detached: TEST_DETACHED,
-      tenantId: ALL_TENANTS,
-      stats,
-    });
+    const shared = await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS, stats });
     expect(shared.map((e) => e.content)).toEqual([ORDINARY]);
     expect(globalContents()).toEqual([ORDINARY]);
     expect(stats.neverAutoShareSkipped).toBe(1);
@@ -84,13 +79,7 @@ describe('git-learned rows and the global store', () => {
 
   it('a hand-run share of a git-learned row still copies it', async () => {
     expect(
-      (
-        await shareMemory(...sharingStores(hippoRoot), seed.id, {
-          embed: TEST_RUN,
-          detached: TEST_DETACHED,
-          tenantId: 'default',
-        })
-      )?.content,
+      (await shareMemory(...sharingStores(hippoRoot), seed.id, { embed: TEST_RUN, tenantId: 'default' }))?.content,
     ).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
   });
@@ -117,7 +106,7 @@ describe('git-learned rows and the global store', () => {
     const recalled = { ...fact, retrievalCount: 3 };
     writeEntry(hippoRoot, recalled);
     expect(transferScore(recalled)).toBeGreaterThanOrEqual(0.6);
-    await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, detached: TEST_DETACHED, tenantId: ALL_TENANTS });
+    await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS });
     expect(globalContents()).toEqual([ORDINARY]);
   });
 

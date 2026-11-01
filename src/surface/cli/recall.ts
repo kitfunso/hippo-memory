@@ -14,11 +14,12 @@ import { type AnchoringHint } from '../../api/recall/anchoring.js';
 import type { AvailabilityHint } from '../../api/availability.js';
 import { printedTokens } from '../../api/context/context-render.js';
 import { loadScopedContinuity, recallJsonRow } from '../../api/recall/rows.js';
+import { cliApiContext, cliSecondStore } from './api-context.js';
 import { printError } from './output.js';
 import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { recallHeading } from './print.js';
-import { continuityJson, type ContinuityBlockJson } from '../../base/session/continuity-json.js';
+import { continuityJson, type ContinuityBlockJson } from '../../api/continuity/continuity-json.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 import { fail } from './exit.js';
 import {
@@ -29,12 +30,10 @@ import {
   type RankedRecall,
 } from './recall-block.js';
 import { parseRecallFlags, type ParsedRecallFlags } from './recall-flags.js';
-import type { CliCommand } from './api-context.js';
 
 /** Runs `hippo recall`: the flags name the ranking core and this verb's presenter,
  * `retrieveWithCliCore` ranks and records, then the block prints. */
 interface PrintRecallOptions {
-  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly query: string;
@@ -43,7 +42,6 @@ interface PrintRecallOptions {
 }
 
 async function printRecall({
-  cli,
   hippoRoot,
   tenantId,
   query,
@@ -51,7 +49,7 @@ async function printRecall({
   callers,
 }: PrintRecallOptions): Promise<void> {
   requireInit(hippoRoot);
-  const ctx = cli.apiContext(hippoRoot, tenantId, callers);
+  const ctx = cliApiContext(hippoRoot, tenantId, callers);
   const parsed = parseRecallFlags(ctx, flags);
   const priced = priceRecallEntries(ctx, query, parsed);
   const { globalRoot } = parsed.setting;
@@ -63,10 +61,10 @@ async function printRecall({
       rank: rankOptions(query, flags, parsed, priced),
       // The global store is a second source for this surface alone, and never when it is the store
       // being searched.
-      sources:
-        globalRoot !== hippoRoot && priced.globalOn ? cli.secondStore(globalRoot) : undefined,
+      sources: globalRoot !== hippoRoot && priced.globalOn ? cliSecondStore(globalRoot) : undefined,
       note: (line) => printError(line),
       hostSessionId: hostSessionId(),
+      lastRecall: ctx.store.lastRecall,
       show: async (rank, planning) => {
         slot.presented = await presentRecall(ctx, {
           query,
@@ -223,7 +221,6 @@ function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefine
 }
 
 export async function handleRecall({
-  cli,
   hippoRoot,
   tenantId,
   args,
@@ -234,5 +231,5 @@ export async function handleRecall({
   if (!query) {
     fail('Please provide a search query.');
   }
-  await printRecall({ cli, hippoRoot: hookStoreRoot(hippoRoot), tenantId, query, flags, callers });
+  await printRecall({ hippoRoot: hookStoreRoot(hippoRoot), tenantId, query, flags, callers });
 }

@@ -28,7 +28,7 @@ afterEach(() => {
 async function runHippo(args: string[]): Promise<{ stdout: string; status: number }> {
   const [, query, ...rest] = args;
   const flags = Object.fromEntries(rest.map((f) => [f.replace(/^--/, ''), true]));
-  return runInProcess((cli) => handleRecall({ cli, hippoRoot: hippoDir, tenantId: 'default', args: [query], flags }));
+  return runInProcess(() => handleRecall({ hippoRoot: hippoDir, tenantId: 'default', args: [query], flags }));
 }
 
 async function seedContinuity(): Promise<void> {

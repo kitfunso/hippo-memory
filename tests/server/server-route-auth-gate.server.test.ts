@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { ROUTE_GROUPS, serve } from '../_helpers/store-switch.js';
 import { V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
@@ -113,7 +113,7 @@ describe('a request with no credential', () => {
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'github-test-secret');
     root = makeRoot('route-auth-gate');
     initTestStore(root);
-    handle = await serve({ hippoRoot: root, port: 0 });
+    handle = await serve({ hippoRoot: root, port: 0, keep: ROUTE_GROUPS });
   });
 
   afterAll(async () => {
@@ -138,9 +138,7 @@ describe('a request with no credential', () => {
       await res.arrayBuffer();
       seen[key] = res.status;
     }
-    // A webhook skips the key check, so on a store without the local tier its 501 comes before the signature check.
-    const noTier = Object.fromEntries(WEBHOOKS.map((key) => [key, 501]));
-    expect(seen).toEqual(needsHippoDb('tier') ? { ...NO_CREDENTIAL, ...noTier } : NO_CREDENTIAL);
+    expect(seen).toEqual(NO_CREDENTIAL);
   });
 
   it('is refused before the handler reads its query, so a bad parameter tells an unknown caller nothing', async () => {

@@ -14,8 +14,7 @@ import type {
 } from './types.js';
 import { type JsonValue, isJsonObject } from '../../../base/util/json.js';
 import { MINUTE_MS } from '../../../base/util/time.js';
-import type { BackfillStream, GitHubStream } from '../../../base/records/connectors.js';
-import { backfillCursor, saveBackfillCursor } from '../../../api/hippo-db/connector-events.js';
+import type { CursorKey, GitHubStream } from '../../../base/ports/store/connectors.js';
 
 const API = 'https://api.github.com';
 
@@ -270,8 +269,9 @@ function prReviewCommentItemToEvent(
 
 const GITHUB_STREAMS: readonly GitHubStream[] = ['issues', 'issueComments', 'prReviewComments'];
 
-const hwmOf = (opts: BackfillOptions, stream: GitHubStream): BackfillStream => ({
+const hwmOf = (ctx: ConnectorContext, opts: BackfillOptions, stream: GitHubStream): CursorKey => ({
   connector: 'github',
+  tenantId: ctx.tenantId,
   repo: opts.repoFullName,
   stream,
 });
@@ -281,13 +281,14 @@ async function resumeFrom(
   ctx: ConnectorContext,
   opts: BackfillOptions,
 ): Promise<Record<GitHubStream, string | null>> {
+  const events = ctx.store.connectorEvents;
   const { sinceIso } = opts;
   if (sinceIso) {
     for (const stream of GITHUB_STREAMS) {
-      await saveBackfillCursor(ctx, hwmOf(opts, stream), sinceIso, { keepSaved: true });
+      await events.saveCursor(hwmOf(ctx, opts, stream), sinceIso, { keepSaved: true });
     }
   }
-  const since = (stream: GitHubStream) => backfillCursor(ctx, hwmOf(opts, stream));
+  const since = (stream: GitHubStream) => events.cursor(hwmOf(ctx, opts, stream));
   return {
     issues: await since('issues'),
     issueComments: await since('issueComments'),
@@ -316,7 +317,7 @@ async function backfillStream(
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
   // unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
-    await saveBackfillCursor(ctx, hwmOf(opts, stream.name), res.maxUpdatedAt);
+    await ctx.store.connectorEvents.saveCursor(hwmOf(ctx, opts, stream.name), res.maxUpdatedAt);
   }
   return { ingested: res.ingested, pages: res.pages };
 }

@@ -1,14 +1,16 @@
-import * as api from './api/index.js';
-import type {
-  Actor,
-  AuthCreateOptions,
-  AuthCreateResult,
-  AuthCreateSelfOptions,
-  AuthCreateSelfResult,
-  AuthRevokeResult,
-  EntryContext as Context,
+import {
+  type Actor,
+  authCreate as authCreateIn,
+  type AuthCreateOptions,
+  type AuthCreateResult,
+  authCreateSelf as authCreateSelfIn,
+  type AuthCreateSelfOptions,
+  type AuthCreateSelfResult,
+  authRevoke as authRevokeIn,
+  type AuthRevokeResult,
+  type EntryContext as Context,
 } from './api/index.js';
-import { filled } from './surface/entry-infra.js';
+import { withEntryInfra } from './surface/entry-infra.js';
 import {
   BadRequestError,
   ConflictError,
@@ -17,13 +19,22 @@ import {
 } from './base/errors/api-errors.js';
 
 /** Mints a key stamped by the caller's clock, else the host's. */
-export const authCreate = filled(api.authCreate);
+export function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthCreateResult> {
+  return authCreateIn(withEntryInfra(ctx), opts);
+}
 
 /** Mints the signed-in caller's own key, stamped by the caller's clock, else the host's. */
-export const authCreateSelf = filled(api.authCreateSelf);
+export function authCreateSelf(
+  ctx: Context,
+  opts: AuthCreateSelfOptions,
+): Promise<AuthCreateSelfResult> {
+  return authCreateSelfIn(withEntryInfra(ctx), opts);
+}
 
 /** Revokes a key, stamped by the caller's clock, else the host's. */
-export const authRevoke = filled(api.authRevoke);
+export function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
+  return authRevokeIn(withEntryInfra(ctx), keyId);
+}
 
 export { serve } from './surface/server/boot.js';
 export { promptHookContext } from './surface/server/prompt-hook-context.js';
@@ -54,17 +65,16 @@ export type {
 } from './surface/server/types.js';
 // ServeOptions takes a HippoStore; the rest of the store contract is on hippo-memory/store-kit.
 export type { HippoStore } from './base/ports/store-index.js';
-// What a caller sets as Context.detached to keep the embeds a call hands off.
-export type { DetachedWork } from './domain/search/embed-memories.js';
 // An add-on route replies 4xx with HttpError, renders the prompt hook elsewhere with
 // promptHookContext, and types its body as JsonValue.
 export { HttpError } from './base/errors/http-errors.js';
 export type { CallerProject } from './api/prompt-hook.js';
 export type { JsonValue } from './base/util/json.js';
 // A session-end route stores the turns its caller read from a transcript on the caller's own
-// machine; a store without hippo.db's local tier rejects.
+// machine; it narrows its Context with store-kit's hasGroup(ctx.store, 'captures') first.
 export {
   captureSessionTexts,
+  type CaptureContext,
   type SessionCaptureRequest,
   type SessionCaptureResult,
 } from './surface/capture/session-texts.js';
@@ -73,7 +83,7 @@ export {
 export type { AuthCreateOptions, AuthCreateResult };
 export { ownerOrSubject } from './api/index.js';
 // A route that writes for a session binds it to the caller's owner first.
-export { bindSessionOwner } from './api/hippo-db/session-owners.js';
+export { bindSessionOwner } from './api/auth/session-owners.js';
 // A hook route for a caller on another machine: each call binds the session, then writes under the
 // caller's owner and project.
 export {
@@ -99,6 +109,6 @@ export {
   sessionEndHandoffForCaller,
   type CallerEvidence,
   type CallerSessionEndRequest,
+  type CallerSessionEndResult,
 } from './surface/capture/session-end-caller.js';
-export type { CallerSessionEndResult } from './api/session-end.js';
 export type { WorkingState } from './base/session/working-state.js';

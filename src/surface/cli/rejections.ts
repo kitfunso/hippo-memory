@@ -2,6 +2,7 @@
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import * as api from '../../api/index.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, stringFlag } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
@@ -16,14 +17,13 @@ export async function handleReject({
   tenantId,
   args,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   // Store resolution mirrors `hippo remember`: --global writes to the global store, otherwise the
   // local store (requireInit'd via resolveAuthRoot).
   const root = resolveAuthRoot(hippoRoot, flags);
 
-  // --reason is REQUIRED: the tombstone stores no content, so reason is its only
-  // human-readable identity.
+  // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable
+  // identity.
   const reason = (stringFlag(flags, 'reason') ?? '').trim();
   if (!reason) {
     fail(
@@ -44,7 +44,7 @@ export async function handleReject({
   }
 
   try {
-    const result = await api.rejectOnHost(cli.apiContext(root, tenantId), {
+    const result = await api.rejectOnHost(cliApiContext(root, tenantId), {
       reason,
       memoryId: valueFlag === undefined ? memoryId : undefined,
       value: valueFlag,
@@ -83,10 +83,9 @@ export async function handleRejections({
   hippoRoot,
   tenantId,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const rows = await api.listRejections(cli.apiContext(root, tenantId));
+  const rows = await api.listRejections(cliApiContext(root, tenantId));
 
   if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ rejections: rows }, null, 2));
@@ -115,7 +114,6 @@ export async function handleUnreject({
   tenantId,
   args,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const digestOrPrefix = (args[0] ?? '').trim();
@@ -123,7 +121,7 @@ export async function handleUnreject({
     fail('Usage: hippo unreject <digest-or-prefix>');
   }
 
-  const outcome = await api.liftRejection(cli.apiContext(root, tenantId), digestOrPrefix);
+  const outcome = await api.liftRejection(cliApiContext(root, tenantId), digestOrPrefix);
   if (outcome.status === 'not_found') {
     fail(
       `No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`,

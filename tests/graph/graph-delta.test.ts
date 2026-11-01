@@ -2,9 +2,9 @@
 // object costs no write and a renamed one keeps its entity id and the edges that point at it.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/graph/extract.js';
-import { entityKey } from '../../src/base/records/graph-delta.js';
+import { entityKey } from '../../src/store/rules/graph-delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
-import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/records/graph.js';
+import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/ports/store/graph.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -26,7 +26,7 @@ function onStore<R>(home: string, read: (db: DatabaseSyncLike) => R): R {
 
 async function deltaOf(home: string, tenant: string = T): Promise<GraphOp[]> {
   const derived = deriveGraph(await loadGraphSources(objectsAt(home), tenant));
-  return sqliteStore(home).hippoDb.graphReads.graphDelta(tenant, derived);
+  return sqliteStore(home).graphReads.graphDelta(tenant, derived);
 }
 
 const opNames = (ops: GraphOp[]): string[] => ops.map((o) => o.op);

@@ -4,7 +4,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
-import type { ConflictListQuery } from '../../src/base/records/conflicts.js';
+import type { ConflictListQuery } from '../../src/base/ports/store/conflicts.js';
 import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
@@ -31,8 +31,8 @@ const entry = (text: string) => createMemory(text, { baseHalfLifeDays: DEFAULT_H
 describe('sessions group', () => {
   it('keeps a snapshot, events and a handoff, in both forms', async () => {
     const r = root();
-    const sync = sqliteStore(r).hippoDb.sessions;
-    const served = sqliteStore(r).hippoDb.sessions;
+    const sync = sqliteStore(r).sessions;
+    const served = sqliteStore(r).sessions;
     const snap = { task: 'ship', summary: 'half done', nextStep: 'merge', sessionId: 's1' };
     expect((await sync.save(T, 'snapshot', snap, null)).task).toBe('ship');
     expect((await served.loadSnapshot(T, {}, null))?.nextStep).toBe('merge');
@@ -52,7 +52,7 @@ describe('sessions group', () => {
 
   it('pushes, reads and clears working memory', async () => {
     const r = root();
-    const served = sqliteStore(r).hippoDb.sessions;
+    const served = sqliteStore(r).sessions;
     await served.save(T, 'working_memory', { scope: 'task', content: 'note one' });
     expect((await served.read(T, 'working_memory', { scope: 'task', limit: 10 })).map((i) => i.content)).toEqual([
       'note one',
@@ -64,8 +64,8 @@ describe('sessions group', () => {
 describe('cards group', () => {
   it('runs a card from create to complete in both forms', async () => {
     const r = root();
-    const sync = sqliteStore(r).hippoDb.cards;
-    const served = sqliteStore(r).hippoDb.cards;
+    const sync = sqliteStore(r).cards;
+    const served = sqliteStore(r).cards;
     const card = await sync.create(T, { title: 'wire the port' });
     expect((await served.detail(T, card.id))?.card.title).toBe('wire the port');
     const claimed = await served.claim(T, card.id, 'claude');
@@ -85,8 +85,8 @@ describe('cards group', () => {
 describe('goals group', () => {
   it('pushes a goal and lists it, then completes it', async () => {
     const r = root();
-    const sync = sqliteStore(r).hippoDb.goals;
-    const served = sqliteStore(r).hippoDb.goals;
+    const sync = sqliteStore(r).goals;
+    const served = sqliteStore(r).goals;
     const goal = await sync.push(T, { sessionId: 's1', goalName: 'ship the refactor' });
     expect((await served.sessionGoals(T, 's1')).map((g) => g.id)).toEqual([goal.id]);
     await served.suspend(T, goal.id);
@@ -104,8 +104,8 @@ describe('conflicts group', () => {
     writeEntry(r, a);
     writeEntry(r, b);
     replaceDetectedConflicts(r, [{ memoryAId: a.id, memoryBId: b.id, reason: 'contradiction', score: 0.9 }]);
-    const sync = sqliteStore(r).hippoDb.conflicts;
-    const served = sqliteStore(r).hippoDb.conflicts;
+    const sync = sqliteStore(r).conflicts;
+    const served = sqliteStore(r).conflicts;
     const query = (tenantId: TenantId): ConflictListQuery => ({ tenantId, status: 'open', limit: 10 });
     const [open] = (await sync.list(query(T))).rows;
     expect(open?.a).not.toBeNull();
@@ -146,8 +146,8 @@ describe('dormant group', () => {
   it('lists, restores and forgets, and keeps another tenant out', async () => {
     const r = root();
     const row = seed(r);
-    const sync = sqliteStore(r).hippoDb.dormant;
-    const served = sqliteStore(r).hippoDb.dormant;
+    const sync = sqliteStore(r).dormant;
+    const served = sqliteStore(r).dormant;
     expect((await sync.list(T, null, {})).map((m) => m.id)).toEqual([row.id]);
     expect((await served.list(T, null, { id: row.id })).map((m) => m.id)).toEqual([row.id]);
     expect(await served.list('other', null, { id: row.id })).toEqual([]);
@@ -164,7 +164,7 @@ describe('dormant group', () => {
   it('forget deletes the row and answers false for a missing id', async () => {
     const r = root();
     const row = seed(r);
-    const served = sqliteStore(r).hippoDb.dormant;
+    const served = sqliteStore(r).dormant;
     expect(await served.forget(T, null, row.id, 'me')).toBe(true);
     expect(await served.forget(T, null, row.id, 'me')).toBe(false);
   });
@@ -178,8 +178,8 @@ describe('reports group', () => {
     writeEntry(r, a);
     writeEntry(r, b);
     replaceDetectedConflicts(r, [{ memoryAId: a.id, memoryBId: b.id, reason: 'x', score: 0.9 }]);
-    const sync = sqliteStore(r).hippoDb.reports;
-    const served = sqliteStore(r).hippoDb.reports;
+    const sync = sqliteStore(r).reports;
+    const served = sqliteStore(r).reports;
     const status = await served.memoryStatus(T, new Date(), 0.1);
     expect(status).toMatchObject({ total: 2, openConflicts: 1 });
     expect((await sync.memoryStatus(T, new Date(), 0.1)).total).toBe(2);

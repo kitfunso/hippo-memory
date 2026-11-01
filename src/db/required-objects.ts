@@ -10,8 +10,8 @@ export function createdObjectNames(ddl: string): string[] {
   return [...ddl.matchAll(CREATED_NAME)].map((m) => m[1]);
 }
 
-/** Every object runMigrations re-asserts on a stamped store; the open fast path requires all
- * of them. */
+/** Every object runMigrations re-asserts on a stamped store; the open fast path requires all of
+ * them. */
 export const REQUIRED_SCHEMA_OBJECTS: readonly string[] = Object.freeze([
   ...createdObjectNames(META_TABLE_DDL),
   ...HEALED_TABLES,

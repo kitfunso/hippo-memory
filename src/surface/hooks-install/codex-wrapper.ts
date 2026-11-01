@@ -44,8 +44,8 @@ const METADATA_TEXT_FIELDS = [
   'installedAt',
 ] as const;
 
-/** The check at the parse site; whether the paths are the installer's own
- * is isCodexWrapperMetadataValid's. */
+/** The check at the parse site; whether the paths are the installer's own is
+ * isCodexWrapperMetadataValid's. */
 function isCodexWrapperMetadataRecord(value: JsonValue): value is JsonValue & CodexWrapperMetadata {
   if (!isJsonObject(value)) return false;
   if (!METADATA_TEXT_FIELDS.every((field) => isJsonString(value[field]))) return false;
@@ -317,8 +317,8 @@ export function ensureCodexWrapperInstalled(): EnsureCodexWrapperResult {
   };
 }
 
-/** Wrapper metadata on this machine means the user opted in once, via `hippo hook
- * install codex`. */
+/** Wrapper metadata on this machine means the user opted in once, via `hippo hook install
+ * codex`. */
 export function isCodexWrapperInstalled(): boolean {
   return readCodexWrapperMetadata() !== null;
 }

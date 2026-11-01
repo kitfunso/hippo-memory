@@ -75,8 +75,8 @@ async function viaCli(s: Store, c: RecallCall): Promise<CliRecalled> {
   const flags: CliFlags = { ...c.cliFlags };
   if (c.session) flags['session-id'] = c.session;
   if (c.budget !== undefined) flags.budget = String(c.budget);
-  const out = await runInProcess((cli) =>
-    handleRecall({ cli, hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  const out = await runInProcess(() =>
+    handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
   );
   const anchored = /\[anchored_on: ([^\]]+)\]/.exec(out.stdout);
   return { output: out, hint: anchored ? anchored[1]! : null };
@@ -452,17 +452,17 @@ describe('recall surface differences', () => {
     });
   });
 
-  // D4: HTTP scores are list positions in every mode; hybrid only reorders.
-  it('http scores are positions in bm25 and hybrid modes', async () => {
+  // D4: HTTP scores are list positions in every mode; hybrid and physics only reorder.
+  it('http scores are positions in bm25, hybrid and physics modes', async () => {
     const got = await onFreshStore('local', async (s) => {
       const out = await httpCalls(
         s,
-        ['bm25', 'hybrid'].map((mode) => ({ query: 'deploy', httpParams: { mode } })),
+        ['bm25', 'hybrid', 'physics'].map((mode) => ({ query: 'deploy', httpParams: { mode } })),
       );
       return out.map((r) => r.output.body.results);
     });
     const engine = ['mem_p_plain', 'mem_p_pinned', ...[...FILLS_UP].reverse(), 'mem_p_trace', 'mem_p_scoped'];
-    expect(got.map((rows) => rows.map((r) => r.id))).toEqual([SQL_ORDER, engine]);
+    expect(got.map((rows) => rows.map((r) => r.id))).toEqual([SQL_ORDER, engine, engine]);
     for (const rows of got) expect(rows.map((r) => r.score)).toEqual(positions(10));
   });
 
@@ -475,7 +475,7 @@ describe('recall surface differences', () => {
         {
           query: 'deploy',
           window: { limit: 50 },
-          mode: 'hybrid',
+          mode: 'physics',
           boost: { sessionId: SESSION },
           filter: { keepHeldCopies: true },
           hints: { suppressAvailabilityHint: true },
@@ -560,8 +560,8 @@ const RECALL_OUTCOMES = new Map<string, { mcp: McpOutcome; http: HttpOutcome }>(
     'scope empty': { mcp: { ok: 'Found 12 memories:' }, http: { status: 200 } },
     'budget -1': { mcp: badArgs(RECALL, 'budget must be >= 0 (got -1)'), http: { status: 200 } },
     'mode bogus': {
-      mcp: badArgs(RECALL, "mode must be 'bm25' or 'hybrid'"),
-      http: status400("mode must be 'bm25' or 'hybrid'"),
+      mcp: badArgs(RECALL, "mode must be 'bm25', 'hybrid', or 'physics'"),
+      http: status400("mode must be 'bm25', 'hybrid', or 'physics'"),
     },
     'limit 0': {
       mcp: badArgs(RECALL, 'limit must be a positive integer <= 1000'),

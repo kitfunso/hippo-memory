@@ -2,17 +2,17 @@
  *  Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown. */
 
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
-import { createMemoryAt, Layer, MemoryEntry } from '../../base/memory/entry.js';
+import { createMemory, Layer, MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { getGlobalRoot } from '../../host/global-store.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../host/config-file.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { log } from '../../base/util/log.js';
-import { CLI_ACTOR } from '../../base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { EntryWrites } from '../../base/ports/store/entry-writes.js';
-import type { Rejections } from '../../base/records/rejections.js';
-import type { Sharing } from '../../base/records/sharing.js';
+import type { Rejections } from '../../base/ports/store/rejections.js';
+import type { Sharing } from '../../base/ports/store/sharing.js';
 import type { Clock } from '../../base/ports/infra.js';
 
 /** Below this length a chunk holds nothing worth recalling. */
@@ -30,7 +30,7 @@ export interface ImportResult {
    * package root and a required field breaks existing consumers; read sites use `?? 0`.
    */
   rejected?: number;
-  /** Vault import: rows archived this run (changed + source-deleted). In a dryRun this is the would-be count (a true
+  /** K1 vault import: rows archived this run (changed + source-deleted). In a dryRun this is the would-be count (a true
    *  deletion-sync preview). */
   archived?: number;
   /** Entries stored with secret-shaped text redacted; optional for the same published-surface
@@ -48,12 +48,12 @@ export interface ImportOptions {
    * entries, except under `global`, which counts every tenant's. */
   tenantId?: string;
   /**
-   * Vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key.
+   * K1 vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key.
    * REQUIRED by importVault (throws if missing or blank), because it keys the destructive deletion
    * sync and two vaults sharing a basename would clobber each other. LIKE-escaped by the loader.
    */
   name?: string;
-  /** Vault import only. Memory scope stamped on every imported note. Defaults to null
+  /** K1 vault import only. Memory scope stamped on every imported note. Defaults to null
    * (unscoped) when unset. */
   scope?: string;
 }
@@ -64,8 +64,8 @@ type AtOnce<F> = F extends (...args: infer A) => Promise<infer R> ? (...args: A)
 /** The port calls an import makes on its folder's store, answered at once; a composition root
  * builds them. */
 export interface ImportFiles {
-  /** Creates the store's files when they are missing, as a first import to the global
-   * store needs. */
+  /** Creates the store's files when they are missing, as a first import to the global store
+   * needs. */
   readonly ensure: () => void;
   readonly writeEntry: AtOnce<EntryWrites['writeEntry']>;
   readonly refusedAmong: AtOnce<Rejections['refusedAmong']>;
@@ -174,8 +174,8 @@ function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate
   return null;
 }
 
-/** Only the rows holding the chunk's words can hold the chunk, so the store is asked for
- * those alone. */
+/** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those
+ * alone. */
 function storeHolds({ files, tenantId }: OpenImport, chunk: string): boolean {
   const key = duplicateKey(chunk);
   return files
@@ -212,7 +212,7 @@ function createImportEntry({
   // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a
   // system of record (see MEMORY_ENVELOPE.md). The write must use the same tenant as the scoped
   // dedup read above: global=true writes host-wide, global=false writes to options.tenantId.
-  return createMemoryAt(
+  return createMemory(
     chunk,
     {
       layer: Layer.Episodic,
@@ -226,8 +226,8 @@ function createImportEntry({
   );
 }
 
-/** Writes the entry, or on a dry run only probes the guard; false when a rejected value
- * refuses it. */
+/** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses
+ * it. */
 function writeOrProbeImport(
   target: OpenImport,
   entry: MemoryEntry,

@@ -5,28 +5,24 @@ import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../../db/index.js';
 import { currentRequestId, type RequestLimits } from '../../../base/util/request-scope.js';
 import type {
   HippoStore,
-  CoreGroups,
+  Readiness,
+  StoreGroups,
   StoredPart,
   StoredParts,
   VectorReads,
 } from '../../../base/ports/store.js';
-import type { Readiness } from '../../../base/records/diagnostics.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore, sqliteStoreOn } from '../store.js';
 import type { StoreRules } from '../../../base/ports/infra.js';
 import type { StoreRuntime } from '../../../db/store-runtime.js';
 import { type VectorPack, vectorViewsOf } from './vector-pack.js';
 import {
-  HIPPO_DB_OPS,
-  type HippoDbRepo,
-  type OpGroup,
   type OpPlaces,
   type OpRoute,
   type WorkerBase,
   type WorkerGroup,
   WORKER_OPS,
 } from './worker-ops.js';
-import type { HippoDbRepos, HippoDbStore } from '../../../base/ports/hippo-db.js';
 import { asHippoDb } from './hippo-db-stores.js';
 import { handlesOf } from './handles.js';
 
@@ -85,7 +81,7 @@ function workerCall(sender: Sender, op: string, mode: OpRoute): Function {
 
 /** `inProcess` with each method the op table places on a worker answered from one, so a new
  * method of a group needs its tag and no body here. */
-function onWorkers<G>(sender: Sender, group: OpGroup, places: OpPlaces<G>, inProcess: G): G {
+function onWorkers<G>(sender: Sender, group: WorkerGroup, places: OpPlaces<G>, inProcess: G): G {
   const moved = Object.entries<OpRoute>(places).map(([method, place]) => [
     method,
     workerCall(sender, `${group}.${method}`, place),
@@ -104,6 +100,7 @@ function storedOnWorkers(sender: Sender): VectorReads['stored'] {
   const sent: SentParts = {
     vectors: async (ids) =>
       vectorViewsOf(await send<VectorPack>(sender, 'vectors.stored', ['vectors', ids], mode)),
+    particles: (ids) => send(sender, 'vectors.stored', ['particles', ids], mode),
   };
   const stored: VectorReads['stored'] = async (part, ids) =>
     ids.length === 0 ? new Map() : sent[part](ids);
@@ -112,7 +109,7 @@ function storedOnWorkers(sender: Sender): VectorReads['stored'] {
   return stored;
 }
 
-function vectorGroups(sender: Sender, inProcess: VectorReads): Pick<CoreGroups, 'vectors'> {
+function vectorGroups(sender: Sender, inProcess: VectorReads): Pick<StoreGroups, 'vectors'> {
   return {
     vectors: {
       ...onWorkers(sender, 'vectors', WORKER_OPS.vectors, inProcess),
@@ -131,45 +128,31 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
   };
 }
 
-/** The groups with a body of their own below: base sits on the store itself, vectors rebuild
- * a Map. */
-type CustomGroup = 'base' | 'vectors';
+/** The groups with a body of their own below: base sits on the store itself, vectors rebuild a
+ * Map, readiness is probed. */
+type CustomGroup = 'base' | 'vectors' | 'readiness';
 type PlainGroup = Exclude<WorkerGroup, CustomGroup>;
 
 const isPlainGroup = (group: WorkerGroup): group is PlainGroup =>
-  group !== 'base' && group !== 'vectors';
+  group !== 'base' && group !== 'vectors' && group !== 'readiness';
 
 // SAFETY: Object.keys of the WORKER_OPS literal lists exactly its WorkerGroup keys.
 const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGroup);
 
 /** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it
  * misses a compile error. */
-function plainGroups(sender: Sender, inProcess: CoreGroups): Pick<CoreGroups, PlainGroup> {
+function plainGroups(sender: Sender, inProcess: StoreGroups): Pick<StoreGroups, PlainGroup> {
   const wrapped = PLAIN_GROUPS.map((group) => [
     group,
     onWorkers(sender, group, WORKER_OPS[group], inProcess[group]),
   ]);
   // SAFETY: each entry pairs a group name with that group's own wrapped methods, so the object has
   // every PlainGroup key.
-  return Object.fromEntries(wrapped) as Pick<CoreGroups, PlainGroup>;
+  return Object.fromEntries(wrapped) as Pick<StoreGroups, PlainGroup>;
 }
 
-// SAFETY: Object.keys of the HIPPO_DB_OPS literal lists exactly its repository keys.
-const HIPPO_DB_REPOS = Object.keys(HIPPO_DB_OPS) as HippoDbRepo[];
-
-/** hippo.db's local tier, each repository wrapped as a plain group is, under `hippoDb.<repo>`. */
-function hippoDbOnWorkers(sender: Sender, inProcess: HippoDbRepos): HippoDbRepos {
-  const wrapped = HIPPO_DB_REPOS.map((repo) => [
-    repo,
-    onWorkers(sender, `hippoDb.${repo}`, HIPPO_DB_OPS[repo], inProcess[repo]),
-  ]);
-  // SAFETY: each entry pairs a repository name with its own wrapped methods, so the object has
-  // every repository key.
-  return Object.fromEntries(wrapped) as HippoDbRepos;
-}
-
-/** The rules a worker store's threads open with, and the server's runtime its checkpoints
- * run under. */
+/** The rules a worker store's threads open with, and the server's runtime its checkpoints run
+ * under. */
 export interface WorkerStoreOptions extends StoreRules {
   readonly runtime?: StoreRuntime | undefined;
 }
@@ -181,26 +164,28 @@ export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
   { runtime, ...rules }: WorkerStoreOptions = {},
-): HippoDbStore {
+): HippoStore & StoreGroups {
   // A method the op table missed would run here, on the server thread, where every open of this
   // part refuses.
   const inProcess = sqliteStoreOn(handlesOf(hippoRoot, { ...rules, runtime, workerOnly: true }));
   const sender: Sender = { executor, limits: {} };
-  const hippoDb = hippoDbOnWorkers(sender, inProcess.hippoDb);
-  const store: HippoDbStore = {
+  const store: HippoStore & StoreGroups = {
     ...inProcess,
     ...onWorkers<WorkerBase>(sender, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(sender, inProcess.vectors),
     ...plainGroups(sender, inProcess),
-    hippoDb: { ...hippoDb, readiness: probing(hippoRoot, hippoDb.readiness) },
+    readiness: probing(
+      hippoRoot,
+      onWorkers(sender, 'readiness', WORKER_OPS.readiness, inProcess.readiness),
+    ),
     close: () => executor.close(),
   };
   return asHippoDb(markOffLoop(store));
 }
 
 function rebound<V>(value: V, limits: RequestLimits): V {
-  // SAFETY: a rebind makes the same worker call again, so the new function has the old
-  // one's signature.
+  // SAFETY: a rebind makes the same worker call again, so the new function has the old one's
+  // signature.
   return isRebindable(value) ? (value[REBIND](limits) as V) : value;
 }
 
@@ -208,22 +193,19 @@ function isPlainObject<V>(value: V): value is V & object {
   return value instanceof Object && Object.getPrototypeOf(value) === Object.prototype;
 }
 
-// Down every level of plain objects, since hippo.db's local tier holds its methods two levels down.
-function reboundAll<V>(value: V, limits: RequestLimits): V {
-  if (!isPlainObject(value)) return rebound(value, limits);
-  const members = Object.entries(value).map(([key, member]) => [key, reboundAll(member, limits)]);
-  // SAFETY: a group keeps its keys, each method rebound to the same signature.
-  return Object.fromEntries(members) as V;
-}
-
-/** `store` with each worker call, at any depth of its groups, bound to one request's `limits`;
- * any other member stays as it is, so a store a caller patched keeps its patches. */
+/** `store` with each worker call, its groups' too, bound to one request's `limits`; any other
+ * member stays as it is, so a store a caller patched keeps its patches. */
 export function storeForRequest<S extends HippoStore>(store: S, limits: RequestLimits): S {
   if (!runsOffLoop(store)) return store;
   const bound: Partial<S> = { ...store };
   // SAFETY: Object.keys lists the store's own string keys, which are keys of S.
   for (const key of Object.keys(store) as (keyof S)[]) {
-    bound[key] = reboundAll(store[key], limits);
+    const value = store[key];
+    const group = isPlainObject(value)
+      ? Object.fromEntries(Object.entries(value).map(([k, m]) => [k, rebound(m, limits)]))
+      : undefined;
+    // SAFETY: a group keeps its keys, each method rebound to the same signature.
+    bound[key] = (group ?? rebound(value, limits)) as S[keyof S];
   }
   // SAFETY: every own string key of `store` was copied above; its marks are non-enumerable, so
   // markOffLoop sets the off-loop mark again.
@@ -232,7 +214,7 @@ export function storeForRequest<S extends HippoStore>(store: S, limits: RequestL
 
 /** The operator's global stores a server opens beside its own, closed with it. */
 interface GlobalStores {
-  readonly open: (root: string) => HippoDbStore;
+  readonly open: (root: string) => HippoStore & StoreGroups;
   readonly close: () => Promise<void>;
 }
 
@@ -251,7 +233,7 @@ export function globalStoresFor(
       close: async () => {},
     };
   }
-  const opened = new Map<string, HippoDbStore>();
+  const opened = new Map<string, HippoStore & StoreGroups>();
   return {
     open(root) {
       const known = opened.get(root);

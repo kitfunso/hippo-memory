@@ -166,115 +166,115 @@
       {
         "memory_id": "mem_p_plain",
         "result_rank": 1,
-        "score": 0.34171209425088767,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_x_cafe",
-        "result_rank": 2,
-        "score": 0.27610319859587545,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_x_summary",
-        "result_rank": 3,
-        "score": 0.28528220534496596,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_p_goal",
-        "result_rank": 4,
-        "score": 0.28822596458993993,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_x_raw",
-        "result_rank": 5,
-        "score": 0.2820722913977005,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "<claim>",
-        "result_rank": 6,
-        "score": 0.24828176504976912,
+        "score": 1,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_noise",
+        "result_rank": 2,
+        "score": 1,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 3,
+        "score": 0.9492305490351495,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_summary",
+        "result_rank": 4,
+        "score": 0.9237120508747305,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 5,
+        "score": 0.8136821125830513,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_cafe",
+        "result_rank": 6,
+        "score": 0.7240962568393271,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_raw",
         "result_rank": 7,
-        "score": 0.24260381567814335,
+        "score": 0.6961301454341282,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_fill1",
         "result_rank": 8,
-        "score": 0.2343178527838822,
+        "score": 0.5407781530504273,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_fill4",
         "result_rank": 9,
-        "score": 0.23140513012268657,
+        "score": 0.5146702476229996,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_fill3",
         "result_rank": 10,
-        "score": 0.22878446244807016,
+        "score": 0.4983880204901915,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "<claim>",
+        "result_rank": 11,
+        "score": 0.48377560192545865,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_pinned",
-        "result_rank": 11,
-        "score": 0.20809629603391627,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_p_scoped",
         "result_rank": 12,
-        "score": 0.20235018021344478,
+        "score": 0.43879941332006234,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_fill2",
         "result_rank": 13,
-        "score": 0.20742274818315765,
+        "score": 0.4217156910234031,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 14,
+        "score": 0.36798768609487015,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_x_child2",
-        "result_rank": 14,
-        "score": 0.19072356766024368,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_p_fill0",
         "result_rank": 15,
-        "score": 0.19740238526170087,
+        "score": 0.3598620496875851,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_fill5",
         "result_rank": 16,
-        "score": 0.19595786153583014,
+        "score": 0.34944417351125495,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_new",
         "result_rank": 17,
-        "score": 0.1531657556765752,
+        "score": 0.19993020991642393,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_trace",
         "result_rank": 18,
-        "score": 0.14249983923073134,
+        "score": 0.176990326833808,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_x_child1",
         "result_rank": 19,
-        "score": 0.1311163360568137,
+        "score": 0.15783343953087442,
         "trace_id": 1,
       },
     ],
@@ -301,22 +301,22 @@
 deploy pipeline uses blue green rollout for the api
 
 [verified] (strength=1.00)
-café opening hours for the team lunch
-
-[verified] tags: dag-summary (strength=1.00)
-rollout summary for the nightly batch move
+unrelated note about lunch options near the office
 
 [verified] tags: goal-alpha (strength=1.00)
 deploy goal work: migrate the rollout scripts to the new runner
 
+[verified] tags: dag-summary (strength=1.00)
+rollout summary for the nightly batch move
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+café opening hours for the team lunch
+
 [verified] (strength=1.00)
 raw capture of the deploy window from the golden session
-
-[observed] tags: prediction, deploy-duration (strength=1.00)
-rollout duration estimate for the eu cluster
-
-[verified] (strength=1.00)
-unrelated note about lunch options near the office
 
 [verified] (strength=1.00)
 deploy log line 1 for the nightly batch
@@ -327,20 +327,20 @@ deploy log line 4 for the nightly batch
 [verified] (strength=1.00)
 deploy log line 3 for the nightly batch
 
+[observed] tags: prediction, deploy-duration (strength=1.00)
+rollout duration estimate for the eu cluster
+
 [verified] tags: deploy (strength=1.00)
 deploy freeze applies to the billing service on fridays
-
-[verified] (strength=1.00)
-deploy checklist for team alpha runs smoke tests first
 
 [verified] (strength=1.00)
 deploy log line 2 for the nightly batch
 
 [verified] (strength=1.00)
-deploy batch child two moved the queue
+deploy checklist for team alpha runs smoke tests first
 
 [verified] (strength=1.00)
-deploy log line 0 for the nightly batch
+deploy batch child two moved the queue
 
 [verified] (strength=1.00)
 deploy log line 5 for the nightly batch

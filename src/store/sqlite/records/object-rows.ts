@@ -4,7 +4,7 @@
 
 import { isJsonString } from '../../../base/util/json.js';
 import { parseStoredJson, warnDamagedColumn } from '../../../base/util/stored-json.js';
-import type { SourceObjectType } from '../../../base/records/graph.js';
+import type { SourceObjectType } from '../../../base/ports/store/graph.js';
 import type {
   BriefStatus,
   CustomerNote,
@@ -106,8 +106,8 @@ export interface RowByKind {
   customer_note: CustomerNoteRow;
 }
 
-// A reply lists an object's keys in the order its mapper sets them: head, the kind's own
-// fields, tail.
+// A reply lists an object's keys in the order its mapper sets them: head, the kind's own fields,
+// tail.
 const head = (row: HeadRow) => ({ id: row.id, memoryId: row.memory_id, tenantId: row.tenant_id });
 
 const versionedTail = <S>(row: VersionedRow<S>) => ({

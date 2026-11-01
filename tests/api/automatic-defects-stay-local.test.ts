@@ -11,7 +11,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -41,14 +41,9 @@ describe('automatic rows with a certain defect stay local', () => {
     for (const entry of [captured, typed]) writeEntry(root, entry);
     expect(transferScore(captured)).toBeGreaterThanOrEqual(0.6);
     expect(
-      (
-        await autoShare(...sharingStores(root), {
-          embed: TEST_RUN,
-          detached: TEST_DETACHED,
-          tenantId: ALL_TENANTS,
-          dryRun: true,
-        })
-      ).map((entry) => entry.id),
+      (await autoShare(...sharingStores(root), { embed: TEST_RUN, tenantId: ALL_TENANTS, dryRun: true })).map(
+        (entry) => entry.id,
+      ),
     ).toEqual([typed.id]);
   });
 

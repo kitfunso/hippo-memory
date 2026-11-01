@@ -1,6 +1,5 @@
-import type { ConnectorEvent } from '../../../base/records/connectors.js';
-import { rememberOncePerEvent } from '../../../api/hippo-db/connector-writes.js';
-import type { ConnectorContext, IngestResult } from '../ingest.js';
+import type { ConnectorEvent } from '../../../base/ports/store.js';
+import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { messageToRememberOpts } from './transform.js';
 import type { ChannelMeta } from './scope.js';
 import type { SlackMessageEvent } from './types.js';
@@ -20,9 +19,17 @@ export async function ingestMessage(
   ctx: ConnectorContext,
   input: IngestInput,
 ): Promise<IngestResult> {
+  const events = ctx.store.connectorEvents;
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
-  const done = await rememberOncePerEvent(ctx, event, () => messageToRememberOpts(input));
-  if (done.status !== 'logged') return done;
-  // An empty body was logged with no memory, so its replay answers the 'skipped' it first did.
-  return { status: done.memoryId === null ? 'skipped' : 'duplicate', memoryId: done.memoryId };
+  // Idempotency check: if already seen, return the cached memory_id without re-running the
+  // transform or hitting api.remember.
+  const seen = await events.eventRecord(event);
+  if (seen.seen) {
+    // Empty-body events are marked seen with memory_id=NULL, so their replay returns the same
+    // 'skipped' they first returned; a non-NULL memory_id means a memory was ingested, so
+    // 'duplicate'.
+    return { status: seen.memoryId === null ? 'skipped' : 'duplicate', memoryId: seen.memoryId };
+  }
+
+  return rememberWithEventLog(ctx, event, messageToRememberOpts(input));
 }

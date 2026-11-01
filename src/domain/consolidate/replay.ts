@@ -1,15 +1,15 @@
 /**
  * Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and
  * age, then apply the `markRetrieved` strengthening. A lightweight deterministic analog of
- * hippocampal replay, so important memories stay strong without being queried; distinct from decay
- * and merge.
+ * hippocampal replay, so important memories stay strong without being queried; distinct from decay,
+ * physics and merge.
  */
 
 import { HOUR_MS } from '../../base/util/time.js';
 import { mulberry32 } from '../../base/util/prng.js';
 import {
   PRODUCTION_STRENGTH,
-  resolveConfidenceAt,
+  resolveConfidence,
   type StrengthModel,
 } from '../../base/memory/strength.js';
 import type { MemoryEntry, EmotionalValence } from '../../base/memory/entry.js';
@@ -35,9 +35,9 @@ const STRENGTH_FLOOR = 0.1;
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
-  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at REWARD_FLOOR
-  // (still eligible, just unlikely). The clamp is required because sampleForReplay needs all
-  // weights positive.
+  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still
+  // eligible, just unlikely). The clamp is required because sampleForReplay needs all weights
+  // positive.
   const rewardSignal = outcomeAblated
     ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
     : Math.max(REWARD_FLOOR, 1 + pos * REWARD_POSITIVE_GAIN + (pos - neg) * REWARD_NET_GAIN);
@@ -86,7 +86,7 @@ export async function sampleForReplay({
     // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats
     // staleness, so derive rather than trust the stored value (it no longer carries the age-out
     // case).
-    if (resolveConfidenceAt(entry, now) === 'stale') continue;
+    if (resolveConfidence(entry, now) === 'stale') continue;
     ids.push(entry.id);
     weights.push(replayPriority(entry, now, outcomeAblated));
   }

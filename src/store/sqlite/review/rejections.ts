@@ -5,7 +5,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { heldTexts } from '../../../base/util/same-text.js';
 import { audit } from '../audit/audit-event.js';
-import { deleteEntryCore } from '../entries/delete-entries.js';
+import { deleteEntryCore } from '../entries/delete-and-batch.js';
 import {
   deleteDormantRow,
   dormantSnapshotsByIds,
@@ -35,12 +35,12 @@ import type {
   Rejection,
   RejectionCheck,
   Rejections,
-} from '../../../base/records/rejections.js';
+} from '../../../base/ports/store/rejections.js';
 import { mergedSuccessor } from '../../../base/memory/merged-row.js';
 import { rejectedText, rejectionReaches } from '../../../base/records/rejection-text.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
 import { openStore } from '../runtime/handles.js';
-import { bound, type Bodies } from '../runtime/bound.js';
+import { bound } from '../runtime/bound.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { handleStamp } from '../runtime/handle-clock.js';
@@ -111,8 +111,8 @@ function listHolderIds(
 }
 
 /** The found rows read again under the write lock, each still in reach and still holding the
- * text; a row that sleep moved between the walk and the lock is read from the table it now
- * sits in. */
+ * text; a row that sleep moved between the walk and the lock is read from the table it now sits
+ * in. */
 function heldUnderLock(
   db: DatabaseSyncLike,
   rejection: Rejection,
@@ -248,8 +248,8 @@ function removeHolders(
     };
     removeLiveRows(db, files, sweep);
     removeDormantCopies(db, sweep);
-    // Still inside the write scope: a failed audit row is reported and the removal commits
-    // without it.
+    // Still inside the write scope: a failed audit row is reported and the removal commits without
+    // it.
     const { tenantId, actor, memoryId } = rejection;
     const { removedIds } = removal;
     audit(db, 'reject_value', {
@@ -346,20 +346,16 @@ export function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionChe
 
 export function sqliteRejections({ on, files }: Handles): Rejections {
   return {
-    ...bound(
+    ...bound<Pick<Rejections, 'apply'>>(
       on,
-      { apply: (db, ...args) => applyRejection(db, files, ...args) } satisfies Bodies<
-        Pick<Rejections, 'apply'>
-      >,
+      { apply: (db, ...args) => applyRejection(db, files, ...args) },
       openStore,
     ),
-    ...bound(
+    ...bound<Pick<Rejections, 'lift' | 'list'>>(
       on,
-      { lift: liftRejection, list: listRejectedValues } satisfies Bodies<
-        Pick<Rejections, 'lift' | 'list'>
-      >,
+      { lift: liftRejection, list: listRejectedValues },
       openStore,
     ),
-    ...bound(on, { refusedAmong: refusedAmong } satisfies Bodies<Pick<Rejections, 'refusedAmong'>>),
+    ...bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmong }),
   };
 }

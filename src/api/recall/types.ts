@@ -1,6 +1,6 @@
 // Option and result shapes for recall and retrieve.
 
-import type { ContinuityBlock } from '../../base/ports/store.js';
+import type { ContinuityBlock, LastRecall } from '../../base/ports/store.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
 import type {
@@ -19,13 +19,13 @@ import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 /** How many rows a recall loads and returns, and the bands it adds beside them. */
 export interface RecallWindowOptions {
   limit?: number;
-  /** Candidates the scorer loads (default DEFAULT_SEARCH_CANDIDATE_LIMIT), decoupled from `limit`;
+  /** Candidates the scorer loads (default: the store's 200-row window), decoupled from `limit`;
    * NOT a hard cap, as fresh-tail and summaries can exceed `limit`. Must be a positive finite
    * integer (else `RecallContractError`, `invalid_scorer_window`). Library-only: HTTP, MCP and
    * `client.ts` do not serialize it. */
   scorerWindow?: number;
   /** DAG-aware recall (default true): entries overflowing `limit` that share a level-2 parent
-   * get that summary appended instead, capped at ceil(limit * SUMMARY_SUB_FRACTION) extra rows. */
+   * get that summary appended instead, capped at ceil(limit 0.3) extra rows. */
   summarizeOverflow?: boolean;
   /** Fresh tail (default 0 = off, capped at MAX_FRESH_RAW): prepend the last N kind='raw' rows
    * (tenant + scope filtered, deduped against BM25 hits) even when the query terms miss. */
@@ -77,8 +77,8 @@ export interface RecallHintOptions {
   suppressAvailabilityHint?: boolean;
 }
 
-/** What the recall records about itself: the rerank trace, the recall_traces row and the
- * audit rows. */
+/** What the recall records about itself: the rerank trace, the recall_traces row and the audit
+ * rows. */
 export interface RecallTraceOptions {
   /** Capture the lifecycle re-ranking trace (api applies only goal-boost) as `rerankTrace` plus
    * `rerankPipeline:'api'` on each item; both fields are absent when unset. The richer CLI
@@ -100,7 +100,7 @@ export interface RecallTraceOptions {
 export interface RecallOptions {
   query: string;
   /** Candidate order. `recall` always keeps the BM25 order; `retrieve` honours this. */
-  mode?: 'bm25' | 'hybrid';
+  mode?: 'bm25' | 'hybrid' | 'physics';
   window?: RecallWindowOptions;
   filter?: RecallFilterOptions;
   boost?: RecallBoostOptions;
@@ -109,8 +109,8 @@ export interface RecallOptions {
 }
 
 /** The presenter `retrieveRanking` hands the full BAND_RANKED ranking to; it strengthens and
- * traces (pipeline 'mcp') just the ids returned, and `results` stays the top window of
- * that ranking. */
+ * traces (pipeline 'mcp') just the ids returned, and `results` stays the top window of that
+ * ranking. */
 export type ShowRanking = (ranking: StoreRanking, result: RecallResult) => ShownRanking;
 
 /** The part of RecallOptions the CLI ranking core reads. It has no scope, so
@@ -132,20 +132,22 @@ export interface CliCoreRecall extends CliCoreRanking {
   /** The host agent's session: it stamps the token ledger row, and the trace when the recall
    * names no session. */
   hostSessionId?: string;
+  /** Where a shown list is kept as the last recall, for a later `hippo outcome` with no ids. */
+  lastRecall: LastRecall;
   show: (
     ranking: RankRecallResult,
     planning: PlanningFallacyOutput,
   ) => ShownCliCore | Promise<ShownCliCore>;
 }
 
-/** A read-only look at the ranking (`hippo explain`): no hint is evaluated and nothing
- * is written. */
+/** A read-only look at the ranking (`hippo explain`): no hint is evaluated and nothing is
+ * written. */
 export interface CliCoreInspection extends CliCoreRanking {
   inspect: (ranking: RankRecallResult) => void;
 }
 
-/** The CLI ranking core (`rankRecall`), run by `retrieveWithCliCore`: host admin only,
- * on hippo.db. */
+/** The CLI ranking core (`rankRecall`), run by `retrieveWithCliCore`: host admin only, on
+ * hippo.db. */
 export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
 
 /** `results`: the rows the caller shows, best first; `hints`: the hints over them, whose rows go
@@ -184,8 +186,8 @@ export interface RecallResultItem {
   /** True for a level-2 topic summary substituted in for overflowed children that did not fit
    * the limit. */
   isSummary?: boolean;
-  /** IDs of the overflow leaves this summary covers; call `drillDown` on them to recover
-   * the detail. */
+  /** IDs of the overflow leaves this summary covers; call `drillDown` on them to recover the
+   * detail. */
   substitutedFor?: string[];
   /** Cached descendant count from schema v25; non-zero for level-2+ rows. */
   descendantCount?: number;
@@ -206,11 +208,11 @@ export interface RecallResult {
   total: number;
   tokens: number;
   continuity?: ContinuityBlock;
-  /** Tokens consumed by the continuity block (snapshot, handoff and the last CONTINUITY_EVENT_LIMIT
-   *  events' full content), each via Math.ceil(len/4) like `tokens`; undefined when not requested.
-   *  Callers needing a tighter budget should truncate event.content themselves. */
+  /** Tokens consumed by the continuity block (snapshot, handoff and the last 5 events' full content), each via
+   *  Math.ceil(len/4) like `tokens`; undefined when not requested. Callers needing a tighter budget should truncate
+   *  event.content themselves. */
   continuityTokens?: number;
-  /** Scorer window used for this recall: `opts.scorerWindow`, else DEFAULT_SEARCH_CANDIDATE_LIMIT.
+  /** Scorer window used for this recall: `opts.scorerWindow`, else the store default (200).
    * Optional in the type so test fakes built before the field still compile; always present on
    * values returned by `api.recall`. */
   windowSize?: number;
@@ -221,8 +223,8 @@ export interface RecallResult {
   suppressionSummary?: RecallSuppressionSummary;
   /** Planning-fallacy hint: base-rate stats when the query carries a forward-prediction phrase
    * and the closest prediction class has closed data. Pipeline-invariant (depends only on
-   * queryText, tenantId, predictions state), so MCP and CLI read it from here. Disabled
-   * by `HIPPO_AUTODEBIAS=off`. */
+   * queryText, tenantId, predictions state), so MCP and CLI read it from here. Disabled by
+   * `HIPPO_AUTODEBIAS=off`. */
   planningFallacyHint?: PlanningFallacyHint;
   /** "Watching" variant emitted when the forward-claim regex matched but no baserate could be produced (no class
    *  overlap, or a tie at the best score).
@@ -230,13 +232,13 @@ export interface RecallResult {
   planningFallacyWatching?: PlanningFallacyWatching;
   /** Anchoring hint from api.recall's own compute against `opts.recallHistory` (query_repeat or
    * memory_dominance); each pipeline computes its OWN hint. Null on CLI-routed calls, since
-   * printRecall does not thread its ring through `opts.recallHistory`. Disabled
-   * by `HIPPO_ANCHORING=off`. */
+   * printRecall does not thread its ring through `opts.recallHistory`. Disabled by
+   * `HIPPO_ANCHORING=off`. */
   anchoringHint?: AnchoringHint;
 
   /** Availability/recency-bias hint: per-pipeline, soft warning only (never filters or reorders); fires when the
-   *  returned slice is recency-dominated while older relevant matches in the pool were passed over. Disabled
-   *  by `HIPPO_AVAILABILITY=off`. */
+   *  returned slice is recency-dominated while older relevant matches in the pool were passed over. Disabled by
+   *  `HIPPO_AVAILABILITY=off`. */
   availabilityHint?: AvailabilityHint;
 }
 
@@ -249,8 +251,8 @@ export interface RecallSuppressionSummary {
   totalCandidates: number;
   /** Candidates dropped by any non-budget filter site, pre- or post-rank; the final limit slice
    * is counted in droppedByBudget instead. Each pipeline counts its own filters (CLI recall:
-   * --as-of, superseded, --filter-conflicts, --outcome, --layer; MCP: scope filter
-   * before search). */
+   * --as-of, superseded, --filter-conflicts, --outcome, --layer; MCP: scope filter before
+   * search). */
   droppedPreRank: number;
   /** Candidates loaded but cut by the final `limit` slice after scoring (api.recall:
    * `entries.length - baseSlice.length`; other pipelines count pre- minus post-slice). */

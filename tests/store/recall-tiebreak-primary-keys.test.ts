@@ -22,11 +22,10 @@ import { retrieve } from '../../src/api/index.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { expandOnGraphs } from '../../src/domain/graph/recall.js';
+import { graphExpandRecall } from '../../src/domain/graph/recall.js';
 import { compareEntryIdentity, type EntryIdentity } from '../../src/base/rank/compare.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
-import { walkable } from '../_helpers/graph-walk.js';
 
 const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
@@ -242,9 +241,9 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ed, relType: 'supersedes', memoryId: b.id });
 
     const base = [sr(a, 1.0)];
-    const out = await expandOnGraphs(base, {
+    const out = await graphExpandRecall(base, {
       hops: 2,
-      store: walkable(sqliteStore(home)),
+      store: sqliteStore(home),
       tenantId: T,
       budget: 40_000,
       includeSuperseded: true,

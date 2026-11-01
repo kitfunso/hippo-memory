@@ -3,16 +3,16 @@
 // read here) and its DecayOptions, from which this entry builds the StrengthModel the base
 // functions take.
 import {
-  createMemoryAt,
-  markRetrievedAt,
+  createMemory as createMemoryAt,
+  markRetrieved as markRetrievedAt,
   type ConfidenceLevel,
   type CreateMemoryOptions,
   type MemoryEntry,
 } from '../base/memory/entry.js';
 import {
-  calculateStrengthAt,
-  confidenceFacetsAt,
-  resolveConfidenceAt,
+  calculateStrength as strengthAt,
+  confidenceFacets as confidenceFacetsAt,
+  resolveConfidence as resolveConfidenceAt,
   DEFAULT_HALF_LIFE_DAYS,
   PRODUCTION_STRENGTH,
   withLossAversion,
@@ -22,8 +22,11 @@ import {
   type StrengthInputs,
   type StrengthModel,
 } from '../base/memory/strength.js';
-import { applyOutcomeAt } from '../base/memory/keep-rules.js';
-import { computeAmbientStateAt, type AmbientState } from '../base/memory/ambient.js';
+import { applyOutcome as applyOutcomeAt } from '../base/memory/keep-rules.js';
+import {
+  computeAmbientState as ambientStateAt,
+  type AmbientState,
+} from '../base/memory/ambient.js';
 import {
   evalNow,
   evalSwitches,
@@ -73,7 +76,7 @@ export function calculateStrength(
   now: Date = evalNow(),
   options: DecayOptions = {},
 ): number {
-  return calculateStrengthAt(entry, now, modelOf(options), options);
+  return strengthAt(entry, now, modelOf(options), options);
 }
 
 export function markRetrieved(
@@ -102,7 +105,7 @@ export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): Co
 
 /** The ambient state under the environment's eval switches, at `now` or the entry's clock. */
 export function computeAmbientState(entries: MemoryEntry[], now?: Date): AmbientState {
-  return computeAmbientStateAt(entries, now ?? evalNow(), evalSwitches().strength);
+  return ambientStateAt(entries, now ?? evalNow(), evalSwitches().strength);
 }
 
 export {

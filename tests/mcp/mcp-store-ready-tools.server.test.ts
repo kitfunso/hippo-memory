@@ -1,0 +1,268 @@
+// Under a store other than hippo.db, MCP lists and runs only the tools that reach their store through the port.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { loadConfig } from '../../src/host/config-file.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
+import { TOOLS } from '../../src/surface/mcp/tools.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
+import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { withoutFolderGroups, portOnlySide, portOnlyStore } from '../_helpers/port-only-store.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { predictionMirror } from '../../src/base/records/prediction.js';
+import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
+import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
+
+let root: string;
+
+beforeEach(() => {
+  root = makeRoot('mcp-ready', { init: false });
+});
+
+// The stub wraps a hippo.db store that nothing blocks, without the local files, so a tool that ran would leave hippo.db behind.
+function storeOfKind(kind: string): HippoStore {
+  return kind === 'sqlite' ? sqliteStore(root) : { ...withoutFolderGroups(sqliteStore(root)), kind };
+}
+
+const ctxWith = (store: HippoStore): McpContext =>
+  mcpContext({
+    hippoRoot: root,
+    tenantId: 'default',
+    actor: 'mcp',
+    role: 'admin',
+    hostAdmin: true,
+    store,
+    config: loadConfig(root),
+    infra: testInfra(),
+  });
+const ctxOn = (kind: string): McpContext => ctxWith(storeOfKind(kind));
+
+function listedNames(res: McpResponse | null): string[] {
+  // SAFETY: src/surface/mcp/request.ts answers tools/list with { tools: McpToolDefinition[] }.
+  const result = res?.result as { tools: { name: string }[] } | undefined;
+  return result?.tools.map((t) => t.name) ?? [];
+}
+
+const declared = TOOLS.map((t) => t.name);
+const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
+// The stub lacks only the local files, so every tool but the two that need them runs on it.
+const READY = [
+  'hippo_recall',
+  'hippo_assemble',
+  'hippo_drill',
+  'hippo_predict_baserate',
+  'hippo_remember',
+  'hippo_outcome',
+  'hippo_context',
+  'hippo_learn',
+  'hippo_status',
+  'hippo_conflicts',
+  'hippo_resolve',
+];
+const ready = declared.filter((name) => READY.includes(name));
+
+describe('store-ready MCP tools', () => {
+  it('tools/list under another store lists only the tools whose optional group it has', async () => {
+    const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxOn('stub'));
+    expect(listedNames(res)).toEqual(ready);
+  });
+
+  it.each([
+    ['the sqlite store', 'sqlite'],
+    ['stdio, which brings no context for a list', undefined],
+  ] as const)('tools/list on %s lists every tool', async (_name, kind) => {
+    const list = { jsonrpc: '2.0', id: 1, method: 'tools/list' } as const;
+    const res =
+      kind === undefined ? await handleMcpRequest(list, undefined) : await handleMcpRequest(list, ctxOn(kind));
+    expect(listedNames(res)).toEqual(declared);
+  });
+
+  it('a call to any other tool under another store answers store_not_ported, and the tool never runs', async () => {
+    const unready = declared.filter((name) => !ready.includes(name));
+    expect(unready).toEqual(['hippo_share', 'hippo_peers']);
+    for (const name of unready) {
+      const res = await handleMcpRequest(
+        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } },
+        ctxOn('stub'),
+      );
+      expect(res).toEqual(notPorted);
+    }
+    expect(readdirSync(root)).toEqual([]);
+  });
+
+  it('the smallest store binds no tool that needs a feature group: a list hides each, a call answers store_not_ported', async () => {
+    const smallest = ctxWith(portOnlyStore(root));
+    const featured = [
+      'hippo_assemble',
+      'hippo_drill',
+      'hippo_predict_baserate',
+      'hippo_status',
+      'hippo_learn',
+      'hippo_conflicts',
+      'hippo_resolve',
+    ];
+    const unbound = [...featured, 'hippo_share', 'hippo_peers'];
+    const list = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, smallest);
+    expect(listedNames(list)).toEqual(declared.filter((name) => !unbound.includes(name)));
+    for (const name of featured) {
+      const res = await handleMcpRequest(
+        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } },
+        smallest,
+      );
+      expect(res).toEqual(notPorted);
+    }
+    expect(readdirSync(root)).toEqual([]);
+  });
+});
+
+const PROJECT = 'proj';
+const note = (id: string): string => `${id} holds a note about the rollout`;
+const minute = (m: number): string => `2026-03-01T10:0${m}:00.000Z`;
+const row = (tenantId: string, id: string, m: number, extra: Partial<MemoryEntry>): MemoryEntry =>
+  seeded(note(id), id, minute(m), { tenantId: tenantId, originProject: PROJECT, ...extra });
+const raw = (tenantId: string, id: string, m: number): MemoryEntry =>
+  row(tenantId, id, m, { kind: 'raw', sourceSessionId: 'sess-mcp' });
+
+// serve() blocks hippo.db for a store of another kind, so a tool that still opened it would answer store_not_ported here.
+describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
+  let fixture: TwoTenantFixture;
+  let handle: ServerHandle | undefined;
+
+  beforeEach(() => {
+    for (const k of CLEARED_ENV) vi.stubEnv(k, '');
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_HOME', join(root, 'global'));
+    fixture = seedTwoTenants();
+  });
+
+  afterEach(async () => {
+    await handle?.stop();
+    handle = undefined;
+    vi.unstubAllEnvs();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  });
+
+  /** The tool's text over POST /mcp as that key, or the whole reply as JSON when it carries no text. */
+  async function callServed(
+    store: HippoStore,
+    token: string,
+    name: string,
+    args: Record<string, string>,
+  ): Promise<string> {
+    handle ??= await serve({ hippoRoot: fixture.dir, port: 0, store });
+    const headers = {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      'x-hippo-project': PROJECT,
+    };
+    const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+    const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body });
+    // SAFETY: a tools/call reply is JSON; a text reply carries result.content[0].text.
+    const reply = (await res.json()) as { result?: { content?: { text?: string }[] } };
+    return reply.result?.content?.[0]?.text ?? JSON.stringify(reply);
+  }
+
+  it("hippo_predict_baserate reads the store's closed rows inside the caller's tenant and leaves its audit row there", async () => {
+    const side = portOnlySide(fixture.dir, ['objects']);
+    const claim = { classTag: 'cutover', claimText: 'the cutover takes two days', estimateValue: 2 };
+    const saved = await side.store.objects.saveObject(TENANT_A, 'prediction', {
+      ...claim,
+      mirror: predictionMirror(TENANT_A, claim, 30, evalNow()),
+      actor: 'seed',
+    });
+    await side.store.objects.closeObject(TENANT_A, 'prediction', saved.id, {
+      closureState: 'closed',
+      actualValue: 3,
+      actor: 'seed',
+    });
+    const { memberA, memberB } = fixture.tokens;
+    expect(await callServed(side.store, memberA, 'hippo_predict_baserate', { class_tag: 'cutover' })).toBe(
+      [
+        'Last 1 estimate in class cutover averaged 1.50x actual (MAE 1.00).',
+        '',
+        'n_closed:         1',
+        'n_ratio_eligible: 1',
+        'mean_estimate:    2.000',
+        'mean_actual:      3.000',
+        'mean_ratio:       1.500x',
+        'p50_ratio:        1.500x',
+        'mae:              1.000',
+      ].join('\n'),
+    );
+    expect(await callServed(side.store, memberB, 'hippo_predict_baserate', { class_tag: 'cutover' })).toMatch(
+      /^No closed predictions in class "cutover" yet\./,
+    );
+    expect(
+      side
+        .auditRows()
+        .slice(-2)
+        .map((e) => [e.op, e.actor, e.tenantId, e.targetId, e.metadata]),
+    ).toEqual([
+      [
+        'predict_baserate',
+        `api_key:${fixture.keys.memberA}`,
+        TENANT_A,
+        'cutover',
+        { class_tag: 'cutover', n_closed: 1 },
+      ],
+      [
+        'predict_baserate',
+        `api_key:${fixture.keys.memberB}`,
+        TENANT_B,
+        'cutover',
+        { class_tag: 'cutover', n_closed: 0 },
+      ],
+    ]);
+  });
+
+  it("hippo_assemble builds the window from the store's rows", async () => {
+    for (const entry of [
+      raw(TENANT_A, 'raw_1', 1),
+      raw(TENANT_A, 'raw_2', 2),
+      raw(TENANT_A, 'raw_3', 3),
+      raw(TENANT_B, 'raw_b', 2),
+    ]) {
+      writeEntry(fixture.dir, entry);
+    }
+    const { store } = portOnlySide(fixture.dir, ['dagReads']);
+    const text = await callServed(store, fixture.tokens.memberA, 'hippo_assemble', { session_id: 'sess-mcp' });
+    const [heading, ...lines] = text.split('\n');
+    expect(heading).toMatch(/^Session sess-mcp \u2014 3 items, \d+ tokens \(raw=3, summarized=0, evicted=0\)$/);
+    expect(lines).toEqual([1, 2, 3].map((m) => `  [tail] ${minute(m)} raw_${m} - ${note(`raw_${m}`)}`));
+  });
+
+  it("hippo_drill lists the store's children of a summary", async () => {
+    const child = (tenantId: string, id: string, m: number): MemoryEntry =>
+      row(tenantId, id, m, { dagParentId: 'sum_1', dagLevel: 1 });
+    for (const entry of [
+      row(TENANT_A, 'sum_1', 5, { dagLevel: 2, descendantCount: 2 }),
+      child(TENANT_A, 'fact_1', 1),
+      child(TENANT_A, 'fact_2', 2),
+      child(TENANT_B, 'fact_b', 3),
+    ]) {
+      writeEntry(fixture.dir, entry);
+    }
+    const { store } = portOnlySide(fixture.dir, ['dagReads']);
+    expect(await callServed(store, fixture.tokens.memberA, 'hippo_drill', { summary_id: 'sum_1' })).toBe(
+      [
+        'Summary sum_1 \u2014 2 descendants',
+        `  ${note('sum_1')}`,
+        '',
+        'Children (2/2):',
+        `  [L1] fact_1 - ${note('fact_1')}`,
+        `  [L1] fact_2 - ${note('fact_2')}`,
+      ].join('\n'),
+    );
+    expect(await callServed(store, fixture.tokens.memberB, 'hippo_drill', { summary_id: 'sum_1' })).toBe(
+      'No drillable summary at id=sum_1.',
+    );
+  });
+});

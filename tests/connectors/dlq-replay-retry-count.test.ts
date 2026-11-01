@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parkInDlq } from '../../src/api/dead-letters.js';
+import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { githubDlq, replayGithubDlqEntry as replayGitHub } from '../../src/surface/connectors/github/dlq.js';
 import { slackDlq, replaySlackDlqEntry as replaySlack } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -18,21 +18,21 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
     items.find((i) => i.id === id)?.retryCount ?? -1;
   const githubCount = async (id: number): Promise<number> =>
     countOf(
-      await sqliteStore(root).hippoDb.connectorEvents.deadLetters('github', 'default', {
+      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
         limit: 100,
       }),
       id,
     );
   const slackCount = async (id: number): Promise<number> =>
     countOf(
-      await sqliteStore(root).hippoDb.connectorEvents.deadLetters('slack', 'default', {
+      await sqliteStore(root).connectorEvents.deadLetters('slack', 'default', {
         limit: 100,
       }),
       id,
     );
 
   it('unparseable payload', async () => {
-    const g = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
+    const g = await parkInDlq(githubDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: 'x{',
       error: 'e',
@@ -41,7 +41,7 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
       installationId: null,
       repoFullName: null,
     });
-    const s = await parkInDlq({ store: sqliteStore(root) }, slackDlq, {
+    const s = await parkInDlq(slackDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: 'x{',
       error: 'e',
@@ -66,7 +66,7 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
   });
 
   it('signature that does not verify', async () => {
-    const g = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
+    const g = await parkInDlq(githubDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'e',
@@ -76,7 +76,7 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
       installationId: null,
       repoFullName: null,
     });
-    const s = await parkInDlq({ store: sqliteStore(root) }, slackDlq, {
+    const s = await parkInDlq(slackDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'e',

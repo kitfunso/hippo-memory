@@ -105,8 +105,8 @@ function withoutHeldCopies(base: ScoredEntry[], summaries: SummaryDecoration[]) 
 }
 
 // When the overflow holds 2+ children of one level-2 summary, that summary stands in for them,
-// capped at SUMMARY_SUB_FRACTION of `limit`. Each one is tenant-scoped and re-checked against the
-// scope filter; drillDown recovers the children.
+// capped at 30% of `limit`. Each one is tenant-scoped and re-checked against the scope filter;
+// drillDown recovers the children.
 interface SubstituteOverflowOptions {
   readonly overflowByParent: Map<string, MemoryEntry[]>;
   readonly parents: MemoryEntry[];

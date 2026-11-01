@@ -8,8 +8,8 @@ export function ageInDays(entry: MemoryEntry, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(entry.created).getTime()) / DAY_MS));
 }
 
-/** Copies the entry's DAG metadata, and for summaries the multipliers applied, onto an
- * explain breakdown. */
+/** Copies the entry's DAG metadata, and for summaries the multipliers applied, onto an explain
+ * breakdown. */
 export function addDagFields(
   breakdown: ScoreBreakdown,
   entry: MemoryEntry,

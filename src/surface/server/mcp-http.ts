@@ -6,9 +6,14 @@ import {
   envMcpSseMaxStreams,
 } from '../../base/util/env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Context } from '../../api/index.js';
 import { sharedStoreOf } from '../../api/types.js';
-import { handleMcpRequest, mcpErrorResponse, type McpRequest } from '../mcp/server.js';
-import { mcpContextOn } from '../mcp/request.js';
+import {
+  handleMcpRequest,
+  mcpErrorResponse,
+  type McpContext,
+  type McpRequest,
+} from '../mcp/server.js';
 import { HttpError } from '../../base/errors/http-errors.js';
 import { bodyDeadlineMs, readBody, sendJson } from '../http/http-util.js';
 import { errorFields, log } from '../../base/util/log.js';
@@ -28,7 +33,7 @@ const DEFAULT_SSE_HEARTBEAT_MS = MINUTE_MS;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
 // MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a
-// keepalive-only SSE stream (`: ping` every DEFAULT_SSE_HEARTBEAT_MS) in v1. Both dispatch to
+// keepalive-only SSE stream (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to
 // handleMcpRequest as stdio does. Auth matches /v1/* (Bearer via `requireAuth`); an SSE stream is
 // checked at open and again before every ping.
 
@@ -72,6 +77,35 @@ export function callerProjectFromHeaders(
   return { name, legacyName: name, aliases };
 }
 
+function mcpContextFor(
+  ctx: Context,
+  opts: ResolvedServeOptions,
+  project?: CallerProject,
+): McpContext {
+  const mcpCtx: McpContext = {
+    hippoRoot: opts.hippoRoot,
+    tenantId: ctx.tenantId,
+    // McpContext.actor stays string; extract subject at the boundary.
+    actor: ctx.actor.subject,
+    // The caller's real role: MCP tools must not run a member key as admin.
+    role: ctx.actor.role,
+    scopes: ctx.actor.scopes,
+    viaAuthResolver: ctx.actor.viaAuthResolver,
+    hostAdmin: ctx.actor.hostAdmin,
+    owner: ctx.actor.owner,
+    clientKey: ctx.clientKey,
+    store: ctx.store,
+    storeFor: opts.storeFor,
+    tools: opts.mcpTools,
+    config: ctx.config,
+    reach: ctx.reach,
+    callers: ctx.callers,
+    infra: ctx.infra,
+  };
+  if (project !== undefined) mcpCtx.project = project;
+  return mcpCtx;
+}
+
 export async function handleMcpPost(
   req: IncomingMessage,
   res: ServerResponse,
@@ -93,8 +127,7 @@ export async function handleMcpPost(
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    const host = { hippoRoot: opts.hippoRoot, storeFor: opts.storeFor, tools: opts.mcpTools };
-    mcpRes = await handleMcpRequest(rpcReq, mcpContextOn(ctx, host, project));
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, opts, project));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, callName(rpcReq));
   }
@@ -160,9 +193,9 @@ export async function handleMcpStream(
   // keepalive interval.
   res.write(': ping\n\n');
 
-  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default
-  // DEFAULT_SSE_HEARTBEAT_MS) and closes with 'auth_revoked' if the key was revoked or rotated;
-  // MCP_SSE_MAX_AGE_SEC (default DEFAULT_SSE_MAX_AGE_SEC) ends it as 'max_age_exceeded'.
+  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and
+  // closes with 'auth_revoked' if the key was revoked or rotated; MCP_SSE_MAX_AGE_SEC (default
+  // 3600) ends it as 'max_age_exceeded'.
   keepStreamAlive(req, res, opts);
 }
 
@@ -255,8 +288,8 @@ function writePing(res: ServerResponse): boolean {
 }
 
 function endStreamWithReason(res: ServerResponse, reason: string): void {
-  // A socket that refused the write is already logged; end() on it would only log the same
-  // failure again.
+  // A socket that refused the write is already logged; end() on it would only log the same failure
+  // again.
   if (writeChunk(res, `event: closed\ndata: ${JSON.stringify({ reason })}\n\n`)) endReply(res);
   else res.destroy();
 }

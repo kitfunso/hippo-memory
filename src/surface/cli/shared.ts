@@ -6,7 +6,7 @@ import { markChurnStaleInReach, type ChurnStaleResult } from '../../api/sleep/ch
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
-import { cliInitGlobal, type CliContext, type CliScope } from './api-context.js';
+import { cliApiContext, cliInitGlobal, type CliContext } from './api-context.js';
 import { fail } from './exit.js';
 import { type CliFlags, boolFlag } from './flag-values.js';
 
@@ -29,10 +29,11 @@ export function workingFolder({ infra }: Pick<CliContext, 'infra'>): string {
 /** Runs churn staleness for the repo this process runs in, against every store its memories can
  * live in. */
 export async function runChurnStaleForRepo(
-  { cli, hippoRoot, tenantId }: CliScope,
+  hippoRoot: string,
+  tenantId: string,
   dryRun: boolean,
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
-  const ctx = cli.apiContext(hippoRoot, tenantId);
+  const ctx = cliApiContext(hippoRoot, tenantId);
   return markChurnStaleInReach(ctx, {
     root: hippoRoot,
     repoDir: workingFolder(ctx),
@@ -57,19 +58,23 @@ interface LearnFromRepoResult {
 }
 
 export interface LearnFromRepoOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
   readonly repoPath: string;
   readonly days: number;
   /** Prefixes each printed line, so a multi-repo scan says which repo spoke. */
   readonly label?: string;
   /** The context to learn on; a test hands in one whose ports it controls. */
-  readonly ctx: CliContext;
+  readonly ctx?: CliContext;
 }
 
 export async function learnFromRepo({
+  hippoRoot,
+  tenantId,
   repoPath,
   days,
   label,
-  ctx,
+  ctx = cliApiContext(hippoRoot, tenantId),
 }: LearnFromRepoOptions): Promise<LearnFromRepoResult> {
   const prefix = label ? `[${label}] ` : '';
   const result = await learn(ctx, {

@@ -10,8 +10,8 @@ import type {
   TraceOutcome,
 } from './entry.js';
 
-/** A memory as files and wire formats name it. Optional keys are the ones a stored entry
- * may lack. */
+/** A memory as files and wire formats name it. Optional keys are the ones a stored entry may
+ * lack. */
 export interface MemoryWire {
   id: string;
   created: string;
@@ -105,8 +105,8 @@ export function toWire(entry: MemoryEntry): MemoryWire {
   };
 }
 
-/** The entry a wire object names; a key the wire lacks stays undefined, as JSON.parse left
- * it before. */
+/** The entry a wire object names; a key the wire lacks stays undefined, as JSON.parse left it
+ * before. */
 export function fromWire(wire: MemoryWire): MemoryEntry {
   return {
     id: wire.id,

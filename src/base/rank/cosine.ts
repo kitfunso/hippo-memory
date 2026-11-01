@@ -1,12 +1,12 @@
-// The vector math every ranking site shares (embeddings, the vector index): one dot
+// The vector math every ranking site shares (embeddings, the vector index, physics): one dot
 // product, one length and one rule for a vector too short to have a direction.
 
 /** A vector shorter than this has no direction: it normalises to nothing and scores 0 against
  * any other. */
 export const ZERO_NORM = 1e-10;
 
-// Four running sums, which V8 runs faster than one: vector index inserts spend most of their
-// time here.
+// Four running sums, which V8 runs faster than one: vector index inserts spend most of their time
+// here.
 export function dot(a: ArrayLike<number>, b: ArrayLike<number>): number {
   let s0 = 0;
   let s1 = 0;

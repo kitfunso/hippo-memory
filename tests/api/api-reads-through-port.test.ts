@@ -38,7 +38,7 @@ describe('reads through a served store', () => {
       tenantId: TENANT,
     });
     writeEntry(plain, onlyInFolder);
-    const ctx = { ...ctxAt(plain), store: sqliteStore(served) };
+    const ctx = { ...ctxAt(plain), store: portOnlyStore(served, ['rejections']) };
     await expect(reject(ctx, { memoryId: onlyInFolder.id, reason: 'wrong' })).rejects.toThrow(NotFoundError);
     expect(readEntry(plain, onlyInFolder.id, TENANT)).not.toBeNull();
     expect(await listRejectionsForTenant(sqliteStore(plain), TENANT)).toEqual([]);

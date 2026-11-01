@@ -1,10 +1,5 @@
 // hippo.db's Dormant group: the memories sleep set aside, listed, restored or forgotten for good.
-import {
-  changedRows,
-  withWriteScope,
-  withWriteScopeOr,
-  type DatabaseSyncLike,
-} from '../../../db/index.js';
+import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { touchableScopeSql } from '../runtime/rule-sql.js';
 import type { SqlFragment } from '../../../db/sql.js';
@@ -22,7 +17,7 @@ import type {
   DormantRestoreOutcome,
   Dormant,
   DormantRestoreRequest,
-} from '../../../base/records/dormant.js';
+} from '../../../base/ports/store/dormant.js';
 import { updateStatsUnlessBusy } from '../entries/index-and-stats.js';
 import { openStore } from '../runtime/handles.js';
 import { bound, type Bodies } from '../runtime/bound.js';
@@ -54,7 +49,7 @@ function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey
 
 function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIso: string): number {
   const sql = `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ? AND dormant_at < ?`;
-  return changedRows(cachedStatement(db, sql).run(key.tenantId, key.id, cutoffIso));
+  return Number(cachedStatement(db, sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
 }
 
 /** Deletes `keys` in transactions of about `budget.holdMs`, letting other writers in between;
@@ -135,8 +130,9 @@ function restoreInWriteScope(
       const entry = stampOriginProject(files, reviveDormant(snapshot, now, restore.revival));
       writeEntryDbOnly(db, entry, { actor: restore.actor });
       deleteDormantRow(db, restore.tenantId, restore.id);
-      // A restore is a labelled "forgot it, then needed it" event a learned lifecycle trains on;
-      // it shares the restore's write scope, so the label exists exactly when the restore does.
+      // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle
+      // trains on. Same write scope as the restore, so the label exists exactly when the restore
+      // does.
       auditDormantRestore(db, restore, snapshot, now);
       return { status: 'restored', entry };
     },
@@ -193,10 +189,10 @@ const dormantReadsBodies: Bodies<Pick<Dormant, 'list'>> = {
 export function sqliteDormant({ on, files }: Handles): Dormant {
   return {
     ...bound(on, dormantReadsBodies),
-    ...bound(on, {
+    ...bound<Pick<Dormant, 'restore'>>(on, {
       restore: (db, ...args) => restoreDormantMemory(db, files, ...args),
-    } satisfies Bodies<Pick<Dormant, 'restore'>>),
-    ...bound(
+    }),
+    ...bound<Pick<Dormant, 'forget'>>(
       on,
       {
         forget: (db, tenantId, ownScope, id, actor) => {
@@ -214,7 +210,7 @@ export function sqliteDormant({ on, files }: Handles): Dormant {
           updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${id}`);
           return true;
         },
-      } satisfies Bodies<Pick<Dormant, 'forget'>>,
+      },
       openStore,
     ),
   };

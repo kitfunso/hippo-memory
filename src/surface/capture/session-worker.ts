@@ -82,8 +82,8 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   }
 }
 
-/** Takes the queued request by renaming it, so one queued while this reads it lands in a
- * fresh file. */
+/** Takes the queued request by renaming it, so one queued while this reads it lands in a fresh
+ * file. */
 function takeQueued(queued: string): WorkerMode | null {
   const taken = `${queued}.${process.pid}`;
   try {
@@ -149,8 +149,8 @@ export function turnPosition(turns: readonly SessionTurn[]): string {
   return turns.length === 0 ? '0:' : `${turns.length}:${turnKey(turns[turns.length - 1])}`;
 }
 
-/** The turns after `position`; all of them when it is null or its last turn is no longer
- * in view. */
+/** The turns after `position`; all of them when it is null or its last turn is no longer in
+ * view. */
 export function turnsAfter(
   turns: readonly SessionTurn[],
   position: string | null,

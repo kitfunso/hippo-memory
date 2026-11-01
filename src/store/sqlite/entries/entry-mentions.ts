@@ -51,8 +51,8 @@ function ftsMentionQuery(tokens: readonly string[], tag: string | null): string 
 
 /** A page of a superset, in loadAllEntries' order, of the rows whose lowercased content holds
  * any of `tokens` or whose lowercased tags hold `tag`; `next` is where the following page
- * starts. The caller re-checks each row exactly; this only spares decoding rows that
- * cannot match. */
+ * starts. The caller re-checks each row exactly; this only spares decoding rows that cannot
+ * match. */
 export function listEntriesMentioning(
   db: DatabaseSyncLike,
   tokens: readonly string[],

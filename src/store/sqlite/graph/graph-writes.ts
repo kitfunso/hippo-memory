@@ -2,7 +2,7 @@
 // the schema triggers are the backstop for a write that skips this module.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
-import { MAX_ENTITY_NAME_LEN } from '../../../base/records/graph.js';
+import { MAX_ENTITY_NAME_LEN } from '../../../base/records/entity-name.js';
 import { errorMessage, log, errorFields } from '../../../base/util/log.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import {
@@ -25,7 +25,7 @@ import type {
   SourceObjectType,
   Entity,
   Relation,
-} from '../../../base/records/graph.js';
+} from '../../../base/ports/store/graph.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
@@ -364,8 +364,8 @@ export function objectInForce(
   return row?.status === 'active' || row?.status === 'superseded';
 }
 
-/** The lowest-id entity of this type anchored to the source object, which is the row a
- * rebuild keeps. */
+/** The lowest-id entity of this type anchored to the source object, which is the row a rebuild
+ * keeps. */
 export function entityIdBySource(
   db: DatabaseSyncLike,
   tenantId: string,

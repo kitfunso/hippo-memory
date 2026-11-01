@@ -114,8 +114,8 @@ function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   try {
     probe = db.prepare(SCHEMA_PROBE_SQL).get() as SchemaProbe | undefined;
   } catch (err) {
-    // A store missing a table the probe reads is the slow path's job; anything else is a
-    // real error.
+    // A store missing a table the probe reads is the slow path's job; anything else is a real
+    // error.
     if (err instanceof Error && PROBE_SLOW_PATH.test(err.message)) return null;
     throw err;
   }
@@ -187,8 +187,8 @@ function migrateAndHeal(
   busyWaitMs: number | undefined,
 ): void {
   ensureMetaTable(db);
-  // Before anything writes, so a stale binary never repairs or migrates a store it does
-  // not understand.
+  // Before anything writes, so a stale binary never repairs or migrates a store it does not
+  // understand.
   assertBinaryCompatible(db);
 
   let currentVersion = getSchemaVersion(db);
@@ -243,8 +243,8 @@ function healUserVersion(
   }
 }
 
-// A failed import leaves embeddings.json in place for the next open to retry; the store
-// still opens.
+// A failed import leaves embeddings.json in place for the next open to retry; the store still
+// opens.
 export function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): void {
   try {
     importLegacyEmbeddingIndex(db, hippoRoot);
@@ -257,8 +257,9 @@ export function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): vo
 }
 
 function ensureMetaDefaults(db: DatabaseSyncLike): void {
-  // Read-first: a current store has all 7 keys, so this is one SELECT, not 7 INSERT OR IGNOREs
-  // that each take a RESERVED lock even when nothing changes.
+  // Read-first: an already-current store has all 7 keys, so this is one SELECT and zero writes
+  // instead of 7 no-op INSERT OR IGNOREs, each of which takes a RESERVED lock even when nothing
+  // changes.
   const keys = META_DEFAULTS.map(([key]) => key);
   // SAFETY: meta.key is TEXT NOT NULL.
   const present = new Set(
@@ -302,8 +303,8 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
   writeFtsFlag(db, '1');
 }
 
-// Read-first: only write when the flag actually changed, so a healthy store's open takes no
-// write lock.
+// Read-first: only write when the flag actually changed, so a healthy store's open takes no write
+// lock.
 function writeFtsFlag(db: DatabaseSyncLike, flag: '0' | '1'): void {
   if (getMeta(db, META_KEY.fts5Available) !== flag) setMeta(db, META_KEY.fts5Available, flag);
 }

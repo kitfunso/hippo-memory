@@ -10,7 +10,12 @@ import {
 } from '../../base/scope/recall-scope.js';
 import { currentEntries } from '../../domain/search/as-of.js';
 import { rankStrength } from '../../domain/search/boosts.js';
-import { rankHybrid, vectorSourceOf, type HybridRankOptions } from '../../domain/search/hybrid.js';
+import {
+  hybridSearch,
+  vectorSourceOf,
+  type HybridRankOptions,
+} from '../../domain/search/hybrid.js';
+import { searchByEngine } from '../../domain/search/engine.js';
 import {
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
   type RankTime,
@@ -73,8 +78,8 @@ export async function loadRecallPool(
     originProjects: opts.originProjects,
     ownScope: opts.ownScope,
   };
-  // The two stores are independent, so their reads overlap; Promise.all keeps the
-  // local-then-global order.
+  // The two stores are independent, so their reads overlap; Promise.all keeps the local-then-global
+  // order.
   const reads = await Promise.all([
     ctx.store.searchRecallEntries(opts.query, load),
     ctx.global ? ctx.global.store.searchRecallEntries(opts.query, load) : Promise.resolve([]),
@@ -113,8 +118,8 @@ type EngineOptions = RankTime &
     | 'signal'
   >;
 
-/** What every engine ranks under, built once so a new ranking input reaches all three
- * search modes. */
+/** What every engine ranks under, built once so a new ranking input reaches all three search
+ * modes. */
 function engineOptions(ctx: RankRecallCtx, opts: SettledOptions): EngineOptions {
   return {
     budget: opts.budget,
@@ -138,9 +143,9 @@ function graphStreamSearch(
 ): Promise<SearchResult[]> {
   const { mmr, mmrLambda } = opts;
   noteGraphStreamLimits(ctx, pool);
-  // With seedCount or fewer candidates every one is a seed and the stream degrades to the
-  // 2-list fusion.
-  return rankHybrid(opts.query, pool.local, {
+  // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list
+  // fusion.
+  return hybridSearch(opts.query, pool.local, {
     ...engineOptions(ctx, opts),
     source: vectorSourceOf(ctx),
     mmr,
@@ -158,7 +163,7 @@ function graphStreamSearch(
 
 /** Says why the graph stream will not run as asked, rather than no-op. */
 function noteGraphStreamLimits(ctx: RankRecallCtx, pool: RecallPool): void {
-  // Without embeddings rankHybrid falls back to BM25-only and the stream is inert.
+  // Without embeddings hybridSearch falls back to BM25-only and the stream is inert.
   if (!ctx.embedderFor(ctx.config.embeddings).isAvailable()) {
     ctx.note?.(
       '[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run ' +
@@ -228,6 +233,12 @@ export async function searchPool(
   }));
 }
 
+/** Physics takes no MMR. An explain run under it also drops the result floor and superseded
+ * rows, so its output stays steady; asOf always stays, or later rows leak. */
+function physicsOptions(engine: EngineOptions, explain: boolean): EngineOptions {
+  return explain ? { ...engine, minResults: undefined, includeSuperseded: undefined } : engine;
+}
+
 async function engineSearch(
   ctx: RankRecallCtx,
   opts: SettledOptions,
@@ -253,14 +264,14 @@ async function engineSearch(
       options: { ...engine, explain, scope, mmr, mmrLambda, localBump: opts.localBump },
     });
   }
-  return rankHybrid(query, pool.local, {
-    ...engine,
+  const physics = opts.usePhysics ? opts.physicsConfig : null;
+  const tuned = physics ? physicsOptions(engine, explain) : { ...engine, mmr, mmrLambda };
+  return searchByEngine({
     source: vectorSourceOf(ctx),
-    mmr,
-    mmrLambda,
-    explain,
-    scope,
-    vectorCandidates,
+    query,
+    pool: pool.local,
+    physics,
+    options: { ...tuned, explain, scope, vectorCandidates },
   });
 }
 

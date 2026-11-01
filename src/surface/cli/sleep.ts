@@ -10,12 +10,12 @@ import { replayCompactions } from '../capture/compaction-record.js';
 import type { Log } from '../../infra/spool-files.js';
 import { pruneSessionFiles } from '../capture/session-worker.js';
 import * as api from '../../api/index.js';
-import { cliConfig, type CliScope } from './api-context.js';
+import { cliConfig, cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
 import { saveVectorGraphFile } from '../open-store.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
-import { boolFlag, stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import {
   requireInit,
   learnFromRepo,
@@ -31,19 +31,17 @@ import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /** Runs `hippo sleep`; `--global` sleeps the global store instead of the folder's. */
 export async function handleSleep({
-  cli,
   hippoRoot,
   tenantId,
   args,
   flags,
 }: CommandContext): Promise<void> {
   const root = boolFlag(flags, 'global') ? hippoHomeDir() : hippoRoot;
-  await sleepStore({ cli, hippoRoot: root, tenantId, args, flags });
+  await sleepStore({ hippoRoot: root, tenantId, args, flags });
 }
 
 /** Sleeps one store; with `--log-file` it also tees its output to that file. */
-export async function sleepStore(cmd: CommandContext): Promise<void> {
-  const { flags } = cmd;
+export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the
   // SessionStart hook can re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;
@@ -63,7 +61,7 @@ export async function sleepStore(cmd: CommandContext): Promise<void> {
   }
 
   try {
-    await runSleepCommand(cmd);
+    await runSleepCommand(hippoRoot, tenantId, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
     if (logFile) printError(`[hippo] sleep failed: ${errorMessage(err)}`);
@@ -78,9 +76,9 @@ function renderSleepResult(result: api.SleepResult): void {
 }
 
 /** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
-async function repairProjectTagsOnce({ cli, hippoRoot, tenantId }: CliScope): Promise<void> {
+async function repairProjectTagsOnce(hippoRoot: string, tenantId: string): Promise<void> {
   try {
-    const r = await api.projectNameRepairOnce(cli.apiContext(hippoRoot, tenantId));
+    const r = await api.projectNameRepairOnce(cliApiContext(hippoRoot, tenantId));
     if (r === null) return;
     const parts = [
       r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
@@ -102,8 +100,11 @@ async function repairProjectTagsOnce({ cli, hippoRoot, tenantId }: CliScope): Pr
   }
 }
 
-async function learnBeforeSleep(cmd: CommandContext): Promise<void> {
-  const { cli, hippoRoot, tenantId, flags } = cmd;
+async function learnBeforeSleep(
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags,
+): Promise<void> {
   // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses
   // process.cwd() / os.homedir()). The CLI runs it here because api.sleep covers Phase 2-6 only.
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
@@ -116,7 +117,8 @@ async function learnBeforeSleep(cmd: CommandContext): Promise<void> {
     const config = cliConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(processGit, process.cwd())) {
       const { added } = await learnFromRepo({
-        ctx: cli.apiContext(hippoRoot, tenantId),
+        hippoRoot,
+        tenantId,
         repoPath: process.cwd(),
         days: 1,
       });
@@ -125,7 +127,7 @@ async function learnBeforeSleep(cmd: CommandContext): Promise<void> {
 
     // Opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
     if (config.churnStaleness.enabled && isGitRepo(processGit, process.cwd())) {
-      for (const { root, result } of await runChurnStaleForRepo(cmd, false)) {
+      for (const { root, result } of await runChurnStaleForRepo(hippoRoot, tenantId, false)) {
         if (result.marked > 0) {
           console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
         }
@@ -134,24 +136,27 @@ async function learnBeforeSleep(cmd: CommandContext): Promise<void> {
     }
 
     printAgentImport(
-      await importForStore(hippoRoot, cli.syncOptions(tenantId, currentMachine())),
+      await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())),
       '',
     );
   }
 }
 
-async function runSleepCommand(cmd: CommandContext): Promise<void> {
-  const { cli, hippoRoot, tenantId, flags } = cmd;
+async function runSleepCommand(
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags,
+): Promise<void> {
   requireInit(hippoRoot);
 
-  await learnBeforeSleep(cmd);
+  await learnBeforeSleep(hippoRoot, tenantId, flags);
 
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run
   // writes nothing.
   if (!boolFlag(flags, 'dry-run')) {
     const warn: Log = (message, fields) => log.warn(`compaction replay: ${message}`, fields);
     const finished = await replayCompactions(
-      { root: hippoRoot, hooks: cli.compactionHooks(hippoRoot), tenantId },
+      { root: hippoRoot, store: cliStore(hippoRoot), tenantId },
       warn,
     );
     if (finished > 0) {
@@ -160,12 +165,12 @@ async function runSleepCommand(cmd: CommandContext): Promise<void> {
       );
     }
     pruneSessionFiles(Date.now());
-    await repairProjectTagsOnce(cmd);
-    await repairQualityOnce(cmd);
+    await repairProjectTagsOnce(hippoRoot, tenantId);
+    await repairQualityOnce(hippoRoot, tenantId);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
-  const ctx = cli.apiContext(hippoRoot, tenantId);
+  const ctx = cliApiContext(hippoRoot, tenantId);
   const result = await api.sleepWholeStore(ctx, {
     dryRun: boolFlag(flags, 'dry-run'),
     noShare: boolFlag(flags, 'no-share'),

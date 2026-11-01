@@ -2,9 +2,9 @@
 
 import { DEFAULT_LIST_LIMIT } from '../../../base/util/limits.js';
 import { BadRequestError, NotFoundError } from '../../../base/errors/api-errors.js';
-import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { StoreFiles } from '../runtime/open.js';
-import { writeEntryInOwnTx } from '../entries/entry-writes.js';
+import { writeEntryRow } from '../entries/entry-writes.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { appendAuditEvents } from '../audit/audit.js';
 import type { KeysetPosition } from '../../../base/util/keyset.js';
@@ -16,7 +16,7 @@ import type {
   PredictionListQuery,
   PredictionSave,
   SavePredictionOptions,
-} from '../../../base/records/objects.js';
+} from '../../../base/ports/store/objects.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import type { JsonObject } from '../../../base/util/json.js';
 import { handleStamp } from '../runtime/handle-clock.js';
@@ -85,8 +85,8 @@ interface ListPredictionsOptions {
   after?: KeysetPosition;
 }
 
-// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/checks/check-row-casts.mjs
-// proves it.
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/checks/check-row-casts.mjs proves
+// it.
 interface PredictionRow {
   id: number;
   memory_id: string | null;
@@ -139,16 +139,13 @@ export function writePrediction(
   // write share a SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
-  writeEntryInOwnTx(db, files, save.mirror, {
-    actor,
-    afterWrite: (writeDb, memoryId) => {
-      savedRow = insertPredictionRow(writeDb, {
-        memoryId,
-        tenantId,
-        opts: save,
-        stamp: { now, actor },
-      });
-    },
+  writeEntryRow(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
+    savedRow = insertPredictionRow(writeDb, {
+      memoryId,
+      tenantId,
+      opts: save,
+      stamp: { now, actor },
+    });
   });
 
   if (!savedRow) {
@@ -279,7 +276,7 @@ function closeOpenPredictionRow(
       `,
   ).run(opts.actualValue ?? null, opts.closureState, now, opts.closureNote ?? null, id, tenantId);
 
-  if (changedRows(updateResult) === 0) throwCloseMiss(db, tenantId, id);
+  if (updateResult.changes === 0) throwCloseMiss(db, tenantId, id);
 
   const row = cachedStatement(
     db,
@@ -431,8 +428,8 @@ function listOpenPredictions(
   return rows.map(rowToPrediction);
 }
 
-/** One page of the tenant's predictions: the open ones, every one, or one class's, as the
- * query names. */
+/** One page of the tenant's predictions: the open ones, every one, or one class's, as the query
+ * names. */
 export function listPredictions(
   db: DatabaseSyncLike,
   tenantId: string,

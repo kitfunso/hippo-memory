@@ -11,11 +11,9 @@ import { exitAfterFlush } from '../../../base/util/crash-handlers.js';
 import { ignoringCodes } from '../../../base/util/expected-errors.js';
 import { cmdShimArgs, npmShimEntry } from '../../../host/spawn-argv.js';
 import { printError } from '../output.js';
-import { CliExit } from '../exit.js';
 import { handleLastSleep } from '../last-sleep.js';
 import type { CommandContext } from '../flag-values.js';
 import { handleCodexSessionEndWorker } from './codex-session-end-worker.js';
-import type { CliCommand } from '../api-context.js';
 
 function spawnRealCodex(
   realCodexPath: string,
@@ -52,12 +50,7 @@ function spawnRealCodex(
   return spawn(realCodexPath, forwardArgs, { cwd, stdio: 'inherit', windowsHide: false });
 }
 
-export async function handleCodexRun({
-  cli,
-  hippoRoot,
-  tenantId,
-  args,
-}: CommandContext): Promise<void> {
+export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): void {
   const realCodexPath = installedRealCodexPath();
   const startedAtMs = Date.now();
   // Codex reads CODEX_HOME at each launch, so resolve it now; the log path is the installer's own,
@@ -80,28 +73,20 @@ export async function handleCodexRun({
     exitAfterFlush(1);
   });
 
-  const end = await new Promise<ChildEnd>((resolve) =>
-    child.on('exit', (code, signal) => resolve({ code, signal })),
-  );
-  await launchCodexSessionEndWorker({
-    cli,
-    hippoRoot,
-    tenantId,
-    historyPath,
-    startOffsetBytes,
-    startedAtMs,
-    logFile,
+  child.on('exit', async (code, signal) => {
+    await launchCodexSessionEndWorker({
+      hippoRoot,
+      tenantId,
+      historyPath,
+      startOffsetBytes,
+      startedAtMs,
+      logFile,
+    });
+    exitLikeChild(code, signal);
   });
-  endLikeChild(end);
-}
-
-interface ChildEnd {
-  readonly code: number | null;
-  readonly signal: NodeJS.Signals | null;
 }
 
 interface CodexSessionEndWorkerOptions {
-  cli: CliCommand;
   hippoRoot: string;
   tenantId: string;
   historyPath: string;
@@ -111,7 +96,7 @@ interface CodexSessionEndWorkerOptions {
 }
 
 async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions): Promise<void> {
-  const { cli, hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, logFile } = options;
+  const { hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, logFile } = options;
   const workerArgs = [
     process.argv[1],
     '__codex-session-end-worker',
@@ -131,7 +116,6 @@ async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions
   // Awaited so the sleep write can't be killed by the exit calls below.
   try {
     await handleCodexSessionEndWorker({
-      cli,
       hippoRoot,
       tenantId,
       args: [],
@@ -170,8 +154,8 @@ function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> 
         stdio: 'ignore',
         windowsHide: true,
       });
-      // An async spawn failure (ENOENT, EAGAIN) arrives as an 'error' event, which a try
-      // cannot catch.
+      // An async spawn failure (ENOENT, EAGAIN) arrives as an 'error' event, which a try cannot
+      // catch.
       worker.on('error', failed);
       worker.once('spawn', () => resolve(true));
       worker.unref();
@@ -181,17 +165,15 @@ function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> 
   });
 }
 
-/** Ends the command as Codex ended, through the CLI root, which runs this command's held writes
- * first; a signal is raised again at exit, after them. */
-function endLikeChild({ code, signal }: ChildEnd): void {
-  if (signal) process.once('exit', () => raiseAgain(signal));
-  const exitCode = signal ? 1 : (code ?? 0);
-  if (exitCode !== 0) throw new CliExit(exitCode);
-}
-
-function raiseAgain(signal: NodeJS.Signals): void {
-  // Cannot re-raise the child's signal on this platform; the exit code 1 still reports the failure.
-  ignoringCodes(['ESRCH', 'EPERM', 'ENOSYS', 'ERR_UNKNOWN_SIGNAL'], () =>
-    process.kill(process.pid, signal),
-  );
+function exitLikeChild(code: number | null, signal: NodeJS.Signals | null): void {
+  if (signal) {
+    // Cannot re-raise the child's signal on this platform; a non-zero exit still reports the
+    // failure.
+    const raised = ignoringCodes(['ESRCH', 'EPERM', 'ENOSYS', 'ERR_UNKNOWN_SIGNAL'], () =>
+      process.kill(process.pid, signal),
+    );
+    if (raised === undefined) process.exit(1);
+    return;
+  }
+  process.exit(code ?? 0);
 }

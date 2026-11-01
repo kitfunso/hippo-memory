@@ -1,3 +1,4 @@
+import { evalStoreRules } from '../../infra/eval-switches.js';
 import {
   envAllowCleartext,
   envLossAversionRatio,
@@ -8,17 +9,17 @@ import {
   validateFlags,
 } from '../../base/util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { rootInfra, rootStoreRules } from '../../infra/ports.js';
+import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { issueLocalKey, type LocalKey } from './local-key.js';
 import { KeyVerifier } from './api-key.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import { hasGroup, hasGroups, type HippoStore, type StoreWith } from '../../base/ports/store.js';
 import {
-  sqliteServerRuntimeWithExitHook,
+  defaultServerRuntime,
   tenantOfApiKey,
   type ResolveOptions,
-  type SqliteServerRuntime,
-  type RequestStores,
+  type ServerRuntime,
+  type StoreSession,
 } from '../open-store.js';
 import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
@@ -28,11 +29,9 @@ import { JSON_HEADERS, sendJson } from '../http/http-util.js';
 import { isLocalCaller } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
 import { createSleepQueue } from './sleep-offload.js';
-import { createCallerState } from '../../api/callers.js';
-import { coreEnrichment } from '../../api/hippo-db-context.js';
+import { createCallerState, newRowsOn, type CallerState } from '../../api/callers.js';
 import {
   DEFAULT_SHUTDOWN_DRAIN_MS,
-  DETACHED_SETTLE_MS,
   drainAndClose,
   setKeepAliveTimeouts,
   shutdownBoundMs,
@@ -83,9 +82,9 @@ interface HandleRequestOptions {
   readonly streamSlots: Map<string, number>;
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
-  readonly workerCounts: SqliteServerRuntime['workerCounts'];
+  readonly workerCounts: ServerRuntime['workerCounts'];
   /** /ready's one probe for the server's life, on the store as booted; unset when the store has
-   * no local tier. */
+   * no readiness group. */
   readonly ready: ReadyProbe | undefined;
 }
 
@@ -149,8 +148,8 @@ async function dispatchLimitedRoute(
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
-  // Store-ready: under another store the MCP layer lists and runs only the tools ported to
-  // the port.
+  // Store-ready: under another store the MCP layer lists and runs only the tools ported to the
+  // port.
   return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () =>
     handleMcpPost(r.req, r.res, r.opts),
   );
@@ -263,8 +262,8 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
     loopbackHosts,
     opts.allowCleartext ?? envAllowCleartext(),
   );
-  // An open-ended previous secret keeps working, so the operator hears once that nothing will
-  // close it.
+  // An open-ended previous secret keeps working, so the operator hears once that nothing will close
+  // it.
   warnSlackPreviousSecretOpen();
   warnGitHubPreviousSecretOpen();
 
@@ -300,10 +299,10 @@ interface BootPlan {
 async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHandle> {
   const { host, requestedPort, startedAt } = plan;
 
-  const runtime = sqliteServerRuntimeWithExitHook(opts.hippoRoot, {
+  const runtime = defaultServerRuntime(opts.hippoRoot, {
     store: opts.store,
     queueMax: envStoreQueueMax(),
-    ...rootStoreRules(envLossAversionRatio()),
+    ...evalStoreRules(envLossAversionRatio()),
     vectorGraphMaxVectors: loadConfig(opts.hippoRoot).vectorGraph.maxVectors,
   });
   // Before the listen, so the first request already has the key it is checked against.
@@ -329,7 +328,7 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     // An auto-sleep answers no request, so draining skips it; its child must leave the store before
     // the store closes.
     await served.sleeps.settled();
-    await runtime.close(DETACHED_SETTLE_MS);
+    await runtime.close();
   };
 
   if (opts.handleSignals) {
@@ -342,9 +341,8 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 function requestOptionsFor(
   { startedAt, limiters }: BootPlan,
   served: ResolvedServeOptions,
-  { workerCounts }: SqliteServerRuntime,
+  { workerCounts }: ServerRuntime,
 ): HandleRequestOptions {
-  const readiness = coreEnrichment(served.store)?.readiness;
   return {
     startedAt,
     // Open /mcp/stream count per client key, so the cap is per server rather than per process.
@@ -352,7 +350,7 @@ function requestOptionsFor(
     limiter: limiters.perAddress,
     counts: served.counts,
     workerCounts,
-    ready: readiness ? createReadyProbe(readiness) : undefined,
+    ready: served.store.readiness && createReadyProbe(served.store.readiness),
   };
 }
 
@@ -361,8 +359,8 @@ function frozenAddonRoutes(
 ): NonNullable<ServeOptions['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
-    (addonRoutes ?? []).map(({ path, handler, hippoDb }) =>
-      Object.freeze({ path, handler, ...(hippoDb === true && { hippoDb }) }),
+    (addonRoutes ?? []).map(({ path, handler, storeReady }) =>
+      Object.freeze({ path, handler, ...(storeReady !== undefined && { storeReady }) }),
     ),
   );
   assertAddonRoutes(routes);
@@ -372,7 +370,7 @@ function frozenAddonRoutes(
 function servedOptsFor(
   opts: ServeOptions,
   { routes, publicJsonBodies, limiters }: BootPlan,
-  runtime: SqliteServerRuntime,
+  runtime: ServerRuntime,
   localKey: LocalKey,
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
@@ -385,13 +383,16 @@ function servedOptsFor(
   };
   // The auto-sleep child reopens hippo.db by its folder, so another store never starts one.
   const sleepsHere = opts.autoSleep !== false && runtime.onHippoDb;
-  const callers = createCallerState(sleepsHere ? { run, hostTenantId: envTenant() } : undefined);
+  // The count reads the store's reports, so a store without them starts no sleep.
+  const counted = sleepsHere && hasGroup(store, 'reports') ? store : undefined;
+  const autoSleep = counted && { run, hostTenantId: envTenant(), newSince: newRowsOn(counted) };
+  const callers = createCallerState(autoSleep);
   return {
     ...opts,
     routes,
     publicJsonBodies,
-    v1Routes: bindV1Routes(store),
-    addonRoutes: bindAddonRoutes(routes, store),
+    v1Routes: bindV1Routes(store, runtime.onHippoDb),
+    addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
     mcpTools: bindMcpTools(store),
     store,
     onHippoDb: runtime.onHippoDb,
@@ -403,8 +404,9 @@ function servedOptsFor(
     localKey,
     keyVerifier: new KeyVerifier(),
     callers,
+    callersFor: (storeFor) => callersOnRequest(callers, counted && storeFor(counted)),
+    ledgerStore: hasGroups(store, ['ledger', 'folderFiles']) ? store : undefined,
     infra: rootInfra(runtime.host),
-    detached: runtime.detached,
     sleeps,
     counts,
   };
@@ -412,7 +414,7 @@ function servedOptsFor(
 
 function acceptingServer(
   served: ResolvedServeOptions,
-  runtime: SqliteServerRuntime,
+  runtime: ServerRuntime,
   inflight: Set<ServerResponse>,
   options: HandleRequestOptions,
 ): Server {
@@ -436,8 +438,8 @@ function acceptingServer(
  * abort signal. */
 function servedFor(
   served: ResolvedServeOptions,
-  runtime: SqliteServerRuntime,
-  { limits, session }: { readonly limits: RequestLimits; readonly session: RequestStores },
+  runtime: ServerRuntime,
+  { limits, session }: { readonly limits: RequestLimits; readonly session: StoreSession },
 ): ResolvedServeOptions {
   // One view per store, so the served, caller and ledger stores share the view of one.
   const views = new Map<HippoStore, HippoStore>();
@@ -452,8 +454,17 @@ function servedFor(
     store: storeFor(served.store),
     reachOf: (shared) => runtime.reachOf(shared, limits, session),
     storeFor,
+    callers: served.callersFor(storeFor),
+    ledgerStore: served.ledgerStore && storeFor(served.ledgerStore),
     signal: limits.signal,
   };
+}
+
+/** The server's callers for one request: the shared latch, and the count on the request's store. */
+function callersOnRequest(callers: CallerState, counted?: StoreWith<'reports'>): CallerState {
+  const { autoSleep } = callers;
+  if (autoSleep === undefined || counted === undefined) return callers;
+  return { ...callers, autoSleep: { ...autoSleep, newSince: newRowsOn(counted) } };
 }
 
 async function listenAndDescribe(

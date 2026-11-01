@@ -16,7 +16,7 @@ import { snapshotFields, WORKING_STATE_CAPS } from '../../src/base/session/worki
 import { compactResumeText } from '../../src/api/context/context-render.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { bindSessionOwner, compactResumeForCaller } from '../../src/server.js';
-import type { EntryContext } from '../../src/api/types.js';
+import type { ContextWith, EntryContext } from '../../src/api/types.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { handlesOf, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { sqliteCompactionHooks } from '../../src/store/sqlite/capture/compaction-hooks.js';
@@ -89,9 +89,9 @@ describe('storeLesson for a caller', () => {
 
   it('counts a user-global lesson as a repeat in every project', async () => {
     seed(LESSON, '', ['error', 'auto-captured']);
-    expect(await sqliteStore(root).hippoDb.lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web'])).toEqual(
-      [LESSON],
-    );
+    expect(await sqliteStore(root).lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web'])).toEqual([
+      LESSON,
+    ]);
     expect(await storeLesson(failureTarget(root, TENANT), LESSON, other)).toBe('duplicate');
   });
 });
@@ -215,7 +215,7 @@ describe('preCompactForCaller', () => {
 });
 
 describe('compactResumeForCaller', () => {
-  const resume = (ctx: EntryContext, source = 'compact') =>
+  const resume = (ctx: EntryContext<ContextWith<'sessions'>>, source = 'compact') =>
     compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source });
 
   it("source not compact gives ''", async () => {

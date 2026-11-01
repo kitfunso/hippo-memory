@@ -1,7 +1,7 @@
 // Project names folded into others, read from the audit trail: the sync files imports under the
 // surviving name, and `hippo projects` repair agrees.
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
-import type { ProjectFold } from '../../base/records/project-tags.js';
+import type { ProjectFold } from '../../base/ports/store/project-tags.js';
 import type { AuditLog } from '../../base/ports/store/audit.js';
 import type { AuditEvent } from '../../base/ports/store/types.js';
 import type { JsonValue } from '../../base/util/json.js';

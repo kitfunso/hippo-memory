@@ -6,14 +6,14 @@ import { writeEntryMirrors } from '../entries/entry-writes.js';
 import { removeEntryMirrors } from '../folder-files/mirrors.js';
 import { openStore } from '../runtime/handles.js';
 import { waitingOpener, type Handles, type StoreFiles } from '../runtime/open.js';
-import { bound, type Bodies } from '../runtime/bound.js';
+import { bound } from '../runtime/bound.js';
 import { runSteps } from './agent-import-steps.js';
 import type {
   AgentImport,
   ContainerApplied,
   ContainerApply,
   MirrorFailure,
-} from '../../../base/records/agent-import.js';
+} from '../../../base/ports/store/agent-import.js';
 
 function applyContainer(
   db: DatabaseSyncLike,
@@ -52,9 +52,9 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
 /** The import's group; `busyWaitMs` replaces each handle's lock wait, as a compaction hook's
  * import asks. */
 export function sqliteAgentImport({ on, files }: Handles, busyWaitMs?: number): AgentImport {
-  return bound(
+  return bound<AgentImport>(
     on,
-    { applyContainer: (db, plan) => applyContainer(db, files, plan) } satisfies Bodies<AgentImport>,
+    { applyContainer: (db, plan) => applyContainer(db, files, plan) },
     waitingOpener(busyWaitMs, openStore),
   );
 }

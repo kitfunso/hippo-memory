@@ -8,8 +8,7 @@ import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-import { onLocalTier } from '../_helpers/v1-route-rows.js';
+import { needsHippoDb, ROUTE_GROUPS, serve } from '../_helpers/store-switch.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -49,10 +48,8 @@ beforeAll(async () => {
   // Seventy requests from one IP would trip the per-IP and per-caller limiters; both are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
   vi.unstubAllEnvs();
-  // Objects live on hippo.db's local tier, which the port-only run serves none of.
-  if (needsHippoDb('tier')) return;
   ids.decision = await created('/v1/decisions', { text: 'use sqlite for the store' }, 'decision');
   ids.process = await created('/v1/processes', { processName: 'release', steps: ['tag', 'publish'] }, 'process');
   ids.policy = await created('/v1/policies', { policyName: 'retention', policyText: 'keep 30 days' }, 'policy');
@@ -375,6 +372,7 @@ describe('HTTP input validation', () => {
       undefined,
       /include_recent must be a non-negative number/,
     ],
+    ['quarantine status', 'GET', '/v1/quarantine?status=maybe', undefined, /status must be one of: pending/],
     ['prediction list closed needs class', 'GET', '/v1/predictions?status=closed', undefined, /requires class param/],
     ['prediction stats class cap', 'GET', `/v1/predictions/stats?class=${long(256)}`, undefined, /class exceeds 256/],
   ];
@@ -384,11 +382,11 @@ describe('HTTP input validation', () => {
     expect(r.status).toBe(400);
     expect(String(r.json.error)).toMatch(message);
   };
-  const onTier = (row: (typeof bad)[number]): boolean => onLocalTier(row[1], row[2]);
-  it.each(bad.filter((row) => !onTier(row)))('%s is a 400 that names the problem', namesTheProblem);
-  it.skipIf(needsHippoDb('tier')).each(bad.filter(onTier))('%s is a 400 that names the problem', namesTheProblem);
+  const isSleep = (row: (typeof bad)[number]): boolean => row[2] === '/v1/sleep';
+  it.each(bad.filter((row) => !isSleep(row)))('%s is a 400 that names the problem', namesTheProblem);
+  it.skipIf(needsHippoDb('sleep')).each(bad.filter(isSleep))('%s is a 400 that names the problem', namesTheProblem);
 
-  it.skipIf(needsHippoDb('tier'))('none of the rejected writes reached the store', async () => {
+  it('none of the rejected writes reached the store', async () => {
     const counts = await Promise.all(
       [
         ['/v1/decisions?status=all', 'decisions'],
@@ -418,25 +416,22 @@ describe('HTTP input validation', () => {
     });
   });
 
-  it.skipIf(needsHippoDb('tier'))(
-    'supersede of a row that does not exist is a 404 on every versioned kind',
-    async () => {
-      const cases: Array<[string, Body]> = [
-        ['processes', { steps: ['a'] }],
-        ['policies', { policyText: 't' }],
-        ['skills', { instructions: 'i' }],
-        ['project-briefs', { summary: 's' }],
-        ['customer-notes', { note: 'n' }],
-      ];
-      for (const [kind, body] of cases) {
-        const r = await call('POST', `/v1/${kind}/99999/supersede`, body);
-        expect([kind, r.status]).toEqual([kind, 404]);
-        expect(String(r.json.error)).toMatch(/99999 not found/);
-      }
-    },
-  );
+  it('supersede of a row that does not exist is a 404 on every versioned kind', async () => {
+    const cases: Array<[string, Body]> = [
+      ['processes', { steps: ['a'] }],
+      ['policies', { policyText: 't' }],
+      ['skills', { instructions: 'i' }],
+      ['project-briefs', { summary: 's' }],
+      ['customer-notes', { note: 'n' }],
+    ];
+    for (const [kind, body] of cases) {
+      const r = await call('POST', `/v1/${kind}/99999/supersede`, body);
+      expect([kind, r.status]).toEqual([kind, 404]);
+      expect(String(r.json.error)).toMatch(/99999 not found/);
+    }
+  });
 
-  it.skipIf(needsHippoDb('tier'))('a create that points at a missing row is a 409, not a 404', async () => {
+  it('a create that points at a missing row is a 409, not a 404', async () => {
     const decision = await call('POST', '/v1/decisions', { text: 'replace it', supersedesDecisionId: 99999 });
     expect(decision.status).toBe(409);
     expect(String(decision.json.error)).toContain('to supersede not found');
@@ -445,31 +440,25 @@ describe('HTTP input validation', () => {
   });
 
   // Decision supersede answers 201 but process and skill answer 200; this pins today's contract.
-  it.skipIf(needsHippoDb('tier'))(
-    'a supersede carries its optional context, description and trigger into the new version',
-    async () => {
-      const d = await call('POST', `/v1/decisions/${ids.decision}/supersede`, {
-        text: 'use postgres',
-        context: 'scale',
-      });
-      expect(d.status).toBe(201);
-      expect(d.json.decision).toMatchObject({ context: 'scale' });
-      const p = await call('POST', `/v1/processes/${ids.process}/supersede`, {
-        steps: ['tag', 'sign', 'publish'],
-        description: 'signed now',
-      });
-      expect(p.status).toBe(200);
-      expect(p.json.process).toMatchObject({ description: 'signed now', steps: ['tag', 'sign', 'publish'] });
-      const s = await call('POST', `/v1/skills/${ids.skill}/supersede`, {
-        instructions: 'halve it',
-        trigger: 'flaky test',
-      });
-      expect(s.status).toBe(200);
-      expect(s.json.skill).toMatchObject({ trigger: 'flaky test' });
-    },
-  );
+  it('a supersede carries its optional context, description and trigger into the new version', async () => {
+    const d = await call('POST', `/v1/decisions/${ids.decision}/supersede`, { text: 'use postgres', context: 'scale' });
+    expect(d.status).toBe(201);
+    expect(d.json.decision).toMatchObject({ context: 'scale' });
+    const p = await call('POST', `/v1/processes/${ids.process}/supersede`, {
+      steps: ['tag', 'sign', 'publish'],
+      description: 'signed now',
+    });
+    expect(p.status).toBe(200);
+    expect(p.json.process).toMatchObject({ description: 'signed now', steps: ['tag', 'sign', 'publish'] });
+    const s = await call('POST', `/v1/skills/${ids.skill}/supersede`, {
+      instructions: 'halve it',
+      trigger: 'flaky test',
+    });
+    expect(s.status).toBe(200);
+    expect(s.json.skill).toMatchObject({ trigger: 'flaky test' });
+  });
 
-  it.skipIf(needsHippoDb('tier'))('closed predictions are listed by class once one is closed', async () => {
+  it('closed predictions are listed by class once one is closed', async () => {
     const close = await call('POST', `/v1/predictions/${ids.prediction}/close`, {
       state: 'closed',
       actual: 3,

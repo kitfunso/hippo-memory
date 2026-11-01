@@ -1,6 +1,6 @@
 // The status reports as the scorecard tests read them: through sqliteStore's reports group.
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import type { CorrectionLink, RawProvenancePage } from '../../src/base/records/reports.js';
+import type { CorrectionLink, RawProvenancePage } from '../../src/base/ports/store/reports.js';
 import { sqliteStore } from './test-session.js';
 import { makeRoot } from './make-root.js';
 import { writeEntriesTogether } from './root-forms.js';
@@ -8,11 +8,11 @@ import { writeEntriesTogether } from './root-forms.js';
 const PAGE = { limit: 500 };
 
 export const rawProvenanceAt = (root: string): Promise<RawProvenancePage> =>
-  sqliteStore(root).hippoDb.reports.rawProvenance(PAGE);
+  sqliteStore(root).reports.rawProvenance(PAGE);
 
 /** The links a fresh store gives for `rows`, written as they are, and read back through the join. */
 export async function correctionLinksOfRows(rows: readonly MemoryEntry[]): Promise<CorrectionLink[]> {
   const root = makeRoot('report-links');
   writeEntriesTogether(root, rows);
-  return (await sqliteStore(root).hippoDb.reports.correctionLinks(PAGE)).links;
+  return (await sqliteStore(root).reports.correctionLinks(PAGE)).links;
 }

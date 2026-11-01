@@ -24,7 +24,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
 
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';

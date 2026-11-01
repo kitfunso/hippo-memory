@@ -1,7 +1,7 @@
 // Reads that once took a whole tenant or backlog at a time now come a page at a time and answer the same. Real store.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { tallyAmbientEntriesAt } from '../../src/base/memory/ambient.js';
+import { tallyAmbientEntries } from '../../src/base/memory/ambient.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { listEntriesMentioning } from '../../src/store/sqlite/entries/entry-mentions.js';
 import { listEntryIdsPage } from '../../src/store/sqlite/entries/entry-reads.js';
@@ -199,7 +199,7 @@ describe('ambient tag tallies', () => {
         currentProject: [],
         now,
       });
-      const js = tallyAmbientEntriesAt(rows, now, PRODUCTION_STRENGTH);
+      const js = tallyAmbientEntries(rows, now, PRODUCTION_STRENGTH);
       expect(Object.fromEntries(sql.tagCounts)).toEqual(Object.fromEntries(js.tagCounts));
       expect(sql.errors).toBe(js.errors);
       expect(sql.total).toBe(js.total);

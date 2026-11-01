@@ -40,16 +40,15 @@ export interface DetectAvailabilityBiasOptions {
   pool: readonly AgeRef[];
   /** Reference "now" in epoch ms. Defaults to Date.now(). */
   now?: number;
-  /** Recency window in ms; entries newer than this count as "recent".
-   * Default DEFAULT_RECENCY_WINDOW_MS. */
+  /** Recency window in ms; entries newer than this count as "recent". Default 24h. */
   recencyWindowMs?: number;
-  /** Minimum recent fraction (exclusive) to fire. Default DEFAULT_RECENT_FRACTION_THRESHOLD. */
+  /** Minimum recent fraction (exclusive) required to fire. Default 0.7 (>70%). */
   recentFractionThreshold?: number;
-  /** Minimum returned size required to fire. Default DEFAULT_MIN_RETURNED. */
+  /** Minimum returned size required to fire. Default 3. */
   minReturned?: number;
-  /** Minimum pool size required to fire. Default DEFAULT_MIN_POOL. */
+  /** Minimum pool size required to fire. Default 10. */
   minPool?: number;
-  /** Minimum older-passed-over count to fire. Default DEFAULT_MIN_OLDER_PASSED_OVER. */
+  /** Minimum older-passed-over count required to fire. Default 3. */
   minOlderPassedOver?: number;
 }
 

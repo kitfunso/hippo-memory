@@ -21,8 +21,8 @@ export function patchPaths(body: string): string[] {
   let updating = false;
   let canMove = false;
   for (const line of lines.slice(start + 1)) {
-    // Inside an update hunk a leading space marks a context line, so headers match on trimEnd
-    // only there.
+    // Inside an update hunk a leading space marks a context line, so headers match on trimEnd only
+    // there.
     const head = updating ? line.trimEnd() : line.trim();
     if (head === END_PATCH) break;
     const header = FILE_HEADER.exec(head);

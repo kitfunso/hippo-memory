@@ -95,8 +95,8 @@ function isLiveLoopbackTarget(info: ServerInfo): boolean {
   );
 }
 
-/** The whole body as text, or null once it passes HEALTH_BODY_MAX_BYTES (the stream is
- * then cancelled). */
+/** The whole body as text, or null once it passes HEALTH_BODY_MAX_BYTES (the stream is then
+ * cancelled). */
 async function readCappedBody(body: ReadableStream<Uint8Array>): Promise<string | null> {
   // Read the body under a hard byte cap: the process on info.url may not be hippo (pid reuse), so
   // its response is untrusted and never goes unbounded into a parser.
@@ -133,8 +133,8 @@ function isConnectionRefused<E>(err: E): boolean {
   );
 }
 
-/** False for a /health body that is not an object (JSON null, a scalar) or reports
- * another started_at. */
+/** False for a /health body that is not an object (JSON null, a scalar) or reports another
+ * started_at. */
 function reportsStartedAt<T>(body: T, startedAt: string): boolean {
   return isObjectLike(body) && 'started_at' in body && body.started_at === startedAt;
 }
@@ -143,8 +143,9 @@ function reportsStartedAt<T>(body: T, startedAt: string): boolean {
  * True when /health on info.url reports the pidfile's started_at; unlinks the pidfile on any
  * definitive mismatch and throws ServerUnresponsiveError on a probe timeout. */
 async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promise<boolean> {
-  // Refusal, non-200 or a malformed body unlinks the pidfile as stale. A timeout proves nothing,
-  // so it keeps the pidfile and throws; any other error keeps it and warns.
+  // Refusal, non-200 or a malformed body unlink the pidfile as stale. A timeout proves neither a
+  // dead server nor this one, so it keeps the pidfile and throws. Any other error keeps it and
+  // warns.
   const probeMs = envHealthProbeMs() ?? HEALTH_PROBE_TIMEOUT_MS;
   try {
     const res = await fetch(`${info.url}/health`, { signal: AbortSignal.timeout(probeMs) });

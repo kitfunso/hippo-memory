@@ -12,9 +12,9 @@ import { clientLimitKey } from '../../src/surface/server/client-ip.js';
 import { createRateLimiter } from '../../src/surface/server/rate-limit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readLocalKey } from '../../src/surface/server/local-key.js';
-import { withoutHippoDb } from '../_helpers/port-only-store.js';
+import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -175,7 +175,7 @@ describe('per-caller buckets', () => {
     expect(await broken()).toEqual({ status: 429, retryAfter: '10' });
   });
 
-  it('charges an add-on route call and a POST /mcp call once each', async () => {
+  it.skipIf(needsHippoDb('addon'))('charges an add-on route call and a POST /mcp call once each', async () => {
     let runs = 0;
     const a = mint({ ownerSubject: 'oid-addon' });
     const m = mint({ ownerSubject: 'oid-mcp' });
@@ -209,9 +209,9 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
       closeHippoDb(openHippoDb(root));
       throw new Error('the stub store does not serve recall');
     };
-    // hippo.db's groups, which serve() fences for this kind, less the local tier a `hippoDb` add-on route needs.
+    // hippo.db's groups, which serve() fences for this kind, less the local files an add-on route needs.
     const store: HippoStore = {
-      ...withoutHippoDb(sqliteStore(root)),
+      ...withoutFolderGroups(sqliteStore(root)),
       kind: 'stub',
       findApiKey: async () => record,
       searchRecallEntries: unported,
@@ -232,12 +232,9 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
       {
         store,
         routes: [
-          {
-            ...addonRoute(() => {
-              runs += 1;
-            }),
-            hippoDb: true,
-          },
+          addonRoute(() => {
+            runs += 1;
+          }),
         ],
       },
     );

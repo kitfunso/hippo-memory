@@ -1,4 +1,4 @@
-import { calculateStrengthAt, type StrengthModel } from '../../base/memory/strength.js';
+import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import {
   CHURN_STALE_TAG,
   DAG_LEVEL,
@@ -21,8 +21,8 @@ import { clamp } from '../../base/util/stats.js';
 const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
 const DECISION_TAG_BOOST = 1.2;
-// A memory tagged for the active scope outranks a neutral one; one tagged for another scope
-// is demoted.
+// A memory tagged for the active scope outranks a neutral one; one tagged for another scope is
+// demoted.
 const SCOPE_MATCH_BOOST = 1.5;
 const SCOPE_MISMATCH_BOOST = 0.5;
 const EXTRACTION_TAG_BOOST = 1.3;
@@ -62,9 +62,9 @@ export function outcomeNudge(
   return clamp(1 + slope * Math.tanh(net), { min, max });
 }
 
-/** Retrieval-time outcome nudge within [OUTCOME_NUDGE_MIN, OUTCOME_NUDGE_MAX]; the bm25-outcome
- * eval baseline ranks with it too. */
-export function outcomeBoostFor(entry: MemoryEntry, ablated: boolean): number {
+/** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it
+ * too. */
+export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   if (ablated || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
@@ -75,8 +75,8 @@ export function outcomeBoostFor(entry: MemoryEntry, ablated: boolean): number {
   });
 }
 
-/** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the
- * same deboost. */
+/** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same
+ * deboost. */
 export function isDagSummary(entry: MemoryEntry): boolean {
   return entry.dagLevel === DAG_LEVEL.topic || entry.dagLevel === DAG_LEVEL.entity;
 }
@@ -84,15 +84,15 @@ export function isDagSummary(entry: MemoryEntry): boolean {
 const isDeboost = (value: number | undefined): value is number =>
   value !== undefined && Number.isFinite(value) && value > 0 && value <= 1;
 
-/** Summary deboost: per-call, then the root's HIPPO_SUMMARY_DEBOOST, then DEFAULT_SUMMARY_DEBOOST;
- * values outside (0, 1] fall through. */
+/** Summary deboost: per-call, then the root's HIPPO_SUMMARY_DEBOOST, then 0.85; values outside
+ * (0, 1] fall through. */
 export function resolveSummaryDeboost(perCall?: number, configured?: number): number {
   if (isDeboost(perCall)) return perCall;
   return isDeboost(configured) ? configured : DEFAULT_SUMMARY_DEBOOST;
 }
 
-/** DEFAULT_FRESHNESS_BOOST for a summary rebuilt within the window; null, unparseable and future
- * timestamps get 1.0. */
+/** 1.05 for a summary rebuilt within the window; null, unparseable and future timestamps get
+ * 1.0. */
 function summaryFreshnessMultiplier(entry: MemoryEntry, now: Date): number {
   if (!isDagSummary(entry) || !entry.lastRebuiltAt) return 1.0;
   const rebuiltMs = new Date(entry.lastRebuiltAt).getTime();
@@ -106,8 +106,8 @@ export interface SummaryScoring {
   freshness: boolean;
 }
 
-/** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its
- * scores bit-identical. */
+/** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its scores
+ * bit-identical. */
 export const NO_SUMMARY_SCORING: SummaryScoring = { deboost: 1, freshness: false };
 
 export function summaryScoring(options: {
@@ -135,13 +135,13 @@ export function strengthRecencyMultipliers(
 ) {
   return {
     strength:
-      STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrengthAt(entry, ctx.now, ctx.strength),
+      STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
     recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, ctx.now, ctx.ablation),
   };
 }
 
-/** What a ranking's strength and recency read from its caller: the eval switches and the
- * root's settings. */
+/** What a ranking's strength and recency read from its caller: the eval switches and the root's
+ * settings. */
 export interface RankRun {
   readonly switches?: EvalSwitches;
   readonly runtime?: RuntimeSettings;
@@ -195,7 +195,7 @@ export function applyRankBoosts(
   const decisionBoost = entry.tags.includes('decision') ? DECISION_TAG_BOOST : 1.0;
   const churnStaleMultiplier = churnStaleFactor(entry);
   const pathBoost = pathBoostMultiplier(entry.tags, ctx.pathTags);
-  const outcomeBoost = ctx.outcome ? outcomeBoostFor(entry, ctx.ablation.outcomeFast) : 1.0;
+  const outcomeBoost = ctx.outcome ? outcomeMultiplier(entry, ctx.ablation.outcomeFast) : 1.0;
   const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, ctx.scope));
   const extractionBoost = entry.tags.includes(EXTRACTED_TAG) ? EXTRACTION_TAG_BOOST : 1.0;
   const summary = summaryMultipliers(entry, ctx.now, ctx.summary);

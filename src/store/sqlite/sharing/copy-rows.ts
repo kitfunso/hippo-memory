@@ -6,8 +6,8 @@ import { DEFAULT_TENANT_ID, type TenantId } from '../../../base/util/tenant.js';
 import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../../../db/index.js';
 import type { SqlFragment } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import type { EntryFilter } from '../../../base/records/reports.js';
-import type { EntryTextKey } from '../../../base/records/sharing.js';
+import type { EntryFilter } from '../../../base/ports/store/reports.js';
+import type { EntryTextKey } from '../../../base/ports/store/sharing.js';
 import { bareText } from '../../rules/copies.js';
 import { narrowingAnd } from '../entries/entry-filter.js';
 import { ftsPhrase } from '../recall/fts-phrase.js';
@@ -51,8 +51,8 @@ export type CopyDbRow = {
   origin_project: string | null;
 };
 
-/** Which rows of the tenant a copy read looks at: `filter` adds predicates, each written `
- * AND ...`. */
+/** Which rows of the tenant a copy read looks at: `filter` adds predicates, each written ` AND
+ * ...`. */
 export interface CopyRead {
   readonly tenantId: TenantId;
   readonly filter: SqlFragment;

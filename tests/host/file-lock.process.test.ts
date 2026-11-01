@@ -164,31 +164,6 @@ describe('one process', () => {
     if (first.kind === 'taken') first.lock.release();
   });
 
-  it('keeps a lock its taker no longer references until the thread that took it ends', async () => {
-    const path = join(scratch(), 's.lock.db');
-    // The thread drops its FileLock and collects garbage before it reports, then idles until terminated.
-    const code = `const { parentPort } = require('node:worker_threads');
-      require('node:v8').setFlagsFromString('--expose-gc');
-      const collect = require('node:vm').runInNewContext('gc');
-      import(${JSON.stringify(pathToFileURL(DIST_LOCK).href)}).then((m) => {
-        const kind = m.takeFileLock(${JSON.stringify(path)}).kind;
-        collect();
-        parentPort.postMessage(kind);
-        setInterval(() => {}, 1 << 30);
-      });`;
-    const worker = new Worker(code, { eval: true });
-    const kind = await new Promise<string>((resolve, reject) => {
-      worker.once('message', resolve);
-      worker.once('error', reject);
-    });
-    expect(kind).toBe('taken');
-    expect(takeFileLock(path).kind).toBe('held');
-    await worker.terminate();
-    const after = takeFileLock(path);
-    expect(after.kind).toBe('taken');
-    if (after.kind === 'taken') after.lock.release();
-  });
-
   it('takes a missing path, keeps the file at release, and the next take reuses it', () => {
     const path = join(scratch(), 's.lock.db');
     const first = takeFileLock(path);

@@ -3,7 +3,11 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { projectNames } from '../../base/scope/project-identity.js';
-import type { ContainerApply, ImportStep, MirrorFailure } from '../../base/records/agent-import.js';
+import type {
+  ContainerApply,
+  ImportStep,
+  MirrorFailure,
+} from '../../base/ports/store/agent-import.js';
 import { liveUnder, type ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
 import { toolReport, type ImportReport } from '../../base/memory/agent-memory-report.js';
@@ -67,7 +71,7 @@ async function handOverContainer(
     ),
   );
   for (let round = 0; round < 2; round++) {
-    const applied = await store.hippoDb.agentImport.applyContainer(
+    const applied = await store.agentImport.applyContainer(
       await handOverPlan(store, work, at.tenantId, prefixes),
     );
     if (applied.kind === 'changed') continue;
@@ -86,8 +90,8 @@ async function handOverPlan(
   tenantId: string,
   prefixes: readonly string[],
 ): Promise<ContainerApply> {
-  // A note the local pass could not read has no local row yet, so its global copy stays until
-  // it does.
+  // A note the local pass could not read has no local row yet, so its global copy stays until it
+  // does.
   const unread = new Set(work.container.skipped);
   const tag = work.tool.tag;
   const rows: MemoryEntry[] = [];

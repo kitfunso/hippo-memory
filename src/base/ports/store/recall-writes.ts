@@ -1,5 +1,7 @@
 import type { RerankStep } from '../../rank/search-types.js';
 import type { OriginFilter, AppendAuditOptions } from './types.js';
+import type { EntryTarget } from './entry-writes.js';
+import type { MethodEffects } from './effects.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
 export interface RecallSearchArgs {
@@ -9,13 +11,13 @@ export interface RecallSearchArgs {
   readonly explicitScopeMode: 'exact' | 'additive';
   readonly includeSuperseded: boolean;
   readonly originProjects?: OriginFilter;
-  /** The caller's personal scope, which the default deny admits; undefined admits no
-   * personal row. */
+  /** The caller's personal scope, which the default deny admits; undefined admits no personal
+   * row. */
   readonly ownScope: string | undefined;
 }
 
-/** Everything one recall writes once its reply is decided, so a store writes it on
- * one connection. */
+/** Everything one recall writes once its reply is decided, so a store writes it on one
+ * connection. */
 export interface RecallWrites {
   /** Insert or ignore on (memory_id, goal_id), so the first row wins, a duplicate inside this
    * batch included. First drop a row whose memory_id is in no memories row of this store,
@@ -45,8 +47,8 @@ export interface RecallTraceInput {
   tenantId: string;
   sessionId?: string | null;
   pipeline: 'api' | 'cli' | 'context' | 'mcp';
-  /** Raw query text. NEVER persisted: only its sha256/16 hash + length are stored (GDPR Path A / audit
-   *  convention, CLI). */
+  /** Raw query text. NEVER persisted: only its sha256/16 hash + length are stored (GDPR Path A / audit convention,
+   *  CLI). */
   query: string;
   /** True when the caller ran with explain/--why (per-result rerank steps may be present).
    * Defaults to false. */
@@ -72,3 +74,25 @@ export interface StrengthenOptions {
   readonly tenantId: string;
   readonly recallBoostAblated: boolean;
 }
+
+/** A recall's writes when the store keeps it as its last one: `strengthen.ids` are the ids it
+ * returned. */
+export type LastRecallWrites = RecallWrites & Required<Pick<RecallWrites, 'strengthen'>>;
+
+/** The last recall a store keeps, so a later outcome can name it, and the outcome linked to a
+ * recall trace. */
+export interface LastRecall {
+  /** entryWrites.applyOutcome on the ids of the last recall, then a link from its trace to the
+   * ids applied, read together so an outcome never pairs them with an older trace. */
+  applyOutcomeToLast(target: EntryTarget, good: boolean): Promise<string[]>;
+  /** finishRecall, then the ids this store lacks strengthened under `globalRoot`, then the ids
+   * and their trace saved as the last recall in one write; resolves to the trace id, null when
+   * none was asked or its write failed. */
+  finishRecall(writes: LastRecallWrites, globalRoot: string | undefined): Promise<number | null>;
+}
+
+/** What each LastRecall method does to the store; every adapter honours it. */
+export const LAST_RECALL_EFFECTS = {
+  applyOutcomeToLast: 'write',
+  finishRecall: 'write',
+} as const satisfies MethodEffects<LastRecall>;

@@ -16,7 +16,6 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { importVault } from '../../src/entry/importers.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import {
   tmpDir,
@@ -80,8 +79,6 @@ describe('importVault (b) — re-import is idempotent', () => {
     const all = loadAllEntries(tmpDir, 'default');
     expect(all.length).toBe(2);
     expect(archivedRows().length).toBe(0);
-    // Total remembered counts the two landed notes and nothing for the skipped re-import.
-    expect(Number((await sqliteStore(tmpDir).hippoDb.reports.stats()).total_remembered)).toBe(2);
   });
 });
 

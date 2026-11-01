@@ -450,8 +450,8 @@ From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); co
 - [x] **B3 follow-up: MCP/REST session_id plumbing.** Shipped v1.7.4 as
   `RecallOpts.sessionId` + `RecallOpts.goalTag`. Wired into `api.recall`
   (primary BM25 band, single db handle, before fresh-tail / summary
-  appendix) AND MCP `hippo_recall`'s separate `hybridSearch` path (3.0
-  removed its `physicsSearch` arm). HTTP `/v1/memories?session_id=...` query param added. Lives on
+  appendix) AND MCP `hippo_recall`'s separate `physicsSearch`/`hybridSearch`
+  path. HTTP `/v1/memories?session_id=...` query param added. Lives on
   `RecallOpts` not `Context` (codex finding: Context shared across all api
   ops; goal-stack boost is recall-scoped only).
 

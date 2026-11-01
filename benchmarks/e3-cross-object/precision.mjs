@@ -14,7 +14,7 @@ const home = mkdtempSync(join(tmpdir(), 'hippo-e3-xobj-'));
 mkdirSync(join(home, '.hippo'), { recursive: true });
 initStore(home);
 const T = 'default';
-const objects = sqliteStore(home).hippoDb.objects;
+const objects = sqliteStore(home).objects;
 const intended = new Set(); // `${srcName}=>${tgtName}` genuine references
 
 async function decRef(text, srcName, tgtName) { await saveDecision(objects, loadConfig(home).defaultHalfLifeDays, T, { decisionText: text }); if (tgtName) intended.add(`${srcName}=>${tgtName}`); }
@@ -44,7 +44,7 @@ await decRef('the team is retrying flaky steps', 'd-retry', null);   // "retry" 
 await decRef('we refactored the core scheduler module', 'd-core', null); // "core" the generic word -> FALSE if it matches the "Core" customer
 
 const r = await extractGraph(sqliteStore(home), T);
-const graph = await sqliteStore(home).hippoDb.graphReads.graphRows(T, { limit: 1000 });
+const graph = await sqliteStore(home).graphReads.graphRows(T, { limit: 1000 });
 const nameById = new Map(graph.entities.map((e) => [e.id, e.name]));
 const edges = graph.relations.filter((x) => x.relType === 'references');
 let truthy = 0, falsy = 0; const falseEdges = [];

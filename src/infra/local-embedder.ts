@@ -40,8 +40,8 @@ interface TransformersEnv {
   allowRemoteModels?: boolean;
 }
 
-/** The parts of the optional package's module this file reads; either export spelling may
- * carry `pipeline`. */
+/** The parts of the optional package's module this file reads; either export spelling may carry
+ * `pipeline`. */
 interface TransformersModule {
   env?: TransformersEnv;
   pipeline?: PipelineFactory;

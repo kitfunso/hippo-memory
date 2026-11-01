@@ -4,9 +4,9 @@
  * reverse is a cycle). */
 
 import { rejectionDigest } from '../../../base/records/rejection-digest.js';
-import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
+import type { DatabaseSyncLike } from '../../../db/index.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
-import type { RejectedValueRow, RejectionCheck } from '../../../base/records/rejections.js';
+import type { RejectedValueRow, RejectionCheck } from '../../../base/ports/store/rejections.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { orderSql, REJECTED_ORDER } from '../../rules/order.js';
@@ -116,7 +116,7 @@ export function deleteRejectedValue(
     db,
     `DELETE FROM rejected_values WHERE tenant_id = ? AND digest = ?`,
   ).run(tenantId, digest);
-  return changedRows(result) > 0;
+  return (result.changes ?? 0) > 0;
 }
 
 /** List tombstones for a tenant, newest first: the `rejections` verb. */

@@ -26,8 +26,8 @@ import {
   type Quad,
   type ScatterRows,
   type SearchTally,
-} from '../../../base/records/dashboard-reads.js';
-import { openConflictsNaming } from '../review/conflict-reads.js';
+} from '../../../base/ports/store/dashboard-reads.js';
+import { openConflictsNaming } from '../review/conflicts.js';
 import {
   FACT_COLUMNS,
   GRID_CELLS,
@@ -46,7 +46,7 @@ import {
   supersededIn,
 } from './dashboard-sql.js';
 import { handlesOf, openStore } from '../runtime/handles.js';
-import { answered, bound, type Bodies } from '../runtime/bound.js';
+import { answered, bound } from '../runtime/bound.js';
 
 const EMBEDDED = 'EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)';
 // First-seen order: the project whose first live row comes first by created, then id.
@@ -261,8 +261,8 @@ function heldReader(hippoRoot: string, files: StoreFiles, migrate: () => void): 
       }
       return held;
     },
-    // The first list runs the open the other reads run, so a pending migration lands before
-    // it sorts.
+    // The first list runs the open the other reads run, so a pending migration lands before it
+    // sorts.
     listsOn: (db) => {
       if (lists !== null) return lists;
       migrate();
@@ -285,9 +285,9 @@ export function sqliteDashboardReads(hippoRoot: string, rules: StoreRules = {}):
   const { on, files } = handlesOf(hippoRoot, rules);
   const open = dashboardOpener(files);
   type Scans = Pick<DashboardReads, 'totals' | 'project' | 'search' | 'openConflictsOf'>;
-  const scans = bound(
+  const scans = bound<Scans>(
     on,
-    { totals, project, search, openConflictsOf: openConflictsNaming } satisfies Bodies<Scans>,
+    { totals, project, search, openConflictsOf: openConflictsNaming },
     open,
   );
   const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));

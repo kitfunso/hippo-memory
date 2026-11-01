@@ -27,7 +27,7 @@ function normalized(text: string): JsonValue {
 function deliveryEvent(stdinText: string | undefined, runtime?: DeliveryRuntime): DeliveryEventInput {
   const rec = createDeliveryRecorder({
     now: evalNow(),
-    ledger: sqliteStore(CWD).hippoDb.ledger,
+    ledger: sqliteStore(CWD).ledger,
     storeHash: 'aaaaaaaaaaaaaaaa',
     writeStore: 'local',
     tenantId: 'default',

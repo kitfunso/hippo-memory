@@ -4,11 +4,11 @@
 import type { AmbientTallies } from '../../base/memory/ambient.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { DormantMove } from '../../base/records/consolidation.js';
+import type { DormantMove } from '../../base/ports/store/consolidation.js';
 import type { AmbientStoreFilter } from '../../base/ports/store/context-reads.js';
-import type { RecallSearchEntriesOptions } from '../../base/records/sharing.js';
+import type { RecallSearchEntriesOptions } from '../../base/ports/store/sharing.js';
 import * as ambient from './recall/ambient.js';
-import { batchWriteAndDelete } from './entries/batch-flush.js';
+import * as batches from './entries/delete-and-batch.js';
 import * as entryReads from './entries/entry-reads.js';
 import * as entryWrites from './entries/entry-writes.js';
 import type { WriteEntryOptions } from './entries/entry-writes.js';
@@ -36,14 +36,14 @@ export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
   return loadAllEntriesIn(storeFilesOf(hippoRoot));
 }
 
-/** The row with `id` in any tenant, or null: an eval reads back what it wrote, as
- * loadAllEntries does. */
+/** The row with `id` in any tenant, or null: an eval reads back what it wrote, as loadAllEntries
+ * does. */
 export function readEntryInFolder(hippoRoot: string, id: string): MemoryEntry | null {
   return readEntryIn(storeFilesOf(hippoRoot), id);
 }
 
-// The forms on `files`: an eval that builds them with a session runs its calls on one handle
-// per store.
+// The forms on `files`: an eval that builds them with a session runs its calls on one handle per
+// store.
 const openOn =
   (files: StoreFiles) =>
   (hippoRoot: string): DatabaseSyncLike =>
@@ -56,7 +56,7 @@ export function writeEntryIn(
 ): void {
   onHandle(
     files.hippoRoot,
-    (db) => entryWrites.writeEntryInOwnTx(db, files, entry, opts),
+    (db) => entryWrites.writeEntryOn(db, files, entry, opts),
     openOn(files),
   );
 }
@@ -128,7 +128,7 @@ export function batchWriteAndDeleteInFolder(
   const files = storeFilesOf(hippoRoot);
   return onHandle(
     hippoRoot,
-    (db) => batchWriteAndDelete(db, { files, toWrite, toDeleteIds, opts }),
+    (db) => batches.batchWriteAndDelete(db, { files, toWrite, toDeleteIds, opts }),
     openOn(files),
   );
 }

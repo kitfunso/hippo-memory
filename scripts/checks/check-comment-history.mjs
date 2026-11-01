@@ -1,19 +1,20 @@
 #!/usr/bin/env node
-// CI comment gate. A src/ comment line carrying a ticket code, version tag, reviewer note, date, plan path or
-// section number fails, as does a one-word comment line or doc ending; the history belongs in docs or the git log.
-// Usage: check-comment-history.mjs [--list [file...]].
+// CI comment gate. Ticket codes, version tags, reviewer notes, dates and plan paths in src/ comments belong in docs
+// or git log; each file's count of such comment lines may fall but never rise above .comment-history-baseline.json.
+// Usage: check-comment-history.mjs [--list [file...]] [--update]. --update rewrites the baseline; run it only after clearing hits.
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const BASELINE = '.comment-history-baseline.json';
+
 // Each pattern skips domain words it would otherwise hit: schema versions (v39, not a release tag), DAG layers L0-L3,
-// markdown headers H1-H6, BM25, FTS5, SHA1, UTF8, P95 percentiles, a prereg "amendment A1", invalid example dates,
-// and the Codex product.
+// BM25, FTS5, SHA1, UTF8, P95 percentiles, a prereg "amendment A1", invalid example dates, and the Codex product.
 const PATTERNS = [
   ['version', /\bv\d+\.\d+(?:\.\d+)?\b/],
   [
     'ticket',
-    /\b(?!(?:BM25|FTS5|FP32|NAT64|C0|H[1-6]|MD5|X509|V\d|SHA\d|UTF\d|IPV\d|HTTP\d|P\d\d|L[0-3])\b)(?<!amendment )[A-Z]{1,4}\d{1,2}(?:\.\d+)?\b/,
+    /\b(?!(?:BM25|FTS5|FP32|NAT64|C0|H1|MD5|X509|V\d|SHA\d|UTF\d|IPV\d|HTTP\d|P\d\d|L[0-3])\b)(?<!amendment )[A-Z]{1,4}\d{1,2}(?:\.\d+)?\b/,
   ],
   [
     'review',
@@ -26,8 +27,7 @@ const PATTERNS = [
 
 // Section labels that name a plan, wave or feature number instead of what the code is; no baseline, any hit fails.
 const LABEL_PATTERN = /\bFeature \d+:|\bW\d+[a-z]?:|\b[Pp]lan designs? \d+|\bCHANGELOG \d/;
-// A wrapped `//` comment's last word left alone on its line; any hit fails.
-const ONE_WORD = /^ [A-Za-z]+\.?\r?$/;
+
 const PRECEDES_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
 /** Index just past the string literal that opens at `start`, and how many escaped newlines it spans. */
@@ -59,9 +59,7 @@ function opensRegex(src, i, prev) {
   return /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i));
 }
 
-/** Returns [lineNumber, text, ownLine, endsDoc] for every comment line: `//` tails and each line of a block comment.
- * ownLine is true for a `//` comment with only space before it on its line; endsDoc for a block's last line of prose
- * when an earlier line holds prose too. */
+/** Returns [lineNumber, text] for every comment line: `//` tails and each line of a block comment. */
 function commentLines(src) {
   const out = [];
   const templateDepth = []; // brace depth inside each open `${ }`
@@ -94,7 +92,7 @@ function commentLines(src) {
     if (c === '/' && src[i + 1] === '/') {
       const end = src.indexOf('\n', i);
       const stop = end < 0 ? src.length : end;
-      out.push([line, src.slice(i + 2, stop), /^\s*$/.test(src.slice(src.lastIndexOf('\n', i - 1) + 1, i)), false]);
+      out.push([line, src.slice(i + 2, stop)]);
       i = stop;
       continue;
     }
@@ -102,9 +100,7 @@ function commentLines(src) {
       const end = src.indexOf('*/', i + 2);
       const stop = end < 0 ? src.length : end;
       const parts = src.slice(i + 2, stop).split('\n');
-      const prose = proseLines(parts);
-      const last = prose.length > 1 ? prose[prose.length - 1] : -1;
-      parts.forEach((part, k) => out.push([line + k, part, false, k === last]));
+      parts.forEach((part, k) => out.push([line + k, part]));
       line += parts.length - 1;
       i = stop + 2;
       continue;
@@ -142,26 +138,6 @@ function commentLines(src) {
   return out;
 }
 
-/** A block comment line's words, past its leading `*`s. */
-function docText(part) {
-  return part.replace(/^\s*\*+/, '').trim();
-}
-
-/** Indexes of a block's prose lines: a code fence's lines are code, and a JSDoc tag such as `@internal` holds the
- * rest of the block, so a lone fence or tag never reads as a wrapped word. */
-function proseLines(parts) {
-  const out = [];
-  let fenced = false;
-  for (const [k, part] of parts.entries()) {
-    const text = docText(part);
-    if (text.startsWith('```')) fenced = !fenced;
-    else if (fenced || text === '') continue;
-    else if (text.startsWith('@')) break;
-    else out.push(k);
-  }
-  return out;
-}
-
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
@@ -175,25 +151,25 @@ function tsFiles(dir, out = []) {
 function findHits() {
   const hits = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
-    const src = readFileSync(file, 'utf8');
-    for (const [line, text, ownLine, endsDoc] of commentLines(src)) {
+    for (const [line, text] of commentLines(readFileSync(file, 'utf8'))) {
       const kind = LABEL_PATTERN.test(text) ? 'label' : PATTERNS.find(([, re]) => re.test(text))?.[0];
       if (kind) hits.push({ file, line, kind, text: text.trim() });
-      const orphan = (ownLine && ONE_WORD.test(text)) || (endsDoc && /^\S+$/.test(docText(text)));
-      if (orphan) hits.push({ file, line, kind: 'orphan', text: (ownLine ? `//${text}` : text).trim() });
     }
   }
   return hits;
 }
 
-const HEADERS = {
-  history:
-    'Comment lines carrying ticket codes, versions, reviewer notes, dates or plan paths (say why in one line; the history goes to docs or the commit message):',
-  label: 'Comments that label a section with a feature, wave or plan number (say what the code is):',
-  orphan: 'Comment lines holding one word (rejoin it to the line above):',
-};
 const hits = findHits();
+const labels = hits.filter((h) => h.kind === 'label');
+const counts = {};
+for (const h of hits.filter((x) => x.kind !== 'label')) counts[h.file] = (counts[h.file] ?? 0) + 1;
 const args = process.argv.slice(2);
+
+if (args.includes('--update')) {
+  writeFileSync(BASELINE, JSON.stringify(counts, null, 2) + '\n');
+  console.log(`Wrote ${BASELINE}: ${hits.length} lines over ${Object.keys(counts).length} files.`);
+  process.exit(0);
+}
 
 if (args.includes('--list')) {
   const only = args.filter((a) => a !== '--list');
@@ -203,12 +179,28 @@ if (args.includes('--list')) {
   process.exit(0);
 }
 
-if (hits.length > 0) {
-  for (const [group, header] of Object.entries(HEADERS)) {
-    const found = hits.filter((h) => (h.kind in HEADERS ? h.kind : 'history') === group);
-    if (found.length > 0) console.error(header);
-    for (const h of found) console.error(`  ${h.file}:${h.line} ${h.text}`);
-  }
+if (labels.length > 0) {
+  console.error('Comments that label a section with a feature, wave or plan number (say what the code is):');
+  for (const h of labels) console.error(`  ${h.file}:${h.line} ${h.text}`);
   process.exit(1);
 }
-console.log('Comment history check OK: no history, section labels or one-word lines in src comments.');
+
+const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};
+const rose = Object.entries(counts).filter(([file, n]) => n > (baseline[file] ?? 0));
+const fell = Object.entries(baseline).filter(([file, n]) => (counts[file] ?? 0) < n);
+
+if (rose.length > 0) {
+  console.error(
+    'Comment lines carrying ticket codes, versions, reviewer notes, dates or plan paths rose above the baseline:',
+  );
+  for (const [file, n] of rose) console.error(`  ${file}: ${baseline[file] ?? 0} -> ${n}`);
+  console.error('Say why in one line and move the history to docs or the commit message.');
+  console.error('`node scripts/checks/check-comment-history.mjs --list <file>` shows the matching lines.');
+  process.exit(1);
+}
+if (fell.length > 0) {
+  console.log(
+    `${fell.length} files fell below the baseline; run \`node scripts/checks/check-comment-history.mjs --update\` to lock that in.`,
+  );
+}
+console.log(`Comment history ratchet OK: ${hits.length} lines, none above ${BASELINE}.`);

@@ -3,11 +3,10 @@
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/recall/candidates.js';
-import { PRODUCTION_STRENGTH, type StrengthModel } from '../../../src/base/memory/strength.js';
-import { deleteEntriesInBatches } from '../../../src/store/sqlite/entries/delete-entries.js';
-import * as deleteEntriesSql from '../../../src/store/sqlite/entries/delete-entries.js';
-import * as batchFlushSql from '../../../src/store/sqlite/entries/batch-flush.js';
-import type { DormantMemory, ListDormantOptions } from '../../../src/base/records/dormant.js';
+import { evalSwitches } from '../../../src/infra/eval-switches.js';
+import { deleteEntriesInBatches } from '../../../src/store/sqlite/entries/delete-and-batch.js';
+import * as deleteAndBatchSql from '../../../src/store/sqlite/entries/delete-and-batch.js';
+import type { DormantMemory, ListDormantOptions } from '../../../src/base/ports/store/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/runtime/rule-sql.js';
 import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entries/entry-reads.js';
@@ -25,8 +24,8 @@ import type {
   ContextCandidateFilter,
   RecentOrigins,
 } from '../../../src/base/ports/store/context-reads.js';
-import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../../src/base/records/sharing.js';
-import type { FlushComponent, LoadedRows } from '../../../src/base/records/consolidation.js';
+import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../../src/base/ports/store/sharing.js';
+import type { FlushComponent, LoadedRows } from '../../../src/base/ports/store/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
 import { handlesOf, onHandle, storeFilesOf } from '../test-session.js';
@@ -66,9 +65,12 @@ export function loadContextCandidates(
   hippoRoot: string,
   tenantId: string,
   filter: ContextCandidateFilter,
-  model: StrengthModel = PRODUCTION_STRENGTH,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => candidatesSql.listContextCandidates(db, model, tenantId, filter), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => candidatesSql.listContextCandidates(db, evalSwitches().strength, tenantId, filter),
+    openStore,
+  );
 }
 
 export function loadTextsHolding(
@@ -90,7 +92,7 @@ export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS
 }
 
 export function memoriesBackingAmong(hippoRoot: string, ids: readonly string[]): Set<string> {
-  return onHandle(hippoRoot, (db) => deleteEntriesSql.memoriesBackingAmong(db, ids));
+  return onHandle(hippoRoot, (db) => deleteAndBatchSql.memoriesBackingAmong(db, ids));
 }
 
 export function deleteEntry(
@@ -224,7 +226,7 @@ export function commitInChunks(
   opts: { snapshot: LoadedRows; budget: WriteBudget; busyWaitMs: number },
 ): Promise<string[]> {
   return handlesOf(hippoRoot).onAsync(
-    (db, files) => batchFlushSql.commitInChunks(db, files, components, opts),
+    (db, files) => deleteAndBatchSql.commitInChunks(db, files, components, opts),
     waitingOpener(opts.busyWaitMs, openStore),
   );
 }

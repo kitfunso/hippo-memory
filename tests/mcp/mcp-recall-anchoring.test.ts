@@ -64,7 +64,7 @@ describe('mcp hippo_recall anchoringHint', () => {
     home = makeRoot('mcp-j1');
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_ANCHORING', undefined);
-    // Seed a memory that matches the test query so MCP hybrid
+    // Seed a memory that matches the test query so MCP physics/hybrid
     // returns a non-null top-1.
     for (let i = 0; i < 3; i++) {
       writeEntry(

@@ -62,8 +62,8 @@ function hookList(): void {
 }
 
 function hookInstall(target: string | undefined): void {
-  // Copilot's instructions live in its home folder, not in a project file, so it has no
-  // HOOKS entry.
+  // Copilot's instructions live in its home folder, not in a project file, so it has no HOOKS
+  // entry.
   if (target === 'copilot') return printCopilotInstall(installCopilot(), '');
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);

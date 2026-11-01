@@ -27,6 +27,7 @@ import {
 } from './run.js';
 import { promoteSessionTraces, replayPass, traceWindow } from './traces.js';
 import { llmPasses } from './llm-passes.js';
+import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type {
@@ -34,7 +35,7 @@ import type {
   SleepBegin,
   SleepStart,
   UntracedSession,
-} from '../../base/records/consolidation.js';
+} from '../../base/ports/store/consolidation.js';
 import { SleepRows, Survivors } from './survivors.js';
 import { tombstoneChecks } from './tombstones.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
@@ -49,8 +50,8 @@ export type ConsolidateOptions = {
   budget?: Pick<WriteBudget, 'holdMs'>;
   /** The caller's config for `hippoRoot`; absent, `consolidate` reads the store's config.json. */
   config?: HippoConfig;
-  /** The tenant whose completed sessions become traces; absent, `consolidate` uses the
-   * default tenant. */
+  /** The tenant whose completed sessions become traces; absent, `consolidate` uses the default
+   * tenant. */
   tenantId?: string;
 };
 
@@ -81,8 +82,8 @@ export async function runConsolidation(
   );
   reportFtsDrift(start.fts, result);
 
-  // One run for every tenant: the run log and the sleep count are host-wide; rows are read a page
-  // at a time.
+  // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read
+  // a page at a time.
   const preview = dryRun ? halfLives : new Map<string, number>();
   const rows = new SleepRows(store, preview, options.pageRows ?? READ_PAGE_ROWS);
   const run = newSleepRun(store, options, { start, result, rows });
@@ -104,8 +105,8 @@ function newSleepRun(
   const { tenantId, now, config } = options;
   const dryRun = options.dryRun ?? false;
   const { start, result, rows } = parts;
-  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a
-  // first-class object.
+  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class
+  // object.
   const retirable = (entry: MemoryEntry): boolean =>
     canAutoDelete(entry) && !rows.backsObject(entry.id);
   return {
@@ -167,6 +168,7 @@ async function runPassesAfterDecay(
   await promoteSessionTraces(run, sessions);
   await replayPass(run);
   await llmPasses(run, llm);
+  await physicsPass(run);
   await retireHeldTexts(run);
   const mergesSkippedRejected = await mergePass(run);
 
@@ -232,12 +234,7 @@ async function commitPending(run: SleepRun, holdMs: number): Promise<void> {
   // The snapshot keeps what the DAG passes and other writers changed while sleep ran.
   const flush = dryRun ? null : { components: flushComponents(run), snapshot: run.survivors.bases };
   const expireBefore = dormantCutoff(run);
-  const committed = await run.store.hippoDb.consolidation.commit({
-    flush,
-    expireBefore,
-    dryRun,
-    holdMs,
-  });
+  const committed = await run.store.consolidation.commit({ flush, expireBefore, dryRun, holdMs });
   if (flush) reportFlush(run, new Set(committed.removedIds));
   if (expireBefore !== null) reportExpiry(run, committed.expired);
 }
@@ -277,7 +274,7 @@ async function logRun(run: SleepRun, decay: DecayOutcome): Promise<void> {
     result.events.push({ kind: 'conflictsDetected', count: detectedConflicts.length });
   }
 
-  await run.store.hippoDb.consolidation.recordSleep({
+  await run.store.consolidation.recordSleep({
     conflicts: detectedConflicts,
     at: now.toISOString(),
     decayed: result.decayed,
@@ -313,7 +310,7 @@ async function auditRescues(
   };
   try {
     // Row by row: one failed audit write must not silently drop every remaining row.
-    const auditFailures = await run.store.hippoDb.consolidation.auditEachRow(
+    const auditFailures = await run.store.consolidation.auditEachRow(
       rescuedEntries.map(rescueEvent),
     );
     if (auditFailures > 0) {

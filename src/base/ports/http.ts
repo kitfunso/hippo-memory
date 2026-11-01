@@ -1,7 +1,7 @@
 // The HTTP port: domain builds the request and reads the reply; src/infra/http.ts sends it.
 
-/** How long one call may take and what it may replay; the adapter's retry defaults fill
- * the rest. */
+/** How long one call may take and what it may replay; the adapter's retry defaults fill the
+ * rest. */
 export interface HttpCallPolicy {
   /** Per-attempt limit; a stalled peer ends as a thrown `TimeoutError`, never a hang. */
   readonly timeoutMs: number;

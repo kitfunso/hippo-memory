@@ -42,7 +42,7 @@ function held(store: HippoStore, name: StoreName, released: Promise<void>, event
   return wrapped;
 }
 
-function options(): RankRecallOptions {
+function options(root: string): RankRecallOptions {
   return {
     query: 'deploy',
     budget: 4000,
@@ -51,6 +51,8 @@ function options(): RankRecallOptions {
     includeSuperseded: false,
     explicitScope: null,
     activeScope: null,
+    usePhysics: false,
+    physicsConfig: loadConfig(root).physics,
     multihop: false,
     mmr: false,
     mmrLambda: 0.7,
@@ -76,7 +78,7 @@ async function run(order: readonly [StoreName, StoreName]): Promise<{ ids: strin
     tenantId: 'default',
     embedderFor: resolveEmbeddingProvider,
   };
-  const ranked = rankRecall(ctx, options(), BUDGET_RANKED);
+  const ranked = rankRecall(ctx, options(local), BUDGET_RANKED);
   // Neither read may end yet, so a recall that ran them one after the other never starts the second.
   await waitFor(() => events.length === 2, { what: 'both store reads to start before either ends', timeoutMs: 4_000 });
   for (const name of order) {

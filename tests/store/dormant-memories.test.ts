@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
-import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/entries/delete-entries.js';
+import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/entries/delete-and-batch.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
@@ -582,7 +582,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       [ids[0], 'test', { dormant: true }],
     ]);
     // Counted like forget and archiveRaw (review finding on PR #227).
-    expect(Number((await sqliteStore(home).hippoDb.reports.stats()).total_forgotten)).toBe(1);
+    expect(Number((await sqliteStore(home).reports.stats()).total_forgotten)).toBe(1);
   });
 });
 

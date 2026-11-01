@@ -1,6 +1,6 @@
 // The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the
 // watermark the sleep drain marks them by.
-import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
+import type { DatabaseSyncLike } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { errorMessage, log, errorFields } from '../../../base/util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
@@ -81,7 +81,7 @@ export function markPendingProcessedUpTo(
     WHERE tenant_id = ? AND status = 'pending' AND id <= ?
   `,
   ).run(now, tenantId, maxId);
-  return changedRows(res);
+  return Number(res.changes ?? 0);
 }
 
 /** Dirty tenants awaiting graph re-extraction, each with the MAX pending queue id at read time

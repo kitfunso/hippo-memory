@@ -18,7 +18,7 @@ import {
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { projectNameList, projectNameMerge, projectNameRepair } from '../../src/api/objects/projects.js';
-import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -36,8 +36,7 @@ beforeEach(() => {
   home = makeRoot('project-merge', { init: false });
   initTestStore(home);
 });
-afterEach(async () => {
-  await endLastingCommands();
+afterEach(() => {
   closeHippoDb(db);
 });
 
@@ -55,7 +54,7 @@ const note = (text: string, origin: string, extra: Partial<MemoryEntry> = {}): M
   });
 const byId = () => new Map(loadAllEntries(home, 'default').map((e) => [e.id, e]));
 const open = () => (db = openHippoDb(home));
-const ctx = () => lastingCommand().apiContext(home, T);
+const ctx = () => cliApiContext(home, T);
 function mirror(id: string): string | null {
   const walk = (dir: string): string | null => {
     for (const name of readdirSync(dir)) {

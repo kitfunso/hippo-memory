@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
-import { promote } from '../../src/api/hippo-db/promote.js';
+import { promote } from '../../src/api/memories/promote.js';
 import { shareToGlobal } from '../../src/api/sharing.js';
 import type { ContextReach } from '../../src/api/types.js';
 import { testInfra } from '../_helpers/infra.js';

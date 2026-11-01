@@ -61,7 +61,7 @@ function onDb(root: string, write: (db: DatabaseSyncLike) => void): void {
 }
 
 describe('rankRecall with a global store', () => {
-  function recallOpts(): RankRecallOptions {
+  function recallOpts(root: string): RankRecallOptions {
     return {
       query: 'zephyrine cache',
       budget: 4000,
@@ -70,6 +70,8 @@ describe('rankRecall with a global store', () => {
       includeSuperseded: false,
       explicitScope: null,
       activeScope: null,
+      usePhysics: false,
+      physicsConfig: loadConfig(root).physics,
       multihop: false,
       mmr: false,
       mmrLambda: 0.7,
@@ -89,8 +91,6 @@ describe('rankRecall with a global store', () => {
       ...Array.from({ length: 6 }, (_, i) => memory(`global note ${i} on the zephyrine cache warmup`)),
       memory('local note 0 on the zephyrine cache eviction'),
     ]);
-    // Recency reads the clock, so the clock stops before ctx.now is read and both rankings see one instant.
-    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
     const at = (root: string) => ({ store: sqliteStore(root), config: loadConfig(root) });
     const ctx = {
       ...at(local),
@@ -99,7 +99,9 @@ describe('rankRecall with a global store', () => {
       embedderFor: resolveEmbeddingProvider,
       now: evalNow(),
     };
-    const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(), BUDGET_RANKED));
+    // Recency reads the clock, so both rankings see one instant.
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
+    const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local), BUDGET_RANKED));
     expect(countMatching(statements, /memories_fts MATCH|LOWER\(content\) LIKE/)).toBe(2);
 
     const reloaded = await searchBothHybrid('zephyrine cache', ...sharingStores(local, global), {

@@ -1,4 +1,4 @@
-// hippo.db's graphDelta plans the ops base/records/graph-delta.ts diffGraph plans over every stored row of the tenant,
+// hippo.db's graphDelta plans the ops store/rules/graph-delta.ts diffGraph plans over every stored row of the tenant,
 // and hands back only the rows that change.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -13,13 +13,13 @@ import type {
   RelationType,
   SourceObjectRef,
   SourceObjectType,
-} from '../../src/base/records/graph.js';
+} from '../../src/base/ports/store/graph.js';
 import {
   diffGraph,
   type StoredEntity,
   type StoredGraph,
   type StoredRelation,
-} from '../../src/base/records/graph-delta.js';
+} from '../../src/store/rules/graph-delta.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph/graph-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -251,10 +251,9 @@ describe('graphDelta on hippo.db', () => {
         );
         const stored = withDb(root, (db) => storedGraph(db, tenant, desired));
         const expected = diffGraph(stored, desired);
-        expect(
-          await sqliteStore(root).hippoDb.graphReads.graphDelta(tenant, desired),
-          `seed ${seed} ${tenant}`,
-        ).toEqual(expected);
+        expect(await sqliteStore(root).graphReads.graphDelta(tenant, desired), `seed ${seed} ${tenant}`).toEqual(
+          expected,
+        );
         for (const op of expected) seen.add(op.op);
         kept += stored.entities.length - expected.filter((op) => op.op === 'deleteEntity').length;
       }
@@ -297,7 +296,7 @@ describe('graphDelta reads', () => {
       const desired = deriveGraph(await loadGraphSources(objectsAt(root), T));
       expect(desired.relations.length).toBeGreaterThan(0);
 
-      const steady = await recordStatementsAsync(() => store.hippoDb.graphReads.graphDelta(T, desired));
+      const steady = await recordStatementsAsync(() => store.graphReads.graphDelta(T, desired));
       expect(steady.result).toEqual([]);
       expect(countMatching(steady.statements, DELTA_READ)).toBe(2);
       expect(peakRowsRead(steady.reads, DELTA_READ)).toBe(0);
@@ -306,7 +305,7 @@ describe('graphDelta reads', () => {
         db.prepare(`UPDATE policies SET policy_name = 'Renamed' WHERE id = (SELECT max(id) FROM policies)`).run(),
       );
       const renamed = deriveGraph(await loadGraphSources(objectsAt(root), T));
-      const one = await recordStatementsAsync(() => store.hippoDb.graphReads.graphDelta(T, renamed));
+      const one = await recordStatementsAsync(() => store.graphReads.graphDelta(T, renamed));
       expect(one.result.map((op) => op.op)).toEqual(['updateEntity']);
       expect(countMatching(one.statements, DELTA_READ)).toBe(2);
       expect(peakRowsRead(one.reads, DELTA_READ)).toBe(1);

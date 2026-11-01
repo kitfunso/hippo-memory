@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { SessionHandoff } from '../../src/base/session/handoff.js';
-import type { SnapshotInput } from '../../src/base/records/sessions.js';
+import type { SnapshotInput } from '../../src/base/ports/store/sessions.js';
 import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 import {
   runOnFixture,

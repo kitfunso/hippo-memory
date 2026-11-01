@@ -1,7 +1,8 @@
 // Generated ids, cursors and argv through the CLI and server parsers: what was written comes back, and a bad input ends in the parser's own refusal and nothing else.
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseArgs } from '../../src/cli.js';
-import { flagKind, type VerbFlags, COMMANDS } from '../../src/surface/cli/flags.js';
+import { flagKind, type VerbFlags } from '../../src/surface/cli/flags.js';
+import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { parsePositiveId, type CliFlags } from '../../src/surface/cli/flag-values.js';
 import { CliExit } from '../../src/surface/cli/exit.js';
 import { ApiError } from '../../src/base/errors/api-errors.js';

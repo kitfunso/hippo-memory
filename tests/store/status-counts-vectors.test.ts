@@ -21,7 +21,6 @@ import {
   storedVectorSummary,
 } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
-import { asCommand } from '../_helpers/test-cli.js';
 
 const { writeEntry, sqliteStore } = sessionPerTest();
 
@@ -132,7 +131,7 @@ describe('hippo status embedding lines', () => {
     };
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      await asCommand((cli) => handleStatus({ cli, hippoRoot: root, tenantId: 'default', args: [], flags: {} }));
+      await handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} });
     } finally {
       proto[Symbol.iterator] = original;
       log.mockRestore();
@@ -279,7 +278,7 @@ describe('reports.statusCounts', () => {
     const now = new Date(NOW);
     const entries = loadEveryTenantEntries(root);
     const strengths = entries.map((e) => calculateStrength(e, now));
-    const counts = await sqliteStore(root).hippoDb.reports.statusCounts(now, 0.2);
+    const counts = await sqliteStore(root).reports.statusCounts(now, 0.2);
     expect(counts.total).toBe(52);
     expect(counts.avgStrength).toBe(strengths.reduce((sum, x) => sum + x, 0) / entries.length);
     expect(counts.atRisk).toBe(strengths.filter((x) => x < 0.2).length);
@@ -298,7 +297,7 @@ describe('hippo status read bound', () => {
     const { statements } = await (async () => {
       try {
         return await recordStatementsAsync(() =>
-          asCommand((cli) => handleStatus({ cli, hippoRoot: root, tenantId: 'default', args: [], flags: {} })),
+          handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }),
         );
       } finally {
         log.mockRestore();

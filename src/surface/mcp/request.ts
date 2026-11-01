@@ -1,21 +1,25 @@
-// Transport-agnostic request handling: the api Context of each tool call, the tool dispatch table,
-// tool execution and the JSON-RPC method switch.
+// Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method
+// switch.
 
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import {
+  hasGroup,
+  hasGroups,
+  type HippoStore,
+  type OptionalGroup,
+  type RequiredStore,
+  type StoreGroups,
+  type StoreWith,
+} from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../../api/recall/request.js';
+import { globalTargetOf } from '../../api/infra.js';
 import { recordTokens } from '../../api/tokens.js';
-import { coreEnrichment, globalTargetOf, hasHippoDb } from '../../api/hippo-db-context.js';
-import type { HippoDbStore } from '../../base/ports/hippo-db.js';
-import type { Context as ApiContext } from '../../api/types.js';
-import type { CallerProject } from '../../api/prompt-hook.js';
-import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import {
-  mcpActor,
-  type HippoDbToolHandler,
+  mcpApiContext,
+  type GroupToolHandler,
   type LocalToolHandler,
   type McpCaller,
   type McpContext,
@@ -48,61 +52,6 @@ import {
 } from './json-rpc.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
 
-/** The api Context a tool call runs as: the transport's store, reach and config under the
- * caller's actor. */
-function mcpApiContext(ctx: McpCaller): ApiContext {
-  return {
-    tenantId: ctx.tenantId,
-    actor: mcpActor(ctx),
-    store: ctx.store,
-    reach: ctx.reach,
-    config: ctx.config,
-    callers: ctx.callers,
-    clientKey: mcpClientKey(ctx),
-    infra: ctx.infra,
-    signal: ctx.signal,
-    enrich: coreEnrichment(ctx.store),
-    detached: ctx.detached,
-  };
-}
-
-/** The transport's client key, else `stdio-<pid>:<tenant>`; a caller's project narrows either,
- * so two repos on one shared store keep apart lists. */
-function mcpClientKey(ctx: McpCaller): string {
-  const base = ctx.clientKey || `stdio-${process.pid}:${ctx.tenantId || DEFAULT_TENANT_ID}`;
-  return ctx.project ? `${base}:${ctx.project.name}` : base;
-}
-
-/** An MCP call on the HTTP server runs on the request's auth-resolved Context, as a REST route
- * does; `host` is what the server bound at boot. */
-export function mcpContextOn(
-  ctx: ApiContext,
-  host: Pick<McpContext, 'hippoRoot' | 'storeFor' | 'tools'>,
-  project?: CallerProject,
-): McpContext {
-  const mcpCtx: McpContext = {
-    ...host,
-    tenantId: ctx.tenantId,
-    // McpContext.actor stays string; extract subject at the boundary.
-    actor: ctx.actor.subject,
-    // The caller's real role: MCP tools must not run a member key as admin.
-    role: ctx.actor.role,
-    scopes: ctx.actor.scopes,
-    viaAuthResolver: ctx.actor.viaAuthResolver,
-    hostAdmin: ctx.actor.hostAdmin,
-    owner: ctx.actor.owner,
-    clientKey: ctx.clientKey,
-    store: ctx.store,
-    config: ctx.config,
-    reach: ctx.reach,
-    callers: ctx.callers,
-    infra: ctx.infra,
-    detached: ctx.detached,
-  };
-  if (project !== undefined) mcpCtx.project = project;
-  return mcpCtx;
-}
-
 // ── Token ledger ──
 
 /** Records the memory text hippo_context returned; best-effort (a ledger failure never fails the
@@ -118,66 +67,71 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpCaller)
 
 // ── Tool execution ──
 
+/** A store whose type holds every optional group, as the stdio host's cliStore does. */
+type AllGroupsStore = HippoStore & StoreGroups;
+
 /** One tool: its run on a store a host proved once, checked here, and its run on a store whose
- * type carries the local tier, checked nowhere. */
+ * type holds every group, checked nowhere. */
 interface ToolRow {
-  readonly bind: (proved: HippoStore) => StoreTool<HippoStore> | undefined;
-  readonly onAll: StoreTool<HippoDbStore>;
+  readonly bind: (proved: HippoStore) => StoreTool<RequiredStore> | undefined;
+  readonly onAll: StoreTool<AllGroupsStore>;
 }
 
 /** A tool that runs under any store. */
 function anyStore(run: ToolHandler): ToolRow {
-  const tool: StoreTool<HippoStore> = (ctx) => (args) => run({ ...toolCall(ctx), args });
+  const tool: StoreTool<RequiredStore> = (ctx) => (args) => run({ ...toolCall(ctx), args });
   return { bind: () => tool, onAll: tool };
 }
 
-/** A tool that runs only on a store with hippo.db's local tier, handed that store and an api
+/** A tool that runs only on a store with every group `needs` names, handed that store and an api
  * Context on it. */
-function onHippoDb(run: HippoDbToolHandler): ToolRow {
-  const on = (ctx: McpCaller, store: HippoDbStore): ToolRun => {
-    const call = toolCall(ctx);
-    return (args) => run({ ...call, args, store, api: { ...call.api, store } });
-  };
+function needing<G extends OptionalGroup>(needs: readonly G[], run: GroupToolHandler<G>): ToolRow {
+  const on =
+    (ctx: McpCaller, store: StoreWith<G>): ToolRun =>
+    (args) =>
+      run({ ...toolCall(ctx), args, store, api: { ...mcpApiContext(ctx), store } });
   return {
-    bind: (proved) => (hasHippoDb(proved) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined),
+    bind: (proved) =>
+      hasGroups(proved, needs) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined,
     onAll: (ctx) => on(ctx, ctx.store),
   };
 }
 
 /** A tool that runs only under a folder store with a global store in its reach. */
 function localTool(run: LocalToolHandler): ToolRow {
-  const on = (ctx: McpCaller, store: HippoDbStore): ToolRun | undefined => {
+  const on = (ctx: McpCaller, store: StoreWith<'folderFiles'>): ToolRun | undefined => {
     const globalTarget = globalTargetOf(ctx);
     return globalTarget === undefined
       ? undefined
       : (args) => run({ ...toolCall(ctx), args, store, globalTarget });
   };
   return {
-    bind: (proved) => (hasHippoDb(proved) ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined),
+    bind: (proved) =>
+      hasGroup(proved, 'folderFiles') ? (ctx) => on(ctx, ctx.storeFor(proved)) : undefined,
     onAll: (ctx) => on(ctx, ctx.store),
   };
 }
 
 const TOOL_ROWS: ReadonlyMap<string, ToolRow> = new Map<string, ToolRow>([
   ['hippo_recall', anyStore(runRecallTool)],
-  ['hippo_assemble', onHippoDb(runAssembleTool)],
-  ['hippo_drill', onHippoDb(runDrillTool)],
-  ['hippo_predict_baserate', onHippoDb(runPredictBaserateTool)],
+  ['hippo_assemble', needing(['dagReads'], runAssembleTool)],
+  ['hippo_drill', needing(['dagReads'], runDrillTool)],
+  ['hippo_predict_baserate', needing(['objects'], runPredictBaserateTool)],
   ['hippo_remember', anyStore(runRememberTool)],
   ['hippo_outcome', anyStore(runOutcomeTool)],
   ['hippo_context', anyStore(runContextTool)],
-  ['hippo_status', onHippoDb(runStatusTool)],
-  ['hippo_learn', onHippoDb(runLearnTool)],
-  ['hippo_conflicts', onHippoDb(runConflictsTool)],
-  ['hippo_resolve', onHippoDb(runResolveTool)],
+  ['hippo_status', needing(['reports'], runStatusTool)],
+  ['hippo_learn', needing(['lessonWrites', 'vectors', 'vectorWrites'], runLearnTool)],
+  ['hippo_conflicts', needing(['conflicts'], runConflictsTool)],
+  ['hippo_resolve', needing(['conflicts'], runResolveTool)],
   ['hippo_share', localTool(runShareTool)],
   ['hippo_peers', localTool(runPeersTool)],
 ]);
 
 /** The tools a host serves on `proved`, each need checked here once and each call run on
  * `ctx.storeFor(proved)`; a tool left out is hidden from a list and answers not ported. */
-export function bindMcpTools(proved: HippoStore): McpTools<HippoStore> {
-  const tools = new Map<string, StoreTool<HippoStore>>();
+export function bindMcpTools(proved: HippoStore): McpTools<RequiredStore> {
+  const tools = new Map<string, StoreTool<RequiredStore>>();
   for (const [name, row] of TOOL_ROWS) {
     const bound = row.bind(proved);
     if (bound !== undefined) tools.set(name, bound);
@@ -185,8 +139,8 @@ export function bindMcpTools(proved: HippoStore): McpTools<HippoStore> {
   return tools;
 }
 
-/** Every tool, each run on the call's own store, whose type carries the local tier. */
-export function allMcpTools(): McpTools<HippoDbStore> {
+/** Every tool, each run on the call's own store, whose type proves every group. */
+export function allMcpTools(): McpTools<AllGroupsStore> {
   return new Map([...TOOL_ROWS].map(([name, row]) => [name, row.onAll]));
 }
 
@@ -194,11 +148,11 @@ export function allMcpTools(): McpTools<HippoDbStore> {
  * (the HTTP server's Bearer, or the stdio host's folder walk and HIPPO_TENANT). */
 function toolCall(ctx: McpCaller): Omit<ToolCall, 'args'> {
   const { hippoRoot, tenantId, config, store } = ctx;
-  return { ctx, api: mcpApiContext(ctx), hippoRoot, store, config, tenantId };
+  return { ctx, hippoRoot, store, config, tenantId };
 }
 
 /** The tool bound to `ctx`'s host, or undefined when its store does not serve it. */
-function toolRun<S extends HippoStore>(name: string, ctx: McpContext<S>): ToolRun | undefined {
+function toolRun<S extends RequiredStore>(name: string, ctx: McpContext<S>): ToolRun | undefined {
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table
   // drifted apart.
   if (!TOOL_ROWS.has(name)) {
@@ -209,8 +163,8 @@ function toolRun<S extends HippoStore>(name: string, ctx: McpContext<S>): ToolRu
 
 // ── Request handling ──
 
-// The MCP spec reports input validation as a tool result with isError, so the model can read it
-// and retry.
+// The MCP spec reports input validation as a tool result with isError, so the model can read it and
+// retry.
 function invalidArgs(
   id: McpResponse['id'],
   toolName: string,
@@ -238,7 +192,7 @@ async function runTool(
   return text;
 }
 
-async function callTool<S extends HippoStore>(
+async function callTool<S extends RequiredStore>(
   id: McpRequest['id'],
   params: McpRequest['params'],
   ctx: McpContext<S>,
@@ -277,7 +231,7 @@ async function callTool<S extends HippoStore>(
  * JSON-RPC message through it. Returns null for notifications. A tool's errors are the caller's
  * problem: wrap with try/catch in the transport. Only `tools/call` needs the context, so stdio
  * builds one for that method alone. */
-export async function handleMcpRequest<S extends HippoStore>(
+export async function handleMcpRequest<S extends RequiredStore>(
   req: McpRequest,
   ctx: McpContext<S> | undefined,
 ): Promise<McpResponse | null> {

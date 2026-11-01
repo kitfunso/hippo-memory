@@ -12,8 +12,8 @@ import {
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { ContextReach, EntryContext } from '../../src/api/types.js';
-import type { HippoDbContext } from '../../src/api/hippo-db-context.js';
+import type { ContextReach, ContextWith, EntryContext } from '../../src/api/types.js';
+import type { OptionalGroup } from '../../src/base/ports/store.js';
 import { onHandle, sqliteStore } from './test-session.js';
 import {
   preCompactForCaller,
@@ -106,8 +106,8 @@ export function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] 
     .all(TENANT, source) as WrittenRow[];
 }
 
-/** A caller's Context on hippo.db, whose store carries the local tier the callers write through. */
-export type CallerContext = EntryContext<HippoDbContext>;
+/** A caller's Context on hippo.db, whose store sets every group the callers write through. */
+export type CallerContext = EntryContext<ContextWith<OptionalGroup>>;
 
 export function owned(owner: string, session?: RequestStores): CallerContext {
   const store = sqliteStore(root, { session });
@@ -117,10 +117,7 @@ export function owned(owner: string, session?: RequestStores): CallerContext {
     config,
     tenantId: TENANT,
     actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
-    reach: {
-      ...SHARED_REACH,
-      ledger: { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config },
-    },
+    reach: { ...SHARED_REACH, ledger: { ledger: store.ledger, folderFiles: store.folderFiles, config } },
   };
 }
 

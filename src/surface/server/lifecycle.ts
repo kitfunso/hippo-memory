@@ -1,12 +1,12 @@
-// Graceful shutdown and the socket deadlines for hippo's HTTP listeners: the API server and
-// the dashboard.
+// Graceful shutdown and the socket deadlines for hippo's HTTP listeners: the API server and the
+// dashboard.
 import type { Server, ServerResponse } from 'node:http';
 import { envBodyTimeoutMs } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../http/http-util.js';
 import { log } from '../../base/util/log.js';
 
 // Node's own default, named so the three socket deadlines read together. It times the request
-// arriving, never the handler, so a sleep up to DEFAULT_SLEEP_DEADLINE_MS is not cut.
+// arriving, never the handler, so a 10 minute sleep is not cut.
 const REQUEST_RECEIVE_TIMEOUT_MS = 300_000;
 
 export function setKeepAliveTimeouts(server: Server): void {
@@ -25,11 +25,8 @@ export function setKeepAliveTimeouts(server: Server): void {
 
 export const DEFAULT_SHUTDOWN_DRAIN_MS = 5000;
 
-/** How long a stop waits for work a request handed off, such as an embed, before the stores close. */
-export const DETACHED_SETTLE_MS = 5000;
-
-// Past the request drain, a stop waits up to DETACHED_SETTLE_MS for handed-off work, then for each
-// store thread to end its statement and close: seconds at most, so longer means a stuck thread.
+// Past the request drain, a stop only waits for each store thread to end its statement and close:
+// seconds at most, so longer means a thread that will not end.
 const STORE_CLOSE_GRACE_MS = 10_000;
 
 /** How long a signal or crash shutdown may run before the process is ended without it. */

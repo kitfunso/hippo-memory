@@ -14,10 +14,12 @@ import {
   tokenize,
   type MemoryEntry,
   type SleepOptions,
+  type SleepContext,
   type SleepResult,
+  type SleepStore,
 } from '../../src/index.js';
 import { hybridSearch, search, type SearchResult } from '../../src/entry/search.js';
-import type { EntryContext } from '../../src/api/types.js';
+import type { Context } from '../../src/api/types.js';
 import type {
   RecallBoostOptions,
   RecallFilterOptions,
@@ -32,6 +34,8 @@ import type { DecayOptions } from '../../src/entry/memory.js';
 type LossAversion = Pick<DecayOptions, 'lossAversionRatio'>;
 
 // Declared, not callback parameters: typeOnly takes a callback with none, so a parameter would be the error.
+declare const plainStore: HippoStore;
+declare const plainCtx: Context;
 
 describe('hippo-memory entry types', () => {
   it('createMemory takes content then optional partial options and returns a MemoryEntry', () => {
@@ -70,14 +74,18 @@ describe('hippo-memory entry types', () => {
     expectTypeOf(textOverlap).toEqualTypeOf<(a: string, b: string) => number>();
   });
 
-  it('consolidate and sleep are async, and take the core store or Context, proving the local tier at run time', () => {
-    expectTypeOf(consolidate).parameter(0).toEqualTypeOf<string | HippoStore>();
+  it('consolidate and sleep are async, and take a store with the sleep groups', () => {
+    expectTypeOf(consolidate).parameter(0).toEqualTypeOf<string | SleepStore>();
     expectTypeOf(consolidate).returns.toEqualTypeOf<Promise<ConsolidationResult>>();
-    expectTypeOf(sleep).parameter(0).toEqualTypeOf<EntryContext>();
+    expectTypeOf(sleep).parameter(0).toEqualTypeOf<SleepContext>();
     expectTypeOf(sleep).parameter(1).toEqualTypeOf<SleepOptions | undefined>();
     expectTypeOf(sleep).returns.toEqualTypeOf<Promise<SleepResult>>();
     // @ts-expect-error sleep needs a Context, not a root path
     typeOnly(() => sleep('/tmp/root'));
+    // @ts-expect-error a store without the sleep groups has nothing for a sleep pass to work on
+    typeOnly(() => consolidate(plainStore));
+    // @ts-expect-error the same for a Context whose store has no sleep groups
+    typeOnly(() => sleep(plainCtx));
   });
 });
 

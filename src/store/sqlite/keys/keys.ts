@@ -24,8 +24,9 @@ import { readApiKeyOwner } from '../runtime/tenant-lookup.js';
 import type { AppendAuditOptions } from '../../../base/ports/store/types.js';
 import { ConflictError, NotFoundError } from '../../../base/errors/api-errors.js';
 
-// A key write's checks: an unknown key and another tenant's fail alike, so a caller learns nothing
-// about keys it does not own; a grant on a revoked key is refused since it would never apply.
+// A key write's checks: an unknown key and another tenant's key fail alike, so a caller learns
+// nothing about keys it does not own, and a grant on a revoked key is refused since it would never
+// apply.
 
 /** `key` when the tenant owns it; NotFoundError otherwise. */
 function ownedKey<K extends { readonly tenantId: string }>(

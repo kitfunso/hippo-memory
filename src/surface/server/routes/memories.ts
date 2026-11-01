@@ -5,7 +5,8 @@ import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/entry.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
 import { keptShownIds } from '../../../api/recall/last-recalled.js';
-import type { AuthedRouteRequest, HippoDbRequest, RouteParams } from '../types.js';
+import type { ContextWith } from '../../../api/types.js';
+import type { AuthedRouteRequest, GroupRequest, RouteParams } from '../types.js';
 import {
   getCallerProject,
   getString,
@@ -68,7 +69,11 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
 }
 
 // GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
-export async function handleGetGraph({ res, ctx, query }: HippoDbRequest): Promise<void> {
+export async function handleGetGraph({
+  res,
+  ctx,
+  query,
+}: GroupRequest<'graphReads'>): Promise<void> {
   const entity = graphEntityOf(query.get('entity'));
   const limit = parseLimitParam(query.get('limit'));
   sendJson(res, 200, await graphView(ctx, { entity, limit }));
@@ -107,7 +112,7 @@ export async function handleSupersedeMemory(
 }
 
 export async function handlePromoteMemory(
-  { res, ctx }: HippoDbRequest,
+  { res, ctx }: AuthedRouteRequest & { ctx: ContextWith<'folderFiles'> },
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'memory id');

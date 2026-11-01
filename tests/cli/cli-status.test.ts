@@ -66,7 +66,7 @@ describe('hippo status', () => {
       trace: '1',
       pinned: '1',
       conflicts: '0',
-      remembered: '3',
+      remembered: '2',
       recalled: '0',
       forgotten: '0',
       sleep: 'never',

@@ -1,9 +1,9 @@
-// hippo.db's graph rebuild diff: base/records/graph-delta.ts diffGraph run in SQL, so a rebuild
+// hippo.db's graph rebuild diff: store/rules/graph-delta.ts diffGraph run in SQL, so a rebuild
 // reads back the rows that change instead of every entity and relation of the tenant.
 import { withReadSnapshot, type DatabaseSyncLike } from '../../../db/index.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import type { DesiredGraph, GraphOp } from '../../../base/records/graph.js';
-import { entityKey, wantedEntities, wantedRelations } from '../../../base/records/graph-delta.js';
+import type { DesiredGraph, GraphOp } from '../../../base/ports/store/graph.js';
+import { entityKey, wantedEntities, wantedRelations } from '../../rules/graph-delta.js';
 
 // provenanceOf for the desired row joined to memories as `m`; IFNULL spells a NULL kind as the JS
 // template does.

@@ -6,7 +6,7 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { readAll } from '../../src/base/util/pages.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { EntryFilter } from '../../src/base/records/reports.js';
+import type { EntryFilter } from '../../src/base/ports/store/reports.js';
 import type { EntryCursor, EntryPage } from '../../src/base/ports/store/types.js';
 import { dormantSnapshotsWhere, insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

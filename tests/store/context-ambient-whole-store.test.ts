@@ -5,23 +5,23 @@ import { join } from 'node:path';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer, type EmotionalValence, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { PRODUCTION_STRENGTH, withLossAversion, type StrengthModel } from '../../src/base/memory/strength.js';
+import { withLossAversion } from '../../src/base/memory/strength.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { contextGet, adminActor } from '../../src/api/index.js';
 import {
   renderAmbientSummary,
-  tallyAmbientEntriesAt,
+  tallyAmbientEntries,
   ambientStateFromTallies,
   foldAmbientRows,
 } from '../../src/base/memory/ambient.js';
+import { cliStore } from '../../src/surface/cli/api-context.js';
+import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
-import { strengthModelUnder, type StrengthAblation } from '../../src/infra/eval-switches.js';
-import { sqliteStore } from '../../src/surface/open-store.js';
-import { asCommand } from '../_helpers/test-cli.js';
+import { evalSwitches } from '../../src/infra/eval-switches.js';
 
 let root = '';
 let store = '';
@@ -113,9 +113,13 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     };
   }
 
-  const NO_CUTS: StrengthAblation = { decay: false, recallBoost: false, outcomeSlow: false };
-
-  function seedRows(): void {
+  it.each([
+    ['default flags', {}],
+    ['decay ablated', { HIPPO_ABLATE_DECAY: '1' }],
+    ['recall boost ablated', { HIPPO_ABLATE_RECALL_BOOST: '1' }],
+    ['outcome ablated, loss aversion 1.5', { HIPPO_ABLATE_OUTCOME: '1', HIPPO_LOSS_AVERSION_RATIO: '1.5' }],
+  ])('%s', async (_label, env: Record<string, string>) => {
+    for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
     writeEntriesTogether(
       store,
       Array.from({ length: 60 }, (_, i) => row(i)),
@@ -129,46 +133,15 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     } finally {
       closeHippoDb(db);
     }
-  }
 
-  function jsTallies(model: StrengthModel): ReturnType<typeof tallyAmbientEntriesAt> {
-    const js = tallyAmbientEntriesAt([], NOW, model);
-    foldAmbientRows(
-      js,
-      loadAllEntries(store, 'default').filter((e) => !e.supersededBy),
-      NOW,
-      model,
-    );
-    return js;
-  }
-
-  it.each([
-    ['default model', NO_CUTS, undefined],
-    ['decay ablated', { ...NO_CUTS, decay: true }, undefined],
-    ['recall boost ablated', { ...NO_CUTS, recallBoost: true }, undefined],
-    ['outcome ablated, loss aversion 1.5', { ...NO_CUTS, outcomeSlow: true }, 1.5],
-  ])('%s', async (_label, cuts: StrengthAblation, lossAversionRatio: number | undefined) => {
-    seedRows();
-    const strength = strengthModelUnder(cuts);
-    const sql = await sqliteStore(store, { strength, lossAversionRatio }).contextReads.ambientTallies('default', {
-      currentProject: [],
-      now: NOW,
-    });
-    const js = jsTallies(withLossAversion(strength, lossAversionRatio));
+    // Both sides score by the ratio the CLI root reads from the environment.
+    const sql = await cliStore(store).contextReads.ambientTallies('default', { currentProject: [], now: NOW });
+    const js = tallyAmbientEntries([], NOW, evalSwitches().strength);
+    const live = loadAllEntries(store, 'default').filter((e) => !e.supersededBy);
+    foldAmbientRows(js, live, NOW, withLossAversion(evalSwitches().strength, envRuntimeSettings().lossAversionRatio));
 
     expect({ ...sql, strengthSum: 0 }).toEqual({ ...js, strengthSum: 0 });
     expect(sql.strengthSum).toBeCloseTo(js.strengthSum, 9);
     expect(ambientStateFromTallies(sql).avgStrength).toBeCloseTo(ambientStateFromTallies(js).avgStrength, 9);
-  });
-
-  it('the CLI root scores by the production model whatever HIPPO_ABLATE_DECAY holds', async () => {
-    vi.stubEnv('HIPPO_ABLATE_DECAY', '1');
-    seedRows();
-    const sql = await asCommand((cli) =>
-      cli.store(store).contextReads.ambientTallies('default', { currentProject: [], now: NOW }),
-    );
-
-    expect(sql.strengthSum).toBeCloseTo(jsTallies(PRODUCTION_STRENGTH).strengthSum, 9);
-    expect(sql.strengthSum).not.toBeCloseTo(jsTallies(strengthModelUnder({ ...NO_CUTS, decay: true })).strengthSum, 3);
   });
 });

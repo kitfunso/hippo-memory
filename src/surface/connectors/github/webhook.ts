@@ -22,9 +22,9 @@ import {
   type IngestEvent as GitHubIngestEvent,
 } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
-import { parkInDlq } from '../../../api/dead-letters.js';
-import { resolveTenant, routeOncePerDelivery } from '../../../api/hippo-db/connector-events.js';
+import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
+import { resolveTenant } from '../tenant-route.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import {
@@ -36,7 +36,8 @@ import {
   type WebhookRequest,
 } from '../../http/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
-import { connectorContext, type ConnectorContext, type WebhookPorts } from '../ingest.js';
+import type { ConnectorContext, WebhookPorts } from '../ingest.js';
+import { errorFields, log } from '../../../base/util/log.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ
  * replay alike. */
@@ -56,8 +57,8 @@ export function warnGitHubPreviousSecretOpen(): void {
   );
 }
 
-/** Reads the raw body and refuses it unless the signature matches the current or the
- * previous secret. */
+/** Reads the raw body and refuses it unless the signature matches the current or the previous
+ * secret. */
 async function readSignedBody(
   request: WebhookRequest,
   secret: string,
@@ -101,14 +102,10 @@ export async function handleGitHubEventsWebhook(
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go to the DLQ and a human
   // can replay later. The delivery id header is unsigned, so a captured body resent under a fresh
   // id must still hit the same hold.
-  const claim = {
-    connector: 'github',
-    key: sigStr,
-    nowMs: Date.now(),
-    ttlMs: REPLAY_HOLD_MS,
-  } as const;
-  const routed = await routeOncePerDelivery(ports, claim, () =>
-    routeSignedDelivery({
+  const replayKey = sigStr;
+  await claimOrRefuse(ports.store, replayKey);
+  try {
+    await routeSignedDelivery({
       hippoRoot: opts.hippoRoot,
       ...ports,
       res,
@@ -116,9 +113,13 @@ export async function handleGitHubEventsWebhook(
       eventName,
       deliveryId,
       signature: sigStr,
-    }),
-  );
-  if (!routed) throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+    });
+  } catch (err) {
+    // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get
+    // through.
+    await freeHold(ports.store, replayKey);
+    throw err;
+  }
 }
 
 function refuseUnconfigured(request: WebhookRequest): void {
@@ -149,6 +150,22 @@ function readGitHubHeaders(req: WebhookRequest['req']): GitHubHeaders {
 // idempotency key for good, so the signature hold must not run out first: a century outlives any
 // store, and the sweep never reaches it.
 const REPLAY_HOLD_MS = 36_500 * DAY_MS;
+
+async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
+  const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
+  if (!(await store.connectorEvents.claimDelivery(claim))) {
+    throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+  }
+}
+
+async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
+  await store.connectorEvents.releaseDelivery('github', key).catch((err) => {
+    log.warn(
+      'github webhook: could not free the replay hold of a failed delivery',
+      errorFields(err),
+    );
+  });
+}
 
 const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
   'issues',
@@ -189,7 +206,7 @@ async function parkAndAck(
     installationId: park.installationId,
     repoFullName: park.repoFullName,
   };
-  await parkInDlq(d, githubDlq, row);
+  await parkInDlq(githubDlq, d.store, row);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
@@ -213,7 +230,13 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     return;
   }
 
-  const ctx = connectorContext(d, resolvedTenant, { subject: 'connector:github', role: 'admin' });
+  const ctx: ConnectorContext = {
+    tenantId: resolvedTenant,
+    actor: { subject: 'connector:github', role: 'admin' },
+    store: d.store,
+    config: d.config,
+    infra: d.infra,
+  };
   if (await dispatchGitHubEvent({ d, ctx, body, deliveryId: d.deliveryId, routing })) return;
 
   // Header allow-listed but body shape didn't satisfy the matching guard.
@@ -228,7 +251,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
 // Fail closed on multi-tenant installs with unknown routing - same policy as Slack.
 function resolveGitHubTenant(d: SignedDelivery, routing: DlqRouting): Promise<string | null> {
   return resolveTenant(
-    d,
+    d.store,
     { connector: 'github', ...routing },
     {
       hostTenant: envTenant(),
@@ -237,8 +260,8 @@ function resolveGitHubTenant(d: SignedDelivery, routing: DlqRouting): Promise<st
   );
 }
 
-/** Answers ping and parks every unusable body; returns the envelope only when ingest should
- * go on. */
+/** Answers ping and parks every unusable body; returns the envelope only when ingest should go
+ * on. */
 async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | null> {
   // Cheap regex extraction of installation_id / repo for DLQ rows that fail to JSON.parse - gives
   // operators something to triage.

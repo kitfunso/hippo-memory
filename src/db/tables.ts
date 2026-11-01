@@ -37,8 +37,8 @@ export function listTableNames(db: DatabaseSyncLike): string[] {
   return rows.map((r) => r.name);
 }
 
-/** Row count of one table; null when the table is missing or unreadable, which callers show
- * as unknown. */
+/** Row count of one table; null when the table is missing or unreadable, which callers show as
+ * unknown. */
 export function countTableRows(db: DatabaseSyncLike, table: string): number | null {
   try {
     const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as

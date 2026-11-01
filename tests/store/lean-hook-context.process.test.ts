@@ -7,7 +7,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { expandOnGraphs } from '../../src/domain/graph/recall.js';
+import { graphExpandRecall } from '../../src/domain/graph/recall.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -15,7 +15,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
-import { walkable } from '../_helpers/graph-walk.js';
 
 let home: string;
 let project: string;
@@ -314,10 +313,10 @@ describe('a memory with a copy in the global store', () => {
       });
     }
 
-    const out = await expandOnGraphs([sr(seed, 1), sr(other, 0.9)], {
+    const out = await graphExpandRecall([sr(seed, 1), sr(other, 0.9)], {
       hops: 1,
-      store: walkable(sqliteStore(local)),
-      global: walkable(sqliteStore(global)),
+      store: sqliteStore(local),
+      global: sqliteStore(global),
       tenantId: T,
       budget: 4000,
     });

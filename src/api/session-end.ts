@@ -5,8 +5,7 @@
 import * as path from 'node:path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
-import type { SessionEndHandoffRequest, SessionEvent } from '../base/records/sessions.js';
-import type { ContinuityKey } from '../base/ports/store/types.js';
+import type { SessionEvent } from '../base/ports/store/sessions.js';
 import type { TranscriptCalls } from '../base/session/transcript-calls.js';
 import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
 import { errorMessage, log, errorFields, type LineLog, type LogFields } from '../base/util/log.js';
@@ -16,10 +15,10 @@ import {
   compactResumeText,
 } from './context/context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
+import { newRowsOn } from './callers.js';
 import { snapshotFields, type WorkingState } from '../base/session/working-state.js';
-import type { Context } from './types.js';
-import type { LedgerBook } from './enrichment.js';
-import { hasHippoDb, type HippoDbContext } from './hippo-db-context.js';
+import type { Context, ContextWith } from './types.js';
+import type { Ledger } from '../base/ports/store.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff
  * is written. */
@@ -40,7 +39,10 @@ export interface SessionClose {
 /** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own
  * failure and never throws. The handoff goes first, while the snapshot writeSessionEndHandoff
  * reads is still active. */
-export async function closeEndedSession(ctx: HippoDbContext, close: SessionClose): Promise<void> {
+export async function closeEndedSession(
+  ctx: ContextWith<'sessions'>,
+  close: SessionClose,
+): Promise<void> {
   if (close.sessionId) await writeEndHandoff(ctx, close.sessionId, close);
   if (close.turn) {
     close.log('skip snapshot close: turn mode');
@@ -50,11 +52,11 @@ export async function closeEndedSession(ctx: HippoDbContext, close: SessionClose
 }
 
 async function writeEndHandoff(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'sessions'>,
   sessionId: string,
   close: SessionClose,
 ): Promise<void> {
-  const { sessions } = ctx.store.hippoDb;
+  const { sessions } = ctx.store;
   try {
     const ownSnapshot =
       (await sessions.loadSnapshot(ctx.tenantId, {}, null))?.sessionId === sessionId;
@@ -82,14 +84,14 @@ async function writeEndHandoff(
 // If session-end never fires (crash, kill -9), the freshness bound of an ambient snapshot load is
 // the backstop.
 async function closeSnapshot(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'sessions'>,
   sessionId: string | null,
   logLine: LineLog,
 ): Promise<void> {
   try {
     if (sessionId) {
       const close = { status: 'session-ended', sessionId };
-      const closed = await ctx.store.hippoDb.sessions.clear(ctx.tenantId, 'snapshot', close, null);
+      const closed = await ctx.store.sessions.clear(ctx.tenantId, 'snapshot', close, null);
       logLine(`closed ${closed} active snapshot(s) for session ${sessionId}`);
     } else {
       logLine('skip: no session_id in SessionEnd payload, active snapshot left untouched');
@@ -100,31 +102,11 @@ async function closeSnapshot(
   }
 }
 
-export interface CallerSessionEndResult {
-  /** False when an earlier handoff already covers the session, as on a retry. */
-  readonly handoffWritten: boolean;
-  readonly snapshotsClosed: number;
-}
-
-/** A remote caller's session end under its owner and project. A failed close throws so the
- * sender retries, and the retry writes no second handoff. */
-export async function closeCallerSession(
-  ctx: HippoDbContext,
-  key: ContinuityKey,
-  sessionEnd: SessionEndHandoffRequest,
-): Promise<CallerSessionEndResult> {
-  const { sessions } = ctx.store.hippoDb;
-  const handoff = await sessions.save(ctx.tenantId, 'handoff', { sessionEnd }, key);
-  const close = { status: 'session-ended', sessionId: sessionEnd.sessionId };
-  const snapshotsClosed = await sessions.clear(ctx.tenantId, 'snapshot', close, key);
-  return { handoffWritten: handoff !== null, snapshotsClosed };
-}
-
 /** The caller's store and the global one, each once; a store that keeps no ledger is left out. */
-function rereadLedgers(ctx: Context): LedgerBook[] {
+function rereadLedgers(ctx: Context): Ledger[] {
   const local = ctx.reach?.hasLocal === false ? undefined : ctx.reach?.ledger?.ledger;
   // A call on the global store reaches it twice, as itself and as the global store beside it.
-  const global = ctx.reach?.isGlobal === true ? undefined : ctx.reach?.global?.enrich?.ledger;
+  const global = ctx.reach?.isGlobal === true ? undefined : ctx.reach?.global?.store.ledger;
   return [local, global].filter((ledger) => ledger !== undefined);
 }
 
@@ -166,15 +148,14 @@ export async function bookSessionRereads(
 }
 
 /** The block a compaction lost: the fresh task snapshot and its session trail, or null with none
- * or another session's snapshot. A remote caller's `key` reads its owner's snapshot. */
+ * or another session's snapshot. */
 export async function compactResumeBlock(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'sessions'>,
   payloadSessionId: string | null,
-  key: ContinuityKey | null,
 ): Promise<string | null> {
-  const { sessions } = ctx.store.hippoDb;
+  const { sessions } = ctx.store;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
-  const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, key);
+  const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, null);
   // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a
   // manual run with no payload id still prints.
   if (!snapshot) return null;
@@ -234,16 +215,17 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   held: HeldLog;
   /** Sleeps the folder's own store; reports its own failure. */
   sleep: () => Promise<void>;
-  /** Imports the session's agent notes into the global store, for a folder that does not
-   * sleep here. */
+  /** Imports the session's agent notes into the global store, for a folder that does not sleep
+   * here. */
   importAgentNotes: () => Promise<void>;
   readScan: (log: LineLog) => Scan | null;
-  /** This session's saved place in its transcript: the turns after it, and moving it
-   * past `turns`. */
+  /** This session's saved place in its transcript: the turns after it, and moving it past
+   * `turns`. */
   cursor: {
     after: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => readonly Turn[];
     save: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => void;
   };
+  /** The project the session ran in. */
   currentProject: () => ProjectRef;
   /** Captures `turns`, or the whole transcript when undefined, into `into`; false when it
    * failed, having said why. */
@@ -263,25 +245,24 @@ function hasOwnStore(ctx: Context): boolean {
 }
 
 /** The store a session's end writes to: the folder's own, else the global one; null when neither
- * exists or the global one has no local tier. */
-function endStore(ctx: HippoDbContext): HippoDbContext | null {
+ * exists. */
+function endStore(ctx: ContextWith<'sessions'>): ContextWith<'sessions'> | null {
   if (hasOwnStore(ctx)) return ctx;
   const global = ctx.reach?.global;
-  if (global === undefined || !hasHippoDb(global.store)) return null;
+  if (global === undefined) return null;
   return {
     tenantId: ctx.tenantId,
     actor: ctx.actor,
     store: global.store,
     config: global.config,
     infra: ctx.infra,
-    detached: ctx.detached,
   };
 }
 
 /** Sleeps the folder's own store: a reply's close only at the auto-sleep threshold, a session's
  * end always. */
 async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'sessions' | 'reports'>,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   // Sleeping the global store from here would learn this folder's git commits into it; it has its
@@ -296,7 +277,7 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
   const prefix = `turn close, session ${w.sessionId}`;
   try {
     const { enabled, count, threshold, due } = await autoSleepDue(
-      ctx.store.hippoDb.reports,
+      newRowsOn(ctx.store),
       ctx.tenantId,
       ctx.config.autoSleep,
       ctx.infra.clock(),
@@ -325,8 +306,8 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   const capture = async (turns: readonly Turn[] | undefined): Promise<boolean> => {
-    // With no transcript of its own, capture would read this as a manual run and scan
-    // every project.
+    // With no transcript of its own, capture would read this as a manual run and scan every
+    // project.
     if (!w.transcriptPath) {
       w.log('skip capture: no transcript for this session');
       return false;
@@ -353,7 +334,7 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
 /** Books re-reads, sleeps, captures, digests and closes one ended session of the folder `ctx`
  * names, in that order. */
 export async function sessionEndWork<Turn, Scan extends { readonly turns: readonly Turn[] }>(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'sessions' | 'reports'>,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   const rereadLog = await bookSessionRereads(ctx, w.transcriptPath, w.sessionId).catch((err) => {

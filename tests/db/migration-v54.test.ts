@@ -103,7 +103,7 @@ describe('schema v54', () => {
       sessionId: 's1',
     });
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'half done', nextAction: 'finish' });
-    await sqliteStore(home).hippoDb.failureLog.record({
+    await sqliteStore(home).failureLog.record({
       tenantId: 'default',
       sessionId: 's1',
       tool: 'Bash',

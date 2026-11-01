@@ -8,13 +8,12 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
-import type { EntryWrites } from '../../base/ports/store.js';
-import type { Objects } from '../../base/records/objects.js';
+import type { EntryWrites, Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { requireText } from './fields.js';
 import { listObjects } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../../base/records/object-types.js';
-import { CLI_ACTOR } from '../../base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { Decision, DecisionStatus } from '../../base/records/object-types.js';
 

@@ -1,5 +1,6 @@
-// The sessions the composition roots (cli, server, stdio MCP) run requests in; a busy code escaping
-// a session's work surfaces as the port's StoreBusyError, as one from a store call does.
+// The sessions the composition roots (cli, server, stdio MCP) run their requests in. A busy code
+// that escapes a session's work leaves it as the port's StoreBusyError, as one from a store call
+// does.
 import {
   HOOK_DB_WAIT_MS,
   noteStoreBusy,

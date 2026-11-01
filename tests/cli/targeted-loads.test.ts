@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
-import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -30,10 +30,7 @@ beforeEach(() => {
   root = makeStore('targeted-loads').root;
 });
 
-afterEach(async () => {
-  await endLastingCommands();
-  removeDir(join(root, '..'));
-});
+afterEach(() => removeDir(join(root, '..')));
 
 // One transaction and no mirrors: these tests read rows only, and 1003 mirrored writes overran the Windows timeout.
 async function seed(count: number, tenantId = 'default'): Promise<string[]> {
@@ -86,14 +83,14 @@ describe('listEntryTextKeysPage', () => {
 describe('memoryList paging', () => {
   it('pages the same rows in the same order as one whole read', async () => {
     await seed(7);
-    const ctx = lastingCommand().apiContext(root, 'default');
+    const ctx = cliApiContext(root, 'default');
     const { result, statements } = await recordStatementsAsync(() => memoryList(ctx, {}, { pageSize: 3 }));
     expect(result.map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
     expect(countMatching(statements, /FROM memories .*LIMIT \?/)).toBe(3);
   });
 
   it('pages past ties on created, and an empty store gives no rows', async () => {
-    const ctx = lastingCommand().apiContext(root, 'default');
+    const ctx = cliApiContext(root, 'default');
     expect(await memoryList(ctx, {}, { pageSize: 2 })).toEqual([]);
     for (let i = 0; i < 5; i++) {
       writeEntry(root, {
@@ -109,7 +106,7 @@ describe('memoryList paging', () => {
 
   it('reads every row across the default page boundary', async () => {
     await seed(1003);
-    const ctx = lastingCommand().apiContext(root, 'default');
+    const ctx = cliApiContext(root, 'default');
     const { result, statements } = await recordStatementsAsync(() => memoryList(ctx));
     expect(result.map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
     expect(countMatching(statements, /FROM memories .*LIMIT \?/)).toBe(2);
@@ -137,10 +134,11 @@ describe('strengthenRetrieved', () => {
     const ids = await seed(4);
     const { result, statements } = recordStatements(() =>
       strengthenRetrieved(
-        { hippoRoot: root, grant: grantFor({}) },
+        root,
         ids,
         { tenantId: 'default', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ),
     );
     expect([...result].sort()).toEqual([...ids].sort());
@@ -159,7 +157,7 @@ describe('rejections.apply', () => {
     await seed(5);
     const target = createMemory('the deploy window is friday afternoon', { tenantId: 'default' });
     writeEntry(root, target);
-    const { rejections } = sqliteStore(root).hippoDb;
+    const { rejections } = sqliteStore(root);
     const { result, statements } = await recordStatementsAsync(
       async () =>
         await rejections.apply({

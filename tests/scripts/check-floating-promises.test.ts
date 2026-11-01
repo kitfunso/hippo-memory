@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
-import { findFloatingApiCalls, staleApiWrites } from '../../scripts/checks/check-floating-api.mjs';
+import { findFloatingApiCalls } from '../../scripts/checks/check-floating-api.mjs';
 import { findFloatingPromises } from '../../scripts/checks/check-floating-promises.mjs';
 
 // Parsing the real ES2022 lib took 6.5 s on a CI runner, past the unit budget; the check only needs these globals.
@@ -32,7 +32,7 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
   });
 
   /** The hits for one source file, compiled on its own. */
-  function hitsFor(body: string, opts?: { voidMarks?: boolean }): { line: number; text: string }[] {
+  function hitsFor(body: string): { line: number; text: string }[] {
     const src = join(dir, 'src');
     mkdirSync(src, { recursive: true });
     const file = join(src, 'entry.ts');
@@ -45,7 +45,7 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
       noEmit: true,
       noLib: true,
     });
-    return findFloatingPromises(program, src, opts).map(({ line, text }) => ({ line, text }));
+    return findFloatingPromises(program, src).map(({ line, text }) => ({ line, text }));
   }
 
   it('flags a promise call statement that nothing awaits', () => {
@@ -83,16 +83,6 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
     expect(hitsFor(body).map((h) => h.line)).toEqual([2, 3]);
   });
 
-  it('with voidMarks, as for tests, passes a void call and still flags a bare one', () => {
-    const body = [
-      'async function work(): Promise<number> { return 1; }',
-      'void work();',
-      'work();',
-      'void (async () => 1)();',
-    ].join('\n');
-    expect(hitsFor(body, { voidMarks: true }).map((h) => h.line)).toEqual([3]);
-  });
-
   it('flags a one-argument .then or a .finally with no handler before it', () => {
     const body = [
       'async function work(): Promise<number> { return 1; }',
@@ -116,8 +106,8 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** A program of one test file that imports a stand-in forget from src/api/memories/forget.ts. */
-  function programFor(body: string): ts.Program {
+  /** The hits for one test file that imports a stand-in forget from src/api/memories/forget.ts. */
+  function hitsFor(body: string): { file: string; line: number; why: string }[] {
     mkdirSync(join(dir, 'src', 'api', 'memories'), { recursive: true });
     mkdirSync(join(dir, 'tests'));
     const files = {
@@ -127,7 +117,7 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
       'tests/use.test.ts': `import { forget, other } from '../src/api/memories/forget';\n${body}`,
     };
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text, 'utf8');
-    return ts.createProgram(
+    const program = ts.createProgram(
       Object.keys(files).map((name) => join(dir, name)),
       {
         target: ts.ScriptTarget.ES2022,
@@ -137,22 +127,8 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
         noLib: true,
       },
     );
+    return findFloatingApiCalls(program, dir).map(({ file, line, why }) => ({ file, line, why }));
   }
-
-  function hitsFor(body: string): { file: string; line: number; why: string }[] {
-    return findFloatingApiCalls(programFor(body), dir).map(({ file, line, why }) => ({ file, line, why }));
-  }
-
-  it('names each listed write its file no longer exports, and each listed file that is gone', () => {
-    const writes = {
-      'src/api/memories/forget.ts': ['forget', 'moved'],
-      'src/api/memories/gone.ts': ['gone'],
-    };
-    expect(staleApiWrites(programFor('void forget;\nvoid other;\n'), dir, writes)).toEqual([
-      'src/api/memories/forget.ts: moved',
-      'src/api/memories/gone.ts: gone',
-    ]);
-  });
 
   it('flags a dropped api write and a sync expect callback that returns one', () => {
     const body = [

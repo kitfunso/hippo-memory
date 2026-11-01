@@ -10,7 +10,7 @@ import type {
   SnapshotInput,
   TaskSnapshot,
   WorkingMemoryItem,
-} from '../../../src/base/records/sessions.js';
+} from '../../../src/base/ports/store/sessions.js';
 import * as handoffsSql from '../../../src/store/sqlite/sessions/handoffs.js';
 import * as indexAndStatsSql from '../../../src/store/sqlite/entries/index-and-stats.js';
 import { readLastRecall } from '../../../src/store/sqlite/folder-files/mirrors.js';
@@ -18,7 +18,7 @@ import { openStore } from '../../../src/store/sqlite/runtime/handles.js';
 import type { StoreFiles } from '../../../src/store/sqlite/runtime/open.js';
 import type { HippoIndex } from '../../../src/store/sqlite/runtime/rows.js';
 import * as sessionsSql from '../../../src/store/sqlite/sessions/sessions.js';
-import type { UntracedSession } from '../../../src/base/records/consolidation.js';
+import type { UntracedSession } from '../../../src/base/ports/store/consolidation.js';
 import * as taskSnapshotsSql from '../../../src/store/sqlite/sessions/task-snapshots.js';
 import { freshActiveSnapshot } from '../../../src/base/session/session-snapshot.js';
 import type { ContinuityKey } from '../../../src/base/ports/store/types.js';
@@ -44,7 +44,7 @@ export function appendSessionEvent(
   tenantId: string,
   event: SessionEventInput,
 ): Promise<SessionEvent> {
-  return sqliteStore(hippoRoot).hippoDb.sessions.save(tenantId, 'event', event);
+  return sqliteStore(hippoRoot).sessions.save(tenantId, 'event', event);
 }
 
 export function saveSessionHandoff(
@@ -146,7 +146,7 @@ export async function clearActiveTaskSnapshot(
   tenantId: string,
   clearedStatus: string = 'cleared',
 ): Promise<boolean> {
-  return (await sqliteStore(hippoRoot).hippoDb.sessions.clear(tenantId, 'snapshot', { status: clearedStatus })) > 0;
+  return (await sqliteStore(hippoRoot).sessions.clear(tenantId, 'snapshot', { status: clearedStatus })) > 0;
 }
 
 export async function closeTaskSnapshotsForSession(
@@ -156,7 +156,7 @@ export async function closeTaskSnapshotsForSession(
   status: string = 'session-ended',
   key?: ContinuityKey,
 ): Promise<number> {
-  return await sqliteStore(hippoRoot).hippoDb.sessions.clear(tenantId, 'snapshot', { status, sessionId }, key ?? null);
+  return await sqliteStore(hippoRoot).sessions.clear(tenantId, 'snapshot', { status, sessionId }, key ?? null);
 }
 
 export function listSessionEvents(
@@ -183,11 +183,7 @@ export async function wmPush(
     tenantId?: string;
   },
 ): Promise<number> {
-  return await sqliteStore(hippoRoot).hippoDb.sessions.save(
-    opts.tenantId ?? resolveTenantId({}),
-    'working_memory',
-    opts,
-  );
+  return await sqliteStore(hippoRoot).sessions.save(opts.tenantId ?? resolveTenantId({}), 'working_memory', opts);
 }
 
 export async function wmRead(
@@ -200,7 +196,7 @@ export async function wmRead(
   },
 ): Promise<WorkingMemoryItem[]> {
   const tenantId = opts?.tenantId ?? resolveTenantId({});
-  return await sqliteStore(hippoRoot).hippoDb.sessions.read(tenantId, 'working_memory', opts ?? {});
+  return await sqliteStore(hippoRoot).sessions.read(tenantId, 'working_memory', opts ?? {});
 }
 
 export async function wmClear(
@@ -211,7 +207,7 @@ export async function wmClear(
     tenantId?: string;
   },
 ): Promise<number> {
-  return await sqliteStore(hippoRoot).hippoDb.sessions.clear(
+  return await sqliteStore(hippoRoot).sessions.clear(
     opts?.tenantId ?? resolveTenantId({}),
     'working_memory',
     opts ?? {},

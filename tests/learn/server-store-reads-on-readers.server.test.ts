@@ -5,7 +5,7 @@ import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detecto
 import { SKILL } from '../../src/domain/objects/skills.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { packVectors, vectorViewsOf } from '../../src/store/sqlite/runtime/vector-pack.js';
-import { HIPPO_DB_OPS, WORKER_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
+import { WORKER_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from '../_helpers/moved-reads-seed.js';
@@ -25,15 +25,15 @@ import {
   type Read,
   REFUSED,
   seedLocalGroups,
+  type Served,
   shown,
 } from '../_helpers/local-group-reads.js';
-import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
 const NOW = new Date(FAKE_NOW);
 const VECTOR_IDS = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
 
-const graphEntities = async (s: HippoDbStore) => (await s.hippoDb.graphReads.graphRows(TENANT, { limit: 50 })).entities;
+const graphEntities = async (s: Served) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
 
 const SLACK_EVENT = { connector: 'slack', eventId: 'Ev-seeded' } as const;
 const REPO = 'acme/demo';
@@ -54,9 +54,9 @@ const made = { handoffId: 0, cardId: '' };
 /** The rows the moved-reads seed lacks, written through the in-process store: connector state, working memory, a claimed card, a failure, a token row, a rejection, a conflict and a dormant memory. */
 async function seedSessionAndAdmin(root: string): Promise<void> {
   const s = sqliteStore(root);
-  await s.hippoDb.connectorEvents.markEventSeen(SLACK_EVENT);
-  await s.hippoDb.connectorEvents.registerSlackWorkspace('T-seeded', TENANT);
-  await s.hippoDb.connectorEvents.parkDeadLetter({
+  await s.connectorEvents.markEventSeen(SLACK_EVENT);
+  await s.connectorEvents.registerSlackWorkspace('T-seeded', TENANT);
+  await s.connectorEvents.parkDeadLetter({
     connector: 'github',
     tenantId: TENANT,
     rawPayload: '{"seeded":true}',
@@ -64,16 +64,16 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
     signature: null,
     bucket: 'unroutable',
   });
-  await s.hippoDb.connectorEvents.saveCursor(SLACK_CURSOR, '1700000000.000100');
-  await s.hippoDb.connectorEvents.saveCursor(GITHUB_CURSOR, '2026-01-01T00:00:00Z');
-  await s.hippoDb.sessions.save(TENANT, 'working_memory', {
+  await s.connectorEvents.saveCursor(SLACK_CURSOR, '1700000000.000100');
+  await s.connectorEvents.saveCursor(GITHUB_CURSOR, '2026-01-01T00:00:00Z');
+  await s.sessions.save(TENANT, 'working_memory', {
     scope: 'deploy',
     content: 'watch the canary error rate',
     sessionId: SESSION,
   });
-  const card = await s.hippoDb.cards.create(TENANT, { title: 'cut the eu release' });
-  await s.hippoDb.cards.claim(TENANT, card.id, 'codex', SESSION);
-  await s.hippoDb.failureLog.record({
+  const card = await s.cards.create(TENANT, { title: 'cut the eu release' });
+  await s.cards.claim(TENANT, card.id, 'codex', SESSION);
+  await s.failureLog.record({
     tenantId: TENANT,
     sessionId: SESSION,
     tool: 'Bash',
@@ -135,10 +135,10 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
 
 const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read(
-    'hippoDb.connectorEvents.eventRecord',
+    'connectorEvents.eventRecord',
     async (s) => [
-      await s.hippoDb.connectorEvents.eventRecord(SLACK_EVENT),
-      await s.hippoDb.connectorEvents.eventRecord(
+      await s.connectorEvents.eventRecord(SLACK_EVENT),
+      await s.connectorEvents.eventRecord(
         { connector: 'slack', eventId: 'Ev-unseen' },
         { artifactRef: 'vault:golden:rollout.md', tenantId: TENANT },
       ),
@@ -146,10 +146,10 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     /seen: true.*mem_z_vault/,
   ),
   read(
-    'hippoDb.connectorEvents.route',
+    'connectorEvents.route',
     async (s) => [
-      await s.hippoDb.connectorEvents.route({ connector: 'slack', teamId: 'T-seeded' }),
-      await s.hippoDb.connectorEvents.route({
+      await s.connectorEvents.route({ connector: 'slack', teamId: 'T-seeded' }),
+      await s.connectorEvents.route({
         connector: 'github',
         installationId: '101',
       }),
@@ -157,70 +157,67 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     `[ { tenantId: '${TENANT}' }, { tenantId: '${TENANT}' } ]`,
   ),
   read(
-    'hippoDb.connectorEvents.deadLetters',
+    'connectorEvents.deadLetters',
     async (s) => [
-      await s.hippoDb.connectorEvents.deadLetters('github', TENANT, { limit: 5 }),
-      await s.hippoDb.connectorEvents.deadLetters('github', TENANT, { id: 1 }),
+      await s.connectorEvents.deadLetters('github', TENANT, { limit: 5 }),
+      await s.connectorEvents.deadLetters('github', TENANT, { id: 1 }),
     ],
     /unroutable payload.*unroutable payload/,
   ),
   read(
-    'hippoDb.connectorEvents.cursor',
-    async (s) => [
-      await s.hippoDb.connectorEvents.cursor(SLACK_CURSOR),
-      await s.hippoDb.connectorEvents.cursor(GITHUB_CURSOR),
-    ],
+    'connectorEvents.cursor',
+    async (s) => [await s.connectorEvents.cursor(SLACK_CURSOR), await s.connectorEvents.cursor(GITHUB_CURSOR)],
     `[ '1700000000.000100', '2026-01-01T00:00:00Z' ]`,
   ),
-  read('hippoDb.connectorEvents.slackWorkspaces', (s) => s.hippoDb.connectorEvents.slackWorkspaces(), 'T-seeded'),
+  read('connectorEvents.slackWorkspaces', (s) => s.connectorEvents.slackWorkspaces(), 'T-seeded'),
   read(
-    'hippoDb.auditMaintenance.objectBackedAmong',
+    'auditMaintenance.objectBackedAmong',
     async (s) =>
-      s.hippoDb.auditMaintenance.objectBackedAmong(
+      s.auditMaintenance.objectBackedAmong(
         (await s.entriesWhere({ tenantId: TENANT }, { limit: 100 })).entries.map((e) => e.id),
       ),
     /'sem_/,
   ),
-  read('hippoDb.lessonWrites.textsHolding', (s) => s.hippoDb.lessonWrites.textsHolding(TENANT, [PLAIN], null), PLAIN),
+  read('lessonWrites.textsHolding', (s) => s.lessonWrites.textsHolding(TENANT, [PLAIN], null), PLAIN),
   read(
-    'hippoDb.lessonWrites.contentsWithTag',
-    (s) => s.hippoDb.lessonWrites.contentsWithTag(TENANT, 'goal-alpha', undefined),
+    'lessonWrites.contentsWithTag',
+    (s) => s.lessonWrites.contentsWithTag(TENANT, 'goal-alpha', undefined),
     'migrate the rollout scripts',
   ),
   read(
-    'hippoDb.sessions.read events',
-    (s) => s.hippoDb.sessions.read(TENANT, 'event', { sessionId: SESSION, limit: 5 }),
+    'sessions.read events',
+    (s) => s.sessions.read(TENANT, 'event', { sessionId: SESSION, limit: 5 }),
     'canary passed',
   ),
   read(
-    'hippoDb.sessions.read latest handoff',
-    (s) => s.hippoDb.sessions.read(TENANT, 'handoff', { sessionId: SESSION }, null),
+    'sessions.read latest handoff',
+    (s) => s.sessions.read(TENANT, 'handoff', { sessionId: SESSION }, null),
     'handoff after the canary',
   ),
   read(
-    'hippoDb.sessions.read handoff by id',
-    (s) => s.hippoDb.sessions.read(TENANT, 'handoff', { id: made.handoffId }),
+    'sessions.read handoff by id',
+    (s) => s.sessions.read(TENANT, 'handoff', { id: made.handoffId }),
     'handoff after the canary',
   ),
   read(
-    'hippoDb.sessions.read working memory',
-    (s) => s.hippoDb.sessions.read(TENANT, 'working_memory', { sessionId: SESSION }),
+    'sessions.read working memory',
+    (s) => s.sessions.read(TENANT, 'working_memory', { sessionId: SESSION }),
     'watch the canary error rate',
   ),
-  read('hippoDb.cards.detail', (s) => s.hippoDb.cards.detail(TENANT, made.cardId), 'cut the eu release'),
-  read('hippoDb.cards.detail runs', async (s) => (await s.hippoDb.cards.detail(TENANT, made.cardId))?.runs, 'codex'),
-  read('hippoDb.cards.list', (s) => s.hippoDb.cards.list(TENANT, { limit: 10 }), 'cut the eu release'),
-  read('hippoDb.goals.sessionGoals', (s) => s.hippoDb.goals.sessionGoals(TENANT, SESSION), 'goal-alpha'),
+  read('cards.detail', (s) => s.cards.detail(TENANT, made.cardId), 'cut the eu release'),
+  read('cards.detail runs', async (s) => (await s.cards.detail(TENANT, made.cardId))?.runs, 'codex'),
+  read('cards.list', (s) => s.cards.list(TENANT, { limit: 10 }), 'cut the eu release'),
+  read('goals.sessionGoals', (s) => s.goals.sessionGoals(TENANT, SESSION), 'goal-alpha'),
   read(
-    'hippoDb.conflicts.list',
-    (s) => s.hippoDb.conflicts.list({ tenantId: TENANT, status: 'open', limit: 5 }),
+    'conflicts.list',
+    (s) => s.conflicts.list({ tenantId: TENANT, status: 'open', limit: 5 }),
     'seeded contradiction',
   ),
-  read('hippoDb.conflicts.get', (s) => s.hippoDb.conflicts.get(TENANT, 1), 'seeded contradiction'),
-  read('hippoDb.dormant.list', (s) => s.hippoDb.dormant.list(TENANT, null, {}), 'stg-1'),
-  read('hippoDb.reports.tokenUse', (s) => s.hippoDb.reports.tokenUse(TENANT, '2000-01-01T00:00:00.000Z'), /120/),
-  read('hippoDb.reports.failures', (s) => s.hippoDb.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
-  read('hippoDb.reports.memoryStatus', (s) => s.hippoDb.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),
+  read('conflicts.get', (s) => s.conflicts.get(TENANT, 1), 'seeded contradiction'),
+  read('dormant.list', (s) => s.dormant.list(TENANT, null, {}), 'stg-1'),
+  read('reports.tokenUse', (s) => s.reports.tokenUse(TENANT, '2000-01-01T00:00:00.000Z'), /120/),
+  read('reports.failures', (s) => s.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
+  read('reports.memoryStatus', (s) => s.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),
   read(
     'entriesWhere',
     async (s) => [
@@ -234,68 +231,48 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     ],
     new RegExp(String.raw`id: 'mem_[\s\S]*mem_x_raw[\s\S]*vault:golden:rollout\.md[\s\S]*${PLAIN}`),
   ),
-  read('hippoDb.reports.countEntries', (s) => s.hippoDb.reports.countEntries(), /^[1-9]\d*$/),
-  read('hippoDb.reports.stats', (s) => s.hippoDb.reports.stats(), /total_recalled/),
-  read('hippoDb.reports.statusCounts', (s) => s.hippoDb.reports.statusCounts(NOW, 0.1), /total/),
-  read('hippoDb.reports.correctionLinks', (s) => s.hippoDb.reports.correctionLinks({ limit: 10 }), /oldId: 'mem_/),
-  read('hippoDb.reports.rawProvenance', (s) => s.hippoDb.reports.rawProvenance({ limit: 10 }), /total: [1-9]/),
+  read('reports.countEntries', (s) => s.reports.countEntries(), /^[1-9]\d*$/),
+  read('reports.stats', (s) => s.reports.stats(), /total_recalled/),
+  read('reports.statusCounts', (s) => s.reports.statusCounts(NOW, 0.1), /total/),
+  read('reports.correctionLinks', (s) => s.reports.correctionLinks({ limit: 10 }), /oldId: 'mem_/),
+  read('reports.rawProvenance', (s) => s.reports.rawProvenance({ limit: 10 }), /total: [1-9]/),
+  read('reports.createdSinceLastSleep', (s) => s.reports.createdSinceLastSleep(TENANT, NOW), /^[1-9]\d*$/),
+  read('rejections.list', (s) => s.rejections.list(TENANT), "reason: 'wrong'"),
   read(
-    'hippoDb.reports.createdSinceLastSleep',
-    (s) => s.hippoDb.reports.createdSinceLastSleep(TENANT, NOW),
-    /^[1-9]\d*$/,
-  ),
-  read('hippoDb.rejections.list', (s) => s.hippoDb.rejections.list(TENANT), "reason: 'wrong'"),
-  read(
-    'hippoDb.rejections.refusedAmong',
-    (s) => s.hippoDb.rejections.refusedAmong([{ tenantId: TENANT, entryId: 'mem_new', content: REFUSED }]),
+    'rejections.refusedAmong',
+    (s) => s.rejections.refusedAmong([{ tenantId: TENANT, entryId: 'mem_new', content: REFUSED }]),
     /^\[ true \]$/,
   ),
-  read(
-    'hippoDb.failureLog.requestOutcome',
-    (s) => s.hippoDb.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION),
-    "'stored'",
-  ),
-  read('hippoDb.sharing.sourceTallies', (s) => s.hippoDb.sharing.sourceTallies(TENANT), /count: [1-9]/),
+  read('failureLog.requestOutcome', (s) => s.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION), "'stored'"),
+  read('sharing.sourceTallies', (s) => s.sharing.sourceTallies(TENANT), /count: [1-9]/),
 ];
 
 /** The groups that were the local files: the ledger, the folder and sharing; the index's sessions run on the writer. */
 const FOLDER_GROUP_READS: readonly Read[] = [
-  read('hippoDb.folderFiles.home', (s) => s.hippoDb.folderFiles.home(), /folderName: '/),
+  read('folderFiles.home', (s) => s.folderFiles.home(), /folderName: '/),
+  read('ledger.lastSent', (s) => s.ledger.lastSent(TENANT, SESSION, 'http_recall'), "hash: 'block-seeded'"),
   read(
-    'hippoDb.ledger.lastSent',
-    (s) => s.hippoDb.ledger.lastSent(TENANT, SESSION, 'http_recall'),
-    "hash: 'block-seeded'",
-  ),
-  read(
-    'hippoDb.sharing.entriesWithSignals',
+    'sharing.entriesWithSignals',
     (s) =>
-      s.hippoDb.sharing.entriesWithSignals(
-        { tags: [], sourcePrefix: 'never', minRetrievals: 0, valences: [] },
-        TENANT,
-        {
-          limit: 3,
-        },
-      ),
+      s.sharing.entriesWithSignals({ tags: [], sourcePrefix: 'never', minRetrievals: 0, valences: [] }, TENANT, {
+        limit: 3,
+      }),
     /id: 'mem_/,
   ),
-  read('hippoDb.sharing.textKeysPage', (s) => s.hippoDb.sharing.textKeysPage(TENANT, { limit: 3 }), /id: 'mem_/),
+  read('sharing.textKeysPage', (s) => s.sharing.textKeysPage(TENANT, { limit: 3 }), /id: 'mem_/),
   read(
-    'hippoDb.sharing.textKeysHolding',
+    'sharing.textKeysHolding',
     async (s) => [
-      await s.hippoDb.sharing.textKeysHolding({ tenantId: TENANT }, [PLAIN]),
-      await s.hippoDb.sharing.textKeysHolding({ tenantId: TENANT, live: true, origins: ['', 'golden'] }, [PLAIN]),
+      await s.sharing.textKeysHolding({ tenantId: TENANT }, [PLAIN]),
+      await s.sharing.textKeysHolding({ tenantId: TENANT, live: true, origins: ['', 'golden'] }, [PLAIN]),
     ],
     /mem_p_plain[\s\S]*mem_p_plain/,
   ),
+  read('sharing.takenIds', (s) => s.sharing.takenIds(['mem_p_plain', 'mem_missing']), "[ 'mem_p_plain' ]"),
+  read('sharing.searchEntries', (s) => s.sharing.searchEntries('deploy', 50, TENANT), 'mem_p_plain'),
   read(
-    'hippoDb.sharing.takenIds',
-    (s) => s.hippoDb.sharing.takenIds(['mem_p_plain', 'mem_missing']),
-    "[ 'mem_p_plain' ]",
-  ),
-  read('hippoDb.sharing.searchEntries', (s) => s.hippoDb.sharing.searchEntries('deploy', 50, TENANT), 'mem_p_plain'),
-  read(
-    'hippoDb.sharing.recallEntries',
-    (s) => s.hippoDb.sharing.recallEntries('deploy', { limit: 50, tenantId: TENANT }),
+    'sharing.recallEntries',
+    (s) => s.sharing.recallEntries('deploy', { limit: 50, tenantId: TENANT }),
     'mem_p_plain',
   ),
 ];
@@ -339,6 +316,7 @@ const READS: readonly Read[] = [
       }),
     'mem_p_plain',
   ),
+  read('vectors.stored particles', (s) => s.vectors.stored('particles', VECTOR_IDS), 'mem_p_noise'),
   read('keyWrites.listApiKeys', (s) => s.keyWrites.listApiKeys({ tenantId: TENANT, active: true }), "role: 'member'"),
   read(
     'vectorWrites.entriesWithoutVector',
@@ -372,35 +350,28 @@ const READS: readonly Read[] = [
     /tagCounts: Map\(\d+\) \{/,
   ),
   read('contextReads.schemaFit', (s) => s.contextReads.schemaFit(TENANT, PLAIN, ['deploy']), /^(0(\.\d+)?|1)$/),
+  read('objects.objectById prediction', (s) => s.objects.objectById(TENANT, 'prediction', 1), 'deploy-duration'),
   read(
-    'hippoDb.objects.objectById prediction',
-    (s) => s.hippoDb.objects.objectById(TENANT, 'prediction', 1),
+    'objects.listObjects predictions',
+    (s) => s.objects.listObjects(TENANT, 'prediction', { limit: 5 }),
     'deploy-duration',
   ),
+  read('dagReads.sessionRawCount', (s) => s.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }), /^1$/),
+  read('consolidation.particlesByRecall', (s) => s.consolidation.particlesByRecall({ limit: 5 }), 'mem_p_noise'),
   read(
-    'hippoDb.objects.listObjects predictions',
-    (s) => s.hippoDb.objects.listObjects(TENANT, 'prediction', { limit: 5 }),
-    'deploy-duration',
-  ),
-  read(
-    'hippoDb.dagReads.sessionRawCount',
-    (s) => s.hippoDb.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }),
-    /^1$/,
-  ),
-  read(
-    'hippoDb.dagReads.sessionRawKeys',
-    (s) => s.hippoDb.dagReads.sessionRawKeys({ tenantId: TENANT, sessionId: SESSION, limit: 5 }),
+    'dagReads.sessionRawKeys',
+    (s) => s.dagReads.sessionRawKeys({ tenantId: TENANT, sessionId: SESSION, limit: 5 }),
     /contentLength: \d+/,
   ),
   read(
-    'hippoDb.dagReads.sessionRawRows',
-    (s) => s.hippoDb.dagReads.sessionRawRows({ tenantId: TENANT, sessionId: SESSION, ids: ['mem_x_raw'] }),
+    'dagReads.sessionRawRows',
+    (s) => s.dagReads.sessionRawRows({ tenantId: TENANT, sessionId: SESSION, ids: ['mem_x_raw'] }),
     'mem_x_raw',
   ),
   read(
-    'hippoDb.dagReads.summaryWithDescendants',
+    'dagReads.summaryWithDescendants',
     (s) =>
-      s.hippoDb.dagReads.summaryWithDescendants(TENANT, 'mem_x_summary', {
+      s.dagReads.summaryWithDescendants(TENANT, 'mem_x_summary', {
         depth: 2,
         admit: {},
         page: { rows: 1 },
@@ -413,39 +384,35 @@ const READS: readonly Read[] = [
     "tenantId: 'default'",
   ),
   read(
-    'hippoDb.quarantine.list',
-    (s) => s.hippoDb.quarantine.list(TENANT, { status: 'all' }),
+    'quarantine.listQuarantined',
+    (s) => s.quarantine.listQuarantined(TENANT, { status: 'all' }),
     'scripts/wipe.sh before every deploy',
   ),
-  read('hippoDb.graphReads.graphRows', (s) => s.hippoDb.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
+  read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
   read(
-    'hippoDb.graphReads.graphRows by memory',
+    'graphReads.graphRows by memory',
     async (s) =>
-      s.hippoDb.graphReads.graphRows(TENANT, {
+      s.graphReads.graphRows(TENANT, {
         by: 'memory',
         ids: (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId])),
       }),
     /memoryId: '[^']+'/,
   ),
   read(
-    'hippoDb.graphReads.graphRows by entity',
-    (s) => s.hippoDb.graphReads.graphRows(TENANT, { by: 'entity', ids: Array.from({ length: 50 }, (_, i) => i + 1) }),
+    'graphReads.graphRows by entity',
+    (s) => s.graphReads.graphRows(TENANT, { by: 'entity', ids: Array.from({ length: 50 }, (_, i) => i + 1) }),
     'RetryPolicy',
   ),
   read(
-    'hippoDb.graphReads.graphRows by neighbor',
+    'graphReads.graphRows by neighbor',
     async (s) =>
-      s.hippoDb.graphReads.graphRows(TENANT, {
-        by: 'neighbor',
-        ids: (await graphEntities(s)).map((e) => e.id),
-        limit: 50,
-      }),
+      s.graphReads.graphRows(TENANT, { by: 'neighbor', ids: (await graphEntities(s)).map((e) => e.id), limit: 50 }),
     /relType: '[^']+'/,
   ),
   read(
-    'hippoDb.graphReads.graphDelta',
+    'graphReads.graphDelta',
     (s) =>
-      s.hippoDb.graphReads.graphDelta(TENANT, {
+      s.graphReads.graphDelta(TENANT, {
         entities: [
           {
             entityType: 'policy',
@@ -458,32 +425,28 @@ const READS: readonly Read[] = [
       }),
     /op: '(update|insert)Entity'/,
   ),
+  read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
+  read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
   read(
-    'hippoDb.objects.listObjects',
-    (s) => s.hippoDb.objects.listObjects(TENANT, 'decision', { limit: 5 }),
-    'We adopt RetryPolicy',
-  ),
-  read('hippoDb.objects.objectById', (s) => s.hippoDb.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
-  read(
-    'hippoDb.objects.listObjects by memory id',
+    'objects.listObjects by memory id',
     async (s) => {
-      const memoryId = (await s.hippoDb.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? '';
-      return (await s.hippoDb.objects.listObjects(TENANT, 'decision', { status: 'active', memoryId, limit: 1 }))[0]?.id;
+      const memoryId = (await s.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? '';
+      return (await s.objects.listObjects(TENANT, 'decision', { status: 'active', memoryId, limit: 1 }))[0]?.id;
     },
     /^[1-9][0-9]*$/,
   ),
   read(
-    'hippoDb.objects.listObjects policies in force',
-    (s) => s.hippoDb.objects.listObjects(TENANT, 'policy', { asOf: '9999-12-31T23:59:59.999Z', limit: 5 }),
+    'objects.listObjects policies in force',
+    (s) => s.objects.listObjects(TENANT, 'policy', { asOf: '9999-12-31T23:59:59.999Z', limit: 5 }),
     'RetryPolicy',
   ),
   read(
-    'hippoDb.objects.listObjects active skills by name',
-    (s) => s.hippoDb.objects.listObjects(TENANT, 'skill', { byName: true, status: 'active', limit: 5 }),
+    'objects.listObjects active skills by name',
+    (s) => s.objects.listObjects(TENANT, 'skill', { byName: true, status: 'active', limit: 5 }),
     'page the owner, then revert',
   ),
-  read('hippoDb.objects.briefReceipts', (s) => s.hippoDb.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
-  read('hippoDb.readiness.ping', (s) => s.hippoDb.readiness.ping(), /^undefined$/),
+  read('objects.briefReceipts', (s) => s.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
+  read('readiness.ping', (s) => s.readiness.ping(), /^undefined$/),
   ...SESSION_AND_ADMIN_READS,
   ...FOLDER_GROUP_READS,
   ...LOCAL_GROUP_READS,
@@ -592,18 +555,20 @@ const WRITES: readonly Write[] = [
       }),
     ['vectors {"memory_id":"mem_p_pinned"'],
   ),
-  write('hippoDb.quarantine.approve', (s, seed) => s.hippoDb.quarantine.approve(TENANT, seed.held[0] ?? '', ACTOR), [
-    '"status":"approved"',
-    '"op":"quarantine_approve"',
-  ]),
-  write('hippoDb.quarantine.reject', (s, seed) => s.hippoDb.quarantine.reject(TENANT, seed.held[1] ?? '', ACTOR), [
-    '"status":"rejected"',
-    '"op":"quarantine_reject"',
-  ]),
   write(
-    'hippoDb.promotion.writeCopy',
+    'quarantine.decideQuarantined approve',
+    (s, seed) => s.quarantine.decideQuarantined(TENANT, seed.held[0] ?? '', 'approve', ACTOR),
+    ['"status":"approved"', '"op":"quarantine_approve"'],
+  ),
+  write(
+    'quarantine.decideQuarantined reject',
+    (s, seed) => s.quarantine.decideQuarantined(TENANT, seed.held[1] ?? '', 'reject', ACTOR),
+    ['"status":"rejected"', '"op":"quarantine_reject"'],
+  ),
+  write(
+    'promotion.writeCopy',
     (s) =>
-      s.hippoDb.promotion.writeCopy(PROMOTED, {
+      s.promotion.writeCopy(PROMOTED, {
         actor: ACTOR,
         sourceId: 'mem_p_plain',
         auditAs: { tenantId: TENANT, actor: ACTOR },
@@ -641,8 +606,8 @@ afterAll(() => {
 afterEach(undoAll);
 
 describe('a read the op table places on a reader thread', () => {
-  let onWorkers: HippoDbStore;
-  let inProcess: HippoDbStore;
+  let onWorkers: Served;
+  let inProcess: Served;
 
   // Reads write nothing, so both stores serve one copy for the whole table.
   beforeAll(async () => {
@@ -671,8 +636,7 @@ describe('a read the op table places on a reader thread', () => {
   });
 
   it('has a row here for every method tagged read or pinned-read', () => {
-    const local = Object.entries(HIPPO_DB_OPS).map(([repo, places]) => [`hippoDb.${repo}`, places] as const);
-    const tagged = [...Object.entries(WORKER_OPS), ...local].flatMap(([group, places]) =>
+    const tagged = Object.entries(WORKER_OPS).flatMap(([group, places]) =>
       Object.entries(places)
         .filter(([, place]) => place === 'read' || place === 'pinned-read')
         .map(([method]) => (group === 'base' ? method : `${group}.${method}`)),
@@ -694,7 +658,7 @@ describe('a read the op table places on a reader thread', () => {
     const { store, sent } = patientStore(root);
     cleanups.push(() => store.close());
     await store.bumpRecallStats(1);
-    await Promise.all([store.hippoDb.readiness.ping(), store.hippoDb.readiness.ping()]);
+    await Promise.all([store.readiness.ping(), store.readiness.ping()]);
     const lock = holdWriteLock(root);
     const blocked = store.bumpRecallStats(1);
     await sent('base.bumpRecallStats', 2);
@@ -761,6 +725,7 @@ describe('vectors from a reader thread', () => {
     cleanups.push(() => store.close());
 
     expect(await store.vectors.stored('vectors', [])).toEqual(new Map());
+    expect(await store.vectors.stored('particles', [])).toEqual(new Map());
     expect(ops).toEqual([]);
   });
 });

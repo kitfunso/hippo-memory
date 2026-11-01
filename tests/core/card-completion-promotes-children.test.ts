@@ -31,17 +31,17 @@ afterEach(() => {
 });
 
 async function toReview(id: string): Promise<void> {
-  await store.hippoDb.cards.claim(TENANT, id, 'test-runtime');
-  await store.hippoDb.cards.review(TENANT, id);
+  await store.cards.claim(TENANT, id, 'test-runtime');
+  await store.cards.review(TENANT, id);
 }
 
 async function finish(id: string): Promise<void> {
   await toReview(id);
-  await store.hippoDb.cards.complete(TENANT, id, 'success');
+  await store.cards.complete(TENANT, id, 'success');
 }
 
 async function card(id: string): Promise<Card> {
-  const found = (await store.hippoDb.cards.detail(TENANT, id))?.card;
+  const found = (await store.cards.detail(TENANT, id))?.card;
   if (!found) throw new Error(`card ${id} is missing`);
   return found;
 }
@@ -55,15 +55,15 @@ interface Family {
 
 /** A parent in review with `children` children: every fourth waits on an open second parent, every fifth already left backlog, the rest are promotable. */
 async function seedFamily(children: number): Promise<Family> {
-  const parent = (await store.hippoDb.cards.create(TENANT, { title: 'parent' })).id;
-  const doneParent = (await store.hippoDb.cards.create(TENANT, { title: 'done parent' })).id;
-  const openParent = (await store.hippoDb.cards.create(TENANT, { title: 'open parent' })).id;
+  const parent = (await store.cards.create(TENANT, { title: 'parent' })).id;
+  const doneParent = (await store.cards.create(TENANT, { title: 'done parent' })).id;
+  const openParent = (await store.cards.create(TENANT, { title: 'open parent' })).id;
   const promotable = new Set<string>();
   const otherIds: string[] = [];
   const ids: string[] = [];
   for (let i = 0; i < children; i++) {
     const second = i % 4 === 3 ? [openParent] : i % 3 === 1 ? [doneParent] : [];
-    ids.push((await store.hippoDb.cards.create(TENANT, { title: `child ${i}`, dependsOn: [parent, ...second] })).id);
+    ids.push((await store.cards.create(TENANT, { title: `child ${i}`, dependsOn: [parent, ...second] })).id);
   }
   await finish(doneParent);
   const db = openHippoDb(root);
@@ -89,7 +89,7 @@ describe('completeCard child promotion', () => {
     'promotes the unblocked backlog children of a parent with %i children, in card_deps order',
     async (children) => {
       const family = await seedFamily(children);
-      const result = await store.hippoDb.cards.complete(TENANT, family.parent, 'success');
+      const result = await store.cards.complete(TENANT, family.parent, 'success');
 
       const deps = (await cardDetailOf(root, TENANT, family.parent))?.deps;
       const inDepsOrder = (deps?.children ?? []).filter((id) => family.promotable.has(id));
@@ -110,7 +110,7 @@ describe('completeCard child promotion', () => {
 
   it('promotes nothing when the parent is shelved', async () => {
     const family = await seedFamily(10);
-    const result = await store.hippoDb.cards.complete(TENANT, family.parent, 'failure');
+    const result = await store.cards.complete(TENANT, family.parent, 'failure');
     expect(result?.promotedChildren).toEqual([]);
     const promotable = await Promise.all([...family.promotable].map((id) => card(id)));
     expect(promotable.map((child) => child.status)).toEqual([...family.promotable].map(() => 'backlog'));
@@ -129,9 +129,9 @@ describe('completeCard child promotion', () => {
     } finally {
       closeHippoDb(db);
     }
-    const result = await store.hippoDb.cards.complete(TENANT, family.parent, 'success');
+    const result = await store.cards.complete(TENANT, family.parent, 'success');
     expect(result?.promotedChildren).toHaveLength(family.promotable.size);
-    expect((await store.hippoDb.cards.detail('tenant-b', 'card_other'))?.card.status).toBe('backlog');
+    expect((await store.cards.detail('tenant-b', 'card_other'))?.card.status).toBe('backlog');
   });
 });
 
@@ -174,7 +174,7 @@ describe('statements one completion prepares and runs', () => {
 
   it('prepares the dependency insert of a new card once for 20 parents', async () => {
     const parents: string[] = [];
-    for (let i = 0; i < 20; i++) parents.push((await store.hippoDb.cards.create(TENANT, { title: `parent ${i}` })).id);
+    for (let i = 0; i < 20; i++) parents.push((await store.cards.create(TENANT, { title: `parent ${i}` })).id);
     const log = recordStatements(() =>
       recordPrepares(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })),
     );

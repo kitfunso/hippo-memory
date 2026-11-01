@@ -11,14 +11,11 @@ import { previousSecretInForce, SLACK_PREVIOUS, warnIfOpenEnded } from '../previ
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
-import { parkInDlq } from '../../../api/dead-letters.js';
-import {
-  resolveTenant,
-  routeOncePerDelivery,
-  type RouteFallback,
-} from '../../../api/hippo-db/connector-events.js';
+import { parkInDlq } from '../dlq.js';
+import { errorFields, log } from '../../../base/util/log.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
+import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import {
   JSON_HEADERS,
@@ -29,7 +26,7 @@ import {
   type WebhookRequest,
 } from '../../http/http-util.js';
 import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/json.js';
-import { connectorContext, type ConnectorContext, type WebhookPorts } from '../ingest.js';
+import type { ConnectorContext, WebhookPorts } from '../ingest.js';
 
 export function warnSlackPreviousSecretOpen(): void {
   warnIfOpenEnded(
@@ -67,8 +64,8 @@ export async function handleSlackEventsWebhook(
   });
 }
 
-/** Reads the raw body and refuses it unless the signature matches the current or the
- * previous secret. */
+/** Reads the raw body and refuses it unless the signature matches the current or the previous
+ * secret. */
 async function readSignedSlackBody(
   request: WebhookRequest,
   secret: string,
@@ -109,14 +106,28 @@ const REPLAY_HOLD_MS = DAY_MS;
 /** Routes a verified request once: the signature covers the timestamp and the body, so a repeat
  * is the same request. */
 async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
-  const claim = {
+  const events = d.store.connectorEvents;
+  const held = await events.claimDelivery({
     connector: 'slack',
     key: d.signature,
     nowMs: Date.now(),
     ttlMs: REPLAY_HOLD_MS,
-  } as const;
-  if (!(await routeOncePerDelivery(d, claim, () => routeSignedSlackPayload(d)))) {
+  });
+  if (!held) {
     sendJson(d.res, 200, { ok: true, status: 'duplicate' });
+    return;
+  }
+  try {
+    await routeSignedSlackPayload(d);
+  } catch (err) {
+    // A request that failed left nothing stored, so Slack's retry must get through.
+    await events.releaseDelivery('slack', d.signature).catch((releaseErr) => {
+      log.warn(
+        'slack webhook: could not free the replay hold of a failed delivery',
+        errorFields(releaseErr),
+      );
+    });
+    throw err;
   }
 }
 
@@ -142,7 +153,7 @@ async function parkAndAck(
     signature: d.signature,
     slackTimestamp: d.slackTimestamp,
   };
-  await parkInDlq(d, slackDlq, row);
+  await parkInDlq(slackDlq, d.store, row);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
@@ -178,7 +189,13 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   if (answerUrlVerification(res, body)) return;
   const resolvedTenant = await tenantOrPark(d, body);
   if (resolvedTenant === null) return;
-  const ctx = connectorContext(d, resolvedTenant, { subject: 'connector:slack', role: 'admin' });
+  const ctx: ConnectorContext = {
+    tenantId: resolvedTenant,
+    actor: { subject: 'connector:slack', role: 'admin' },
+    store: d.store,
+    config: d.config,
+    infra: d.infra,
+  };
   if (!isSlackEventEnvelope(body)) {
     await parkAndAck(d, {
       tenantId: ctx.tenantId,
@@ -201,7 +218,7 @@ async function tenantOrPark(d: SignedSlackRequest, body: JsonValue): Promise<str
     return envTenant();
   }
   const resolvedTenant = await resolveTenant(
-    d,
+    d.store,
     { connector: 'slack', teamId: body.team_id },
     hostFallback(),
   );
@@ -226,7 +243,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
   // null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
     teamIdFromRaw !== null
-      ? await resolveTenant(d, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
+      ? await resolveTenant(d.store, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
       : null;
   await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel

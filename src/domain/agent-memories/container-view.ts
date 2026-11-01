@@ -4,7 +4,7 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { AgentMemoryTool } from '../../base/memory/agent-memory-tools.js';
-import type { ImportStep, PlannedRow } from '../../base/records/agent-import.js';
+import type { ImportStep, PlannedRow } from '../../base/ports/store/agent-import.js';
 import type { DormantSnapshot, EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { itemSource } from './source.js';
@@ -30,8 +30,8 @@ export interface StoreSession {
 export interface ContainerWork {
   readonly tool: AgentMemoryTool;
   readonly container: Container;
-  /** `containerPrefix(tool, containerId)`: every row of the container has a source starting
-   * with it. */
+  /** `containerPrefix(tool, containerId)`: every row of the container has a source starting with
+   * it. */
   readonly prefix: string;
   /** Legacy rows that take an item's key as they are, by key. */
   readonly adopt: ReadonlyMap<string, readonly MemoryEntry[]>;
@@ -47,8 +47,8 @@ export interface ContainerView {
   readonly live: readonly MemoryEntry[];
   /** Dormant snapshots the moves bring under the prefix, as they will stand. */
   readonly movedDormant: readonly DormantSnapshot[];
-  /** Every live row under the prefix and the earlier ones, as read: what the apply checks
-   * still stands. */
+  /** Every live row under the prefix and the earlier ones, as read: what the apply checks still
+   * stands. */
   readonly read: readonly PlannedRow[];
   /** The adoptions and moves, in the order the store runs them. */
   readonly steps: readonly ImportStep[];
@@ -140,7 +140,7 @@ async function adoptPrefix(
   }
   if (rows.length === 0 && (w.container.items.length === 0 || draft.live.length > 0)) return;
   draft.steps.push({ kind: 'moveDormant', from: old, to: w.prefix, origin });
-  for (const snap of await s.store.hippoDb.projectTags.dormantWhere({
+  for (const snap of await s.store.projectTags.dormantWhere({
     tenantId: s.tenantId,
     sourcePrefix: old,
   })) {
@@ -152,8 +152,8 @@ async function adoptPrefix(
   }
 }
 
-// Byte order on created then id, as the store pages rows; localeCompare may skip the
-// ISO punctuation.
+// Byte order on created then id, as the store pages rows; localeCompare may skip the ISO
+// punctuation.
 const byteOrder = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 function oldestFirst(rows: readonly MemoryEntry[]): MemoryEntry[] {

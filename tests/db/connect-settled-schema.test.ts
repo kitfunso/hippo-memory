@@ -45,7 +45,7 @@ describe('connection open after the schema is proven', () => {
     const probes = probesPrepared(() => {
       for (let i = 0; i < 3; i++) closeHippoDb(grant.open(root));
     });
-    runtime.closeNow();
+    runtime.dispose();
     expect(probes).toBe(1);
   });
 

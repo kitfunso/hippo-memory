@@ -397,9 +397,12 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
       if (msg === 'locked') resolve();
     });
   });
-  const released = new Promise<void>((resolve, reject) => {
+  const released = new Promise<void>((resolve) => {
     worker.on('message', (msg) => {
-      if (msg === 'released') worker.terminate().then(() => resolve(), reject);
+      if (msg === 'released') {
+        worker.terminate();
+        resolve();
+      }
     });
   });
   // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.

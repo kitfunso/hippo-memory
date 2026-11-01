@@ -85,7 +85,7 @@ describe('openStore makes the mirror folders once per store', () => {
 
     fs.rmSync(root, { recursive: true, force: true });
     expect(foldersMadeBy(3)).toBe(mirrorFolders.length);
-    runtime.closeNow();
+    runtime.dispose();
     expect(mirrorFolders.filter((folder) => fs.existsSync(path.join(root, folder)))).toEqual(mirrorFolders);
   });
 });

@@ -7,7 +7,7 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
-import type { Rejection } from '../../src/base/records/rejections.js';
+import type { Rejection } from '../../src/base/ports/store/rejections.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import type { OnHandle } from '../../src/store/sqlite/runtime/open.js';
@@ -123,7 +123,7 @@ describe('rejections.apply across pages', () => {
     const ids = seed();
     const dormant = seedDormant();
 
-    const applied = await sqliteStore(root).hippoDb.rejections.apply(rejection());
+    const applied = await sqliteStore(root).rejections.apply(rejection());
 
     const removed = [ids[2], ids[600], ids[700], ids[800], dormant.direct, dormant.merged];
     expect(applied.removedIds).toEqual(removed);

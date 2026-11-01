@@ -6,19 +6,18 @@ import { join } from 'node:path';
 import { adminActor, contextGet, remember, sleepWholeStore } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { recallRerankerPick } from '../../src/api/recall/rows.js';
-import type { HippoDbContext } from '../../src/api/hippo-db-context.js';
-import { contextReach, coreEnrichment } from '../../src/api/hippo-db-context.js';
+import { contextReach, type ContextWith } from '../../src/api/types.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import type { InfraPorts } from '../../src/base/ports/infra.js';
 import type { Llm, LlmRequest } from '../../src/base/ports/llm.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import type { AgentFiles } from '../../src/base/util/agent-files.js';
+import type { OptionalGroup } from '../../src/base/ports/store.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { cwdProject } from '../_helpers/api-ctx.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-import { PRODUCTION_SWITCHES } from '../../src/base/memory/eval-switches.js';
 
 let network: ReturnType<typeof vi.fn>;
 
@@ -88,7 +87,6 @@ function fakeInfra(cwd: string): FakeInfra {
     isGlobalRoot: read('isGlobalRoot'),
   };
   const infra: InfraPorts = {
-    ...PRODUCTION_SWITCHES,
     clock: evalNow,
     machine,
     llm,
@@ -116,7 +114,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function contextOn(fake: FakeInfra): HippoDbContext {
+function contextOn(fake: FakeInfra): ContextWith<OptionalGroup> {
   const store = sqliteStore(hippoRoot);
   return {
     tenantId: 'default',
@@ -125,7 +123,6 @@ function contextOn(fake: FakeInfra): HippoDbContext {
     reach: contextReach(sqliteReach({ hippoRoot, store }), loadConfig, fake.infra.embedderFor),
     config: loadConfig(hippoRoot),
     infra: fake.infra,
-    enrich: coreEnrichment(store),
   };
 }
 
@@ -133,6 +130,7 @@ describe('the api on fake infra ports', () => {
   it('remembers, recalls through the reranker, builds context and sleeps through the llm on the fakes alone', async () => {
     const fake = fakeInfra(join(hippoRoot, '..'));
     const ctx = contextOn(fake);
+    const config = ctx.config;
 
     await remember(ctx, { content: 'the release train leaves every second thursday from platform nine' });
     await remember(ctx, {
@@ -154,6 +152,8 @@ describe('the api on fake infra ports', () => {
           explicitScope: null,
           activeScope: null,
           reranker: { fn: picked!.fn, topK: picked!.defaultTopK },
+          usePhysics: false,
+          physicsConfig: config.physics,
           multihop: false,
           mmr: false,
           mmrLambda: 0.7,
@@ -161,6 +161,7 @@ describe('the api on fake infra ports', () => {
           explain: false,
         },
         show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
+        lastRecall: ctx.store.lastRecall,
       },
     );
     expect(recalled.results.length).toBeGreaterThan(0);

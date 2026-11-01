@@ -6,9 +6,8 @@ import type { MemoryEntry } from '../base/memory/entry.js';
 import { ALL_TENANTS } from '../base/util/tenant.js';
 import { syncGlobalToLocal } from '../domain/sharing/global-sync.js';
 import { autoShare, listPeers, shareMemory } from '../domain/sharing/share.js';
-import { withDetached } from './detached.js';
-import { requireHostAdmin, type Context } from './types.js';
-import { globalTargetOf, type HippoDbContext } from './hippo-db-context.js';
+import { globalTargetOf } from './infra.js';
+import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 export { AUTO_SHARE_MIN_SCORE, transferScore } from '../domain/sharing/share.js';
 
@@ -35,24 +34,25 @@ function requireGlobalTarget(
 /** Copies one of the caller's memories to the global store; null when its transfer score is too
  * low and `force` is off. */
 export async function shareToGlobal(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'folderFiles'>,
   id: string,
   opts: { readonly force: boolean },
 ): Promise<MemoryEntry | null> {
-  const target = requireGlobalTarget(ctx, 'share');
   const options = { force: opts.force, tenantId: ctx.tenantId, embed: ctx.infra };
-  return withDetached(ctx, (detached) => shareMemory(ctx, target, id, { ...options, detached }));
+  return shareMemory(ctx, requireGlobalTarget(ctx, 'share'), id, options);
 }
 
 /** The caller's memories whose transfer score reaches `minScore`, copied to the global store
  * unless `dryRun`. */
 export async function autoShareToGlobal(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'sharing' | 'folderFiles'>,
   opts: { readonly minScore: number; readonly dryRun: boolean },
 ): Promise<MemoryEntry[]> {
-  const target = requireGlobalTarget(ctx, 'auto-share');
-  const options = { ...opts, tenantId: ctx.tenantId, embed: ctx.infra };
-  return withDetached(ctx, (detached) => autoShare(ctx, target, { ...options, detached }));
+  return autoShare(ctx, requireGlobalTarget(ctx, 'auto-share'), {
+    ...opts,
+    tenantId: ctx.tenantId,
+    embed: ctx.infra,
+  });
 }
 
 /** The projects that shared into the global store: the caller's tenant, or every tenant for the
@@ -68,16 +68,12 @@ export async function sharePeers(
   );
 }
 
-/** Copies the global rows the caller's store lacks into it; other projects' rows only
- * with `includeCrossProject`. */
+/** Copies the global rows the caller's store lacks into it; other projects' rows only with
+ * `includeCrossProject`. */
 export async function syncFromGlobal(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'sharing' | 'folderFiles' | 'lessonWrites' | 'rejections'>,
   opts: { readonly includeCrossProject: boolean },
 ): Promise<number> {
   const local = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };
-  const target = requireGlobalTarget(ctx, 'sync');
-  const options = { ...opts, embed: ctx.infra };
-  return withDetached(ctx, (detached) =>
-    syncGlobalToLocal(local, target, { ...options, detached }),
-  );
+  return syncGlobalToLocal(local, requireGlobalTarget(ctx, 'sync'), { ...opts, embed: ctx.infra });
 }

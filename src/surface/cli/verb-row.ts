@@ -1,8 +1,9 @@
-// The shape of one row of the verb table, and the helper that builds it with a type-checked
-// lazy import.
+// The shape of one row of the verb table, and the helper that builds it with a type-checked lazy
+// import.
 
 import type { CliFlags, CommandContext } from './flag-values.js';
 import type { VerbFlags } from './flags.js';
+import type { OptionalGroup } from '../../base/ports/store.js';
 
 type Handler = (ctx: CommandContext) => void | Promise<void>;
 
@@ -13,33 +14,28 @@ export interface DryRunForm {
   readonly honoured: (args: readonly string[], flags: CliFlags) => boolean;
 }
 
-/** A flag an earlier release took: the release that removed it and what to do instead. */
-export interface RemovedFlag {
-  readonly removedIn: string;
-  readonly advice: string;
-}
-
-/** What a verb declares; its key in the table is its name, and the table's order is the
- * help listing's. */
+/** What a verb declares; its key in the table is its name, and the table's order is the help
+ * listing's. */
 export interface VerbRow {
   /** The flags this verb reads; any other flag still parses, and the verb says it ignores it. */
   readonly flags: VerbFlags;
-  /** Flags an earlier release took: typing one stops the run and names the removal. */
-  readonly removedFlags?: Readonly<Record<string, RemovedFlag>>;
-  /** The handler refuses each subcommand's unknown flags with a stricter message, so main() leaves
-   * the check to it. */
-  readonly checksOwnFlags?: true;
+  /** Flags an earlier release took, each with what to do instead: typing one stops the run and
+   * names the removal. */
+  readonly removedFlags?: Readonly<Record<string, string>>;
   /** Help blocks, each opening with a newline so the full listing is their concatenation. */
   readonly usage?: readonly string[];
   /** Help blocks the full listing prints after every verb's own; `hippo <verb> --help` prints
    * them last. */
   readonly listedLast?: readonly string[];
   readonly aliases?: readonly string[];
+  /** The optional store groups the verb reaches; on a store without one it refuses before it
+   * opens anything. */
+  readonly needs?: readonly OptionalGroup[];
   /** Runs on a session of its own, opening each store once; set on api-backed verbs, as hook
    * verbs open their own. */
   readonly scoped?: true;
-  /** Routine verbs after which a previously installed codex wrapper is repaired
-   * (never first-installed). */
+  /** Routine verbs after which a previously installed codex wrapper is repaired (never
+   * first-installed). */
   readonly repairsCodexWrapper?: true;
   /** Deletes or hides memories: an unknown flag stops the run instead of being ignored. */
   readonly destructive?: true;

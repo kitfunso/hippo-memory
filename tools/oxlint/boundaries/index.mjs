@@ -12,7 +12,7 @@ import { noStoreBranchRule } from './no-store-branch.mjs';
 import { noTwinFunctionRule } from './no-twin-function.mjs';
 
 /** Rules that read a node's shape, which no built-in oxlint rule does; .dependency-cruiser.cjs holds
- * the import rules, and oxlint.config.ts scopes each rule to its folders. */
+ * the import rules, and .oxlintrc.json scopes each rule to its folders. */
 const boundariesPlugin = eslintCompatPlugin({
   meta: { name: 'boundaries' },
   rules: {

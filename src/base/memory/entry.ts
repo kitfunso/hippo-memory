@@ -7,7 +7,7 @@ import { isJsonString } from '../util/json.js';
 import { tokenize } from '../util/tokenize.js';
 import { ID_SUFFIX_CHARS } from '../util/token-text.js';
 import {
-  calculateStrengthAt,
+  calculateStrength,
   netWrong,
   PRODUCTION_STRENGTH,
   type StrengthModel,
@@ -31,9 +31,9 @@ export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 export const MEMORY_KINDS = ['raw', 'distilled', 'superseded', 'archived'] as const;
 export type MemoryKind = (typeof MEMORY_KINDS)[number];
 
-// Timestamps are Date.toISOString() output (ISO_STAMP_CHARS chars, UTC, ms, trailing Z), so byte
-// comparison sorts them chronologically. The row writer stores `created` in that form (isoInstant);
-// only rows written before it may hold another.
+// Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison
+// sorts them chronologically. The row writer stores `created` in that form (isoInstant); only rows
+// written before it may hold another.
 
 // Fields are camelCase in memory; src/base/memory/memory-wire.ts keeps the snake_case keys of every
 // stored and wire format.
@@ -114,8 +114,8 @@ export const HIGH_SCHEMA_FIT = 0.7;
 const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
 const LOW_SCHEMA_FIT = 0.3;
 const LOW_FIT_HALF_LIFE_FACTOR = 0.5;
-// Schema fit blends tag coverage and content similarity; a content match needs this share of
-// shared tokens.
+// Schema fit blends tag coverage and content similarity; a content match needs this share of shared
+// tokens.
 const TAG_FIT_WEIGHT = 0.6;
 const CONTENT_FIT_WEIGHT = 0.4;
 const CONTENT_TOKEN_SHARE_MIN = 0.2;
@@ -158,8 +158,8 @@ export interface CreateMemoryOptions {
   source?: string;
   confidence?: ConfidenceLevel;
   /**
-   * The store config's `defaultHalfLifeDays`; required so no writer silently gets the
-   * compiled default.
+   * The store config's `defaultHalfLifeDays`; required so no writer silently gets the compiled
+   * default.
    */
   baseHalfLifeDays: number;
   traceOutcome?: TraceOutcome;
@@ -177,7 +177,7 @@ export interface CreateMemoryOptions {
 
 /** A new memory entry created at `now`; hippo's own writers name the half-life base, so the type
  * asks for it. */
-export function createMemoryAt(
+export function createMemory(
   content: string,
   options: CreateMemoryOptions,
   now: Date,
@@ -213,7 +213,7 @@ export function createMemoryAt(
     ...newLineage(options, at),
   };
 
-  entry.strength = calculateStrengthAt(entry, now, PRODUCTION_STRENGTH);
+  entry.strength = calculateStrength(entry, now, PRODUCTION_STRENGTH);
   return entry;
 }
 
@@ -299,7 +299,7 @@ export function createSuccessor(
     sourceSessionId: old.sourceSessionId,
     baseHalfLifeDays: opts.baseHalfLifeDays,
   };
-  const next = createMemoryAt(content, fields, now);
+  const next = createMemory(content, fields, now);
   // A legacy null origin has nothing to carry, so the store stamps it from its own location.
   if (isJsonString(old.originProject)) {
     next.originProject = old.originProject;
@@ -308,9 +308,9 @@ export function createSuccessor(
 }
 
 /**
- * How well new content fits existing knowledge, 0..1: above HIGH_SCHEMA_FIT consolidates
- * faster, below LOW_SCHEMA_FIT is novel and decays faster if unused. Tags shared with existing
- * memories count by rarity (a rare shared tag fits more), plus content-token overlap. */
+ * How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3
+ * is novel and decays faster if unused. Tags shared with existing memories count by rarity (a
+ * rare shared tag fits more), plus content-token overlap. */
 export function computeSchemaFit(
   content: string,
   tags: string[],
@@ -344,8 +344,8 @@ export interface SchemaFitSource {
 const FILLER_TOKEN_MAX_LENGTH = 3;
 // Matching half the tags at average weight scores about 0.5, so the raw overlap ratio is doubled.
 const TAG_OVERLAP_SCALE = 2;
-// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on
-// one hit.
+// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on one
+// hit.
 const CONTENT_ENOUGH_MIN_MATCHES = 5;
 
 function significantTokens(text: string): Set<string> {
@@ -405,7 +405,7 @@ function inferValence(tags: string[]): EmotionalValence {
 /** Copies with the retrieval count, clock and half-life updated at `now`; the caller persists
  * them. A model whose recall does not strengthen returns the entries unchanged, not empty, since
  * callers derive last_retrieval_ids. */
-export function markRetrievedAt(
+export function markRetrieved(
   entries: MemoryEntry[],
   now: Date,
   model: StrengthModel,
@@ -422,7 +422,7 @@ export function markRetrievedAt(
       lastRetrieved: wrong ? e.lastRetrieved : now.toISOString(),
       halfLifeDays: wrong ? e.halfLifeDays : e.halfLifeDays + RETRIEVAL_HALF_LIFE_GAIN_DAYS,
     };
-    updated.strength = calculateStrengthAt(updated, now, model);
+    updated.strength = calculateStrength(updated, now, model);
     return updated;
   });
 }

@@ -9,8 +9,8 @@ import { sendJson } from '../http/http-util.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import type { RouteParams } from './types.js';
 
-// The caller's id lands in a response header and in logs, so only a short plain token is
-// echoed back.
+// The caller's id lands in a response header and in logs, so only a short plain token is echoed
+// back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */
@@ -50,8 +50,8 @@ export function replyFor<E>(err: E): { status: number; message: string } {
   return isStoreBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
 }
 
-// Above DEFAULT_BODY_DEADLINE_MS and DEFAULT_RESOLVER_DEADLINE_MS, so a request those govern is
-// answered before it is called slow.
+// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered
+// before it is called slow.
 const SLOW_REQUEST_WARN_MS = MINUTE_MS;
 
 /** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or

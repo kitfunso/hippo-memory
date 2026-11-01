@@ -15,8 +15,7 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { ServerHandle } from '../../src/server.js';
-import type { HippoStore } from '../../src/base/ports/store-index.js';
-import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor, type SqliteExecutor } from '../../src/store/sqlite/runtime/executor.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -465,7 +464,7 @@ interface Seeded {
   readonly token: string;
 }
 
-type InProcess = HippoDbStore;
+type InProcess = HippoStore & StoreGroups;
 
 describe("the server-thread block of a moved `loop: 'off'` route", () => {
   const ROUTES: ReadonlyArray<
@@ -502,7 +501,7 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     ],
     [
       'GET /v1/sessions/:id/assemble',
-      (p) => ({ hippoDb: p.hippoDb }),
+      (p) => ({ dagReads: p.dagReads }),
       (s, made) => get(s, '/v1/sessions/sess-1/assemble', made.token),
     ],
     [
@@ -676,7 +675,7 @@ describe("a store worker's wal_autocheckpoint", () => {
     cleanups.push(() => store.close());
     const save = (n: number) => {
       const saved = { classTag: 'release', claimText: `claim ${n}` };
-      return store.hippoDb.objects.saveObject('default', 'prediction', {
+      return store.objects.saveObject('default', 'prediction', {
         ...saved,
         mirror: predictionMirror('default', saved, 30, evalNow()),
         actor: 'test',

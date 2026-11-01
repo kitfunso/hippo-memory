@@ -87,8 +87,8 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
     scope: wire.scope ?? null,
     owner: wire.owner ?? null,
     artifact_ref: wire.artifact_ref ?? null,
-    // A rebuild from these files must keep supersession and the DAG; deserializeEntry reads
-    // all five.
+    // A rebuild from these files must keep supersession and the DAG; deserializeEntry reads all
+    // five.
     valid_from: wire.valid_from,
     superseded_by: wire.superseded_by,
     extracted_from: wire.extracted_from,
@@ -118,8 +118,8 @@ export function serializeEntry(entry: MemoryEntry): string {
   return `${fm}\n\n${wire.content}\n`;
 }
 
-/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no
- * creation time. */
+/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no creation
+ * time. */
 export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
   const { data, content } = parseFrontmatter(raw);
 

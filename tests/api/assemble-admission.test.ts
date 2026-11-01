@@ -51,20 +51,17 @@ describe('assemble admission', () => {
   it('leaves out a row made private between choosing the window and reading its content', async () => {
     const root = seeded(5);
     const ctx = member(root);
-    const dagReads = ctx.store.hippoDb.dagReads;
+    const dagReads = ctx.store.dagReads;
     const raced = {
       ...ctx,
       store: {
         ...ctx.store,
-        hippoDb: {
-          ...ctx.store.hippoDb,
-          dagReads: {
-            ...dagReads,
-            sessionRawKeys: async (query: Parameters<typeof dagReads.sessionRawKeys>[0]) => {
-              const keys = await dagReads.sessionRawKeys(query);
-              sql(root, `UPDATE memories SET scope = 'slack:private:CSEC' WHERE id = ?`, 'raw-002');
-              return keys;
-            },
+        dagReads: {
+          ...dagReads,
+          sessionRawKeys: async (query: Parameters<typeof dagReads.sessionRawKeys>[0]) => {
+            const keys = await dagReads.sessionRawKeys(query);
+            sql(root, `UPDATE memories SET scope = 'slack:private:CSEC' WHERE id = ?`, 'raw-002');
+            return keys;
           },
         },
       },

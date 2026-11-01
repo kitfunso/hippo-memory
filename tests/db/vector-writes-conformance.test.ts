@@ -6,8 +6,11 @@ import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
+import { savePhysicsState } from '../../src/db/physics-state.js';
+import { initializeParticle } from '../../src/base/rank/physics.js';
 import type {
   EmbeddingIndexState,
+  PhysicsParticle,
   VectorBackfillQuery,
   VectorRowWrite,
   VectorWriteResult,
@@ -24,18 +27,26 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 const MODEL = embeddingIndexIdentity('test:vec-3');
 const OLD = embeddingIndexIdentity('test:old-3');
 const NEW = embeddingIndexIdentity('test:new-3');
+const SEEDED_AT = new Date('2026-02-01T00:00:00.000Z');
 const ALL_IDS = ['mem_1', 'mem_2', 'mem_3', 'mem_4', 'mem_5', 'mem_6'];
 
-type Value = MemoryEntry[] | VectorWriteResult | EmbeddingIndexState | [string, number[]][];
+type Value =
+  | MemoryEntry[]
+  | VectorWriteResult
+  | EmbeddingIndexState
+  | [string, number[]][]
+  | [string, PhysicsParticle][];
 type Call = GroupCall<'vectorWrites', Value>;
 type Side = SideResult<Value>;
 
 let fixture: TwoTenantFixture;
 let baseline: Side;
+const entries = new Map<string, MemoryEntry>();
 
 function memory(id: string, tenantId: string, day: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const created = `2026-01-0${day}T00:00:00.000Z`;
@@ -49,7 +60,7 @@ function memory(id: string, tenantId: string, day: number, extra: Partial<Memory
   };
 }
 
-/** Ids interleave the tenants in byte order: mem_1 has a vector, mem_3 a vector under OLD, mem_4 a vector in tenant B. */
+/** Ids interleave the tenants in byte order: mem_1 has a vector and a particle, mem_3 a vector under OLD, mem_4 a vector in tenant B. */
 function seedMemories(dir: string): void {
   const rows = [
     memory('mem_1', TENANT_A, 1),
@@ -59,7 +70,10 @@ function seedMemories(dir: string): void {
     memory('mem_5', TENANT_A, 5, { kind: 'archived' }),
     memory('mem_6', TENANT_A, 6),
   ];
-  for (const row of rows) writeEntry(dir, row);
+  for (const row of rows) {
+    writeEntry(dir, row);
+    entries.set(row.id, row);
+  }
   const db = openHippoDb(dir);
   try {
     upsertVectors(
@@ -72,6 +86,7 @@ function seedMemories(dir: string): void {
     );
     upsertVectors(db, [['mem_3', [0, 1, 0]]], OLD);
     setMeta(db, EMBEDDING_MODEL_META_KEY, MODEL);
+    savePhysicsState(db, [initializeParticle(rows[0], [1, 0, 0], PRODUCTION_STRENGTH, SEEDED_AT)]);
   } finally {
     closeHippoDb(db);
   }
@@ -95,8 +110,11 @@ const sorted = <V>(map: Map<string, V> | undefined): [string, V][] =>
   [...(map ?? new Map<string, V>())].sort(([a], [b]) => (a < b ? -1 : 1));
 const stored: Call = async (_g, store) =>
   sorted(await store.vectors?.stored('vectors', ALL_IDS)).map(([id, v]): [string, number[]] => [id, Array.from(v)]);
+const particles: Call = async (_g, store) => sorted(await store.vectors?.stored('particles', ALL_IDS));
+const particleFor = (id: string, vector: number[]): PhysicsParticle =>
+  initializeParticle(entries.get(id) ?? memory(id, TENANT_A, 9), vector, PRODUCTION_STRENGTH, SEEDED_AT);
 
-type Row = MemoryEntry | [string, number[]];
+type Row = MemoryEntry | [string, number[]] | [string, PhysicsParticle];
 const isEntry = (row: Row): row is MemoryEntry => !Array.isArray(row);
 
 function idsOf(outcome: Side['outcomes'][number] | undefined): string[] {
@@ -110,14 +128,14 @@ function idsOf(outcome: Side['outcomes'][number] | undefined): string[] {
 beforeAll(async () => {
   fixture = seedTwoTenants();
   seedMemories(fixture.dir);
-  baseline = await conforms([indexState, stored]);
+  baseline = await conforms([indexState, stored, particles]);
 });
 
 afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });
 });
 
-it('starts from the seeded index: the model and three vectors', () => {
+it("starts from the seeded index: the model, three vectors and mem_1's particle", () => {
   expect(baseline.outcomes).toEqual([
     { value: { storedModel: MODEL, hasVectors: true } },
     {
@@ -127,6 +145,7 @@ it('starts from the seeded index: the model and three vectors', () => {
         ['mem_4', [0, 0, 1]],
       ],
     },
+    { value: [['mem_1', particleFor('mem_1', [1, 0, 0])]] },
   ]);
 });
 
@@ -213,20 +232,43 @@ describe('VectorWrites.writeVectors', () => {
     expect(side.outcomes.slice(2)).toEqual(baseline.outcomes.slice(0, 2));
   });
 
+  it("keeps a memory's particle and adds one only where none exists", async () => {
+    const side = await conforms([
+      write(TENANT_A, MODEL, [
+        { memoryId: 'mem_1', vector: [0, 1, 0], particle: particleFor('mem_1', [0, 1, 0]) },
+        {
+          memoryId: 'mem_6',
+          vector: [0.25, 0.5, 1],
+          particle: { ...particleFor('mem_6', [0.25, 0.5, 1]), memoryId: 'mem_4' },
+        },
+      ]),
+      particles,
+    ]);
+    expect(side.outcomes[0]).toEqual({ value: { written: 2, modelMismatch: false } });
+    expect(side.outcomes[1]).toEqual({
+      value: [
+        ['mem_1', particleFor('mem_1', [1, 0, 0])],
+        ['mem_6', particleFor('mem_6', [0.25, 0.5, 1])],
+      ],
+    });
+  });
+
   it("refuses a one-row write under another model without replaceIndex, leaving tenant B's vector, and drops every tenant's index with it", async () => {
-    const row6 = { memoryId: 'mem_6', vector: [0, 1, 1] };
+    const row6 = { memoryId: 'mem_6', vector: [0, 1, 1], particle: particleFor('mem_6', [0, 1, 1]) };
     const side = await conforms([
       write(TENANT_A, NEW, [row6]),
       indexState,
       stored,
+      particles,
       write(TENANT_A, NEW, [row6], true),
       write(TENANT_B, NEW, [{ memoryId: 'mem_2', vector: [1, 1, 0] }], true),
       indexState,
       stored,
+      particles,
       missing({ tenantId: ALL_TENANTS, model: NEW, limit: 10 }),
     ]);
-    expect(side.outcomes.slice(0, 3)).toEqual([{ value: { written: 0, modelMismatch: true } }, ...baseline.outcomes]);
-    expect(side.outcomes.slice(3, 7)).toEqual([
+    expect(side.outcomes.slice(0, 4)).toEqual([{ value: { written: 0, modelMismatch: true } }, ...baseline.outcomes]);
+    expect(side.outcomes.slice(4, 8)).toEqual([
       { value: { written: 1, modelMismatch: false } },
       { value: { written: 1, modelMismatch: false } },
       { value: { storedModel: NEW, hasVectors: true } },
@@ -237,7 +279,8 @@ describe('VectorWrites.writeVectors', () => {
         ],
       },
     ]);
-    expect(idsOf(side.outcomes[7])).toEqual(['mem_1', 'mem_3', 'mem_4', 'mem_5']);
+    expect(side.outcomes[8]).toEqual({ value: [['mem_6', particleFor('mem_6', [0, 1, 1])]] });
+    expect(idsOf(side.outcomes[9])).toEqual(['mem_1', 'mem_3', 'mem_4', 'mem_5']);
     expect(side.audit).toEqual(baseline.audit);
   });
 });

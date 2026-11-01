@@ -4,9 +4,14 @@ import { anthropicLlmFromEnv } from '../../infra/ports.js';
 import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
-import { embedCoverage, memoryEmbedMissing, storedVectorCount } from '../../api/embeddings.js';
-import { memoryCountAll } from '../../api/hippo-db/memory-count.js';
-import { type CliContext } from './api-context.js';
+import {
+  embedCoverage,
+  memoryEmbedMissing,
+  resetPhysicsFromVectors,
+  storedVectorCount,
+} from '../../api/embeddings.js';
+import { memoryCountAll } from '../../api/memories/memories.js';
+import { cliApiContext, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
 import {
@@ -24,12 +29,7 @@ const MAX_FAILED_SHOWN = 5;
 const MAX_PAIRS_SHOWN = 15;
 const PAIR_PREVIEW_CHARS = 90;
 
-export async function handleRefine({
-  hippoRoot,
-  tenantId,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const llm = anthropicLlmFromEnv();
@@ -43,7 +43,7 @@ export async function handleRefine({
   const model = stringFlagOrExit(flags, 'model') || undefined;
   const asJson = boolFlag(flags, 'json');
 
-  const result = await refineStore(cli, hippoRoot, {
+  const result = await refineStore(hippoRoot, {
     llm,
     model,
     limit,
@@ -71,12 +71,7 @@ export async function handleRefine({
   }
 }
 
-export async function handleDedup({
-  hippoRoot,
-  tenantId,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const dryRun = boolFlag(flags, 'dry-run');
@@ -86,12 +81,12 @@ export async function handleDedup({
     );
   }
 
-  const total = await memoryCountAll(cli.apiContext(hippoRoot, tenantId));
+  const total = await memoryCountAll(cliApiContext(hippoRoot, tenantId));
   console.log(
     `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
   );
 
-  const result = await dedupWholeStore(cli.apiContext(hippoRoot, tenantId), { dryRun });
+  const result = await dedupWholeStore(cliApiContext(hippoRoot, tenantId), { dryRun });
 
   if (result.removed === 0) {
     console.log('No duplicates found.');
@@ -148,16 +143,22 @@ function printDedupPairs(result: DedupResult, dryRun: boolean): void {
 }
 
 export async function handleEmbed(
-  { hippoRoot, tenantId, flags, cli }: CommandContext,
+  { hippoRoot, tenantId, flags }: CommandContext,
   given?: EmbeddingProvider,
 ): Promise<void> {
   // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local
   // requireInit, so it heals pre-1.27.0 global stores from a directory with no local .hippo.
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx = cli.apiContext(root, tenantId);
+  const ctx = cliApiContext(root, tenantId);
 
-  // --status only reads cached state, so it must work with no provider key (e.g. removed after an
-  // earlier embed); the provider-availability gate waits for the embed path.
+  // --status and --reset-physics only read cached state, so they must work with no provider key
+  // (e.g. removed after an earlier embed); the provider-availability gate is deferred to the embed
+  // path.
+  if (boolFlag(flags, 'reset-physics')) {
+    await resetPhysics(ctx);
+    return;
+  }
+
   if (boolFlag(flags, 'status')) {
     await printEmbedStatus(ctx);
     return;
@@ -191,6 +192,11 @@ async function embedMissing(ctx: CliContext, provider: EmbeddingProvider): Promi
     );
     process.exitCode = 1;
   }
+}
+
+async function resetPhysics(ctx: CliContext): Promise<void> {
+  const count = await resetPhysicsFromVectors(ctx);
+  console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
 }
 
 async function printEmbedStatus(ctx: CliContext): Promise<void> {

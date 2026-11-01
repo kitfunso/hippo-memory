@@ -1,7 +1,7 @@
 // SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction
 // and the arithmetic.
 import type { DatabaseSyncLike } from '../../../db/index.js';
-import type { TokenSurface } from '../../../base/records/ledger.js';
+import type { TokenSurface } from '../../../base/ports/store/ledger.js';
 import { placeholders } from '../../../db/sql.js';
 import type { TenantId } from '../../../base/util/tenant.js';
 import { tenantAnd } from '../runtime/tenant.js';
@@ -189,6 +189,7 @@ export function deleteRereadRows(db: DatabaseSyncLike, tenantId: string, session
   ).run(tenantId, sessionId);
 }
 
+/** The first stored pilot arm hash for a session in `tenantId`. */
 export function firstPilotArmHash(
   db: DatabaseSyncLike,
   sessionId: string,

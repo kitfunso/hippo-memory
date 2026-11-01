@@ -4,11 +4,12 @@
 import type { Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
-import { requireHippoDb } from '../../api/hippo-db-context.js';
+import { requireGroups } from '../../base/ports/store.js';
+import { DASHBOARD_GROUPS } from './dashboard-types.js';
 import { configReader } from '../../host/config-file.js';
-import { evalClock } from '../../infra/eval-switches.js';
+import { evalClock, evalStoreRules } from '../../infra/eval-switches.js';
 import { loadStaticFiles } from '../dashboard/static-file.js';
-import { sqliteServerRuntimeWithExitHook, type SqliteServerRuntime } from '../open-store.js';
+import { defaultServerRuntime, type ServerRuntime } from '../open-store.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../http/http-util.js';
@@ -19,14 +20,13 @@ import { answerDashboard, type DashboardServing } from './dashboard-routes.js';
 import { dashboardTickets } from './dashboard-session.js';
 import {
   DEFAULT_SHUTDOWN_DRAIN_MS,
-  DETACHED_SETTLE_MS,
   drainAndClose,
   setKeepAliveTimeouts,
   shutdownBoundMs,
 } from './lifecycle.js';
 import { createListener } from './tls.js';
 import type { ServerHandle } from './types.js';
-import { rootInfra, rootStoreRules } from '../../infra/ports.js';
+import { rootInfra } from '../../infra/ports.js';
 
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
@@ -46,7 +46,7 @@ export interface DashboardOptions {
   readonly cacheClock?: () => number;
   /** Stop and exit on SIGINT or SIGTERM; only `hippo dashboard` sets it. */
   readonly handleSignals?: boolean;
-  /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; DEFAULT_BODY_DEADLINE_MS when unset. */
+  /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; 30 s when unset. */
   readonly bodyDeadlineMs?: number;
 }
 
@@ -71,15 +71,15 @@ export class DashboardListenError extends Error {
  * the store's workers. */
 function servingFor(
   opts: DashboardOptions,
-  { store, storeFor, host }: SqliteServerRuntime,
+  { store, storeFor, host }: ServerRuntime,
 ): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const clock = evalClock();
   const now = opts.now ?? ((): number => clock().getTime());
   const configAt = configReader(envRuntimeSettings);
   const infra = rootInfra(host);
-  // Proved once, so a store without the local tier refuses at start, never on a request.
-  const dashboardStore = requireHippoDb(store);
+  // Proved once, so a store without the Board's groups refuses at start, never on a request.
+  const dashboardStore = requireGroups(store, DASHBOARD_GROUPS);
   return {
     access: { token: opts.token, port: opts.port, tickets: dashboardTickets() },
     reader: startDashboardReader(
@@ -103,10 +103,7 @@ function servingFor(
 /** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never
  * claims the API server's pidfile, so both can serve one store. */
 export async function serveDashboard(opts: DashboardOptions): Promise<DashboardHandle> {
-  const runtime = sqliteServerRuntimeWithExitHook(
-    opts.hippoRoot,
-    rootStoreRules(envLossAversionRatio()),
-  );
+  const runtime = defaultServerRuntime(opts.hippoRoot, evalStoreRules(envLossAversionRatio()));
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
   const server = dashboardListener(serving, runtime, inflight);
@@ -115,7 +112,7 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
   // close is the last.
   const release = async (): Promise<void> => {
     await serving.reader.close();
-    await runtime.close(DETACHED_SETTLE_MS);
+    await runtime.close();
   };
   try {
     await listenOn(server, opts.port, DASHBOARD_HOST);
@@ -143,7 +140,7 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
 
 function dashboardListener(
   serving: DashboardServing,
-  runtime: SqliteServerRuntime,
+  runtime: ServerRuntime,
   inflight: Set<ServerResponse>,
 ): Server {
   // Its own count: the dashboard serves no /health, so its late handlers never mix into the API

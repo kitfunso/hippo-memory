@@ -3,15 +3,14 @@
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { CLI_ACTOR } from '../../base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
-import type { DetachedWork } from '../search/embed-memories.js';
-import type { ConfiguredFolder } from '../../base/ports/store.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { log } from '../../base/util/log.js';
-import type { EntryTextKey, Sharing } from '../../base/records/sharing.js';
+import type { EntryTextKey, Sharing } from '../../base/ports/store.js';
 import { logEmbedAllFailure } from './search-both.js';
 import { textKeyPages, type SharingStore } from './text-keys.js';
 
@@ -22,25 +21,19 @@ import { textKeyPages, type SharingStore } from './text-keys.js';
 export async function syncGlobalToLocal(
   into: ConfiguredFolder<SharingStore>,
   global: { readonly store: SharingStore },
-  opts: { includeCrossProject?: boolean } & SyncEmbed,
+  opts: { includeCrossProject?: boolean; embed: EmbedRun },
 ): Promise<number> {
-  const home = await into.store.hippoDb.folderFiles.home();
+  const home = await into.store.folderFiles.home();
   if (home.shared) {
     throw new BadRequestError(
       `Refusing to sync into ${home.folder}: a shared store takes no copies of a personal global store, ` +
         `whose rows would reach every member.`,
     );
   }
-  if (!(await global.store.hippoDb.folderFiles.home()).exists) return 0;
+  if (!(await global.store.folderFiles.home()).exists) return 0;
 
   const rules = { project: home.project, includeCrossProject: opts.includeCrossProject };
-  return copyMissingRows(into, global.store, rules, opts);
-}
-
-/** The root's ports that score the copies, and the keeper of the embed that follows them. */
-interface SyncEmbed {
-  readonly embed: EmbedRun;
-  readonly detached: DetachedWork;
+  return copyMissingRows(into, global.store, rules, opts.embed);
 }
 
 const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
@@ -79,8 +72,8 @@ interface Copies {
   readonly twins: Set<string>;
 }
 
-/** The rows to copy, in order: one per text, never a secret, and another project's only
- * when asked. */
+/** The rows to copy, in order: one per text, never a secret, and another project's only when
+ * asked. */
 function copiesOf(
   candidates: readonly EntryTextKey[],
   byId: ReadonlyMap<string, MemoryEntry>,
@@ -115,7 +108,7 @@ function copiesOf(
 /** The texts held twice whose first copy a rejection refuses. */
 async function refusedTexts(store: SharingStore, { copies, twins }: Copies): Promise<Set<string>> {
   const firsts = copies.filter((e) => twins.has(textKey(e)));
-  const refused = await store.hippoDb.rejections.refusedAmong(
+  const refused = await store.rejections.refusedAmong(
     firsts.map((e) => ({ tenantId: e.tenantId, entryId: e.id, content: e.content })),
   );
   return new Set(firsts.filter((_, i) => refused[i]).map(textKey));
@@ -127,9 +120,9 @@ async function copyMissingRows(
   into: ConfiguredFolder<SharingStore>,
   from: SharingStore,
   rules: CopyRules,
-  embedding: SyncEmbed,
+  embed: EmbedRun,
 ) {
-  const candidates = await missingRows(into.store.hippoDb.sharing, from.hippoDb.sharing);
+  const candidates = await missingRows(into.store.sharing, from.sharing);
   if (candidates.length === 0) return 0;
   const byId = new Map<string, MemoryEntry>();
   const wanted = candidates.map((k) => k.id);
@@ -143,13 +136,13 @@ async function copyMissingRows(
     first.twins.size === 0
       ? first
       : copiesOf(candidates, byId, rules, await refusedTexts(into.store, first));
-  // A locally rejected value must not come back through sync down: skipped per item, printed as
-  // one line.
+  // A locally rejected value must not come back through sync down: skipped per item, printed as one
+  // line.
   const written =
     copies.length === 0
       ? []
-      : await into.store.hippoDb.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
-  finishSyncDown(into, written.length, copies.length - written.length, embedding);
+      : await into.store.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
+  finishSyncDown(into, written.length, copies.length - written.length, embed);
   return written.length;
 }
 
@@ -157,7 +150,7 @@ function finishSyncDown(
   into: ConfiguredFolder<SharingStore>,
   count: number,
   rejected: number,
-  { embed, detached }: SyncEmbed,
+  embed: EmbedRun,
 ): void {
   if (rejected > 0) {
     log.warn(
@@ -168,10 +161,8 @@ function finishSyncDown(
   // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row
   // (same batching invariant as autoShare).
   if (count > 0) {
-    detached.detach(
-      embedAll(folderEmbedTarget(into, embed)).catch((err) =>
-        logEmbedAllFailure('syncGlobalToLocal', err),
-      ),
+    void embedAll(folderEmbedTarget(into, embed)).catch((err) =>
+      logEmbedAllFailure('syncGlobalToLocal', err),
     );
   }
 }

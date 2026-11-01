@@ -17,20 +17,14 @@ interface StatementSyncLike {
   iterate(...params: unknown[]): IterableIterator<unknown>;
 }
 
-/** The rows a write statement changed. node:sqlite always sets `changes`, as a number or a bigint;
- * StatementSyncLike types it optional, so a missing count reads 0. */
-export function changedRows(result: ReturnType<StatementSyncLike['run']>): number {
-  return Number(result.changes ?? 0);
-}
-
 export interface DatabaseSyncLike {
   exec(sql: string): void;
   prepare(sql: string): StatementSyncLike;
   close(): void;
   /** A SQL function on this connection, called once per row that names it. */
   function(name: string, options: FunctionOptions, fn: (...args: SqlValue[]) => SqlResult): void;
-  /** An aggregate on this connection: `start` per group, `step` per row, `result` once
-   * per group. */
+  /** An aggregate on this connection: `start` per group, `step` per row, `result` once per
+   * group. */
   aggregate<T extends SqlResult>(name: string, options: AggregateOptions<T>): void;
   readonly isOpen?: boolean;
   readonly isTransaction?: boolean;

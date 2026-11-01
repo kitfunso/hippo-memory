@@ -144,8 +144,8 @@ export interface ChurnNeeds {
   scripts: boolean;
 }
 
-/** The per-commit lookups of a ChurnGitView; each asks git once per commit and remembers
- * the answer. */
+/** The per-commit lookups of a ChurnGitView; each asks git once per commit and remembers the
+ * answer. */
 function churnCommitLookups(
   repo: ChurnRepo,
 ): Pick<ChurnGitView, 'resolveAnchorCommit' | 'symbolsPresentAt' | 'scriptsAt'> {

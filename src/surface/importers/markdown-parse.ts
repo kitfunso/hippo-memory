@@ -83,8 +83,8 @@ export function parseWikilinks(body: string): string[] {
 /**
  * Recursively collect files matching `match` (`*.md` default) under `root` as forward-slash
  * relative paths; symlinks are not followed. Skips dot-directories and the Hippo store path so a
- * vault containing the store never imports its own mirror files; importVault
- * handles root-IS-the-store.
+ * vault containing the store never imports its own mirror files; importVault handles
+ * root-IS-the-store.
  */
 export function collectMarkdownFiles(
   root: string,

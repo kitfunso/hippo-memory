@@ -43,8 +43,8 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   return { llmError, llmOpts: { llm, model: config.extraction.model } };
 }
 
-/** Counts the survivors extraction could read and returns the first `limit` of them, holding
- * no others. */
+/** Counts the survivors extraction could read and returns the first `limit` of them, holding no
+ * others. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
   for await (const e of run.survivors.rows()) {
@@ -76,8 +76,8 @@ export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<
   if (llm === null || run.dryRun) return;
   if (batch.length > 0) {
     const stopped = await extractionPass(run, llm, batch);
-    // The DAG passes call the same API with the same key and model, so they would fail the
-    // same way.
+    // The DAG passes call the same API with the same key and model, so they would fail the same
+    // way.
     if (stopped) return;
   }
 
@@ -247,8 +247,8 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
 }
 
 // 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same
-// model/dryRun gate as buildDag. Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default
-// DEFAULT_DAG_REBUILD_CAP, hard ceiling MAX_DAG_REBUILD_CAP), prevents runaway LLM cost.
+// model/dryRun gate as buildDag. Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default 20, hard
+// ceiling 1000), prevents runaway LLM cost.
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
   try {
@@ -290,7 +290,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 /** Every unprofiled L2 summary, one keyset page per store call: clustering needs them all, a
  * statement need not. */
 async function allUnprofiledTopicSummaries(
-  store: SleepRun['store']['hippoDb']['consolidation'],
+  store: SleepRun['store']['consolidation'],
 ): Promise<MemoryEntry[]> {
   const all: MemoryEntry[] = [];
   for (let after: EntryCursor | undefined; ;) {
@@ -306,7 +306,7 @@ async function allUnprofiledTopicSummaries(
 // 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
-    const l2Summaries = await allUnprofiledTopicSummaries(run.store.hippoDb.consolidation);
+    const l2Summaries = await allUnprofiledTopicSummaries(run.store.consolidation);
     if (l2Summaries.length >= 2) {
       const profileResult = await buildEntityProfiles(run.store, l2Summaries, {
         ...llmOpts,

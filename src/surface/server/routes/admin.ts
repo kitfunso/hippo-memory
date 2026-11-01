@@ -14,7 +14,7 @@ import { readBody, sendJson } from '../../http/http-util.js';
 import { assertCrossTenantAdmin, recheckContextWithAuth } from '../auth.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { pageOf, setNextCursorHeader } from '../cursor.js';
-import type { AuthedRouteRequest, HippoDbRequest, RouteParams } from '../types.js';
+import type { AuthedRouteRequest, GroupRequest, RouteParams } from '../types.js';
 import {
   getString,
   isSetMember,
@@ -34,8 +34,8 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 const MINT_BODY_MAX_BYTES = 4 * 1024;
 const MINT_BODY_DEADLINE_MS = 10_000;
 
-// GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below
-// MAX_AUTH_KEYS_PAGE keys sees no change.
+// GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees
+// no change.
 const MAX_AUTH_KEYS_PAGE = 1000;
 
 // POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this
@@ -124,7 +124,11 @@ export async function handleRevokeAuthKey(
 
 // GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no
 // role gate itself, so its row's admin gate is the check.
-export async function handleListQuarantine({ res, ctx, query }: HippoDbRequest): Promise<void> {
+export async function handleListQuarantine({
+  res,
+  ctx,
+  query,
+}: GroupRequest<'quarantine'>): Promise<void> {
   const statusRaw = query.get('status');
   let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
   if (statusRaw !== null) {
@@ -154,7 +158,7 @@ export async function handleListQuarantine({ res, ctx, query }: HippoDbRequest):
 
 // POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
 export async function handleApproveQuarantine(
-  { res, ctx }: HippoDbRequest,
+  { res, ctx }: GroupRequest<'quarantine'>,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'memory id');
@@ -165,7 +169,7 @@ export async function handleApproveQuarantine(
 
 // POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
 export async function handleRejectQuarantine(
-  { res, ctx }: HippoDbRequest,
+  { res, ctx }: GroupRequest<'quarantine'>,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'memory id');

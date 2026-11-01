@@ -8,7 +8,7 @@ import type {
   ApplyGraphOpsOptions,
   ApplyGraphOpsResult,
   GraphRebuild,
-} from '../../../base/records/graph.js';
+} from '../../../base/ports/store/graph.js';
 import {
   deleteEntityRow,
   deleteRelationRow,
@@ -21,7 +21,7 @@ import {
   updateEntityRow,
 } from './graph-writes.js';
 import { type OnHandle, waitingOpener } from '../runtime/open.js';
-import { bound, type Bodies } from '../runtime/bound.js';
+import { bound } from '../runtime/bound.js';
 
 function insertDesiredRelation(
   db: DatabaseSyncLike,
@@ -50,8 +50,8 @@ function insertDesiredRelation(
   return true;
 }
 
-/** Applies one op; false when a writer since the diff made it stale, which the next run's
- * diff repairs. */
+/** Applies one op; false when a writer since the diff made it stale, which the next run's diff
+ * repairs. */
 function applyGraphOp(db: DatabaseSyncLike, tenantId: string, op: GraphOp): boolean {
   switch (op.op) {
     case 'deleteEntity':
@@ -97,8 +97,8 @@ function applyGraphOpsOn(
 }
 
 /** Applies `ops` from `opts.from` in one rebuild transaction, stopping at the first op boundary
- * past `opts.holdMs`; returns where the next chunk starts and how many ops were skipped
- * as stale. */
+ * past `opts.holdMs`; returns where the next chunk starts and how many ops were skipped as
+ * stale. */
 function applyGraphOps(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -108,10 +108,10 @@ function applyGraphOps(
   return runGraphRebuildTransaction(db, tenantId, (tx) => applyGraphOpsOn(tx, tenantId, ops, opts));
 }
 
-// Sleep's wait, not a request's SERVER_DB_WAIT_MS: each chunk is a fresh BEGIN IMMEDIATE a hook's
-// write could otherwise fail.
+// Sleep's wait, not a request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could
+// otherwise fail.
 const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
 
 export function sqliteGraphRebuild(on: OnHandle): GraphRebuild {
-  return bound(on, { applyOps: applyGraphOps } satisfies Bodies<GraphRebuild>, openForChunk);
+  return bound<GraphRebuild>(on, { applyOps: applyGraphOps }, openForChunk);
 }

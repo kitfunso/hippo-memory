@@ -9,6 +9,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { serve, type AddonRoute, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
+import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { retrieve, remember } from '../../src/api/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -17,7 +18,6 @@ import { testInfra } from '../_helpers/infra.js';
 import { withEntryInfra } from '../../src/surface/entry-infra.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { asCommand } from '../_helpers/test-cli.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -194,15 +194,11 @@ describe('stdio MCP tool calls', () => {
       infra: testInfra(),
     };
     const reply = (id: number, query: string) =>
-      asCommand((cli) =>
-        cli
-          .stdioHost()
-          .runFrame(new AbortController().signal, (contextFor) =>
-            handleMcpRequest(
-              { ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } },
-              mcpContext({ ...ctx, store: contextFor(root, 'default').store }),
-            ),
-          ),
+      cliStdioHost().runFrame(new AbortController().signal, (contextFor) =>
+        handleMcpRequest(
+          { ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } },
+          mcpContext({ ...ctx, store: contextFor(root, 'default').store }),
+        ),
       );
     let replies: Array<McpResponse | null> = [];
     const counts = await opensDuring(async () => {

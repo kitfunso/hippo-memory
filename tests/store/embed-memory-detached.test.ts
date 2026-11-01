@@ -7,10 +7,11 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sharedLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { embedMemoryDetached, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
-import type { CoreGroups } from '../../src/base/ports/store.js';
+import type { StoreGroups } from '../../src/base/ports/store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { DetachedSet } from '../../src/base/util/detached-set.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -31,15 +32,16 @@ describe('embedMemoryDetached', () => {
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
       failureNotices: new FailureNotices(),
-      get groups(): CoreGroups {
+      strength: PRODUCTION_STRENGTH,
+      clock: evalNow,
+      get groups(): StoreGroups {
         throw new Error('store is unreachable');
       },
     };
     const entry = createMemory('a memory whose embed path rejects', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     try {
-      const detached = new DetachedSet();
-      embedMemoryDetached(target, entry, detached);
-      await detached.settle();
+      embedMemoryDetached(target, entry);
+      await vi.waitFor(() => expect(warn).toHaveBeenCalled());
       await new Promise((resolve) => setImmediate(resolve));
       expect(warn).toHaveBeenCalledWith(
         `embedding ${entry.id} failed unexpectedly`,

@@ -66,9 +66,9 @@ const SCENARIOS: readonly Scenario[] = [
   },
   { name: 'mcp budget 80', kind: 'local', calls: [on('mcp', 'deploy', { budget: 80 })] },
   {
-    name: 'http bm25 and hybrid modes',
+    name: 'http bm25, hybrid and physics modes',
     kind: 'local',
-    calls: ['bm25', 'hybrid'].map((mode) => on('http', 'deploy', { mode })),
+    calls: ['bm25', 'hybrid', 'physics'].map((mode) => on('http', 'deploy', { mode })),
   },
   {
     name: 'bad and edge inputs',

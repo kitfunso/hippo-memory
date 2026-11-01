@@ -43,7 +43,7 @@ import { POSITION_BAND, BAND_RANKED } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 import type { RecallWrites } from '../../base/ports/store.js';
-import { CONTINUITY_EVENT_LIMIT } from '../context/context-task-state.js';
+import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
 
 /** Ranks under POSITION_BAND, composes the band, then writes the recall; a caller that sets
  * `recordAs` also has the recall recorded in full. */
@@ -182,10 +182,12 @@ function rankRequestOf(
     scopeMode: 'exact',
     ownScope: personalScope,
     originProjects: recallOrigin(opts),
-    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the
-    // tag instead.
+    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the tag
+    // instead.
     boost: goalTag ? {} : { sessionId },
-    engineNamed: opts.mode === 'hybrid',
+    usePhysics: opts.mode === 'physics',
+    engineNamed: opts.mode === 'hybrid' || opts.mode === 'physics',
+    physicsConfig: ctx.config.physics,
     multihop: false,
     explain: false,
   };
@@ -217,16 +219,16 @@ function storeRankingOf(ranking: RankRecallResult): StoreRanking {
   };
 }
 
-/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows
- * it earned. */
+/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows it
+ * earned. */
 interface CallerCut {
   readonly show: ShowRanking;
   readonly ranking: StoreRanking;
   readonly goalLog: GoalRecallLogRow[];
 }
 
-/** The caller shows its cut of the ranking; its rows go after the window's, in the same
- * one write. */
+/** The caller shows its cut of the ranking; its rows go after the window's, in the same one
+ * write. */
 async function finishShownRecall(
   ctx: Context,
   opts: RecallOptions,

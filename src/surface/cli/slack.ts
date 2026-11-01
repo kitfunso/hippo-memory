@@ -7,23 +7,24 @@ import {
   envSlackTeamId,
 } from '../../base/util/env.js';
 import * as api from '../../api/index.js';
-import { listDlq } from '../../api/dead-letters.js';
+import { listDlq } from '../connectors/dlq.js';
 import { replaySlackDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
 import { backfillChannel } from '../connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../connectors/slack/web-client.js';
 import {
-  mapSlackWorkspace,
-  slackWorkspaceMap,
-  unmapSlackWorkspace,
-} from '../../api/hippo-db/connector-events.js';
+  addWorkspace as addSlackWorkspace,
+  listWorkspaces as listSlackWorkspaces,
+  removeWorkspace as removeSlackWorkspace,
+} from '../connectors/slack/workspaces.js';
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
-import { stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { runDlqReplay } from './dlq-replay.js';
+import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit, fail } from './exit.js';
 import { errorMessage } from '../../base/util/log.js';
 
-async function backfillSlack({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+async function backfillSlack(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const channel = stringFlag(flags, 'channel');
   if (!channel) {
     printSlackBackfillUsage();
@@ -44,7 +45,7 @@ async function backfillSlack({ cli, hippoRoot, tenantId, flags }: CommandContext
   }
   const fetcher = slackHistoryFetcher(token);
   const ctx = {
-    ...cli.apiContext(hippoRoot, tenantId),
+    ...cliApiContext(hippoRoot, tenantId),
     actor: api.adminActor('cli:slack-backfill'),
   };
   try {
@@ -60,21 +61,20 @@ async function backfillSlack({ cli, hippoRoot, tenantId, flags }: CommandContext
   }
 }
 
-async function listSlackDlq({ cli, hippoRoot, tenantId }: CommandContext): Promise<void> {
-  const items = await listDlq(cli.apiContext(hippoRoot, tenantId), slackDlq);
+async function listSlackDlq(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
+  const items = await listDlq(slackDlq, cliStore(hippoRoot), { tenantId });
   for (const it of items) {
     console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
   }
 }
 
-async function replaySlackDlq({
-  cli,
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
-  const ctx = cli.apiContext(hippoRoot, tenantId);
+async function replaySlackDlq(
+  hippoRoot: string,
+  tenantId: string,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
+  const ctx = cliApiContext(hippoRoot, tenantId);
   await runDlqReplay('slack', args[2], flags, (id, force) =>
     replaySlackDlqEntry(ctx, id, {
       force,
@@ -84,22 +84,18 @@ async function replaySlackDlq({
   );
 }
 
-async function registerSlackWorkspace(cmd: CommandContext): Promise<void> {
-  const teamId = (stringFlag(cmd.flags, 'team') ?? '').trim();
-  const tenantId = (stringFlag(cmd.flags, 'tenant') ?? '').trim();
+async function registerSlackWorkspace(hippoRoot: string, flags: CliFlags): Promise<void> {
+  const teamId = (stringFlag(flags, 'team') ?? '').trim();
+  const tenantId = (stringFlag(flags, 'tenant') ?? '').trim();
   if (!teamId || !tenantId) {
     fail('Usage: hippo slack workspaces add --team <T> --tenant <t>');
   }
-  const ws = await mapSlackWorkspace(
-    cmd.cli.apiContext(cmd.hippoRoot, cmd.tenantId),
-    teamId,
-    tenantId,
-  );
+  const ws = await addSlackWorkspace(cliStore(hippoRoot), { teamId, tenantId });
   console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
 }
 
-async function printSlackWorkspaces({ cli, hippoRoot, tenantId }: CommandContext): Promise<void> {
-  const items = await slackWorkspaceMap(cli.apiContext(hippoRoot, tenantId));
+async function printSlackWorkspaces(hippoRoot: string): Promise<void> {
+  const items = await listSlackWorkspaces(cliStore(hippoRoot));
   if (items.length === 0) {
     console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
     return;
@@ -109,50 +105,49 @@ async function printSlackWorkspaces({ cli, hippoRoot, tenantId }: CommandContext
   }
 }
 
-async function unregisterSlackWorkspace({
-  cli,
-  hippoRoot,
-  tenantId,
-  flags,
-}: CommandContext): Promise<void> {
+async function unregisterSlackWorkspace(hippoRoot: string, flags: CliFlags): Promise<void> {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   if (!teamId) {
     fail('Usage: hippo slack workspaces remove --team <T>');
   }
-  const removed = await unmapSlackWorkspace(cli.apiContext(hippoRoot, tenantId), teamId);
+  const removed = await removeSlackWorkspace(cliStore(hippoRoot), teamId);
   if (!removed) {
     fail(`no workspace registered for team ${teamId}`);
   }
   console.log(`removed: ${teamId}`);
 }
 
-export async function handleSlack(cmd: CommandContext): Promise<void> {
-  const { args } = cmd;
+export async function handleSlack({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
-    await backfillSlack(cmd);
+    await backfillSlack(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {
-    await listSlackDlq(cmd);
+    await listSlackDlq(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    await replaySlackDlq(cmd);
+    await replaySlackDlq(hippoRoot, tenantId, args, flags);
     return;
   }
   if (sub === 'workspaces') {
     const action = args[1];
     if (action === 'add') {
-      await registerSlackWorkspace(cmd);
+      await registerSlackWorkspace(hippoRoot, flags);
       return;
     }
     if (action === 'list') {
-      await printSlackWorkspaces(cmd);
+      await printSlackWorkspaces(hippoRoot);
       return;
     }
     if (action === 'remove') {
-      await unregisterSlackWorkspace(cmd);
+      await unregisterSlackWorkspace(hippoRoot, flags);
       return;
     }
     printSlackWorkspacesUsage();

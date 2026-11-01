@@ -7,7 +7,7 @@ import { envSleepTimeoutMs } from '../../base/util/env.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import { replyError, type FailureReply } from './failure-reply.js';
 
-export const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
+const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 
 /** What the child needs to rebuild the request's context (the store handle itself cannot cross a
  * process boundary), or the store an auto-sleep consolidates. */
@@ -27,14 +27,14 @@ export type SleepMessage = SleepJob & { readonly deadline: number };
 
 export type SleepReply<R = SleepResult> = { readonly ok: true; readonly result: R } | FailureReply;
 
-// Resolved from the package root, so a server run from TypeScript source starts the same
-// built file.
+// Resolved from the package root, so a server run from TypeScript source starts the same built
+// file.
 const CHILD_ENTRY = fileURLToPath(
   new URL('../../../dist/surface/server/sleep-child.js', import.meta.url),
 );
 
-/** The shape check for what crosses the IPC channel; the result's own fields are the API's
- * to define. */
+/** The shape check for what crosses the IPC channel; the result's own fields are the API's to
+ * define. */
 export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
   if (typeof message !== 'object' || message === null || !('ok' in message)) return false;
   if (message.ok === true) {
@@ -150,13 +150,13 @@ const SLEEP_RETRY_AFTER_SEC = 30;
 /** A server's sleeps, one at a time in a child process: POST /v1/sleep and the auto-sleep a
  * write starts share it. */
 export interface SleepQueue {
-  /** `sleep` for the HTTP route: same result and errors, stopped at the deadline
-   * (DEFAULT_SLEEP_DEADLINE_MS, or HIPPO_SLEEP_TIMEOUT_MS). */
+  /** `sleep` for the HTTP route: same result and errors, stopped at the deadline (10 minutes, or
+   * HIPPO_SLEEP_TIMEOUT_MS). */
   readonly sleep: (ctx: Context, opts: SleepOptions) => Promise<SleepResult>;
   /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
   readonly consolidate: () => Promise<void>;
-  /** Resolves once every sleep in line has ended, each by its deadline at the latest; it
-   * never rejects. */
+  /** Resolves once every sleep in line has ended, each by its deadline at the latest; it never
+   * rejects. */
   readonly settled: () => Promise<void>;
 }
 
@@ -208,8 +208,8 @@ function sleepLine(): SleepLine {
     // One sleep at a time, as on the server's single thread: a second one waits its turn and does
     // not fight the first for the write lock.
     const child = turn.then(() => runInChild<R>(job));
-    // A failed sleep reaches its own caller through its answer; the turn lasts until the child
-    // has exited.
+    // A failed sleep reaches its own caller through its answer; the turn lasts until the child has
+    // exited.
     turn = child
       .then((run) => run.ended)
       .finally(() => {

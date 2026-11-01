@@ -28,8 +28,8 @@ export interface CaptureInput {
   readonly trigger: string | null;
 }
 
-/** The outcome of reading a payload: usable input, a payload hippo refuses, or no payload
- * at all. */
+/** The outcome of reading a payload: usable input, a payload hippo refuses, or no payload at
+ * all. */
 export type CaptureReceipt<I extends CaptureInput = CaptureInput> =
   | { readonly status: 'received'; readonly input: I }
   | { readonly status: 'skipped' | 'unavailable'; readonly reason: string };
@@ -54,8 +54,8 @@ export interface PostCompactPayload {
   compactSummary: string | null;
 }
 
-/** Working state saved before the host drops context, so the session can resume; it is not
- * a lesson. */
+/** Working state saved before the host drops context, so the session can resume; it is not a
+ * lesson. */
 export interface Checkpoint {
   readonly runtime: string;
   readonly sessionId: string | null;
@@ -65,8 +65,8 @@ export interface Checkpoint {
   readonly savedAt: string;
 }
 
-/** How far capture has read one session's source, so a retry resumes instead of re-reading
- * or skipping. */
+/** How far capture has read one session's source, so a retry resumes instead of re-reading or
+ * skipping. */
 export interface ProgressCursor {
   readonly runtime: string;
   readonly sessionId: string;
@@ -139,8 +139,8 @@ export function readClaudeCodePreCompact(
   if (empty) return manualRun(runtime, 'pre-compact');
   const payload = parseObject(stdinText);
   const transcriptPath = stringField(payload, 'transcript_path');
-  // A bad payload is skipped, never treated as manual: discovery could pick up another
-  // session's transcript.
+  // A bad payload is skipped, never treated as manual: discovery could pick up another session's
+  // transcript.
   if (transcriptPath === null) {
     return {
       status: 'skipped',
@@ -209,8 +209,8 @@ export function readVscodeStop(stdinText: string | undefined, timedOut: boolean)
   };
 }
 
-/** Reads a Claude Code PostCompact payload; it must name a session, but needs
- * no transcript_path. */
+/** Reads a Claude Code PostCompact payload; it must name a session, but needs no
+ * transcript_path. */
 export function readClaudeCodePostCompact(
   stdinText: string | undefined,
   timedOut: boolean,

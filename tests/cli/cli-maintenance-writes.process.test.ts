@@ -8,9 +8,9 @@ import { refineStore, type RefineOptions } from '../../src/surface/cli/refine-ll
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { captureErrorAt } from '../../src/domain/learn/autolearn.js';
+import { captureError } from '../../src/domain/learn/autolearn.js';
 import { recordTokenUse } from '../../src/store/sqlite/ledger/token-ledger.js';
-import type { TokenSurface } from '../../src/base/records/ledger.js';
+import type { TokenSurface } from '../../src/base/ports/store/ledger.js';
 import { PATH_TAGS, query, Store, type Ran } from '../_helpers/cli-verb-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
@@ -71,11 +71,7 @@ describe('hippo watch (built CLI, no server)', () => {
   it('a failure that matches a rejected value is not stored', async () => {
     const s = new Store();
     scripts(s);
-    const value = captureErrorAt(
-      { command: 'node fail.js', exitCode: 3, stderr: STDERR },
-      undefined,
-      evalNow(),
-    ).content;
+    const value = captureError({ command: 'node fail.js', exitCode: 3, stderr: STDERR }, undefined, evalNow()).content;
     await reject(apiCtx(s.root, 'default', adminActor('cli')), { value, reason: 'wrong' });
     s.settle();
     expect(await s.run('watch', 'node', 'fail.js')).toEqual({
@@ -303,8 +299,8 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
     async () =>
       new Response(JSON.stringify({ content: [{ text }] }), { status });
   const refine = (s: Store, fetcher: typeof fetch, opts: Omit<RefineOptions, 'llm' | 'tenantId'> = {}) =>
-    s.call((cli) =>
-      refineStore(cli, s.root, { llm: anthropicLlm({ apiKey: 'no-key', fetcher }), tenantId: 'default', ...opts }),
+    s.call(() =>
+      refineStore(s.root, { llm: anthropicLlm({ apiKey: 'no-key', fetcher }), tenantId: 'default', ...opts }),
     );
 
   /** A merged row, a merged row already refined, and a plain one; the seeded text of each, by id. */

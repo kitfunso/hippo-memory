@@ -8,15 +8,12 @@ import {
 import { errorFields, log } from '../../../base/util/log.js';
 import type { HippoIndex } from '../runtime/rows.js';
 import { writeStatsMirror, buildStatsFromDb } from '../folder-files/mirrors.js';
-import type { Handles, StoreFiles } from '../runtime/open.js';
-import { openStore } from '../runtime/handles.js';
-import { bound, type Bodies } from '../runtime/bound.js';
-import type { Stats } from '../../../base/ports/hippo-db.js';
+import type { StoreFiles } from '../runtime/open.js';
 import type { StoreAt } from '../../../db/connect.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
-import type { SleepStart } from '../../../base/records/consolidation.js';
+import type { SleepStart } from '../../../base/ports/store/consolidation.js';
 import { META_KEY, getMetaNumber } from '../../../db/meta.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and
@@ -42,21 +39,10 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
   };
 }
 
-export function sqliteStats({ on, files }: Handles): Stats {
-  return bound(
-    on,
-    {
-      bumpRemembered: (db, count) =>
-        updateStatsUnlessBusy(db, files, { remembered: count }, `remembered ${count}`),
-    } satisfies Bodies<Stats>,
-    openStore,
-  );
-}
-
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
-  // Increments a busy store refused, held by the runtime and folded into the next update
-  // that lands.
+  // Increments a busy store refused, held by the runtime and folded into the next update that
+  // lands.
   const { runtime } = files;
   const total = addDelta(runtime?.takeStats(files.hippoRoot) ?? {}, delta);
   try {
@@ -122,8 +108,8 @@ export function appendConsolidationRun(
   writeStatsMirror(files, buildStatsFromDb(db));
 }
 
-/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most
- * 24 hours. */
+/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24
+ * hours. */
 export function createdSinceLastSleep(db: DatabaseSyncLike, tenantId: string, now: Date): number {
   const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
   const row = cachedStatement(

@@ -1,5 +1,6 @@
-// `hippo projects`: list a store's project names, fold one into another, repair old tags in one
-// reversible pass. The rules here plan from reads; the store applies each plan in one transaction.
+// `hippo projects`: list the project names a store holds, fold one into another, and repair old
+// tags in one reversible pass. The rules here plan from reads; the store applies each plan in one
+// transaction.
 import * as path from 'node:path';
 import { transcriptNotesProject } from '../agent-memories/claude-code.js';
 import { containerId, containerPrefix } from '../agent-memories/source.js';
@@ -20,8 +21,8 @@ import type {
   ProjectTags,
   ProjectTagScope,
   RowRetag,
-} from '../../base/records/project-tags.js';
-import type { EntryNarrowing } from '../../base/records/reports.js';
+} from '../../base/ports/store/project-tags.js';
+import type { EntryNarrowing } from '../../base/ports/store/reports.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 
 export interface ProjectSummary {
@@ -78,8 +79,8 @@ export interface RepairResult {
 export type SessionMachine = Pick<Machine, 'platform' | 'env' | 'files' | 'projectIdentity'>;
 
 /** What a plan knows of the store's folder: the global store reads session folders on its
- * machine, and a project store folds only its own folder's old name, unless many people
- * share it. */
+ * machine, and a project store folds only its own folder's old name, unless many people share
+ * it. */
 export type StoreFolder =
   | { readonly isGlobal: true; readonly machine: SessionMachine }
   | {
@@ -94,8 +95,8 @@ interface Reader {
   readonly tenantId: string;
 }
 
-/** Every row of the tenant `narrowing` keeps, one page per call, so no one call holds a
- * whole tenant. */
+/** Every row of the tenant `narrowing` keeps, one page per call, so no one call holds a whole
+ * tenant. */
 async function* rowsOf(r: Reader, narrowing: EntryNarrowing): AsyncGenerator<MemoryEntry> {
   const filter = { ...narrowing, tenantId: r.tenantId };
   const read = (after?: EntryCursor) =>
@@ -193,8 +194,8 @@ async function transcriptsOf(
   return [...seen.values()];
 }
 
-/** Each Claude session folder a compaction recorded, with the names of each project it
- * resolves to. */
+/** Each Claude session folder a compaction recorded, with the names of each project it resolves
+ * to. */
 async function sessionOwners(
   r: Reader,
   machine: SessionMachine,
@@ -256,8 +257,8 @@ async function planFolds(
   folder: StoreFolder,
   globalFolds: boolean,
 ): Promise<Pick<RepairResult, 'folds' | 'collisions'>> {
-  // A name someone merged into by hand stays: undoing their choice would rest on the
-  // resolver alone.
+  // A name someone merged into by hand stays: undoing their choice would rest on the resolver
+  // alone.
   const chosen = new Set(
     (await projectAudit(r.store.auditLog, r.tenantId, 'project_merge')).map((e) => e.metadata.into),
   );
@@ -379,8 +380,8 @@ async function parentOrigins(
   const parentIds = [...parents];
   const live = new Map<string, MemoryEntry>();
   for await (const e of rowsOf(r, { ids: parentIds })) live.set(e.id, e);
-  // A live row outranks a snapshot under its id, so only the parents with no live row are looked
-  // up dormant.
+  // A live row outranks a snapshot under its id, so only the parents with no live row are looked up
+  // dormant.
   const gone = parentIds.filter((id) => !live.has(id));
   const dormant = await r.store.projectTags.dormantWhere({ tenantId: r.tenantId, ids: gone });
   const origins = new Map<string, string | null>(

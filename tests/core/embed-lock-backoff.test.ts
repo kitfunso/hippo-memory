@@ -8,10 +8,10 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
-import type { EmbeddingIndex } from '../../src/base/records/embedding-index.js';
+import type { EmbeddingIndex } from '../../src/base/ports/store.js';
+import { cliStore } from '../../src/surface/cli/api-context.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { storeAt } from '../_helpers/cli-stores.js';
 
 const ASKED_AT_MS = [0, 50, 150, 350, 750, 1550, 2550, 3550, 4550, 5550, 6550, 7550, 8550, 9550, 10_000];
 
@@ -32,7 +32,7 @@ describe('embedAll waiting on a held embedding index lock', () => {
     const root = makeRoot('embed-lock-backoff');
     const held = takeFileLock(join(root, 'embeddings.lock.db'));
     expect(held.kind).toBe('taken');
-    const index = storeAt(root).hippoDb.embeddingIndex;
+    const index = cliStore(root).embeddingIndex;
     vi.useFakeTimers({ now: Date.parse('2026-01-15T00:00:00.000Z') });
     const startedAt = Date.now();
     const asked: number[] = [];
@@ -44,7 +44,7 @@ describe('embedAll waiting on a held embedding index lock', () => {
     const run = embedAll(
       {
         embeddingIndex: { ...index, step },
-        rows: storeAt(root),
+        rows: cliStore(root),
         embeddings: loadConfig(root).embeddings,
         embedderFor: resolveEmbeddingProvider,
         failureNotices: new FailureNotices(),

@@ -11,7 +11,7 @@ import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 const at = (i: number): string => new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString();
 
@@ -83,9 +83,7 @@ describe('sync down from the global store', () => {
       const g = seed();
       localFtsInSync(inSync);
 
-      expect(
-        await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
-      ).toBe(4);
+      expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN })).toBe(4);
 
       const local = new Map(
         [...loadAllEntries(localRoot, 'default'), ...loadAllEntries(localRoot, 'acme')].map((e) => [e.id, e]),
@@ -107,7 +105,7 @@ describe('sync down from the global store', () => {
       );
       return (
         await recordStatementsAsync(() =>
-          syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
+          syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN }),
         )
       ).rowsRead;
     };

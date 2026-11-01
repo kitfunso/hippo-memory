@@ -13,14 +13,9 @@ import {
   transcriptNotesProject,
 } from '../domain/agent-memories/claude-code.js';
 import { runPass, type Pass, type SyncOptions } from '../domain/agent-memories/sync.js';
-import type { AdapterContext, CountRemembered } from '../domain/agent-memories/types.js';
-import { countRemembered } from './memories/remember.js';
+import type { AdapterContext } from '../domain/agent-memories/types.js';
 
 export type { SyncOptions };
-
-/** A sync's rows move Total remembered through remember's own counter, as every other write's do. */
-const countImported: CountRemembered = (store, count) =>
-  countRemembered({ enrich: { remembered: store.hippoDb.stats } }, count);
 
 /**
  * init, sleep, `import --agents` and the daily runner: a local store gets its project pass then the
@@ -52,7 +47,6 @@ export async function importProjectMemories(
       handover: true,
     },
     opts,
-    countImported,
   );
 }
 
@@ -74,7 +68,6 @@ export async function importUserMemories(
       handover: false,
     },
     opts,
-    countImported,
   );
 }
 
@@ -98,7 +91,6 @@ export async function importAtSessionEnd(
       handover: false,
     },
     opts,
-    countImported,
   );
   if (transcriptPath !== undefined) {
     mergeReports(report, await importSessionFolder(globalRoot, transcriptPath, cwd, opts));
@@ -136,7 +128,6 @@ export async function importSessionFolder(
       list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
     },
     opts,
-    countImported,
   );
 }
 

@@ -1,8 +1,9 @@
 // PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's
 // owner and project, and a retried request id gets the first answer.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { EntryContext } from '../../api/types.js';
+import type { ContextWith, EntryContext } from '../../api/types.js';
 import { storeLesson } from './capture-error.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { scrubForSharing } from './share-scrub.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
@@ -12,20 +13,14 @@ import type {
   CaptureErrorOutcome,
   FailureOutcome,
   RoutineRule,
-} from '../../base/records/rejections.js';
+} from '../../base/ports/store/rejections.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { withEntryInfra } from '../entry-infra.js';
-import { withHippoDb } from '../../api/hippo-db-context.js';
-import {
-  firstFailureOutcome,
-  logCallerFailure,
-  type CallerFailureEvent,
-} from '../../api/hippo-db/failure-log.js';
 
 type FailureSkip = Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'>;
 
-/** failureReport's reading of the payload, read on the caller's machine, plus the id its
- * retries carry. */
+/** failureReport's reading of the payload, read on the caller's machine, plus the id its retries
+ * carry. */
 export interface CallerFailureRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
@@ -93,13 +88,17 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
 }
 
 export async function captureFailureForCaller(
-  given: EntryContext,
+  given: EntryContext<ContextWith<'failureLog' | 'lessonWrites' | 'sessions'>>,
   req: CallerFailureRequest,
 ): Promise<CallerFailureResult> {
-  const ctx = withHippoDb(withEntryInfra(given));
+  const ctx = withEntryInfra(given);
   const failure = checkedFailure(req);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const earlier = await firstFailureOutcome(ctx, req.requestId, req.sessionId);
+  const earlier = await ctx.store.failureLog.requestOutcome(
+    ctx.tenantId,
+    req.requestId,
+    req.sessionId,
+  );
   // A retry after a lost reply gets the first answer and writes nothing; one whose store failed
   // tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
@@ -112,25 +111,47 @@ export async function captureFailureForCaller(
     return { outcome };
   } finally {
     // The hash is of the text as stored, so a repeat counts against the lesson it repeats.
-    const event = failureEvent({ ...req, text: failure.text }, key, logged);
-    await logCallerFailure(ctx, event, earlier !== null);
+    await logOutcome(ctx, {
+      req: { ...req, text: failure.text },
+      key,
+      outcome: logged,
+      retried: earlier !== null,
+    });
   }
 }
 
-function failureEvent(
-  req: CallerFailureRequest,
-  key: ContinuityKey,
-  outcome: FailureOutcome,
-): CallerFailureEvent {
-  return {
-    sessionId: req.sessionId,
-    tool: req.tool,
-    outcome,
-    rule: req.rule,
-    sigHash: req.text?.trim() ? failureHash(req.text) : null,
-    detailHash: req.detailHash,
-    ownerSubject: key.owner,
-    originProject: req.project.name,
-    requestId: req.requestId,
-  };
+interface LogOutcomeOptions {
+  readonly req: CallerFailureRequest;
+  readonly key: ContinuityKey;
+  readonly outcome: FailureOutcome;
+  readonly retried: boolean;
+}
+
+/** Runs after the outcome in its own try, so a log error never hides the store's error or its
+ * outcome. */
+async function logOutcome(
+  ctx: ContextWith<'failureLog'>,
+  { req, key, outcome, retried }: LogOutcomeOptions,
+): Promise<void> {
+  try {
+    // The request id allows one row, so a retry rewrites the first try's outcome.
+    if (retried) {
+      await ctx.store.failureLog.settleOutcome(ctx.tenantId, req.requestId, outcome);
+      return;
+    }
+    await ctx.store.failureLog.record({
+      tenantId: ctx.tenantId,
+      sessionId: req.sessionId,
+      tool: req.tool,
+      outcome,
+      rule: req.rule,
+      sigHash: req.text?.trim() ? failureHash(req.text) : null,
+      detailHash: req.detailHash,
+      ownerSubject: key.owner,
+      originProject: req.project.name,
+      requestId: req.requestId,
+    });
+  } catch (err) {
+    log.warn(`capture-error: failure not logged: ${errorMessage(err)}`, errorFields(err));
+  }
 }

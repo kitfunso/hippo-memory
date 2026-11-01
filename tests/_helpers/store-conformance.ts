@@ -8,7 +8,7 @@ import { appendAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import type { HippoStore, CoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { runStoreConformance } from '../../src/entry/store-kit.js';
 import { portOnlyStore } from './port-only-store.js';
@@ -100,29 +100,22 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
   }
 }
 
-/** The store the calls run on: sqliteStore, which sets every group and its local tier. */
-export type FixtureStore = ReturnType<typeof sqliteStore>;
+/** The store the calls run on: sqliteStore, which sets every group. */
+export type FixtureStore = HippoStore & StoreGroups;
 
 /** A store group, or 'base' for the methods HippoStore declares itself. */
-export type ConformanceGroup = keyof CoreGroups | LocalRepo | 'base';
-type LocalRepo = keyof FixtureStore['hippoDb'];
+export type ConformanceGroup = keyof StoreGroups | 'base';
 
 /** What a call on `G` is handed: the group's methods, or the store itself for 'base'. */
-export type GroupOf<G extends ConformanceGroup> = G extends 'base'
-  ? FixtureStore
-  : G extends LocalRepo
-    ? FixtureStore['hippoDb'][G]
-    : CoreGroups[Exclude<G, 'base' | LocalRepo>];
+export type GroupOf<G extends ConformanceGroup> = G extends 'base' ? FixtureStore : StoreGroups[Exclude<G, 'base'>];
 
 /** One call on a store group; R is every value the calls in one run resolve to. */
 export type GroupCall<G extends ConformanceGroup, R> = (group: GroupOf<G>, store: FixtureStore) => Promise<R>;
 
 function groupOf<G extends ConformanceGroup>(store: FixtureStore, group: G): GroupOf<G> {
-  const named = ([key]: readonly [string, unknown]): boolean => key === group;
-  const local = Object.entries(store.hippoDb).find(named)?.[1];
-  // SAFETY: GroupOf<G> is the store for 'base', the local tier's repo for a local G and CoreGroups[G] for the rest,
-  // as each branch reads.
-  return (group === 'base' ? store : (local ?? Object.entries(store).find(named)?.[1])) as GroupOf<G>;
+  const name: ConformanceGroup = group;
+  // SAFETY: GroupOf<G> is the store for 'base' and StoreGroups[G] for every other G, as each branch reads.
+  return (name === 'base' ? store : store[name]) as GroupOf<G>;
 }
 
 export interface SideResult<R> {

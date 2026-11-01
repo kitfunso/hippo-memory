@@ -6,9 +6,8 @@ import { assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall
 import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
-import type { Context } from './types.js';
-import type { SessionRawCount, SessionRawKey } from '../base/records/dag-reads.js';
-import type { HippoDbContext } from './hippo-db-context.js';
+import type { Context, ContextWith } from './types.js';
+import type { SessionRawCount, SessionRawKey } from '../base/ports/store/context-reads.js';
 
 export const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;
@@ -18,15 +17,15 @@ export const DEFAULT_ASSEMBLE_BUDGET = 4000;
 export interface AssembleOptions {
   /** Token budget. Default DEFAULT_ASSEMBLE_BUDGET. */
   budget?: number;
-  /** Recent raw rows always kept verbatim. Default DEFAULT_FRESH_TAIL_COUNT. */
+  /** Recent raw rows always kept verbatim. Default 10. */
   freshTailCount?: number;
   /** Substitute parent summaries for older raws when ≥2 share a level-2 ancestor. Default true. */
   summarizeOlder?: boolean;
   /** Exact scope match when set, so an authorised caller can assemble a private session.
    * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */
   scope?: string;
-  /** Hard cap on the session raws the window is chosen from (default DEFAULT_ROW_CAP); `truncated`
-   * is set when it is hit. */
+  /** Hard cap on the session raws the window is chosen from (default 5000); `truncated` is set
+   * when it is hit. */
   rowCap?: number;
   cost?: AssembleCost;
   project?: CallerProject;
@@ -42,8 +41,8 @@ export interface AssembleCost {
 export interface AssembledContextItem {
   id: string;
   content: string;
-  /** ISO timestamp of the source row's `created` field (or `earliest_at` for
-   * substituted summaries). */
+  /** ISO timestamp of the source row's `created` field (or `earliest_at` for substituted
+   * summaries). */
   createdAt: string;
   /** Fresh-tail protected window (last freshTailCount raws). */
   isFreshTail?: boolean;
@@ -74,7 +73,7 @@ export interface AssembleResult {
  *  tail is never evicted).
  *  Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'dagReads'>,
   sessionId: string,
   opts: AssembleOptions = {},
 ): Promise<AssembleResult> {
@@ -123,7 +122,7 @@ export async function assemble(
 // Priced at a content length that cannot exceed the real one, so the first pass drops only rows the
 // real costs drop too; the rows left are then read whole and the same eviction runs on them.
 async function fitToBudget(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'dagReads'>,
   query: SessionRawCount,
   start: AssembledContextItem[],
   itemCost: (it: AssembledContextItem) => number,
@@ -146,13 +145,12 @@ function keyItem(k: SessionRawKey): AssembledContextItem {
 
 // Read under the rule the keys were chosen by, so a row a write hid or deleted since is left out.
 async function withContent(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'dagReads'>,
   query: SessionRawCount,
   items: AssembledContextItem[],
 ): Promise<AssembledContextItem[]> {
   const ids = items.filter((it) => !it.isSummary).map((it) => it.id);
-  const read =
-    ids.length > 0 ? await ctx.store.hippoDb.dagReads.sessionRawRows({ ...query, ids }) : [];
+  const read = ids.length > 0 ? await ctx.store.dagReads.sessionRawRows({ ...query, ids }) : [];
   const rows = new Map(read.map((r) => [r.id, r]));
   return items.flatMap((it) => {
     if (it.isSummary) return [it];
@@ -177,13 +175,13 @@ interface ScopedKeys {
 }
 
 async function loadScopedKeys(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'dagReads'>,
   sessionId: string,
   opts: AssembleOptions,
   own: string | undefined,
 ): Promise<ScopedKeys> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
-  const dag = ctx.store.hippoDb.dagReads;
+  const dag = ctx.store.dagReads;
   const query: SessionRawCount = {
     tenantId: ctx.tenantId,
     sessionId,
@@ -218,8 +216,8 @@ function freshTailItem(r: MemoryEntry): AssembledContextItem {
   };
 }
 
-/** Older rows with every level-2 parent shared by two or more of them standing in for
- * those rows. */
+/** Older rows with every level-2 parent shared by two or more of them standing in for those
+ * rows. */
 interface SubstitutedOlder {
   olderItems: AssembledContextItem[];
   summarized: number;
@@ -287,8 +285,8 @@ function summaryItem(parent: MemoryEntry, claimed: string[]): AssembledContextIt
   };
 }
 
-/** Drops the weakest non-fresh-tail item until the total fits `room`; fresh-tail items are
- * never evicted. */
+/** Drops the weakest non-fresh-tail item until the total fits `room`; fresh-tail items are never
+ * evicted. */
 interface BudgetFit {
   items: AssembledContextItem[];
   tokens: number;

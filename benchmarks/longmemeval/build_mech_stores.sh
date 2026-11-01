@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mechanism audit (docs/evals/2026-09-23-mechanism-audit-prereg.md): one ingest, a never-slept and a slept copy,
-# then hybrid retrieval on each (3.0 removed the physics arm). Usage: HIPPO_MODEL_CACHE=<dir> bash build_mech_stores.sh <run-dir> <data.json>
+# then hybrid and physics retrieval on each. Usage: HIPPO_MODEL_CACHE=<dir> bash build_mech_stores.sh <run-dir> <data.json>
 set -euo pipefail
 R="$1"; DATA="$2"
 W="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -24,7 +24,7 @@ counts() {
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1], { readOnly: true });
 const n = (t) => db.prepare('SELECT COUNT(*) n FROM ' + t).get().n;
-console.log(n('memories'));
+console.log(n('memories'), n('memory_physics'));
 " "$1/.hippo/hippo.db"
 }
 
@@ -32,19 +32,22 @@ t0=$(date +%s)
 python "$W/benchmarks/longmemeval/ingest.py" --data "$DATA" --hippo "$HIPPO_BIN" --store-dir "$R/nosleep" --skip-sleep
 hip "$R/nosleep" embed
 full_cover "$R/nosleep"
-read -r mem < <(counts "$R/nosleep")
-echo "nosleep memories=$mem ingest+embed secs=$(( $(date +%s) - t0 ))"
+read -r mem phys < <(counts "$R/nosleep")
+if [ "$mem" != "$phys" ]; then echo "ABORT: nosleep has $mem memories but $phys particles"; exit 1; fi
+echo "nosleep memories=$mem particles=$phys ingest+embed secs=$(( $(date +%s) - t0 ))"
 
 cp -r "$R/nosleep" "$R/sleep"
 t1=$(date +%s)
 hip "$R/sleep" sleep > "$R/sleep.log" 2>&1
 hip "$R/sleep" embed
 full_cover "$R/sleep"
-read -r mem < <(counts "$R/sleep")
-echo "sleep memories=$mem sleep+embed secs=$(( $(date +%s) - t1 ))"
+read -r mem phys < <(counts "$R/sleep")
+echo "sleep memories=$mem particles=$phys sleep+embed secs=$(( $(date +%s) - t1 ))"
 
 for S in nosleep sleep; do
-  node "$W/benchmarks/longmemeval/retrieve_inprocess.mjs" --data "$DATA" --store-dir "$R/$S" \
-    --output "$R/ret-$S-hybrid.jsonl" --budget 1000000 --min-results 10 --top 10 --mode hybrid
+  for M in hybrid physics; do
+    node "$W/benchmarks/longmemeval/retrieve_inprocess.mjs" --data "$DATA" --store-dir "$R/$S" \
+      --output "$R/ret-$S-$M.jsonl" --budget 1000000 --min-results 10 --top 10 --mode "$M"
+  done
 done
 echo "build done secs=$(( $(date +%s) - t0 ))"

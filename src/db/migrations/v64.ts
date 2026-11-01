@@ -1,4 +1,4 @@
-import { CURRENT_DISTILLED, TEXT_OUTSIDE_TRIGRAMS } from '../sql.js';
+import { CURRENT_DISTILLED, TEXT_OUTSIDE_TRIGRAMS } from '../sql-predicates.js';
 import { ensureTrigramIndex, isFtsMissing } from '../fts-index.js';
 import { tableHasColumn } from '../tables.js';
 import { duplicateHash } from '../../base/util/same-text.js';

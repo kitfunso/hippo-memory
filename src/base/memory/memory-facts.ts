@@ -1,8 +1,8 @@
 // What the dashboard reads off one memory at an instant. The store's dashboard SQL calls these same
 // functions, so a count, a sort and a listed row never judge one memory two ways.
 import {
-  calculateStrengthAt,
-  confidenceFacetsAt,
+  calculateStrength,
+  confidenceFacets,
   netWrong,
   type ConfidenceInputs,
   type StrengthInputs,
@@ -73,11 +73,11 @@ function bandOf(pinned: boolean, strength: number, strength30d: number): number 
 
 /** The band of `entry` at `nowMs`, as memoryFacts judges it. */
 export function bandAt(entry: StrengthInputs, nowMs: number, model: StrengthModel): number {
-  const strength = calculateStrengthAt(entry, new Date(nowMs), model);
+  const strength = calculateStrength(entry, new Date(nowMs), model);
   return bandOf(
     entry.pinned,
     strength,
-    calculateStrengthAt(entry, new Date(nowMs + AHEAD_30D_MS), model),
+    calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model),
   );
 }
 
@@ -105,24 +105,24 @@ export function strengthBucket(value: number): 0 | 1 | 2 {
   return value >= STRONG_FROM ? 0 : value >= AT_RISK_BELOW ? 1 : 2;
 }
 
-/** Whole days from `timeMs` back from `nowMs`, held to 0 through SERIES_DAYS; a time to come
- * is today. */
+/** Whole days from `timeMs` back from `nowMs`, held to 0 through SERIES_DAYS; a time to come is
+ * today. */
 export function seriesDay(timeMs: number, nowMs: number): number {
   return Math.min(SERIES_DAYS, Math.max(0, Math.floor((nowMs - timeMs) / DAY_MS)));
 }
 
-/** Strength now and at +7d and +30d, band, age and the confidence split for one entry
- * at `nowMs`. */
+/** Strength now and at +7d and +30d, band, age and the confidence split for one entry at
+ * `nowMs`. */
 export function memoryFacts(
   entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>,
   nowMs: number,
   model: StrengthModel,
 ): MemoryFacts {
   const now = new Date(nowMs);
-  const strength = calculateStrengthAt(entry, now, model);
-  const strength7d = calculateStrengthAt(entry, new Date(nowMs + AHEAD_7D_MS), model);
-  const strength30d = calculateStrengthAt(entry, new Date(nowMs + AHEAD_30D_MS), model);
-  const facets = confidenceFacetsAt(entry, now);
+  const strength = calculateStrength(entry, now, model);
+  const strength7d = calculateStrength(entry, new Date(nowMs + AHEAD_7D_MS), model);
+  const strength30d = calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model);
+  const facets = confidenceFacets(entry, now);
   return {
     strength,
     strength7d,

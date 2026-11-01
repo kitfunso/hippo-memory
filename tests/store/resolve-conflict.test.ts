@@ -129,7 +129,7 @@ describe('resolveConflict', () => {
 
   it('writes nothing when a side no longer holds the scope the api decided on', async () => {
     const { aId, bId, conflictId } = await seedConflict();
-    const resolved = await sqliteStore(tmpDir).hippoDb.conflicts.resolve('default', {
+    const resolved = await sqliteStore(tmpDir).conflicts.resolve('default', {
       conflictId,
       keep: { id: aId, scope: null },
       loser: { id: bId, scope: 'personal:private:moved' },
@@ -153,7 +153,7 @@ describe('resolveConflict', () => {
     const team = copyOf('team:shared');
     const mine = copyOf('personal:private:alice', 'alice');
     const theirs = copyOf('personal:private:bob', 'bob');
-    const resolved = await sqliteStore(tmpDir).hippoDb.conflicts.resolve('default', {
+    const resolved = await sqliteStore(tmpDir).conflicts.resolve('default', {
       conflictId,
       keep: { id: aId, scope: null },
       loser: { id: bId, scope: null },
@@ -186,7 +186,7 @@ describe('resolveConflict', () => {
       reason: 'wrong',
       at: RESOLVED_AT,
     };
-    expect(await sqliteStore(tmpDir).hippoDb.conflicts.resolve('default', resolution)).toBe(true);
+    expect(await sqliteStore(tmpDir).conflicts.resolve('default', resolution)).toBe(true);
     expect(readEntry(tmpDir, bId)).toBeNull();
     expect(readEntry(tmpDir, personal.id)).not.toBeNull();
   });

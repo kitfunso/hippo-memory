@@ -7,8 +7,14 @@ import { join } from 'node:path';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { HippoStore, RecallWrites } from '../../src/base/ports/store-index.js';
-import type { LastRecall, LastRecallWrites } from '../../src/base/records/last-recall.js';
+import type {
+  HippoStore,
+  LastRecall,
+  LastRecallWrites,
+  RecallWrites,
+  StoreWith,
+} from '../../src/base/ports/store-index.js';
+import type { GlobalGroup } from '../../src/base/ports/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { adminActor } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
@@ -28,6 +34,7 @@ let home: string;
 let hippoRoot: string;
 
 function cliCore(): CliCoreRecall {
+  const config = loadConfig(hippoRoot);
   return {
     rank: {
       budget: 4000,
@@ -36,6 +43,8 @@ function cliCore(): CliCoreRecall {
       includeSuperseded: false,
       explicitScope: null,
       activeScope: null,
+      usePhysics: false,
+      physicsConfig: config.physics,
       multihop: false,
       mmr: false,
       mmrLambda: 0.7,
@@ -43,6 +52,7 @@ function cliCore(): CliCoreRecall {
       explain: false,
     },
     show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
+    lastRecall: sqliteStore(hippoRoot).lastRecall,
   };
 }
 
@@ -74,9 +84,9 @@ afterEach(() => {
 
 describe('retrieve with the CLI ranking core', () => {
   it('writes the recall through a store that is not hippo.db when the context carries one', async () => {
-    const store = portOnlyStore(hippoRoot);
+    const inner = portOnlyStore(hippoRoot);
     const writes: RecallWrites[] = [];
-    const lastRecall = sqliteStore(hippoRoot).hippoDb.lastRecall;
+    const lastRecall = sqliteStore(hippoRoot).lastRecall;
     const traced: LastRecall = {
       ...lastRecall,
       finishRecall: async (w: LastRecallWrites, root) => {
@@ -84,16 +94,16 @@ describe('retrieve with the CLI ranking core', () => {
         return lastRecall.finishRecall(w, root);
       },
     };
+    const store: HippoStore = { ...inner, lastRecall: traced };
     const ctx: Context = {
       tenantId: 'default',
       actor: adminActor('cli'),
       store,
       config: loadConfig(hippoRoot),
       infra: testInfra(),
-      enrich: { lastRecall: traced },
     };
 
-    const result = await retrieveWithCliCore(ctx, { query: 'deploy' }, cliCore());
+    const result = await retrieveWithCliCore(ctx, { query: 'deploy' }, { ...cliCore(), lastRecall: traced });
 
     expect(store.kind).toBe('port-only');
     expect(result.results.map((r) => r.id).sort()).toEqual(['mem_core_0', 'mem_core_1']);
@@ -129,9 +139,9 @@ describe('retrieve with the CLI ranking core', () => {
       id: 'mem_second_0',
       strength: 1,
     });
-    const inner = sqliteStore(secondRoot);
+    const inner = portOnlyStore(secondRoot, ['learning', 'ledger', 'folderFiles', 'sessions']);
     const writes: RecallWrites[] = [];
-    const globalStore: HippoStore = {
+    const globalStore: StoreWith<GlobalGroup> = {
       ...inner,
       finishRecall: async (w) => {
         writes.push(w);

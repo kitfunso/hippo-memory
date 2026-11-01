@@ -1,5 +1,6 @@
 /** Hippo's config: its shape and its defaults. config-keys.ts reads each key of .hippo/config.json. */
 
+import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../rank/physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../memory/strength.js';
 import { SALIENCE_DEFAULTS } from '../memory/salience.js';
 import type { PromptRecallMetric } from '../rank/prompt-recall.js';
@@ -31,8 +32,8 @@ export interface HippoConfig {
      * 'voyage' | 'cohere' = opt-in API embedder needing the provider's API key in env
      * (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/infra/embedding-provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
-    /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost may use http). Ignored by the
-     *  local provider. */
+    /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost may use http). Ignored by the local
+     *  provider. */
     apiBaseUrl?: string;
     /** Batch size for API embedding requests. Default 64. */
     batchSize?: number;
@@ -41,16 +42,17 @@ export interface HippoConfig {
     enabled: boolean;
   };
   gitLearnPatterns: string[];
-  /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when embeddings are available: needs
-   *  doc-to-doc similarity. */
+  physics: PhysicsConfig;
+  /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when embeddings are available: needs doc-to-doc
+   *  similarity. */
   mmr: {
     enabled: boolean;
-    /** 1.0 = pure relevance, 0.0 = pure diversity; DEFAULT_MMR_LAMBDA by default. */
+    /** 1.0 = pure relevance (current behavior). 0.0 = pure diversity. 0.7 is a typical balance. */
     lambda: number;
   };
   search: {
-    /** Multiplier applied to local-store scores when merged with global results (searchBothHybrid):
-     * DEFAULT_LOCAL_BUMP by default, and 1.0 means no bias. */
+    /** Multiplier applied to local-store scores when merged with global results (searchBothHybrid). 1.0 = no bias,
+     *  1.2 = 20% local priority. */
     localBump: number;
   };
   /** Replay settings — biologically-inspired rehearsal during consolidation. */
@@ -163,8 +165,8 @@ export interface HippoConfig {
   runtime?: RuntimeSettings;
 }
 
-/** Process settings a root reads from env vars; each absent field takes the default its
- * reader names. */
+/** Process settings a root reads from env vars; each absent field takes the default its reader
+ * names. */
 export interface RuntimeSettings {
   /** HIPPO_ANCHORING=off turns the anchoring hint off; on by default. */
   readonly anchoringHint?: boolean;
@@ -189,8 +191,8 @@ export interface RuntimeSettings {
   readonly clef?: ClefSettings;
 }
 
-/** The CLEF rerankers' transport, read by the root: HIPPO_CLEF_ENDPOINT wins over hosted
- * Workers AI. */
+/** The CLEF rerankers' transport, read by the root: HIPPO_CLEF_ENDPOINT wins over hosted Workers
+ * AI. */
 export interface ClefSettings {
   /** HIPPO_CLEF_ENDPOINT, trimmed. */
   readonly endpoint?: string;
@@ -239,6 +241,7 @@ export const DEFAULT_CONFIG: HippoConfig = {
     'breaking',
     'deprecate',
   ],
+  physics: { ...DEFAULT_PHYSICS_CONFIG },
   mmr: {
     enabled: true,
     lambda: DEFAULT_MMR_LAMBDA,

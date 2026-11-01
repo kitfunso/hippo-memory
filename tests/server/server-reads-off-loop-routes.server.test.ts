@@ -4,7 +4,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { log } from '../../src/base/util/log.js';
 import type { ServerHandle } from '../../src/server.js';
-import type { HippoStore } from '../../src/base/ports/store-index.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -28,7 +28,7 @@ import {
 } from '../_helpers/store-worker-server.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
-type InProcess = ReturnType<typeof serverThreadPart>;
+type InProcess = HippoStore & StoreGroups;
 
 interface Run {
   readonly server: ServerHandle;
@@ -244,15 +244,20 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
   const ROUTES: ReadonlyArray<
     readonly [route: string, swapped: (inProcess: InProcess) => Partial<InProcess>, send: Send, writesNothing: boolean]
   > = [
-    ['GET /v1/graph', (p) => ({ hippoDb: p.hippoDb }), graph(''), true],
-    ['GET /v1/quarantine', (p) => ({ hippoDb: p.hippoDb }), held(''), true],
+    ['GET /v1/graph', (p) => ({ graphReads: p.graphReads }), graph(''), true],
+    ['GET /v1/quarantine', (p) => ({ quarantine: p.quarantine }), held(''), true],
     [
       'POST /v1/quarantine/:id/approve',
-      (p) => ({ hippoDb: p.hippoDb }),
+      (p) => ({ quarantine: p.quarantine }),
       decide('approve', (made) => made.held[0]),
       true,
     ],
-    ['POST /v1/quarantine/:id/reject', (p) => ({ hippoDb: p.hippoDb }), decide('reject', (made) => made.held[1]), true],
+    [
+      'POST /v1/quarantine/:id/reject',
+      (p) => ({ quarantine: p.quarantine }),
+      decide('reject', (made) => made.held[1]),
+      true,
+    ],
     [
       'GET /v1/memories, by its candidate read',
       (p) => ({ searchRecallEntries: p.searchRecallEntries }),

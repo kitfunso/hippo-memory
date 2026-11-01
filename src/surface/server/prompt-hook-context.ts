@@ -8,11 +8,9 @@ import {
 } from '../../api/prompt-hook.js';
 import { loadConfig } from '../../host/config-file.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import { coreEnrichment } from '../../api/hippo-db-context.js';
-import { ledgerHomeOf } from '../../api/ledger-db.js';
+import { hasGroup, type HippoStore } from '../../base/ports/store.js';
 import { entryHost, withEntryInfra } from '../entry-infra.js';
-import { sqliteReach } from '../open-store.js';
+import { defaultReach } from '../open-store.js';
 
 export async function promptHookContext(
   ctx: EntryContext,
@@ -25,22 +23,24 @@ export async function promptHookContext(
   return renderPromptHook({ ...withInfra, reach }, req, opts);
 }
 
-/** The reach every root probes for a store kept in a folder, from the folder its tier names; a
- * store without one keeps the Context's default, one project and no global store. */
+/** The reach every root probes for a store kept in a folder, from the folder its port names; a
+ * store without folderFiles keeps the Context's default, one project and no global store. */
 async function folderReach(
   store: HippoStore,
   embedderFor: EmbedderFor,
   opts: PromptHookOptions | undefined,
 ): Promise<ContextReach | undefined> {
-  const enrich = coreEnrichment(store);
-  if (enrich?.folderFiles === undefined) return undefined;
-  const { folder } = await enrich.folderFiles.home();
-  const reach = sqliteReach({
+  if (!hasGroup(store, 'folderFiles')) return undefined;
+  const { folder } = await store.folderFiles.home();
+  const reach = defaultReach({
     hippoRoot: folder,
     store,
     shared: opts?.sharedStore,
     openGlobal: undefined,
     host: entryHost,
   });
-  return contextReach(reach, loadConfig, embedderFor, ledgerHomeOf(enrich, loadConfig(folder)));
+  const ledger = hasGroup(store, 'ledger')
+    ? { ledger: store.ledger, folderFiles: store.folderFiles, config: loadConfig(folder) }
+    : undefined;
+  return contextReach(reach, loadConfig, embedderFor, ledger);
 }

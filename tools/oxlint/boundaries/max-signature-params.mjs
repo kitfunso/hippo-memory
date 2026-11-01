@@ -1,7 +1,7 @@
 // Plain JS with JSDoc types so the plugin loads on the package's Node floor, which cannot strip types.
 import { defineRule } from '@oxlint/plugins';
 
-// The same limit as max-params in oxlint.config.ts, which skips the four signature kinds below.
+// The same limit as max-params in .oxlintrc.json, which skips the four signature kinds below.
 const MAX_POSITIONAL = 5;
 
 /**

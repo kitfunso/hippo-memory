@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { Process } from '../../src/domain/objects/processes.js';
@@ -28,7 +28,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
 });
 
 afterEach(async () => {
@@ -49,7 +49,7 @@ async function createProcess(processName: string, extra: ProcessCreateExtra = {}
   });
 }
 
-describe.skipIf(needsHippoDb('tier'))('HTTP /v1/processes (process first-class object)', () => {
+describe('HTTP /v1/processes (process first-class object)', () => {
   it('GET /v1/processes lists and filters by status', async () => {
     const v1 = (await jsonAs<{ process: Process }>(await createProcess('Deploy', { steps: ['a'] }))).process;
     await fetch(`${handle.url}/v1/processes/${v1.id}/supersede`, {

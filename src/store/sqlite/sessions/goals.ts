@@ -13,7 +13,7 @@ import {
   type CompleteGoalOptions,
   type PushGoalOptions,
   type Goals,
-} from '../../../base/records/goals.js';
+} from '../../../base/ports/store/goals.js';
 import type { OnHandle } from '../runtime/open.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -23,8 +23,8 @@ import { handleStamp } from '../runtime/handle-clock.js';
 // The goal stack's rules: its ids, its depth cap, the parent check, a new goal and policy, and
 // the strength a completed goal passes to the memories recalled under it.
 
-// The CLI prints these ids and the sequential-learning adapter reads them back as this many
-// hex characters.
+// The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex
+// characters.
 const GOAL_ID_CHARS = 16;
 const MAX_ACTIVE_GOAL_DEPTH = 3;
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
@@ -66,6 +66,7 @@ function retrievalPolicyOf(
   };
 }
 
+/** The goal a push stores. */
 function pushedGoal(
   id: string,
   opts: PushGoalOptions,
@@ -269,7 +270,7 @@ function listActiveGoalsOn(db: DatabaseSyncLike, opts: GetActiveGoalsOptions): G
 }
 
 // Per-goal retrieval_policy multipliers compose onto the base goal-tag boost and are hard-capped at
-// MAX_FINAL_MULTIPLIER before scoring.
+// MAX_FINAL_MULTIPLIER (3.0x) before scoring.
 function readGoalPolicies(
   db: DatabaseSyncLike,
   active: readonly Goal[],

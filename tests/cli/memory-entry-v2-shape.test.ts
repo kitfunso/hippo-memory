@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -9,7 +10,6 @@ import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
-import { asCommand } from '../_helpers/test-cli.js';
 
 let root: string;
 
@@ -63,7 +63,7 @@ describe('MemoryEntry 3.0 shape', () => {
 
   it('keeps tenant_id and a boolean summary_dirty in the export JSON', async () => {
     writeEntry(root, createMemory('exported note', { tenantId: 'acme' }));
-    const entries = await asCommand((cli) => memoryList(cli.apiContext(root, 'acme')));
+    const entries = await memoryList(cliApiContext(root, 'acme'));
     const exported = JSON.parse(JSON.stringify(entries.map(toWire), null, 2));
     expect(exported).toHaveLength(1);
     expect(exported[0]).toMatchObject({ tenant_id: 'acme', summary_dirty: false });

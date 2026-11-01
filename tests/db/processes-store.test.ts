@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
   PROCESS,

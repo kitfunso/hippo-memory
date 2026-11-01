@@ -1,11 +1,11 @@
 import type { MemoryEntry } from '../base/memory/entry.js';
-import { entryAfterOutcomeAt } from '../base/memory/keep-rules.js';
+import { entryAfterOutcome as outcomeAt } from '../base/memory/keep-rules.js';
 import { PRODUCTION_STRENGTH, withLossAversion } from '../base/memory/strength.js';
-import { tallyAmbientEntriesAt, type AmbientTallies } from '../base/memory/ambient.js';
+import {
+  tallyAmbientEntries as tallyAmbientAt,
+  type AmbientTallies,
+} from '../base/memory/ambient.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
-import type { StoreRules } from '../base/ports/infra.js';
-import type { HippoStore } from '../base/ports/store-index.js';
-import * as openStore from '../surface/open-store.js';
 export type {
   ApiKeyListItem,
   ApiKeyListRow,
@@ -59,17 +59,15 @@ export type {
   LiftedRejection,
   Rejection,
   RejectionSource,
-} from '../base/records/rejections.js';
+} from '../base/ports/store/rejections.js';
 
-// The hippo-memory/store-kit subpath: the core port, row types and hippo.db's rule helpers for a second HippoStore.
-// Its one known user, hippo-enterprise's Postgres store, pins hippo-memory ^1.69.0 and must port to this 3.0 core
-// port before it can take 3.0.
+// The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types,
+// hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
 
-/** hippo.db's store, which an add-on swaps for its own HippoStore in serve(); it takes only an
- * add-on's rules. Typed as the core port: hippo.db's local tier is not part of the contract. */
-export const sqliteStore: (hippoRoot: string, rules?: StoreRules) => HippoStore =
-  openStore.sqliteStore;
+// An add-on serves from another database by passing serve() its own HippoStore; sqliteStore names
+// hippo.db's, which the composition roots open as their default store.
 export {
+  publishedDefaultStore as sqliteStore,
   decodeVector,
   EMBEDDING_MODEL_META_KEY,
   encodeVector,
@@ -78,43 +76,56 @@ export {
   type VectorRow,
   OTHER_STORE_MARKER,
 } from '../surface/open-store.js';
-export { runStoreConformance } from './store-conformance.js';
-export type { ConformanceRunner } from './conformance/kit.js';
-export type {
-  AmbientCandidateRequest,
-  ContextReads,
-  EntryRemoval,
-  EntryTarget,
-  EntryWrite,
-  EntryWrites,
-  HippoStore,
-  KeyListQuery,
-  KeyMint,
-  KeyRevoke,
-  KeyWrites,
-  OutcomeWrite,
-  RawArchive,
-  RecallSearchArgs,
-  RecallWrites,
-  SelfKeyMint,
-  CoreGroups,
-  SupersedeWrite,
-  VectorReads,
-  VectorBackfillQuery,
-  VectorRowWrite,
-  VectorWrite,
-  VectorWriteResult,
-  VectorWrites,
+export { runStoreConformance, type ConformanceRunner } from './store-conformance.js';
+export {
+  hasGroup,
+  OPTIONAL_GROUPS,
+  requireGroup,
+  type RequiredStore,
+  type AmbientCandidateRequest,
+  type CallerItemsSaved,
+  type CardCreate,
+  type Cards,
+  type Compactions,
+  type Conflicts,
+  type ContextReads,
+  type Dormant,
+  type DormantRestoreRequest,
+  type EntryRemoval,
+  type EntryTarget,
+  type EntryWrite,
+  type EntryWrites,
+  type FailureLog,
+  type Goals,
+  type HippoStore,
+  type KeyListQuery,
+  type KeyMint,
+  type KeyRevoke,
+  type KeyWrites,
+  type LastRecall,
+  type LastRecallWrites,
+  type OptionalGroup,
+  type OutcomeWrite,
+  type RawArchive,
+  type RecallSearchArgs,
+  type RecallWrites,
+  type RejectionCheck,
+  type Rejections,
+  type Reports,
+  type SelfKeyMint,
+  type Sessions,
+  type StoreGroup,
+  type StoreGroups,
+  type SupersedeWrite,
+  type VectorReads,
+  type VectorBackfillQuery,
+  type VectorRowWrite,
+  type VectorWrite,
+  type VectorWriteResult,
+  type VectorWrites,
+  type WorkingMemoryFilter,
+  type WorkingMemoryPush,
 } from '../base/ports/store-index.js';
-export type { CallerItemsSaved, Compactions } from '../base/records/capture.js';
-export type { CardCreate, Cards } from '../base/records/cards.js';
-export type { Conflicts } from '../base/records/conflicts.js';
-export type { Dormant, DormantRestoreRequest } from '../base/records/dormant.js';
-export type { FailureLog, RejectionCheck, Rejections } from '../base/records/rejections.js';
-export type { Goals } from '../base/records/goals.js';
-export type { LastRecall, LastRecallWrites } from '../base/records/last-recall.js';
-export type { Reports } from '../base/records/reports.js';
-export type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from '../base/records/sessions.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as
 // hippo.db does.
 export function entryAfterOutcome(
@@ -122,7 +133,7 @@ export function entryAfterOutcome(
   good: boolean,
   rules: { lossAversionRatio?: number } = {},
 ): MemoryEntry {
-  return entryAfterOutcomeAt(
+  return outcomeAt(
     entry,
     good,
     evalNow(),
@@ -147,8 +158,8 @@ export {
   RECALL_DEFAULT_DENY_SCOPES,
 } from '../base/scope/recall-scope.js';
 export type { KeysetPosition } from '../base/util/keyset.js';
-// The types HippoStore's methods take and return, so an add-on store can implement them from
-// this subpath.
+// The types HippoStore's methods take and return, so an add-on store can implement them from this
+// subpath.
 export type { ContinuityBlock } from '../api/recall/types.js';
 export type { MemoryEntry } from '../base/memory/entry.js';
 export type {
@@ -159,12 +170,12 @@ export type {
   SessionEventInput,
   SnapshotInput,
   WorkingMemoryItem,
-} from '../base/records/sessions.js';
+} from '../base/ports/store/sessions.js';
 export type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
-// The types hippo.db's Sessions, Cards, Goals, Conflicts, Dormant and Reports repositories take and return.
+// The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
 export type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
-export type { CardDetail } from '../base/records/cards.js';
-export type { CompleteGoalOptions, PushGoalOptions } from '../base/records/goals.js';
+export type { CardDetail } from '../base/ports/store/cards.js';
+export type { CompleteGoalOptions, PushGoalOptions } from '../base/ports/store/goals.js';
 export type {
   ConflictListQuery,
   ConflictMember,
@@ -174,13 +185,13 @@ export type {
   ConflictSide,
   LoserFate,
   MemoryConflict,
-} from '../base/records/conflicts.js';
+} from '../base/ports/store/conflicts.js';
 export type {
   DormantMemory,
   DormantRestoreOutcome,
   ListDormantOptions,
-} from '../base/records/dormant.js';
-export type { CallerItems, CompactionStart } from '../base/records/capture.js';
+} from '../base/ports/store/dormant.js';
+export type { CallerItems, CompactionStart } from '../base/ports/store/capture.js';
 export type {
   CorrectionLink,
   EntryFilter,
@@ -189,20 +200,25 @@ export type {
   StatusCounts,
   StrengthTallies,
   LegacyStats,
-} from '../base/records/reports.js';
-export type { TokenSummary, TokenUse } from '../base/records/ledger.js';
+} from '../base/ports/store/reports.js';
+export type { TokenSummary, TokenUse } from '../base/ports/store/ledger.js';
 export type { AmbientTallies } from '../base/memory/ambient.js';
+export type { PhysicsParticle } from '../base/rank/physics.js';
+// An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root
+// in the options.
+export { physicsSearch } from './folder-search.js';
 export { StoreBusyError } from '../base/ports/store.js';
 // A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it
 // from a missed tenant.
 export { ALL_TENANTS, type TenantId } from '../base/util/tenant.js';
-// An add-on store encodes, decodes and ranks vectors with hippo.db's own code, and
+// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and
 // drops the index by its rule, so an add-on store and hippo.db keep the same bytes and return the
 // same ids in the same order.
 export { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 export { replacesIndex } from '../base/embeddings/index-identity.js';
-// An add-on's ContextReads, ambientCandidates and summaryWithDescendants apply hippo.db's scope,
-// secret, tally and rarest-term rules with this same code, so it admits the rows hippo.db would.
+// An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the
+// same code. An add-on's ambientCandidates and summaryWithDescendants admit rows by hippo.db's
+// rule.
 export {
   ambientRefusal,
   descendantAdmits,
@@ -213,11 +229,11 @@ export {
 export { SECRET_TAGS } from '../base/util/secret-detect.js';
 /** An add-on's ambient tallies, scored as hippo.db's are under the environment's eval switches. */
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
-  return tallyAmbientEntriesAt(entries, now ?? evalNow(), evalSwitches().strength);
+  return tallyAmbientAt(entries, now ?? evalNow(), evalSwitches().strength);
 }
-// An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by
-// hippo.db's rule.
-export { diffGraph, type StoredGraph } from '../base/records/graph-delta.js';
+// An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by hippo.db's
+// rule.
+export { diffGraph, type StoredGraph } from '../store/rules/graph-delta.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';
 // store copy --db writes the marker into the other store's folder.
 // An add-on that serves a team store checks the flag before it starts.

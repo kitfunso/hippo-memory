@@ -155,17 +155,17 @@ describe('recall cross-store determinism', () => {
   it('searchBothHybrid starts the global load while the local one is still out', async () => {
     const [local, global] = sharingStores(storeA, storeB);
     const events: string[] = [];
-    const searchLocal = local.store.hippoDb.sharing.searchEntries.bind(local.store.hippoDb.sharing);
-    const searchGlobal = global.store.hippoDb.sharing.searchEntries.bind(global.store.hippoDb.sharing);
+    const searchLocal = local.store.sharing.searchEntries.bind(local.store.sharing);
+    const searchGlobal = global.store.sharing.searchEntries.bind(global.store.sharing);
     // The local answer waits a turn of the event loop, so a global load that waits on it starts after local:end.
-    vi.spyOn(local.store.hippoDb.sharing, 'searchEntries').mockImplementation(async (...args) => {
+    vi.spyOn(local.store.sharing, 'searchEntries').mockImplementation(async (...args) => {
       events.push('local:start');
       await new Promise((done) => setImmediate(done));
       const found = await searchLocal(...args);
       events.push('local:end');
       return found;
     });
-    vi.spyOn(global.store.hippoDb.sharing, 'searchEntries').mockImplementation(async (...args) => {
+    vi.spyOn(global.store.sharing, 'searchEntries').mockImplementation(async (...args) => {
       events.push('global:start');
       return searchGlobal(...args);
     });

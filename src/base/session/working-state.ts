@@ -6,8 +6,8 @@ import { truncateCodePointSafe } from '../util/code-point-cut.js';
 const PRE_COMPACT_TASK_CAP = 200;
 const PRE_COMPACT_SUMMARY_CAP = 2000;
 const PRE_COMPACT_NEXT_STEP_CAP = 500;
-/** How far past the cut a trim looks for a line start, so a trimmed summary does not
- * open mid-line. */
+/** How far past the cut a trim looks for a line start, so a trimmed summary does not open
+ * mid-line. */
 const LINE_ALIGN_WINDOW_CHARS = 200;
 const TRIM_MARKER = '[...earlier turns trimmed]\n';
 

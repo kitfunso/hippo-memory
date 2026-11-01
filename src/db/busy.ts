@@ -1,8 +1,8 @@
 import { errorFields, errorMessage, isLevelEnabled, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 
-// SQLite's busy result codes; the SQLite adapter turns each into the port's StoreBusyError at
-// its boundary.
+// SQLite's busy result codes; the SQLite adapter turns each into the port's StoreBusyError at its
+// boundary.
 const SQLITE_BUSY = 5;
 const SQLITE_LOCKED = 6;
 // SQLITE_BUSY with extended code 2: a write on a read snapshot another writer has since moved past.
@@ -31,8 +31,9 @@ function noteLongWait(db: DatabaseSyncLike, sql: string, startedAt: number): voi
   log.debug('sqlite lock wait', { path, sql, waitedMs });
 }
 
-// busy_timeout covers neither statement here: SQLite skips the busy handler for
-// `PRAGMA journal_mode` or a write upgrading a deferred read snapshot, so each waits on its own.
+// busy_timeout covers neither contended statement here: SQLite skips the busy handler for `PRAGMA
+// journal_mode` and for a write that upgrades a deferred read snapshot, so both need an explicit
+// wait.
 export function execWithBusyRetry(
   db: DatabaseSyncLike,
   sql: string,

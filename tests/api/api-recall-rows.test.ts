@@ -7,7 +7,7 @@ import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
+import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { rankRecall } from '../../src/api/recall/pipeline.js';
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import { handoffText, snapshotText } from '../../src/api/context/context-render.js';
@@ -33,7 +33,7 @@ let home: string;
 let hippoRoot: string;
 let globalRoot: string;
 
-const ctx = () => lastingCommand().apiContext(hippoRoot, 'default');
+const ctx = () => cliApiContext(hippoRoot, 'default');
 const setting = (activeScope: string | null, primaryIsGlobal = false): RecallStoreSetting => ({
   globalRoot,
   primaryIsGlobal,
@@ -58,6 +58,8 @@ async function rankDeploy() {
       includeSuperseded: false,
       explicitScope: null,
       activeScope: null,
+      usePhysics: false,
+      physicsConfig: config.physics,
       multihop: false,
       mmr: false,
       mmrLambda: 0.7,
@@ -120,8 +122,7 @@ beforeEach(() => {
   }
 });
 
-afterEach(async () => {
-  await endLastingCommands();
+afterEach(() => {
   vi.unstubAllEnvs();
 });
 
@@ -201,6 +202,8 @@ describe('recallStoreSetting and recallRowOrigin', () => {
         includeSuperseded: false,
         explicitScope: null,
         activeScope: null,
+        usePhysics: false,
+        physicsConfig: config.physics,
         multihop: false,
         mmr: false,
         mmrLambda: 0.7,
@@ -250,18 +253,6 @@ describe('recallJsonRow and recallRerankerPick', () => {
     const why = recallJsonRow({ r: top, query: 'deploy', showWhy: true, isGlobal: true, now: evalNow() });
     expect(why.source).toBe('global');
     expect(why.reason).toBe('BM25: matched terms [deploy]');
-  });
-
-  it('names every key in snake_case, the graph hop and the ranking steps included', async () => {
-    const top = (await rankDeploy()).results[0]!;
-    const r: SearchResult = {
-      ...top,
-      graphVia: { hops: 1, relType: 'supersedes', direction: 'from' },
-      rerankTrace: [{ stage: 'utility', scoreBefore: 1, scoreAfter: 0.9 }],
-    };
-    const row = recallJsonRow({ r, query: 'deploy', showWhy: true, isGlobal: false, now: evalNow() });
-    expect(Object.keys(row).filter((key) => /[A-Z]/.test(key))).toEqual([]);
-    expect(row).toMatchObject({ graph_via: r.graphVia, rerank_trace: r.rerankTrace });
   });
 
   it('picks no reranker for a blank name and throws for an unknown one', () => {

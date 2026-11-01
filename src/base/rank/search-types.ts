@@ -1,13 +1,5 @@
 import type { MemoryEntry } from '../memory/entry.js';
 
-// Ranking defaults that `hippo recall --help` prints; the help and the rankers read the same value.
-/** Share of the blended score that cosine takes. */
-export const DEFAULT_EMBEDDING_WEIGHT = 0.6;
-/** Default hops expanded from each seed (MVP; hard cap MAX_HOPS reused from graph recall). */
-export const DEFAULT_GRAPH_HOPS = 2;
-/** Default number of top lexical seeds expanded from. */
-export const DEFAULT_GRAPH_SEED_COUNT = 10;
-
 /** Default candidate-pool size for `listSearchEntries` when `limit` is undefined; `api.recall`
  * imports it for `RecallResult.windowSize` so the two cannot drift. */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
@@ -16,8 +8,8 @@ export const DEFAULT_RECALL_BUDGET = 4000;
 
 /** Results a search keeps whatever they cost when the caller names no minimum. */
 export const DEFAULT_MIN_RESULTS = 1;
-// Local memories outrank global ones by this factor; contextGet applies it as a 1/x
-// global discount.
+// Local memories outrank global ones by this factor; contextGet applies it as a 1/x global
+// discount.
 export const DEFAULT_LOCAL_BUMP = 1.2;
 // The relevance side of the MMR relevance-versus-diversity trade; config and hybrid recall both
 // default to it.
@@ -34,8 +26,8 @@ export const UTILITY_LENGTH_TOKENS = 10000;
 export const SALIENCE_MIN_MULTIPLIER = 0.5;
 
 /**
- * One score mutation applied after candidate generation; allocated only under `recall --why`
- * or `RecallOptions.trace.explain`.
+ * One score mutation applied after candidate generation; allocated only under `recall --why` or
+ * `RecallOptions.trace.explain`.
  */
 export interface RerankStep {
   /** One of: interference, value, utility, reranker, goal-boost, retrieval-count-downweight. */
@@ -78,8 +70,8 @@ export type ResultCost = (r: SearchResult) => number;
 
 export interface ScoreBreakdown {
   /** `hybrid`: BM25 plus a cached doc vector; `hybrid-no-vec`: the query was embedded but this doc has no vector (run
-   *  `hippo embed`); `bm25-only`: no usable embeddings. */
-  mode: 'hybrid' | 'hybrid-no-vec' | 'bm25-only';
+   *  `hippo embed`); `bm25-only`: no usable embeddings; `physics`: scored by the physics engine. */
+  mode: 'hybrid' | 'hybrid-no-vec' | 'bm25-only' | 'physics';
   /** BM25 score after normalization by max-in-corpus (0..1). */
   normBm25: number;
   /** Weight applied to BM25 in the hybrid blend. */
@@ -90,22 +82,23 @@ export interface ScoreBreakdown {
   cosine: number;
   /** Blended base score before multipliers. */
   base: number;
-  /** Multiplier from memory strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength. The
-   * constants named here live in domain/search/boosts.ts and path-context.ts, written once. */
+  /** Multiplier from memory strength: 0.5 + 0.5*strength. */
   strengthMultiplier: number;
-  /** Multiplier from age: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost. */
+  /** Multiplier from age: 0.8 + 0.2*recencyBoost. */
   recencyMultiplier: number;
-  /** DECISION_TAG_BOOST if tagged 'decision', else 1.0. */
+  /** 1.2 if tagged 'decision', else 1.0. */
   decisionBoost: number;
-  /** pathBoostMultiplier: 1.0 plus PATH_BOOST_WEIGHT times the cwd path tag overlap. */
+  /** 1.0..1.3 based on cwd path tag overlap. */
   pathBoost: number;
-  /** SCOPE_MATCH_BOOST if scope matches, SCOPE_MISMATCH_BOOST if it mismatches, 1.0 if neutral. */
+  /** 1.5 if scope matches, 0.5 if scope mismatches, 1.0 if neutral. */
   scopeBoost: number;
-  /** Extra multiplier applied post-hybrid (the caller's local bump on a local hit in a local+global
-   * merge); 1.0 otherwise. */
+  /** Extra multiplier applied post-hybrid (e.g. 1.2x for local hits in a local+global merge);
+   * 1.0 otherwise. */
   sourceBump: number;
-  /** Immediate outcome nudge, outcomeNudge within the OUTCOME_NUDGE_* bounds; separate from the
-   * slow strength path. */
+  /**
+   * Immediate outcome nudge, 1 + 0.15*tanh((pos - neg) / 2) clipped to [0.85, 1.15]; separate from
+   * the slow strength path.
+   */
   outcomeBoost: number;
   /** CHURN_STALE_RANK_MULTIPLIER if tagged 'churn-stale', else 1.0. */
   churnStaleMultiplier: number;
@@ -127,9 +120,9 @@ export interface ScoreBreakdown {
   lastRebuiltAt?: string | null;
   /** Cumulative rebuild_count. Summaries only. */
   rebuildCount?: number;
-  /** Deboost applied: 1.0 for non-summaries, resolveSummaryDeboost for summaries. */
+  /** Deboost applied (1.0 for non-summaries; default 0.85 for summaries). */
   summaryDeboost?: number;
-  /** DEFAULT_FRESHNESS_BOOST if a summary was rebuilt within FRESHNESS_WINDOW_MS; 1.0 otherwise. */
+  /** 1.05 if a summary was rebuilt within 7 days; 1.0 otherwise. */
   summaryFreshnessBoost?: number;
 }
 

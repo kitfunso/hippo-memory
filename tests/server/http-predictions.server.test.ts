@@ -19,7 +19,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-import type { Prediction } from '../../src/base/records/objects.js';
+import type { Prediction } from '../../src/base/ports/store/objects.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { jsonAs, authHeaders } from '../_helpers/http-objects-server.js';
 
@@ -36,7 +36,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
 });
 
 afterEach(async () => {
@@ -44,7 +44,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe.skipIf(needsHippoDb('tier'))('HTTP /v1/predictions (prediction first-class object)', () => {
+describe('HTTP /v1/predictions (prediction first-class object)', () => {
   it('POST /v1/predictions creates a prediction (201 + Prediction body)', async () => {
     const res = await fetch(`${handle.url}/v1/predictions`, {
       method: 'POST',

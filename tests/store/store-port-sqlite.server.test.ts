@@ -10,6 +10,7 @@ import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/sqlite/sessions/goals.js';
 import { boostByGoals } from '../../src/domain/search/goal-boost.js';
+import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { planningFallacyEvidence } from '../../src/store/sqlite/learning/planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall/recall-trace.js';
 import { serve } from '../../src/server.js';
@@ -130,7 +131,7 @@ function entriesOf<V>(map: ReadonlyMap<string, V>): [string, V][] {
 
 const VECTOR_IDENTITY = embeddingIndexIdentity('openai:hashed-16');
 
-/** Vectors for a current, a newer, a private and a superseded row, an 8-dim row, and a vector whose row is gone. */
+/** Vectors and particles for a current, a newer, a private and a superseded row, an 8-dim row, and a vector whose row is gone. */
 function seedVectors(root: string): void {
   const entries = loadEntriesByIds(root, ['mem_p_plain', 'mem_p_new', 'mem_p_private', 'mem_p_old', 'mem_p_noise']);
   const index = Object.fromEntries(
@@ -143,6 +144,7 @@ function seedVectors(root: string): void {
   try {
     upsertVectors(db, [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]], VECTOR_IDENTITY);
     setMeta(db, EMBEDDING_MODEL_META_KEY, VECTOR_IDENTITY);
+    resetAllPhysicsState(db, entries, index, { now: new Date(FAKE_NOW) });
   } finally {
     closeHippoDb(db);
   }
@@ -463,8 +465,22 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     expect(port.opens).toBe(direct.opens);
   });
 
-  it('stored vectors for no id open nothing', async () => {
-    const none = await onCopy('local', async (s) => (await sqliteStore(s.root).vectors.stored('vectors', [])).size);
+  it('stored particles are only the ids asked for, as loadPhysicsState reads, and none opens nothing', async () => {
+    const ids = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
+    const { direct, port } = await parity(
+      (s) => {
+        const db = openHippoDb(s.root);
+        try {
+          return entriesOf(loadPhysicsState(db, ids));
+        } finally {
+          closeHippoDb(db);
+        }
+      },
+      async (store) => entriesOf(await store.vectors.stored('particles', ids)),
+    );
+    expect(direct.value.map(([id]) => id)).toEqual(['mem_p_noise', 'mem_p_plain']);
+    expect(port.opens).toBe(direct.opens);
+    const none = await onCopy('local', async (s) => (await sqliteStore(s.root).vectors.stored('particles', [])).size);
     expect([none.value, none.opens]).toEqual([0, 0]);
   });
 });
@@ -579,7 +595,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
           closeHippoDb(db);
         }
         const rules = { strength: PRODUCTION_STRENGTH, clock: evalNow };
-        strengthenRetrieved({ hippoRoot: s.root, grant: grantFor({}) }, strengthen.ids, strengthen.opts, rules);
+        strengthenRetrieved(s.root, strengthen.ids, strengthen.opts, rules, grantFor({}));
       },
       (store) => store.finishRecall(finishWrites()),
     );
@@ -693,6 +709,7 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
     ['mcp, no session', 1, { via: 'mcp', args: { query: 'deploy' } }],
     ['mcp, a session with active goals', 1, { via: 'mcp', args: { query: 'deploy', session_id: SESSION } }],
     ['http hybrid, the vector arm on', 1, { via: 'http', params: { q: 'deploy', mode: 'hybrid' } }, true],
+    ['http physics, the vector arm on', 1, { via: 'http', params: { q: 'deploy', mode: 'physics' } }, true],
   ];
   let embeddings: HashedEmbeddings;
 
@@ -710,7 +727,10 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
       if (vectorArm) {
         vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
         const embeddingsConfig = { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url };
-        writeFileSync(join(s.root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig }));
+        writeFileSync(
+          join(s.root, 'config.json'),
+          JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: true } }),
+        );
       }
       const before = embeddings.requests();
       const handle = await serveKeyed({ hippoRoot: s.root, port: 0, store: sqliteStore(s.root) }, serve);

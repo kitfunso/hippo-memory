@@ -7,7 +7,7 @@ import { readSessionScan, recordSessionDigest } from '../../capture/session-dige
 import { runCapture, type CaptureOptions } from '../../capture/command.js';
 import type { LineLog } from '../../../base/util/log.js';
 import { isInitialized, resolveProjectIdentity } from '../../../host/project-identity.js';
-import { cliConfig, type CliCommand, type CliScope } from '../api-context.js';
+import { cliConfig, cliStore } from '../api-context.js';
 import { type CliFlags, type CommandContext, parseCountFlag, stringFlag } from '../flag-values.js';
 import {
   appendSessionEndCloseLog,
@@ -17,8 +17,11 @@ import {
   reportSessionEndFailure,
 } from '../hook-runtime.js';
 
-export async function handleCodexSessionEndWorker(cmd: CommandContext): Promise<void> {
-  const { cli, hippoRoot, tenantId, flags } = cmd;
+export async function handleCodexSessionEndWorker({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   // Like the other hooks: project store, else global; a folder with neither must not get one made.
   const store = hookStoreRoot(hippoRoot);
@@ -29,12 +32,13 @@ export async function handleCodexSessionEndWorker(cmd: CommandContext): Promise<
     return;
   }
 
-  await sleepCodexProjectStore(cmd, logFile);
-  await captureCodexTranscript({ cli, hippoRoot, tenantId, store, flags, logFile });
+  await sleepCodexProjectStore(hippoRoot, tenantId, logFile);
+  await captureCodexTranscript({ hippoRoot, tenantId, store, flags, logFile });
 }
 
 async function sleepCodexProjectStore(
-  { cli, hippoRoot, tenantId }: CliScope,
+  hippoRoot: string,
+  tenantId: string,
   logFile: string | null,
 ): Promise<void> {
   // Sleeping the global store from here would learn this folder's git commits into it; it has its
@@ -44,7 +48,6 @@ async function sleepCodexProjectStore(
       await (
         await import('../sleep.js')
       ).sleepStore({
-        cli,
         hippoRoot,
         tenantId,
         args: [],
@@ -57,12 +60,11 @@ async function sleepCodexProjectStore(
     appendSessionEndCloseLog(logFile, 'skip sleep: this folder has no store of its own', {
       startFresh: true,
     });
-    await logSessionEndImport(cli, logFile, tenantId, undefined);
+    await logSessionEndImport(logFile, tenantId, undefined);
   }
 }
 
 interface CodexStoreOptions {
-  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly store: string;
@@ -74,7 +76,6 @@ interface CaptureCodexTranscriptOptions extends CodexStoreOptions {
 }
 
 async function captureCodexTranscript({
-  cli,
   hippoRoot,
   tenantId,
   store,
@@ -88,7 +89,7 @@ async function captureCodexTranscript({
       appendSessionEndCloseLog(logFile, 'skip capture: no Codex transcript for this session');
       return;
     }
-    await captureCodexRollout({ cli, hippoRoot, tenantId, store, logFile }, transcriptPath);
+    await captureCodexRollout({ hippoRoot, tenantId, store, logFile }, transcriptPath);
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: transcript scan or digest', err);
   }
@@ -110,7 +111,7 @@ function codexTranscriptPath(flags: CliFlags): string | undefined {
 }
 
 async function captureCodexRollout(
-  { cli, hippoRoot, tenantId, store, logFile }: CodexStoreOptions,
+  { hippoRoot, tenantId, store, logFile }: CodexStoreOptions,
   transcriptPath: string,
 ): Promise<void> {
   const digestLog: LineLog = (message, opts) => appendSessionEndCloseLog(logFile, message, opts);
@@ -126,12 +127,12 @@ async function captureCodexRollout(
     sessionTurns: scan?.turns,
   };
   try {
-    await runCapture(captureTarget(cli, store), captureOpts);
+    await runCapture(captureTarget(store), captureOpts);
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: capture', err);
   }
   // The Codex wrapper passes no session id, so the rollout file names the session.
   const digestKey = path.basename(transcriptPath, '.jsonl');
   const digestOpts = { key: digestKey, tenantId, log: digestLog, config: cliConfig(hippoRoot) };
-  await recordSessionDigest(hippoRoot, cli.store(hippoRoot), scan, digestOpts);
+  await recordSessionDigest(hippoRoot, cliStore(hippoRoot), scan, digestOpts);
 }

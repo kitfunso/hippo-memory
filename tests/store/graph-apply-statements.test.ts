@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteGraphRebuild } from '../../src/store/sqlite/graph/graph-rebuild.js';
-import type { GraphOp, NaturalKey } from '../../src/base/records/graph.js';
+import type { GraphOp, NaturalKey } from '../../src/base/ports/store/graph.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadRelations } from '../_helpers/root-forms.js';

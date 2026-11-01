@@ -86,14 +86,11 @@ async function sleepCountingAsks(perTenant: number): Promise<SleepAsks> {
   const asks: string[] = [];
   const store = {
     ...local,
-    hippoDb: {
-      ...local.hippoDb,
-      consolidation: {
-        ...local.hippoDb.consolidation,
-        rejected: (tenantId: string, digests: readonly string[]) => {
-          asks.push(tenantId);
-          return local.hippoDb.consolidation.rejected(tenantId, digests);
-        },
+    consolidation: {
+      ...local.consolidation,
+      rejected: (tenantId: string, digests: readonly string[]) => {
+        asks.push(tenantId);
+        return local.consolidation.rejected(tenantId, digests);
       },
     },
   };

@@ -12,7 +12,7 @@ import { parseArgs, runCli, usageText, verbUsage } from '../../src/cli.js';
 import type { VerbFlags } from '../../src/surface/cli/flags.js';
 import { USAGE_EXAMPLES, USAGE_HEADER } from '../../src/surface/cli/usage.js';
 import type { VerbRow } from '../../src/surface/cli/verb-row.js';
-import { COMMANDS } from '../../src/surface/cli/flags.js';
+import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 
@@ -47,7 +47,7 @@ const DRY_RUN_VERBS = ['audit', 'capture', 'dedup', 'forget', 'import', 'invalid
 const UNDOCUMENTED = new Map(
   Object.entries({
     remember: ['artifact-ref', 'extract', 'force', 'kind', 'layer', 'owner', 'scope'],
-    recall: ['equal-sources', 'layer', 'limit', 'local-bump', 'outcome', 'scope'],
+    recall: ['classic', 'equal-sources', 'layer', 'limit', 'local-bump', 'outcome', 'physics', 'scope'],
     drill: ['depth'],
     explain: ['as-of', 'equal-sources', 'include-superseded', 'local-bump', 'scope'],
     eval: ['baseline', 'save-baseline', 'suite'],
@@ -61,7 +61,7 @@ const UNDOCUMENTED = new Map(
     handoff: ['id'],
     forget: ['dry-run'],
     context: ['cross-project', 'limit', 'runtime', 'scope'],
-    embed: ['global'],
+    embed: ['global', 'reset-physics'],
     sync: ['cross-project'],
     peers: ['all-tenants'],
     graph: ['entity', 'format', 'json', 'open', 'out'],

@@ -9,17 +9,20 @@ import { OTHER_STORE_MARKER, SqliteBlockedError } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
 import { embeddingModelRequiresReindex } from '../../src/store/sqlite/vectors/vector-index.js';
 import { resolveVectorArm } from '../../src/domain/search/vector.js';
-import { folderVectorSource } from '../../src/entry/folder-search.js';
+import { physicsSearch, folderVectorSource } from '../../src/entry/folder-search.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { strengthenRetrieved } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+
+const ranked = (results: readonly unknown[]): string => `ranked ${results.length}`;
 
 /** [catch site, a frame the blocked error's stack must name, the call, what the call returns when the open fails otherwise]. */
 type Row = readonly [string, RegExp, (root: string) => Promise<string>, string];
@@ -41,7 +44,7 @@ const ROWS: readonly Row[] = [
     'store/sqlite/entries/entry-writes.ts strengthenRetrieved',
     /strengthenRetrieved/,
     async (root) =>
-      `found ${strengthenRetrieved({ hippoRoot: root, grant: grantFor({}) }, [entry.id], { tenantId: 'default', recallBoostAblated: false }, { strength: PRODUCTION_STRENGTH, clock: evalNow }).size}`,
+      `found ${strengthenRetrieved(root, [entry.id], { tenantId: 'default', recallBoostAblated: false }, { strength: PRODUCTION_STRENGTH, clock: evalNow }, grantFor({})).size}`,
     'found 0',
   ],
   [
@@ -57,6 +60,31 @@ const ROWS: readonly Row[] = [
       `embeddings ${(await resolveVectorArm('deploy', [], folderVectorSource({ hippoRoot: root }), {})).useEmbeddings}`,
     'embeddings false',
   ],
+  [
+    'domain/search/physics-search.ts physicsQueryVector',
+    /physicsQueryVector/,
+    async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root })),
+    'ranked 1',
+  ],
+  [
+    'domain/search/physics-search.ts withVectorCandidates',
+    /withVectorCandidates/,
+    async (root) =>
+      ranked(
+        await physicsSearch('deploy', [entry], {
+          hippoRoot: root,
+          queryEmbedding: [1, 0, 0],
+          vectorCandidates: { tenantId: ALL_TENANTS, includeSuperseded: false },
+        }),
+      ),
+    'ranked 1',
+  ],
+  [
+    'domain/search/physics-search.ts loadCandidateParticles',
+    /loadCandidateParticles/,
+    async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root, queryEmbedding: [1, 0, 0] })),
+    'ranked 1',
+  ],
 ];
 
 let root: string;
@@ -67,7 +95,7 @@ beforeEach(() => {
   Error.stackTraceLimit = 50;
   root = mkdtempSync(join(tmpdir(), 'hippo-blocked-catch-'));
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
-  // An API provider with a stubbed fetch, so the vector arm reaches its opens without a local model or the network.
+  // An API provider with a stubbed fetch, so the vector arm and physics reach their opens without a local model or the network.
   writeFileSync(
     join(root, 'config.json'),
     JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }),

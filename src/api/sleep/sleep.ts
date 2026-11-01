@@ -1,14 +1,11 @@
 // The sleep cycle: decay, consolidation, dedupe, graph extraction and the other maintenance passes.
 
 import type { AmbientState } from '../../base/memory/ambient.js';
-import type { ConsolidationResult } from '../../domain/consolidate/run.js';
-import { runConsolidation } from '../../domain/consolidate/sleep.js';
-import { strengthOf } from '../types.js';
-import type { HippoDbContext } from '../hippo-db-context.js';
-import type { SleepEvent } from './sleep-run.js';
+import type { SleepContext } from '../types.js';
+import type { SleepEvent } from './events.js';
 import { runSleep } from './sleep-run.js';
 
-/** Options for `sleep`, one consolidation cycle on a store with hippo.db's local tier that returns
+/** Options for `sleep`, one consolidation cycle on a store with the sleep groups that returns
  * counts; unlike `hippo sleep` it skips the auto-learn step. */
 export interface SleepOptions {
   /** Report what a sleep would change without applying it; sharing, the ambient summary and the
@@ -56,22 +53,8 @@ export interface SleepResult {
 /** Sleeps the WHOLE store, every tenant, so /v1/sleep stays loopback-only; never auto-deletes
  * pinned, raw, kept or object-backing rows. */
 export async function sleepWholeStore(
-  ctx: HippoDbContext,
+  ctx: SleepContext,
   opts: SleepOptions = {},
 ): Promise<SleepResult> {
   return runSleep(ctx, opts);
-}
-
-/** What one auto-sleep runs: the consolidation alone. */
-export async function autoSleepConsolidate(
-  ctx: Pick<HippoDbContext, 'store' | 'config' | 'tenantId' | 'infra'>,
-): Promise<ConsolidationResult> {
-  const { store, config, tenantId, infra } = ctx;
-  return runConsolidation(store, {
-    config,
-    tenantId,
-    llm: infra.llm,
-    now: infra.clock(),
-    strength: strengthOf(ctx),
-  });
 }

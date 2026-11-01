@@ -20,7 +20,7 @@ import {
 } from '../../src/api/index.js';
 import { rememberLocally } from '../../src/api/memories/remember-local.js';
 import { importVault } from '../../src/entry/importers.js';
-import type { HippoStore } from '../../src/base/ports/store-index.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -107,7 +107,7 @@ const REPLIES = {
   importVault: expect.objectContaining({ total: 1, imported: 1 }),
 };
 
-const STORE_KINDS: ReadonlyArray<readonly [string, (root: string) => ReturnType<typeof sqliteStore>]> = [
+const STORE_KINDS: ReadonlyArray<readonly [string, (root: string) => HippoStore & StoreGroups]> = [
   ['sqliteStore', sqliteStore],
   ['workerSqliteStore', (root) => workerSqliteStore(root)],
 ];

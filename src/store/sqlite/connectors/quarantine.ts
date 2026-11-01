@@ -1,34 +1,37 @@
-// hippo.db's quarantine repository: the review queue's rows, and the approve and reject writes
-// with their audit rows. A refusal is a resolved value, never a rejection, and writes nothing.
+// hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with
+// their audit rows.
 import { appendAuditEvents } from '../audit/audit.js';
-import { changedRows, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
+import { withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
 import type { KeysetPosition } from '../../../base/util/keyset.js';
 import { keysetAfter } from '../../../db/sql.js';
 import { readEntriesByIds, readEntry } from '../entries/entry-reads.js';
+import type {
+  QuarantineApproval,
+  QuarantineListQuery,
+  QuarantineRefusal,
+  QuarantineRejection,
+  QuarantinedMemory,
+  Quarantine,
+} from '../../../base/ports/store.js';
 import {
   QUARANTINE_LIST_LIMIT,
-  type QuarantineApproval,
-  type Quarantine,
-  type QuarantineListQuery,
-  type QuarantineRefusal,
-  type QuarantineRejection,
-  type QuarantinedMemory,
+  type QuarantineCalls,
   type QuarantineRow,
   type QuarantineStatus,
-} from '../../../base/records/quarantine.js';
+} from '../../../base/ports/store/quarantine.js';
 import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../../base/scope/recall-scope.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
-import { bound, type Bodies } from '../runtime/bound.js';
+import { bound } from '../runtime/bound.js';
 import { writeEntryMirrors } from '../entries/entry-writes.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
 
-// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/checks/check-row-casts.mjs
-// proves it.
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/checks/check-row-casts.mjs proves
+// it.
 interface QuarantineDbRow {
   tenant_id: string;
   memory_id: string;
@@ -49,8 +52,8 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
     memoryId: row.memory_id,
     originalScope: row.original_scope,
     reason: row.reason,
-    // SAFETY: the quarantine INSERT and this module's UPDATE statements are the only writers
-    // of status.
+    // SAFETY: the quarantine INSERT and this module's UPDATE statements are the only writers of
+    // status.
     status: row.status as QuarantineStatus,
     quarantinedAt: row.quarantined_at,
     decidedAt: row.decided_at,
@@ -117,8 +120,8 @@ interface RecordQuarantineOptions {
   actor: string;
 }
 
-/** Insert the quarantine row + its audit event; caller runs this inside the memory's own
- * write transaction. */
+/** Insert the quarantine row + its audit event; caller runs this inside the memory's own write
+ * transaction. */
 export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOptions): void {
   cachedStatement(
     db,
@@ -209,7 +212,7 @@ function approveQuarantined(
         db,
         `UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`,
       ).run(row.originalScope, id, tenantId, quarantineScope);
-      if (changedRows(updated) !== 1) return rollback({ outcome: 'scope_moved' });
+      if (Number(updated.changes ?? 0) !== 1) return rollback({ outcome: 'scope_moved' });
       approveQuarantineRow(db, { tenantId, id, actor });
       appendAuditEvents(db, [
         {
@@ -264,23 +267,35 @@ function rewriteMirror(
   }
 }
 
-/** The quarantine queue on `handles`; hippo.db's local tier carries it as `quarantine`. */
+interface Decision extends DecisionOptions {
+  readonly decision: 'approve' | 'reject';
+}
+
+function decide(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  { tenantId, id, decision, actor }: Decision,
+) {
+  if (decision === 'reject') return rejectQuarantined(db, { tenantId, id, actor });
+  const result = approveQuarantined(db, { tenantId, id, actor });
+  if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
+  return result;
+}
+
 export function sqliteQuarantine({ on, files }: Handles): Quarantine {
-  return {
-    ...bound(on, { list: listQuarantined }),
-    // An approval rewrites the memory's mirror, so a decision opens the store with its
-    // mirror folders.
-    ...bound(
+  const quarantine: QuarantineCalls = {
+    ...bound<Pick<QuarantineCalls, 'listQuarantined'>>(on, { listQuarantined: listQuarantined }),
+    // An approval rewrites the memory's mirror, so the decision opens the store with its mirror
+    // folders.
+    ...bound<Pick<QuarantineCalls, 'decideQuarantined'>>(
       on,
       {
-        approve: (db, tenantId, id, actor) => {
-          const result = approveQuarantined(db, { tenantId, id, actor });
-          if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
-          return result;
-        },
-        reject: (db, tenantId, id, actor) => rejectQuarantined(db, { tenantId, id, actor }),
-      } satisfies Bodies<Pick<Quarantine, 'approve' | 'reject'>>,
+        decideQuarantined: (db, tenantId, id, decision, actor) =>
+          decide(db, files, { tenantId, id, decision, actor }),
+      },
       openStore,
     ),
   };
+  // SAFETY: decide answers each decision with the outcome the port's overload for it names.
+  return quarantine as Quarantine;
 }
