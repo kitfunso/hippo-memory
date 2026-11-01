@@ -14,7 +14,7 @@ def test_sync_health_reports_version(hippo_server: str):
     with HippoSync(base_url=hippo_server) as client:
         info = client.health()
         assert info.ok is True
-        assert info.version.startswith("1.") or info.version.startswith("2.")
+        assert tuple(int(p) for p in info.version.split(".")[:3]) >= (1, 11, 4)
         assert info.pid > 0
 
 

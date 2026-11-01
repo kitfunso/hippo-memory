@@ -20,7 +20,7 @@ async def test_health_reports_version(hippo_server: str, hippo_member_key: str):
         info = await client.health()
         assert info.ok is True
         # Server version should be >=1.11.4 for the SDK's endpoint surface.
-        assert info.version.startswith("1.") or info.version.startswith("2.")
+        assert tuple(int(p) for p in info.version.split(".")[:3]) >= (1, 11, 4)
         assert info.pid > 0
 
 
