@@ -1,15 +1,10 @@
 // The typed-object writes: audit rows, close, save with versions, the half-life mirror and incident open.
 
 import { appendAuditEvents } from '../audit/audit.js';
-import {
-  changedRows,
-  getMeta,
-  withWriteScopeOr,
-  type DatabaseSyncLike,
-} from '../../../db/index.js';
+import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import { chunked } from '../../../base/util/chunked.js';
-import { calculateStrengthAt, LEGACY_TYPED_HALF_LIFE } from '../../../base/memory/strength.js';
+import { calculateStrength, LEGACY_TYPED_HALF_LIFE } from '../../../base/memory/strength.js';
 import { deriveHalfLife, type MemoryEntry } from '../../../base/memory/entry.js';
 import { stampOriginProject, upsertEntryRow } from '../entries/entry-row.js';
 import { auditEntryWrite, writeEntryMirrors, auditingRefusal } from '../entries/entry-writes.js';
@@ -35,7 +30,7 @@ import type {
   ObjectCloseArgs,
   ObjectSave,
   ObjectSaveArgs,
-} from '../../../base/records/objects.js';
+} from '../../../base/ports/store/objects.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { closePrediction, writePrediction } from '../learning/predictions.js';
@@ -138,7 +133,7 @@ function closeRow<K extends ObjectKind>(
       `UPDATE ${table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN ` +
         `(${marks})`,
     ).run(close.at, id, tenantId, ...close.from);
-    if (changedRows(updated) === 0) {
+    if (updated.changes === 0) {
       const existing = cachedStatement(
         db,
         `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
@@ -237,7 +232,7 @@ function supersedeRow<K extends SavableKind>(
     WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
   `,
   ).run(id, row.save.at, replaced, row.tenantId, id);
-  if (changedRows(updated) === 0) return false;
+  if (updated.changes === 0) return false;
   const ids = { replaced, id, version: row.version };
   const audit = supersedeAudit(row.kind, ids, row.save.fields);
   appendAuditEvents(db, [{ tenantId: row.tenantId, actor: row.save.actor, ...audit }]);
@@ -290,7 +285,7 @@ function onStoreHalfLife(
 ): MemoryEntry {
   if (getMeta(db, META_KEY.typedHalfLife, '') !== '') return mirror;
   const legacy = { ...mirror, halfLifeDays: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
-  return { ...legacy, strength: calculateStrengthAt(legacy, rules.clock(), rules.strength) };
+  return { ...legacy, strength: calculateStrength(legacy, rules.clock(), rules.strength) };
 }
 
 /** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link
@@ -413,7 +408,7 @@ function resolveRow(
       WHERE id = ? AND tenant_id = ? AND status = 'open'
     `,
     ).run(resolve.text, resolve.at, id, tenantId);
-    if (changedRows(updated) === 0) {
+    if (updated.changes === 0) {
       const existing = cachedStatement(
         db,
         `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,

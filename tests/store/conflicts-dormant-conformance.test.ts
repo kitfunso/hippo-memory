@@ -6,7 +6,7 @@ import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memo
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../src/base/records/conflicts.js';
+import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../src/base/ports/store/conflicts.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
@@ -168,7 +168,7 @@ describe('Conflicts', () => {
           .then((found) =>
             found.map((e) => ({ content: e.content, halfLifeDays: e.halfLifeDays, conflictsWith: e.conflictsWith })),
           ),
-      (_g, s) => s.hippoDb.rejections.list(TENANT_A),
+      (_g, s) => s.rejections.list(TENANT_A),
     ]);
     expect(ids(valueAt<ConflictRowPage>(outcomes, 0))).toHaveLength(4);
     expect(outcomes.slice(7, 13).map((o) => ('value' in o ? o.value : o))).toEqual([
@@ -221,7 +221,7 @@ describe('Dormant', () => {
       (g) => g.forget(TENANT_A, ALICE, rows.mine!.id, 'me'),
       (g) => g.list(TENANT_A, ALICE, {}),
       (_g, s) => s.entriesByIds([rows.d1!.id], TENANT_A),
-      (_g, s) => s.hippoDb.reports.stats().then((stats) => stats.total_forgotten),
+      (_g, s) => s.reports.stats().then((stats) => stats.total_forgotten),
     ]);
     const listed = (o: (typeof outcomes)[number]) =>
       'value' in o && Array.isArray(o.value) ? o.value.map((m: { content: string }) => m.content) : o;

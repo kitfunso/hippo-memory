@@ -1,5 +1,8 @@
 // The vector-groups adapter: vector pages written through a store, under the same embed turn.
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import type { StrengthModel } from '../../base/memory/strength.js';
+import type { Clock } from '../../base/ports/infra.js';
+import { initializeParticle } from '../../base/rank/physics.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import {
   embeddingIndexIdentity,
@@ -13,7 +16,7 @@ import type {
   VectorWrite,
   VectorWriteResult,
   VectorWrites,
-  CoreGroups,
+  StoreGroups,
 } from '../../base/ports/store.js';
 import { errorMessage } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -28,20 +31,29 @@ interface WriteVectorPageOptions {
   readonly write: Pick<VectorWrite, 'model' | 'replaceIndex'>;
   readonly page: readonly MemoryEntry[];
   readonly vectors: readonly number[][];
+  readonly particles: ParticleScoring | undefined;
 }
 
-/** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write. */
+/** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write;
+ * `particles`, when given, scores the particle each memory seeds. */
 async function writeVectorPage({
   writes,
   write,
   page,
   vectors,
+  particles,
 }: WriteVectorPageOptions): Promise<VectorWriteResult> {
   const byTenant = new Map<string, VectorRowWrite[]>();
   page.forEach((entry, i) => {
     const vector = vectors[i];
     if (!vector || vector.length === 0) return noteSkippedEmbedding(entry.id);
-    const row: VectorRowWrite = { memoryId: entry.id, vector };
+    const row: VectorRowWrite = particles
+      ? {
+          memoryId: entry.id,
+          vector,
+          particle: initializeParticle(entry, vector, particles.strength, particles.clock()),
+        }
+      : { memoryId: entry.id, vector };
     byTenant.set(entry.tenantId, [...(byTenant.get(entry.tenantId) ?? []), row]);
   });
   let written = 0;
@@ -58,15 +70,17 @@ interface BackfillInStoreOptions {
   readonly provider: EmbeddingProvider;
   readonly model: string;
   readonly rebuild: boolean;
+  readonly particles: ParticleScoring;
 }
 
 /** Embeds every memory with no vector under `model`, page by page, so a provider failure keeps
- * the pages written. */
+ * the pages written; a rebuild reseeds the particles it drops. */
 async function backfillInStore({
   writes,
   provider,
   model,
   rebuild,
+  particles,
 }: BackfillInStoreOptions): Promise<number> {
   let count = 0;
   let afterId: string | undefined;
@@ -88,6 +102,7 @@ async function backfillInStore({
       write: { model, replaceIndex: rebuild },
       page,
       vectors,
+      particles: rebuild ? particles : undefined,
     });
     // Another process rebuilt the index mid-run; every later page would be refused too, after
     // paying the provider for it.
@@ -101,6 +116,7 @@ async function backfillInStore({
 async function embedAllInStore(
   { groups }: StoreEmbedTarget,
   provider: EmbeddingProvider,
+  particles: ParticleScoring,
 ): Promise<number> {
   const { vectors: reads, vectorWrites: writes } = groups;
   return embedTurns.run(await writes.indexKey(), async () => {
@@ -110,6 +126,7 @@ async function embedAllInStore(
       provider,
       model: embeddingIndexIdentity(provider.id),
       rebuild,
+      particles,
     });
   });
 }
@@ -135,6 +152,7 @@ async function embedMemoryInStore(
             write: { model, replaceIndex: false },
             page: [entry],
             vectors: await provider.embed([embeddingInputText(entry)], 'passage'),
+            particles: target,
           })
         ).modelMismatch,
     );
@@ -146,14 +164,21 @@ async function embedMemoryInStore(
   }
 }
 
-/** A store's vector groups. */
-export interface StoreEmbedTarget extends EmbedWith {
-  readonly groups: Pick<CoreGroups, 'vectors' | 'vectorWrites'>;
+/** How the particle a vector write seeds is scored: the strength model, at the time the clock
+ * gives. */
+interface ParticleScoring {
+  readonly strength: StrengthModel;
+  readonly clock: Clock;
+}
+
+/** A store's vector groups, with how the particles a vector write seeds are scored. */
+export interface StoreEmbedTarget extends EmbedWith, ParticleScoring {
+  readonly groups: Pick<StoreGroups, 'vectors' | 'vectorWrites'>;
 }
 
 export function storeAdapter(on: StoreEmbedTarget): EmbedAdapter {
   return {
     one: (provider, entry) => embedMemoryInStore(on, provider, entry),
-    all: (provider) => embedAllInStore(on, provider),
+    all: (provider) => embedAllInStore(on, provider, on),
   };
 }

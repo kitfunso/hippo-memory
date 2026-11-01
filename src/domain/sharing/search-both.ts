@@ -4,13 +4,13 @@ import { compareScoresDesc } from '../../base/rank/compare.js';
 import { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
-import type { ConfiguredFolder } from '../../base/ports/store.js';
 import {
   passesScopeFilterForRecall,
   passesCliRecallScopeFilter,
   recallScopeFilter,
 } from '../../base/scope/recall-scope.js';
-import { rankHybrid, vectorSourceOf } from '../search/hybrid.js';
+import { hybridSearch, vectorSourceOf } from '../search/hybrid.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { fitBudget } from '../search/finalize.js';
 import {
   DEFAULT_LOCAL_BUMP,
@@ -41,19 +41,19 @@ export function logEmbedAllFailure<E>(caller: string, err: E): void {
   );
 }
 
-export interface SearchBothOptions {
+export interface SearchOptions {
   budget?: number;
   now?: Date;
   minResults?: number;
 }
 
-export interface SearchBothHybridOptions extends SearchBothOptions {
+export interface HybridSearchOptions extends SearchOptions {
   embeddingWeight?: number;
   explain?: boolean;
   mmr?: boolean;
   mmrLambda?: number;
-  /** Multiplier applied to local-store scores when merging with global; DEFAULT_LOCAL_BUMP when
-   * unset. 1.0 removes the local bias for eval comparisons. */
+  /** Multiplier applied to local-store scores when merging with global.
+   *  Defaults to 1.2. Use 1.0 to remove the local bias for eval comparisons. */
   localBump?: number;
   /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
   scope?: string | null;
@@ -71,10 +71,10 @@ export interface SearchBothHybridOptions extends SearchBothOptions {
   asOf?: string;
   /** Budget cost per result, spent the same way in each store and in the merged list. */
   cost?: ResultCost;
-  /** Propagated to underlying rankHybrid calls: per-call, then the root's HIPPO_SUMMARY_DEBOOST,
-   * then DEFAULT_SUMMARY_DEBOOST. */
+  /** Propagated to underlying hybridSearch calls.
+   *  Per-call > the root's HIPPO_SUMMARY_DEBOOST > 0.85 default. */
   summaryDeboost?: number;
-  /** Propagated. Default true: DEFAULT_FRESHNESS_BOOST if rebuilt within FRESHNESS_WINDOW_MS. */
+  /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
   summaryFreshness?: boolean;
   /** Optional admission predicate applied to the loaded candidates of BOTH stores before
    * ranking, cross-store dedupe and budgeting, so an excluded row cannot shadow its admitted
@@ -88,13 +88,13 @@ export interface SearchBothHybridOptions extends SearchBothOptions {
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
-/** `SearchBothHybridOptions` with the tenant both stores are read as (the eval harness reads every
+/** `HybridSearchOptions` with the tenant both stores are read as (the eval harness reads every
  * tenant's) and the embedder each store's vector arm uses. */
-export type BothStoresSearch = SearchBothHybridOptions &
+export type BothStoresSearch = HybridSearchOptions &
   RankTime & { readonly tenantId: TenantId; readonly embedderFor: EmbedderFor };
 
 /** Hybrid search across both local and global stores, using embeddings when available.
- *  Each store ranks through rankHybrid, then the local bump, one copy per text and the shared budget apply. */
+ *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
 export async function searchBothHybrid(
   query: string,
   local: ConfiguredFolder<SharingStore>,
@@ -133,8 +133,8 @@ async function loadStoreEntries(
   // With an admission filter, lift the per-store candidate cap (DEFAULT_SEARCH_CANDIDATE_LIMIT) to
   // a bounded window: excluded rows could otherwise fill it first.
   const searchWindow = entryFilter ? FILTERED_SEARCH_WINDOW : undefined;
-  const { sharing } = store.hippoDb;
-  if (!(await store.hippoDb.folderFiles.home()).exists) return [];
+  const { sharing } = store;
+  if (!(await store.folderFiles.home()).exists) return [];
   return recallScope
     ? sharing.recallEntries(query, {
         limit: searchWindow,
@@ -182,7 +182,7 @@ function recallVectorCandidates(
 function folderVectorSource(
   { store, config }: ConfiguredFolder<SharingStore>,
   embedderFor: EmbedderFor,
-): VectorSource {
+): VectorSource | undefined {
   return vectorSourceOf({ store, config, onHippoDb: true, embedderFor });
 }
 
@@ -230,7 +230,7 @@ export interface RankBothStoresOptions {
   readonly sources: { local: VectorSource | undefined; global: VectorSource | undefined };
   readonly entries: { local: MemoryEntry[]; global: MemoryEntry[] };
   readonly vectorCandidates: HybridVectorCandidates;
-  readonly options: SearchBothHybridOptions & RankTime;
+  readonly options: HybridSearchOptions & RankTime;
 }
 
 /** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text,
@@ -251,11 +251,11 @@ export async function rankBothStores({
   if (entries.local.length === 0 && entries.global.length === 0) return [];
   const shared = sharedRanking(options, vectorCandidates);
   const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
-  const localResults = await rankHybrid(query, entries.local, {
+  const localResults = await hybridSearch(query, entries.local, {
     ...side(false),
     source: sources.local,
   });
-  const globalResults = await rankHybrid(query, entries.global, {
+  const globalResults = await hybridSearch(query, entries.global, {
     ...side(true),
     source: sources.global,
   });
@@ -270,7 +270,7 @@ export async function rankBothStores({
 // One deadline for both stores, so a provider that stalls on the first is not waited on again for
 // the second.
 function sharedRanking(
-  options: SearchBothHybridOptions & RankTime,
+  options: HybridSearchOptions & RankTime,
   vectorCandidates: HybridVectorCandidates,
 ) {
   const {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in
-// surface/cli/flags.ts. `hippo help` prints the verb list from that table, so no list is kept here.
+// surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import * as fs from 'node:fs';
@@ -26,12 +26,11 @@ import {
   flagKind,
   isKnownFlag,
   undeclaredFlags,
-  COMMANDS,
 } from './surface/cli/flags.js';
+import { assertVerbPorted, CLI_STORE, COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
-import { cliCommand, type CliCommand } from './surface/cli/api-context.js';
-import { withStoreRuntime } from './surface/open-store.js';
+import { runCliCommand } from './surface/cli/cli-runtime.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(
@@ -52,8 +51,8 @@ function dryRunRefusal(
 
 function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   if (Array.isArray(flags[key])) {
-    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other
-    // array member.
+    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array
+    // member.
     (flags[key] as string[]).push(value);
   } else {
     flags[key] = [value];
@@ -224,10 +223,11 @@ function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined):
 
 function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | undefined): void {
   const declared = spec?.flags;
-  if (spec?.checksOwnFlags) return;
-  for (const [name, { removedIn, advice }] of Object.entries(spec?.removedFlags ?? {})) {
+  // card checks its flags per subcommand, with a stricter message.
+  if (command === 'card') return;
+  for (const [name, advice] of Object.entries(spec?.removedFlags ?? {})) {
     if (Object.hasOwn(flags, name)) {
-      fail(`hippo ${command}: --${name} was removed in ${removedIn}. ${advice}`);
+      fail(`hippo ${command}: --${name} was removed in 3.0. ${advice}`);
     }
   }
   const flagNames = (keys: readonly string[]): string => keys.map((key) => `--${key}`).join(', ');
@@ -236,8 +236,8 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
     printError(`Unknown flag ${flagNames(unknown)} for hippo ${command}. Nothing was changed.`);
     throw new CliExit(2);
   }
-  // main() refuses --dry-run by name on a verb without one, so that flag is not also
-  // called ignored.
+  // main() refuses --dry-run by name on a verb without one, so that flag is not also called
+  // ignored.
   const ignored = declared
     ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run')
     : unknown;
@@ -253,7 +253,6 @@ async function main(
   args: string[],
   flags: CliFlags,
   hippoRoot: string,
-  cli: CliCommand,
 ): Promise<void> {
   if (command === '--version' || command === '-v' || boolFlag(flags, 'version')) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
@@ -283,13 +282,14 @@ async function main(
     printUsage();
     throw new CliExit(1);
   }
-  const run = (verb: CliCommand): Promise<void> =>
-    spec.run({ hippoRoot, tenantId: envTenant(), args, flags, cli: verb });
-  await (spec.scoped ? cli.request(run) : run(cli));
+  assertVerbPorted(spec, CLI_STORE);
+  const run = (): void | Promise<void> =>
+    spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
+  await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());
 }
 
-/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the
- * safe side. */
+/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe
+ * side. */
 function warnUnknownFlagValues(): void {
   for (const entry of validateFlags()) {
     log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);
@@ -300,10 +300,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
   warnUnknownFlagValues();
   try {
-    // One store runtime per command: its held writes run and its idle handles close as it ends.
-    await withStoreRuntime((runtime) =>
-      main(command, args, flags, getHippoRoot(process.cwd()), cliCommand(runtime)),
-    );
+    await runCliCommand(() => main(command, args, flags, getHippoRoot(process.cwd())));
   } catch (err) {
     // The verb printed its own message. The process ends as a success does, never by process.exit,
     // which on Windows aborts Node (libuv async.c) while a fetch still has work in flight.

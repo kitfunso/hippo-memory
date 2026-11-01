@@ -5,6 +5,7 @@ import { type DatabaseSyncLike } from '../../../db/index.js';
 import type { ApiKeyOwner } from '../../../base/ports/store/types.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
+/** The owner row of `keyId`, or undefined when no such key exists. */
 export function readApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOwner | undefined {
   const row = cachedStatement(
     db,

@@ -50,6 +50,14 @@ const CASES: KeyCase[] = [
   },
   { ...block('global', { enabled: false }), bad: true, badField: enabledField },
   { ...scalar('gitLearnPatterns', ['fix']), bad: 'fix' },
+  // A config file keeps the snake_case physics keys; each reads into its camelCase field.
+  {
+    key: 'physics',
+    good: { G_query: 3 },
+    read: { ...defaultsOf('physics'), gQuery: 3 },
+    bad: [],
+    badField: { name: 'dt', value: 'fast', reads: 0.1 },
+  },
   { ...block('mmr', { lambda: 0.2 }), bad: 'on', badField: { name: 'lambda', value: 2, reads: 0.7 } },
   { ...block('search', { localBump: 2 }), bad: null, badField: { name: 'localBump', value: 0, reads: 1.2 } },
   { ...block('replay', { count: 0 }), bad: 3, badField: { name: 'count', value: 'many', reads: 5 } },
@@ -128,7 +136,7 @@ describe('every top-level config key is checked', () => {
 
   it('has a case for each key loadConfig reads', () => {
     expect(CASES.map((c) => c.key).sort()).toEqual(Object.keys(DEFAULT_CONFIG).sort());
-    expect(CASES).toHaveLength(30);
+    expect(CASES).toHaveLength(31);
   });
 
   describe.each(CASES)('$key', (c) => {

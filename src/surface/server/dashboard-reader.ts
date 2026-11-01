@@ -76,8 +76,8 @@ export interface ReaderClocks {
   readonly cacheClock: () => number;
 }
 
-// Resolved from the package root, so a server run from TypeScript source starts the same
-// built file.
+// Resolved from the package root, so a server run from TypeScript source starts the same built
+// file.
 const THREAD_ENTRY = fileURLToPath(
   new URL('../../../dist/surface/server/dashboard-reader-thread.js', import.meta.url),
 );

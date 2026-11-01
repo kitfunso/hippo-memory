@@ -1,23 +1,25 @@
 // Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it
 // and nothing imports it. The sleep modules alone: the api barrel loads far more than one sleep
 // needs, and every sleep pays for the start.
-import { autoSleepConsolidate, sleepWholeStore } from '../../api/sleep/sleep.js';
-import { rootInfra, rootStoreRules } from '../../infra/ports.js';
+import { evalStoreRules } from '../../infra/eval-switches.js';
+import { sleepWholeStore } from '../../api/sleep/sleep.js';
+import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
+import { rootInfra } from '../../infra/ports.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';
 import {
-  sqliteReach,
-  sqliteStore,
-  runSqliteRequest,
+  defaultReach,
+  defaultStore,
+  runStoreRequest,
   saveVectorGraphFile,
-  type RequestStores,
+  type StoreSession,
 } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SleepJob, SleepMessage, SleepReply } from './sleep-offload.js';
 import { failureReply } from './failure-reply.js';
 import type { SleepResult } from '../../api/sleep/sleep.js';
-import { contextReach } from '../../api/hippo-db-context.js';
+import { contextReach } from '../../api/types.js';
 
 type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 
@@ -26,27 +28,27 @@ type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 const EXIT_MARGIN_MS = 5_000;
 
 const loadConfig = configReader(envRuntimeSettings);
-const storeIn = (session: RequestStores) => (root: string) =>
-  sqliteStore(root, { ...rootStoreRules(envLossAversionRatio()), session });
+const storeIn = (session: StoreSession) => (root: string) =>
+  defaultStore(root, { ...evalStoreRules(envLossAversionRatio()), session });
 // The child runs one job, so its one root builds the ports and its Host once.
 const childHost = createHost();
 const childInfra = rootInfra(childHost);
 
-/** The served sleep, with the reach `hippo sleep` probes, so it shares into the same
- * global store. */
+/** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global
+ * store. */
 function sleepJob(
   { hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>,
-  session: RequestStores,
+  session: StoreSession,
 ): Promise<SleepResult> {
   const storeAt = storeIn(session);
   const store = storeAt(hippoRoot);
   const config = loadConfig(hippoRoot);
   const infra = childInfra();
   const reach = contextReach(
-    sqliteReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
+    defaultReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
     loadConfig,
     infra.embedderFor,
-    { ledger: store.hippoDb.ledger, folderFiles: store.hippoDb.folderFiles, config },
+    { ledger: store.ledger, folderFiles: store.folderFiles, config },
   );
   return sleepWholeStore(
     { tenantId: job.tenantId, actor: job.actor, store, reach, config, infra },
@@ -80,7 +82,7 @@ function sendReply(reply: SleepReply<JobResult>): Promise<number> {
 process.once('message', (message) => {
   // SAFETY: sleep-offload.ts is the only writer on this channel and sends exactly one SleepMessage.
   const job = message as SleepMessage;
-  const work = (session: RequestStores): Promise<JobResult> =>
+  const work = (session: StoreSession): Promise<JobResult> =>
     job.kind === 'consolidate'
       ? autoSleepConsolidate({
           store: storeIn(session)(job.hippoRoot),
@@ -89,9 +91,9 @@ process.once('message', (message) => {
           infra: childInfra(),
         })
       : sleepJob(job, session);
-  // The server's own session and lock wait, so a busy store answers as it did when sleep ran in
-  // the server.
-  runSqliteRequest(work, 'server')
+  // The server's own session and lock wait, so a busy store answers as it did when sleep ran in the
+  // server.
+  runStoreRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failureReply)
     // Exit only once the reply is written, or the parent could see the process end first.
     .then(async (reply) => {

@@ -5,7 +5,7 @@ import { plural } from '../../base/util/format.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { withLossAversion } from '../../base/memory/strength.js';
+import { strengthModelFor } from '../../base/memory/eval-switches.js';
 import type { EmbedRun } from '../search/embed-memories.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { namesFoldedInto } from './project-folds.js';
@@ -35,7 +35,7 @@ import {
   type Scope,
   type ToolId,
 } from '../../base/memory/agent-memory-tools.js';
-import type { Adapter, CountRemembered, ImportStore, ImportStores, Listing } from './types.js';
+import type { Adapter, ImportStore, ImportStores, Listing } from './types.js';
 
 export const ADAPTERS: readonly Adapter[] = [
   claudeCodeAdapter,
@@ -62,7 +62,7 @@ export interface SyncOptions {
   readonly busyWaitMs?: number;
   /** Opens each target store; the caller's, so this module never builds a store adapter. */
   readonly stores: ImportStores;
-  /** The root's strength model and clock, which score and stamp each revived or new row. */
+  /** The root's eval switches and clock, which score and stamp each revived or new row. */
   readonly run: EmbedRun;
 }
 
@@ -148,11 +148,7 @@ function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Se
 
 /** Lists each allowed tool's containers for `pass` and syncs them into its target store; a
  * failure is a warning. */
-export async function runPass(
-  pass: Pass,
-  opts: SyncOptions,
-  countRemembered: CountRemembered,
-): Promise<ImportReport> {
+export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
   const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) =>
@@ -163,9 +159,7 @@ export async function runPass(
   let synced: ContainerWork[] = [];
   try {
     store = await openTarget(pass.target, hasItems, opts);
-    if (store !== null) {
-      synced = await syncStore({ pass, listings, store, opts, report, countRemembered });
-    }
+    if (store !== null) synced = await syncStore({ pass, listings, store, opts, report });
   } catch (err) {
     const why = opts.stores.isBusy(err) ? 'the store was busy' : errorMessage(err);
     report.warnings.push(`agent memories not synced into ${pass.target}: ${why}`);
@@ -206,8 +200,8 @@ function listSafely(adapter: Adapter, pass: Pass, report: ImportReport): Listing
 
 interface OpenStore {
   readonly store: ImportStore;
-  /** The folder whose config scores the rows; a stand-in plans by the absent target's,
-   * its defaults. */
+  /** The folder whose config scores the rows; a stand-in plans by the absent target's, its
+   * defaults. */
   readonly root: string;
   readonly global: boolean;
 }
@@ -239,7 +233,7 @@ function storeSession(
     store: store.store,
     tenantId: opts.tenantId,
     baseHalfLifeDays: config.defaultHalfLifeDays,
-    strength: withLossAversion(opts.run.strength, config.runtime?.lossAversionRatio),
+    strength: strengthModelFor(opts.run.evalSwitches, config.runtime),
     now: opts.run.clock(),
     originProject: pass.originProject,
     visible: store.global ? [pass.originProject ?? '', ...pass.legacyOrigins] : null,
@@ -270,7 +264,6 @@ interface SyncStoreOptions {
   readonly store: OpenStore;
   readonly opts: SyncOptions;
   readonly report: ImportReport;
-  readonly countRemembered: CountRemembered;
 }
 
 async function syncStore({
@@ -279,7 +272,6 @@ async function syncStore({
   store,
   opts,
   report,
-  countRemembered,
 }: SyncStoreOptions): Promise<ContainerWork[]> {
   const legacy = pass.legacy ? await legacyWork(store.store, opts.tenantId, listings) : null;
   const session = storeSession(pass, store, opts, legacy);
@@ -305,9 +297,7 @@ async function syncStore({
       remembered += outcome.tally.imported + outcome.tally.replaced;
     }
   }
-  if (remembered > 0 && !session.dryRun) {
-    await countSynced(() => countRemembered(store.store, remembered), report);
-  }
+  if (remembered > 0 && !session.dryRun) await bumpRemembered(store.store, remembered, report);
   return synced;
 }
 
@@ -424,9 +414,13 @@ async function syncOne(
   }
 }
 
-async function countSynced(count: () => Promise<void>, report: ImportReport): Promise<void> {
+async function bumpRemembered(
+  store: ImportStore,
+  remembered: number,
+  report: ImportReport,
+): Promise<void> {
   try {
-    await count();
+    await store.bumpRemembered(remembered);
   } catch (err) {
     log.debug('remembered counter not updated', errorFields(err));
     report.warnings.push(`remembered counter not updated: ${errorMessage(err)}`);

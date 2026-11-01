@@ -2,7 +2,6 @@
 // closes it at once, so a writer on Windows can replace the file between reads; a record a time
 // cost a syscall for each node the walk reached.
 import * as fs from 'node:fs';
-import { fnv1a32 } from '../base/util/fnv1a.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { cachedStatement } from './statement-cache.js';
@@ -11,6 +10,7 @@ import {
   badGraphFile,
   GraphFileError,
   graphFilePath,
+  idHash,
   isReplaced,
   RECORD_AT,
   RECORD_HEAD,
@@ -26,8 +26,8 @@ import type {
   VectorMatchQuery,
 } from './vector-match.js';
 
-// Rows below the file's newest that may be checked for the newest row still holding what the
-// file read.
+// Rows below the file's newest that may be checked for the newest row still holding what the file
+// read.
 const INTACT_WALK = 32;
 
 interface NodeRecord {
@@ -174,8 +174,8 @@ class GraphFileView implements GraphView {
     return links;
   }
 
-  /** The node at `rowid`: records sit in rowid order, and of a reused rowid only the last
-   * is current. */
+  /** The node at `rowid`: records sit in rowid order, and of a reused rowid only the last is
+   * current. */
   nodeAt(rowid: number): number | undefined {
     let lo = 0;
     let hi = this.stamp.nodes;
@@ -232,7 +232,7 @@ function intactRowid(db: DatabaseSyncLike, file: GraphFileView): number | undefi
   for (const row of rows) {
     const node = file.nodeAt(row.rowid);
     const record = node === undefined ? undefined : file.record(node);
-    if (record && !record.replaced && record.idHash === fnv1a32(row.id)) return row.rowid;
+    if (record && !record.replaced && record.idHash === idHash(row.id)) return row.rowid;
   }
   return undefined;
 }
@@ -281,8 +281,8 @@ export class GraphFileIndex implements VectorIndex {
   readonly #hippoRoot: string;
   // A file that cannot be trusted warns once, until it is replaced.
   readonly #warned = new Set<string>();
-  // The last view of each path, kept so a long-lived process reads the file once, not on
-  // every query.
+  // The last view of each path, kept so a long-lived process reads the file once, not on every
+  // query.
   readonly #views = new Map<string, GraphFileView>();
 
   constructor(hippoRoot: string) {

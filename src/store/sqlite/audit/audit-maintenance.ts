@@ -7,7 +7,7 @@ import type { DatabaseSyncLike } from '../../../db/sqlite.js';
 import { tableColumns } from '../../../db/tables.js';
 import { assertBinaryCompatible } from '../../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from '../dormant/dormant-rows.js';
-import { calculateStrengthAt } from '../../../base/memory/strength.js';
+import { calculateStrength } from '../../../base/memory/strength.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import {
   isRepairCandidate,
@@ -20,7 +20,7 @@ import {
   MEMORY_BACKED_TABLES,
   deleteEntriesInBatches,
   memoriesBackingAmong,
-} from '../entries/delete-entries.js';
+} from '../entries/delete-and-batch.js';
 import { readEntriesByIds, listPreviewRowsPage, type PreviewRow } from '../entries/entry-reads.js';
 import { listEntriesWhere } from '../entries/entry-filter.js';
 import { ftsRowExists } from '../entries/entry-row.js';
@@ -31,10 +31,10 @@ import type {
   QualityRepairResult,
   QualityRepairIssue,
   RepairProtection,
-} from '../../../base/records/audit-maintenance.js';
+} from '../../../base/ports/store/audit.js';
 import { openStore } from '../runtime/handles.js';
-import { answered, bound, skipEmpty, type Bodies } from '../runtime/bound.js';
-import type { AuditMaintenance } from '../../../base/records/audit-maintenance.js';
+import { answered, bound, skipEmpty } from '../runtime/bound.js';
+import type { AuditMaintenance } from '../../../base/ports/store.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { getMeta, pragmaUserVersion, setMeta, META_KEY } from '../../../db/meta.js';
@@ -251,7 +251,7 @@ function setAsideIssue(
   if (removed === null) return false;
   insertDormantRow(db, {
     entry,
-    strength: calculateStrengthAt(entry, now, move.rules.strength),
+    strength: calculateStrength(entry, now, move.rules.strength),
     reason: 'quality-repair',
     dormantAt: now.toISOString(),
   });
@@ -370,20 +370,20 @@ function repairQualityOnce(
 }
 
 export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance {
-  const { deleteAutomatically } = bound(
+  const { deleteAutomatically } = bound<Pick<AuditMaintenance, 'deleteAutomatically'>>(
     on,
     {
       deleteAutomatically: (db, removals, actor) => {
         const went = deleteEntriesInBatches(db, files, removals, { actor, automatic: true });
         return removals.filter((_, i) => went[i]).map((removal) => removal.id);
       },
-    } satisfies Bodies<Pick<AuditMaintenance, 'deleteAutomatically'>>,
+    },
     openStore,
   );
-  const reads = bound(on, {
+  const reads = bound<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>(on, {
     objectBackedAmong: memoriesBackingAmong,
     pruneAuditRows: pruneAuditRows,
-  } satisfies Bodies<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>);
+  });
   return {
     ...reads,
     objectBackedAmong: skipEmpty(reads.objectBackedAmong, () => new Set<string>()),

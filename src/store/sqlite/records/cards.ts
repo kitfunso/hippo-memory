@@ -12,7 +12,7 @@ import type {
   CardListQuery,
   CardPage,
   Cards,
-} from '../../../base/records/cards.js';
+} from '../../../base/ports/store/cards.js';
 import { keysetPage } from '../../../base/util/keyset.js';
 import type { OnHandle } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
@@ -32,12 +32,12 @@ import {
   type CardRunRow,
 } from './card-rows.js';
 import {
-  blockCardRow,
-  claimCardRow,
-  completeCardRow,
-  heartbeatCardRow,
-  reclaimExpiredCardRows,
-  reviewCardRow,
+  blockCard,
+  claimCard,
+  completeCard,
+  heartbeatCard,
+  reclaimExpiredCards,
+  reviewCard,
 } from './card-runs.js';
 
 const unknownParentCard = (id: string): Error => new Error(`unknown parent card id: ${id}`);
@@ -201,8 +201,8 @@ function readLatestHandoffForCard(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-/** Appends a comment to cardId in any card status; throws if cardId is not a card of
- * this tenant. */
+/** Appends a comment to cardId in any card status; throws if cardId is not a card of this
+ * tenant. */
 function addCardComment(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -238,12 +238,12 @@ const cardsBodies: Bodies<Cards> = {
   create: createCard,
   detail: readCardDetail,
   list: listCards,
-  claim: claimCardRow,
-  heartbeat: heartbeatCardRow,
-  block: blockCardRow,
-  review: reviewCardRow,
-  complete: completeCardRow,
-  reclaimExpired: reclaimExpiredCardRows,
+  claim: claimCard,
+  heartbeat: heartbeatCard,
+  block: blockCard,
+  review: reviewCard,
+  complete: completeCard,
+  reclaimExpired: reclaimExpiredCards,
   comment: addCardComment,
 };
 

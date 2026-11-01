@@ -2,9 +2,10 @@
 // repeats are not stored, because error memories decay slowly and would crowd out real lessons;
 // what is stored stays `observed` until outcome feedback confirms it. Every failure, stored or not,
 // goes to the failure log.
+import type { ContextWith } from '../../api/types.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
-import { CLI_ACTOR } from '../../base/records/audit-ops.js';
-import { createMemoryAt, ERROR_TAG } from '../../base/memory/entry.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { createMemory, ERROR_TAG } from '../../base/memory/entry.js';
 import {
   failureHash,
   failureSignature,
@@ -13,16 +14,13 @@ import {
   type FailureReading,
 } from './failure-reading.js';
 import type { JsonValue } from '../../base/util/json.js';
-import type {
-  CaptureErrorOutcome,
-  FailureEvent,
-  FailureOutcome,
-} from '../../base/records/rejections.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
-import { heldLessons, logFailure } from '../../api/hippo-db/failure-log.js';
+import type { CaptureErrorOutcome, FailureOutcome } from '../../base/ports/store/rejections.js';
 
 /** The store a failure is logged and its lesson kept in, with that store's config. */
-export type FailureTarget = Pick<HippoDbContext, 'tenantId' | 'store' | 'config'> & {
+export type FailureTarget = Pick<
+  ContextWith<'failureLog' | 'lessonWrites'>,
+  'tenantId' | 'store' | 'config'
+> & {
   readonly infra: Pick<InfraPorts, 'clock'>;
 };
 
@@ -64,7 +62,7 @@ async function logAndReport({
 }: LogAndReportOptions): Promise<void> {
   let id: number;
   try {
-    id = await logFailure(target, failureEvent(payload, lesson, outcome));
+    id = await logFailure(target, payload, lesson, outcome);
   } catch (error) {
     onLogged?.(null);
     throw error;
@@ -72,21 +70,22 @@ async function logAndReport({
   onLogged?.(id);
 }
 
-/** The log row's fields: what the payload names, and hashes rather than the failure's text. */
-function failureEvent(
+function logFailure(
+  { store, tenantId }: FailureTarget,
   payload: JsonValue,
   lesson: FailureReading,
   outcome: FailureOutcome,
-): Omit<FailureEvent, 'tenantId'> {
+): Promise<number> {
   const hash = (s: string | null): string | null => (s === null ? null : failureHash(s));
-  return {
+  return store.failureLog.record({
+    tenantId,
     sessionId: payloadString(payload, 'session_id'),
     tool: payloadString(payload, 'tool_name'),
     outcome,
     rule: 'rule' in lesson ? lesson.rule : null,
     sigHash: hash(lesson.text),
     detailHash: hash(lesson.detail),
-  };
+  });
 }
 
 /** Who sent a failure from another machine: the audit actor and the project its lesson and
@@ -103,9 +102,9 @@ export async function storeLesson(
   caller?: LessonCaller,
 ): Promise<'stored' | 'duplicate'> {
   const sig = failureSignature(text);
-  const held = await heldLessons({ store, tenantId }, caller?.origins);
+  const held = await store.lessonWrites.contentsWithTag(tenantId, 'auto-captured', caller?.origins);
   if (held.some((content) => failureSignature(content) === sig)) return 'duplicate';
-  const entry = createMemoryAt(
+  const entry = createMemory(
     text,
     {
       tags: [ERROR_TAG, 'auto-captured'],

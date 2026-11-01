@@ -8,7 +8,7 @@ import {
   type DatabaseSyncLike,
 } from '../../../db/index.js';
 import { withBackup } from '../../../db/backup.js';
-import { calculateStrengthAt } from '../../../base/memory/strength.js';
+import { calculateStrength } from '../../../base/memory/strength.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import {
   AGENT_MEMORY_SOURCE_PREFIX,
@@ -25,12 +25,12 @@ import {
   replaceDormantEntry,
 } from '../dormant/dormant-rows.js';
 import { readEntriesByIds, countByOrigin } from '../entries/entry-reads.js';
-import { writeEntryMirrors } from '../entries/entry-writes.js';
 import {
   deleteEntryRowInTx,
   restampOriginProject,
   stampOriginProjects,
-} from '../entries/entry-row.js';
+  writeEntryMirrors,
+} from '../entries/entry-writes.js';
 import { removeEntryMirrors } from '../folder-files/mirrors.js';
 import type { Handles, HandleOpener, StoreFiles } from '../runtime/open.js';
 import { setAsideRow } from '../entries/set-aside.js';
@@ -45,8 +45,8 @@ import type {
   ProjectTagScope,
   RepairPlan,
   RowRead,
-} from '../../../base/records/project-tags.js';
-import type { EntryFilter } from '../../../base/records/reports.js';
+} from '../../../base/ports/store/project-tags.js';
+import type { EntryFilter } from '../../../base/ports/store/reports.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { listEntriesWhere } from '../entries/entry-filter.js';
 import { META_KEY } from '../../../db/meta.js';
@@ -215,7 +215,7 @@ interface RetireOptions {
 function retire(db: DatabaseSyncLike, { files, row, actor, now }: RetireOptions): void {
   insertDormantRow(db, {
     entry: row,
-    strength: calculateStrengthAt(row, now, files.strength),
+    strength: calculateStrength(row, now, files.strength),
     reason: 'project-repair',
     dormantAt: now.toISOString(),
   });

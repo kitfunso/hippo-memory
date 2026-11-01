@@ -1,10 +1,10 @@
 // The `compactions` table: one row per Claude Code compaction, and the reads project merge makes
 // over it.
-import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
+import type { DatabaseSyncLike } from '../../../db/index.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import type { CompactionOrigin } from '../../../base/records/project-tags.js';
-import type { OriginMoveOptions } from '../entries/entry-row.js';
+import type { CompactionOrigin } from '../../../base/ports/store/project-tags.js';
+import type { OriginMoveOptions } from '../entries/entry-writes.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
@@ -86,8 +86,8 @@ interface LatestStartedOptions {
   readonly notBefore: string;
 }
 
-/** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both
- * ISO strings. */
+/** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both ISO
+ * strings. */
 export function latestStartedRows(
   db: DatabaseSyncLike,
   { tenantId, sessionId, notAfter, notBefore }: LatestStartedOptions,
@@ -178,7 +178,7 @@ export function markCompactionSummarized(
       `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
      WHERE tenant_id = ? AND id = ? AND status = 'started'`,
   ).run(summary, itemsJson, summarizedAt, ...stamp, tenantId, id);
-  return changedRows(result) > 0;
+  return (result.changes ?? 0) > 0;
 }
 
 export function insertSummarizedCompaction(
@@ -256,7 +256,7 @@ export function closeStartedWithoutSummary(
     db,
     `UPDATE compactions SET status = 'no-summary' WHERE tenant_id = ? AND id = ? AND status = 'started'`,
   ).run(tenantId, id);
-  return changedRows(result);
+  return Number(result.changes ?? 0);
 }
 
 /** A session and the ISO start its next compaction must follow. */
@@ -296,19 +296,19 @@ export function restampCompactionOrigin(
   db: DatabaseSyncLike,
   { tenantId, from, into }: OriginMoveOptions,
 ): number {
-  return changedRows(
+  return Number(
     cachedStatement(
       db,
       `UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`,
-    ).run(into, tenantId, from),
+    ).run(into, tenantId, from).changes ?? 0,
   );
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 type CompactionOriginRow = CompactionOrigin;
 
-/** Each distinct project name, transcript and working folder of the tenant's compactions, in
- * one read. */
+/** Each distinct project name, transcript and working folder of the tenant's compactions, in one
+ * read. */
 export function compactionOrigins(db: DatabaseSyncLike, tenantId: string): CompactionOrigin[] {
   return cachedStatement(
     db,

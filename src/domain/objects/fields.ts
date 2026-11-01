@@ -10,8 +10,8 @@ export function requireText(value: string | undefined, max: number, field: strin
   return capText(text, max, field);
 }
 
-/** Required text that becomes a tag, a heading or a filter value, so it must also fit on
- * one line. */
+/** Required text that becomes a tag, a heading or a filter value, so it must also fit on one
+ * line. */
 export function requireLine(value: string | undefined, max: number, field: string): string {
   return oneLine(requireText(value, max, field), field);
 }

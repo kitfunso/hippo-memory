@@ -1,5 +1,6 @@
-// Handle types and the legacy setup a first open runs; runtime/handles.ts opens hippo.db, the
-// source of truth, whose Markdown and JSON files are human-readable mirrors.
+// The store's handle types and the legacy setup a first open runs; src/store/sqlite/runtime/handles.ts
+// opens hippo.db, the source of truth, and Markdown and JSON files are human-readable mirrors of
+// it.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -18,19 +19,19 @@ import type { StoreAt } from '../../../db/connect.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { type HippoIndex } from './rows.js';
-import type { LegacyStats } from '../../../base/records/reports.js';
+import type { LegacyStats } from '../../../base/ports/store/reports.js';
 import { audit } from '../audit/audit-event.js';
 import { deserializeEntry } from '../../../base/memory/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from '../entries/entry-row.js';
 import { layerDir } from '../folder-files/mirrors.js';
 import { isJsonObject, type JsonValue } from '../../../base/util/json.js';
-import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import { createHost, type Host } from '../../../host/host.js';
 import { META_KEY } from '../../../db/meta.js';
 import { handleNow, handleStamp } from './handle-clock.js';
 
-/** The strength model a store scores by and the clock its writes stamp by, both fixed when
- * it opens. */
+/** The strength model a store scores by and the clock its writes stamp by, both fixed when it
+ * opens. */
 export interface StoreModel {
   readonly strength: StrengthModel;
   readonly clock: Clock;
@@ -53,9 +54,11 @@ export interface GrantedOpens {
 
 export type HandleOpener = (hippoRoot: string, opts: GrantedOpens) => DatabaseSyncLike;
 
+/** A read-write handle on the store's grant. */
 export const readWrite: HandleOpener = (hippoRoot, { grant, busyWaitMs }) =>
   grant.open(hippoRoot, busyWaitMs);
 
+/** A read-only handle on the store's grant, which leaves the store as it is. */
 export const readOnly: HandleOpener = (hippoRoot, { grant }) => grant.openReadOnly(hippoRoot);
 
 /** One call on a handle of the store's own, closed after; `open` defaults to a bare handle,
@@ -96,7 +99,7 @@ export function holdsMemory(db: DatabaseSyncLike): boolean {
 
 /** A store with no memories starts on the current default half-life base so `hippo sleep` never
  * migrates it; one that holds memories but no recorded base predates the record and keeps the
- * legacy base of LEGACY_HALF_LIFE_BASE days until sleep migrates it. */
+ * legacy 7-day base until sleep migrates it. */
 export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   if (getMeta(db, META_KEY.halfLifeBase, '') !== '') return;
   if (holdsMemory(db)) return;
@@ -104,8 +107,8 @@ export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   setMeta(db, META_KEY.typedHalfLife, '1');
 }
 
-/** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported
- * any row. */
+/** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported any
+ * row. */
 export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): boolean {
   if (holdsMemory(db)) return false;
   // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the

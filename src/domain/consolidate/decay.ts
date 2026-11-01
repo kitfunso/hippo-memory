@@ -1,5 +1,5 @@
 import { MemoryEntry } from '../../base/memory/entry.js';
-import { calculateStrengthAt, type DecayBasis } from '../../base/memory/strength.js';
+import { calculateStrength, type DecayBasis } from '../../base/memory/strength.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { chunked } from '../../base/util/chunked.js';
 import {
@@ -12,7 +12,7 @@ import {
 } from './memory-value.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
 import { DAY_MS } from '../../base/util/time.js';
-import type { SleepStart } from '../../base/records/consolidation.js';
+import type { SleepStart } from '../../base/ports/store/consolidation.js';
 
 export const DECAY_THRESHOLD = 0.05;
 
@@ -81,7 +81,7 @@ function keepSurvivor(
 /** Notes the row's DAG parent for the flush's family units, then returns its live strength. */
 function liveStrength(run: SleepRun, entry: MemoryEntry): number {
   if (entry.dagParentId) run.parentOf.set(entry.id, entry.dagParentId);
-  return calculateStrengthAt(entry, run.now, run.strength, run.decayOpts);
+  return calculateStrength(entry, run.now, run.strength, run.decayOpts);
 }
 
 // Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero
@@ -189,7 +189,7 @@ async function decayWithMemoryValue(run: SleepRun): Promise<DecayOutcome> {
 }
 
 // --- Phase 2b: commit in run order --- Rescued entries appended at the tail would be starved by
-// order-sensitive passes like extraction's slice(0, EXTRACTION_BATCH_LIMIT).
+// order-sensitive passes like extraction's slice(0,20).
 async function commitVerdicts(
   run: SleepRun,
   verdicts: readonly Verdict[],
@@ -207,8 +207,8 @@ async function commitVerdicts(
       if (!v.condemned) {
         keepSurvivor(run, v, v.live);
       } else if (rescuedIds.has(v.id)) {
-        // Confidence is left alone: it is an epistemic tier resolveConfidence derives, not a
-        // cached computation.
+        // Confidence is left alone: it is an epistemic tier resolveConfidence derives, not a cached
+        // computation.
         keepSurvivor(run, v, v.live);
         rescuedEntries.push({ id: v.id, tenantId: v.tenant_id });
         reportRescue(run.result, v.id, v.live, rankById.get(v.id));

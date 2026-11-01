@@ -1,12 +1,12 @@
 // The dashboard drawer's detail of one memory, read fresh through the api and stamped with the id
 // the client holds.
-import { calculateStrengthAt, type StrengthModel } from '../../base/memory/strength.js';
+import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
 import { round1 } from '../../base/util/format.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import type { MemoryConflict } from '../../base/records/conflicts.js';
-import type { DashboardReads } from '../../base/records/dashboard-reads.js';
+import type { RequiredStore } from '../../base/ports/store.js';
+import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
+import type { DashboardReads } from '../../base/ports/store/dashboard-reads.js';
 import { memoryGet } from '../memories/memories.js';
 import { strengthOf, type Context } from '../types.js';
 import { BANDS, isLiveMemory, LAYERS, projectIdentity, round3 } from './live.js';
@@ -24,7 +24,7 @@ interface OpenConflictsOfOptions {
 }
 
 async function openConflictsOf(
-  store: Pick<HippoStore, 'entriesByIds'>,
+  store: Pick<RequiredStore, 'entriesByIds'>,
   { reads, tenantId, entry, at }: OpenConflictsOfOptions,
 ): Promise<MemoryConflictDetail[]> {
   const conflicts = (await reads.openConflictsOf(tenantId, entry.id)).map((row) => row.conflict);
@@ -38,7 +38,7 @@ async function openConflictsOf(
   for (const c of conflicts) {
     const other = others.get(otherId(c));
     if (!other || !isLiveMemory(other)) continue;
-    const strength = round3(calculateStrengthAt(other, new Date(at.nowMs), at.strength));
+    const strength = round3(calculateStrength(other, new Date(at.nowMs), at.strength));
     out.push({
       id: c.id,
       reason: c.reason,
@@ -64,7 +64,7 @@ interface BuildMemoryDetailOptions {
 
 /** Full detail read fresh from the store, so the drawer is current inside the coalescing window. */
 async function buildMemoryDetail(
-  store: Pick<HippoStore, 'entriesByIds'>,
+  store: Pick<RequiredStore, 'entriesByIds'>,
   { reads, tenantId, entry, options }: BuildMemoryDetailOptions,
 ): Promise<MemoryDetail> {
   const { snapshotId, nowMs, strength } = options;
@@ -128,8 +128,8 @@ export interface DashboardWrite {
 }
 
 /** Drops the held stamp after a committed write, then the detail of the entry it acted on,
- * stamped with the last id so the panels refetch on the next read; null when the write names
- * no entry. */
+ * stamped with the last id so the panels refetch on the next read; null when the write names no
+ * entry. */
 export async function dashboardDetailAfterWrite(
   ctx: Context,
   view: { readonly reads: DetailReads; readonly clock: SnapshotClock },

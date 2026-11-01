@@ -5,8 +5,8 @@ import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import * as path from 'node:path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import * as api from '../../api/index.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
-import { type CliContext } from './api-context.js';
+import type { ContextWith } from '../../api/types.js';
+import { cliApiContext, type CliContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, parseCountFlag } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
@@ -26,10 +26,9 @@ export async function handleDormant({
   tenantId,
   args,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx = cli.apiContext(root, tenantId);
+  const ctx = cliApiContext(root, tenantId);
   const sub = args[0];
 
   if (sub === 'restore' || sub === 'forget') {
@@ -52,7 +51,7 @@ export async function handleDormant({
 }
 
 async function changeDormant(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'dormant'>,
   sub: 'restore' | 'forget',
   id: string,
 ): Promise<void> {
@@ -122,10 +121,9 @@ export async function handleQuarantine({
   tenantId,
   args,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx = cli.apiContext(root, tenantId);
+  const ctx = cliApiContext(root, tenantId);
   const sub = args[0];
 
   if (sub === 'approve' || sub === 'reject') {
@@ -148,7 +146,7 @@ export async function handleQuarantine({
 }
 
 async function decideQuarantined(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'quarantine'>,
   sub: 'approve' | 'reject',
   id: string,
 ): Promise<void> {

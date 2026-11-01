@@ -1,11 +1,11 @@
-import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { keysetAfter } from '../../../db/sql.js';
 import type { JsonValue, JsonObject } from '../../../base/util/json.js';
 import { parseStoredObject } from '../../../base/util/stored-json.js';
 import type { AppendAuditOptions, AuditEvent } from '../../../base/ports/store/types.js';
 import type { AuditOp } from '../../../base/records/audit-ops.js';
 import { auditRowsRead, type QueryAuditOptions } from '../../../base/ports/store/audit.js';
-import type { AuditPrune } from '../../../base/records/audit-maintenance.js';
+import type { AuditPrune } from '../../../base/ports/store/audit.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
@@ -25,8 +25,8 @@ function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValue
 const AUDIT_ROW_COLUMNS = 'ts, tenant_id, actor, op, target_id, metadata_json';
 const INSERT_AUDIT_ROW_SQL = `INSERT INTO audit_log (${AUDIT_ROW_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`;
 
-// Every column is text, so one JSON array binds any number of rows and the statement's text
-// never changes.
+// Every column is text, so one JSON array binds any number of rows and the statement's text never
+// changes.
 const INSERT_AUDIT_ROWS_SQL =
   `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) ` +
   `SELECT ?, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ` +
@@ -97,7 +97,7 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
     tenantId,
     cutoff,
   );
-  return changedRows(result);
+  return Number(result.changes ?? 0);
 }
 
 /** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike

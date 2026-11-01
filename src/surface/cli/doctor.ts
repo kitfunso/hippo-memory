@@ -6,15 +6,16 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir, isInitialized } from '../../host/project-identity.js';
-import { hippoHomeDir, processHomes } from '../../host/agent-homes.js';
-import type { Diagnostics } from '../../base/records/diagnostics.js';
-import type { ProjectTagReads } from '../../base/records/project-tags.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
+import type { StoreGroups } from '../../base/ports/store.js';
+import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 import { loadConfig } from '../../host/config-file.js';
 import { type SpoolFs } from '../../infra/spool-files.js';
 import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { CODEX_TRUST_LINE } from '../hooks-install/json-hooks.js';
 import { isCodexPresent } from '../hooks-install/detect.js';
 import { claudeConfigDir, codexHomeDir } from '../../base/util/agent-homes.js';
+import { processEnv } from '../../base/util/env.js';
 import { type JsonValue, isJsonObjectLiteral } from '../../base/util/json.js';
 import { tryReadJsonFile } from '../../host/json-file.js';
 import { databaseChecks, projectsCheck } from './doctor-store-checks.js';
@@ -55,14 +56,14 @@ export interface DoctorOptions {
   now?: Date;
   /** Stands in for the fs the spool check reads; a test makes one call fail. */
   spoolFs?: SpoolFs;
-  /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens
-   * the store. */
+  /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens the
+   * store. */
   diagnosticsBodies: (hippoRoot: string) => DoctorStore;
 }
 
 /** What doctor reads of a store: its health and, for the global store, what a project repair
  * plans from. */
-export type DoctorStore = { readonly diagnostics: Diagnostics } & ProjectTagReads;
+export type DoctorStore = Pick<StoreGroups, 'diagnostics'> & ProjectTagReads;
 
 /** Minimum Node.js version hippo supports (package.json engines). */
 export const MIN_NODE = '22.16.0';
@@ -85,7 +86,7 @@ function readJson(file: string): JsonValue | null {
 
 // Trust lives in Codex's own config.toml rows; doctor reads only the hooks file and reminds.
 function codexCheck(home: string): DoctorCheck {
-  const file = path.join(codexHomeDir(home, processHomes().env), 'hooks.json');
+  const file = path.join(codexHomeDir(home, processEnv()), 'hooks.json');
   const parsed = readJson(file);
   // Codex drops every hook in a hooks.json it cannot parse, hippo's included.
   if (fs.existsSync(file) && !isJsonObjectLiteral(parsed)) {
@@ -194,7 +195,7 @@ const CLAUDE_CODE_HOOKS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 function claudeCodeCheck(home: string): DoctorCheck {
-  const claudeDir = claudeConfigDir(home, processHomes().env);
+  const claudeDir = claudeConfigDir(home, processEnv());
   if (!fs.existsSync(claudeDir)) {
     return {
       id: 'claude-code',

@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { PROTECTED_ROWS } from '../../src/base/memory/memory-audit.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import type { QualityRepairResult } from '../../src/base/records/audit-maintenance.js';
+import type { QualityRepairResult } from '../../src/base/ports/store/audit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
@@ -44,7 +44,7 @@ async function seed(): Promise<void> {
   seedRow('cutB', CUT, { tenantId: TENANT_B });
   const mirror = { ...createMemory('we chose sqlite for the queue', { tenantId: TENANT_A }), originProject: 'proj' };
   const fields = { decisionText: 'use sqlite', context: undefined };
-  await sqliteStore(fixture.dir).hippoDb.objects.saveObject(TENANT_A, 'decision', {
+  await sqliteStore(fixture.dir).objects.saveObject(TENANT_A, 'decision', {
     mirror,
     fields,
     actor: 'cli',
@@ -138,7 +138,7 @@ describe('AuditMaintenance', () => {
       (g) => g.repairQuality(TENANT_A, false, NO_PROTECTION).then(planOf),
       (g) => g.repairQuality(TENANT_B, false, PROTECTED_ROWS).then(planOf),
       (g) => g.repairQuality(TENANT_A, true, PROTECTED_ROWS).then(planOf),
-      (_g, s) => s.hippoDb.dormant.list(TENANT_A, null, {}),
+      (_g, s) => s.dormant.list(TENANT_A, null, {}),
       (g) => g.repairQualityOnce(TENANT_B, PROTECTED_ROWS).then(planOf),
       (g) => g.repairQualityOnce(TENANT_A, PROTECTED_ROWS).then(planOf),
       (_g, s) =>

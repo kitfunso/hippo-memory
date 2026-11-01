@@ -25,8 +25,8 @@ const RETENTION_DAYS = 90;
 const deliveryCutoff = (ts: string, nowMs: number): string =>
   new Date(Math.min(Date.parse(ts), nowMs) - RETENTION_DAYS * DAY_MS).toISOString();
 
-/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow
- * the hook. */
+/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the
+ * hook. */
 const DELIVERY_LEDGER_WAIT_MS = 50;
 
 /** Two prompt-identical events without a host turn id, or two boundary events of one type, this

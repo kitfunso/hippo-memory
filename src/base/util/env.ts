@@ -13,6 +13,12 @@ type FlagState = 'on' | 'off' | 'unset' | 'unknown';
 /** Every on/off variable, with the side an unrecognised spelling takes: the safe one, so a typo
  * never opens a door. */
 const FLAGS = {
+  HIPPO_ABLATE_DECAY: false,
+  HIPPO_ABLATE_RECALL_BOOST: false,
+  HIPPO_ABLATE_OUTCOME: false,
+  HIPPO_ABLATE_OUTCOME_SLOW: false,
+  HIPPO_ABLATE_OUTCOME_FAST: false,
+  HIPPO_ABLATE_RECENCY: false,
   HIPPO_AUTODEBIAS: false,
   HIPPO_ANCHORING: false,
   HIPPO_AVAILABILITY: false,
@@ -38,8 +44,8 @@ function flagState(name: string): FlagState {
   return 'unknown';
 }
 
-/** Never throws, since accessors run per request; an unknown spelling takes the flag's
- * safe side. */
+/** Never throws, since accessors run per request; an unknown spelling takes the flag's safe
+ * side. */
 function bool(name: FlagName): () => boolean {
   return () => {
     const state = flagState(name);
@@ -102,45 +108,12 @@ function nonNegInt(name: string): () => number | undefined {
   };
 }
 
-// What the agent-tool path rules read from a Machine's env (src/base/util/agent-homes.ts, the
-// agent-memory adapters and the hook installers); a rule that reads another variable adds it here.
-const MACHINE_ENV = [
-  'HOME',
-  'USERPROFILE',
-  'APPDATA',
-  'XDG_CONFIG_HOME',
-  'CLAUDE_CONFIG_DIR',
-  'CLAUDE_CODE_PROJECT_DIR_NAME',
-  'CODEX_HOME',
-  'COPILOT_HOME',
-  'VSCODE_PORTABLE',
-  'VSCODE_APPDATA',
-  'GEMINI_CLI_HOME',
-  'OPENCLAW_WORKSPACE_DIR',
-  'OPENCLAW_STATE_DIR',
-  'OPENCLAW_HOME',
-  'OPENCLAW_PROFILE',
-  'QWEN_CODE_MEMORY_BASE_DIR',
-  'QWEN_RUNTIME_DIR',
-  'QWEN_HOME',
-  'QWEN_CODE_MEMORY_LOCAL',
-  'QWEN_CODE_MEMORY_PROJECT_SCOPE',
-  'HIPPO_AGENT_MEMORY_TOOLS',
-] as const;
-
-/** The MACHINE_ENV variables as they stand now, as the map a Machine carries. */
-export function envMachine(): Readonly<Record<string, string | undefined>> {
-  return Object.fromEntries(MACHINE_ENV.map((name) => [name, raw(name)]));
-}
-
-/** The names of the set variables that start with `prefix`, never their values. */
-export function envNamesStarting(prefix: string): string[] {
-  return Object.keys(process.env).filter((name) => name.startsWith(prefix));
-}
-
-/** HIPPO_STRICT_OWNER: only `1` makes `remember --owner` reject an owner off the contract. */
-export function envStrictOwner(): boolean {
-  return raw('HIPPO_STRICT_OWNER') === '1';
+/**
+ * The whole environment, for code that takes it as an injectable map (agent-memory machines, owner
+ * checks, support bundles).
+ */
+export function processEnv(): NodeJS.ProcessEnv {
+  return process.env;
 }
 
 /** A variable whose name comes from configuration, such as an embedding provider's key variable. */
@@ -148,13 +121,22 @@ export function envByName(name: string): string | undefined {
   return raw(name);
 }
 
-/** An on/off variable that the module owning it names, on only for an on spelling. */
-export function envFlagOn(name: string): boolean {
-  return flagState(name) === 'on';
+// Eval-only lifecycle switches; src/infra/eval-switches.ts reads them at call time.
+export const envAblateDecay = bool('HIPPO_ABLATE_DECAY');
+export const envAblateRecallBoost = bool('HIPPO_ABLATE_RECALL_BOOST');
+export const envAblateOutcome = bool('HIPPO_ABLATE_OUTCOME');
+export const envAblateOutcomeSlow = bool('HIPPO_ABLATE_OUTCOME_SLOW');
+export const envAblateOutcomeFast = bool('HIPPO_ABLATE_OUTCOME_FAST');
+export const envAblateRecency = bool('HIPPO_ABLATE_RECENCY');
+
+/** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null. */
+export function envEvalRecencyDays(): number | null {
+  const days = Number(raw('HIPPO_EVAL_RECENCY_DAYS'));
+  return Number.isFinite(days) && days > 0 ? days : null;
 }
 
-/** HIPPO_FAKE_NOW as epoch millis, or null unless it is byte-identical to
- * Date.toISOString output. */
+/** HIPPO_FAKE_NOW as epoch millis, or null unless it is byte-identical to Date.toISOString
+ * output. */
 export function envFakeNowMs(): number | null {
   const value = raw('HIPPO_FAKE_NOW');
   if (value === undefined || value === '') return null;
@@ -178,8 +160,8 @@ const envAnchoringOff = boolOff('HIPPO_ANCHORING');
 const envAvailabilityOff = boolOff('HIPPO_AVAILABILITY');
 const envDagRebuildCap = posInt('HIPPO_DAG_REBUILD_CAP');
 
-/** The settings a root hands down in HippoConfig.runtime; an unset number or scope
- * stays undefined. */
+/** The settings a root hands down in HippoConfig.runtime; an unset number or scope stays
+ * undefined. */
 export function envRuntimeSettings(): RuntimeSettings {
   const deboost = envSummaryDeboost();
   return {
@@ -250,13 +232,13 @@ export const envStdinWaitMs = posInt('HIPPO_STDIN_WAIT_MS');
 export function envLogLevel(): string {
   return raw('HIPPO_LOG')?.trim().toLowerCase() ?? '';
 }
-/** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the
- * text line. */
+/** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the text
+ * line. */
 export function envLogJson(): boolean {
   return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json';
 }
 
-// Server and its clients.
+// Server.
 export const envPort = text('HIPPO_PORT');
 /**
  * How long a client waits for a running server's /health before writing to the store directly;
@@ -270,8 +252,8 @@ export const envV1Rps = text('HIPPO_V1_RPS');
 export const envCallerRps = trimmedText('HIPPO_CALLER_RPS');
 /** How long a request body may take to arrive; http-util.ts holds the default. */
 export const envBodyTimeoutMs = posInt('HIPPO_BODY_TIMEOUT_MS');
-/** How long POST /v1/sleep lets its consolidation run; surface/server/sleep-offload.ts holds
- * the default. */
+/** How long POST /v1/sleep lets its consolidation run; surface/server/sleep-offload.ts holds the
+ * default. */
 export const envSleepTimeoutMs = posInt('HIPPO_SLEEP_TIMEOUT_MS');
 /** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP request
  * before its timeout error; 0 for no deadline; base/util/request-scope.ts holds the default. */
@@ -326,7 +308,7 @@ export function envCloudflareApiToken(): string {
   return cloudflareApiToken() ?? '';
 }
 
-// Slack and GitHub connectors.
+// Connectors.
 export const envSlackBotToken = text('SLACK_BOT_TOKEN');
 export const envSlackTeamId = text('SLACK_TEAM_ID');
 export const envSlackSigningSecret = text('SLACK_SIGNING_SECRET');

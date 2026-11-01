@@ -5,7 +5,6 @@ import { resolveListLimit } from '../../base/util/limits.js';
 import type { CallerState } from '../../api/callers.js';
 import type { RankRecallEngine } from '../../api/recall/pipeline.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import type { CliCommand } from './api-context.js';
 import { fail } from './exit.js';
 
 export function isBooleanFlag(value: string | boolean | string[] | undefined): value is boolean {
@@ -46,8 +45,8 @@ export function parseBudgetFlag<F extends number | undefined>(
   if (!isStringFlag(value)) {
     fail('--budget requires an integer value (e.g. --budget 1500).');
   }
-  // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this
-  // message rejects.
+  // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message
+  // rejects.
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
     fail(`Invalid --budget: "${value}". Must be a non-negative integer.`);
@@ -190,14 +189,15 @@ export interface CommandContext {
   readonly tenantId: string;
   readonly args: string[];
   readonly flags: CliFlags;
-  /** The stores this command opens, on its runtime and, for a scoped verb, its session. */
-  readonly cli: CliCommand;
   /** Unset in a hippo process, which runs one command, so its recall starts empty rings; a
    * caller that runs several commands in one process passes one set to each. */
   readonly callers?: CallerState;
 }
 
-export type EngineFlags = Pick<RankRecallEngine, 'mmr' | 'mmrLambda' | 'localBump'>;
+export type EngineFlags = Pick<
+  RankRecallEngine,
+  'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'
+>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = stringFlag(flags, 'as-of');
@@ -209,8 +209,14 @@ export function parseAsOfFlag(flags: CliFlags): string | undefined {
   return asOf;
 }
 
+/** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns
+ * it off. */
 export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
   return {
+    usePhysics:
+      boolFlag(flags, 'physics') ||
+      (!boolFlag(flags, 'classic') && config.physics.enabled !== false),
+    physicsConfig: config.physics,
     mmr: !boolFlag(flags, 'no-mmr') && config.mmr.enabled,
     mmrLambda: numberFlag(flags, 'mmr-lambda') ?? config.mmr.lambda,
     localBump: boolFlag(flags, 'equal-sources')

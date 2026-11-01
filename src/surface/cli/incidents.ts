@@ -1,8 +1,10 @@
 // First-class object verbs for incidents: open one, resolve it, close it.
 
+import type { ContextWith } from '../../api/types.js';
 import { incidentOpen, incidentResolve } from '../../api/objects/object-kinds.js';
 import { objectClose, objectGet, objectList, objectStates } from '../../api/objects/objects.js';
 import type { Incident } from '../../base/records/object-types.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   flagValueless,
@@ -22,7 +24,6 @@ import {
 } from './object-verbs.js';
 import { fail } from './exit.js';
 import { shellFolder } from './versioned-verbs.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 const INCIDENT: ObjectNames = { cmd: 'incident', noun: 'Incident', idLabel: 'incident' };
 
@@ -33,7 +34,7 @@ function printIncidentRow(inc: Incident): void {
   if (inc.context) console.log(`    context: ${inc.context}`);
 }
 
-function incidentList(ctx: HippoDbContext, flags: CliFlags): Promise<void> {
+function incidentList(ctx: ContextWith<'objects'>, flags: CliFlags): Promise<void> {
   return listObjectsVerb(flags, {
     plural: 'incidents',
     states: objectStates('incident'),
@@ -42,7 +43,7 @@ function incidentList(ctx: HippoDbContext, flags: CliFlags): Promise<void> {
   });
 }
 
-async function incidentGet(ctx: HippoDbContext, args: string[]): Promise<void> {
+async function incidentGet(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo incident get <id>', INCIDENT.idLabel);
   const incident = foundOrExit(await objectGet(ctx, 'incident', id), INCIDENT.noun, id);
   console.log(`Incident #${incident.id}`);
@@ -60,7 +61,7 @@ async function incidentGet(ctx: HippoDbContext, args: string[]): Promise<void> {
 }
 
 async function resolveIncident(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'objects'>,
   args: string[],
   flags: CliFlags,
 ): Promise<void> {
@@ -79,7 +80,7 @@ async function resolveIncident(
   console.log(`Incident #${resolved.id} resolved.`);
 }
 
-function incidentClose(ctx: HippoDbContext, args: string[]): Promise<void> {
+function incidentClose(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   return closeObjectVerb(args, INCIDENT, (id) => objectClose(ctx, 'incident', id));
 }
 
@@ -88,11 +89,10 @@ export async function handleIncident({
   tenantId,
   args,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  const ctx = cli.apiContext(hippoRoot, tenantId);
+  const ctx = cliApiContext(hippoRoot, tenantId);
   if (subcommand === 'list') return incidentList(ctx, flags);
   if (subcommand === 'get') return incidentGet(ctx, args);
   if (subcommand === 'resolve') return resolveIncident(ctx, args, flags);
@@ -104,7 +104,7 @@ export async function handleIncident({
 }
 
 async function incidentCreate(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'objects'>,
   incidentText: string,
   flags: CliFlags,
 ): Promise<void> {

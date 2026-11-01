@@ -1,8 +1,8 @@
 // Signed deliveries already taken, one meta row each holding its expiry in epoch ms, so a restart
 // or a second process still refuses a captured request. Every claim sweeps the expired rows first,
 // as a server can run for months.
-import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
-import type { DeliveryClaim } from '../../../base/records/connectors.js';
+import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import type { DeliveryClaim } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
 const HOLD = 'delivery_hold:';
@@ -25,7 +25,7 @@ export function claimDelivery(
       holdKey(connector, key),
       String(nowMs + ttlMs),
     );
-    return changedRows(taken) > 0;
+    return Number(taken.changes ?? 0) !== 0;
   });
 }
 

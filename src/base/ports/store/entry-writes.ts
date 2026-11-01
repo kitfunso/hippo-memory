@@ -1,6 +1,7 @@
 import type { ScopeReader } from '../../scope/recall-scope.js';
 import type { MemoryEntry } from '../../memory/entry.js';
-import type { MethodEffects } from './types.js';
+import type { HeldText } from './types.js';
+import type { MethodEffects } from './effects.js';
 
 export interface EntryWrite {
   readonly entry: MemoryEntry;
@@ -41,8 +42,8 @@ export interface PinWrite extends EntryRemoval {
 
 /** The memory-row writes behind remember, outcome, pin, supersede, archive and forget. Each
  * writes its audit rows in the write's own transaction, a child row's change marks its level 2
- * or 3 summary parent dirty (one summary_marked_dirty row on the flip), and the schema's
- * rules hold. */
+ * or 3 summary parent dirty (one summary_marked_dirty row on the flip), and the schema's rules
+ * hold. */
 export interface EntryWrites {
   /** Upserts the row, its full-text row and one remember row ({kind, scope}) in the entry's
    * tenant; an undefined origin_project takes the store's fallback. An id another tenant holds
@@ -54,8 +55,8 @@ export interface EntryWrites {
    * lock to commit, so a concurrent supersede is not undone. Resolves to the ids applied,
    * repeats kept. */
   applyOutcome(outcome: OutcomeWrite): Promise<string[]>;
-  /** Rewrites the row as writeEntry does plus one pin row ({pinned}); refuses a row as
-   * forget does. */
+  /** Rewrites the row as writeEntry does plus one pin row ({pinned}); refuses a row as forget
+   * does. */
   setPinned(pin: PinWrite): Promise<MemoryEntry>;
   /** Sets the old row's superseded_by if the caller may change it and it is not yet superseded
    * (both checked in the transaction), else rejects as forget does or with ConflictError. Then
@@ -81,3 +82,31 @@ export const ENTRY_WRITES_EFFECTS = {
   archiveRaw: 'write',
   forget: 'write',
 } as const satisfies MethodEffects<EntryWrites>;
+
+/** The reads and writes behind git auto-learn's batch. */
+export interface LessonWrites {
+  /** Content, source and origin of the tenant's rows that may hold one of `texts`, as
+   * `captures.textsHolding` reads them, among the rows a team member or `ownScope`'s owner may
+   * touch. */
+  textsHolding(
+    tenantId: string,
+    texts: readonly string[],
+    ownScope: string | null,
+  ): Promise<HeldText[]>;
+  /** Contents of the tenant's team-visible rows tagged `tag`; with `origins`, only those
+   * projects' and user-global. */
+  contentsWithTag(tenantId: string, tag: string, origins?: readonly string[]): Promise<string[]>;
+  /** Writes each entry in one transaction; a rejected value writes its refusal row and is
+   * skipped. Resolves to the ids written. */
+  writeSkippingRejected(entries: readonly MemoryEntry[], actor: string): Promise<string[]>;
+  /** Rewrites each entry in one transaction, all or none. */
+  writeTogether(entries: readonly MemoryEntry[]): Promise<void>;
+}
+
+/** What each LessonWrites method does to the store; every adapter honours it. */
+export const LESSON_WRITES_EFFECTS = {
+  textsHolding: 'read',
+  contentsWithTag: 'read',
+  writeSkippingRejected: 'write',
+  writeTogether: 'write',
+} as const satisfies MethodEffects<LessonWrites>;

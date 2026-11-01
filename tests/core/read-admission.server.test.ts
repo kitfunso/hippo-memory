@@ -14,9 +14,7 @@ import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js
 import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/base/session/session-digest-row.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listAmbientCandidates } from '../../src/store/sqlite/recall/candidates.js';
-import type { AmbientRefusal } from '../../src/base/ports/store.js';
-import type { SummaryDescendants } from '../../src/base/records/dag-reads.js';
-import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
+import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/base/ports/store.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/runtime/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
@@ -204,8 +202,8 @@ const DESCENDANT: readonly DescendantAdmission[] = [
 
 let root = '';
 let rows: MemoryEntry[] = [];
-let inProcess: HippoDbStore;
-let onWorkers: HippoDbStore;
+let inProcess: HippoStore & StoreGroups;
+let onWorkers: HippoStore & StoreGroups;
 
 function onDb<T>(run: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
@@ -323,8 +321,8 @@ describe('descendant admission as data', () => {
             const want = oldWalk(tenantId, id, depth, oldDrillAdmit(admission, id));
             for (const store of [inProcess, onWorkers]) {
               const walk = { depth, admit: admission, minSummaryLevel: DAG_LEVEL.topic };
-              expect(levelIds(await store.hippoDb.dagReads.summaryWithDescendants(tenantId, id, walk))).toEqual(want);
-              const paged = await store.hippoDb.dagReads.summaryWithDescendants(tenantId, id, {
+              expect(levelIds(await store.dagReads.summaryWithDescendants(tenantId, id, walk))).toEqual(want);
+              const paged = await store.dagReads.summaryWithDescendants(tenantId, id, {
                 ...walk,
                 page: { rows: 1_000 },
               });

@@ -13,7 +13,7 @@ import type {
   CaptureWriteOptions,
   CapturedOutcome,
   Captures,
-} from '../../../base/records/capture.js';
+} from '../../../base/ports/store/capture.js';
 import { listTextsHolding } from '../recall/candidates.js';
 import { EVERY_SCOPE } from '../runtime/rule-sql.js';
 import { openStore } from '../runtime/handles.js';
@@ -66,11 +66,9 @@ const capturedTextsBodies: Bodies<Pick<Captures, 'textsHolding'>> = {
 };
 
 export function sqliteCaptures({ on, files }: Handles): Captures {
-  const { write } = bound(
+  const { write } = bound<Pick<Captures, 'write'>>(
     on,
-    { write: (db, ...args) => writeCapturedEntries(db, files, ...args) } satisfies Bodies<
-      Pick<Captures, 'write'>
-    >,
+    { write: (db, ...args) => writeCapturedEntries(db, files, ...args) },
     openStore,
   );
   return {

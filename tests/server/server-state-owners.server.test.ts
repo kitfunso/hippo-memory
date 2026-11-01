@@ -9,7 +9,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { inSqliteSession, sqliteStore } from '../../src/store/sqlite/store.js';
 import { runSqliteRequest } from '../../src/store/sqlite/runtime/request-scope.js';
 import { storeForRequest, workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
-import type { HippoStore, CoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
@@ -133,7 +133,7 @@ describe('a store decorated with Object.create', () => {
   it('keeps its methods and groups through storeForRequest when it decorates a worker store', async () => {
     const worker = workerSqliteStore(root('decorated-worker'));
     try {
-      const decorated: HippoStore & CoreGroups = Object.create(worker);
+      const decorated: HippoStore & StoreGroups = Object.create(worker);
       const bound = storeForRequest(decorated, {});
       expect(bound.findApiKey).toBe(worker.findApiKey);
       expect(bound.entryWrites).toBe(worker.entryWrites);
@@ -143,7 +143,7 @@ describe('a store decorated with Object.create', () => {
   });
 
   it('keeps its own override through the reopen when it decorates sqliteStore', async () => {
-    const decorated: HippoStore & CoreGroups = Object.create(sqliteStore(root('decorated-sqlite')));
+    const decorated: HippoStore & StoreGroups = Object.create(sqliteStore(root('decorated-sqlite')));
     const override: HippoStore['findApiKey'] = async () => null;
     decorated.findApiKey = override;
     await runSqliteRequest(async (session) => {

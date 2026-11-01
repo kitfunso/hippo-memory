@@ -9,8 +9,8 @@ export interface PlanningFallacyHint {
   baserateSummary: string;
   /** Tells this automatic hint apart from any later manual-override kind. */
   source: 'j3.2-auto';
-  /** The regex match that fired, so the agent sees why the hint appeared and can discount
-   * a misfire. */
+  /** The regex match that fired, so the agent sees why the hint appeared and can discount a
+   * misfire. */
   detectedPhrase: string;
   nClosed: number;
   /** Null only when every closed row had estimate_value=0, so the ratio is undefined. */

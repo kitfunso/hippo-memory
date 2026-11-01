@@ -1,13 +1,12 @@
-// Memory reads for the CLI verbs and importers: one row by id, the tenant's rows, or with a host
-// admin every tenant's.
+// Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every
+// tenant's.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import { requireHostAdmin, type Context } from '../types.js';
+import type { RequiredStore } from '../../base/ports/store.js';
+import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
 export async function memoryGet(ctx: Context, id: string): Promise<MemoryEntry | null> {
@@ -41,7 +40,7 @@ const LIST_PAGE_SIZE = 1000;
 
 /** The tenant's memory rows, oldest first, `pageSize` per query, so a pass can hold one page. */
 export async function* memoryPages(
-  store: HippoStore,
+  store: RequiredStore,
   tenant: TenantId,
   pageSize: number = LIST_PAGE_SIZE,
 ): AsyncGenerator<MemoryEntry[]> {
@@ -52,14 +51,6 @@ export async function* memoryPages(
     yield page.entries;
     after = page.next ?? undefined;
   } while (after);
-}
-
-/** Every page, as an importer diffs its source against what it wrote before. */
-export function rawRowsUnder(ctx: Context, artifactRefPrefix: string): Promise<MemoryEntry[]> {
-  const under = { tenantId: ctx.tenantId, kinds: ['raw'], artifactRefPrefix } as const;
-  return readAll((after?: EntryCursor) =>
-    ctx.store.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
-  );
 }
 
 /** Every memory row in reach, oldest first, read `pageSize` rows per query so no single read
@@ -74,6 +65,12 @@ export async function memoryList(
     all.push(...page);
   }
   return all;
+}
+
+/** How many memory rows the whole store holds, counted in SQL. */
+export async function memoryCountAll(ctx: ContextWith<'reports'>): Promise<number> {
+  requireHostAdmin(ctx, 'Reading every tenant');
+  return ctx.store.reports.countEntries();
 }
 
 /** The rows in reach among `ids`; a missing id or one out of reach is absent. */

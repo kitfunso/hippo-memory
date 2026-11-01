@@ -191,20 +191,20 @@ describe('the auto-sleep trigger', () => {
     const root = newRoot();
     writeEntry(root, createMemory('first memory about the release train schedule'));
     writeEntry(root, createMemory('second memory about the staging cluster restarts'));
-    expect(await sqliteStore(root).hippoDb.reports.createdSinceLastSleep('default', new Date())).toBe(2);
+    expect(await sqliteStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(2);
 
     await consolidate(root);
-    expect(await sqliteStore(root).hippoDb.reports.createdSinceLastSleep('default', new Date())).toBe(0);
+    expect(await sqliteStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(0);
 
     writeEntry(root, createMemory('third memory about invoices exported as csv'));
-    expect(await sqliteStore(root).hippoDb.reports.createdSinceLastSleep('default', new Date())).toBe(1);
+    expect(await sqliteStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(1);
   });
 
   it('never counts memories older than 24 hours', async () => {
     const root = newRoot();
     const old = createMemory('an old memory about the quarterly budget review');
     writeEntry(root, { ...old, created: new Date(Date.now() - 2 * DAY_MS).toISOString() });
-    expect(await sqliteStore(root).hippoDb.reports.createdSinceLastSleep('default', new Date())).toBe(0);
+    expect(await sqliteStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(0);
   });
 });
 

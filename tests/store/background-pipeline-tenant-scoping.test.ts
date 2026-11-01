@@ -25,8 +25,7 @@ import { folderStore, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
-import { asCommand } from '../_helpers/test-cli.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -106,29 +105,25 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
 
     // tenant-a scope: only tenant-a entries are returned by loadAllEntries,
     // and the tenant-a entry is not consolidated → scanned=0.
-    const result = await asCommand((cli) =>
-      refineStore(cli, hippoRoot, {
-        llm: anthropicLlm({
-          apiKey: 'test',
-          fetcher: async () =>
-            new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
-        }),
-        tenantId: 'tenant-a',
+    const result = await refineStore(hippoRoot, {
+      llm: anthropicLlm({
+        apiKey: 'test',
+        fetcher: async () =>
+          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
       }),
-    );
+      tenantId: 'tenant-a',
+    });
     expect(result.scanned).toBe(0); // tenant-b's consolidated entry not visible
 
     // Positive control: host-wide scan does see the consolidated entry
-    const hostWide = await asCommand((cli) =>
-      refineStore(cli, hippoRoot, {
-        llm: anthropicLlm({
-          apiKey: 'test',
-          fetcher: async () =>
-            new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
-        }),
-        dryRun: true,
+    const hostWide = await refineStore(hippoRoot, {
+      llm: anthropicLlm({
+        apiKey: 'test',
+        fetcher: async () =>
+          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
       }),
-    );
+      dryRun: true,
+    });
     expect(hostWide.scanned).toBe(1);
   });
 
@@ -160,12 +155,10 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       return new Response(JSON.stringify({ choices: [{ message: { content: 'refined output' } }] }), { status: 200 });
     };
 
-    const result = await asCommand((cli) =>
-      refineStore(cli, hippoRoot, {
-        llm: anthropicLlm({ apiKey: 'test', fetcher }),
-        tenantId: 'tenant-a',
-      }),
-    );
+    const result = await refineStore(hippoRoot, {
+      llm: anthropicLlm({ apiKey: 'test', fetcher }),
+      tenantId: 'tenant-a',
+    });
     // L9 contract: the consolidated entry was scanned (scope=tenant-a hit),
     // and the parent lookup for the cross-tenant bParentId returned null →
     // refineSemanticMemory was called with 0 sources. The refined/failed
@@ -284,7 +277,6 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // dryRun returns the candidate list without writing
     const candidates = await autoShare(...sharingStores(hippoRoot), {
       embed: TEST_RUN,
-      detached: TEST_DETACHED,
       tenantId: 'tenant-a',
       minScore: 0,
       dryRun: true,
@@ -326,16 +318,14 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     expect(allHostWide.length).toBe(2);
     expect(allHostWide.every((e) => e.content.startsWith('[Consolidated from'))).toBe(true);
 
-    const result = await asCommand((cli) =>
-      refineStore(cli, hippoRoot, {
-        llm: anthropicLlm({
-          apiKey: 'test',
-          fetcher: async () =>
-            new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
-        }),
-        dryRun: true,
+    const result = await refineStore(hippoRoot, {
+      llm: anthropicLlm({
+        apiKey: 'test',
+        fetcher: async () =>
+          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
       }),
-    );
+      dryRun: true,
+    });
     // Both tenants' consolidated entries are scanned (host-wide). The
     // exact refined/failed split depends on refineSemanticMemory's response
     // parsing; the host-wide assertion is on `scanned`.
@@ -432,16 +422,13 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
     seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-    expect(
-      await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
-    ).toBe(0);
+    expect(await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { embed: TEST_RUN })).toBe(0);
 
     // Under v39 the seeded rows carry the seed store's own project origin, so the default sync gates them above; this case's
     // original guarantee - the global read is host-wide across TENANTS - still holds once the origin gate is explicitly
     // lifted: both tenants' rows copy.
     const copied = await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), {
       embed: TEST_RUN,
-      detached: TEST_DETACHED,
       includeCrossProject: true,
     });
     expect(copied).toBe(2);

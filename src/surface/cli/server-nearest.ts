@@ -9,7 +9,7 @@ import { callerKey } from '../server/local-key.js';
 import { nearestIds } from './client.js';
 
 // A graph read takes milliseconds (docs/ARCHITECTURE.md), so a later reply means a stalled server,
-// and the scan after it still fits the HOOK_SHORT_TIMEOUT_SECONDS hook budget.
+// and the scan after it still fits the 5 s hook budget.
 const NEAREST_TIMEOUT_MS = 1000;
 
 /** The ask a CLI store on `hippoRoot` makes of its server: undefined with no server, and after

@@ -4,7 +4,7 @@
 import type { DatabaseSyncLike, SqlValue } from '../../../db/index.js';
 import type { StoreModel } from '../runtime/open.js';
 import {
-  calculateStrengthAt,
+  calculateStrength,
   FALLBACK_HALF_LIFE_DAYS,
   type ConfidenceInputs,
   type StrengthInputs,
@@ -22,10 +22,10 @@ import {
   strengthBucket,
 } from '../../../base/memory/memory-facts.js';
 import { AT_RISK_BELOW } from '../../../base/memory/strength-bands.js';
-import { SCATTER_COLS, SCATTER_ROWS } from '../../../base/records/dashboard-reads.js';
+import { SCATTER_COLS, SCATTER_ROWS } from '../../../base/ports/store/dashboard-reads.js';
 import { type MemoryRow, parseJsonArray } from '../runtime/rows.js';
 import { isFtsAvailable } from '../../../db/meta.js';
-import { TAGS_NOT_AS_WRITTEN, TEXT_OUTSIDE_TRIGRAMS } from '../../../db/sql.js';
+import { TAGS_NOT_AS_WRITTEN, TEXT_OUTSIDE_TRIGRAMS } from '../../../db/sql-predicates.js';
 
 /** The columns each fact function reads first, in this order. */
 export const FACT_COLUMNS =
@@ -151,7 +151,7 @@ function holdsTextBinds(text: string | null): TextBinds {
   return { text, probe: probe === '' ? null : probe, wide: ALL_WIDE.test(seen) ? 1 : 0 };
 }
 
-// FTS5's trigram index cannot look up a shorter probe, so one leaves the needle to HOLDS_TEXT
+// FTS5 cannot look up fewer than 3 characters, so a shorter probe leaves the needle to HOLDS_TEXT
 // over every row.
 const MIN_PROBE_CHARS = 3;
 
@@ -258,7 +258,7 @@ function addGridRow(t: Float64Array, v: readonly SqlValue[], rules: StoreModel):
   const nowMs = Number(v[FACT_ARGS]);
   const maxLog = Number(v[FACT_ARGS + 1]);
   const age = daysBetween(row.created, nowMs);
-  const strength = calculateStrengthAt(row, new Date(nowMs), rules.strength);
+  const strength = calculateStrength(row, new Date(nowMs), rules.strength);
   const col = Math.min(SCATTER_COLS - 1, Math.floor((Math.log10(age + 1) / maxLog) * SCATTER_COLS));
   const cell = Math.min(SCATTER_ROWS - 1, Math.floor(strength * SCATTER_ROWS));
   t[layerIndex(row.layer) * GRID_CELLS + cell * SCATTER_COLS + col]++;
@@ -289,7 +289,7 @@ export function useDashboardFunctions(db: DatabaseSyncLike, rules: StoreModel): 
   const fixed = { deterministic: true };
   const many = { deterministic: true, varargs: true };
   db.function('hippo_strength', many, (...v) =>
-    calculateStrengthAt(factsOf(v), new Date(Number(v[FACT_ARGS])), rules.strength),
+    calculateStrength(factsOf(v), new Date(Number(v[FACT_ARGS])), rules.strength),
   );
   db.function('hippo_band', many, (...v) =>
     bandAt(factsOf(v), Number(v[FACT_ARGS]), rules.strength),

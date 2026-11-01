@@ -21,8 +21,7 @@ import {
 } from './protocol.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { handleMcpRequest } from './request.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import { ensureStoreFiles } from '../../api/store-init.js';
+import type { RequiredStore } from '../../base/ports/store.js';
 import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';
 import { randomUUID } from 'node:crypto';
@@ -134,9 +133,7 @@ function track(method: string, call: Promise<void>): void {
     .catch((err) => log.error(`mcp: ${method} failed after it was dispatched`, errorFields(err)));
 }
 
-/** Waits for the calls in flight, then for the work they handed off, one bound for both. */
-async function drainInFlight<S extends HippoStore>(host: McpHost<S>): Promise<void> {
-  const started = performance.now();
+async function drainInFlight(): Promise<void> {
   if (inFlight.size > 0) {
     let bound: NodeJS.Timeout | undefined;
     const timedOut = new Promise<void>((resolve) => {
@@ -151,17 +148,10 @@ async function drainInFlight<S extends HippoStore>(host: McpHost<S>): Promise<vo
       { method },
     );
   }
-  const left = await host.settle(Math.max(0, STDIN_END_DRAIN_MS - (performance.now() - started)));
-  if (left > 0) {
-    log.warn(
-      `mcp: ${left} handed-off task(s), such as an embed, still running ${STDIN_END_DRAIN_MS} ms after stdin closed`,
-      { left },
-    );
-  }
 }
 
-async function exitWhenDrained<S extends HippoStore>(host: McpHost<S>): Promise<void> {
-  await drainInFlight(host);
+async function exitWhenDrained(): Promise<void> {
+  await drainInFlight();
   exitAfterFlush(0);
 }
 
@@ -204,13 +194,15 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
 /** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global
  * store instead of failing every tool call, and say so on stderr (stdout carries the protocol).
  * A later `hippo init` project store wins. */
-async function createGlobalStoreOnFirstRun<S extends HippoStore>(
+async function createGlobalStoreOnFirstRun<S extends RequiredStore>(
   contextFor: McpContextFor<S>,
   tenantId: string,
 ): Promise<string> {
   const root = hippoHomeDir();
+  const target = contextFor(root, tenantId).reach?.globalTarget;
   // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
-  if (!(await ensureStoreFiles(contextFor(root, tenantId).reach?.globalTarget?.store))) return root;
+  if (target === undefined) return root;
+  await target.store.folderFiles.ensure();
   log.warn(
     `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
   );
@@ -219,7 +211,7 @@ async function createGlobalStoreOnFirstRun<S extends HippoStore>(
 
 /** Runs one frame on the host's stores; only a tool call builds a context, so tools/list never
  * creates a store. */
-function handleFrame<S extends HippoStore>(
+function handleFrame<S extends RequiredStore>(
   req: McpRequest,
   host: McpHost<S>,
   signal: AbortSignal,
@@ -232,7 +224,7 @@ function handleFrame<S extends HippoStore>(
   });
 }
 
-function dispatch<S extends HippoStore>(
+function dispatch<S extends RequiredStore>(
   body: string,
   abort: AbortController,
   host: McpHost<S>,
@@ -275,7 +267,7 @@ function dispatch<S extends HippoStore>(
   );
 }
 
-function dispatchNotification<S extends HippoStore>(
+function dispatchNotification<S extends RequiredStore>(
   req: McpRequest,
   abort: AbortController,
   host: McpHost<S>,
@@ -296,29 +288,29 @@ function dispatchNotification<S extends HippoStore>(
  * this file run directly) should call it, so the HTTP daemon (which imports `handleMcpRequest`)
  * does not steal stdin or exit when its parent closes a pipe. The caller picks the host, so
  * src/surface/mcp names no store adapter and no scope plumbing. */
-export function startStdioLoop<S extends HippoStore>(host: McpHost<S>): void {
+export function startStdioLoop<S extends RequiredStore>(host: McpHost<S>): void {
   process.stdin.on(
     'data',
     frameReader((body) => {
-      // One id per frame, so the error reply and every line logged for the call name the
-      // same request.
+      // One id per frame, so the error reply and every line logged for the call name the same
+      // request.
       const abort = new AbortController();
       runWithRequestId(randomUUID(), () => dispatch(body, abort, host));
     }),
   );
 
   process.stdin.on('end', () => {
-    exitWhenDrained(host).catch((err) => {
+    exitWhenDrained().catch((err) => {
       log.error('mcp: draining the calls in flight failed; exiting', errorFields(err));
       exitAfterFlush(1);
     });
   });
 
   exitOnStreamError();
-  // A crash waits for the calls in flight as stdin's end does, so a client is not left without
-  // its reply.
+  // A crash waits for the calls in flight as stdin's end does, so a client is not left without its
+  // reply.
   installCrashHandlers('mcp', {
-    run: () => drainInFlight(host),
+    run: drainInFlight,
     boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS,
   });
 }
@@ -336,8 +328,8 @@ function exitOnStreamError(): void {
     exitAfterFlush(1);
   });
 
-  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an
-  // exit code.
+  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an exit
+  // code.
   process.stderr.on('error', (err: NodeJS.ErrnoException) => {
     exitAfterFlush(err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED' ? 0 : 1);
   });

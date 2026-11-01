@@ -1,4 +1,4 @@
-import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
+import type { DatabaseSyncLike } from '../../../db/index.js';
 import {
   type SessionHandoff,
   type SessionHandoffRow,
@@ -20,7 +20,7 @@ import type {
   HandoffFilter,
   SessionEndHandoffRequest,
   TaskSnapshot,
-} from '../../../base/records/sessions.js';
+} from '../../../base/ports/store/sessions.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleNow, handleStamp } from '../runtime/handle-clock.js';
 
@@ -75,8 +75,8 @@ function sessionEndSource(
 }
 
 /** The handoff `source` writes. A same-task refresh carries forward the envelope fields nobody
- * cleared; a scope mismatch carries none, so private metadata never leaks into an
- * unscoped envelope. */
+ * cleared; a scope mismatch carries none, so private metadata never leaks into an unscoped
+ * envelope. */
 function sessionEndHandoff(
   sessionId: string,
   source: SessionEndSource,
@@ -105,19 +105,19 @@ function sessionEndHandoff(
   };
 }
 
-/** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card
- * handoff lookup. */
+/** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff
+ * lookup. */
 export const HANDOFF_COLUMNS =
   'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, ' +
   'evidence_json, outcome, target_runtime, card_id';
-// SAFETY: every read cast to this row selects HANDOFF_COLUMNS; scripts/checks/check-row-casts.mjs
-// proves it.
+// SAFETY: every read cast to this row selects HANDOFF_COLUMNS; scripts/checks/check-row-casts.mjs proves
+// it.
 export type SessionHandoffDbRow = SessionHandoffRow;
 
 type HandoffColumn = readonly [column: string, value: string | null];
 
-/** The columns an insert and a transcript rewrite both write, so the two statements cannot
- * drift apart. */
+/** The columns an insert and a transcript rewrite both write, so the two statements cannot drift
+ * apart. */
 function handoffContentColumns(handoff: Omit<SessionHandoff, 'updatedAt'>): HandoffColumn[] {
   return [
     ['repo_root', handoff.repoRoot ?? null],
@@ -288,8 +288,8 @@ export function readHandoff(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-/** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns
- * rows changed. */
+/** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows
+ * changed. */
 export function stampHandoffOutcome(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -309,7 +309,7 @@ export function stampHandoffOutcome(
     )
     `,
   ).run(outcome, tenantId, sessionId, tenantId, sessionId);
-  return changedRows(result);
+  return Number(result.changes ?? 0);
 }
 
 /** Rewrites the session's newest handoff when it is still a transcript read, in one statement so
@@ -340,7 +340,7 @@ function replaceTranscriptHandoff(
     WHERE id = (${newest}) AND json_valid(evidence_json)
       AND json_extract(evidence_json, '$.derivedFrom') = 'transcript'`,
   ).run(...columns.map(([, value]) => value), ...params);
-  if (changedRows(result) === 0) return null;
+  if (Number(result.changes ?? 0) === 0) return null;
   const row = cachedStatement(
     db,
     `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`,

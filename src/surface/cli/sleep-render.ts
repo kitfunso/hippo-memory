@@ -1,5 +1,5 @@
-// The text `hippo sleep` prints for an api.sleep result, kept pure so tests read the
-// lines directly.
+// The text `hippo sleep` prints for an api.sleep result, kept pure so tests read the lines
+// directly.
 
 import type * as api from '../../api/index.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';

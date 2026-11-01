@@ -27,17 +27,17 @@ import {
   idPageOf,
   type EntryPageRequest,
 } from '../runtime/keyset.js';
-import type { EntryIdPage } from '../../../base/records/consolidation.js';
-import type { IdPage, IdPageRequest } from '../../../base/records/embedding-index.js';
+import type { EntryIdPage } from '../../../base/ports/store/consolidation.js';
+import type { IdPage, IdPageRequest } from '../../../base/ports/store/vectors.js';
 import type {
   SessionRawCount,
   SessionRawKey,
   SessionRawKeys,
   SessionRawQuery,
   SessionRawRows,
-} from '../../../base/records/dag-reads.js';
-import type { OriginTally } from '../../../base/records/project-tags.js';
-import type { EntrySignals, EntryTextKeyPage } from '../../../base/records/sharing.js';
+} from '../../../base/ports/store/context-reads.js';
+import type { OriginTally } from '../../../base/ports/store/project-tags.js';
+import type { EntrySignals, EntryTextKeyPage } from '../../../base/ports/store/sharing.js';
 import type { EntryCursor, EntryPage } from '../../../base/ports/store/types.js';
 
 /** Read a memory entry by ID; a row in another tenant reads as null. */
@@ -75,8 +75,8 @@ export function readEntriesByIds(
   return byId;
 }
 
-/** Direct children of each parent, one query per chunk; each list is in `created ASC, id
- * ASC` order. */
+/** Direct children of each parent, one query per chunk; each list is in `created ASC, id ASC`
+ * order. */
 export function readChildrenByParent(
   db: DatabaseSyncLike,
   parentIds: readonly string[],
@@ -223,8 +223,8 @@ export function readSessionRawRows(
 
 /** Last N kind='raw' memories by `created` desc, tenant-scoped, at most MAX_FRESH_RAW; pass
  * `sessionId` or concurrent sessions show up in each other's fresh tail. The tenant-wide shape
- * is discouraged: `api.recall` throws `RecallContractError` for it
- * when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
+ * is discouraged: `api.recall` throws `RecallContractError` for it when
+ * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
 export function listFreshRawMemories(
   db: DatabaseSyncLike,
   count: number,

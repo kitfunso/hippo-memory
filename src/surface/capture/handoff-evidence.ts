@@ -32,8 +32,7 @@ function gitOutput(args: readonly string[], cwd: string, timeoutMs: number): str
 }
 
 // Best-effort git state; a missing git, non-repo cwd, or a call past timeoutMs (each call, default
-// DEFAULT_TIMEOUT_MS) yields null fields rather than throw, so a hook with a hard deadline can cap
-// a slow repo.
+// 2 s) yields null fields rather than throw, so a hook with a hard deadline can cap a slow repo.
 export function collectHandoffEvidence(
   cwd: string,
   testStatus: HandoffEvidence['testStatus'],

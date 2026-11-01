@@ -19,7 +19,7 @@ import type {
   DashboardSortKey,
   FilterTally,
   ListedRow,
-} from '../../../base/records/dashboard-reads.js';
+} from '../../../base/ports/store/dashboard-reads.js';
 import {
   FACT_COLUMNS,
   factInputs,
@@ -31,8 +31,8 @@ import {
 import { IN_PROJECT, OPEN_PAIRS } from './dashboard-sql.js';
 import { julianDayOfMs, strengthSqlAt } from '../runtime/rule-sql.js';
 
-// One past the list's cut, so the cut and its truncated flag come out as they would on the
-// whole text.
+// One past the list's cut, so the cut and its truncated flag come out as they would on the whole
+// text.
 const HEAD_READ = 241;
 // Each list is a row per kept id in SQLite's temp store, never in JavaScript; the least recently
 // read goes first.
@@ -75,8 +75,8 @@ const AFTER_ALL = '~';
 // strftime keeps an hour of 24 as written, where Date.parse moves it to the next day.
 const PLAIN_CREATED = `strftime('%Y-%m-%dT%H:%M:%fZ', created) = created AND substr(created, 12, 2) < '24'`;
 
-// The brush's age test as daysBetween makes it: as text on a plain created, by hippo_days on
-// any other.
+// The brush's age test as daysBetween makes it: as text on a plain created, by hippo_days on any
+// other.
 const AGE_KEPT =
   `CASE WHEN :anyAge THEN 1 WHEN ${PLAIN_CREATED} THEN created >= :createdFrom AND created <= :createdTo ` +
   `ELSE hippo_days(created, :now) BETWEEN :minAgeDays AND :maxAgeDays END`;
@@ -102,8 +102,8 @@ interface AgeBindsOptions {
 }
 
 /** AGE_KEPT's parameters: a plain created is kept from createdFrom to createdTo, the instants
- * where daysBetween's arithmetic, done here on each candidate instant, turns the brush's
- * two tests. */
+ * where daysBetween's arithmetic, done here on each candidate instant, turns the brush's two
+ * tests. */
 function ageBinds({ minAgeDays: min, maxAgeDays: max, nowMs }: AgeBindsOptions) {
   const age = (ms: number): number => Math.max(0, (nowMs - ms) / DAY_MS);
   const from = firstHolding((ms) => age(ms) <= max);
@@ -122,8 +122,8 @@ interface ListScan {
   readonly binds: Record<string, SqlValue>;
 }
 
-/** What one list scan computes: its sort, whether a strength brush narrows it, and its
- * text filter. */
+/** What one list scan computes: its sort, whether a strength brush narrows it, and its text
+ * filter. */
 interface ScanPlan {
   readonly sort: DashboardSortKey;
   readonly descending: boolean;
@@ -153,12 +153,12 @@ function scanSql({ sort, descending, byStrength, holds }: ScanPlan, rules: Store
   );
 }
 
+/** The scan that writes list `list`: the filter's tally at position 0, then from 1 each kept id
+ * the chip keeps, in sort order; a layer the query leaves out binds NULL, which no row's layer
+ * equals. */
 /** The page query with the tenant and the time the scan dates its facts at. */
 type ScanQuery = DashboardPageQuery & { readonly tenantId: string; readonly nowMs: number };
 
-/** The scan that writes list `list`: the filter's tally at position 0, then from 1 each kept id
- * the chip keeps, in sort order; a layer the query leaves out binds NULL, which no row's
- * layer equals. */
 function listScan(
   db: DatabaseSyncLike,
   rules: StoreModel,
@@ -250,8 +250,8 @@ function listKey(tenantId: string, query: DashboardPageQuery, nowMs: number): st
   return `${JSON.stringify([tenantId, origin, layers, text, sort, descending, chip])} ${bounds.join(' ')}`;
 }
 
-/** The sorted lists one held reader keeps, scored by `rules`; a commit to the store drops
- * them all. */
+/** The sorted lists one held reader keeps, scored by `rules`; a commit to the store drops them
+ * all. */
 export class MemoryLists {
   readonly #db: DatabaseSyncLike;
   readonly #rules: StoreModel;
@@ -290,8 +290,8 @@ export class MemoryLists {
     });
   }
 
-  // data_version moves on every other connection's commit, and this reader never commits to
-  // the store.
+  // data_version moves on every other connection's commit, and this reader never commits to the
+  // store.
   #follow(version: number): void {
     if (version === this.#version) return;
     if (this.#lists.size > 0) cachedStatement(this.#db, `DELETE FROM ${LISTS}`).run();

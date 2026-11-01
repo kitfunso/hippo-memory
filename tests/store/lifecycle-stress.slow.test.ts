@@ -9,7 +9,7 @@
  * Covers:
  *   1. injector determinism      — same seed => byte-identical stream
  *   2. value-based metric        — the by-fact-value scoring is correct
- *   3. merge fires + answer survives consolidation
+ *   3. merge fires + answer survives (mirrors scripts/lifecycle-stress/probe.mjs)
  *   4. G1 leak sanity            — noise-only store => fact answer absent at floor
  */
 
@@ -19,18 +19,22 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import { isEmbeddingAvailable } from '../../src/base/embeddings/local.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
-import { hybridSearch } from '../../src/entry/folder-search.js';
+import { physicsSearch } from '../../src/entry/folder-search.js';
 import { consolidate } from '../../src/index.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 
 import { injectStream } from '../../scripts/lifecycle-stress/inject.mjs';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
+const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s: string): number => Math.ceil((s || '').length / 4);
 
-// The prereg's by-value scoring, pinned here. Out-rank is by a STALE token of the SAME fact
-// (pre-reg axis 1); the 4 main conditions have no stale tokens, so presence is the metric there.
+// Re-implements run.mjs scoreAssembled by-value logic so the test pins the
+// scoring contract independently of the harness module's internals. Out-rank is
+// by a STALE token of the SAME fact (pre-reg axis 1); the 4 main conditions have
+// no stale tokens, so presence is the metric there.
 function scoreAssembled(
   assembled: { entry: { content: string } }[],
   labels: { factKey: string; topic: string; answerToken: string; staleTokens?: string[] }[],
@@ -143,7 +147,7 @@ describe('lifecycle-stress value-based metric', () => {
   });
 });
 
-describe('lifecycle-stress mechanism (real DB)', () => {
+describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
   let root: string;
 
   beforeEach(() => {
@@ -176,7 +180,7 @@ describe('lifecycle-stress mechanism (real DB)', () => {
     }
   });
 
-  it('answers each queried fact via hybridSearch after consolidate (token present)', async (ctx) => {
+  it('answers each queried fact via physicsSearch after consolidate (token present)', async (ctx) => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     const { memories, labels } = injectStream({ seed: 11, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     writeEntriesTogether(
@@ -191,8 +195,9 @@ describe('lifecycle-stress mechanism (real DB)', () => {
 
     // at a generous budget every fact's token must be retrievable by its topic
     for (const lab of labels) {
-      const res = await hybridSearch(lab.topic, after, {
+      const res = await physicsSearch(lab.topic, after, {
         hippoRoot: root,
+        physicsConfig: PC,
         budget: 2000,
         minResults: 1,
       });
@@ -222,8 +227,9 @@ describe('lifecycle-stress mechanism (real DB)', () => {
       const leaked = entries.some((e) => (e.content || '').includes(lab.answerToken));
       expect(leaked, `noise store must not contain ${lab.answerToken}`).toBe(false);
       // and a topic query must not retrieve it either (floor)
-      const res = await hybridSearch(lab.topic, entries, {
+      const res = await physicsSearch(lab.topic, entries, {
         hippoRoot: root,
+        physicsConfig: PC,
         budget: 200,
         minResults: 1,
       });

@@ -4,7 +4,6 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from './default-half-life-memory.js';
 import { makeRoot } from './make-root.js';
 import { readEntry, writeEntry } from './root-forms.js';
-import { asCommand } from './test-cli.js';
 
 /** Runs `hippo refine`'s path on a fresh store holding one consolidated entry with `merged` as its text and
  *  `sources` as its parents; returns the refined text stored, or null when the refinement failed. */
@@ -21,6 +20,6 @@ export async function refineOne(
   };
   for (const source of sources) writeEntry(root, source);
   writeEntry(root, entry);
-  const result = await asCommand((cli) => refineStore(cli, root, opts));
+  const result = await refineStore(root, opts);
   return result.refined === 1 ? (readEntry(root, entry.id)?.content ?? null) : null;
 }

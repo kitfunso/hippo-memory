@@ -16,8 +16,8 @@ export interface CompactionItemRows {
 }
 
 const HEADING = 'memories for hippo';
-// `\S` parts the gap from the text, so a line that fails to match is scanned once, not once
-// per space.
+// `\S` parts the gap from the text, so a line that fails to match is scanned once, not once per
+// space.
 const ITEM_LINE = /^\s*(?:[-*]|\d+[.)])(?:\s+(\S.*)?)?$/;
 const ANALYSIS_OPEN = '<analysis>';
 const ANALYSIS_CLOSE = '</analysis>';
@@ -137,8 +137,8 @@ const PROTECTED_WORDS = new Set([
   'unless',
   'until',
 ]);
-/** Below this share of the held text's words, an item is a fragment of something longer, not
- * a restatement. */
+/** Below this share of the held text's words, an item is a fragment of something longer, not a
+ * restatement. */
 const RESTATE_MIN_SHARE = 0.5;
 
 /** The words restates compares: NFC, lower case, split on anything that is not a letter, mark,

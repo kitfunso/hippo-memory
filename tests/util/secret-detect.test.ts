@@ -21,7 +21,7 @@ import { copyToGlobal, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES, runtimeJoin } from '../_helpers/secret-shapes.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { writeEntry, apiCtx } = sessionPerTest();
@@ -224,12 +224,7 @@ describe('producer + sync vetoes (real stores)', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
     await expect(
-      shareMemory(...sharingStores(projA), row.id, {
-        embed: TEST_RUN,
-        detached: TEST_DETACHED,
-        tenantId: 'default',
-        force: true,
-      }),
+      shareMemory(...sharingStores(projA), row.id, { embed: TEST_RUN, tenantId: 'default', force: true }),
     ).rejects.toThrow(/secret/i);
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
@@ -238,12 +233,7 @@ describe('producer + sync vetoes (real stores)', () => {
     // error tag + pin push transferScore over the 0.6 bar for both rows.
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
-    const shared = await autoShare(...sharingStores(projA), {
-      embed: TEST_RUN,
-      detached: TEST_DETACHED,
-      tenantId: ALL_TENANTS,
-      minScore: 0.6,
-    });
+    const shared = await autoShare(...sharingStores(projA), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0.6 });
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
@@ -256,7 +246,6 @@ describe('producer + sync vetoes (real stores)', () => {
     const stats = { secretSkipped: 0 };
     const shared = await autoShare(...sharingStores(projA), {
       embed: TEST_RUN,
-      detached: TEST_DETACHED,
       tenantId: ALL_TENANTS,
       minScore: 0.6,
       stats,
@@ -270,7 +259,6 @@ describe('producer + sync vetoes (real stores)', () => {
     const stats = { secretSkipped: 0 };
     const candidates = await autoShare(...sharingStores(projA), {
       embed: TEST_RUN,
-      detached: TEST_DETACHED,
       tenantId: ALL_TENANTS,
       minScore: 0.6,
       dryRun: true,
@@ -298,7 +286,6 @@ describe('producer + sync vetoes (real stores)', () => {
     const [row] = loadAllEntries(projA, 'default');
     const globalCopy = await shareMemory(...sharingStores(projA), row.id, {
       embed: TEST_RUN,
-      detached: TEST_DETACHED,
       tenantId: 'default',
       force: true,
     });
@@ -311,10 +298,7 @@ describe('producer + sync vetoes (real stores)', () => {
     writeEntry(globalStore, { ...createMemory('project b routing table quirk'), originProject: 'proj-b' });
     writeEntry(globalStore, { ...createMemory(SECRET_ROW), originProject: '' });
 
-    const count = await syncGlobalToLocal(...sharingStores(projA, globalStore), {
-      embed: TEST_RUN,
-      detached: TEST_DETACHED,
-    });
+    const count = await syncGlobalToLocal(...sharingStores(projA, globalStore), { embed: TEST_RUN });
     expect(count).toBe(1);
     const local = loadAllEntries(projA, 'default');
     expect(local.map((e) => e.content)).toEqual([CLEAN_ROW]);
@@ -322,7 +306,6 @@ describe('producer + sync vetoes (real stores)', () => {
 
     const withCross = await syncGlobalToLocal(...sharingStores(projA, globalStore), {
       embed: TEST_RUN,
-      detached: TEST_DETACHED,
       includeCrossProject: true,
     });
     expect(withCross).toBe(1); // proj-b row now copies; the secret still never does

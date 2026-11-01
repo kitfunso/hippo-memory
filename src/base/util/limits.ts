@@ -1,4 +1,4 @@
-// The body cap. The CLI never sends payloads near this; anything bigger is almost certainly a
+// 1 MB body cap. The CLI never sends payloads near this; anything bigger is almost certainly a
 // misconfigured client or a deliberate memory-blowup attempt.
 export const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -34,8 +34,8 @@ export const MAX_FRESH_RAW = 200;
 // importance goes first.
 export const WM_MAX_ENTRIES = 20;
 
-// Session events a read returns when its caller names no limit, as `hippo session show` prints
-// by default.
+// Session events a read returns when its caller names no limit, as `hippo session show` prints by
+// default.
 export const SESSION_EVENT_LIMIT = 8;
 
 // Page size every list surface (CLI, HTTP, store) falls back to when the caller names none.
@@ -51,7 +51,7 @@ export const MAX_LIST_LIMIT = 1000;
 export const MAX_AUDIT_LIMIT = 10_000;
 
 // Cap on a reply body read from a peer (LLM API, hippo server, reranker); honest replies are a few
-// KB, and this cap leaves room for a verbose envelope.
+// KB, and 1 MiB leaves room for a verbose envelope.
 export const MAX_REPLY_BYTES = 1024 * 1024;
 
 /** The one list-limit rule: absent means the default; a positive integer up to the ceiling passes.

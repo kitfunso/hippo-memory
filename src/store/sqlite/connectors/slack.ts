@@ -1,16 +1,22 @@
 // Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the
 // dead-letter queue and workspace routing. Each `xAt(db, ...)` runs on the caller's handle.
 
-import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
-import type { ConnectorEventRecord } from '../../../base/records/connectors.js';
-import { eventMemory, keyRecord, eventSeen, markKeySeen, type EventLogSpec } from './event-log.js';
+import type { DatabaseSyncLike } from '../../../db/index.js';
+import type { ConnectorEventRecord } from '../../../base/ports/store.js';
+import {
+  eventMemory,
+  eventRecord,
+  eventSeen,
+  markEventSeen,
+  type EventLogSpec,
+} from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type {
   TenantRoute,
   SlackDlqInsert,
   SlackDlqItem as DlqItem,
   SlackWorkspace,
-} from '../../../base/records/connectors.js';
+} from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
@@ -54,14 +60,14 @@ export function slackEventSeen(db: DatabaseSyncLike, eventId: string): boolean {
   return eventSeen(db, SLACK_LOG, eventId);
 }
 
-/** Records the event unless a row already holds its id; false means another writer got
- * there first. */
+/** Records the event unless a row already holds its id; false means another writer got there
+ * first. */
 export function markSlackEventSeen(
   db: DatabaseSyncLike,
   eventId: string,
   memoryId: string | null,
 ): boolean {
-  return markKeySeen(db, { log: SLACK_LOG, key: eventId, extra: [], memoryId });
+  return markEventSeen(db, { log: SLACK_LOG, key: eventId, extra: [], memoryId });
 }
 
 export function slackEventMemory(db: DatabaseSyncLike, eventId: string): string | null {
@@ -69,7 +75,7 @@ export function slackEventMemory(db: DatabaseSyncLike, eventId: string): string 
 }
 
 export function slackEventRecord(db: DatabaseSyncLike, eventId: string): ConnectorEventRecord {
-  return keyRecord(db, SLACK_LOG, eventId);
+  return eventRecord(db, SLACK_LOG, eventId);
 }
 
 export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
@@ -139,5 +145,5 @@ export function listSlackWorkspaces(db: DatabaseSyncLike): SlackWorkspace[] {
 /** True when a row was deleted, so the caller can report not-found without a second lookup. */
 export function removeSlackWorkspace(db: DatabaseSyncLike, teamId: string): boolean {
   const result = cachedStatement(db, `DELETE FROM slack_workspaces WHERE team_id = ?`).run(teamId);
-  return changedRows(result) > 0;
+  return Number(result.changes) > 0;
 }

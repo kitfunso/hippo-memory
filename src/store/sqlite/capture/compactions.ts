@@ -9,7 +9,11 @@ import {
   startCompaction,
   type Log,
 } from './compactions-record.js';
-import type { CallerItems, CallerItemsSaved, Compactions } from '../../../base/records/capture.js';
+import type {
+  CallerItems,
+  CallerItemsSaved,
+  Compactions,
+} from '../../../base/ports/store/capture.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 
 interface WriteCallerItemsOptions {
@@ -81,8 +85,8 @@ const compactionsBodies: Bodies<Omit<Compactions, 'saveCallerItems'>> = {
 export function sqliteCompactions({ on, files }: Handles): Compactions {
   return {
     ...bound(on, compactionsBodies),
-    ...bound(on, {
+    ...bound<Pick<Compactions, 'saveCallerItems'>>(on, {
       saveCallerItems: (db, ...args) => saveCallerItems(db, files, ...args),
-    } satisfies Bodies<Pick<Compactions, 'saveCallerItems'>>),
+    }),
   };
 }

@@ -12,7 +12,7 @@ export const MAX_SENTENCES = 5;
 export const MAX_SENTENCE_CHARS = 300;
 /** At about 20 chars per repo path this keeps the Changed line near 50 tokens. */
 export const MAX_FILES = 10;
-/** 20% of DEFAULT_CONTEXT_BUDGET, both context surfaces' default budget, at 4 chars a token. */
+/** 300 tokens at 4 chars each: 20% of the 1500-token default budget of both context surfaces. */
 const MAX_DIGEST_CHARS = 1200;
 
 const ABSOLUTE_PATH = /(?<![\w.~/\\:-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;
@@ -165,8 +165,8 @@ function rankedSentences(
   digestSentences(maskEmails(redactSecretsStrict(finalText))).forEach((sentence, index) => {
     if (/[?:]$/.test(sentence) || opensOnReferent(sentence) || echoes(sentence, windows)) return;
     const text = rewriteRepoPaths(sentence, relativePath);
-    // A home-directory path names its user and the store may be shared, so such a sentence
-    // is dropped.
+    // A home-directory path names its user and the store may be shared, so such a sentence is
+    // dropped.
     if (text.length > MAX_SENTENCE_CHARS || USER_SEGMENT.some((re) => re.test(text))) return;
     kept.push({ index, text, score: sentenceScore(text) });
   });

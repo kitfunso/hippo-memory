@@ -4,7 +4,7 @@
 // `hippo recall` path dropped almost every candidate and reported it via
 // counters that never moved. `droppedByBudgetCountCmd` was computed from
 // `results.length - limit` (src/cli.ts) AFTER the search call, but `results`
-// had already been ranked and truncated by hybridSearch, so
+// had already been ranked and truncated by hybridSearch/physicsSearch, so
 // the counter read 0 while hundreds of candidates silently vanished. The
 // `Cutoff:` line (guarded on `clauses.length > 0`) never printed as a result.
 //

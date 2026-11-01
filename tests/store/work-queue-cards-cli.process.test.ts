@@ -6,7 +6,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { handleCard } from '../../src/surface/cli/card.js';
 import { parseArgs } from '../../src/cli.js';
-import { COMMANDS } from '../../src/surface/cli/flags.js';
+import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -98,9 +98,8 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       initTestStore(join(home, '.hippo'));
       // parseArgs collects --depends-on into an array, so the in-process call passes one.
-      const create = await runInProcess((cli) =>
+      const create = await runInProcess(() =>
         handleCard({
-          cli,
           hippoRoot: join(home, '.hippo'),
           tenantId: 'default',
           args: ['create'],
@@ -315,9 +314,7 @@ describe('the card verb is wired through the flag parser and the command table',
       b.id,
     ]);
 
-    const run = await runInProcess((cli) =>
-      COMMANDS.card.run({ cli, hippoRoot: root, tenantId: 'default', args, flags }),
-    );
+    const run = await runInProcess(() => COMMANDS.card.run({ hippoRoot: root, tenantId: 'default', args, flags }));
 
     expect(run.status, run.stderr).toBe(0);
     const child = /Created card (\S+)/.exec(run.stdout)?.[1] ?? '';

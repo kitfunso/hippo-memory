@@ -26,6 +26,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 type BandCase = readonly [string, RecallOptions, readonly string[]];
 interface CoreSetup {
   rank?: Partial<RankRecallOptions>;
+  physics?: boolean;
   global?: boolean;
   sessionId?: string;
 }
@@ -55,6 +56,19 @@ const HYBRID = [
   'mem_p_fill4',
   'mem_x_raw',
 ];
+/** The physics order for "deploy", which ranks the scoped row first. */
+const PHYSICS = [
+  'mem_p_scoped',
+  'mem_p_fill0',
+  'mem_p_trace',
+  'mem_p_plain',
+  'mem_p_goal',
+  'mem_p_pinned',
+  'mem_p_new',
+  'mem_x_child1',
+  'mem_p_fill5',
+  'mem_p_fill2',
+];
 /** The CLI core's order for "deploy", which a global store with no match or a private scope leaves alone. */
 const CORE_ORDER = [
   'mem_p_plain',
@@ -77,6 +91,7 @@ const BAND: readonly BandCase[] = [
   ['bm25 plain', { query: 'deploy' }, BM25],
   ['bm25 limit 3', { query: 'deploy', window: { limit: 3 } }, BM25.slice(0, 3)],
   ['hybrid', { query: 'deploy', mode: 'hybrid' }, HYBRID],
+  ['physics', { query: 'deploy', mode: 'physics' }, PHYSICS],
   ['scope team-alpha', { query: 'deploy', filter: { scope: 'team-alpha' } }, ['mem_p_scoped']],
   // The band applies no session goal boost: the order stays BM25's.
   ['session goal boost', { query: 'deploy', boost: { sessionId: SESSION } }, BM25],
@@ -98,9 +113,9 @@ const BAND: readonly BandCase[] = [
   ],
   ['LIKE path', { query: 'caf' }, ['mem_x_cafe']],
   [
-    'hybrid with session',
-    { query: 'deploy', mode: 'hybrid', boost: { sessionId: SESSION }, trace: { explain: true } },
-    HYBRID,
+    'physics with session',
+    { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, trace: { explain: true } },
+    goalFirst(PHYSICS),
   ],
 ];
 
@@ -116,36 +131,26 @@ const WIDE_TAIL = [
   'mem_x_cafe',
   'mem_x_summary',
 ];
-/** The wide list for "deploy" under the session's goal boost, which lifts the goal row first. */
-const WIDE_SESSION = [
-  'mem_p_goal',
-  'mem_p_plain',
-  'mem_p_pinned',
-  'mem_p_trace',
-  'mem_p_scoped',
-  'mem_p_fill5',
-  'mem_p_new',
-  'mem_p_fill2',
-  'mem_x_child1',
-  'mem_p_fill4',
+const WIDE_PHYSICS = [
+  ...goalFirst(PHYSICS),
   'mem_p_fill1',
+  'mem_p_fill4',
   'mem_p_fill3',
-  'mem_p_fill0',
   'mem_x_child2',
-  'mem_x_raw',
-  CLAIM,
   'mem_p_noise',
+  'mem_x_raw',
   'mem_x_cafe',
+  CLAIM,
   'mem_x_summary',
 ];
 
 const WIDE: ReadonlyArray<readonly [string, RecallOptions, Wide]> = [
   ['wide hybrid', { query: 'deploy' }, { ranked: [...HYBRID, ...WIDE_TAIL], band: HYBRID }],
   [
-    'wide hybrid with session',
-    { query: 'deploy', mode: 'hybrid', boost: { sessionId: SESSION }, window: { limit: 5 } },
+    'wide physics with session',
+    { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, window: { limit: 5 } },
     // Five rows fit the limit, then the overflow summary.
-    { ranked: WIDE_SESSION, band: [...WIDE_SESSION.slice(0, 5), 'mem_x_summary'] },
+    { ranked: WIDE_PHYSICS, band: [...WIDE_PHYSICS.slice(0, 5), 'mem_x_summary'] },
   ],
   [
     'wide scoped',
@@ -156,7 +161,9 @@ const WIDE: ReadonlyArray<readonly [string, RecallOptions, Wide]> = [
 
 const CORE: readonly CoreCase[] = [
   ['core hybrid', 'deploy', {}, CORE_ORDER],
+  ['core physics', 'deploy', { physics: true }, PHYSICS],
   ['core with the global store', 'deploy', { global: true }, CORE_ORDER],
+  ['core physics with the global store', 'deploy', { global: true, physics: true }, CORE_ORDER],
   ['core session goal boost', 'deploy', { sessionId: SESSION }, goalFirst(CORE_ORDER)],
   [
     'core superseded kept',
@@ -177,20 +184,20 @@ const CORE: readonly CoreCase[] = [
   ],
   ['core explicit private scope', 'deploy', { rank: { explicitScope: 'slack:private:C1' } }, CORE_ORDER],
   [
-    'core explain',
+    'core explain physics',
     'deploy rollout',
-    { rank: { why: true } },
+    { physics: true, rank: { why: true } },
     [
-      'mem_p_plain',
       'mem_p_goal',
-      CLAIM,
-      'mem_x_summary',
+      'mem_p_fill0',
+      'mem_p_plain',
       'mem_p_pinned',
-      'mem_p_noise',
       'mem_p_scoped',
+      'mem_p_noise',
       'mem_p_new',
-      'mem_p_trace',
       'mem_p_fill1',
+      'mem_p_trace',
+      'mem_p_fill2',
     ],
   ],
 ];
@@ -209,8 +216,10 @@ async function onStore<T>(fn: (s: Store) => Promise<T>): Promise<T> {
   }
 }
 
-function rankOpts(c: CoreSetup): Omit<RankRecallOptions, 'query' | 'boost'> {
+function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'boost'> {
   const engine = {
+    usePhysics: c.physics === true,
+    physicsConfig: loadConfig(s.root).physics,
     multihop: false,
     mmr: false,
     mmrLambda: 0.7,
@@ -283,7 +292,7 @@ describe('recall ranker order', () => {
         ctx,
         { query, boost: { sessionId: c.sessionId } },
         {
-          rank: rankOpts(c),
+          rank: rankOpts(s, c),
           sources: c.global
             ? { root: s.globalRoot, store: sqliteStore(s.globalRoot), config: loadConfig(s.globalRoot) }
             : undefined,
@@ -291,6 +300,7 @@ describe('recall ranker order', () => {
             ranked = ranking.results.map((r) => stable(r.entry.id));
             return { results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 };
           },
+          lastRecall: ctx.store.lastRecall,
         },
       );
       return ranked;

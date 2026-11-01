@@ -47,7 +47,8 @@ export class DbGrant {
     return this.#session;
   }
 
-  /** A read-write handle; `busyWaitMs` shortens its lock waits, a session's own wait when unset. */
+  /** A read-write handle; `busyWaitMs` shortens its lock waits, a session's own wait when
+   * unset. */
   open(hippoRoot: string, busyWaitMs?: number): DatabaseSyncLike {
     return this.openWithFacts(hippoRoot, busyWaitMs).db;
   }

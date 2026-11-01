@@ -1,5 +1,5 @@
-// The graph page and JSON Canvas renderers: presentation of the plain GraphModel the
-// domain computes.
+// The graph page and JSON Canvas renderers: presentation of the plain GraphModel the domain
+// computes.
 
 import { createHash } from 'node:crypto';
 import { layoutGraph, LAYOUT_H, LAYOUT_W, type GraphModel } from '../../api/objects/graph.js';

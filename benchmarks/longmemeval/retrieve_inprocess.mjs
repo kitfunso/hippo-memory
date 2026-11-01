@@ -13,7 +13,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { hybridSearch } from '../../dist/entry/search.js';
+import { physicsSearch } from '../../dist/entry/store-kit.js';
 import { buildCorpus } from '../../dist/domain/search/bm25.js';
+import { loadConfig } from '../../dist/host/config-file.js';
 import { loadAllEntries } from '../../dist/entry/testing.js';
 import { cliReranker as getReranker } from '../../dist/surface/cli/api-context.js';
 
@@ -38,8 +40,8 @@ if (MMR_LAMBDA !== null && Number.isNaN(parseFloat(MMR_LAMBDA))) {
 const RERANKER = flag('--reranker', null);
 const RERANKER_TOP_K = parseInt(flag('--reranker-top-k', '50'), 10);
 const MODE = flag('--mode', 'hybrid');
-if (MODE !== 'hybrid') {
-  console.error('--mode must be hybrid (3.0 removed physics), got:', MODE);
+if (MODE !== 'hybrid' && MODE !== 'physics') {
+  console.error('--mode must be hybrid or physics, got:', MODE);
   process.exit(1);
 }
 const TOP = parseInt(flag('--top', '0'), 10);
@@ -87,17 +89,25 @@ for (let i = 0; i < limit; i++) {
   const q = questions[i];
   const question = q.question ?? '';
   try {
-    const ranked = await hybridSearch(question, entries, {
-      budget: BUDGET,
-      hippoRoot,
-      preparedCorpus: corpus,
-      embeddingWeight: EMB_WEIGHT !== null ? parseFloat(EMB_WEIGHT) : undefined,
-      mmrLambda: MMR_LAMBDA !== null ? parseFloat(MMR_LAMBDA) : undefined,
-      mmr: !NO_MMR,
-      minResults: MIN_RESULTS,
-      reranker: reranker ?? undefined,
-      rerankerOptions: reranker ? { topK: RERANKER_TOP_K } : undefined,
-    });
+    const ranked = MODE === 'physics'
+      // Same options the CLI passes on its physics path (src/cli.ts recall).
+      ? await physicsSearch(question, entries, {
+        budget: BUDGET,
+        hippoRoot,
+        physicsConfig: loadConfig(hippoRoot).physics,
+        minResults: MIN_RESULTS,
+      })
+      : await hybridSearch(question, entries, {
+        budget: BUDGET,
+        hippoRoot,
+        preparedCorpus: corpus,
+        embeddingWeight: EMB_WEIGHT !== null ? parseFloat(EMB_WEIGHT) : undefined,
+        mmrLambda: MMR_LAMBDA !== null ? parseFloat(MMR_LAMBDA) : undefined,
+        mmr: !NO_MMR,
+        minResults: MIN_RESULTS,
+        reranker: reranker ?? undefined,
+        rerankerOptions: reranker ? { topK: RERANKER_TOP_K } : undefined,
+      });
     const results = TOP > 0 ? ranked.slice(0, TOP) : ranked;
     const memories = results.map((r) => ({
       id: r.entry.id,

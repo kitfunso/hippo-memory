@@ -2,7 +2,7 @@
 import { inspect } from 'node:util';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
-import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { startCompaction } from '../../src/store/sqlite/capture/compactions-record.js';
 import { sqliteStore } from './test-session.js';
@@ -12,7 +12,8 @@ import { TENANT } from './recall-golden-seed.js';
 import { markGraphDirty, writeEntry } from './root-forms.js';
 import { onDb } from './store-worker-server.js';
 
-export type Call<T> = (store: HippoDbStore, seed: MovedReadsSeed) => Promise<T>;
+export type Served = HippoStore & StoreGroups;
+export type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
 
 /** A value as text, so a Map, a typed array and an undefined field all take part in the comparison. */
 export function shown<T>(value: T): string {
@@ -86,80 +87,61 @@ export async function seedLocalGroups(root: string): Promise<void> {
   const s = sqliteStore(root);
   await s.entryWrites.applyOutcome({ tenantId: TENANT, actor: ACTOR, ownScope: null, ids: [NOTE], good: true });
   // Folds the compaction records' stale project name into the seeded one, which leaves the merge's audit row.
-  await s.hippoDb.projectTags.merge(
+  await s.projectTags.merge(
     { tenantId: TENANT, actor: ACTOR },
     { from: 'stale-project', into: PROJECT, dryRun: false },
   );
-  await s.hippoDb.projectTags.markRepairedOnce();
+  await s.projectTags.markRepairedOnce();
   await s.close();
 }
 
 const CUTOFFS = { since: EVER, stuckBefore: NEVER, transcriptFloor: EVER };
 
 export const LOCAL_GROUP_READS: readonly Read[] = [
-  read('hippoDb.captures.textsHolding', (s) => s.hippoDb.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
-  read('hippoDb.compactionHooks.openRecords', (s) => s.hippoDb.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
+  read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
+  read('compactionHooks.openRecords', (s) => s.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
+  read('consolidation.entryIdsPage', (s) => s.consolidation.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
   read(
-    'hippoDb.consolidation.entryIdsPage',
-    (s) => s.hippoDb.consolidation.entryIdsPage({ limit: 3 }),
-    /ids: \[ 'mem_/,
-  ),
-  read(
-    'hippoDb.consolidation.rejected',
-    (s) => s.hippoDb.consolidation.rejected(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
+    'consolidation.rejected',
+    (s) => s.consolidation.rejected(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
     "reason: 'wrong'",
   ),
+  read('consolidation.particleIds', (s) => s.consolidation.particleIds(), 'mem_p_noise'),
+  read('consolidation.duplicateCandidates', (s) => s.consolidation.duplicateCandidates(), 'mem_z_twin2'),
+  read('consolidation.dirtyGraphTenants', (s) => s.consolidation.dirtyGraphTenants(), /maxPendingId: [1-9]/),
+  read('consolidation.dirtySummaries', (s) => s.consolidation.dirtySummaries(10), 'mem_x_child1'),
   read(
-    'hippoDb.consolidation.duplicateCandidates',
-    (s) => s.hippoDb.consolidation.duplicateCandidates(),
-    'mem_z_twin2',
-  ),
-  read(
-    'hippoDb.consolidation.dirtyGraphTenants',
-    (s) => s.hippoDb.consolidation.dirtyGraphTenants(),
-    /maxPendingId: [1-9]/,
-  ),
-  read('hippoDb.consolidation.dirtySummaries', (s) => s.hippoDb.consolidation.dirtySummaries(10), 'mem_x_child1'),
-  read(
-    'hippoDb.consolidation.unprofiledTopicSummaries',
-    (s) => s.hippoDb.consolidation.unprofiledTopicSummaries({ limit: 10 }),
+    'consolidation.unprofiledTopicSummaries',
+    (s) => s.consolidation.unprofiledTopicSummaries({ limit: 10 }),
     'mem_x_summary',
   ),
-  read('hippoDb.diagnostics.health', (s) => s.hippoDb.diagnostics.health(CUTOFFS), /started: 2/),
-  read('hippoDb.diagnostics.inventory', (s) => s.hippoDb.diagnostics.inventory(), /compactions: 2/),
+  read('diagnostics.health', (s) => s.diagnostics.health(CUTOFFS), /started: 2/),
+  read('diagnostics.inventory', (s) => s.diagnostics.inventory(), /compactions: 2/),
   read(
-    'hippoDb.learning.entriesMentioning',
-    (s) => s.hippoDb.learning.entriesMentioning(['deploy'], 'goal-alpha', TENANT, { limit: 50 }),
+    'learning.entriesMentioning',
+    (s) => s.learning.entriesMentioning(['deploy'], 'goal-alpha', TENANT, { limit: 50 }),
     'mem_p_plain',
   ),
+  read('learning.readEntry', (s) => s.learning.readEntry(NOTE, TENANT), 'the rollout runbook lives in the team wiki'),
   read(
-    'hippoDb.learning.readEntry',
-    (s) => s.hippoDb.learning.readEntry(NOTE, TENANT),
-    'the rollout runbook lives in the team wiki',
-  ),
-  read(
-    'hippoDb.projectTags.originTallies',
-    (s) => s.hippoDb.projectTags.originTallies(TENANT, IMPORTED),
+    'projectTags.originTallies',
+    (s) => s.projectTags.originTallies(TENANT, IMPORTED),
     /origin: 'seeded-project', prefixed: 1/,
   ),
   read(
-    'hippoDb.projectTags.dormantWhere',
+    'projectTags.dormantWhere',
     async (s) => [
-      await s.hippoDb.projectTags.dormantWhere({ tenantId: TENANT, sourcePrefix: IMPORTED }),
-      await s.hippoDb.projectTags.dormantWhere({ tenantId: TENANT, origins: [PROJECT] }),
-      await s.hippoDb.projectTags.dormantWhere({ tenantId: TENANT, ids: ['mem_d_agent', 'mem_missing'] }),
+      await s.projectTags.dormantWhere({ tenantId: TENANT, sourcePrefix: IMPORTED }),
+      await s.projectTags.dormantWhere({ tenantId: TENANT, origins: [PROJECT] }),
+      await s.projectTags.dormantWhere({ tenantId: TENANT, ids: ['mem_d_agent', 'mem_missing'] }),
     ],
     /mem_d_agent[\s\S]*mem_d_agent[\s\S]*mem_d_agent/,
   ),
   read(
-    'hippoDb.projectTags.compactionOrigins',
-    (s) => s.hippoDb.projectTags.compactionOrigins(TENANT),
+    'projectTags.compactionOrigins',
+    (s) => s.projectTags.compactionOrigins(TENANT),
     `cwd: '${CWD}', origin: '${PROJECT}', transcript: '${TRANSCRIPT}'`,
   ),
-  read('hippoDb.projectTags.repairedOnce', (s) => s.hippoDb.projectTags.repairedOnce(), /^true$/),
-  read(
-    'hippoDb.learning.confirmedOutcomeTimes',
-    (s) => s.hippoDb.learning.confirmedOutcomeTimes(TENANT, EVER),
-    `'${NOTE}' =>`,
-  ),
+  read('projectTags.repairedOnce', (s) => s.projectTags.repairedOnce(), /^true$/),
+  read('learning.confirmedOutcomeTimes', (s) => s.learning.confirmedOutcomeTimes(TENANT, EVER), `'${NOTE}' =>`),
 ];

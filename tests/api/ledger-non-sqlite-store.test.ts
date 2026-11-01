@@ -1,12 +1,11 @@
-// A hook on a store that is not hippo.db never creates one under hippoRoot; hippo.db's local tier, on the store or on
-// the global one, decides where it books.
+// A hook on a store that is not hippo.db never creates one under hippoRoot; the store's own groups decide if it books.
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { adminActor, contextReach } from '../../src/api/index.js';
+import { adminActor } from '../../src/api/index.js';
 import { promptHookContext } from '../../src/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { withoutHippoDb } from '../_helpers/port-only-store.js';
+import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -15,7 +14,6 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { tokensBySession } from '../../src/store/sqlite/fixtures.js';
-import { testInfra } from '../_helpers/infra.js';
 
 let tmp: string;
 
@@ -49,7 +47,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
     const donor = donorStore();
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
-    const store = { ...withoutHippoDb(sqliteStore(donor)), kind: 'other' };
+    const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other' };
     const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, REQUEST);
     expect(out.stdout).toContain('rollback plan');
@@ -58,42 +56,17 @@ describe('promptHookContext on a store that is not SQLite', () => {
     expect(ledgerRows(donor, 's1')).toBe(0);
   });
 
-  it("gives an add-on store that carries hippo.db's local tier the reach a root gives it, so its ledger books", async () => {
+  it('gives an add-on store that serves folderFiles and a ledger the reach a root gives it, so its ledger books', async () => {
     const donor = donorStore();
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
-    const { hippoDb } = sqliteStore(donor);
-    const store = { ...withoutHippoDb(sqliteStore(donor)), kind: 'other', hippoDb };
+    const { folderFiles, ledger } = sqliteStore(donor);
+    // String keys only, so the copy is not marked as hippo.db: the port groups alone decide its reach.
+    const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other', folderFiles, ledger };
     const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, REQUEST);
     expect(out.stdout).toContain('rollback plan');
     expect(ledgerRows(donor, 's1')).toBeGreaterThan(0);
-    expect(fs.readdirSync(root)).toEqual([]);
-  });
-
-  it('books to the global store when its own store has no local tier', async () => {
-    const donor = donorStore();
-    const root = path.join(tmp, 'bare');
-    fs.mkdirSync(root);
-    const globalRoot = path.join(tmp, 'global');
-    fs.mkdirSync(globalRoot);
-    initTestStore(globalRoot);
-    const store = { ...withoutHippoDb(sqliteStore(donor)), kind: 'other' };
-    const global = { root: globalRoot, store: sqliteStore(globalRoot) };
-    const reachOf = { hasLocal: true, isGlobal: false, shared: false, global };
-    const reach = contextReach(reachOf, loadConfig, testInfra().embedderFor);
-    const ctx = {
-      hippoRoot: root,
-      tenantId: 'default',
-      actor: adminActor('test'),
-      store,
-      config: loadConfig(root),
-      reach,
-    };
-    const out = await promptHookContext(ctx, REQUEST);
-    expect(out.stdout).toContain('rollback plan');
-    expect(ledgerRows(globalRoot, 's1')).toBeGreaterThan(0);
-    expect(ledgerRows(donor, 's1')).toBe(0);
     expect(fs.readdirSync(root)).toEqual([]);
   });
 });

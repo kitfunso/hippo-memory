@@ -45,6 +45,7 @@ interface Seeded {
 
 interface StoreConfig {
   embeddings?: { provider: string; model: string };
+  physics?: { enabled: boolean };
 }
 
 function makeHome(config?: StoreConfig): string {
@@ -239,10 +240,10 @@ describe('MCP hippo_recall ranking', () => {
     expect(observe(s, text)).toEqual(EXPECTED.continuity);
   });
 
-  it('ranks a short exact match first', async () => {
-    const s = track(seed());
+  it('physics mode without embeddings ranks like hybrid, a short exact match first', async () => {
+    const s = track(seed({ physics: { enabled: true } }));
     add(s, 'X1', 'deploy pipeline');
-    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.shortExactMatch);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.physicsNoEmbeddings);
   });
 
   it('hybrid mode with embeddings returns the semantic-only row', async () => {
@@ -250,6 +251,13 @@ describe('MCP hippo_recall ranking', () => {
     const s = track(seed(EMBED_CONFIG));
     withEmbeddings(s);
     expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.hybridEmbeddings);
+  });
+
+  it('physics mode with embeddings returns the semantic-only row', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    const s = track(seed({ ...EMBED_CONFIG, physics: { enabled: true } }));
+    withEmbeddings(s);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.physicsEmbeddings);
   });
 
   it('session goals boost by score, not by position', async () => {
@@ -343,13 +351,18 @@ const EXPECTED = {
     tail: [],
     cutoff: 'Showing 9 of 11 candidates; 2 not shown (rank, budget or limit).',
   },
-  shortExactMatch: {
+  physicsNoEmbeddings: {
     ranked: ['X1', 'SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
     cutoff: null,
   },
   hybridEmbeddings: {
     ranked: ['SC1', 'L1', 'S1', 'D1', 'L2', 'P1', 'L4', 'SC2', 'L3', 'L5', 'G1', 'C1'],
+    tail: [],
+    cutoff: null,
+  },
+  physicsEmbeddings: {
+    ranked: ['SC1', 'L1', 'D1', 'L2', 'S1', 'P1', 'L4', 'SC2', 'L3', 'L5', 'G1', 'C1'],
     tail: [],
     cutoff: null,
   },

@@ -38,8 +38,9 @@ export const v39: Migration = {
         if (origin === null) continue;
         setOrigin.run(origin, row.id);
       }
-      // The global root is user-global ('') wherever it sits: a HIPPO_HOME inside a dotfiles repo
-      // must not stamp the whole corpus with that repo's name.
+      // The global root itself is always user-global (''), whatever surrounds it on disk: a
+      // HIPPO_HOME inside a dotfiles git repo must not stamp the whole corpus with that repo's
+      // name.
       const storeOrigin = isGlobalStoreRoot(hippoRoot)
         ? ''
         : deriveOriginProject(path.dirname(hippoRoot));

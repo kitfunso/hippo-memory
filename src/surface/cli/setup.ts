@@ -9,6 +9,7 @@ import { copilotPaths, installCopilot, isCopilotCliPresent } from '../hooks-inst
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
+import { cliSyncOptions } from './api-context.js';
 import { boolFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import {
@@ -62,7 +63,7 @@ function setupDetectedTools(
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
 // Detection and install logic live in src/surface/hooks-install/.
 
-export async function handleSetup({ tenantId, flags, cli }: CommandContext): Promise<void> {
+export async function handleSetup({ tenantId, flags }: CommandContext): Promise<void> {
   const dryRun = boolFlag(flags, 'dry-run');
   const forceAll = boolFlag(flags, 'all');
   const tools = detectInstalledTools();
@@ -86,7 +87,7 @@ export async function handleSetup({ tenantId, flags, cli }: CommandContext): Pro
     console.log('');
     const imported = await importUserMemories(
       globalRoot,
-      cli.syncOptions(tenantId, currentMachine(), { dryRun }),
+      cliSyncOptions(tenantId, currentMachine(), { dryRun }),
     );
     printAgentImport(imported, dryRun ? '[dry-run] ' : '');
   }

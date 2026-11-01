@@ -5,9 +5,9 @@ import { rmSync } from 'node:fs';
 import { CARD_LEASE_MS, type CardStatus } from '../../src/base/records/card.js';
 import type { HandoffOutcome } from '../../src/base/session/handoff.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
-import type { CardCreate } from '../../src/base/records/cards.js';
+import type { CardCreate } from '../../src/base/ports/store/cards.js';
 import { keysetPages } from '../../src/api/pages.js';
-import type { PushGoalOptions } from '../../src/base/records/goals.js';
+import type { PushGoalOptions } from '../../src/base/ports/store/goals.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   runOnFixture,
@@ -195,7 +195,7 @@ describe('Cards', () => {
       (g, s) => g.detail(TENANT_A, idOf(s, 0)).then((detail) => detail?.card ?? null),
       (g, s) => g.detail(TENANT_B, idOf(s, 2)).then((detail) => detail?.card ?? null),
       (_g, s) =>
-        s.hippoDb.sessions.save(
+        s.sessions.save(
           TENANT_A,
           'handoff',
           { handoff: { version: 1, sessionId: 's1', summary: 'over to you', cardId: idOf(s, 1) } },

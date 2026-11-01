@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { CustomerNote } from '../../src/domain/objects/customer-notes.js';
@@ -28,7 +28,7 @@ beforeEach(async () => {
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
 });
 afterEach(async () => {
   await handle.stop();
@@ -43,7 +43,7 @@ async function createNote(body: { customer: string; note: string }, key: CreateA
   });
 }
 
-describe.skipIf(needsHippoDb('tier'))('HTTP /v1/customer-notes (entity-scoped first-class object)', () => {
+describe('HTTP /v1/customer-notes (entity-scoped first-class object)', () => {
   it('GET /v1/customer-notes lists + filters by status + customer (many-per-customer)', async () => {
     await createNote({ customer: 'Acme', note: 'n1' });
     await createNote({ customer: 'Acme', note: 'n2' });

@@ -36,7 +36,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/runtime/handles.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { saveCustomerNote, saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
@@ -92,7 +92,7 @@ const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 /** The base the store's memories are on, as a dry-run move reads it. */
 async function baseOf(root: string): Promise<number> {
-  return (await local(root).hippoDb.consolidation.begin(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' })).from;
+  return (await local(root).consolidation.begin(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' })).from;
 }
 
 function byContent(root: string): Map<string, number> {
@@ -241,7 +241,7 @@ describe('default half-life migration', () => {
     const allocated = async (n: number): Promise<number> => {
       const root = bulkLegacyStore(n);
       // The store's body runs to its end inside the call, so the heap count sees the plan and the write in one call.
-      const move = sqliteStore(root).hippoDb.consolidation;
+      const move = sqliteStore(root).consolidation;
       let moved: Promise<unknown> | undefined;
       const bytes = allocatedBytes(() => {
         moved = move.begin(365, { dryRun: false, actor: 'system' });

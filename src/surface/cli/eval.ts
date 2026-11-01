@@ -4,12 +4,12 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryList } from '../../api/memories/memories.js';
-import { cliConfig, cliInfra } from './api-context.js';
-import { evalSwitches } from '../../infra/eval-switches.js';
+import { cliConfig, cliApiContext, cliFolder, cliInfra } from './api-context.js';
+import { PRODUCTION_SWITCHES } from '../../base/memory/eval-switches.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { vectorSourceOf } from '../../domain/search/hybrid.js';
-import { sqliteStore } from '../open-store.js';
+import { defaultStore } from '../open-store.js';
 import {
   bootstrapCorpus,
   compareSummaries,
@@ -22,7 +22,7 @@ import {
   detectRegressions,
   formatResult,
   resultToBaseline,
-  runFeatureEvalAt,
+  runFeatureEval,
   type EvalBaseline,
 } from '../../domain/eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -56,8 +56,12 @@ const MAX_DELTAS_SHOWN = 5;
 
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else
  * it scores a corpus file. */
-async function evaluateCorpus(cmd: CommandContext, corpusPath: string | null): Promise<void> {
-  const { cli, hippoRoot, tenantId, flags } = cmd;
+async function evaluateCorpus(
+  hippoRoot: string,
+  tenantId: string,
+  corpusPath: string | null,
+  flags: CliFlags,
+): Promise<void> {
   const asJson = boolFlag(flags, 'json');
   const minMrr = numberFlag(flags, 'min-mrr') ?? null;
   const comparePath = stringFlagOrExit(flags, 'compare') || null;
@@ -67,7 +71,7 @@ async function evaluateCorpus(cmd: CommandContext, corpusPath: string | null): P
 
   const entries = boolFlag(flags, 'suite')
     ? []
-    : await memoryList(cli.apiContext(hippoRoot, tenantId), { everyTenant: true });
+    : await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
 
   if (boolFlag(flags, 'bootstrap')) {
     writeBootstrapCorpus(entries, flags);
@@ -79,7 +83,7 @@ async function evaluateCorpus(cmd: CommandContext, corpusPath: string | null): P
     return;
   }
 
-  const summary = await runCorpusEval(cmd, corpusPath, entries);
+  const summary = await runCorpusEval(hippoRoot, corpusPath, entries, flags);
 
   if (asJson) {
     console.log(JSON.stringify(summary, null, 2));
@@ -95,9 +99,10 @@ async function evaluateCorpus(cmd: CommandContext, corpusPath: string | null): P
 }
 
 async function runCorpusEval(
-  { cli, hippoRoot, flags }: CommandContext,
+  hippoRoot: string,
   corpusPath: string | null,
   entries: MemoryEntry[],
+  flags: CliFlags,
 ): Promise<EvalSummary> {
   const cases = readCorpus(corpusPath);
   const globalRoot = hippoHomeDir();
@@ -109,13 +114,13 @@ async function runCorpusEval(
   return runEval(cases, entries, {
     stores: isInitialized(globalRoot)
       ? {
-          local: cli.folder(hippoRoot),
-          global: cli.folder(globalRoot),
+          local: cliFolder(hippoRoot),
+          global: cliFolder(globalRoot),
           embedderFor: infra.embedderFor,
         }
       : undefined,
     source: vectorSourceOf({
-      store: sqliteStore(hippoRoot),
+      store: defaultStore(hippoRoot),
       config: cliConfig(hippoRoot),
       onHippoDb: true,
       embedderFor: infra.embedderFor,
@@ -126,7 +131,7 @@ async function runCorpusEval(
     localBump,
     runtime: cliConfig(hippoRoot).runtime,
     cwd: infra.machine.cwd,
-    switches: evalSwitches(),
+    switches: infra.evalSwitches ?? PRODUCTION_SWITCHES,
     now: infra.clock(),
   });
 }
@@ -196,7 +201,11 @@ async function runEvalSuite(
   const baseline = loadEvalBaseline(baselinePath);
 
   const infra = cliInfra();
-  const result = await runFeatureEvalAt(PACKAGE_VERSION, evalSwitches(), infra.clock());
+  const result = await runFeatureEval(
+    PACKAGE_VERSION,
+    infra.evalSwitches ?? PRODUCTION_SWITCHES,
+    infra.clock(),
+  );
 
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
@@ -224,8 +233,8 @@ function loadEvalBaseline(baselinePath: string): EvalBaseline | undefined {
   try {
     parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
   } catch (err) {
-    // No baseline file is a first run and says nothing; a file that is there and cannot be
-    // used warns.
+    // No baseline file is a first run and says nothing; a file that is there and cannot be used
+    // warns.
     if (errorCode(err) !== 'ENOENT') {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
@@ -239,8 +248,8 @@ function loadEvalBaseline(baselinePath: string): EvalBaseline | undefined {
   );
 }
 
-/** Loads the corpus file, exiting with the usage line or the read error when there is none
- * to score. */
+/** Loads the corpus file, exiting with the usage line or the read error when there is none to
+ * score. */
 function readCorpus(corpusPath: string | null): EvalCase[] {
   if (!corpusPath) {
     fail(
@@ -355,8 +364,8 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   const cmp = compareSummaries(readCompareBaseline(comparePath), summary);
 
   if (asJson) {
-    // The main JSON output already emitted; append comparison to stderr so both can be
-    // captured independently.
+    // The main JSON output already emitted; append comparison to stderr so both can be captured
+    // independently.
     printError(JSON.stringify({ compare: cmp }, null, 2));
     return;
   }
@@ -396,8 +405,12 @@ function printCompareDeltas(cmp: EvalComparison): void {
   }
 }
 
-export async function handleEval(cmd: CommandContext): Promise<void> {
-  const { args } = cmd;
+export async function handleEval({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const corpusPath = args[0] ? String(args[0]) : null;
-  await evaluateCorpus(cmd, corpusPath);
+  await evaluateCorpus(hippoRoot, tenantId, corpusPath, flags);
 }

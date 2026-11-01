@@ -1,7 +1,7 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
 import { envActiveScope } from '../../base/util/env.js';
-import { confidenceFacetsAt } from '../../base/memory/strength.js';
+import { confidenceFacets } from '../../base/memory/strength.js';
 import {
   DEFAULT_RECALL_BUDGET,
   type ScoreBreakdown,
@@ -10,9 +10,8 @@ import {
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
-import { recallRowOrigin } from '../../api/recall/rows.js';
-import { scopeHiddenCount } from '../../api/hippo-db/scope-hidden-count.js';
-import { type CliCommand, type CliContext, type CliStore } from './api-context.js';
+import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
+import { cliApiContext, cliSecondStore, cliStore, type CliStore } from './api-context.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
 import { printedTokens } from '../../api/context/context-render.js';
 import { printError } from './output.js';
@@ -36,7 +35,7 @@ const EXPLAIN_PREVIEW_CHARS = 48;
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the
  * policy hides. */
 async function noteScopeHidden(
-  ctx: CliContext,
+  ctx: ReturnType<typeof cliApiContext>,
   global: CliStore | undefined,
   query: string,
   requested: string | undefined,
@@ -56,7 +55,6 @@ interface InspectedSlot {
 }
 
 interface ExplainQueryOptions {
-  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly query: string;
@@ -64,7 +62,6 @@ interface ExplainQueryOptions {
 }
 
 async function explainQuery({
-  cli,
   hippoRoot,
   tenantId,
   query,
@@ -78,8 +75,8 @@ async function explainQuery({
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   const globalRoot = hippoHomeDir();
-  const ctx = cli.apiContext(hippoRoot, tenantId);
-  const scope = await explainScope(cli, ctx, flags, globalRoot, query);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const scope = await explainScope(ctx, flags, globalRoot, query);
 
   const engine = engineFlags(flags, ctx.config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
@@ -103,9 +100,9 @@ async function explainQuery({
       multihop: false,
       explain: true,
     },
-    sources: scope.origin.globalOn ? cli.secondStore(globalRoot) : undefined,
+    sources: scope.origin.globalOn ? cliSecondStore(globalRoot) : undefined,
   });
-  printExplainResults({ rank, query, asJson, now });
+  printExplainResults({ rank, usePhysics: engine.usePhysics, query, asJson, now });
 }
 
 interface ExplainScope {
@@ -115,8 +112,7 @@ interface ExplainScope {
 }
 
 async function explainScope(
-  cli: CliCommand,
-  ctx: CliContext,
+  ctx: ReturnType<typeof cliApiContext>,
   flags: CliFlags,
   globalRoot: string,
   query: string,
@@ -124,12 +120,12 @@ async function explainScope(
   // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || envActiveScope();
-  // Unlike recall, explain reads the global store whenever it exists, even when it is the
-  // local root.
+  // Unlike recall, explain reads the global store whenever it exists, even when it is the local
+  // root.
   const origin = recallRowOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   await noteScopeHidden(
     ctx,
-    origin.globalOn ? cli.store(globalRoot) : undefined,
+    origin.globalOn ? cliStore(globalRoot) : undefined,
     query,
     explicitScope || undefined,
   );
@@ -137,7 +133,7 @@ async function explainScope(
 }
 
 async function inspectRanking(
-  ctx: CliContext,
+  ctx: ReturnType<typeof cliApiContext>,
   query: string,
   ranking: Omit<api.CliCoreInspection, 'inspect'>,
 ): Promise<RankRecallResult> {
@@ -160,13 +156,22 @@ async function inspectRanking(
 
 interface PrintExplainResultsOptions {
   readonly rank: RankRecallResult;
+  readonly usePhysics: boolean;
   readonly query: string;
   readonly asJson: boolean;
   readonly now: Date;
 }
 
-function printExplainResults({ rank, query, asJson, now }: PrintExplainResultsOptions): void {
-  const modeUsed = rank.globalEntries.length > 0 ? 'searchBothHybrid' : 'hybrid';
+function printExplainResults({
+  rank,
+  usePhysics,
+  query,
+  asJson,
+  now,
+}: PrintExplainResultsOptions): void {
+  const hasGlobal = rank.globalEntries.length > 0;
+  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' =
+    usePhysics && !hasGlobal ? 'physics' : hasGlobal ? 'searchBothHybrid' : 'hybrid';
   const results = dropHeldCopies(rank.results, (r) => r.entry);
 
   const candidates = rank.localEntries.length + rank.globalEntries.length;
@@ -206,8 +211,8 @@ function printExplainJson({
     rank: rank + 1,
     id: r.entry.id,
     layer: r.entry.layer,
-    confidence: confidenceFacetsAt(r.entry, now).tier,
-    aged_out: confidenceFacetsAt(r.entry, now).agedOut,
+    confidence: confidenceFacets(r.entry, now).tier,
+    aged_out: confidenceFacets(r.entry, now).agedOut,
     score: r.score,
     tokens: r.tokens,
     tags: r.entry.tags,
@@ -259,7 +264,13 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     console.log();
     return;
   }
-  printHybridBreakdown(r, b);
+  if (b.mode === 'physics') {
+    console.log(`    mode:      physics-gravity`);
+    console.log(`    cosine:    ${fmt(b.cosine, 3)}  (pre-amp baseline)`);
+    console.log(`    final:     ${fmt(b.final, 4)}  (post-amp, from physics scorer)`);
+  } else {
+    printHybridBreakdown(r, b);
+  }
   console.log();
 }
 
@@ -315,7 +326,6 @@ function printBoostLines(r: SearchResult, b: ScoreBreakdown): void {
 }
 
 export async function handleExplain({
-  cli,
   hippoRoot,
   tenantId,
   args,
@@ -325,5 +335,5 @@ export async function handleExplain({
   if (!query) {
     fail('Please provide a search query.');
   }
-  await explainQuery({ cli, hippoRoot, tenantId, query, flags });
+  await explainQuery({ hippoRoot, tenantId, query, flags });
 }

@@ -74,7 +74,7 @@ async function learn(
   flags: Record<string, string | boolean>,
   repo = '',
 ): Promise<{ status: number; stdout: string; stderr: string }> {
-  const r = await runInProcess((cli) => handleLearn({ cli, hippoRoot: root, tenantId: 'default', args: [], flags }));
+  const r = await runInProcess(() => handleLearn({ hippoRoot: root, tenantId: 'default', args: [], flags }));
   const mask = (text: string): string => (repo ? text.replaceAll(basename(repo), '<repo>') : text);
   return { status: r.status, stdout: mask(r.stdout), stderr: mask(r.stderr) };
 }

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb, SLEEP_DB_WAIT_MS } from '../../src/db/index.js';
-import type { FlushComponent } from '../../src/base/records/consolidation.js';
+import type { FlushComponent } from '../../src/base/ports/store/consolidation.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';

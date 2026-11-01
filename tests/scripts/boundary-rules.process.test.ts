@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import type { DummyRuleMap } from 'oxlint';
-import repoConfig from '../../oxlint.config.ts';
 
 const REPO = join(import.meta.dirname, '..', '..');
 const OXLINT = join(REPO, 'node_modules', 'oxlint', 'bin', 'oxlint');
@@ -14,21 +12,33 @@ interface Diagnostic {
   readonly filename: string;
 }
 
-/** `rules` without the anti-slop ones. */
-const withoutAntiSlop = (rules: DummyRuleMap): DummyRuleMap =>
-  Object.fromEntries(Object.entries(rules).filter(([name]) => !name.startsWith('anti-slop/')));
+/** An oxlint rule setting: a severity, or a severity and its options. */
+type RuleSetting = string | readonly [string, ...object[]];
 
-/** The repo's oxlint.config.ts as JSON in `root`, its plugin paths pointing back at the repo. The
- * anti-slop plugin is TypeScript, which Node 22.16 (the engines floor) cannot load, so it and its rules go. */
+interface RuleTable {
+  readonly [rule: string]: RuleSetting;
+}
+
+interface Config {
+  jsPlugins: { readonly name: string; specifier: string }[];
+  rules?: RuleTable;
+  overrides?: { rules?: RuleTable }[];
+}
+
+/** `rules` without the anti-slop ones. */
+const withoutAntiSlop = (rules: RuleTable | undefined): RuleTable | undefined =>
+  rules && Object.fromEntries(Object.entries(rules).filter(([name]) => !name.startsWith('anti-slop/')));
+
+/** The repo's .oxlintrc.json in `root`, its plugin paths pointing back at the repo. The anti-slop
+ * plugin is TypeScript, which Node 22.16 (the engines floor) cannot load, so it and its rules go. */
 function configIn(root: string): string {
-  const config = {
-    ...repoConfig,
-    jsPlugins: repoConfig.jsPlugins
-      .filter((plugin) => plugin.name !== 'anti-slop')
-      .map((plugin) => ({ ...plugin, specifier: relative(root, join(REPO, plugin.specifier)).split(sep).join('/') })),
-    rules: withoutAntiSlop(repoConfig.rules),
-    overrides: repoConfig.overrides.map((override) => ({ ...override, rules: withoutAntiSlop(override.rules) })),
-  };
+  // SAFETY: .oxlintrc.json is the repo's own config, whose jsPlugins entries all carry a specifier.
+  const config = JSON.parse(readFileSync(join(REPO, '.oxlintrc.json'), 'utf8')) as Config;
+  config.jsPlugins = config.jsPlugins
+    .filter((plugin) => plugin.name !== 'anti-slop')
+    .map((plugin) => ({ ...plugin, specifier: relative(root, join(REPO, plugin.specifier)).split(sep).join('/') }));
+  config.rules = withoutAntiSlop(config.rules);
+  for (const override of config.overrides ?? []) override.rules = withoutAntiSlop(override.rules);
   const file = join(root, '.oxlintrc.json');
   writeFileSync(file, JSON.stringify(config));
   return file;
@@ -58,7 +68,7 @@ function lint(files: Record<string, string>): Map<string, string[]> {
   }
 }
 
-describe('oxlint.config.ts boundary rules', () => {
+describe('.oxlintrc.json boundary rules', () => {
   it('holds every signature kind to 5 positional parameters with one hit, past a rest or this one', () => {
     const hits = lint({
       'src/base/six.ts': 'export interface P {\n  m(a: 1, b: 2, c: 3, d: 4, e: 5, f: 6): void;\n}\n',
@@ -87,10 +97,16 @@ describe('oxlint.config.ts boundary rules', () => {
     expect(hits.get('src/base/name.ts')).toBeUndefined();
   });
 
-  it('fails the api naming hippoRoot', () => {
+  it('fails a route that imports or calls requireGroup, and the api naming hippoRoot', () => {
     const hits = lint({
+      'src/surface/server/routes/imports.ts':
+        "import { requireGroup } from '../../../base/ports/store.js';\nexport const p = requireGroup;\n",
+      'src/surface/server/routes/calls.ts':
+        "import * as ports from '../../../base/ports/store.js';\nexport const p = ports.requireGroup;\n",
       'src/api/root.ts': 'export const f = (o: { readonly hippoRoot: string }): string => o.hippoRoot;\n',
     });
+    expect(hits.get('src/surface/server/routes/imports.ts')).toContain('eslint(no-restricted-imports)');
+    expect(hits.get('src/surface/server/routes/calls.ts')).toContain('eslint(no-restricted-properties)');
     expect(hits.get('src/api/root.ts')).toContain('eslint(no-restricted-properties)');
   });
 });
@@ -98,7 +114,7 @@ describe('oxlint.config.ts boundary rules', () => {
 const PROPERTY = 'eslint(no-restricted-properties)';
 const IMPORT = 'eslint(no-restricted-imports)';
 
-describe('oxlint.config.ts env, exit and outside-world rules', () => {
+describe('.oxlintrc.json env, exit and outside-world rules', () => {
   it('fails process.env outside env.ts in each spelling, and process.exit outside the three process ends', () => {
     const hits = lint({
       'src/domain/member.ts': 'export const h = process.env.HOME;\n',
@@ -106,7 +122,7 @@ describe('oxlint.config.ts env, exit and outside-world rules', () => {
       'src/api/global.ts': 'export const h = globalThis.process.env.HOME;\n',
       'src/base/util/env.ts': 'export const h = process.env.HOME;\n',
       'src/surface/cli/stop.ts': 'export const stop = (): never => process.exit(2);\n',
-      'src/surface/server/sleep-child.ts': 'export const stopChild =(): never => process.exit(0);\n',
+      'src/surface/server/sleep-child.ts': 'export const stop = (): never => process.exit(0);\n',
     });
     expect(hits.get('src/domain/member.ts')).toEqual([PROPERTY]);
     expect(hits.get('src/surface/cli/destructure.ts')).toEqual([PROPERTY]);
@@ -119,8 +135,7 @@ describe('oxlint.config.ts env, exit and outside-world rules', () => {
   it('fails a domain fetch or adapter import, and a loadConfig import in host outside config-file.ts', () => {
     const hits = lint({
       'src/domain/fetch.ts': 'export const get = async (u: string): Promise<Response> => fetch(u);\n',
-      'src/domain/global-fetch.ts':
-        'export const getGlobal =async (u: string): Promise<Response> => globalThis.fetch(u);\n',
+      'src/domain/global-fetch.ts': 'export const get = async (u: string): Promise<Response> => globalThis.fetch(u);\n',
       'src/domain/by-name.ts':
         "import { fetchWithRetry } from '../base/util/net.js';\nexport const f = fetchWithRetry;\n",
       'src/domain/by-module.ts': "import { retries } from '../base/http-retry.js';\nexport const n = retries;\n",
@@ -137,16 +152,16 @@ describe('oxlint.config.ts env, exit and outside-world rules', () => {
   });
 });
 
-describe('oxlint.config.ts CLI rules', () => {
+describe('.oxlintrc.json CLI rules', () => {
   it('fails a flag turned into text by hand, and passes a list cast and a string', () => {
-    const flag = (name: string, body: string): string => `export const ${name} = (flags: Flags): string => ${body};\n`;
+    const flag = (body: string): string => `export const f = (flags: Flags): string => ${body};\n`;
     const hits = lint({
-      'src/surface/cli/a.ts': flag('a', "String(flags.x ?? '')"),
-      'src/surface/cli/b.ts': flag('b', '`${flags.y}`'),
-      'src/surface/cli/c.ts': flag('c', 'flags.z as string'),
-      'src/surface/cli/d.ts': flag('d', 'String(flags.q.trim())'),
-      'src/surface/cli/e.ts': 'export const e = (flags: Flags): string[] => flags.w as string[];\n',
-      'src/surface/cli/g.ts': flag('g', "flags.name ?? 'String(flags.q)'"),
+      'src/surface/cli/a.ts': flag("String(flags.x ?? '')"),
+      'src/surface/cli/b.ts': flag('`${flags.y}`'),
+      'src/surface/cli/c.ts': flag('flags.z as string'),
+      'src/surface/cli/d.ts': flag('String(flags.q.trim())'),
+      'src/surface/cli/e.ts': 'export const f = (flags: Flags): string[] => flags.w as string[];\n',
+      'src/surface/cli/g.ts': flag("flags.name ?? 'String(flags.q)'"),
     });
     for (const file of ['a', 'b', 'c', 'd']) {
       expect(hits.get(`src/surface/cli/${file}.ts`)).toEqual(['boundaries(no-hand-flag-read)']);
@@ -156,13 +171,12 @@ describe('oxlint.config.ts CLI rules', () => {
   });
 
   it('fails printError followed by throw CliExit(1), across a multi-line call, and nothing else', () => {
-    const pair = (name: string, lines: string[]): string =>
-      `export function ${name}(c: boolean): void {\n${lines.join('\n')}\n}\n`;
+    const pair = (lines: string[]): string => `export function f(c: boolean): void {\n${lines.join('\n')}\n}\n`;
     const hits = lint({
-      'src/surface/cli/pair.ts': pair('pair', ['  printError(', '    `bad ${c}`,', '  );', '  throw new CliExit(1);']),
-      'src/surface/cli/guarded.ts': pair('guarded', ["  if (c) printError('y');", '  throw new CliExit(1);']),
-      'src/surface/cli/code-2.ts': pair('codeTwo', ['  printError(String(c));', '  throw new CliExit(2);']),
-      'src/surface/cli/exit.ts': pair('exit', ['  printError(String(c));', '  throw new CliExit(1);']),
+      'src/surface/cli/pair.ts': pair(['  printError(', '    `bad ${c}`,', '  );', '  throw new CliExit(1);']),
+      'src/surface/cli/guarded.ts': pair(["  if (c) printError('y');", '  throw new CliExit(1);']),
+      'src/surface/cli/code-2.ts': pair(['  printError(String(c));', '  throw new CliExit(2);']),
+      'src/surface/cli/exit.ts': pair(['  printError(String(c));', '  throw new CliExit(1);']),
     });
     expect(hits.get('src/surface/cli/pair.ts')).toEqual(['boundaries(no-hand-fail)']);
     expect(hits.get('src/surface/cli/guarded.ts')).toBeUndefined();
@@ -171,20 +185,19 @@ describe('oxlint.config.ts CLI rules', () => {
   });
 
   it('fails a CLI that ranks or writes a recall itself, and books tokens only outside recall and explain', () => {
-    const call = (name: string, method: string): string =>
-      `export const ${name} = (s: Store): void => s.${method}({});\n`;
+    const call = (method: string): string => `export const f = (s: Store): void => s.${method}({});\n`;
     const hits = lint({
       'src/surface/cli/rank.ts':
         "import { rankRecall } from '../../api/recall/pipeline.js';\nexport const r = rankRecall;\n",
       'src/surface/cli/tenant.ts':
         "import { resolveTenantId } from '../server/boot.js';\nexport const t = resolveTenantId;\n",
-      'src/surface/cli/bump.ts': call('bump', 'bumpRecallStats'),
-      'src/surface/cli/finish.ts': call('finish', 'finishRecall'),
-      'src/surface/cli/write.ts': call('write', 'writeEntry'),
-      'src/surface/cli/recall.ts': call('recall', 'recordTokens'),
-      'src/surface/cli/recall-flags.ts': call('recallFlags', 'recordTokens'),
-      'src/surface/cli/recall-block.ts': call('recallBlock', 'recordTokens'),
-      'src/surface/cli/usage.ts': call('usage', 'recordTokens'),
+      'src/surface/cli/bump.ts': call('bumpRecallStats'),
+      'src/surface/cli/finish.ts': call('finishRecall'),
+      'src/surface/cli/write.ts': call('writeEntry'),
+      'src/surface/cli/recall.ts': call('recordTokens'),
+      'src/surface/cli/recall-flags.ts': call('recordTokens'),
+      'src/surface/cli/recall-block.ts': call('recordTokens'),
+      'src/surface/cli/usage.ts': call('recordTokens'),
     });
     expect(hits.get('src/surface/cli/rank.ts')).toContain(IMPORT);
     expect(hits.get('src/surface/cli/tenant.ts')).toContain(IMPORT);
@@ -195,18 +208,18 @@ describe('oxlint.config.ts CLI rules', () => {
   });
 });
 
-describe('oxlint.config.ts store rules', () => {
+describe('.oxlintrc.json store rules', () => {
   it('fails a store branch, a twin, SQL and BEGIN outside the data layer, and a surface that books a recall', () => {
     const hits = lint({
       'src/api/kind.ts': "export const k = (ctx: Ctx): number => (ctx.store.kind === 'mem' ? 1 : 2);\n",
-      'src/api/ternary.ts': 'export const t = (store: Store | null): number => (store ? 1 : 2);\n',
+      'src/api/ternary.ts': 'export const k = (store: Store | null): number => (store ? 1 : 2);\n',
       'src/api/twin.ts': 'export function readThroughStore(): number {\n  return 1;\n}\n',
       'src/api/sql.ts': "export const q = (db: Db): Row => db.prepare('SELECT 1');\n",
-      'src/store/sqlite/sql.ts': "export const r = (db: Db): Row => db.prepare('SELECT 1');\n",
+      'src/store/sqlite/sql.ts': "export const q = (db: Db): Row => db.prepare('SELECT 1');\n",
       'src/api/begin.ts': "export const begin = 'BEGIN IMMEDIATE';\n",
       'src/db/busy.ts': "export const begin = 'BEGIN IMMEDIATE';\n",
       'src/surface/server/label.ts': "export const b = (a: Api): void => a.recordTokens({}, 'recall');\n",
-      'src/surface/server/other.ts': "export const o = (a: Api): void => a.recordTokens({}, 'remember');\n",
+      'src/surface/server/other.ts': "export const b = (a: Api): void => a.recordTokens({}, 'remember');\n",
       'src/surface/mcp/note.ts': 'export const n = (s: Store): void => s.noteRecall();\n',
     });
     expect(hits.get('src/api/kind.ts')).toEqual(['boundaries(no-store-branch)']);
@@ -220,31 +233,9 @@ describe('oxlint.config.ts store rules', () => {
     expect(hits.get('src/surface/server/other.ts')).toBeUndefined();
     expect(hits.get('src/surface/mcp/note.ts')).toEqual([PROPERTY]);
   });
-
-  it('fails one exported function name defined in two src files, and passes a binding, overloads and tests', () => {
-    const twin = 'boundaries(no-twin-function)';
-    const hits = lint({
-      'src/base/clock.ts': 'export function stamp(now: Date): string {\n  return now.toISOString();\n}\n',
-      'src/entry/clock.ts':
-        "import { stamp as at } from '../base/clock.js';\nexport function stamp(): string {\n  return at(new Date());\n}\n",
-      'src/domain/arrow.ts': 'export const nudge = (n: number): number => n + 1;\n',
-      'src/api/renamed.ts': 'function plusOne(n: number): number {\n  return n + 1;\n}\nexport { plusOne as nudge };\n',
-      'src/api/act.ts':
-        'export function act(n: number): number;\nexport function act(n: number): number {\n  return n;\n}\n',
-      'src/server.ts': "import { act as inner } from './api/act.js';\nexport const act = wrap(inner);\n",
-      'tests/act.test.ts': 'export function act(): number {\n  return 1;\n}\n',
-    });
-    expect(hits.get('src/base/clock.ts')).toEqual([twin]);
-    expect(hits.get('src/entry/clock.ts')).toEqual([twin]);
-    expect(hits.get('src/domain/arrow.ts')).toEqual([twin]);
-    expect(hits.get('src/api/renamed.ts')).toEqual([twin]);
-    expect(hits.get('src/api/act.ts')).toBeUndefined();
-    expect(hits.get('src/server.ts')).toBeUndefined();
-    expect(hits.get('tests/act.test.ts')).toBeUndefined();
-  });
 });
 
-describe('oxlint.config.ts test env rule', () => {
+describe('.oxlintrc.json test env rule', () => {
   it('fails a test that writes process.env by hand, and passes reads, a child env object and tests/_helpers', () => {
     const hits = lint({
       'tests/assign.test.ts': "process.env.A = 'x';\nprocess.env[key] = 'y';\nprocess.env.B ??= 'z';\n",
@@ -268,13 +259,15 @@ describe('oxlint.config.ts test env rule', () => {
   });
 });
 
-describe('oxlint.config.ts store and grant rules', () => {
-  it('passes HippoStore in api code, which names only the core', () => {
+describe('.oxlintrc.json store-group and grant rules', () => {
+  it('fails HippoStore and hasGroups in api and domain code, which take the groups they name', () => {
     const hits = lint({
-      'src/api/core.ts':
+      'src/api/whole.ts':
         "import type { HippoStore } from '../base/ports/store.js';\nexport const f = (s: HippoStore): HippoStore => s;\n",
+      'src/domain/narrow.ts': "import { hasGroups } from '../base/ports/store.js';\nexport const n = hasGroups;\n",
     });
-    expect(hits.get('src/api/core.ts')).toBeUndefined();
+    expect(hits.get('src/api/whole.ts')).toContain(IMPORT);
+    expect(hits.get('src/domain/narrow.ts')).toContain(IMPORT);
   });
 
   it('fails an unscoped hippo.db open in src, and passes it in the db files that make one', () => {
@@ -396,32 +389,6 @@ describe('.dependency-cruiser.cjs grant rule', () => {
       'db-dynamic-import',
     );
     expect(imported).toEqual(['src/store/sqlite/late.ts']);
-  });
-});
-
-describe('.dependency-cruiser.cjs core port rule', () => {
-  it("fails a core file that reaches the adapter or the local tier's port, directly or through a local module, type-only included", () => {
-    const reached = cruise(
-      {
-        'src/store/sqlite/limits.ts': 'export const LIMIT = 5;\n',
-        'src/base/ports/hippo-db.ts': 'export interface HippoDbRepos { readonly n: number }\n',
-        'src/api/hippo-db-context.ts':
-          "import type { HippoDbRepos } from '../base/ports/hippo-db.js';\nexport type Tier = { readonly hippoDb: HippoDbRepos };\n",
-        'src/api/recall/rows.ts': "import type { Tier } from '../hippo-db-context.js';\nexport type Rows = Tier;\n",
-        'src/base/ports/store/keys.ts':
-          "import type { HippoDbRepos } from '../hippo-db.js';\nexport type Keys = HippoDbRepos;\n",
-        'src/api/context/context.ts':
-          "import { LIMIT } from '../../store/sqlite/limits.js';\nexport const CAP = LIMIT;\n",
-        'src/api/memories/forget.ts':
-          "import type { Tier } from '../hippo-db-context.js';\nexport type Forget = Tier;\n",
-      },
-      'core-port-no-sqlite',
-    );
-    expect([...new Set(reached)].sort()).toEqual([
-      'src/api/context/context.ts',
-      'src/api/recall/rows.ts',
-      'src/base/ports/store/keys.ts',
-    ]);
   });
 });
 

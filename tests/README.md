@@ -13,7 +13,7 @@ Run one file: `npx vitest run tests/store/memory-columns.test.ts`. Never run the
 
 ## Projects
 
-The file name picks the project and its timeout: `*.test.ts` is `unit` (5 s), `*.process.test.ts` and `*.server.test.ts` start a child, the server or a worker (30 s), `*.slow.test.ts` gets 180 s. Three projects need `npm run build` first: `process`, `server` and `slow-dist`, the slow tests that load dist (`SLOW_ON_DIST` in `vitest.config.ts`). `scripts/checks/check-test-env.mjs` fails a name that does not match.
+The file name picks the project and its timeout: `*.test.ts` is `unit` (5 s), `*.process.test.ts` and `*.server.test.ts` start a child, the server or a worker (30 s, need `npm run build`), `*.slow.test.ts` gets 180 s. `scripts/checks/check-test-env.mjs` fails a name that does not match.
 
 ## Make a store
 

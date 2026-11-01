@@ -46,8 +46,8 @@ present.</p>
 }
 
 /**
- * Moves the browser off the URL that carries the ticket, so the page's own address holds no
- * spent secret.
+ * Moves the browser off the URL that carries the ticket, so the page's own address holds no spent
+ * secret.
  */
 function leaveTicketUrl(res: http.ServerResponse, pathname: string, query: URLSearchParams): void {
   const rest = new URLSearchParams(query);
@@ -58,8 +58,8 @@ function leaveTicketUrl(res: http.ServerResponse, pathname: string, query: URLSe
   res.end();
 }
 
-/** Any path outside the JSON API: an asset, else index.html, since the app routes in
- * the browser. */
+/** Any path outside the JSON API: an asset, else index.html, since the app routes in the
+ * browser. */
 export async function pageRoute(r: DashboardRouteRequest, match: RegExpMatchArray): Promise<void> {
   const pathname = match[0];
   if (r.session === 'ticket') return leaveTicketUrl(r.res, pathname, r.query);

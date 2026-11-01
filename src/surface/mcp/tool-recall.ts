@@ -95,8 +95,8 @@ function suppressionCounts(i: SuppressionInputs): SuppressionCounts {
   };
 }
 
-/** The window band's fresh-tail and summary rows that the shown list holds neither by id nor
- * by text. */
+/** The window band's fresh-tail and summary rows that the shown list holds neither by id nor by
+ * text. */
 function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): RecallResultItem[] {
   const shownIds = new Set(list.map((r) => r.entry.id));
   const shownKeys = storedTextKeys(list.map((r) => r.entry));
@@ -197,8 +197,8 @@ export interface ToolRecallRequest {
   readonly opts: SharedRecallOptions;
   /** The caller's token budget; the store's defaultBudget when absent. */
   readonly budget: number | undefined;
-  /** The caller's project on a shared store, which keeps the list to its rows and
-   * user-global ones. */
+  /** The caller's project on a shared store, which keeps the list to its rows and user-global
+   * ones. */
   readonly project: CallerProject | undefined;
 }
 
@@ -216,7 +216,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   const out: RenderSlot = {};
   await retrieveRanking(
     ctx,
-    toolRecallOptions(req),
+    toolRecallOptions(ctx, req),
     recallPresenter(budget, {
       config: ctx.config,
       includeContinuity,
@@ -233,11 +233,11 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   return rendered.text;
 }
 
-function toolRecallOptions({ opts, project }: ToolRecallRequest): RecallOptions {
+function toolRecallOptions(ctx: Context, { opts, project }: ToolRecallRequest): RecallOptions {
   return {
     ...opts,
     window: { ...opts.window, limit: TOOL_RECALL_LIMIT },
-    mode: 'hybrid',
+    mode: ctx.config.physics?.enabled !== false ? 'physics' : 'hybrid',
     filter: { ...opts.filter, keepHeldCopies: true, project },
     // The hint is computed below over the list the tool shows; the window's copy would emit its
     // audit row twice.

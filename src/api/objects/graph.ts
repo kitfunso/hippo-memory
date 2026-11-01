@@ -1,9 +1,8 @@
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import { MAX_ENTITY_NAME_LEN } from '../../base/records/graph.js';
+import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
 import { extractGraph, type ExtractResult } from '../../domain/graph/extract.js';
 import { buildGraphModel, type GraphModel } from '../../domain/graph/view.js';
-import { requireHostAdmin, type Context } from '../types.js';
-import type { HippoDbContext } from '../hippo-db-context.js';
+import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
 
 export {
   DEFAULT_VIEW_LIMIT,
@@ -13,7 +12,7 @@ export {
   type GraphModel,
 } from '../../domain/graph/view.js';
 
-/** The entity a graph read focuses on. Capped at MAX_ENTITY_NAME_LEN, not the id-shaped MAX_ID_LEN,
+/** The entity a graph read focuses on. Capped at the 512 entity-name cap, not the id-shaped 256,
  * so a long decision or policy name stays focusable. */
 export function graphEntityOf(raw: string | null): string | undefined {
   if (raw !== null && raw.length > MAX_ENTITY_NAME_LEN) {
@@ -25,24 +24,24 @@ export function graphEntityOf(raw: string | null): string | undefined {
 /** The entity/relation graph behind GET /v1/graph, as the caller's role, scopes and owner may
  * see it. */
 export function graphView(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'graphReads'>,
   query: { entity?: string; limit: number },
 ): Promise<GraphModel> {
   const { role, scopes, owner } = ctx.actor;
-  return buildGraphModel(ctx.store.hippoDb.graphReads, ctx.tenantId, {
+  return buildGraphModel(ctx.store.graphReads, ctx.tenantId, {
     ...query,
     reader: { role, scopes, owner },
   });
 }
 
-/** The graph as its store holds it, personal rows included, which only the host's operator
- * reads whole. */
+/** The graph as its store holds it, personal rows included, which only the host's operator reads
+ * whole. */
 export async function graphViewOnHost(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'graphReads'>,
   query: { entity?: string; limit: number },
 ): Promise<GraphModel> {
   requireHostAdmin(ctx, 'Reading every scope of the graph');
-  return buildGraphModel(ctx.store.hippoDb.graphReads, ctx.tenantId, query);
+  return buildGraphModel(ctx.store.graphReads, ctx.tenantId, query);
 }
 
 /** Rebuilds the caller's tenant's graph from its consolidated objects; safe to re-run. */

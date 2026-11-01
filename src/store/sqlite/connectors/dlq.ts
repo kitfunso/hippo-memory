@@ -22,8 +22,8 @@ function assertColumns(names: readonly string[]): void {
   }
 }
 
-// The driver returns each column by its stored affinity; the connector's rowToItem coerces
-// every field.
+// The driver returns each column by its stored affinity; the connector's rowToItem coerces every
+// field.
 type DlqRawValue = string | number | bigint | null;
 type DlqRawRow = Record<string, DlqRawValue>;
 

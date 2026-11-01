@@ -4,7 +4,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember, conflictListOpen, type Actor } from '../../src/api/index.js';
 import { memoryGetTouchable } from '../../src/api/memories/memories.js';
-import { tenantStatus } from '../../src/api/status.js';
 import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -28,10 +27,10 @@ describe('api admin reads', () => {
     const team = (await remember(ctxFor(actorB), { content: 'deploy without --dry-run' })).id;
     replaceDetectedConflicts(root, [{ memoryAId: personal, memoryBId: team, reason: 'contradiction', score: 0.9 }]);
 
-    const status = await tenantStatus(ctxFor(actorA), new Date(), 0.1);
+    const ctxA = ctxFor(actorA);
+    const status = await ctxA.store.reports.memoryStatus(ctxA.tenantId, new Date(), 0.1);
     expect(status.total).toBe(2);
     expect(status.openConflicts).toBe(1);
-    expect(status.avgStrength).toBeCloseTo(status.strengthSum / 2);
     expect((await conflictListOpen(ctxFor(actorA))).conflicts).toHaveLength(1);
     expect((await conflictListOpen(ctxFor(actorB))).conflicts).toHaveLength(0);
     await expect(memoryGetTouchable(ctxFor(actorB), personal)).rejects.toBeInstanceOf(NotFoundError);

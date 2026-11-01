@@ -1,6 +1,7 @@
 // The one recall ranker's entry point: rankRecall runs the pool, search and stage steps for a profile.
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
@@ -9,10 +10,9 @@ import {
   type ResultCost,
   type SearchResult,
 } from '../../base/rank/search-types.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import type { GraphWalk } from '../../domain/graph/recall.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import type { RecallBoostOptions } from './types.js';
-import { scoringOf, type Context } from '../types.js';
+import type { Context } from '../types.js';
 import type { RecallProfile } from './profiles.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 import type { ActiveGoals } from '../../base/ports/store/types.js';
@@ -21,9 +21,7 @@ import { type RankState, rankStages } from './rank-stages.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {
-  readonly store: HippoStore;
-  /** The store's graph, as its root found it; unset, expansion adds nothing from this store. */
-  readonly graph?: GraphWalk;
+  readonly store: StoreWith<never, 'vectors' | 'graphReads'>;
   readonly config: HippoConfig;
   readonly onHippoDb?: boolean;
 }
@@ -38,7 +36,7 @@ export interface RankRecallCtx extends RankSource {
   embedderFor: EmbedderFor;
   /** The folder whose path segments boost a memory. Without it, no path boost applies. */
   cwd?: string;
-  /** The strength model and rank switches the context's root set; absent, production ranking. */
+  /** The strength model and rank switches the context's root read; absent, production ranking. */
   switches?: EvalSwitches;
   /** The instant every memory is scored at. */
   now: Date;
@@ -52,18 +50,21 @@ export interface RankRecallCtx extends RankSource {
 
 /** Search-engine choice and tuning; tuning left unset takes the engine's own default. */
 export interface RankRecallEngine {
-  /** Set when the request names an engine (HTTP `mode=hybrid`). Without it, a 'position' profile
-   * keeps the load order. */
+  usePhysics: boolean;
+  /** Set when the request names an engine (HTTP `mode=hybrid` or `physics`). Without it, a
+   * 'position' profile keeps the load order. */
   engineNamed?: boolean;
+  physicsConfig: PhysicsConfig;
   multihop: boolean;
-  /** Graph-stream rrf fusion over the local store; hop and seed counts fall back to the
-   * engine defaults. */
+  /** Graph-stream rrf fusion over the local store; hop and seed counts fall back to the engine
+   * defaults. */
   graphStream?: RecallGraphStream;
   mmr?: boolean;
   mmrLambda?: number;
   localBump?: number;
   minResults?: number;
-  /** Score breakdowns for `hippo explain`. */
+  /** Score breakdowns for `hippo explain`; explain's physics call also leaves out minResults and
+   * includeSuperseded. */
   explain: boolean;
 }
 
@@ -92,8 +93,8 @@ export interface RankRecallFilters {
   /** `--scope` unlocks that envelope scope on top of the default-admitted set. Under `scopeMode:
    * 'exact'` it is the only scope read. */
   explicitScope: string | null;
-  /** 'additive' (the default) for the CLI operator, who has no identity; 'exact' for an
-   * API caller. */
+  /** 'additive' (the default) for the CLI operator, who has no identity; 'exact' for an API
+   * caller. */
   scopeMode?: 'additive' | 'exact';
   /** The API caller's own personal scope, which the default deny still admits. */
   ownScope?: string;
@@ -175,21 +176,20 @@ function settle(request: RankRecallOptions, profile: RecallProfile): SettledOpti
 export function rankCtxOf(ctx: Context): RankRecallCtx {
   return {
     store: ctx.store,
-    graph: ctx.enrich?.graph,
     config: ctx.config,
     onHippoDb: ctx.reach?.isHippoDb,
     tenantId: ctx.tenantId,
     embedderFor: ctx.infra.embedderFor,
     cwd: ctx.infra.machine.cwd,
-    switches: scoringOf(ctx),
+    switches: ctx.infra.evalSwitches,
     now: ctx.infra.clock(),
     signal: ctx.signal,
   };
 }
 
 /** Ranks memories for a query under the caller's `profile`; notes go to `ctx.note`, and the
- * caller supplies the cost function and reranker in `request` and writes the returned
- * goal-log rows. */
+ * caller supplies the cost function and reranker in `request` and writes the returned goal-log
+ * rows. */
 export async function rankRecall(
   ctx: RankRecallCtx,
   request: RankRecallOptions,

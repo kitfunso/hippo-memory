@@ -9,8 +9,8 @@ import { parseStoredJson, warnDamagedColumn } from '../util/stored-json.js';
 /** Terminal state of a handoff's session, denormalized from its `session_complete` event. */
 export type HandoffOutcome = 'success' | 'failure' | 'partial';
 
-/** Best-effort evidence of repo state at handoff time; null fields mean collection failed or
- * was skipped. */
+/** Best-effort evidence of repo state at handoff time; null fields mean collection failed or was
+ * skipped. */
 export interface HandoffEvidence {
   gitRef?: string | null;
   dirtyTree?: boolean | null;
@@ -99,8 +99,8 @@ function storedList(
   return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
 }
 
-/** Stored evidence, or null (after a log line) when the column is damaged or holds
- * another shape. */
+/** Stored evidence, or null (after a log line) when the column is damaged or holds another
+ * shape. */
 function storedEvidence(row: SessionHandoffRow): HandoffEvidence | null {
   if (!row.evidence_json) return null;
   const site = { table: 'session_handoffs', id: row.id, column: 'evidence_json' };

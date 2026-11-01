@@ -20,9 +20,12 @@ import {
   type MemoryRow,
   rowToEntry,
   MEMORY_CONFLICT_COLUMNS,
+  type MemoryConflictRow,
+  rowToMemoryConflict,
 } from '../runtime/rows.js';
-import type { LegacyStats } from '../../../base/records/reports.js';
-import type { ConflictWire } from '../../../base/memory/conflict-wire.js';
+import type { LegacyStats } from '../../../base/ports/store/reports.js';
+import type { MemoryConflict } from '../../../base/ports/store/conflicts.js';
+import { conflictToWire } from '../../../base/memory/conflict-wire.js';
 import { mirrorDecimal, serializeEntry } from '../../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../../host/atomic-write.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -53,15 +56,15 @@ export function ensureMirrorDirectories(at: StoreAt): void {
   });
 }
 
-const conflictMirrorName = (conflict: ConflictWire): string => `conflict_${conflict.id}.md`;
+const conflictMirrorName = (conflict: MemoryConflict): string => `conflict_${conflict.id}.md`;
 
-function writeConflictMirror(conflictDir: string, conflict: ConflictWire): void {
-  const fm = dumpFrontmatter({ ...conflict, score: mirrorDecimal(conflict.score) });
+function writeConflictMirror(conflictDir: string, conflict: MemoryConflict): void {
+  const fm = dumpFrontmatter({ ...conflictToWire(conflict), score: mirrorDecimal(conflict.score) });
   const body = [
     '# Memory Conflict',
     '',
-    `- Memory A: ${conflict.memory_a_id}`,
-    `- Memory B: ${conflict.memory_b_id}`,
+    `- Memory A: ${conflict.memoryAId}`,
+    `- Memory B: ${conflict.memoryBId}`,
     `- Reason: ${conflict.reason}`,
     `- Score: ${conflict.score.toFixed(SCORE_DECIMALS)}`,
     `- Status: ${conflict.status}`,
@@ -71,7 +74,7 @@ function writeConflictMirror(conflictDir: string, conflict: ConflictWire): void 
 }
 
 /** Every open conflict's file, and no other: the full sync's rebuild of the folder. */
-function writeAllConflictMirrors(hippoRoot: string, open: readonly ConflictWire[]): void {
+function writeAllConflictMirrors(hippoRoot: string, open: readonly MemoryConflict[]): void {
   const conflictDir = path.join(hippoRoot, 'conflicts');
   fs.mkdirSync(conflictDir, PRIVATE_DIR);
   const keep = new Set(open.map(conflictMirrorName));
@@ -84,7 +87,7 @@ function writeAllConflictMirrors(hippoRoot: string, open: readonly ConflictWire[
 }
 
 /** The files of `changed` alone: an open conflict's is rewritten, a closed one's removed. */
-function writeChangedConflictMirrors(hippoRoot: string, changed: readonly ConflictWire[]): void {
+function writeChangedConflictMirrors(hippoRoot: string, changed: readonly MemoryConflict[]): void {
   if (changed.length === 0) return;
   const conflictDir = path.join(hippoRoot, 'conflicts');
   fs.mkdirSync(conflictDir, PRIVATE_DIR);
@@ -256,8 +259,8 @@ export function buildIndexFromDb(db: DatabaseSyncLike): HippoIndex {
 
   const entries: Record<string, IndexEntry> = {};
   for (const row of rows) {
-    // SAFETY: layer is only ever written from the Layer enum by this module's own
-    // INSERT/UPDATE paths.
+    // SAFETY: layer is only ever written from the Layer enum by this module's own INSERT/UPDATE
+    // paths.
     const layer = row.layer as Layer;
     entries[row.id] = {
       id: row.id,
@@ -318,8 +321,8 @@ export function buildStatsFromDb(db: DatabaseSyncLike): LegacyStats {
   };
 }
 
-/** Write the `index.json` mirror file for an already-derived index. Exported for the
- * longmemeval benchmark. */
+/** Write the `index.json` mirror file for an already-derived index. Exported for the longmemeval
+ * benchmark. */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   mirrorBestEffort('index.json', () =>
     overwriteInPlace(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2)),
@@ -400,8 +403,10 @@ export function syncMirrorFiles(at: StoreAt, db: DatabaseSyncLike): void {
   const open = cachedStatement(
     db,
     `SELECT ${MEMORY_CONFLICT_COLUMNS} FROM memory_conflicts WHERE status = 'open' ORDER BY updated_at DESC, id DESC`,
-  ).all() as ConflictWire[];
-  mirrorBestEffort('conflict mirrors', () => writeAllConflictMirrors(hippoRoot, open));
+  ).all() as MemoryConflictRow[];
+  mirrorBestEffort('conflict mirrors', () =>
+    writeAllConflictMirrors(hippoRoot, open.map(rowToMemoryConflict)),
+  );
   writeStatsMirror(at, buildStatsFromDb(db));
 }
 
@@ -418,7 +423,9 @@ export function syncChangedMirrors(
   const conflicts = cachedStatement(
     db,
     `SELECT ${MEMORY_CONFLICT_COLUMNS} FROM memory_conflicts WHERE updated_at = ?`,
-  ).all(conflictsAt) as ConflictWire[];
-  mirrorBestEffort('conflict mirrors', () => writeChangedConflictMirrors(hippoRoot, conflicts));
+  ).all(conflictsAt) as MemoryConflictRow[];
+  mirrorBestEffort('conflict mirrors', () =>
+    writeChangedConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict)),
+  );
   writeStatsMirror(at, buildStatsFromDb(db));
 }

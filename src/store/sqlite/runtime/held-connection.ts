@@ -21,8 +21,8 @@ export interface StoreHolder {
   release: () => Promise<void>;
 }
 
-/** Holds a connection to the hippo.db under `hippoRoot` once it exists, so serving never
- * creates one. */
+/** Holds a connection to the hippo.db under `hippoRoot` once it exists, so serving never creates
+ * one. */
 function holdSqliteConnection(hippoRoot: string, runtime: StoreRuntime): StoreHolder {
   // Handlers open and close their own connections; while this one is held, none of those closes is
   // SQLite's last, which checkpoints and deletes the WAL.
@@ -32,8 +32,8 @@ function holdSqliteConnection(hippoRoot: string, runtime: StoreRuntime): StoreHo
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
-      // The server's lock wait: this open runs on the event loop, where DEFAULT_BUSY_WAIT_MS, the
-      // busy_timeout and journal-mode retry an open takes by default, would stall every request.
+      // The server's lock wait: this open runs on the event loop, where SQLite's 5 s default and
+      // the 30 s journal-mode retry would stall every request.
       heldDb = grantFor({ runtime }).open(hippoRoot, SERVER_DB_WAIT_MS);
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot), runtime);
     } catch (err) {

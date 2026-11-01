@@ -25,8 +25,8 @@ export async function readApiCalls(transcriptPath: string): Promise<TranscriptCa
         malformed += 1; // reported by the caller: one torn line must not void the session
         continue;
       }
-      // Sidechain calls, sidechain compactions and `<synthetic>` messages never touch the
-      // main context.
+      // Sidechain calls, sidechain compactions and `<synthetic>` messages never touch the main
+      // context.
       if (!isJsonObjectLiteral(entry) || entry.isSidechain === true) continue;
       if (entry.subtype === 'compact_boundary') {
         compactions += 1;

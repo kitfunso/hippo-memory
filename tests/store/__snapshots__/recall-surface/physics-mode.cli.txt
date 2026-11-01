@@ -1,0 +1,319 @@
+{
+  "global": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"d2490aef6a340d48","query_length":14,"results":20}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [],
+    "retrieved": [
+      {
+        "id": "mem_p_global",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [],
+    "traces": [],
+  },
+  "local": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"d2490aef6a340d48","query_length":14}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"d2490aef6a340d48","query_length":14,"results":20}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 20,
+        "session_id": null,
+        "surface": "recall",
+        "tenant_id": "default",
+        "tokens": 884,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 4,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_new",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_noise",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_cafe",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_raw",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_summary",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "<claim>",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "20",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 1,
+        "score": 0.9972926690128006,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 2,
+        "score": 0.8570820706118282,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "<claim>",
+        "result_rank": 3,
+        "score": 0.829939439267148,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_summary",
+        "result_rank": 4,
+        "score": 0.6767239658865475,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 5,
+        "score": 0.5310287719941635,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_noise",
+        "result_rank": 6,
+        "score": 0.5138480490752175,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 7,
+        "score": 0.5103731440376054,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_new",
+        "result_rank": 8,
+        "score": 0.4919728335439002,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 9,
+        "score": 0.4866071394183789,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 10,
+        "score": 0.46747804956983163,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_raw",
+        "result_rank": 11,
+        "score": 0.4648893100472458,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 12,
+        "score": 0.462100325718977,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 13,
+        "score": 0.46011721893047886,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child2",
+        "result_rank": 14,
+        "score": 0.4450586782796882,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child1",
+        "result_rank": 15,
+        "score": 0.43268295030847187,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 16,
+        "score": 0.43248256805247914,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 17,
+        "score": 0.42793685243511775,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 18,
+        "score": 0.41203050489594595,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_cafe",
+        "result_rank": 19,
+        "score": 0.3180499771854907,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_global",
+        "result_rank": 20,
+        "score": 0.12742339707679143,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "cli",
+        "result_count": 20,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "reply": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{"query":"deploy rollout","budget":4000,"results":[{"id":"mem_p_plain","score":0.9972926690128006,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_p_goal","score":0.8570820706118282,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"},{"id":"<claim>","score":0.829939439267148,"strength":1,"tokens":11,"tags":["prediction","deploy-duration"],"content":"rollout duration estimate for the eu cluster","layer":"semantic"},{"id":"mem_x_summary","score":0.6767239658865475,"strength":1,"tokens":11,"tags":["dag-summary"],"content":"rollout summary for the nightly batch move","layer":"semantic"},{"id":"mem_p_pinned","score":0.5310287719941635,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_p_noise","score":0.5138480490752175,"strength":1,"tokens":13,"tags":[],"content":"unrelated note about lunch options near the office","layer":"episodic"},{"id":"mem_p_scoped","score":0.5103731440376054,"strength":1,"tokens":14,"tags":[],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_p_new","score":0.4919728335439002,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_p_trace","score":0.4866071394183789,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_p_fill1","score":0.46747804956983163,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 1 for the nightly batch","layer":"episodic"},{"id":"mem_x_raw","score":0.4648893100472458,"strength":1,"tokens":14,"tags":[],"content":"raw capture of the deploy window from the golden session","layer":"episodic"},{"id":"mem_p_fill2","score":0.462100325718977,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 2 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill5","score":0.46011721893047886,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 5 for the nightly batch","layer":"episodic"},{"id":"mem_x_child2","score":0.4450586782796882,"strength":1,"tokens":10,"tags":[],"content":"deploy batch child two moved the queue","layer":"episodic"},{"id":"mem_x_child1","score":0.43268295030847187,"strength":1,"tokens":10,"tags":[],"content":"deploy batch child one moved the cron","layer":"episodic"},{"id":"mem_p_fill4","score":0.43248256805247914,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 4 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill3","score":0.42793685243511775,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 3 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill0","score":0.41203050489594595,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 0 for the nightly batch","layer":"episodic"},{"id":"mem_x_cafe","score":0.3180499771854907,"strength":1,"tokens":10,"tags":[],"content":"café opening hours for the team lunch","layer":"episodic"},{"id":"mem_p_global","score":0.12742339707679143,"strength":1,"tokens":13,"tags":[],"content":"deploy notes from the global store about rollbacks","layer":"episodic"}],"total":20,"suppressionSummary":{"totalCandidates":18,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+  },
+}

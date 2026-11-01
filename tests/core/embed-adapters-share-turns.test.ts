@@ -3,11 +3,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import type { IndexEmbedTarget } from '../../src/domain/search/embed-index-target.js';
 import type { StoreEmbedTarget } from '../../src/domain/search/embed-store-target.js';
 import { partialFake } from '../_helpers/partial-fake.js';
 import { embedTurns } from '../../src/domain/search/embed-turns.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const KEY = 'one-root';
 const provider: EmbeddingProvider = {
@@ -45,6 +47,8 @@ describe('embed adapters', () => {
     });
     const storeOn = partialFake<StoreEmbedTarget>()({
       ...common,
+      strength: PRODUCTION_STRENGTH,
+      clock: evalNow,
       groups: {
         vectorWrites: { indexKey: async () => KEY },
         vectors: {

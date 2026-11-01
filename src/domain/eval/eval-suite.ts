@@ -7,7 +7,7 @@ import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { rankMultihop } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 import {
-  buildSyntheticCorpusAt,
+  buildSyntheticCorpus,
   type FeatureCategory,
   type FeatureTestCase,
 } from './eval-suite-corpus.js';
@@ -88,13 +88,13 @@ function featureAverages(
 }
 
 /** Ranks the synthetic corpus under `switches`, built and scored at `now`. */
-export async function runFeatureEvalAt(
+export async function runFeatureEval(
   version: string,
   switches: EvalSwitches,
   now: Date,
 ): Promise<EvalSuiteResult> {
   const start = Date.now();
-  const { entries, cases } = buildSyntheticCorpusAt(now);
+  const { entries, cases } = buildSyntheticCorpus(now);
 
   const caseResults: ScoredFeatureCase[] = [];
 
@@ -183,7 +183,7 @@ export function detectRegressions(
 
 export function resultToBaseline(result: EvalSuiteResult): EvalBaseline {
   // SAFETY: the loop below sets every FeatureCategory key from result.features, which holds every
-  // category in buildSyntheticCorpusAt's cases.
+  // category in buildSyntheticCorpus's cases.
   const features: EvalBaseline['features'] = {} as EvalBaseline['features'];
   for (const f of result.features) {
     features[f.category] = { mrr: f.mrr, recallAt5: f.recallAt5, ndcgAt5: f.ndcgAt5 };

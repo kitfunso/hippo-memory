@@ -53,9 +53,8 @@ describe('hippo eval --suite', () => {
   });
 
   const run = (extra: Record<string, boolean> = {}) =>
-    runInProcess((cli) =>
+    runInProcess(() =>
       handleEval({
-        cli,
         hippoRoot: join(dir, '.hippo'),
         tenantId: 'default',
         args: [],

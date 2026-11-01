@@ -8,7 +8,7 @@ import * as slackSql from '../../../src/store/sqlite/connectors/slack.js';
 import { listApiKeyRows } from '../../../src/store/sqlite/keys/auth.js';
 import type { ApiKeyListItem, ListApiKeysOptions } from '../../../src/base/ports/store/keys.js';
 import type { AppendAuditOptions } from '../../../src/base/ports/store/types.js';
-import type { ConnectorEventRecord } from '../../../src/base/records/connectors.js';
+import type { ConnectorEventRecord } from '../../../src/base/ports/store/connectors.js';
 import { onHandle } from '../test-session.js';
 
 /** The highest audit id hippo.db ever assigned, pruned rows included. */

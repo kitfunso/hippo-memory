@@ -59,7 +59,7 @@ async function rejection<T>(work: Promise<T>): Promise<Error> {
 describe('a busy hippo.db in the port terms', () => {
   it('a served store call rejects with StoreBusyError, the driver text and the driver error as its cause', async () => {
     const store = sqliteStore(root, { busyWaitMs: 50 });
-    const err = await whileHeld(() => rejection(store.hippoDb.sessions.save('default', 'snapshot', SNAPSHOT, null)));
+    const err = await whileHeld(() => rejection(store.sessions.save('default', 'snapshot', SNAPSHOT, null)));
     expect(err).toBeInstanceOf(StoreBusyError);
     expect(err).toMatchObject({ message: 'database is locked' });
     expect(isSqliteBusy(err.cause)).toBe(true);

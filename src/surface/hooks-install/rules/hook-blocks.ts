@@ -1,5 +1,5 @@
-// The hippo block each agent's instruction file carries, and how init recognises one it
-// wrote earlier.
+// The hippo block each agent's instruction file carries, and how init recognises one it wrote
+// earlier.
 import { createHash } from 'node:crypto';
 import { escapeRegex } from '../../../base/util/escape.js';
 
@@ -19,8 +19,8 @@ export interface HookTable {
   [agent: string]: HookSpec;
 }
 
-// Shared by the agents that differ only in the noun, a recall paragraph, the capture lead-in and
-// a footer.
+// Shared by the agents that differ only in the noun, a recall paragraph, the capture lead-in and a
+// footer.
 const PI_FOOTER =
   'For full integration, copy the hippo-memory Pi extension to `~/.pi/agent/extensions/hippo-memory/`.';
 const CODEX_CAPTURE = `When Hippo's Codex wrapper is installed, session-end capture runs automatically.
@@ -150,8 +150,8 @@ export function hippoBlock(
   const start = at + HOOK_MARKERS.start.length;
   const end = text.indexOf(HOOK_MARKERS.end, start);
   if (at < 0 || end < 0) return null;
-  // git autocrlf checks these files out with CRLF: match as LF, write back in the file's
-  // own ending.
+  // git autocrlf checks these files out with CRLF: match as LF, write back in the file's own
+  // ending.
   const raw = text.slice(start, end);
   const inner = raw.replace(/\r\n/g, '\n').trim();
   const owner =

@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import type { HookRuntime } from '../../base/session/capture-contract.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
-import { cliInfra, type CliCommand, type CliScope } from './api-context.js';
+import { cliFolder, cliInfra, cliLedgerReach, cliSyncOptions } from './api-context.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
 import type { CaptureTarget } from '../capture/command.js';
 import {
@@ -33,17 +33,20 @@ import { type CliFlags, stringFlag } from './flag-values.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /**
+ * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one
+ * stage failing does not block the other.
+ */
+/**
  * A folder without its own store never sleeps at session end, so its project's agent notes go to
  * the global store here.
  */
 export async function logSessionEndImport(
-  cli: CliCommand,
   logFile: string | null,
   tenantId: string,
   transcriptPath: string | undefined,
 ): Promise<void> {
   try {
-    const sync = cli.syncOptions(tenantId, currentMachine());
+    const sync = cliSyncOptions(tenantId, currentMachine());
     const report = await importAtSessionEnd(process.cwd(), transcriptPath, sync);
     const line = summaryLine(report);
     if (line !== null) appendSessionEndCloseLog(logFile, line);
@@ -112,7 +115,8 @@ export function hostSessionId(): string | undefined {
  * payload's session and the next prompt injects again. `requiredSource` limits it to payloads
  * with that `source`; best-effort and silent on a malformed payload. */
 export async function resetHookInjection(
-  { cli, hippoRoot, tenantId }: CliScope,
+  hippoRoot: string,
+  tenantId: string,
   stdinText: string | undefined,
   requiredSource: string | null,
 ): Promise<void> {
@@ -128,7 +132,7 @@ export async function resetHookInjection(
       items: 0,
       tokens: 0,
     },
-    cli.ledgerReach(hippoRoot),
+    cliLedgerReach(hippoRoot),
   );
 }
 
@@ -179,22 +183,23 @@ export function payloadCwdRoot(
 
 /** Whether this session sits in the pilot's holdout arm; off at rate 0 and with no session id. */
 export async function inPilotHoldout(
-  { cli, hippoRoot, tenantId }: CliScope,
+  hippoRoot: string,
+  tenantId: string,
   sessionId: string | undefined,
   opts: { write: boolean },
 ): Promise<boolean> {
-  const reach = cli.ledgerReach(hippoRoot);
+  const reach = cliLedgerReach(hippoRoot);
   return (await sessionPilotArm(tenantId, sessionId, opts.write, { reach })) === 'holdout';
 }
 
-/** What capture writes into for a store folder: its port, its config and what embeds the
- * new rows. */
-export function captureTarget(cli: CliCommand, root: string): CaptureTarget {
-  const folder = cli.folder(root);
+/** What capture writes into for a store folder: its port, its config and what embeds the new
+ * rows. */
+export function captureTarget(root: string): CaptureTarget {
+  const folder = cliFolder(root);
   return {
     root,
     store: folder.store,
     config: folder.config,
-    embed: detachedEmbedder(folder, cliInfra(), cli.detached),
+    embed: detachedEmbedder(folder, cliInfra()),
   };
 }

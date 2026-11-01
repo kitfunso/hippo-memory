@@ -1,7 +1,7 @@
 // The `hippo doctor` checks that read the database and the compaction spool.
 
 import * as path from 'node:path';
-import type { StoreHealth } from '../../base/records/diagnostics.js';
+import type { StoreHealth } from '../../base/ports/store/diagnostics.js';
 import { needsNewerHippo } from '../../base/errors/store-open.js';
 import {
   REPLAY_AFTER_MS,
@@ -16,7 +16,7 @@ import { DAY_MS } from '../../base/util/time.js';
 import { plural } from '../../base/util/format.js';
 import type { DoctorCheck, DoctorStore } from './doctor.js';
 
-// The migration that creates failure_log; a read-only open no longer creates it on an older store.
+// Migration 46 creates failure_log; a read-only open no longer creates it on an older store.
 const FAILURE_LOG_SCHEMA = 46;
 
 /** The failed-tool-call count over the last 7 days, or why it could not be read. */
@@ -88,8 +88,8 @@ interface SpoolRead {
   unread: string;
 }
 
-/** Spool counts in their own try, so a spool that cannot be read never hides the
- * database counts. */
+/** Spool counts in their own try, so a spool that cannot be read never hides the database
+ * counts. */
 function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
   try {
     return { counts: spoolCounts(store, now, REPLAY_AFTER_MS, spoolFs), unread: '' };

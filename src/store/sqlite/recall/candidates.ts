@@ -3,8 +3,8 @@ import { type MemoryEntry, ERROR_TAG, Layer, schemaFitFrom } from '../../../base
 import {
   FALLBACK_HALF_LIFE_DAYS,
   PRODUCTION_STRENGTH,
-  calculateStrengthAt,
-  confidenceFacetsAt,
+  calculateStrength,
+  confidenceFacets,
   type ConfidenceInputs,
   type StrengthInputs,
   type StrengthModel,
@@ -29,7 +29,7 @@ import {
 import { pickRarestFtsQuery, listRecallEntries } from './search-rows.js';
 import type { HeldText, EntryCursor } from '../../../base/ports/store/types.js';
 import type { TenantId } from '../../../base/util/tenant.js';
-import { newestFirst, oldestFirst } from '../../rules/order.js';
+import { oldestFirst } from '../../rules/order.js';
 import { tenantAnd } from '../runtime/tenant.js';
 import { rowsHoldingTexts } from '../sharing/copy-rows.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../base/util/pages.js';
@@ -42,16 +42,17 @@ import type {
   ContextCandidateFilter,
   RecentOrigins,
 } from '../../../base/ports/store/context-reads.js';
-import type { SourceTally } from '../../../base/records/sharing.js';
-import type { StatusCounts, StrengthTallies } from '../../../base/records/reports.js';
+import type { SourceTally } from '../../../base/ports/store/sharing.js';
+import type { StatusCounts, StrengthTallies } from '../../../base/ports/store/reports.js';
+import { SCHEMA_FIT_WINDOW_ROWS } from '../../rules/windows.js';
 
-/** How many of a tenant's newest rows schemaFit reads; older rows no longer move the fit. */
-const SCHEMA_FIT_WINDOW_ROWS = 2000;
+// The status tally: each row scored by calculateStrength and confidenceFacets, summed in the order
+// given so the average rounds the same on every run.
 
+/** What one row's status reads: its strength and confidence inputs and its layer. */
 type StatusInputs = StrengthInputs & ConfidenceInputs & { readonly layer: Layer };
 
-/** The counts over `rows`, summed in the order given so the average rounds the same on every run;
- * the caller adds the conflict and vector counts. */
+/** The counts over `rows`; the caller adds the conflict and vector counts. */
 function tallyStatus(
   rows: Iterable<StatusInputs>,
   now: Date,
@@ -62,8 +63,8 @@ function tallyStatus(
   const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
   const sums = { total: 0, strength: 0, pinned: 0, atRisk: 0, agedOut: 0 };
   for (const row of rows) {
-    const strength = calculateStrengthAt(row, now, rules.strength);
-    const facets = confidenceFacetsAt(row, now);
+    const strength = calculateStrength(row, now, rules.strength);
+    const facets = confidenceFacets(row, now);
     sums.total++;
     sums.strength += strength;
     byLayer[row.layer] = (byLayer[row.layer] ?? 0) + 1;
@@ -107,10 +108,6 @@ interface RecentRowsOptions {
 // that would change what the hook injects.
 const NEWEST = 'ORDER BY created DESC, id DESC';
 const AFTER = 'AND created <= ? AND (created < ? OR id < ?) ';
-// admit refuses some rows, so a read takes more rows than it keeps; these bound the reads it costs.
-const WINDOW_PER_WANTED = 4;
-const MIN_WINDOW = 32;
-const PAGE_GROWTH = 4;
 
 /** Where a row sorts in a recent read: the instant its `created` names, then its id. */
 interface Position {
@@ -118,13 +115,14 @@ interface Position {
   readonly id: string;
 }
 
-/** Up to `limit` live rows `scope` admits, newest first, after `after`. */
-type ReadNewest = (scope: SqlFragment, limit: number, after?: Position) => MemoryEntry[];
+/** Up to `limit` live rows `own` admits, newest first, after `after`. */
+type ReadNewest = (own: SqlFragment, limit: number, after?: Position) => MemoryEntry[];
 
 // As contextGet sorts a row: a drifted stamp at the instant Date reads in it.
 const positionOf = (e: MemoryEntry): Position => ({ at: sortableStamp(e.created), id: e.id });
 
-const positionsNewestFirst = newestFirst<Position>({ key: (p) => p.at, textId: (p) => p.id });
+const newestFirst = (a: Position, b: Position): number =>
+  a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.id === b.id ? 0 : a.id < b.id ? 1 : -1;
 
 const afterParams = (after: Position | undefined): string[] =>
   after ? [after.at, after.at, after.id] : [];
@@ -132,39 +130,37 @@ const afterParams = (after: Position | undefined): string[] =>
 /** Reads in `created` text order, which is time order while every live row of the tenant holds
  * toISOString text. */
 function readByText(run: RunSql): ReadNewest {
-  return (scope, limit, after) =>
-    run(`${scope.sql} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
-      ...scope.params,
+  return (own, limit, after) =>
+    run(`${own.sql} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
+      ...own.params,
       ...afterParams(after),
       limit,
     ]);
 }
 
-/** Every live drifted row `scope` admits, newest first; the drift index holds only these, so it is
+/** Every live drifted row `own` admits, newest first; the drift index holds only these, so it is
  * no tenant scan. */
-function newestDrifted(run: RunSql, scope: SqlFragment): MemoryEntry[] {
-  return run(`${scope.sql} AND ${CREATED_DRIFTED}`, [...scope.params])
+function newestDrifted(run: RunSql, own: SqlFragment): MemoryEntry[] {
+  return run(`${own.sql} AND ${CREATED_DRIFTED}`, [...own.params])
     .map((entry) => ({ entry, at: positionOf(entry) }))
-    .sort((a, b) => positionsNewestFirst(a.at, b.at))
+    .sort((a, b) => newestFirst(a.at, b.at))
     .map(({ entry }) => entry);
 }
 
 /** The text-ordered rows merged with the drifted ones by instant: the rows and order a store
  * whose stamps were all written in toISOString form would read. */
-function readByInstant(run: RunSql, driftedByScope: Map<string, MemoryEntry[]>): ReadNewest {
-  return (scope, limit, after) => {
-    let driftedRows = driftedByScope.get(scope.sql);
-    if (!driftedRows) driftedByScope.set(scope.sql, (driftedRows = newestDrifted(run, scope)));
-    const textRows = run(
-      `${scope.sql} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`,
-      [...scope.params, ...afterParams(after), limit],
+function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNewest {
+  return (own, limit, after) => {
+    let odd = drifted.get(own.sql);
+    if (!odd) drifted.set(own.sql, (odd = newestDrifted(run, own)));
+    const text = run(
+      `${own.sql} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`,
+      [...own.params, ...afterParams(after), limit],
     );
-    const older = after
-      ? driftedRows.filter((e) => positionsNewestFirst(positionOf(e), after) > 0)
-      : driftedRows;
-    return [...textRows, ...older]
+    const older = after ? odd.filter((e) => newestFirst(positionOf(e), after) > 0) : odd;
+    return [...text, ...older]
       .map((entry) => ({ entry, at: positionOf(entry) }))
-      .sort((a, b) => positionsNewestFirst(a.at, b.at))
+      .sort((a, b) => newestFirst(a.at, b.at))
       .slice(0, limit)
       .map(({ entry }) => entry);
   };
@@ -180,13 +176,13 @@ function listRecentRows(
 ): MemoryEntry[] {
   const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
-  const window = Math.max(needed * WINDOW_PER_WANTED, MIN_WINDOW);
+  const window = Math.max(needed * 4, 32);
   const originSql =
     origins &&
     (origins.userGlobal
       ? `(origin_project = '' OR ${originInSql(origins.names)})`
       : originInSql(origins.names));
-  const scope: SqlFragment = {
+  const own: SqlFragment = {
     sql: originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED,
     params: [tenantId, ...(origins?.names ?? [])],
   };
@@ -194,28 +190,28 @@ function listRecentRows(
   let kept = rows.filter(keep);
   if (kept.length >= needed || rows.length < window) return kept;
   if (origins) {
-    rows = read(scope, window);
+    rows = read(own, window);
     kept = rows.filter(keep);
     if (kept.length >= needed || rows.length < window) return kept;
   }
-  return [...kept, ...keptPastWindow({ read, scope, rows, wanted: needed - kept.length, keep })];
+  return [...kept, ...keptPastWindow({ read, own, rows, wanted: needed - kept.length, keep })];
 }
 
 interface KeptPastWindowOptions {
   readonly read: ReadNewest;
-  readonly scope: SqlFragment;
+  readonly own: SqlFragment;
   readonly rows: readonly MemoryEntry[];
   readonly wanted: number;
   readonly keep: (e: MemoryEntry) => boolean;
 }
 
-// A window of refused rows can hide older ones, so read on in keyset pages, each PAGE_GROWTH times
-// the last, until enough are kept.
-function keptPastWindow({ read, scope, rows, wanted, keep }: KeptPastWindowOptions): MemoryEntry[] {
+// A window of refused rows can hide older ones, so read on in keyset pages, each four times the
+// last, until enough are kept.
+function keptPastWindow({ read, own, rows, wanted, keep }: KeptPastWindowOptions): MemoryEntry[] {
   const out: MemoryEntry[] = [];
   let last = rows[rows.length - 1];
-  for (let size = rows.length * PAGE_GROWTH; out.length < wanted; size *= PAGE_GROWTH) {
-    const page = read(scope, size, positionOf(last));
+  for (let size = rows.length * 4; out.length < wanted; size *= 4) {
+    const page = read(own, size, positionOf(last));
     out.push(...page.filter(keep));
     if (page.length < size) break;
     last = page[page.length - 1];
@@ -592,8 +588,9 @@ const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
   'outcome_negative',
 ];
 
-// Scored in JavaScript, not strengthSql: SQLite reads fewer date shapes than Date, so its counts
-// would differ; rowToEntry's column defaults apply, so a row scores as its loaded entry would.
+// Scored in JavaScript, not with strengthSql: SQLite reads fewer date shapes than Date does, so its
+// counts would differ. rowToEntry's defaults for these columns, so a row scores as its loaded entry
+// would.
 function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
   for (const row of rows) {
     yield {

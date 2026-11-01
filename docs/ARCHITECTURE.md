@@ -3,41 +3,25 @@
 ## Layers
 
 Eight layers, lowest first: base (pure helpers, core types, the ports), host (the disk, environment and process reads: config.json, project walks, home folders, atomic writes, child processes), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), infra (the adapters behind the ports), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
-Domain code gets every model and socket through a port in `src/base/ports`: `EmbedderFor` builds an embedding provider from a config, `Http` sends a request under a timeout policy, `CrossEncoderLoad` loads the reranker's model, and `Llm`, the machine and the git runner do the rest. `src/infra` holds the real ones: the embedding providers and the local embedder, the Transformers.js loaders, `fetchWithRetry`, and the hosted rerankers with their registry and the TypeSafe judge (`src/infra/rerankers`, whose `endpoint.ts` holds the one outbound rule: TypeSafe's address, the pinned Jev model and the bounded, retried post). `src/base/embeddings/local.ts` keeps only the model rules and a package probe that loads nothing, because token-eval scripts import it by its dist path. The layer order in `.dependency-cruiser.cjs` fails a domain file that imports `src/infra`, and the domain rules in `oxlint.config.ts` fail one that imports an adapter module or function by name, or that calls `fetch`.
+Domain code gets every model and socket through a port in `src/base/ports`: `EmbedderFor` builds an embedding provider from a config, `Http` sends a request under a timeout policy, `CrossEncoderLoad` loads the reranker's model, and `Llm`, the machine and the git runner do the rest. `src/infra` holds the real ones: the embedding providers and the local embedder, the Transformers.js loaders, `fetchWithRetry`, and the hosted rerankers with their registry and the TypeSafe judge (`src/infra/rerankers`, whose `endpoint.ts` holds the one outbound rule: TypeSafe's address, the pinned Jev model and the bounded, retried post). `src/base/embeddings/local.ts` keeps only the model rules and a package probe that loads nothing, because token-eval scripts import it by its dist path. The layer order in `.dependency-cruiser.cjs` fails a domain file that imports `src/infra`, and the domain rules in `.oxlintrc.json` fail one that imports an adapter module or function by name, or that calls `fetch`.
 `src/base` imports no `fs`, `os` or `child_process`; those reads live in `src/host`, and domain and api import host for its types only, getting its answers from the machine port or their caller. The `no-io-below-host` and `host-types-only` rules in `.dependency-cruiser.cjs` hold both lines. A host keeps no module state: the project-walk cache and the sticky shared-store flag live in a `Host` (`src/host/host.ts`) that each root builds and drops with itself (a CLI command through `currentMachine()`, a server runtime, the sleep child, and each SQLite store object through `storeFilesOf`).
 The roots wire the real adapters in. Every api `Context` carries them as `ctx.infra`, which its composition root sets. A published entry takes an `EntryContext`, where `infra` is optional, and `withEntryInfra` in `src/surface/entry-infra.ts` fills in the real ports. `ctx.infra` hands api code the context's embedder, and a `ConfiguredFolder` or `globalTarget` carries its `embedderFor`, so a target built from it embeds with no further wiring. Eval and benchmark scripts import the wired `embedAll`, `folderIndex`, `getReranker` and `judgeAll` from `src/entry/eval-scripts.ts`.
 The tree shows them: `src/base`, `src/domain` and `src/surface` hold one folder per feature, and `src/db`, `src/store` and `src/api` are one feature each. `src/entry` and the five root files stay at the top of `src` because package.json exports and bin/hippo.js name their dist paths.
-A file imports only from its own layer or a lower one. `layers.json` is the map, and its `paths` groups hold every file and folder a rule names (the core files, the environment readers, the SQLite loaders); `.dependency-cruiser.cjs` builds its rules from it, so `npm run check:deps` fails any upward import and any src folder or root file the map does not list. `.dependency-cruiser-cycles.cjs` fails a runtime import cycle between two features or two top folders. The name rules (SQLite words in src/api and src/domain) are oxlint rules in `oxlint.config.ts`.
+A file imports only from its own layer or a lower one. `layers.json` is the map; `.dependency-cruiser.cjs` builds its rules from it, so `npm run check:deps` fails any upward import and any src folder or root file the map does not list. `.dependency-cruiser-cycles.cjs` fails a runtime import cycle between two features or two top folders. The name rules (SQLite words in src/api and src/domain, `requireGroup` in the routes) are oxlint rules in `.oxlintrc.json`.
 
 ## Store port
 
 ### Async port
 
-node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. Remember, recall, context, auth and audit run on the port alone, and everything else runs on hippo.db's local tier (see Two tiers). `scripts/checks/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
-
-### Two tiers
-
-The store has two tiers. The core port is `HippoStore` in `src/base/ports/store.ts` and `src/base/ports/store/`: the base methods and the groups `keyWrites`, `entryWrites`, `contextReads`, `auditLog`, `vectors` and `vectorWrites`. Every store sets all of it, and no member is optional.
-
-hippo.db's local tier is `store.hippoDb`. Its port is `HippoDbRepos` in `src/base/ports/hippo-db.ts`, and `src/store/sqlite/hippo-db.ts` builds it from the SQLite repositories. No other store has it, so it is not part of the core port. Its methods run on the store workers like the port's, and `HIPPO_DB_EFFECTS` places each one.
-
-A surface proves the tier once, when it binds, with `hasHippoDb` from `src/api/hippo-db-context.ts`. A route marked `hippoDb: true`, a webhook, the dashboard and an MCP tool bound with `onHippoDb` bind only on a store with the tier. On any other store each one answers the same refusal, `NoLocalTierError`, a 501. A local api module takes a `HippoDbContext`, whose `store` carries the tier, so binding the store to a request binds the tier with it.
-
-A published entry names no tier type. The session entries on `./server`, `captureSessionTexts`, `sleep` and `consolidate` take the plain `Context` or `HippoStore` and prove the tier at run time with `withHippoDb` or `requireHippoDb`.
-
-A core path that can use the tier but works without it reads `ctx.enrich`, a `CoreEnrichment` that the root fills from the request-bound store's tier and leaves unset on a store without one. The global store in a reach has its own `enrich`, a `GlobalEnrichment`. A reach's stores are core `HippoStore`s, and a local path that writes to the global store proves its tier where it writes (`globalTargetOf`).
-
-Domain code never imports `src/store`. A domain function that calls the tier names the repositories it calls under `hippoDb`. Their interfaces, and the record and request shapes they pass, live in `src/base/records`; their effect table is `src/store/sqlite/hippo-db-effects.ts`.
-
-Three checks hold the line. The depcruise rule `core-port-no-sqlite` fails a core file (the port, and the remember, recall, context, auth and audit api files) that reaches `src/store/sqlite` or the tier's port through any module, type-only imports included, so a local function in a core folder lives in `src/api/hippo-db`. `scripts/checks/check-store-port.mjs` fails a port or tier method that takes a function, which cannot cross to a store worker. `tests/api/published-tier-types.slow.test.ts` fails a symbol a package export publishes whose type reaches a type the tier's port declares.
+node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. Recall, remember and context run on the required groups; `OPTIONAL_GROUPS` in `src/base/ports/store.ts` lists the rest, such as `objects`, `quarantine` and `lastRecall`. Each HTTP route, MCP tool and CLI verb that needs one checks for it once at start (`boundGroupRoute` in route-table.ts, `needing` in mcp/request.ts, `assertVerbPorted` in cli/verbs.ts), so no request checks a group, and on a store without it answers `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/checks/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
 
 ### Where the port lives
 
-The port is `src/base/ports/store.ts`, with its core groups in `src/base/ports/store/` and its published type entry in `store-index.ts`. It sits in `src/base`, below both layers, so src/domain and the adapter in src/store import the same port and src/domain imports nothing from src/store (`apart` in `layers.json`).
+The port is `src/base/ports/store.ts`, with its groups in `src/base/ports/store/` and `store-groups.ts`, and its published type entry in `store-index.ts`. It sits in `src/base`, below both layers, so src/domain and the two adapters in src/store import the same port and src/domain imports nothing from src/store (`apart` in `layers.json`).
 
 ### What lives in src/store
 
-`src/store` holds two folders: `sqlite/`, the SQLite adapter and its row shapes, SQL text and plumbing, and `rules/`, the rules the adapter shares across files, which import only `src/base` and each other. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live under `src/base`. The `store-folders` and `store-rules-pure` rules in `.dependency-cruiser.cjs` fail a file anywhere else under `src/store` and a rules file that imports more, so a new pure helper filed there fails CI.
+`src/store` holds two folders: `sqlite/`, the SQLite adapter and its row shapes, SQL text and plumbing, and `rules/`, the rules the adapter shares across files and store-kit exports, which import only `src/base` and each other. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live under `src/base`. The `store-folders` and `store-rules-pure` rules in `.dependency-cruiser.cjs` fail a file anywhere else under `src/store` and a rules file that imports more, so a new pure helper filed there fails CI.
 
 ### Read verbs
 
@@ -53,7 +37,7 @@ A layer imports only from its own layer or a lower one, so domain and api reach 
 
 `sqliteStore` in `src/store/sqlite` is the one adapter, with one folder for each store group and `runtime/` for the handles, executor and worker, and each store rule is written once, in the SQL or the file that runs it. Store tests call `sqliteStore` over a seeded copy of the two-tenant fixture: `seedTwoTenants` and `runOnFixture` in `tests/_helpers/store-conformance.ts` copy the folder, run a list of calls and return the answers and the audit rows, which a test asserts against literal values. `runStoreConformance` in `src/entry/store-conformance.ts` is the suite an add-on runs on its own store; `tests/_helpers/store-conformance.ts` runs it over `sqliteStore` and the port-only store.
 
-The port-only run is the proof that `serve()` holds for any store. `tests/_helpers/port-only-store.ts` builds a store from `sqliteStore`'s core members alone, under a kind that is not `'sqlite'` and with no local tier. The server blocks hippo.db opens for any other kind, so a path that skips the port throws. `HIPPO_TEST_STORE=port-only` serves the HTTP and MCP suites on that store, where every local route and tool answers 501, and the `port-only` job in `.github/workflows/ci.yml` runs them. A test that needs hippo.db's folder or its local tier skips with its reason in `tests/_helpers/store-switch.ts`.
+The port-only run is the proof that `serve()` holds for any store. `tests/_helpers/port-only-store.ts` wraps `sqliteStore` without its optional groups and under a kind that is not `'sqlite'`. The server blocks hippo.db opens for any other kind, so a path that skips the port throws. `HIPPO_TEST_STORE=port-only` serves the HTTP and MCP suites on that store, which keeps only the optional groups a suite names in `keep`, so a route or tool that reaches another group answers 501, and the `port-only` job in `.github/workflows/ci.yml` runs them. A test that needs hippo.db's folder skips with its reason in `tests/_helpers/store-switch.ts`.
 
 ## Test-only exports
 
@@ -72,24 +56,25 @@ Flags (set to `1` or `true`):
 - `HIPPO_ABLATE_DECAY`: the time-decay term becomes 1 in `calculateStrength`.
 - `HIPPO_ABLATE_RECALL_BOOST`: full recall-strengthening ablation.
   - `markRetrieved` returns entries UNMUTATED (no clock reset, count or half-life increment); ids stay available so `hippo outcome` attribution keeps working in this arm.
-  - Persisting callers handed the ablated model skip their `writeEntry` loops (identical-row writes would still refresh `updated_at`, mirrors and DAG dirty flags): api recall and context when their Context's `infra.strength` carries it, as the package entries' Contexts do, and consolidation replay.
+  - Persisting callers (CLI recall, api context, MCP recall/context, consolidation replay) skip their `writeEntry` loops (identical-row writes would still refresh `updated_at`, mirrors and DAG dirty flags).
   - The retrieval-count READ boost becomes 1.
   - Decay anchors at `created` instead of `last_retrieved`, so prior-run clock resets cannot leak in.
+  - Physics: `computeMass` ignores the count, and `physicsSearch` recomputes loaded masses LIVE under ablated strength rules (persisted masses embed recall history in their frozen strength component).
   - Replay rehearsal is silenced entirely (it IS strengthening; use config `replay.count=0` to separate replay in unflagged arms).
   - CAVEAT: half_life increments persisted by prior unflagged runs are NOT reconstructed (consolidation legitimately writes half_life too), so ablation arms run on FRESH stores, as the experiment protocol mandates.
 - `HIPPO_ABLATE_OUTCOME`: both outcome channels become neutral (`_SLOW` and `_FAST` together). The slow side also silences replay's outcome reward bias (`replayPriority`). NOT gated: the opt-in `recall --value-aware` rerank (an explicit CLI flag that also reads outcome counts); ablated arms must not pass it.
 - `HIPPO_ABLATE_OUTCOME_SLOW`: `rewardFactor` becomes 1 (no half-life modulation).
-- `HIPPO_ABLATE_OUTCOME_FAST`: `rankHybrid` `outcomeBoost` becomes 1.
+- `HIPPO_ABLATE_OUTCOME_FAST`: `hybridSearch` `outcomeBoost` becomes 1.
 - `HIPPO_ABLATE_RECENCY`: the search recency factor becomes 1 (the creation-age multiplier `0.8 + 0.2*exp(-age/30d)`); decay, strengthening and outcomes stay live.
 - `HIPPO_EVAL_RECENCY_DAYS`: a positive number replaces the 30-day scale of that recency factor (tuning grids only). Unset, zero, negative or junk values keep 30.
 - `HIPPO_FAKE_NOW`: timestamp injected as the default `now` for strength computation and retrieval stamping (simulated-time protocols). It MUST be the exact `Date.toISOString()` form (`YYYY-MM-DDTHH:mm:ss.sssZ`); it is validated by round-trip, so junk, locale dates, non-UTC offsets and rolled-over dates (`2026-02-31`) all fall back to the real clock.
 
-The rankers in `src/domain/search` read none of these. They take the switches as `switches` (`EvalSwitches`, `src/base/memory/eval-switches.ts`) and the clock as `now`. An api Context carries them as plain values, `infra.strength` and `infra.rank`, which `strengthOf` and `rankCtxOf` read. Every root sets them: `rootInfra` (`src/infra/ports.ts`) sets the production model, and only the package entries' root (`src/surface/entry-infra.ts`) and `hippo eval` build them from the flags, so a frozen eval that sets a flag still gets it. An entry handed the caller's own `infra` scores by production unless that `infra` sets `strength` and `rank`. The production roots (the other CLI verbs, `serve`, stdio and HTTP MCP, the dashboard and its reader thread, and the sleep child) build their ports with `rootInfra` and open their store with `rootStoreRules`; of these variables they read `HIPPO_FAKE_NOW` alone.
+The rankers in `src/domain/search` read none of these. They take the switches as `switches` (`EvalSwitches`, `src/base/memory/eval-switches.ts`) and the clock as `now`. The roots read the environment once: `realInfra` puts `evalSwitches()` on `ctx.infra` for each context, and the `./search` and `./testing` entries and `dist/entry/eval-scripts.js` fill it for a library caller, so a frozen eval that sets a flag still gets it.
 
 Formula notes (load-bearing for the experiments). Ablating decay has TWO intrinsic co-effects, because the unified formula routes other mechanisms THROUGH the decay term. Both are real properties of the architecture, not implementation accidents; experiment analysis must attribute accordingly (the decay-off arm is "decay + its dependents off", see prereg amendment A1):
 
 1. Read-side strengthening flattens: raw = retrievalBoost * emotionalMult >= 1, and the [0,1] clamp caps it at 1.0, so the recall boost can only offset decay, never exceed baseline. (Write-side still runs.)
-2. Outcome-slow goes inert: `rewardFactor` only acts by scaling the effective half-life INSIDE the decay exponent; with decay := 1 there is no exponent for it to modulate. Outcome-slow is decay-rate modulation BY DESIGN, so "no decay" necessarily means "no slow channel" (the fast channel in `rankHybrid` is unaffected).
+2. Outcome-slow goes inert: `rewardFactor` only acts by scaling the effective half-life INSIDE the decay exponent; with decay := 1 there is no exponent for it to modulate. Outcome-slow is decay-rate modulation BY DESIGN, so "no decay" necessarily means "no slow channel" (the fast channel in `hybridSearch` is unaffected).
 
 Nothing caches these env vars. The readers here read them on each call, so a test that stubs one sees it at once and resets nothing. `HIPPO_LOSS_AVERSION_RATIO` is a root setting: the CLI, `serve()`, the stdio MCP host, the sleep child and the dashboard read it once when they build their store and hand it down as `lossAversionRatio` (`sqliteStore(root, { lossAversionRatio })`, `strengthOptionsOf(config.runtime)`); a library caller passes it the same way.
 
@@ -105,7 +90,7 @@ Tests use `port: 0` to bind an ephemeral port and read the actual port back via 
 
 ## The dashboard's reads
 
-The dashboard reads hippo.db through `DashboardReads` (src/base/records/dashboard-reads.ts), served by `sqliteDashboardReads`. No read hands JavaScript a number of rows that grows with the tenant. Per-project counts come from SQL aggregates. A memory list is one sorted `LIMIT ... OFFSET` page. A project with more than 4,000 live rows draws a 64 by 32 grid per layer in place of its points. `tests/dashboard-reads-bounded.server.test.ts` holds this: five times the rows reads the same rows. Before wave 1020g, a reader thread held an in-memory snapshot of every live row of the tenant and rebuilt it on each new snapshot id.
+The dashboard reads hippo.db through `DashboardReads` (src/base/ports/store/dashboard-reads.ts), served by `sqliteDashboardReads`. No read hands JavaScript a number of rows that grows with the tenant. Per-project counts come from SQL aggregates. A memory list is one sorted `LIMIT ... OFFSET` page. A project with more than 4,000 live rows draws a 64 by 32 grid per layer in place of its points. `tests/dashboard-reads-bounded.server.test.ts` holds this: five times the rows reads the same rows. Before wave 1020g, a reader thread held an in-memory snapshot of every live row of the tenant and rebuilt it on each new snapshot id.
 
 - The SQL calls the dashboard's rules as SQL functions (src/store/sqlite/reports/dashboard-functions.ts). Each runs the strength, band and age code of src/base, so a count and a listed row judge a memory the same way. A pure-SQL strength was tried first and rejected: julianday arithmetic drifts by about 5e-10 days, which moves a memory on an exact cut point into the next band.
 - An aggregate keeps its state in a fixed Float64Array, returned as a BLOB, because node:sqlite requires the state to be a SQL value.
@@ -123,8 +108,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/auth/audit.ts
 - `auditList`: Read-only — no audit emit (matches A5: cmdAuditList does not record a 'recall'-style read event).
-
-### src/api/hippo-db/audit-maintenance.ts
 - `auditPrune`: Audit log retention pruning (v1.12.9), moved here from `src/surface/cli/audit-prune.ts`, which keeps only the `--older-than` parser.
 - `auditPrune`: Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR); the prune should be opt-in per tenant and emit its own audit trail event."
 - `auditPrune` tenant: Required, taken from `ctx.tenantId`; prune is always tenant-scoped per the A5 v2 design.
@@ -156,24 +139,21 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/api/sleep/dormant.ts
 - `dormantRestore`: A restore is a labelled "forgot it, then needed it" event: the signal a learned lifecycle (ROADMAP LC3) trains on.
 
-### src/api/hippo-db/rejections.ts
+### src/api/memories/forget.ts
 - `reject / unreject` (section banner): AT1: reject and unreject, docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
 
 ### src/api/memories/outcome.ts
 - `outcome`: the LC1 trace link (docs/plans/2026-08-02-lc1-recall-trace-persistence.md) is the store's `lastRecall.applyTracedOutcome`; the `opts.traceId` option no src caller sent was dropped in 3.0.
 - `outcome`: if (good && updated.tags.includes(CHURN_STALE_TAG)) { // FE2: a good outcome reconfirms the entry
 - `outcome`: LC1: link the outcome to its trace, recording only the ids actually credited (post tenant-filtering, matches appliedIds).
-
-### src/api/hippo-db/outcome-last-recall.ts
 - `outcomeForLastRecall` (section banner): outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
 
-### src/api/hippo-db/promote.ts
+### src/api/memories/promote.ts
 - `PromoteResult`: `copyToGlobal` reads the local row in `opts.tenantId` (`promote` passes the caller's) and keeps the entry's tenantId on the global side.
 - `assertPromotable`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review. The quarantine, personal-scope and secret vetoes moved here from `src/store` in 3.0; the store keeps only `promotion.writeCopy`.
-
-### src/api/memories/promote.ts
 - `SupersedeResult`: Mirrors `cmdSupersede` in cli.ts (without flag-driven layer/tag/pin overrides — A1 keeps the API minimal; the CLI handler will continue to handle those flags and pass the resolved values once Task 4 lands).
 - `ArchiveRawOpts`: We DO NOT emit a second audit event here to avoid double-emitting the archive_raw op (unlike Task 1 remember/forget where the underlying helpers hardcode actor='cli').
+- `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.
 
 ### src/api/recall/types.ts
 - `RecallOpts.scorerWindow`: F3 (v1.7.0): scorer-window opt-in. When set, `listSearchEntries` loads up to `scorerWindow` candidates. When undefined (default), the existing behaviour is preserved: store-internal 200-row default, which every release before v1.7.0 silently relied on.
@@ -206,11 +186,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `recall`: **api.recall does NOT mutate `index.last_retrieval_ids`** (v1.11.5 contract lock).
 - `retrieve`: Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock).
 
-### src/api/hippo-db/connector-writes.ts
-- `ConnectorRememberOptions.event`: Took the place of `afterWrite`, the hook ingestion connectors (E1.3+) used to stamp idempotency rows atomically with the memory row on its database handle. The store's `connectorWrites` group now writes the event log row and a flagged row's quarantine record in the memory's transaction.
-- `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.
-
 ### src/api/memories/remember.ts
+- `RememberOpts.event`: Took the place of `afterWrite`, the hook ingestion connectors (E1.3+) used to stamp idempotency rows atomically with the memory row on its database handle. The store's `connectorWrites` group now writes the event log row and a flagged row's quarantine record in the memory's transaction.
 - `RememberOpts.untrusted`: CD5: connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this.
 
 ### src/api/sleep/sleep.ts
@@ -225,8 +202,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/tokens.ts
 - `recordTokens`: Record memory text handed to an agent in the token ledger (ROADMAP TE0).
-
-### src/api/hippo-db/token-reports.ts
 - `failureSummary`: Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30); ROADMAP CD13.
 
 ### src/api/types.ts
@@ -353,8 +328,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handlePeers`: D4 v1.12.10: tenant-scoped by default. --all-tenants restores the pre-D4 host-wide view for the rare operator who genuinely wants cross-tenant peer discovery.
 
 ### src/base/rank/compare.ts
-- `module header`: A leaf module ... a type-only import back from a sort site would create an ESM import cycle (r2 critic HIGH, docs/plans/2026-07-09-recall-determinism.md T2).
+- `module header`: A true LEAF module ... a type-only import back to search.ts would still create the search.ts <-> physics.ts ESM import cycle this module exists to avoid (r2 critic HIGH, docs/plans/2026-07-09-recall-determinism.md T2).
 - `compareEntryIdentity`: The metadata keys are only computed on a content tie, which is rare post-T1 (path-tag embedding fix), so the per-compare Set/sort cost never lands on the hot path.
+- `comparePhysicsResultsBy`: `ScoredPhysicsResult` (physics.ts) carries `{ memoryId, baseScore, clusterAmplification, finalScore }` -- NO `entry`/`content` in scope at that layer, so `compareEntryIdentity` cannot apply directly (plan T2 shape (c)).
 
 ### src/base/config/config.ts
 - `pinnedInject.skipUnchanged`: Skip a block identical to the one already injected this session (ROADMAP TE2). Default true. Needs a session id from the hook payload.
@@ -400,16 +376,16 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/surface/connectors/slack/web-client.ts
 - `module header`: fetcher is the one Task 13's `backfillChannel` consumes.
 
-### src/api/hippo-db/connector-events.ts
-- `mapSlackWorkspace`: Slack workspace registration helpers (T2B follow-up, 2026-05-24), first in src/surface/connectors/slack/workspaces.ts.
-- `mapSlackWorkspace`: Before T2B, populating this table required direct SQL — fine for a single-machine deployment, awkward for operators with multiple workspaces. These helpers give the CLI (`hippo slack workspaces add|list|remove`) a clean surface.
+### src/surface/connectors/slack/workspaces.ts
+- `module header`: Slack workspace registration helpers (T2B follow-up, 2026-05-24).
+- `module header`: Before T2B, populating this table required direct SQL — fine for a single-machine deployment, awkward for operators with multiple workspaces. These helpers give the CLI (`hippo slack workspaces add|list|remove`) a clean surface.
 
 ### src/domain/consolidate/conflicts.ts
 - `detectConflicts`: LC2-E3 (opt-in, default off): ids rescued by this cycle's decay pass. detectConflicts recomputes its own strength>=DECAY_THRESHOLD survivor filter independently of the decay pass above; without this bypass, rescued entries would be silently re-excluded from conflict detection every cycle even though the decay pass just decided to keep them. Default empty set: flag-off behavior is unchanged.
 - `detectConflicts`: CD5: an unreviewed quarantined row must not taint a visible memory as conflicted.
 
 ### src/domain/consolidate/decay.ts
-- `decayPass`: LC2-E3 (opt-in, default off; docs/plans/2026-08-10-lc2-e3-mv-wiring.md): flag OFF keeps the single-phase loop below byte-identical to pre-E3 behavior (pre-registered gate G2). Flag ON restructures into two phases: phase 1 classifies every entry (condemned vs survivor) with ZERO commits; phase 2 runs rescueSet over the per-tenant candidate groups, then commits — rescued entries get the standard survivor bookkeeping refresh (stored strength + effective confidence; no half-life edits, no rank-derived writes) and are pushed to survivors so they fully participate in this cycle's merge and conflict passes; non-rescued condemned entries follow the existing pendingDeletes/result.removed/details path.
+- `decayPass`: LC2-E3 (opt-in, default off; docs/plans/2026-08-10-lc2-e3-mv-wiring.md): flag OFF keeps the single-phase loop below byte-identical to pre-E3 behavior (pre-registered gate G2). Flag ON restructures into two phases: phase 1 classifies every entry (condemned vs survivor) with ZERO commits; phase 2 runs rescueSet over the per-tenant candidate groups, then commits — rescued entries get the standard survivor bookkeeping refresh (stored strength + effective confidence; no half-life edits, no rank-derived writes) and are pushed to survivors so they fully participate in this cycle's merge/physics/conflict passes; non-rescued condemned entries follow the existing pendingDeletes/result.removed/details path.
 
 ### src/domain/consolidate/llm-passes.ts
 - `dagRebuildPass`: 1.8. DAG summary rebuild — drain dirty queue from E2's child-write hooks
@@ -571,7 +547,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/db/migrations/v54.ts
 - migration v54: Owner task state. `task_snapshots`, `session_handoffs` and `failure_log` gain nullable `owner_subject` and `origin_project`. `compactions` and `failure_log` gain a nullable `request_id`, with a partial unique index on (tenant, request id), so a retried call finds the row it wrote the first time. New table `session_owners` holds (tenant, session id, owner).
 - migration v54: No backfill and no floor raise. Rows from before v54 keep NULL owners, so no owner read ever returns them. A store nobody writes owner rows to stays open to older binaries.
-- `session_owners` (src/api/hippo-db/session-owners.ts): The first owner to write for a session id holds it. `bindSessionOwner` reads the row first, so a session already bound takes no write lock. Another owner on the same session id gets `ConflictError`, and the message names no owner. Each new bind prunes bindings older than 90 days in every tenant. There is no owner erase path yet; when one lands it must delete the owner's rows here too.
+- `session_owners` (src/api/auth/session-owners.ts): The first owner to write for a session id holds it. `bindSessionOwner` reads the row first, so a session already bound takes no write lock. Another owner on the same session id gets `ConflictError`, and the message names no owner. Each new bind prunes bindings older than 90 days in every tenant. There is no owner erase path yet; when one lands it must delete the owner's rows here too.
 - `TASK_OWNER_MIN_BINARY` (src/base/util/version.ts): The floor a store takes on its first session bind or its first owner snapshot, raised in the same transaction and never lowered. An older binary supersedes snapshots across the whole tenant, so it would close other people's rows; it must refuse the store from then on. It names the first release that ships v54, set by hand in that release. `scripts/checks/check-expiring-keys-floor.mjs` checks it beside `EXPIRING_KEYS_MIN_BINARY`, and fails on a checkout with no tags, where every tag check would pass by finding nothing.
 - Owner keying: On a shared store, snapshot and handoff reads and writes take a `ContinuityKey`: the caller's owner (`ownerOrSubject`, the key's owner or else its id) and its project names. The session trail is read only for the session of the caller's own snapshot. `recordFailure` stamps the owner and project when it is given them. A keyed save supersedes only that owner's rows in that project and writes no mirror file. A key with no owner or no project matches nothing on a read and throws on a write, so it never falls back to the tenant's newest row. Recall's continuity block and `getContext`'s task state use the same key, so a developer's next session picks up their own handoff. A local store passes no key and keeps its SQL and mirror files as before.
 
@@ -696,7 +672,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `resolveConsolidatedSource`: source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only row (E2 objects are consolidated by construction).
 - `extraction queue section`: Extraction queue (the interface the deferred sleep enqueue-hook + E3.1 will use)
 - `enqueueExtraction`: The producer hook in `hippo sleep` is deferred (E3.1); this is the API it will call.
-- `clearGraph`: Lives in graph.ts (the sole sanctioned graph writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Removed in E8b: the rebuild applies the difference `graphReads.graphDelta` plans (base/records/graph-delta.ts) through `applyGraphOps`, and `updateEntity` renames in place so relations keep their endpoints.
+- `clearGraph`: Lives in graph.ts (the sole sanctioned graph writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Removed in E8b: the rebuild applies the difference `graphReads.graphDelta` plans (store/rules/graph-delta.ts) through `applyGraphOps`, and `updateEntity` renames in place so relations keep their endpoints.
 - `sleep enqueue-hook section`: E3 sleep enqueue-hook — producer helper + drain support
 - `markGraphDirty`: NEVER throws into the caller — a graph-dirty signal failing must not abort a core E2 write. ... Called POST-COMMIT from the E2 graph-source save/close mutations of decision, policy, customer_note and project_brief. / swallowed so the already-committed E2 write is never rolled back.
 - `removeGraphEntitiesForObject`: Remove the graph rows sourced from one E2 object, by its (type, id). ... Fail-soft like `markGraphDirty` (never throws into the E2 close caller; graph staleness is recoverable).
@@ -790,6 +766,12 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: --owner format validation (B2 v1.12.6).
 - `module header`: with id ∈ `[A-Za-z0-9_-]+`. Pre-v1.12.6 any string was accepted, leaving the documented contract unenforced.
 - `module header`: to reject + exit. Strict mode will become the default once A5 v2 lands (see `TODOS.md` A3 follow-ups for the migration path).
+
+### src/base/rank/physics.ts
+- `queryGravity`: F1: Query gravity (retrieval-time, virtual — does not update position).
+- `attractionForce`: F2: Inter-memory attraction force vector (consolidation-time).
+- `repulsionForce`: F3: Conflict repulsion force vector (consolidation-time).
+- `dragForce`: F4: Drag force vector (consolidation-time).
 
 ### src/domain/objects/policies.ts
 - `module header`: E2 policy first-class object (docs/plans/2026-05-30-e2-policy-object.md).
@@ -891,8 +873,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RerankerFn`: Determinism is required for paired A/B and for the workload-validity gate in docs/evals/2026-05-10-f6-reranker-prereg.md.
 
 ### src/domain/search/rrf.ts
-- `module header`: the value already in use across hippo's `rankHybrid` since v1.0.
-- `module header`: Generic over the candidate id type so this helper can be shared by `src/domain/search/hybrid.ts::rankHybrid` (T = number, idx into MemoryEntry[]) and the LongMemEval F9 hybrid retrieve benchmark (T = string, session_id).
+- `module header`: the value already in use across hippo's `hybridSearch` since v1.0.
+- `module header`: Generic over the candidate id type so this helper can be shared by `src/search.ts::hybridSearch` (T = number, idx into MemoryEntry[]) and the LongMemEval F9 hybrid retrieve benchmark (T = string, session_id).
 
 ### src/base/util/secret-detect.ts
 - `module header`: Secret detection for memory content (v39 memory scope isolation, S4; docs/plans/2026-07-01-memory-scope-isolation.md).
@@ -981,9 +963,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
 ### src/domain/sharing/search-both.ts
-- `SearchBothHybridOptions.summaryDeboost`: v0.30 / E4: propagated to underlying rankHybrid calls.
-- `SearchBothHybridOptions.summaryFreshness`: v0.30 / E4: propagated.
-- `SearchBothHybridOptions.recallScope`: v1.25.0: recall-mode scope filter, consumed by `searchBothHybrid` only.
+- `HybridSearchOptions.summaryDeboost`: v0.30 / E4 — propagated to underlying hybridSearch calls.
+- `HybridSearchOptions.summaryFreshness`: v0.30 / E4 — propagated.
+- `HybridSearchOptions.recallScope`: v1.25.0 — recall-mode scope filter, consumed by `searchBothHybrid` only.
 - `searchBothHybrid`: v1.25.0 recall mode: push the scope predicate into SQL exactly like api.recall (loadRecallSearchEntries)
 - `rankBothStores`: T2 note: PLAIN stable score sort on purpose -- local/global inputs are each deterministically ordered, so stability holds and an exact tie keeps the LOCAL result ahead of the global one.
 
@@ -1033,7 +1015,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `writeEntry` (stray doc above stampOriginProject): Used by E1.3+ connectors to stamp idempotency rows atomically with the memory write.
 
 ### src/store/entry-writes.ts
-- `writeEntryInOwnTx`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction; then rethrow so the caller sees the refusal.
+- `writeEntryOn`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction; then rethrow so the caller sees the refusal.
 - `writeEntryDbOnly`: v0.30 / E2 — DAG live-coupling: child write under a level-2 summary marks the parent dirty for E3 sleep-cycle rebuild. Early-exit on null dag_parent_id (vast majority of writes); cost is one null check on the hot path.
 
 ### src/store/handoffs.ts

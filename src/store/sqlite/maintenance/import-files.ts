@@ -1,18 +1,18 @@
 // The port calls the published importers make on hippo.db, kept synchronous because those importers
 // return their result rather than a Promise.
 import type { EntryWrite } from '../../../base/ports/store/entry-writes.js';
-import type { EntryFilter } from '../../../base/records/reports.js';
-import type { RejectionCheck } from '../../../base/records/rejections.js';
-import type { EntryTextKey } from '../../../base/records/sharing.js';
+import type { EntryFilter } from '../../../base/ports/store/reports.js';
+import type { RejectionCheck } from '../../../base/ports/store/rejections.js';
+import type { EntryTextKey } from '../../../base/ports/store/sharing.js';
 import { listTextKeysHolding } from '../sharing/copy-rows.js';
-import { writeEntryInOwnTx } from '../entries/entry-writes.js';
+import { writeEntryRow } from '../entries/entry-writes.js';
 import type { SqliteStoreOptions } from '../runtime/grant.js';
 import { handlesOf, openStore } from '../runtime/handles.js';
 import { inPortTerms } from '../runtime/port-errors.js';
 import { refusedAmong } from '../review/rejections.js';
 
-/** The FolderFiles, EntryWrites, Rejections and Sharing calls an import makes, each answered
- * at once. */
+/** The FolderFiles, EntryWrites, Rejections and Sharing calls an import makes, each answered at
+ * once. */
 interface SqliteImportFiles {
   ensure(): void;
   writeEntry(write: EntryWrite): void;
@@ -30,9 +30,7 @@ export function sqliteImportFiles(
   return {
     ensure: () => inPortTerms(() => on(() => undefined, openStore)),
     writeEntry: (write) =>
-      inPortTerms(() =>
-        on((db) => writeEntryInOwnTx(db, files, write.entry, { actor: write.actor }), openStore),
-      ),
+      inPortTerms(() => on((db) => writeEntryRow(db, files, write), openStore)),
     refusedAmong: (checks) => inPortTerms(() => on((db) => refusedAmong(db, checks))),
     textKeysHolding: (filter, texts) =>
       inPortTerms(() => on((db) => listTextKeysHolding(db, filter, texts), openStore)),

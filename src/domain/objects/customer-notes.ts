@@ -4,7 +4,7 @@
 
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
-import type { Objects } from '../../base/records/objects.js';
+import type { Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { capText, requireLine, requireText } from './fields.js';
 import { listObjects } from './lifecycle.js';
@@ -18,8 +18,8 @@ export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>([
   'closed',
 ]);
 
-/** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap than the
- *  MAX_SHORT_FIELD_LEN short-field convention. */
+/** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap than the 4096 short-field
+ *  convention. */
 export const MAX_CUSTOMER_LEN = 256;
 export const MAX_NOTE_LEN = 8192;
 

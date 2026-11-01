@@ -60,7 +60,7 @@ describe('confirmedOutcomeTimes', () => {
   it('returns the latest good outcome per target since the bound and reads no older row', async () => {
     const root = newRoot();
     seedHistory(root);
-    const learning = sqliteStore(root).hippoDb.learning;
+    const learning = sqliteStore(root).learning;
 
     const { result, reads } = await recordStatementsAsync(
       async () => await learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
@@ -78,7 +78,7 @@ describe('confirmedOutcomeTimes', () => {
     const root = newRoot();
     seedHistory(root);
     const { statements } = await recordStatementsAsync(
-      async () => await sqliteStore(root).hippoDb.learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
+      async () => await sqliteStore(root).learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
     );
     const sql = statements.find((s) => s.includes('FROM audit_log') && s.includes('GROUP BY target_id'));
     expect(sql).toContain('GROUP BY target_id');

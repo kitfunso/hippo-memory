@@ -18,19 +18,27 @@ export {
   passesCliRecallScopeFilter,
   ScopeForbiddenError,
 } from '../base/scope/recall-scope.js';
-export type { TokenSummary, TokenSurface, TokenSurfaceSummary } from '../base/records/ledger.js';
-export type { FailureSummary } from '../base/records/rejections.js';
+export type {
+  TokenSummary,
+  TokenSurface,
+  TokenSurfaceSummary,
+} from '../base/ports/store/ledger.js';
+export type { FailureSummary } from '../base/ports/store/rejections.js';
 
 // classifyOriginProject lives in project-identity.ts (leaf) for the same reason.
 export { classifyOriginProject } from '../base/scope/project-identity.js';
 
-export { RecallContractError, adminActor, ownerOrSubject, requireHostAdmin } from './types.js';
-export { contextReach } from './hippo-db-context.js';
+export {
+  RecallContractError,
+  adminActor,
+  contextReach,
+  ownerOrSubject,
+  requireHostAdmin,
+} from './types.js';
 export type { Actor, Context, ContextReach, EntryContext, GlobalInReach } from './types.js';
-export { remember } from './memories/remember.js';
-export { rawArchiveForEvent, rememberUntrusted } from './hippo-db/connector-writes.js';
-export type { ConnectorRememberOptions } from './hippo-db/connector-writes.js';
+export { remember, rememberUntrusted } from './memories/remember.js';
 export type {
+  ConnectorRememberOptions,
   GatedRememberOptions,
   RememberLocal,
   RememberOptions,
@@ -84,18 +92,17 @@ export type {
   DrillDownResult,
   DrillDownSummary,
 } from './objects/drill-down.js';
-export { outcome } from './memories/outcome.js';
-export type { OutcomeResult } from './memories/outcome.js';
-export { outcomeForLastRecall } from './hippo-db/outcome-last-recall.js';
-export type { OutcomeForLastRecallResult } from './hippo-db/outcome-last-recall.js';
-export { forget, removalTarget } from './memories/forget.js';
+export { outcome, outcomeForLastRecall } from './memories/outcome.js';
+export type { OutcomeForLastRecallResult, OutcomeResult } from './memories/outcome.js';
 export {
+  forget,
   liftRejection,
   listRejections,
   reject,
   rejectOnHost,
+  removalTarget,
   unreject,
-} from './hippo-db/rejections.js';
+} from './memories/forget.js';
 export {
   AUTO_SHARE_MIN_SCORE,
   autoShareToGlobal,
@@ -106,21 +113,20 @@ export {
 } from './sharing.js';
 export type { SharePeer } from './sharing.js';
 export { memoryPin } from './memories/pin.js';
-export type { ForgetResult } from './memories/forget.js';
-export type { RejectOptions, RejectResult } from './hippo-db/rejections.js';
+export type { ForgetResult, RejectOptions, RejectResult } from './memories/forget.js';
 export {
   conflictPages,
   conflictGet,
   conflictList,
   conflictListOpen,
   conflictResolve,
-} from './hippo-db/conflicts.js';
+} from './memories/conflicts.js';
 export type {
   ConflictPage,
   ConflictPageOptions,
   ResolveMemoryConflictOptions,
   ResolveMemoryConflictResult,
-} from './hippo-db/conflicts.js';
+} from './memories/conflicts.js';
 export {
   projectNameList,
   projectNameMerge,
@@ -135,10 +141,13 @@ export type {
   ProjectSummary,
   RepairResult,
 } from './objects/projects.js';
-export { rawArchive, supersede } from './memories/promote.js';
-export type { ArchiveRawResult, SupersedeOverrides, SupersedeResult } from './memories/promote.js';
-export { promote } from './hippo-db/promote.js';
-export type { PromoteResult } from './hippo-db/promote.js';
+export { rawArchive, rawArchiveForEvent, promote, supersede } from './memories/promote.js';
+export type {
+  ArchiveRawResult,
+  PromoteResult,
+  SupersedeOverrides,
+  SupersedeResult,
+} from './memories/promote.js';
 export {
   DEFAULT_KEY_TTL_DAYS,
   MAX_TTL_DAYS,
@@ -159,21 +168,21 @@ export type {
   AuthGrantResult,
   AuthRevokeResult,
 } from './auth/auth.js';
-export { auditList } from './auth/audit.js';
-export type { AuditListOptions } from './auth/audit.js';
 export {
+  auditList,
   auditMemoryQuality,
   computeCutoff,
   auditPrune,
   auditRemoveErrors,
   memoryQualityRepair,
   memoryQualityRepairOnce,
-} from './hippo-db/audit-maintenance.js';
+} from './auth/audit.js';
 export type {
+  AuditListOptions,
   AuditPass,
   PruneAuditOptions,
   PruneAuditResult,
-} from './hippo-db/audit-maintenance.js';
+} from './auth/audit.js';
 export type {
   ContextCost,
   ContextOptions,
@@ -183,11 +192,10 @@ export type {
 export { DEFAULT_CONTEXT_BUDGET, contextGet } from './context/context.js';
 export { NO_QUERY } from './context/context-plan.js';
 export { contextProjectFor, type ProjectFacts } from './context/context-project.js';
-export { recordTokens } from './tokens.js';
-export { failureSummary, tokenSummary } from './hippo-db/token-reports.js';
+export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
 export { dormantForget, isDormant, dormantList, dormantRestore } from './sleep/dormant.js';
-export { quarantineApprove, quarantineList, quarantineReject } from './hippo-db/quarantine.js';
-export type { QuarantineListItem } from './hippo-db/quarantine.js';
+export { quarantineApprove, quarantineList, quarantineReject } from './auth/quarantine.js';
+export type { QuarantineListItem } from './auth/quarantine.js';
 export { sleepWholeStore } from './sleep/sleep.js';
 export type { SleepOptions, SleepResult } from './sleep/sleep.js';
 export { goalComplete, goalList, goalPush, goalResume, goalSuspend } from './objects/goals.js';

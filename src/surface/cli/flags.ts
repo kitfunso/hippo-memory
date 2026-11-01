@@ -1,12 +1,7 @@
-// Every CLI verb, one row each, and each flag's kind read from those rows: dispatch, help and the help
-// listing's order read the table, and parseArgs needs a flag's kind before the verb's module loads.
+// Each flag's kind, read from the verb table's flags: parseArgs needs a flag's kind before the
+// verb's module loads.
 
-import { MEMORY_VERBS } from './verbs/memory.js';
-import { HEALTH_VERBS } from './verbs/health.js';
-import { SESSION_VERBS } from './verbs/sessions.js';
-import { OBJECT_VERBS } from './verbs/objects.js';
-
-export const COMMANDS = { ...MEMORY_VERBS, ...HEALTH_VERBS, ...SESSION_VERBS, ...OBJECT_VERBS };
+import { COMMANDS } from './verbs.js';
 
 // A value on a switch is refused, as `--fix=false` reads as on under Boolean() and `--pin=true` as
 // off under === true.
@@ -53,8 +48,8 @@ const SHARED_KIND: ReadonlyMap<string, FlagKind> = (() => {
   return shared;
 })();
 
-/** How parseArgs reads `--name` on the verb with these flags; `undefined` is a command the
- * table lacks. */
+/** How parseArgs reads `--name` on the verb with these flags; `undefined` is a command the table
+ * lacks. */
 export function flagKind(verb: VerbFlags | undefined, name: string): FlagKind {
   return (verb ? DECLARED.get(verb)?.get(name) : undefined) ?? SHARED_KIND.get(name) ?? 'value';
 }

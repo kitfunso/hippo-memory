@@ -5,6 +5,7 @@ import { isInitialized } from '../../../host/project-identity.js';
 import { flushDeliveryRecorder, startToolFailureRecorder } from '../../../api/ledger-db.js';
 import { captureToolFailure } from '../../capture/capture-error.js';
 import { readHookStdin } from '../stdin.js';
+import { cliApiContext, cliHookRequest } from '../api-context.js';
 import type { CommandContext } from '../flag-values.js';
 import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../hook-runtime.js';
 
@@ -14,7 +15,6 @@ export async function handleCaptureError({
   hippoRoot,
   tenantId,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const { text } = await readHookStdin();
   try {
@@ -23,8 +23,8 @@ export async function handleCaptureError({
     if (isInitialized(root) && payload) {
       const failure = parseJson(payload);
       // Built inside the hook's request, so the recorder and the capture share its one handle.
-      await cli.hookRequest(async (hook) => {
-        const ctx = hook.apiContext(root, tenantId);
+      await cliHookRequest(async () => {
+        const ctx = cliApiContext(root, tenantId);
         const rec = await startToolFailureRecorder(ctx, {
           stdinText: text,
           runtime: hookRuntime(flags),

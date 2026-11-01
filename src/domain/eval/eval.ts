@@ -5,10 +5,10 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
-import type { ConfiguredFolder } from '../../base/ports/store.js';
-import { rankHybrid } from '../search/hybrid.js';
+import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
 import type { VectorSource } from '../search/vector.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SharingStore } from '../sharing/text-keys.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 
@@ -176,7 +176,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
         embedderFor: stores.embedderFor,
         localBump: options.localBump,
       })
-    : rankHybrid(query, entries, { ...ranking, source: options.source });
+    : hybridSearch(query, entries, { ...ranking, source: options.source });
 }
 
 export interface EvalDelta {
@@ -255,8 +255,8 @@ export function compareSummaries(baseline: EvalSummary, current: EvalSummary): E
 }
 
 /**
- * For each memory, use its first QUERY_WORDS content words as a trivial query and expect that
- * memory back: a smoke test for recall.
+ * For each memory, use its first 8 content words as a trivial query and expect that memory back: a
+ * smoke test for recall.
  */
 export function bootstrapCorpus(entries: MemoryEntry[], maxCases = 50): EvalCase[] {
   const cases: EvalCase[] = [];

@@ -22,8 +22,7 @@ const RULE = /^\s*([-*_])(?:\s*\1){2,}\s*$/;
 const FENCE = /^\s*(?:(`{3,})[^`]*|(~{3,}).*)$/;
 const MAX_SLUG_LENGTH = 40;
 
-/** Lowercase, punctuation runs folded to '-', cut to MAX_SLUG_LENGTH characters; 'top' when nothing
- * is left. */
+/** Lowercase, punctuation runs folded to '-', cut to 40 characters; 'top' when nothing is left. */
 export function slugHeading(heading: string): string {
   const slug = heading
     .toLowerCase()
@@ -98,8 +97,8 @@ function skipFence(lines: readonly string[], start: number, fence: string): numb
   return lines.length;
 }
 
-// A line opening a fence carries its whole body with it, so body lines never start a heading
-// or bullet.
+// A line opening a fence carries its whole body with it, so body lines never start a heading or
+// bullet.
 function afterLine(lines: readonly string[], i: number): number {
   const fence = fenceOf(lines[i]);
   return fence === null ? i + 1 : skipFence(lines, i, fence);

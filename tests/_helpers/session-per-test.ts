@@ -1,7 +1,7 @@
 // One request's handles per test, closed after it, so a test's store calls share one handle per store as a CLI
 // command's do; a test that opens and closes hippo.db on every call pays a WAL checkpoint each time.
 import { afterEach, beforeEach, expect } from 'vitest';
-import type { Objects } from '../../src/base/records/objects.js';
+import type { Objects } from '../../src/base/ports/store.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { RequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
 import { readEntryIn, writeEntryIn, type WriteEntryOptions } from '../../src/store/sqlite/fixtures.js';

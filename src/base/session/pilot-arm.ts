@@ -3,8 +3,8 @@ import { BASIS_POINTS } from '../util/limits.js';
 
 export type PilotArm = 'hippo' | 'holdout';
 
-// Eight hex characters are 32 bits: an exact integer, spread evenly enough over the
-// basis-point buckets.
+// Eight hex characters are 32 bits: an exact integer, spread evenly enough over the basis-point
+// buckets.
 const BUCKET_HEX_CHARS = 8;
 
 /** Deterministic split: the same session and rate always land in the same arm. */

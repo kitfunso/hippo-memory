@@ -43,8 +43,8 @@ export function toolTag(source: string): string | null {
   return AGENT_MEMORY_TOOLS.find((t) => t.id === id)?.tag ?? null;
 }
 
-/** Tool, note key and hash of an import, without the container, whose id hashes the
- * project name. */
+/** Tool, note key and hash of an import, without the container, whose id hashes the project
+ * name. */
 export function noteKey(source: string): string {
   const rest = source.slice(AGENT_MEMORY_SOURCE_PREFIX.length);
   return `${rest.split(':')[0]}:${rest.slice(rest.indexOf('/') + 1)}`;

@@ -1,5 +1,5 @@
 import {
-  createMemoryAt,
+  createMemory,
   DAG_LEVEL,
   EXTRACTED_TAG,
   Layer,
@@ -11,11 +11,9 @@ import { overlapPartners } from './overlap-index.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { CLI_ACTOR } from '../../base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { applyRebuild, settleFreshSummary } from './summary-settle.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import type { Consolidation } from '../../base/records/consolidation.js';
-import type { LessonWrites } from '../../base/records/lesson-writes.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
@@ -23,9 +21,7 @@ const DEFAULT_REBUILD_CAP = 20;
 const CLUSTER_JACCARD_MIN = 0.5;
 
 /** Sleep's store: the summary reads and writes, and the row writes every store has. */
-type DagStore = HippoStore & {
-  readonly hippoDb: { readonly consolidation: Consolidation; readonly lessonWrites: LessonWrites };
-};
+type DagStore = StoreWith<'consolidation' | 'lessonWrites'>;
 
 /** The summary options plus the config's default half-life, which new summaries start on. */
 export type DagBuildOptions = DagSummaryOptions & { baseHalfLifeDays: number; now: Date };
@@ -88,8 +84,9 @@ export interface DagBuildResult {
   rejected: number;
 }
 
-// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order,
-// so a single-tenant store iterates as before. buildEntityProfiles partitions its L2s by it too.
+// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order, so
+// a single-tenant store iterates as before. buildEntityProfiles partitions its L2s with this same
+// key.
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {
@@ -119,7 +116,7 @@ function createClusterSummaryEntry(
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
   // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the
   // facts' tenant, not 'default'.
-  const summaryEntry = createMemoryAt(
+  const summaryEntry = createMemory(
     summary,
     {
       layer: Layer.Semantic,
@@ -179,7 +176,7 @@ async function summarizeCluster(
   result.summariesCreated++;
 
   const linked = cluster.members.map((member) => ({ ...member, dagParentId: summaryEntry.id }));
-  await store.hippoDb.lessonWrites.writeTogether(linked);
+  await store.lessonWrites.writeTogether(linked);
   result.factsLinked += linked.length;
   await settleFreshSummary(store, summaryEntry, 'buildDag', 'buildDag-clean');
 }
@@ -326,7 +323,7 @@ export async function rebuildDirtySummaries(
   opts: DagSummaryOptions & { cap?: number; now: Date },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
-  const { summaries: queue, more } = await store.hippoDb.consolidation.dirtySummaries(cap);
+  const { summaries: queue, more } = await store.consolidation.dirtySummaries(cap);
 
   const result: DagRebuildResult = {
     attempted: queue.length,
@@ -340,8 +337,8 @@ export async function rebuildDirtySummaries(
   const rebuiltContent = new Map<string, string>();
   for (const [index, { summary, children }] of queue.entries()) {
     // Yield the macrotask queue every 25 summaries: each iteration is synchronous store work, so a
-    // batch of up to MAX_DAG_REBUILD_CAP would starve timers and IPC (server keep-alives, Vitest's
-    // birpc heartbeat).
+    // batch of up to 1000 would starve timers and IPC (server keep-alives, Vitest's birpc
+    // heartbeat).
     if (index > 0 && index % 25 === 0) {
       await new Promise((resolve) => setImmediate(resolve));
     }
@@ -392,7 +389,7 @@ function createProfileEntry(
 ): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
   const nowIso = home.now.toISOString();
-  const profileEntry = createMemoryAt(
+  const profileEntry = createMemory(
     summary,
     {
       layer: Layer.Semantic,
@@ -453,7 +450,7 @@ async function profileCluster(
   result.profilesCreated++;
 
   const linked = cluster.members.map((member) => ({ ...member, dagParentId: profileEntry.id }));
-  await store.hippoDb.lessonWrites.writeTogether(linked);
+  await store.lessonWrites.writeTogether(linked);
   result.l2sLinked += linked.length;
   await settleFreshSummary(store, profileEntry, 'buildEntityProfiles', 'buildEntityProfiles-clean');
 }

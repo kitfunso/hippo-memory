@@ -9,32 +9,20 @@ import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import {
   ambientStateFromTallies,
   foldAmbientRows,
-  tallyAmbientEntriesAt,
-  type AmbientState,
+  tallyAmbientEntries,
 } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { strengthOf, type Context } from '../types.js';
-import { auditRemoveErrors } from '../hippo-db/audit-maintenance.js';
-import { withDetached } from '../detached.js';
+import { strengthOf, type Context, type ContextWith, type SleepContext } from '../types.js';
+import { auditRemoveErrors } from '../auth/audit.js';
+import { globalTargetOf } from '../infra.js';
 import type { SleepOptions, SleepResult } from './sleep.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
+import type { SleepGroup, StoreWith } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import { globalTargetOf, type HippoDbContext } from '../hippo-db-context.js';
-import type { HippoDbStore } from '../../base/ports/hippo-db.js';
-import type { ConsolidateEvent } from '../../domain/consolidate/events.js';
-
-/** What a sleep did beyond its consolidation, as data; the CLI and the /v1/sleep reply turn each
- * event into its line. */
-export type SleepEvent =
-  | ConsolidateEvent
-  | { kind: 'graphSnapshotFailed'; message: string }
-  | { kind: 'graphDrainFailed'; message: string }
-  | { kind: 'graphStaleOpsSkipped'; count: number }
-  | { kind: 'graphExtractFailed'; message: string };
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial:
  * true` row, or shrink the pages dedup, the audit and ambient read; production never sets them. */
@@ -45,9 +33,12 @@ export interface SleepPhases {
   autoShare: typeof autoShare;
   computeAmbientState: typeof ambientStateFromTallies;
   loadPendingExtractionTenants: (
-    store: HippoDbStore,
+    store: StoreWith<'consolidation'>,
   ) => Promise<DirtyTenantSnapshot['dirtyTenants']>;
-  extractGraph: (store: HippoDbStore, tenantId: string) => ExtractResult | Promise<ExtractResult>;
+  extractGraph: (
+    store: StoreWith<'graphRebuild' | 'graphReads' | 'objects'>,
+    tenantId: string,
+  ) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
 }
 
@@ -57,7 +48,7 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   auditMemories,
   autoShare,
   computeAmbientState: ambientStateFromTallies,
-  loadPendingExtractionTenants: (store) => store.hippoDb.consolidation.dirtyGraphTenants(),
+  loadPendingExtractionTenants: (store) => store.consolidation.dirtyGraphTenants(),
   extractGraph: extractGraphChunked,
   pageSize: 1000,
 };
@@ -81,7 +72,7 @@ interface DirtyTenantSnapshot {
 /** `sleepWholeStore` with its phase dependencies overridable; tests pass stubs here, so the seam
  * never touches the public `SleepOptions`. */
 export async function runSleep(
-  ctx: HippoDbContext,
+  ctx: SleepContext,
   opts: SleepOptions,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
@@ -104,7 +95,7 @@ export async function runSleep(
 }
 
 async function runSleepPhases(
-  ctx: HippoDbContext,
+  ctx: SleepContext,
   opts: SleepOptions,
   phases: SleepPhases,
   counts: SleepCounts,
@@ -116,18 +107,12 @@ async function runSleepPhases(
   if (dryRun) return result;
 
   // Phase 4: Auto-share high-transfer-score memories to global.
-  if (!opts.noShare) Object.assign(result, await shareOnSleep(ctx, phases));
+  if (!opts.noShare) await shareOnSleep(ctx, phases, result);
 
   // Phase 5: Post-sleep ambient state summary.
-  const ambient = await summarizeAmbient(ctx, phases, pages);
-  if (ambient) {
-    result.ambient = ambient;
-    counts.ambient = ambient.totalMemories;
-  }
+  counts.ambient = await summarizeAmbient(ctx, phases, result, pages);
 
-  const drained = await drainGraphQueue(ctx, phases, snapshot);
-  if (drained.events.length > 0) result.events = [...(result.events ?? []), ...drained.events];
-  if (drained.graph) result.graph = drained.graph;
+  await drainGraphQueue(ctx, phases, snapshot, result);
   return result;
 }
 
@@ -138,7 +123,7 @@ interface CorePhasesRun {
 
 /** Phases 1 to 3, the ones a dry run also runs. */
 async function runCorePhases(
-  ctx: HippoDbContext,
+  ctx: SleepContext,
   phases: SleepPhases,
   dryRun: boolean,
   counts: SleepCounts,
@@ -169,10 +154,8 @@ async function runCorePhases(
 
   // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would
   // remove).
-  const auditOptions = { dryRun, consolidateResult, dedupResult, pages };
-  const audit = await runQualityAudit(ctx, phases, auditOptions);
-  counts.auditDeleted = audit.errorsRemoved;
-  if (audit.errorsRemoved > 0 || audit.warningCount > 0) result.audit = audit;
+  const auditOptions = { dryRun, consolidateResult, dedupResult, result, pages };
+  counts.auditDeleted = await runQualityAudit(ctx, phases, auditOptions);
   return { result, pages };
 }
 
@@ -180,7 +163,7 @@ async function runCorePhases(
 // read would miss tenants dedup touched. Fail-soft: a failed read skips the graph refresh this
 // sleep and never aborts core sleep.
 async function snapshotDirtyTenants(
-  ctx: HippoDbContext,
+  ctx: SleepContext,
   phases: SleepPhases,
   dryRun: boolean,
 ): Promise<DirtyTenantSnapshot> {
@@ -230,7 +213,10 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
 }
 
 /** Every row of every tenant in load order, `limit` per read. */
-async function* entryPages(store: HippoDbStore, limit: number): AsyncGenerator<MemoryEntry[]> {
+async function* entryPages(
+  store: StoreWith<'consolidation'>,
+  limit: number,
+): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | undefined;
   do {
     const page = await store.entriesWhere({ tenantId: ALL_TENANTS }, { limit, after });
@@ -243,21 +229,20 @@ interface QualityAuditOptions {
   readonly dryRun: boolean;
   readonly consolidateResult: ConsolidateOutcome;
   readonly dedupResult: DedupOutcome;
+  readonly result: SleepResult;
   readonly pages: () => AsyncIterable<MemoryEntry[]>;
 }
 
-type AuditSummary = NonNullable<SleepResult['audit']>;
-
-/** The audit errors deleted (or that would be under dryRun) and the warnings; each row is judged
- * alone, so pages need no shared state beyond the issues found. */
+/** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so
+ * pages need no shared state beyond the issues found. */
 async function runQualityAudit(
-  ctx: HippoDbContext,
+  ctx: SleepContext,
   phases: SleepPhases,
   options: QualityAuditOptions,
-): Promise<AuditSummary> {
-  const { dryRun, consolidateResult, dedupResult, pages } = options;
-  // The pages follow consolidation and dedup, so only a dry run still holds the rows they
-  // would remove.
+): Promise<number> {
+  const { dryRun, consolidateResult, dedupResult, result, pages } = options;
+  // The pages follow consolidation and dedup, so only a dry run still holds the rows they would
+  // remove.
   const wouldGo = dryRun
     ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)]
     : [];
@@ -265,71 +250,84 @@ async function runQualityAudit(
   const issues: AuditIssue[] = [];
   for await (const page of pages()) {
     const rows = page.filter((e) => !planned.has(e.id));
-    const backing = await ctx.store.hippoDb.auditMaintenance.objectBackedAmong(
-      rows.map((e) => e.id),
-    );
+    const backing = await ctx.store.auditMaintenance.objectBackedAmong(rows.map((e) => e.id));
     issues.push(...phases.auditMemories(rows, backing).issues);
   }
-  if (issues.length === 0) return { errorsRemoved: 0, warningCount: 0 };
+  if (issues.length === 0) return 0;
   const errors = issues.filter((i) => i.severity === 'error');
   const warnings = issues.filter((i) => i.severity === 'warning');
   const gone = dryRun
     ? errors.map((issue) => issue.memoryId)
     : await auditRemoveErrors(ctx, 'sleep-audit', errors);
-  return { errorsRemoved: gone.length, warningCount: warnings.length };
+  if (gone.length > 0 || warnings.length > 0) {
+    result.audit = {
+      errorsRemoved: gone.length,
+      warningCount: warnings.length,
+    };
+  }
+  return gone.length;
 }
 
-/** The auto-share counts, each set only when non-zero so an idle share leaves the result as
- * it was. */
 async function shareOnSleep(
-  ctx: HippoDbContext,
+  ctx: ContextWith<SleepGroup, 'sharing' | 'folderFiles'>,
   phases: SleepPhases,
-): Promise<Pick<SleepResult, 'shared' | 'secretSkipped' | 'rejectedSkipped'>> {
+  result: SleepResult,
+): Promise<void> {
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = globalTargetOf(ctx);
-  if (!ctx.config.autoShareOnSleep || target === undefined) return {};
   const { store } = ctx;
-  const { sharing, folderFiles } = store.hippoDb;
+  const { sharing, folderFiles } = store;
+  if (
+    !ctx.config.autoShareOnSleep ||
+    target === undefined ||
+    sharing === undefined ||
+    folderFiles === undefined
+  ) {
+    return;
+  }
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable,
   // not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = await withDetached(ctx, (detached) =>
-    phases.autoShare(
-      {
-        store: {
-          hippoDb: { sharing, folderFiles },
-          entriesWhere: (filter, page) => store.entriesWhere(filter, page),
-        },
+  const shared = await phases.autoShare(
+    {
+      store: {
+        sharing,
+        folderFiles,
+        entriesWhere: (filter, page) => store.entriesWhere(filter, page),
       },
-      target,
-      {
-        tenantId: ALL_TENANTS,
-        minScore: AUTO_SHARE_MIN_SCORE,
-        stats: autoShareStats,
-        embed: ctx.infra,
-        detached,
-      },
-    ),
+    },
+    target,
+    {
+      tenantId: ALL_TENANTS,
+      minScore: AUTO_SHARE_MIN_SCORE,
+      stats: autoShareStats,
+      embed: ctx.infra,
+    },
   );
-  const { secretSkipped, rejectedSkipped } = autoShareStats;
-  return {
-    ...(shared.length > 0 && { shared: shared.length }),
-    ...(secretSkipped > 0 && { secretSkipped }),
-    ...(rejectedSkipped > 0 && { rejectedSkipped }),
-  };
+  if (shared.length > 0) {
+    result.shared = shared.length;
+  }
+  if (autoShareStats.secretSkipped > 0) {
+    result.secretSkipped = autoShareStats.secretSkipped;
+  }
+  if (autoShareStats.rejectedSkipped > 0) {
+    result.rejectedSkipped = autoShareStats.rejectedSkipped;
+  }
 }
 
-/** The ambient state after sleep: null when ambient is off or no current row is left. */
+/** Returns the ambient total the audit row reports: 0 when ambient is off or no current row is
+ * left. */
 async function summarizeAmbient(
   ctx: Context,
   phases: SleepPhases,
+  result: SleepResult,
   pages: () => AsyncIterable<MemoryEntry[]>,
-): Promise<AmbientState | null> {
-  if (!ctx.config.ambient.enabled) return null;
+): Promise<number> {
+  if (!ctx.config.ambient.enabled) return 0;
   // One running tally at one `now`, so the float sums match one whole read row for row.
   const now = ctx.infra.clock();
   const rules = strengthOf(ctx);
-  const tallies = tallyAmbientEntriesAt([], now, rules);
+  const tallies = tallyAmbientEntries([], now, rules);
   for await (const page of pages()) {
     foldAmbientRows(
       tallies,
@@ -338,81 +336,86 @@ async function summarizeAmbient(
       rules,
     );
   }
-  return tallies.total === 0 ? null : phases.computeAmbientState(tallies);
+  if (tallies.total === 0) return 0;
+  result.ambient = phases.computeAmbientState(tallies);
+  return result.ambient.totalMemories;
 }
 
 // Phase 6: rebuild the graph of every tenant marked dirty since the last sleep, so graph recall
 // runs on fresh data. Fault-isolated: consolidation has already committed, so no failure here
 // aborts sleep; a failed tenant stays pending.
 async function drainGraphQueue(
-  ctx: HippoDbContext,
+  ctx: SleepContext,
   phases: SleepPhases,
   snapshot: DirtyTenantSnapshot,
-): Promise<GraphDrain> {
-  const events: SleepEvent[] = [];
+  result: SleepResult,
+): Promise<void> {
   try {
     if (snapshot.error) {
       // Core sleep already succeeded; surface the skipped graph refresh as an event.
-      events.push({ kind: 'graphSnapshotFailed', message: snapshot.error });
+      result.events = [
+        ...(result.events ?? []),
+        { kind: 'graphSnapshotFailed', message: snapshot.error },
+      ];
     }
     const rebuilt: GraphTotals = { tenants: 0, entities: 0, relations: 0 };
     // dirtyTenants was snapshotted before the memory-deleting phases above.
-    for (const dirty of snapshot.dirtyTenants) {
-      const tenant = await rebuildDirtyTenant(ctx, phases, dirty);
-      events.push(...tenant.events);
-      if (tenant.extracted === undefined) continue;
-      rebuilt.tenants += 1;
-      rebuilt.entities += tenant.extracted.entities;
-      rebuilt.relations += tenant.extracted.relations;
+    for (const { tenantId, maxPendingId } of snapshot.dirtyTenants) {
+      await rebuildDirtyTenant(ctx, { phases, dirty: { tenantId, maxPendingId }, rebuilt, result });
     }
-    return rebuilt.tenants > 0 ? { events, graph: rebuilt } : { events };
+    if (rebuilt.tenants > 0) {
+      result.graph = rebuilt;
+    }
   } catch (graphErr) {
     log.warn(`sleep: graph drain phase failed: ${errorMessage(graphErr)}`, errorFields(graphErr));
-    events.push({ kind: 'graphDrainFailed', message: errorMessage(graphErr) });
-    return { events };
+    result.events = [
+      ...(result.events ?? []),
+      { kind: 'graphDrainFailed', message: errorMessage(graphErr) },
+    ];
   }
 }
 
 type GraphTotals = NonNullable<SleepResult['graph']>;
 
-/** The graph phase's events in order, and its totals when a tenant was rebuilt and none threw. */
-interface GraphDrain {
-  readonly events: readonly SleepEvent[];
-  readonly graph?: GraphTotals;
+interface RebuildDirtyTenantOptions {
+  readonly phases: SleepPhases;
+  readonly dirty: DirtyTenantSnapshot['dirtyTenants'][number];
+  readonly rebuilt: GraphTotals;
+  readonly result: SleepResult;
 }
 
-/** One tenant's rebuild: its events in order, and its counts when the extract ran. */
-interface TenantRebuild {
-  readonly events: readonly SleepEvent[];
-  readonly extracted?: Pick<GraphTotals, 'entities' | 'relations'>;
-}
-
-/** Rebuilds one dirty tenant's graph and drains its queue; on a failure the tenant
- * stays pending. */
+/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is an event
+ * and the tenant stays pending. */
 async function rebuildDirtyTenant(
-  ctx: HippoDbContext,
-  phases: SleepPhases,
-  dirty: DirtyTenantSnapshot['dirtyTenants'][number],
-): Promise<TenantRebuild> {
-  const events: SleepEvent[] = [];
-  let extracted: TenantRebuild['extracted'];
+  ctx: SleepContext,
+  { phases, dirty, rebuilt, result }: RebuildDirtyTenantOptions,
+): Promise<void> {
   try {
     const ext = await phases.extractGraph(ctx.store, dirty.tenantId);
     // Count the rebuild as soon as it succeeds; it happened regardless of the drain-mark below.
-    extracted = { entities: ext.entities, relations: ext.relations };
-    if (ext.skipped) events.push({ kind: 'graphStaleOpsSkipped', count: ext.skipped });
+    rebuilt.tenants += 1;
+    rebuilt.entities += ext.entities;
+    rebuilt.relations += ext.relations;
+    if (ext.skipped) {
+      result.events = [
+        ...(result.events ?? []),
+        { kind: 'graphStaleOpsSkipped', count: ext.skipped },
+      ];
+    }
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals
     // stay pending. Marked only after the last chunk, so a run stopped between chunks leaves the
     // tenant for the next one.
-    await ctx.store.hippoDb.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
+    await ctx.store.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
   } catch (tenantErr) {
     log.warn(
       `sleep: graph extract failed for tenant ${dirty.tenantId}, left pending: ${errorMessage(tenantErr)}`,
       errorFields(tenantErr),
     );
-    events.push({ kind: 'graphExtractFailed', message: errorMessage(tenantErr) });
+    result.events = [
+      ...(result.events ?? []),
+      { kind: 'graphExtractFailed', message: errorMessage(tenantErr) },
+    ];
   }
-  return extracted === undefined ? { events } : { events, extracted };
 }
 
 interface SleepAuditMetadata {
@@ -438,7 +441,7 @@ interface EmitSleepAuditOptions {
 // One 'consolidate' row per sleep, emitted from finally so a partial failure still reports what got
 // done. An audit failure is logged and never replaces the original phase error.
 async function emitSleepAudit(
-  ctx: HippoDbContext,
+  ctx: SleepContext,
   { opts, dryRun, counts, phaseError }: EmitSleepAuditOptions,
 ): Promise<void> {
   try {

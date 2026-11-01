@@ -9,7 +9,7 @@ import { reject } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
-import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../src/base/records/connectors.js';
+import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../src/base/ports/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   outcomeOf,
@@ -84,7 +84,7 @@ function copyOfFixture(): string {
 }
 
 async function runSide(side: ConnectorSide<FixtureStore>, calls: readonly Call[]): Promise<Side> {
-  const group = side.store.hippoDb.connectorWrites;
+  const group = side.store.connectorWrites;
   const outcomes: Outcome<Value>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => call(group, side.store)));
   await side.store.close();
@@ -392,7 +392,7 @@ describe('on hippo.db the companion rows commit with the entry or not at all', (
   ] as const)('a failed insert into %s leaves no memory row, no record and no audit row', async (table, event) => {
     const side = sqliteConnectorSide(copyWithBrokenLog(table));
     const entry = fresh('a line whose event log write fails', { scope: 'quarantine:private:unscoped' });
-    const group = side.store.hippoDb.connectorWrites;
+    const group = side.store.connectorWrites;
     await expect(
       group.writeConnectorEntry({
         entry,
@@ -410,7 +410,7 @@ describe('on hippo.db the companion rows commit with the entry or not at all', (
     const { raw } = seeded;
     const root = copyWithBrokenLog('slack_event_log');
     const side = sqliteConnectorSide(root);
-    const group = side.store.hippoDb.connectorWrites;
+    const group = side.store.connectorWrites;
     const refused = group.archiveConnectorEntry({
       tenantId: TENANT_A,
       actor: ACTOR,

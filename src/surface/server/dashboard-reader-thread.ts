@@ -1,5 +1,6 @@
 // Entry of the dashboard's reader thread; dashboard-reader.ts starts it and nothing imports it. It
 // owns the snapshot clock and answers each read through the api's dashboard functions.
+import { evalStoreRules } from '../../infra/eval-switches.js';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { adminActor } from '../../api/index.js';
 import { dashboardDetailAfterWrite, dashboardMemoryDetail } from '../../api/dashboard/detail.js';
@@ -8,12 +9,12 @@ import { buildMemoryPage, buildSearch } from '../../api/dashboard/queries.js';
 import { createSnapshotClock } from '../../api/dashboard/snapshot-clock.js';
 import type { Context } from '../../api/types.js';
 import { configReader } from '../../host/config-file.js';
-import { sqliteDashboardReads, sqliteStore } from '../open-store.js';
+import { defaultDashboardReads, defaultStore } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { postReply } from '../../base/util/thread-reply.js';
 import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';
 import { failureReply } from './failure-reply.js';
-import { rootInfra, rootStoreRules } from '../../infra/ports.js';
+import { rootInfra } from '../../infra/ports.js';
 
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
@@ -24,9 +25,9 @@ function readerStore(
   hippoRoot: string,
   clock: { readonly nowMs: number; readonly wallMs: number },
 ) {
-  const rules = rootStoreRules(envLossAversionRatio());
-  const store = sqliteStore(hippoRoot, rules);
-  const reads = sqliteDashboardReads(hippoRoot, rules);
+  const rules = evalStoreRules(envLossAversionRatio());
+  const store = defaultStore(hippoRoot, rules);
+  const reads = defaultDashboardReads(hippoRoot, rules);
   const stamps = createSnapshotClock(
     reads,
     () => clock.nowMs,

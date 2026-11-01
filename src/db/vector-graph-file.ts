@@ -4,7 +4,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../host/atomic-write.js';
-import { fnv1a32 } from '../base/util/fnv1a.js';
 import { isJsonObject, isJsonString, tryParseJson } from '../base/util/json.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import { getHippoDbPath } from './connect.js';
@@ -35,7 +34,6 @@ const HEADER_AT = {
 /** Where each field sits, in bytes from the record start. */
 const RECORD_AT = {
   rowid: 0,
-  // The intact walk matches a row's memory id with its node's by this hash.
   idHash: 8,
   level: 12,
   flags: 13,
@@ -47,6 +45,14 @@ const ENCODE_TURN_NODES = 1024;
 
 export function graphFilePath(hippoRoot: string, dim: number): string {
   return path.join(hippoRoot, `vector-graph-${dim}.bin`);
+}
+
+/** FNV-1a over the id's UTF-16 units: the intact walk compares a row's memory id with its node's
+ * by this. */
+export function idHash(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
+  return h >>> 0;
 }
 
 const align = (n: number, to: number): number => Math.ceil(n / to) * to;
@@ -177,7 +183,7 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
     if (!replaced) live++;
     const off = recordsAt + i * recordBytes;
     view.setFloat64(off + RECORD_AT.rowid, rowids[node], true);
-    view.setUint32(off + RECORD_AT.idHash, fnv1a32(ids[node]), true);
+    view.setUint32(off + RECORD_AT.idHash, idHash(ids[node]), true);
     bytes[off + RECORD_AT.level] = data.level;
     bytes[off + RECORD_AT.flags] = replaced ? FLAG_REPLACED : 0;
     view.setUint16(off + RECORD_AT.linkCount, data.links[0].length, true);

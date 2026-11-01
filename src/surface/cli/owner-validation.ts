@@ -1,6 +1,8 @@
 /** --owner validation per MEMORY_ENVELOPE.md: `user:<id>` | `agent:<id>`, id in `[A-Za-z0-9_-]+`.
  * Warn-only by default for legacy scripted callers; `HIPPO_STRICT_OWNER=1` rejects and exits. */
 
+import { processEnv } from '../../base/util/env.js';
+
 const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
 export const OWNER_CONTRACT_HINT =
   'Must match ^(user|agent):[A-Za-z0-9_-]+$ (e.g. user:alice, agent:capture-bot).';
@@ -40,4 +42,9 @@ export function validateOwner(
       `[warn] --owner "${owner}" does not match the contract. ${OWNER_CONTRACT_HINT} ` +
       `Accepting for back-compat; set HIPPO_STRICT_OWNER=1 to reject.`,
   };
+}
+
+/** True when strict-owner enforcement is enabled via env var. */
+export function isStrictOwnerEnv(env: NodeJS.ProcessEnv = processEnv()): boolean {
+  return env.HIPPO_STRICT_OWNER === '1';
 }

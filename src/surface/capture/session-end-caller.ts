@@ -1,14 +1,12 @@
 // SessionEnd for a caller on another machine: the owner's handoff, then the owner's snapshot for
 // the session closed, both under its tenant and project.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { EntryContext } from '../../api/types.js';
+import type { ContextWith, EntryContext } from '../../api/types.js';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { bindCaller, checkedWorkingState } from './caller-session.js';
 import { snapshotFields, type WorkingState } from '../../base/session/working-state.js';
 import { withEntryInfra } from '../entry-infra.js';
-import { withHippoDb } from '../../api/hippo-db-context.js';
-import { closeCallerSession, type CallerSessionEndResult } from '../../api/session-end.js';
 
 export type CallerEvidence = Pick<HandoffEvidence, 'gitRef' | 'dirtyTree' | 'testStatus'>;
 
@@ -20,6 +18,12 @@ export interface CallerSessionEndRequest {
   readonly workingState: WorkingState | null;
   /** The git state the caller saw when the session ended. */
   readonly evidence: CallerEvidence | null;
+}
+
+export interface CallerSessionEndResult {
+  /** False when an earlier handoff already covers the session, as on a retry. */
+  readonly handoffWritten: boolean;
+  readonly snapshotsClosed: number;
 }
 
 const TEST_STATUSES: ReadonlySet<string> = new Set(['pass', 'fail', 'unknown']);
@@ -41,15 +45,26 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
   return { gitRef, dirtyTree, testStatus };
 }
 
-/** Call on a session's final end only, since it closes the snapshot. */
+/**
+ * Call on a session's final end only, since it closes the snapshot. A failed close throws so the
+ * sender retries, and the retry writes no second handoff.
+ */
 export async function sessionEndHandoffForCaller(
-  given: EntryContext,
+  given: EntryContext<ContextWith<'sessions'>>,
   req: CallerSessionEndRequest,
 ): Promise<CallerSessionEndResult> {
-  const ctx = withHippoDb(withEntryInfra(given));
+  const ctx = withEntryInfra(given);
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const derived = state === null ? null : snapshotFields(state);
-  return closeCallerSession(ctx, key, { sessionId: req.sessionId, evidence, derived });
+  const { sessions } = ctx.store;
+  const sessionEnd = {
+    sessionId: req.sessionId,
+    evidence,
+    derived: state === null ? null : snapshotFields(state),
+  };
+  const handoff = await sessions.save(ctx.tenantId, 'handoff', { sessionEnd }, key);
+  const close = { status: 'session-ended', sessionId: req.sessionId };
+  const snapshotsClosed = await sessions.clear(ctx.tenantId, 'snapshot', close, key);
+  return { handoffWritten: handoff !== null, snapshotsClosed };
 }

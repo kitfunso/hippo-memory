@@ -5,7 +5,7 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { type FullContext } from '../_helpers/api-ctx.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
-import { auditMemoryQuality } from '../../src/api/hippo-db/audit-maintenance.js';
+import { auditMemoryQuality } from '../../src/api/auth/audit.js';
 import { deduplicateStore, type DedupPair } from '../../src/domain/consolidate/dedupe.js';
 import { auditMemories, type AuditIssue } from '../../src/base/memory/memory-audit.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';

@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { parkInDlq } from '../../src/api/dead-letters.js';
+import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -18,7 +18,6 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { asCommand } from '../_helpers/test-cli.js';
 
 function runCli(cwd: string, args: string[], extraEnv: Record<string, string> = {}) {
   return runCliAs(args, {
@@ -83,15 +82,12 @@ describe('hippo github CLI', () => {
     const origLog = console.log;
     console.log = (...a: unknown[]) => logs.push(a.map(String).join(' '));
     try {
-      await asCommand((cli) =>
-        handleGitHub({
-          cli,
-          hippoRoot,
-          tenantId: 'default',
-          args: ['backfill'],
-          flags: { repo: 'acme/widgets' },
-        }),
-      );
+      await handleGitHub({
+        hippoRoot,
+        tenantId: 'default',
+        args: ['backfill'],
+        flags: { repo: 'acme/widgets' },
+      });
     } finally {
       console.log = origLog;
     }
@@ -117,7 +113,7 @@ describe('hippo github CLI', () => {
   });
 
   it('dlq list with rows prints bucket and tenant', async () => {
-    await parkInDlq({ store: sqliteStore(hippoRoot) }, githubDlq, {
+    await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
       tenantId: 'default',
       rawPayload: '{"x":1}',
       error: 'bad envelope',
@@ -133,7 +129,7 @@ describe('hippo github CLI', () => {
 
   it('dlq list reads the HIPPO_TENANT tenant, not default', async () => {
     for (const tenantId of ['default', 'acme']) {
-      await parkInDlq({ store: sqliteStore(hippoRoot) }, githubDlq, {
+      await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
         tenantId,
         rawPayload: '{}',
         error: `err-${tenantId}`,
@@ -191,7 +187,7 @@ describe('hippo github CLI', () => {
 
   /** Parks one signed delivery with every column the webhook route writes, and returns the row id. */
   function parkDelivery(eventName: string, body: string, secret: string = SECRET): Promise<number> {
-    return parkInDlq({ store: sqliteStore(hippoRoot) }, githubDlq, {
+    return parkInDlq(githubDlq, sqliteStore(hippoRoot), {
       tenantId: 'default',
       rawPayload: body,
       error: 'unroutable: installation_id=99 repo=acme/repo',
@@ -212,7 +208,7 @@ describe('hippo github CLI', () => {
   const liveRaws = (artifactRef: string) =>
     loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
   const retryCountOf = async (id: number) =>
-    (await sqliteStore(hippoRoot).hippoDb.connectorEvents.deadLetters('github', 'default', { limit: 100 })).find(
+    (await sqliteStore(hippoRoot).connectorEvents.deadLetters('github', 'default', { limit: 100 })).find(
       (row) => row.id === id,
     )?.retryCount;
 
@@ -297,15 +293,12 @@ describe('hippo github CLI', () => {
     const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     try {
-      await asCommand((cli) =>
-        handleGitHub({
-          cli,
-          hippoRoot,
-          tenantId: 'default',
-          args: ['backfill'],
-          flags: { repo, max },
-        }),
-      );
+      await handleGitHub({
+        hippoRoot,
+        tenantId: 'default',
+        args: ['backfill'],
+        flags: { repo, max },
+      });
       return JSON.parse(String(printed.mock.calls[0][0])).ingested.issues;
     } finally {
       vi.unstubAllEnvs();

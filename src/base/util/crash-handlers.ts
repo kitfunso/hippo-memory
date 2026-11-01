@@ -28,7 +28,7 @@ function afterFlush(leave: () => void): void {
 
 /**
  * Exit once stdout and stderr have drained, so the last reply and the last log line reach their
- * reader; capped at FLUSH_CAP_MS.
+ * reader; capped at 1 s.
  */
 export function exitAfterFlush(code: number): void {
   process.exitCode = code;

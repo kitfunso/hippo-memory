@@ -2,11 +2,10 @@
 
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
-import { conflictListOpen, conflictPages, conflictResolve } from '../../api/hippo-db/conflicts.js';
+import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
 import { memoryGetTouchable } from '../../api/memories/memories.js';
-import type { HippoDbToolCall, LocalToolCall } from './protocol.js';
+import { mcpApiContext, type GroupToolCall, type LocalToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
-import { tenantStatus } from '../../api/status.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, optionalStringArg, stringArg } from './tool-args.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
@@ -16,7 +15,10 @@ const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
-export async function runPredictBaserateTool({ args, api }: HippoDbToolCall): Promise<string> {
+export async function runPredictBaserateTool({
+  args,
+  api,
+}: GroupToolCall<'objects'>): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no
   // surface can skip it.
   const classTag = stringArg(args, 'class_tag', MAX_ID_LEN).trim();
@@ -52,19 +54,23 @@ export async function runPredictBaserateTool({ args, api }: HippoDbToolCall): Pr
   return lines.join('\n');
 }
 
-export async function runStatusTool({ config, api }: HippoDbToolCall): Promise<string> {
-  const status = await tenantStatus(api, api.infra.clock(), AT_RISK_BELOW);
-  const avgStrength = status.total > 0 ? status.avgStrength.toFixed(2) : '0';
+export async function runStatusTool({ config, api }: GroupToolCall<'reports'>): Promise<string> {
+  const tallies = await api.store.reports.memoryStatus(
+    api.tenantId,
+    api.infra.clock(),
+    AT_RISK_BELOW,
+  );
+  const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
-    `Memories: ${status.total} (${status.pinned} pinned, ${status.errors} errors)`,
+    `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
     `Avg strength: ${avgStrength}`,
-    `At risk (<${AT_RISK_BELOW}): ${status.atRisk}`,
-    `Open conflicts: ${status.openConflicts}`,
+    `At risk (<${AT_RISK_BELOW}): ${tallies.atRisk}`,
+    `Open conflicts: ${tallies.openConflicts}`,
     `Half-life default: ${config.defaultHalfLifeDays}d`,
   ].join('\n');
 }
 
-export async function runConflictsTool({ ctx, api }: HippoDbToolCall): Promise<string> {
+export async function runConflictsTool({ ctx, api }: GroupToolCall<'conflicts'>): Promise<string> {
   const lines: string[] = [];
   for await (const page of conflictPages((p) =>
     conflictListOpen(api, { ...p, project: ctx.project }),
@@ -78,7 +84,7 @@ export async function runConflictsTool({ ctx, api }: HippoDbToolCall): Promise<s
   return lines.length === 0 ? 'No open conflicts.' : lines.join('\n');
 }
 
-export async function runResolveTool({ args, api }: HippoDbToolCall): Promise<string> {
+export async function runResolveTool({ args, api }: GroupToolCall<'conflicts'>): Promise<string> {
   const conflictId = numberArg(args, 'conflict_id');
   const keepId = stringArg(args, 'keep', MAX_ID_LEN);
   const forget = boolArg(args, 'forget');
@@ -102,22 +108,23 @@ export async function runResolveTool({ args, api }: HippoDbToolCall): Promise<st
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export async function runShareTool({ args, api, store }: LocalToolCall): Promise<string> {
+export async function runShareTool({ args, ctx, store }: LocalToolCall): Promise<string> {
   const shareId = stringArg(args, 'id', MAX_ID_LEN);
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = boolArg(args, 'force');
+  const apiCtx = mcpApiContext(ctx);
   // Checked before the share, whose personal-row refusal would tell another person the id exists.
-  await memoryGetTouchable(api, shareId);
+  await memoryGetTouchable(apiCtx, shareId);
   // The share reads the id in the caller's tenant only, so tenant A cannot copy tenant B's row to
   // the global store.
-  const shared = await shareToGlobal({ ...api, store }, shareId, { force });
+  const shared = await shareToGlobal({ ...apiCtx, store }, shareId, { force });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
 }
 
-export async function runPeersTool({ api }: LocalToolCall): Promise<string> {
+export async function runPeersTool({ ctx }: LocalToolCall): Promise<string> {
   // Tenant-scope peer discovery to the caller, as hippo_share does.
-  const peers = await sharePeers(api);
+  const peers = await sharePeers(mcpApiContext(ctx));
   if (peers.length === 0) return 'No peers found.';
   return peers
     .map(

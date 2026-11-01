@@ -20,7 +20,7 @@ import type {
   CompactionCounts,
   TokenTally,
   Diagnostics,
-} from '../../../base/records/diagnostics.js';
+} from '../../../base/ports/store/diagnostics.js';
 import { type OnHandle, readOnly } from '../runtime/open.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -35,8 +35,8 @@ function attempt<T>(read: () => T): Attempt<T> {
   }
 }
 
-/** Everything `hippo doctor` reads from one store; throws when its schema version cannot
- * be read. */
+/** Everything `hippo doctor` reads from one store; throws when its schema version cannot be
+ * read. */
 function storeHealth(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth {
   return {
     schemaVersion: getSchemaVersion(db),

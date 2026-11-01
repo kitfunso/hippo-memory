@@ -20,8 +20,8 @@ import {
 import { cachedStatement } from './statement-cache.js';
 import { placeholders } from './sql.js';
 
-// The graph beat the paged scan at both p50 and p95 from this many vectors on; docs/ARCHITECTURE.md
-// has the bench.
+// The graph beat the paged scan at both p50 and p95 from 1,000 vectors on; docs/ARCHITECTURE.md has
+// the bench.
 /** Stored vectors a store holds before its nearest-row reads search a graph. */
 export const VECTOR_GRAPH_THRESHOLD = 1_000;
 /** Share of a graph's nodes that may be stale, or its file's rows new, before it is rebuilt. */
@@ -49,8 +49,8 @@ export interface GraphRows {
   /** The memory id and rowid of each node. */
   readonly ids: string[];
   readonly rowids: number[];
-  /** The node that holds each memory's current vector; a node no id points at holds a
-   * replaced one. */
+  /** The node that holds each memory's current vector; a node no id points at holds a replaced
+   * one. */
   readonly nodeOf: Map<string, number>;
   /** The highest rowid read. */
   lastRowid: number;
@@ -160,8 +160,8 @@ export type CatchUp =
   | { readonly kind: 'current' | 'lost' }
   | { readonly kind: 'behind'; readonly afterRowid: number };
 
-/** Inserts the rows another connection wrote since the graph last read, up to `inlineRows`
- * of them. */
+/** Inserts the rows another connection wrote since the graph last read, up to `inlineRows` of
+ * them. */
 export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number): CatchUp {
   if (storedModel(db) !== g.model) return { kind: 'lost' };
   const afterRowid = intactRowid(db, g);

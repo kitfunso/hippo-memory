@@ -4,8 +4,8 @@
  * (api/context/context-render.ts). Leaf module, no store/api imports.
  */
 
-/** What a member's flagged row in a shared scope carries: it is kept, and prints framed
- * as untrusted. */
+/** What a member's flagged row in a shared scope carries: it is kept, and prints framed as
+ * untrusted. */
 export const INSTRUCTION_LIKE_TAG = 'instruction-like';
 
 /** What every untrusted write (connector text) carries, so it prints framed whatever the
@@ -42,8 +42,8 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
       'i',
     ),
   },
-  // "always"/"never" alone (ordinary PR prose) doesn't flag without an agent-facing target
-  // nearby too.
+  // "always"/"never" alone (ordinary PR prose) doesn't flag without an agent-facing target nearby
+  // too.
   {
     name: 'standing-order',
     re: new RegExp(
@@ -75,8 +75,8 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'unicode-tag-chars', re: /[\u{E0000}-\u{E007F}]/u },
 ];
 
-// A stray zero-width char has legitimate uses (ZWJ); only a run of 3+ adjacent ones reads
-// as smuggling.
+// A stray zero-width char has legitimate uses (ZWJ); only a run of 3+ adjacent ones reads as
+// smuggling.
 const ZERO_WIDTH_RUN_RE = /[\u200B-\u200F\u2060-\u2064]{3,}/;
 
 // Reorders what is drawn without changing a byte a pattern reads, and ordinary right-to-left prose
@@ -160,8 +160,8 @@ function referencedCharacter(
   return drawn ? String.fromCodePoint(code) : reference;
 }
 
-/** `content` as a reader or a model takes it in. For matching only: what is stored is
- * never this. */
+/** `content` as a reader or a model takes it in. For matching only: what is stored is never
+ * this. */
 function screeningForm(content: string): string {
   return (
     content

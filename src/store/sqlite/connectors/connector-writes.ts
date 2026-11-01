@@ -3,17 +3,17 @@
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { logEvent, loggedMemory } from './events.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
-import { bound, type Bodies } from '../runtime/bound.js';
+import { bound } from '../runtime/bound.js';
 import { openStore } from '../runtime/handles.js';
 import type {
   ConnectorArchive,
   ConnectorWrite,
   ConnectorWriteOutcome,
   ConnectorWrites,
-} from '../../../base/records/connectors.js';
+} from '../../../base/ports/store.js';
 import { recordQuarantine } from './quarantine.js';
-import { writeEntryInOwnTx } from '../entries/entry-writes.js';
-import { archiveRaw } from '../entries/sqlite-entry-writes.js';
+import { stampOriginProject } from '../entries/entry-row.js';
+import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from '../entries/entry-writes.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever
  * sees it. */
@@ -23,10 +23,9 @@ class EventAlreadyLogged extends Error {}
  * second store must order them. */
 function writeWithCompanions(
   db: DatabaseSyncLike,
-  files: StoreFiles,
   { entry, actor, event, quarantine }: ConnectorWrite,
 ): void {
-  const afterWrite = (handle: DatabaseSyncLike, memoryId: string): void => {
+  writeInOwnTenant(db, entry, actor, (handle, memoryId) => {
     if (quarantine) {
       recordQuarantine(handle, {
         tenantId: entry.tenantId,
@@ -37,17 +36,12 @@ function writeWithCompanions(
       });
     }
     if (event && !logEvent(handle, event, memoryId)) throw new EventAlreadyLogged();
-  };
-  writeEntryInOwnTx(db, files, entry, { actor, afterWrite });
+  });
 }
 
-function writeOnce(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  write: ConnectorWrite,
-): ConnectorWriteOutcome {
+function writeOnce(db: DatabaseSyncLike, write: ConnectorWrite): ConnectorWriteOutcome {
   try {
-    writeWithCompanions(db, files, write);
+    writeWithCompanions(db, write);
     return { outcome: 'written' };
   } catch (err) {
     if (!(err instanceof EventAlreadyLogged) || !write.event) throw err;
@@ -72,15 +66,20 @@ function archiveConnectorEntry(
  * write leaves none. */
 export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
   return {
-    ...bound(
+    ...bound<Pick<ConnectorWrites, 'writeConnectorEntry'>>(
       on,
       {
-        writeConnectorEntry: (db, write) => writeOnce(db, files, write),
-      } satisfies Bodies<Pick<ConnectorWrites, 'writeConnectorEntry'>>,
+        writeConnectorEntry: (db, write) => {
+          const entry = stampOriginProject(files, write.entry);
+          const result = writeOnce(db, { ...write, entry });
+          if (result.outcome === 'written') writeEntryMirrors(files.hippoRoot, entry);
+          return result;
+        },
+      },
       openStore,
     ),
-    ...bound(on, {
+    ...bound<Pick<ConnectorWrites, 'archiveConnectorEntry'>>(on, {
       archiveConnectorEntry: (db, ...args) => archiveConnectorEntry(db, files, ...args),
-    } satisfies Bodies<Pick<ConnectorWrites, 'archiveConnectorEntry'>>),
+    }),
   };
 }

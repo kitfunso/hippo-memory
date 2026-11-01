@@ -7,8 +7,8 @@ import { settledStoreFacts } from './migrate.js';
 import { storeKey, type StoreRuntime } from './store-runtime.js';
 
 export interface RequestStoresOptions {
-  /** Its pool lends and takes back the session's handles, and its exit closes a session
-   * still open. */
+  /** Its pool lends and takes back the session's handles, and its exit closes a session still
+   * open. */
   readonly runtime?: StoreRuntime | undefined;
   /** Lock wait of every open in the session that does not pass its own. */
   readonly busyWaitMs?: number | undefined;
@@ -20,7 +20,7 @@ export interface RequestStoresOptions {
   readonly setupDoneFor?: string;
 }
 
-/** The session's open, which only a DbGrant (src/db/grant.ts) calls; oxlint.config.ts bans its import
+/** The session's open, which only a DbGrant (src/db/grant.ts) calls; .oxlintrc.json bans its import
  * elsewhere, so every hippo.db open on a session goes through a grant. */
 export const SESSION_OPEN = Symbol('request session open');
 

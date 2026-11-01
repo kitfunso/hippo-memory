@@ -1,5 +1,5 @@
-// The adapter behind the Http port: fetch, under the retry policy every outbound call of
-// hippo's shares.
+// The adapter behind the Http port: fetch, under the retry policy every outbound call of hippo's
+// shares.
 import type { Http } from '../base/ports/http.js';
 import { fetchWithRetry } from './http-retry.js';
 

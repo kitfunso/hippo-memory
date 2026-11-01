@@ -6,7 +6,7 @@ import { isFtsAvailable, withWriteScope } from '../../../db/index.js';
 import { appendAuditEvents } from '../audit/audit.js';
 import { reportAuditWriteFailure } from '../../../base/records/audit-report.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
@@ -134,8 +134,8 @@ function markParentsDirty(
 }
 
 /** archiveRawMemory for every row in `ids` in one write scope, in the same few statements for
- * one row or many; throws, archiving none, if any is missing or not raw. Returns
- * the archived_at. */
+ * one row or many; throws, archiving none, if any is missing or not raw. Returns the
+ * archived_at. */
 export function archiveRawMemories(
   db: DatabaseSyncLike,
   ids: readonly string[],

@@ -26,6 +26,7 @@ function seeded(
 }
 
 function opts(extra: Partial<RankRecallOptions> = {}): RankRecallOptions {
+  const config = loadConfig(hippoRoot);
   return {
     query: 'deploy',
     budget: 4000,
@@ -34,6 +35,8 @@ function opts(extra: Partial<RankRecallOptions> = {}): RankRecallOptions {
     includeSuperseded: false,
     explicitScope: null,
     activeScope: null,
+    usePhysics: false,
+    physicsConfig: config.physics,
     multihop: false,
     mmr: false,
     mmrLambda: 0.7,

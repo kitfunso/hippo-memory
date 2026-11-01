@@ -3,6 +3,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { processEnv } from '../../base/util/env.js';
 import { claudeConfigDir, codexHomeDir, vscodeDataFolders } from '../../base/util/agent-homes.js';
 import { homeDir, processHomes } from '../../host/agent-homes.js';
 import { copilotHomeDir, type ToolDetection } from './rules/shared.js';
@@ -11,16 +12,14 @@ import { copilotHomeDir, type ToolDetection } from './rules/shared.js';
  * CODEX_HOME that is not a folder. */
 export function isCodexPresent(home: string = homeDir()): boolean {
   return (
-    fs
-      .statSync(codexHomeDir(home, processHomes().env), { throwIfNoEntry: false })
-      ?.isDirectory() === true
+    fs.statSync(codexHomeDir(home, processEnv()), { throwIfNoEntry: false })?.isDirectory() === true
   );
 }
 
 /** The VS Code User folders that exist; Stable and Insiders keep their own, and only an edition
  * the user has run has one. */
 export function vscodeUserDirs(
-  env: Readonly<Record<string, string | undefined>> = processHomes().env,
+  env: Readonly<Record<string, string | undefined>> = processEnv(),
   home: string = os.homedir(),
 ): string[] {
   return vscodeDataFolders({ env, home, platform: process.platform })
@@ -33,8 +32,8 @@ export function vscodeUserDirs(
 export function isCopilotPresent(home: string = os.homedir()): boolean {
   return (
     fs
-      .statSync(copilotHomeDir({ home, env: processHomes().env }), { throwIfNoEntry: false })
-      ?.isDirectory() === true || vscodeUserDirs(processHomes().env, home).length > 0
+      .statSync(copilotHomeDir({ home, env: processEnv() }), { throwIfNoEntry: false })
+      ?.isDirectory() === true || vscodeUserDirs(processEnv(), home).length > 0
   );
 }
 
@@ -54,7 +53,7 @@ type HomeHas = (...parts: string[]) => boolean;
 
 /** Claude Code, the two plugin hosts and Codex, in setup's order. */
 function detectClaudeToCodex(home: string, exists: HomeHas): ToolDetection[] {
-  const claudeDir = claudeConfigDir(os.homedir(), processHomes().env);
+  const claudeDir = claudeConfigDir(os.homedir(), processEnv());
   return [
     {
       name: 'claude-code',

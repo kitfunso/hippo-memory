@@ -11,7 +11,7 @@ import type { SavableDescriptor } from './descriptor.js';
 import { capText, requireLine, requireText } from './fields.js';
 import { listObjects, type ObjectSaveSite, saveObject } from './lifecycle.js';
 import type { BriefReceipt, BriefStatus, ProjectBrief } from '../../base/records/object-types.js';
-import type { ObjectListQuery, Objects } from '../../base/records/objects.js';
+import type { ObjectListQuery, Objects } from '../../base/ports/store.js';
 
 export type { BriefStatus, ProjectBrief } from '../../base/records/object-types.js';
 
@@ -21,8 +21,8 @@ export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>
   'closed',
 ]);
 
-/** Field caps (untrusted at the HTTP/SDK boundary). summary is a body, so a larger cap than the
- *  MAX_SHORT_FIELD_LEN short-field convention. */
+/** Field caps (untrusted at the HTTP/SDK boundary). summary is a body, so a larger cap than the 4096 short-field
+ *  convention. */
 export const MAX_REPO_LEN = 256;
 export const MAX_BRIEF_SUMMARY_LEN = 8192;
 /** Bound the receipts gathered per refresh (a refresh reads memories; cap the scan
@@ -109,8 +109,8 @@ function receiptHeadline(content: string): string {
   return truncateWithEllipsis(trimmed, MAX_RECEIPT_HEADLINE_LEN);
 }
 
-/** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never
- * matches `path:hippo`. */
+/** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never matches
+ * `path:hippo`. */
 function receiptTag(normalizedRepo: string): string {
   return `path:${normalizedRepo.toLowerCase()}`;
 }

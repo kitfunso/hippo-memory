@@ -6,15 +6,14 @@ import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { VectorReads } from '../../base/ports/store-index.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import type { GraphWalk } from '../graph/recall.js';
+import type { GraphReads, RequiredStore } from '../../base/ports/store.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 
 /**
- * rankHybrid's vector arm: which rows it may add, plus the caller's JS admission rules (exact
+ * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact
  * private regex, entry filters).
  */
 export type HybridVectorCandidates = VectorCandidateSpec & {
@@ -33,10 +32,10 @@ export interface VectorArm {
 
 /** Where the vector arm reads: the vectors `store` holds, embedded by `provider`. */
 export interface VectorSource {
-  readonly store: HippoStore;
+  readonly store: RequiredStore;
   readonly vectors: VectorReads;
   /** The store's graph, which the graph list walks; unset on a store that keeps none. */
-  readonly graphReads?: GraphWalk;
+  readonly graphReads?: GraphReads;
   /** Resolved inside the arm's try, so a bad embeddings config falls back to BM25 rather than
    * failing the search. */
   readonly provider: () => EmbeddingProvider;
@@ -67,8 +66,8 @@ function queryEmbedBudgetMs(configured: number | undefined): number {
   return configured ?? QUERY_EMBED_BUDGET_MS;
 }
 
-/** One deadline for every query embedding a recall makes, so two stores share the budget; the
- * request's own abort ends it as well. */
+/** One deadline for every query embedding a recall makes, so two stores or a physics fallback
+ * share the budget; the request's own abort ends it as well. */
 export function startQueryEmbedDeadline({
   runtime,
   signal,
@@ -95,7 +94,7 @@ export async function embedQueryBy(
 }
 
 // Search runs on every hook prompt, so one line per reason per process says why vectors went unused
-// without flooding stderr. A repeat still logs, at debug and then every SAMPLE_EVERY at warn, so a
+// without flooding stderr. A repeat still logs, at debug and then every 100th at warn, so a
 // fallback that keeps happening stays visible.
 function warnBm25Fallback(reason: string, detail: string, fields?: LogFields): void {
   log.warnThenSample(
@@ -191,8 +190,8 @@ async function fillVectorArm(
   arm.useEmbeddings = true;
 }
 
-/** The stored vectors of the arm's rows; null when the index needs a rebuild or none can
- * be used. */
+/** The stored vectors of the arm's rows; null when the index needs a rebuild or none can be
+ * used. */
 async function usableVectors(
   arm: VectorArm,
   source: VectorSource,

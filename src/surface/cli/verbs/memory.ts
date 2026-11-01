@@ -13,10 +13,12 @@ import {
   VALUE_MULT_MAX,
   VALUE_MULT_MIN,
   VALUE_MULT_SLOPE,
+} from '../../../base/rank/search-types.js';
+import {
   DEFAULT_EMBEDDING_WEIGHT,
   DEFAULT_GRAPH_HOPS,
   DEFAULT_GRAPH_SEED_COUNT,
-} from '../../../base/rank/search-types.js';
+} from '../../../base/rank/recall-defaults.js';
 import { DEFAULT_CONTEXT_BUDGET } from '../../../api/context/context.js';
 import { DEFAULT_MAX_NEIGHBORS } from '../../../domain/graph/recall.js';
 import { JEV_DEFAULT_TOP_K } from '../../../domain/rerankers/hosted.js';
@@ -27,15 +29,10 @@ import {
   SEED_DAYS_SCAN,
   SEED_DAYS_SINGLE,
 } from '../flag-defaults.js';
-import { type RemovedFlag, type VerbSpec, verb } from '../verb-row.js';
+import { type VerbSpec, verb } from '../verb-row.js';
 
 const SEED_DAYS_HELP = `${SEED_DAYS_SCAN} for --scan, ${SEED_DAYS_SINGLE} for single`;
 const VALUE_CLIP = `clip(1 + ${VALUE_MULT_SLOPE}*tanh(pos - neg), ${VALUE_MULT_MIN}, ${VALUE_MULT_MAX})`;
-const RANKER_REMOVED: RemovedFlag = {
-  removedIn: '3.0',
-  advice: 'Drop it: recall ranks by hybrid search, BM25 blended with cosine similarity.',
-};
-const RANKER_FLAGS_REMOVED = { physics: RANKER_REMOVED, classic: RANKER_REMOVED };
 
 export const MEMORY_VERBS = {
   init: verb(() => import('../init.js'), 'handleInit', {
@@ -94,6 +91,7 @@ export const MEMORY_VERBS = {
     scoped: true,
     flags: {
       switches: [
+        'classic',
         'continuity',
         'equal-sources',
         'evc-adaptive',
@@ -103,6 +101,7 @@ export const MEMORY_VERBS = {
         'json',
         'multihop',
         'no-mmr',
+        'physics',
         'rerank-utility',
         'value-aware',
         'why',
@@ -124,7 +123,6 @@ export const MEMORY_VERBS = {
       ],
       numbers: ['limit', 'local-bump', 'min-results', 'mmr-lambda', 'reranker-top-k'],
     },
-    removedFlags: RANKER_FLAGS_REMOVED,
     usage: [
       `
   recall <query>           Search and retrieve memories (local + global)
@@ -208,17 +206,17 @@ export const MEMORY_VERBS = {
   explain: verb(() => import('../explain.js'), 'handleExplain', {
     scoped: true,
     flags: {
-      switches: ['equal-sources', 'include-superseded', 'json', 'no-mmr'],
+      switches: ['classic', 'equal-sources', 'include-superseded', 'json', 'no-mmr', 'physics'],
       values: ['as-of', 'budget', 'scope'],
       numbers: ['limit', 'local-bump', 'mmr-lambda'],
     },
-    removedFlags: RANKER_FLAGS_REMOVED,
     usage: [
       `
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget, counted as recall prints (default: ${DEFAULT_RECALL_BUDGET})
     --limit <n>            Cap the number of results displayed
     --json                 Output as JSON
+    --physics | --classic  Force search mode (default: from config)
     --no-mmr               Disable MMR diversity re-ranking
     --mmr-lambda <f>       MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA}, 1.0 = pure relevance)`,
     ],
@@ -301,6 +299,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   sleep: verb(() => import('../sleep.js'), 'handleSleep', {
+    needs: ['graphReads', 'vectors'],
     repairsCodexWrapper: true,
     destructive: true,
     scoped: true,
@@ -318,6 +317,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   'daily-runner': verb(() => import('../daily-runner.js'), 'handleDailyRunner', {
+    needs: ['reports'],
     flags: {},
     usage: [
       `
@@ -325,6 +325,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   dedup: verb(() => import('../maintenance.js'), 'handleDedup', {
+    needs: ['reports'],
     destructive: true,
     flags: { switches: ['dry-run'], numbers: ['threshold'] },
     usage: [

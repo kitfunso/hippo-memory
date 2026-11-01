@@ -4,8 +4,8 @@
 /** Rows per statement when a caller walks every row a read names. */
 export const READ_PAGE_ROWS = 500;
 
-/** Every row of a keyset-paged read, in its order; `read` gets the cursor the page before
- * ended at. */
+/** Every row of a keyset-paged read, in its order; `read` gets the cursor the page before ended
+ * at. */
 export function* rowsInPages<T, C>(
   read: (after: C | undefined) => { readonly entries: readonly T[]; readonly next: C | null },
 ): Generator<T> {

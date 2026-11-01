@@ -10,9 +10,7 @@ import {
 } from '../../src/db/index.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { bindSessionOwner } from '../../src/server.js';
-import type { EntryContext } from '../../src/api/types.js';
-import { NoLocalTierError } from '../../src/base/util/store-blocked.js';
-import { portOnlyStore } from '../_helpers/port-only-store.js';
+import type { ContextWith, EntryContext } from '../../src/api/types.js';
 import { TASK_OWNER_MIN_BINARY, compareSemver } from '../../src/base/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -41,7 +39,7 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-function ctx(owner: string, tenantId = 'default', session?: RequestStores): EntryContext {
+function ctx(owner: string, tenantId = 'default', session?: RequestStores): EntryContext<ContextWith<'sessions'>> {
   return {
     store: sqliteStore(home, { session }),
     config: loadConfig(home),
@@ -81,12 +79,6 @@ beforeEach(() => {
 });
 
 describe('bindSessionOwner', () => {
-  it("rejects on a store without hippo.db's local tier and binds nothing", async () => {
-    const coreOnly = { ...ctx('alice'), store: portOnlyStore(home) };
-    await expect(bindSessionOwner(coreOnly, 's1')).rejects.toBeInstanceOf(NoLocalTierError);
-    expect(bindings()).toEqual([]);
-  });
-
   it('first writer wins, a second owner gets a 409 ConflictError', async () => {
     await bindSessionOwner(ctx('alice'), 's1');
     const refusal = expect(bindSessionOwner(ctx('bob'), 's1')).rejects;

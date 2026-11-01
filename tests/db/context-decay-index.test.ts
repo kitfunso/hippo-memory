@@ -1,5 +1,5 @@
 // Past the cap, loadContextCandidates reads the v60 decay-key subset and must return the rows the full-tenant rank would.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../../src/db/decay-key.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -13,8 +13,12 @@ import { loadContextCandidates } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { mulberry32 } from '../_helpers/property.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-import { PRODUCTION_STRENGTH, type StrengthModel } from '../../src/base/memory/strength.js';
-import { strengthModelUnder } from '../../src/infra/eval-switches.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalSwitches } from '../../src/infra/eval-switches.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const BASE = Date.UTC(2026, 5, 1);
 const HALF_LIVES = [0, 0.5, 1, 3, 7, 14, 30, 90, 365];
@@ -56,11 +60,11 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 }
 
 // The full-tenant rank as it was before v60, frozen here so a change to the live rank cannot move the expectation.
-function scanIds(cap: number, now: Date, tenant = 'default', model: StrengthModel = PRODUCTION_STRENGTH): string[] {
+function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
   const { sql: where, params } = contextRowsWhere(tenant, {});
   const sql = `SELECT id FROM memories WHERE id IN (SELECT id FROM memories WHERE ${where}
     ORDER BY pinned DESC, CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
-    / (half_life_days * ${rewardFactorSql(model)}) END ASC NULLS LAST, id ASC LIMIT ?) ORDER BY created ASC, id ASC`;
+    / (half_life_days * ${rewardFactorSql(evalSwitches().strength)}) END ASC NULLS LAST, id ASC LIMIT ?) ORDER BY created ASC, id ASC`;
   // SAFETY: one TEXT `id` column.
   return withDb((db) =>
     (db.prepare(sql).all(...params, now.toISOString(), cap) as Array<{ id: string }>).map((r) => r.id),
@@ -82,8 +86,8 @@ function plainKeyCaps(now: Date): number[] {
   return [n - 1, n].filter((cap) => cap >= 1);
 }
 
-function readOnce(cap: number, now: Date, tenant = 'default', model: StrengthModel = PRODUCTION_STRENGTH) {
-  const { result, statements } = recordStatements(() => loadContextCandidates(home, tenant, { cap, now }, model));
+function readOnce(cap: number, now: Date, tenant = 'default') {
+  const { result, statements } = recordStatements(() => loadContextCandidates(home, tenant, { cap, now }));
   return {
     ids: result.map((e) => e.id),
     subset: statements.some((s) => SUBSET.test(s)),
@@ -154,12 +158,12 @@ describe('loadContextCandidates past the cap', () => {
   });
 
   it('ranks by the scan with the outcome-slow ablation on, and still matches it', () => {
-    const model = strengthModelUnder({ decay: false, recallBoost: false, outcomeSlow: true });
+    vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
     for (const now of NOWS) {
       for (const cap of CAPS) {
-        const got = readOnce(cap, now, 'default', model);
+        const got = readOnce(cap, now);
         expect(got.subset).toBe(false);
-        expect(got.ids, `cap ${cap} now ${now.toISOString()}`).toEqual(scanIds(cap, now, 'default', model));
+        expect(got.ids, `cap ${cap} now ${now.toISOString()}`).toEqual(scanIds(cap, now));
       }
     }
   });

@@ -47,7 +47,7 @@ import type {
   SpooledSummary,
   StalledOptions,
   StalledSaved,
-} from '../../../base/records/capture.js';
+} from '../../../base/ports/store/capture.js';
 import { handleNow } from '../runtime/handle-clock.js';
 
 // A note leaves the store only as the port's answer, so a caught error also goes to the shared
@@ -255,8 +255,8 @@ function fillRecord(
 ): boolean {
   const { tenantId, record, text, log } = fill;
   if (text === null) {
-    // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach
-    // stays empty.
+    // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays
+    // empty.
     if (closeStartedWithoutSummary(db, tenantId, record.id) > 0) {
       log(`${record.id} closed as no-summary: its transcript holds no summary for it`);
     }

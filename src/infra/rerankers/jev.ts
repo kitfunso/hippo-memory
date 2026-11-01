@@ -24,8 +24,8 @@ function isProbability(v: JsonValue | undefined): v is number {
   return isJsonNumber(v) && Number.isFinite(v) && v >= 0 && v <= 1;
 }
 
-// A half-scored list ranks worse than the order it would replace, so one bad answer voids the
-// whole response.
+// A half-scored list ranks worse than the order it would replace, so one bad answer voids the whole
+// response.
 function parseScores(body: JsonValue, n: number): number[] | null {
   const answers = isJsonObject(body) ? body.answers : undefined;
   const out: number[] = [];
@@ -101,8 +101,8 @@ async function requestScores(
   return scores;
 }
 
-/** Builds a Jev reranker around the reranker it degrades to. Exported so a test can pass
- * a stand-in. */
+/** Builds a Jev reranker around the reranker it degrades to. Exported so a test can pass a
+ * stand-in. */
 export function createJevReranker(localFallback: RerankerFn, http: Http): RerankerFn {
   const outage = createOutageWarning('jev', 'falling back to the local cross-encoder');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {

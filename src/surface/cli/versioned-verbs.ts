@@ -3,6 +3,7 @@
 
 import { errorMessage } from '../../base/util/log.js';
 import type { ObjectByKind } from '../../base/records/object-types.js';
+import type { ContextWith } from '../../api/types.js';
 import {
   objectClose,
   objectCreate,
@@ -20,6 +21,7 @@ import {
   type CommandContext,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
+import { cliApiContext } from './api-context.js';
 import {
   closeObjectVerb,
   foundOrExit,
@@ -29,7 +31,6 @@ import {
   type ObjectNames,
 } from './object-verbs.js';
 import { CliExit, fail } from './exit.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 /** The kinds a new version replaces by supersession. */
 export type VersionedKindName = 'process' | 'policy' | 'skill' | 'project_brief' | 'customer_note';
@@ -66,7 +67,7 @@ export interface VersionedKind<K extends VersionedKindName, B> {
   /** A subcommand only this kind has. */
   readonly extra?: {
     readonly sub: string;
-    readonly run: (ctx: HippoDbContext, args: string[], flags: CliFlags) => Promise<void>;
+    readonly run: (ctx: ContextWith<'objects'>, args: string[], flags: CliFlags) => Promise<void>;
   };
 }
 
@@ -80,9 +81,9 @@ export function requiredText(flags: CliFlags, name: string): string | undefined 
 export function versionedVerbs<K extends VersionedKindName, B>(
   kind: VersionedKind<K, B>,
 ): (cc: CommandContext) => Promise<void> {
-  return async ({ cli, hippoRoot, tenantId, args, flags }) => {
+  return async ({ hippoRoot, tenantId, args, flags }) => {
     requireInit(hippoRoot);
-    const ctx = cli.apiContext(hippoRoot, tenantId);
+    const ctx = cliApiContext(hippoRoot, tenantId);
     const sub = args[0] ?? '';
     if (sub === kind.extra?.sub) return kind.extra.run(ctx, args, flags);
     if (sub === 'list') {
@@ -106,7 +107,7 @@ export function versionedVerbs<K extends VersionedKindName, B>(
 }
 
 async function getVersion<K extends VersionedKindName, B>(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'objects'>,
   kind: VersionedKind<K, B>,
   args: string[],
 ): Promise<void> {
@@ -118,7 +119,7 @@ async function getVersion<K extends VersionedKindName, B>(
 }
 
 async function createVersion<K extends VersionedKindName, B>(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'objects'>,
   kind: VersionedKind<K, B>,
   key: string,
   flags: CliFlags,
@@ -135,7 +136,7 @@ async function createVersion<K extends VersionedKindName, B>(
 }
 
 async function supersedeVersion<K extends VersionedKindName, B>(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'objects'>,
   kind: VersionedKind<K, B>,
   args: string[],
   flags: CliFlags,
@@ -163,8 +164,8 @@ export function shellFolder(): WriteOrigin {
   return { folder: process.cwd() };
 }
 
-/** Every save goes through here, so a refused write always prints the store's message and
- * exits 1. */
+/** Every save goes through here, so a refused write always prints the store's message and exits
+ * 1. */
 async function refusalExits<T>(save: () => Promise<T>): Promise<T> {
   try {
     return await save();

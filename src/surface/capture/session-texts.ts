@@ -1,18 +1,18 @@
 // `hippo capture --last-session` for a caller whose transcript was read on another machine: its
 // project names the rows, never the store's folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { EntryContext } from '../../api/types.js';
+import type { ContextWith, EntryContext } from '../../api/types.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
+import { storedTextKeys } from '../../base/util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
-import { captureExtractedItems } from './command.js';
-import type { CaptureTally } from '../../base/records/capture.js';
+import { captureExtractedItems, type CaptureTally } from './command.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
 import { extractFromTexts } from './extract.js';
 import { withEntryInfra } from '../entry-infra.js';
-import { withDetached } from '../../api/detached.js';
-import { withHippoDb } from '../../api/hippo-db-context.js';
-import { textKeysHeldUnder } from '../../api/hippo-db/captures.js';
+
+/** A context whose store has the captures group, which a session's capture reads and writes. */
+export type CaptureContext = EntryContext<ContextWith<'captures'>>;
 
 const MAX_TEXTS = 30;
 const MAX_TEXT_BYTES = 32 * 1024;
@@ -48,14 +48,14 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
 /**
  * Captures the session's statements into `ctx`'s tenant under the caller's project, skipping each
  * text a row the caller can see already holds. The write reads those rows again in its own
- * transaction, so no other write lands between the dedup and the write. No console output and
- * no process.exit.
+ * transaction, so no other write lands between the dedup and the write. No console output and no
+ * process.exit.
  */
 export async function captureSessionTexts(
-  given: EntryContext,
+  given: CaptureContext,
   req: SessionCaptureRequest,
 ): Promise<SessionCaptureResult> {
-  const ctx = withHippoDb(withEntryInfra(given));
+  const ctx = withEntryInfra(given);
   assertSessionCapture(req);
   const extracted = extractFromTexts(req.texts.map(scrubForSharing));
   // The newest items win, since the end of a session states where it landed.
@@ -64,27 +64,29 @@ export async function captureSessionTexts(
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows
   // block a copy, other projects' rows do not.
   const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
-  const held = await textKeysHeldUnder(
-    ctx,
-    dedup,
+  const held = await ctx.store.captures.textsHolding(
+    dedup.tenantId,
     items.map((i) => i.content),
+    { project: dedup.project },
   );
-  const folder = { ...ctx, embedderFor: ctx.infra.embedderFor };
-  const tally = await withDetached(ctx, (detached) =>
-    captureExtractedItems(
-      { ...ctx, embed: detachedEmbedder(folder, ctx.infra, detached) },
-      {
-        tenantId: ctx.tenantId,
-        originProject: req.project,
-        sessionId: req.sessionId,
-        actor: ctx.actor.subject,
-        lean: true,
-        dedup,
-        now: ctx.infra.clock(),
-      },
-      items,
-      held,
-    ),
+  const { store, config } = ctx;
+  const tally = await captureExtractedItems(
+    {
+      store,
+      config,
+      embed: detachedEmbedder({ store, config, embedderFor: ctx.infra.embedderFor }, ctx.infra),
+    },
+    {
+      tenantId: ctx.tenantId,
+      originProject: req.project,
+      sessionId: req.sessionId,
+      actor: ctx.actor.subject,
+      lean: true,
+      dedup,
+      now: ctx.infra.clock(),
+    },
+    items,
+    storedTextKeys(held),
   );
   return { ...tally, skipped: tally.skipped + extracted.length - items.length };
 }

@@ -52,8 +52,8 @@ export interface ModelLoads<T> {
   load(key: string, start: () => Promise<T>): Promise<T>;
 }
 
-/** Runs `start` under a timeout; a model that arrives after the timeout is still handed
- * to `onLoaded`. */
+/** Runs `start` under a timeout; a model that arrives after the timeout is still handed to
+ * `onLoaded`. */
 function loadWithTimeout<T>(
   key: string,
   start: () => Promise<T>,

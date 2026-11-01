@@ -2,28 +2,24 @@
 // at a time by id.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { chunked } from '../../base/util/chunked.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import type { AuditMaintenance } from '../../base/records/audit-maintenance.js';
-import type { Consolidation } from '../../base/records/consolidation.js';
 
 /** The store's rows as this run loaded them: by created then id, with a dry run's half-life
  * preview applied. */
 export class SleepRows {
-  /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs
-   * an integer. */
+  /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs an
+   * integer. */
   private readonly idPage: number;
   /** The rows read so far that back a first-class object, asked page by page with the rows. */
   private readonly backed = new Set<string>();
 
   constructor(
-    private readonly store: Pick<HippoStore, 'entriesByIds'> & {
-      readonly hippoDb: {
-        readonly consolidation: Consolidation;
-        readonly auditMaintenance: AuditMaintenance;
-      };
-    },
+    private readonly store: Pick<
+      StoreWith<'consolidation' | 'auditMaintenance'>,
+      'entriesByIds' | 'consolidation' | 'auditMaintenance'
+    >,
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
   ) {
@@ -37,9 +33,7 @@ export class SleepRows {
       const byId = new Map(
         (await this.store.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]),
       );
-      for (const id of await this.store.hippoDb.auditMaintenance.objectBackedAmong([
-        ...byId.keys(),
-      ])) {
+      for (const id of await this.store.auditMaintenance.objectBackedAmong([...byId.keys()])) {
         this.backed.add(id);
       }
       for (const id of page) {
@@ -60,10 +54,7 @@ export class SleepRows {
   async *pages(): AsyncGenerator<MemoryEntry[]> {
     let after: EntryCursor | undefined;
     do {
-      const page = await this.store.hippoDb.consolidation.entryIdsPage({
-        limit: this.idPage,
-        after,
-      });
+      const page = await this.store.consolidation.entryIdsPage({ limit: this.idPage, after });
       yield await this.read(page.ids);
       after = page.next ?? undefined;
     } while (after);
@@ -113,8 +104,8 @@ export class Survivors {
     const loaded = new Map(
       (await this.stored.read(fresh.map((row) => row.id))).map((row) => [row.id, row]),
     );
-    // A row gone since decay read it is its own base, so the flush skips it rather than write
-    // it back.
+    // A row gone since decay read it is its own base, so the flush skips it rather than write it
+    // back.
     for (const row of fresh) this.bases.set(row.id, loaded.get(row.id) ?? row);
     for (const row of rows) this.held.set(row.id, row);
   }

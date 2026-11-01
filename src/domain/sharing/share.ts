@@ -9,7 +9,8 @@ import {
   ERROR_TAG,
   EXTRACTED_TAG,
 } from '../../base/memory/entry.js';
-import { CLI_ACTOR } from '../../base/records/audit-ops.js';
+import { strengthModelFor } from '../../base/memory/eval-switches.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import {
   AGENT_MEMORY_SOURCE_PREFIX,
   AGENT_MEMORY_TAGS,
@@ -22,23 +23,25 @@ import {
   folderEmbedTarget,
   type EmbedRun,
 } from '../search/embed-memories.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
-import type { DetachedWork } from '../search/embed-memories.js';
 import type { SharingStore } from './text-keys.js';
-import type { EntrySignals } from '../../base/records/sharing.js';
-import type { PageRequest } from '../../base/records/reports.js';
-import type { StoreHome } from '../../base/records/folder-files.js';
-import type { ConfiguredFolder, HippoStore } from '../../base/ports/store.js';
+import type {
+  EntrySignals,
+  PageRequest,
+  RequiredStore,
+  StoreGroups,
+  StoreHome,
+  StoreWith,
+} from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import type { Captures } from '../../base/records/capture.js';
+import type { Captures } from '../../base/ports/store/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
-import type { FolderFiles } from '../../base/records/folder-files.js';
-import type { Sharing } from '../../base/records/sharing.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
@@ -101,8 +104,8 @@ export const AUTO_SHARE_MIN_SCORE = 0.6;
 /** Below this transfer score a hand-run share copies a row only when forced. */
 const SHARE_MIN_SCORE = 0.3;
 
-/** transferScore's weights: where a row with no signal sits, then what each signal adds or
- * takes away. */
+/** transferScore's weights: where a row with no signal sits, then what each signal adds or takes
+ * away. */
 const TRANSFER_WEIGHTS = {
   neutral: 0.5,
   perTransferableTag: 0.1,
@@ -152,25 +155,17 @@ export function transferScore(entry: MemoryEntry): number {
 /** Share a memory to the global store with attribution (source enriched with project path and timestamp).
  *  Returns the new entry, or null if the transfer score is too low. */
 export async function shareMemory(
-  local: {
-    readonly store: HippoStore & { readonly hippoDb: { readonly folderFiles: FolderFiles } };
-  },
-  global: ConfiguredFolder<SharingStore>,
+  local: { readonly store: StoreWith<'folderFiles'> },
+  global: ConfiguredFolder<SharingStore & StoreWith<'vectors' | 'vectorWrites'>>,
   id: string,
-  options: {
-    force?: boolean;
-    tenantId: string;
-    skipEmbed?: boolean;
-    embed: EmbedRun;
-    detached: DetachedWork;
-  },
+  options: { force?: boolean; tenantId: string; skipEmbed?: boolean; embed: EmbedRun },
 ): Promise<MemoryEntry | null> {
   // Tenant A cannot share tenant B's memory to global: the read finds no row of another tenant.
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
   const globalEntry = toGlobalEntry(
-    await local.store.hippoDb.folderFiles.home(),
+    await local.store.folderFiles.home(),
     entry,
     options.force === true,
     options.embed.clock(),
@@ -187,8 +182,10 @@ export async function shareMemory(
       embeddings: global.config.embeddings,
       embedderFor: global.embedderFor,
       failureNotices: options.embed.failureNotices,
+      strength: strengthModelFor(options.embed.evalSwitches, global.config.runtime),
+      clock: options.embed.clock,
     };
-    embedMemoryDetached(target, globalEntry, options.detached);
+    embedMemoryDetached(target, globalEntry);
   }
 
   return globalEntry;
@@ -251,9 +248,9 @@ export async function listPeers(
   global: { readonly store: SharingStore },
   tenantId: TenantId,
 ): Promise<Array<{ project: string; count: number; latest: string }>> {
-  if (!(await global.store.hippoDb.folderFiles.home()).exists) return [];
+  if (!(await global.store.folderFiles.home()).exists) return [];
 
-  const tallies = (await global.store.hippoDb.sharing.sourceTallies(tenantId)).sort((a, b) =>
+  const tallies = (await global.store.sharing.sourceTallies(tenantId)).sort((a, b) =>
     a.first < b.first ? -1 : a.first > b.first ? 1 : 0,
   );
   const peerMap = new Map<string, { count: number; latest: string }>();
@@ -298,8 +295,8 @@ function clearsShareRules(
   minScore: number,
   stats: AutoShareStats | undefined,
 ): boolean {
-  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting
-  // on one.
+  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on
+  // one.
   if (
     isQuarantineScope(entry.scope ?? null) ||
     isPersonalScope(entry.scope ?? null) ||
@@ -307,8 +304,8 @@ function clearsShareRules(
   ) {
     return false;
   }
-  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears
-  // the bar.
+  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the
+  // bar.
   if (
     entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) ||
     entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)
@@ -319,8 +316,8 @@ function clearsShareRules(
   return transferScore(entry) >= minScore;
 }
 
-/** A row that cleared the rules shares unless the global store holds its text or it carries
- * a secret. */
+/** A row that cleared the rules shares unless the global store holds its text or it carries a
+ * secret. */
 function isNewAndClean(
   entry: MemoryEntry,
   globalKeys: ReadonlySet<string>,
@@ -343,7 +340,7 @@ function isNewAndClean(
 /** The local rows a page at a time: above the neutral score only a row carrying a signal can
  * share or count as a never-auto-share skip, so only those are read. */
 async function* autoSharePages(
-  store: Pick<HippoStore, 'entriesWhere'> & { readonly hippoDb: { readonly sharing: Sharing } },
+  store: Pick<StoreGroups, 'sharing'> & Pick<RequiredStore, 'entriesWhere'>,
   minScore: number,
   tenantId: TenantId,
 ): AsyncGenerator<MemoryEntry[]> {
@@ -352,7 +349,7 @@ async function* autoSharePages(
     const page: PageRequest = { limit: READ_PAGE_ROWS, after: after ?? undefined };
     const { entries, next } =
       minScore > TRANSFER_WEIGHTS.neutral
-        ? await store.hippoDb.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
+        ? await store.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
         : await store.entriesWhere({ tenantId }, page);
     yield entries;
     after = next;
@@ -385,7 +382,7 @@ async function sharePage(
   now: Date,
 ) {
   const copies = page.flatMap((entry) => toGlobalEntry(local, entry, true, now) ?? []);
-  const written = new Set(await to.hippoDb.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
+  const written = new Set(await to.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
   const shared = copies.filter((copy) => written.has(copy.id));
   return { shared, refused: copies.length - shared.length };
 }
@@ -430,13 +427,10 @@ async function shareCandidates({
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
   from: {
-    readonly store: Pick<HippoStore, 'entriesWhere'> & {
-      readonly hippoDb: { readonly sharing: Sharing; readonly folderFiles: FolderFiles };
-    };
+    readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles'> &
+      Pick<RequiredStore, 'entriesWhere'>;
   },
-  global: ConfiguredFolder<
-    SharingStore & HippoStore & { readonly hippoDb: { readonly captures: Captures } }
-  >,
+  global: ConfiguredFolder<SharingStore & StoreWith<'captures'>>,
   options: {
     minScore?: number;
     dryRun?: boolean;
@@ -444,24 +438,22 @@ export async function autoShare(
     tenantId: TenantId;
     stats?: AutoShareStats;
     embed: EmbedRun;
-    /** Keeps the batch embed of the shared rows until the root settles it. */
-    detached: DetachedWork;
   },
 ): Promise<MemoryEntry[]> {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
   const to = global.store;
-  await to.hippoDb.folderFiles.ensure();
-  // Every page is judged before any is written, so a copy written early cannot hide a later
-  // row's twin.
+  await to.folderFiles.ensure();
+  // Every page is judged before any is written, so a copy written early cannot hide a later row's
+  // twin.
   const candidates: MemoryEntry[] = [];
   for await (const page of autoSharePages(from.store, minScore, options.tenantId)) {
-    candidates.push(...(await pageCandidates(to.hippoDb.captures, page, minScore, options.stats)));
+    candidates.push(...(await pageCandidates(to.captures, page, minScore, options.stats)));
   }
 
   if (dryRun) return candidates;
 
   const shared = await shareCandidates({
-    local: await from.store.hippoDb.folderFiles.home(),
+    local: await from.store.folderFiles.home(),
     to,
     candidates,
     stats: options.stats,
@@ -469,10 +461,8 @@ export async function autoShare(
   });
 
   if (shared.length > 0) {
-    options.detached.detach(
-      embedAll(folderEmbedTarget(global, options.embed)).catch((err) =>
-        logEmbedAllFailure('autoShare', err),
-      ),
+    void embedAll(folderEmbedTarget(global, options.embed)).catch((err) =>
+      logEmbedAllFailure('autoShare', err),
     );
   }
 

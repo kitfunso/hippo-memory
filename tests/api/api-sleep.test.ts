@@ -22,7 +22,6 @@ import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { remember, sleepWholeStore, contextGet } from '../../src/api/index.js';
-import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { removeDir } from '../_helpers/remove-dir.js';
@@ -112,32 +111,6 @@ describe('api.sleep', () => {
       expect(Number.isInteger(result.mergedEpisodic)).toBe(true);
       expect(Number.isInteger(result.newSemantic)).toBe(true);
       expect(Array.isArray(detailLines(result))).toBe(true);
-    } finally {
-      restore();
-    }
-  });
-
-  it('with no keeper on the Context, resolves after the embeds its auto-share started', async () => {
-    const { home, restore } = tmpHome();
-    try {
-      // A global store of its own, so the auto-share phase has a target.
-      vi.stubEnv('HIPPO_HOME', makeRoot('api-sleep-global', { init: false }));
-      const base: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-      const ctx = { ...base, config: { ...base.config, autoShareOnSleep: true } };
-      let embedded = false;
-      const autoShare: SleepPhases['autoShare'] = async (_ctx, _target, { detached }) => {
-        detached.detach(
-          new Promise<void>((done) =>
-            setTimeout(() => {
-              embedded = true;
-              done();
-            }, 50),
-          ),
-        );
-        return [];
-      };
-      await runSleep(ctx, {}, { autoShare });
-      expect(embedded).toBe(true);
     } finally {
       restore();
     }

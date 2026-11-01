@@ -1,15 +1,21 @@
 // The GitHub connector's tables: event log, dead-letter queue, tenant routing and backfill cursors.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
-import type { ConnectorEventRecord } from '../../../base/records/connectors.js';
-import { eventMemory, keyRecord, eventSeen, markKeySeen, type EventLogSpec } from './event-log.js';
+import type { ConnectorEventRecord } from '../../../base/ports/store.js';
+import {
+  eventMemory,
+  eventRecord,
+  eventSeen,
+  markEventSeen,
+  type EventLogSpec,
+} from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type {
   TenantRoute,
   GitHubDlqInsert,
   GitHubDlqItem as DlqItem,
   GitHubStream,
-} from '../../../base/records/connectors.js';
+} from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { log } from '../../../base/util/log.js';
 import { handleStamp } from '../runtime/handle-clock.js';
@@ -32,10 +38,10 @@ export function githubEventMemory(db: DatabaseSyncLike, idempotencyKey: string):
   return eventMemory(db, GITHUB_LOG, idempotencyKey);
 }
 
-/** False when the key was already logged, so a caller inside a write scope can roll its own
- * row back. */
+/** False when the key was already logged, so a caller inside a write scope can roll its own row
+ * back. */
 export function markGitHubEventSeen(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
-  return markKeySeen(db, {
+  return markEventSeen(db, {
     log: GITHUB_LOG,
     key: entry.idempotencyKey,
     extra: [
@@ -50,7 +56,7 @@ export function githubEventRecord(
   db: DatabaseSyncLike,
   idempotencyKey: string,
 ): ConnectorEventRecord {
-  return keyRecord(db, GITHUB_LOG, idempotencyKey);
+  return eventRecord(db, GITHUB_LOG, idempotencyKey);
 }
 
 export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [

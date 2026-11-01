@@ -1,10 +1,10 @@
-// The reranker port: a recall names a reranker and the registry its root built hands back
-// the function.
+// The reranker port: a recall names a reranker and the registry its root built hands back the
+// function.
 import type { SearchResult } from '../rank/search-types.js';
 import type { ClefSettings } from '../config/config.js';
 
 /**
- * Reorders rankHybrid's candidates AFTER MMR de-duplication and BEFORE token-budget filtering, so
+ * Reorders hybridSearch's candidates AFTER MMR de-duplication and BEFORE token-budget filtering, so
  * it sees the full diverse pool. MUST be deterministic for a given (query, results) unless
  * documented stochastic (LLM track, hosted jev): paired A/B and the validity gate need it.
  */
@@ -55,8 +55,8 @@ export interface RerankProvenance {
 }
 
 export interface RerankResult extends SearchResult {
-  /** Score assigned by the reranker. Replaces `score` for downstream ordering; original `score` preserved on
-   *  the SearchResult. */
+  /** Score assigned by the reranker. Replaces `score` for downstream ordering; original `score` preserved on the
+   *  SearchResult. */
   rerankScore: number;
   /** 1-indexed rank in the input to the reranker. */
   preRerankRank: number;
@@ -65,12 +65,3 @@ export interface RerankResult extends SearchResult {
   /** Recorded by rerankers that track model identity (the CLEF rerankers). */
   rerankProvenance?: RerankProvenance;
 }
-
-// The cross-encoder the reranker scores pairs with; src/infra/cross-encoder.ts loads it.
-/** A query and one candidate in, a relevance score in [0, 1] out; throws when that pair cannot
- * be scored. */
-export type CrossEncoderFn = (query: string, candidate: string) => Promise<number>;
-
-/** The loaded model, or why it did not load; calls inside one backoff window share a load and
- * its failure. */
-export type CrossEncoderLoad = () => Promise<CrossEncoderFn>;

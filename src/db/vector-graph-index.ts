@@ -51,8 +51,8 @@ interface Ready {
   seenOn: DatabaseSyncLike | undefined;
   dataVersion: number;
   refreshes: number;
-  /** The rowid a background catch-up reads above; until it ends, reads answer up to it from
-   * the graph. */
+  /** The rowid a background catch-up reads above; until it ends, reads answer up to it from the
+   * graph. */
   catchingUpFrom: number | undefined;
 }
 
@@ -97,8 +97,8 @@ export class VectorGraphs implements VectorIndex {
   readonly #maxVectors: number;
   readonly #slots = new Map<number, Slot>();
   readonly #file: GraphFileIndex;
-  // Builds, catch-ups and the saves after them, so the thread closes its store with none
-  // left running.
+  // Builds, catch-ups and the saves after them, so the thread closes its store with none left
+  // running.
   readonly #work = new Set<Promise<void>>();
   #closed = false;
   // Counted under the threshold or over the cap on this connection at this data_version, so not
@@ -198,8 +198,8 @@ export class VectorGraphs implements VectorIndex {
       const fresh = staleNodes(slot.rows) <= STALE_SHARE * slot.rows.ids.length;
       if (this.#underCap(slot.rows.live) && fresh) return slot.rows.lastRowid;
     }
-    // Dropped, so the next read builds a fresh graph without the stale nodes or the other
-    // model's vectors.
+    // Dropped, so the next read builds a fresh graph without the stale nodes or the other model's
+    // vectors.
     this.#slots.delete(dim);
     return undefined;
   }
@@ -308,8 +308,8 @@ export class VectorGraphs implements VectorIndex {
   ): Promise<{ model: string; staged: StagedRows } | undefined> {
     const db = this.#grant.openReadOnly(this.#hippoRoot);
     try {
-      // Before the rows: a model change between the two reads then shows as a mismatch at the
-      // next query.
+      // Before the rows: a model change between the two reads then shows as a mismatch at the next
+      // query.
       const model = storedModel(db);
       const staged = new StagedRows(dim);
       let slice = performance.now();

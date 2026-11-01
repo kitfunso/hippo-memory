@@ -4,8 +4,8 @@
 import type { ConfidenceLevel, EmotionalValence, MemoryEntry } from './entry.js';
 import { DAY_MS } from '../util/time.js';
 
-/** The slopes, bases and channels strength scoring runs on; an eval builds another value at
- * its root. */
+/** The slopes, bases and channels strength scoring runs on; an eval builds another value at its
+ * root. */
 export interface StrengthModel {
   /** Strength left after one half-life; also what each wrong mark multiplies by. */
   readonly decayBase: number;
@@ -14,12 +14,12 @@ export interface StrengthModel {
   /** Strength each doubling of the retrieval count adds. */
   readonly retrievalBoostSlope: number;
   /** The most halvings bad outcome marks apply; bad marks alone never push a memory under
-   * sleep's DECAY_THRESHOLD retire line. */
+   * sleep's 0.05 retire line. */
   readonly maxWrongHalvings: number;
   /** Multiplies the `negative` valence weight, after parseLossAversionRatio's floor. */
   readonly lossAversionRatio: number;
-  /** Strength fades with time since the decay anchor; off, it holds at the boost and
-   * emotional weight. */
+  /** Strength fades with time since the decay anchor; off, it holds at the boost and emotional
+   * weight. */
   readonly decays: boolean;
   /** A recall boosts strength, moves the decay anchor and lengthens the half-life; off, the
    * anchor is `created`. */
@@ -41,8 +41,8 @@ export const PRODUCTION_STRENGTH: StrengthModel = Object.freeze({
 export const FALLBACK_HALF_LIFE_DAYS = 7;
 
 /** Base half-life before deriveHalfLife's multipliers: 7 lost the current fact far more often
- * and 730 did no better. `hippo sleep` moves memories still on an older
- * base (src/domain/consolidate/half-life-migration.ts). */
+ * and 730 did no better. `hippo sleep` moves memories still on an older base
+ * (src/domain/consolidate/half-life-migration.ts). */
 export const DEFAULT_HALF_LIFE_DAYS = 365;
 
 /** The flat half-life the object writers gave their memories before they took the default. */
@@ -67,8 +67,8 @@ export function parseLossAversionRatio(raw: string | number | undefined): number
   return Number.isFinite(parsed) && parsed >= LOSS_AVERSION_RATIO_MIN ? parsed : 1.0;
 }
 
-/** `model` with the root's HIPPO_LOSS_AVERSION_RATIO, floored as parseLossAversionRatio
- * floors it. */
+/** `model` with the root's HIPPO_LOSS_AVERSION_RATIO, floored as parseLossAversionRatio floors
+ * it. */
 export function withLossAversion(
   model: StrengthModel,
   ratio: string | number | undefined,
@@ -113,7 +113,7 @@ export function netWrong(
   return Math.min(marks, model.maxWrongHalvings);
 }
 
-/** What calculateStrengthAt reads, so a caller can score a row without loading its text. */
+/** What calculateStrength reads, so a caller can score a row without loading its text. */
 export type StrengthInputs = Pick<
   MemoryEntry,
   | 'pinned'
@@ -138,7 +138,7 @@ export interface DecayBasis {
 
 /** Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]. Pinned
  * memories skip time decay, but being marked wrong still fades them (netWrong). */
-export function calculateStrengthAt(
+export function calculateStrength(
   entry: StrengthInputs,
   now: Date,
   model: StrengthModel,
@@ -199,8 +199,8 @@ function decayExponentFor(basis: DecayBasis, daysSince: number, halfLifeDays: nu
   return daysSince / effectiveHalfLife;
 }
 
-/** What the confidence facets read, so a caller can derive them from a row it loaded only
- * in part. */
+/** What the confidence facets read, so a caller can derive them from a row it loaded only in
+ * part. */
 export type ConfidenceInputs = Pick<MemoryEntry, 'pinned' | 'confidence' | 'lastRetrieved'>;
 
 // Days without a retrieval before trust lapses; pinned and verified rows are exempt by policy.
@@ -218,13 +218,13 @@ export interface ConfidenceFacets {
   agedOut: boolean;
 }
 
-export function confidenceFacetsAt(entry: ConfidenceInputs, now: Date): ConfidenceFacets {
+export function confidenceFacets(entry: ConfidenceInputs, now: Date): ConfidenceFacets {
   return { tier: entry.confidence, agedOut: isAgedOut(entry, now) };
 }
 
 // An aged-out row warns on its own, since its stored tier alone would hide it.
 export function confidenceLabel(entry: ConfidenceInputs, now: Date) {
-  const { tier, agedOut } = confidenceFacetsAt(entry, now);
+  const { tier, agedOut } = confidenceFacets(entry, now);
   return {
     text: agedOut ? `${tier}, aged` : tier,
     warn: agedOut || tier === 'stale' || tier === 'inferred',
@@ -233,6 +233,6 @@ export function confidenceLabel(entry: ConfidenceInputs, now: Date) {
 
 /** The stored confidence, or 'stale' once aged out (no retrieval for AGED_OUT_AFTER_DAYS; pinned
  * and verified exempt). */
-export function resolveConfidenceAt(entry: ConfidenceInputs, now: Date): ConfidenceLevel {
+export function resolveConfidence(entry: ConfidenceInputs, now: Date): ConfidenceLevel {
   return isAgedOut(entry, now) ? 'stale' : entry.confidence;
 }

@@ -2,15 +2,15 @@
  * v1.12.13 / C5 — cutoff transparency for the MCP hippo_recall path.
  *
  * Proof-of-fix for the plan-eng-critic round 1 CRIT: MCP runs a SECOND
- * hybrid pipeline (src/surface/mcp/server.ts loadAllEntries -> scope filter
- * -> hybridSearch) for the user-visible memory list AFTER
+ * physics/hybrid pipeline (src/surface/mcp/server.ts loadAllEntries -> scope filter
+ * -> physicsSearch/hybridSearch) for the user-visible memory list AFTER
  * apiRecall. If suppressionSummary were attached only to apiResult, MCP
  * users would see counts describing a DIFFERENT pipeline than the memories
  * they were reading. Plan v3 fix: MCP populates its own suppressionSummary
- * from the hybrid pipeline and replaces apiResult.suppressionSummary
+ * from the physics/hybrid pipeline and replaces apiResult.suppressionSummary
  * in the user-facing response.
  *
- * This test seeds memories such that the MCP hybrid path
+ * This test seeds memories such that the MCP physics/hybrid path
  * (loadAllEntries) sees MORE candidates than the api.recall path
  * (loadRecallSearchEntries returns BM25-pruned set), then asserts the Cutoff
  * line in the MCP text response reflects the LARGER pipeline's count.
@@ -71,8 +71,8 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
   });
 
   it('MCP text response includes Cutoff block when filter activity is non-zero', async () => {
-    // Seed 30 query-matching rows with content padded to force the hybrid
-    // budget to drop some, so droppedByBudget > 0 and Cutoff fires.
+    // Seed 30 query-matching rows with content padded to force the physics/
+    // hybrid budget to drop some, so droppedByBudget > 0 and Cutoff fires.
     // Each row ~100 chars; tight budget = 200 tokens forces ~10 rows max.
     writeEntriesTogether(
       home,
@@ -105,7 +105,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     expect(text).toMatch(/## Cutoff\nShowing \d+ of \d+ candidates;/);
   });
 
-  it('MCP Cutoff line reflects MCP hybrid pipeline counts (NOT api.recall pipeline counts)', async () => {
+  it('MCP Cutoff line reflects MCP physics/hybrid pipeline counts (NOT api.recall pipeline counts)', async () => {
     // MCP pipeline uses loadAllEntries (all 30 rows). api.recall pipeline
     // uses loadRecallSearchEntries with a query-specific BM25 prune.
     // For a generic query that matches every row, both pipelines see all 30,

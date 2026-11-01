@@ -6,16 +6,14 @@ import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { RequestStores } from '../../src/db/index.js';
 import { SESSION_OPEN } from '../../src/db/request-stores.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
+import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
-import { cliCommand, type CliStore } from '../../src/surface/cli/api-context.js';
-import { StoreRuntime } from '../../src/db/store-runtime.js';
+import type { CliStore } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
 const roots: string[] = [];
 
-afterEach(async () => {
-  await endLastingCommands();
+afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
@@ -52,7 +50,7 @@ describe('MCP auto-sleep', () => {
       }),
     );
 
-    const host = lastingCommand().stdioHost();
+    const host = cliStdioHost();
     await remember(host, root, 'the deploy moved to friday');
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     await remember(host, root, 'alice owns the billing service');
@@ -89,7 +87,7 @@ describe('MCP auto-sleep', () => {
       }),
     );
 
-    await remember(lastingCommand().stdioHost(), root, 'the deploy moved to friday');
+    await remember(cliStdioHost(), root, 'the deploy moved to friday');
     const frame = sessions[0];
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
     opens.mockRestore();
@@ -99,25 +97,6 @@ describe('MCP auto-sleep', () => {
     for (const s of seen) {
       expect(s.open).toBe(true);
       expect(s.session).not.toBe(frame);
-    }
-  });
-
-  it("is kept by the loop's runtime, so its settle waits for the sleep a write started", async () => {
-    const root = makeRoot('mcp-autosleep-kept');
-    roots.push(root);
-    writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
-    vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 })),
-    );
-    const runtime = new StoreRuntime();
-    try {
-      await remember(cliCommand(runtime).stdioHost(), root, 'the deploy moved to friday');
-      await runtime.settle();
-      expect(sleepRuns(root)).toBe(1);
-    } finally {
-      await runtime.dispose();
     }
   });
 });

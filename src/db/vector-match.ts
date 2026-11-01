@@ -43,8 +43,8 @@ interface BestMatches {
   oneEachId(): void;
 }
 
-// One scoring loop for rows in memory and rows paged from the store, so the two can never
-// rank apart.
+// One scoring loop for rows in memory and rows paged from the store, so the two can never rank
+// apart.
 function bestMatches(query: readonly number[], k: number): BestMatches | null {
   if (k <= 0 || query.length === 0) return null;
   const q = Float32Array.from(query);
@@ -63,8 +63,8 @@ function bestMatches(query: readonly number[], k: number): BestMatches | null {
   };
 }
 
-/** At most `k` matches with the worst at the root, so a row that makes the cut costs one log
- * k sift. */
+/** At most `k` matches with the worst at the root, so a row that makes the cut costs one log k
+ * sift. */
 class MatchHeap {
   readonly #k: number;
   readonly #heap: VectorMatch[] = [];
@@ -156,8 +156,8 @@ export interface ProposedMatches {
   readonly coveredRowid: number;
 }
 
-/** Proposes a query's nearest rows from a graph; undefined when it cannot answer, so the
- * caller scans. */
+/** Proposes a query's nearest rows from a graph; undefined when it cannot answer, so the caller
+ * scans. */
 export interface VectorIndex {
   matches(db: DatabaseSyncLike, ask: VectorMatchQuery): ProposedMatches | undefined;
 }

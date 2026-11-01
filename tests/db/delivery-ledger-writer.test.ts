@@ -379,11 +379,7 @@ describe('writeDeliveryEventOnHandle', () => {
 
 describe('the delivery ledger prune', () => {
   const prunes = (log: StatementLog<unknown>): number => countMatching(log.statements, /^DELETE FROM delivery_events/);
-  const writeVia = async (
-    ledger: ReturnType<typeof sqliteStore>['hippoDb']['ledger'],
-    promptHash: string,
-    ms: number,
-  ) =>
+  const writeVia = async (ledger: ReturnType<typeof sqliteStore>['ledger'], promptHash: string, ms: number) =>
     await recordStatementsAsync(
       async () => await ledger.recordTurn({ uses: [], delivery: event({ promptHash, ts: at(ms) }) }),
     );
@@ -395,13 +391,13 @@ describe('the delivery ledger prune', () => {
   it("runs at most once a minute per store, and again once the store's minute has passed", async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.parse('2026-09-01T00:00:00.000Z'));
-    const { ledger } = sqliteStore(root).hippoDb;
+    const { ledger } = sqliteStore(root);
     expect([await writeVia(ledger, 'p1', 0), await writeVia(ledger, 'p2', 30_000)].map(prunes)).toEqual([1, 0]);
     vi.setSystemTime(Date.parse('2026-09-01T00:00:59.000Z'));
     expect(prunes(await writeVia(ledger, 'p3', 59_000))).toBe(0);
     vi.setSystemTime(Date.parse('2026-09-01T00:01:01.000Z'));
     expect(prunes(await writeVia(ledger, 'p4', 61_000))).toBe(1);
-    expect(prunes(await writeVia(sqliteStore(root).hippoDb.ledger, 'another store', 62_000))).toBe(1);
+    expect(prunes(await writeVia(sqliteStore(root).ledger, 'another store', 62_000))).toBe(1);
     expect(count('delivery_events')).toBe(5);
   });
 
@@ -479,7 +475,7 @@ describe('createDeliveryRecorder row building', () => {
   const recorder = (payload: Record<string, string> = {}) =>
     createDeliveryRecorder({
       now: evalNow(),
-      ledger: sqliteStore(root).hippoDb.ledger,
+      ledger: sqliteStore(root).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
       tenantId: 'default',

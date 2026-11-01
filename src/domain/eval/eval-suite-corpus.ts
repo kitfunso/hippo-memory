@@ -376,7 +376,7 @@ function addMultiHop(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date
 }
 
 /** The synthetic corpus, every memory stamped at `now`. */
-export function buildSyntheticCorpusAt(now: Date) {
+export function buildSyntheticCorpus(now: Date) {
   const entries: MemoryEntry[] = [];
   const cases: FeatureTestCase[] = [];
 

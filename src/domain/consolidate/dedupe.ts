@@ -1,8 +1,8 @@
 /**
  * Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so
  * `api.sleep` can dedupe without cli -> api imports. Survivor order is total and tenant-scoped:
- * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are
- * not candidates.
+ * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are not
+ * candidates.
  */
 
 import { textOverlap } from '../../base/util/tokenize.js';
@@ -11,17 +11,8 @@ import { canAutoDelete } from '../../base/memory/keep-rules.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import { CLI_ACTOR } from '../../base/records/audit-ops.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import type { AuditMaintenance } from '../../base/records/audit-maintenance.js';
-import type { Consolidation } from '../../base/records/consolidation.js';
-
-type DedupeStore = HippoStore & {
-  readonly hippoDb: {
-    readonly consolidation: Consolidation;
-    readonly auditMaintenance: AuditMaintenance;
-  };
-};
+import type { StoreWith } from '../../base/ports/store.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export interface DedupPair {
   kept: string;
@@ -42,7 +33,7 @@ export interface DedupResult {
 }
 
 /**
- * Quantization step for strength-tie comparisons: an epsilon applied by rounding instead of
+ * Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of
  * an abs-diff threshold, so the tiebreak is transitive.
  */
 const STRENGTH_TIE_EPSILON = 0.01;
@@ -83,8 +74,8 @@ function dedupRow(entry: MemoryEntry): DedupRow {
   };
 }
 
-/** The survivor total order: strength bucket desc, then retrievalCount desc,
- * then compareEntryIdentity. */
+/** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then
+ * compareEntryIdentity. */
 function survivorOrder(a: DedupRow, b: DedupRow): number {
   const bucketDiff = strengthTieKey(b.strength) - strengthTieKey(a.strength);
   if (bucketDiff !== 0) return bucketDiff;
@@ -152,7 +143,7 @@ async function partitionRows(pages: RowPages): Promise<Partitions> {
   for await (const page of pages) {
     for (const entry of page) {
       if (!isCurrentDistilled(entry)) continue;
-      // Also split by restricted scope, else a private copy can delete the readable one.
+      // EI2: also split by restricted scope, else a private copy can delete the readable one.
       const partition = derivationPartitionKey(entry.tenantId, entry.scope, entry.originProject);
       let groups = partitions.get(partition);
       if (!groups) partitions.set(partition, (groups = new Map()));
@@ -163,10 +154,8 @@ async function partitionRows(pages: RowPages): Promise<Partitions> {
 }
 
 /** The candidates' partitions in the order a read of every current row first meets them. */
-async function candidatePartitions(
-  store: HippoStore & { readonly hippoDb: { readonly consolidation: Consolidation } },
-): Promise<Partitions> {
-  const { rows, firstSeen } = await store.hippoDb.consolidation.duplicateCandidates();
+async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<Partitions> {
+  const { rows, firstSeen } = await store.consolidation.duplicateCandidates();
   const rank = new Map<string, number>();
   firstSeen.forEach((seen, i) => {
     const key = derivationPartitionKey(seen.tenantId, seen.scope, seen.originProject);
@@ -176,13 +165,14 @@ async function candidatePartitions(
   return new Map([...(await partitionRows([rows]))].sort(([a], [b]) => at(a) - at(b)));
 }
 
-async function scanPairs(store: DedupeStore, partitions: Partitions): Promise<DedupPair[]> {
+async function scanPairs(
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
+  partitions: Partitions,
+): Promise<DedupPair[]> {
   const losers = [...partitions.values()].flatMap((groups) =>
     [...groups.values()].flatMap((g) => g.losers),
   );
-  const backing = await store.hippoDb.auditMaintenance.objectBackedAmong(
-    losers.map((loser) => loser.id),
-  );
+  const backing = await store.auditMaintenance.objectBackedAmong(losers.map((loser) => loser.id));
   return [...partitions.values()].flatMap((groups) => partitionPairs(groups, backing));
 }
 
@@ -190,7 +180,7 @@ async function scanPairs(store: DedupeStore, partitions: Partitions): Promise<De
  * across (isolation). Strength wins, then retrievals; `threshold` is ignored; `pages` feeds
  * every row in place of the candidates read. */
 export async function deduplicateStore(
-  store: DedupeStore,
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
   options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: RowPages } = {},
 ): Promise<DedupResult> {
   // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort
@@ -205,13 +195,13 @@ export async function deduplicateStore(
 
 /** The pairs whose loser was deleted; one store call, one transaction per batch of deletes. */
 async function deletePairs(
-  store: DedupeStore,
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
   pairs: readonly DedupPair[],
   actor: string | undefined,
 ): Promise<DedupPair[]> {
   const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
   const gone = new Set(
-    await store.hippoDb.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR),
+    await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR),
   );
   // A loser named twice went once, so only its first pair reports the delete.
   return pairs.filter((p) => gone.delete(p.removed));

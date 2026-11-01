@@ -1,7 +1,7 @@
 /**
  * Learned memory-value scorer, a rescue-only veto in the sleep decay pass (it can only shrink the
  * condemned set); mirrors benchmarks/memory-value/*.mjs. rescueSet rescues a condemned entry iff it
- * ranks in the top RESCUE_BUDGET share of its tenant's non-pinned set; memory-value-wiring.test.ts
+ * ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set; memory-value-wiring.test.ts
  * guards parity.
  */
 
@@ -10,7 +10,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
   PRODUCTION_STRENGTH,
   type StrengthModel,
-  calculateStrengthAt,
+  calculateStrength,
 } from '../../base/memory/strength.js';
 import {
   compareEntryIdentity,
@@ -32,14 +32,14 @@ const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
   'contentLength',
 ];
 
-/** The keep-budget operating point (the only point with measured evidence): a code constant tied to that evidence,
- *  not user-tunable. */
+/** The keep-budget operating point (the only point with measured evidence): a code constant tied to that evidence, not
+ *  user-tunable. */
 const RESCUE_BUDGET = 0.3;
 
 /**
  * Per-tenant floor on the non-pinned candidate set: below it ranks are noise, and
- * keepN=ceil(RESCUE_BUDGET*N) would rescue a 1-entry tenant's entry every sleep forever. A code
- * constant tied to that reasoning, not user-tunable (like RESCUE_BUDGET). */
+ * keepN=ceil(0.3*N) would rescue a 1-entry tenant's entry every sleep forever. A code constant
+ * tied to that reasoning, not user-tunable (like RESCUE_BUDGET). */
 const MIN_RESCUE_GROUP = 10;
 
 export interface MvFeatureVector {
@@ -56,8 +56,8 @@ export interface MvFeatureVector {
 /**
  * Blind v1 feature dict for one entry, restricted to the 8 dims the frozen weights carry.
  * `strength` is CLOCK-BASIS `calculateStrength(entry, now)` with no DecayOptions, as in the
- * weights' training; passing the production decay basis would silently break parity with the
- * frozen weights.
+ * weights' training; passing the production decay basis would silently break parity with the frozen
+ * weights.
  */
 function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
@@ -67,7 +67,7 @@ function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel):
     ageDays,
     halfLifeDays: entry.halfLifeDays,
     // clock-basis, never the production decay basis — see doc comment above
-    strength: calculateStrengthAt(entry, now, rules),
+    strength: calculateStrength(entry, now, rules),
     retrievalCount: entry.retrievalCount,
     outcomePositive: pos,
     outcomeNegative: neg,
@@ -108,8 +108,8 @@ export function validateWeights(
 /**
  * Min-max normalize the 8 features over the given entries (constant -> 0), then score =
  * dot(weights, normalized); callers set the scope. An entry with any non-finite feature (NaN from a
- * malformed `created`) is excluded from normalization and scores -Infinity, so it can never
- * be rescued.
+ * malformed `created`) is excluded from normalization and scores -Infinity, so it can never be
+ * rescued.
  */
 export function scoreEntries(
   entries: MemoryEntry[],
@@ -284,8 +284,8 @@ function tieGroups(
     const ids = group
       .map(([id]) => id)
       .sort((a, b) => compareScoresDesc(scores.get(a)!, scores.get(b)!));
-    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's
-    // doc comment.
+    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's doc
+    // comment.
     const keepN =
       ids.length < MIN_RESCUE_GROUP
         ? 0
@@ -364,9 +364,9 @@ export interface RescueSetOptions {
 }
 
 /**
- * Rescue decision: the subset of condemnedIds ranking in the top RESCUE_BUDGET share of their
- * tenant's non-pinned set by learned score. Pass `precomputedRanks` to skip the internal ranking
- * so the whole-store pass runs once per sleep; `weights`/`digest` overrides exist for tests only.
+ * Rescue decision: the subset of condemnedIds ranking in the top 30% of their tenant's non-pinned
+ * set by learned score. Pass `precomputedRanks` to skip the internal ranking so the whole-store
+ * pass runs once per sleep; `weights`/`digest` overrides exist for tests only.
  */
 export function rescueSet(
   entries: MemoryEntry[],

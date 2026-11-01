@@ -6,13 +6,13 @@ import {
   type RecallScopeFilter,
 } from '../../base/scope/recall-scope.js';
 import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
-import { sharedStoreOf, type Context } from '../types.js';
+import { sharedStoreOf, type ContextWith } from '../types.js';
 
 /** The ids of the rows nearest `vector` that pass `spec`, nearest first. Refuses a spec for
  * another tenant, a scope the caller may not request, and on a shared store a spec that names no
  * project, as recall refuses them. */
 export async function nearestMemoryIds(
-  ctx: Context,
+  ctx: ContextWith<'vectors'>,
   vector: readonly number[],
   spec: VectorCandidateSpec,
 ): Promise<string[]> {

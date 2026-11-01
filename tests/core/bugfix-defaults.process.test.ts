@@ -1,16 +1,32 @@
 /**
- * Regression test for a defect fixed alongside ROADMAP Part IX: `hippo learn --git` ignored
- * `config.gitLearnPatterns`, which only the MCP `hippo_learn` tool honoured.
+ * Regression tests for two defects fixed alongside ROADMAP Part IX:
+ *   1. physics scoring was on by default ('auto') although its paired
+ *      ablation (benchmarks/physics-ablation/) measured it worse on every
+ *      metric with the CI excluding zero;
+ *   2. `hippo learn --git` ignored `config.gitLearnPatterns`, which only the
+ *      MCP `hippo_learn` tool honoured.
  * Real git, the built CLI, real SQLite. No mocks.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { hippoOut } from '../_helpers/spawn-hippo.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+
+describe('physics scoring default', () => {
+  it('is off unless a config opts in', () => {
+    expect(DEFAULT_PHYSICS_CONFIG.enabled).toBe(false);
+    const home = makeRoot('physics-default');
+    expect(loadConfig(home).physics.enabled).toBe(false);
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ physics: { enabled: 'auto' } }), 'utf8');
+    expect(loadConfig(home).physics.enabled).toBe('auto');
+  });
+});
 
 describe('hippo learn --git honours config.gitLearnPatterns', () => {
   let repo: string;

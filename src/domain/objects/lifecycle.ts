@@ -5,7 +5,7 @@
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import { createMemoryAt, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import {
   isObjectRefusal,
   type ObjectByKind,
@@ -13,12 +13,7 @@ import {
   type ObjectRefusal,
   type SavableKind,
 } from '../../base/records/object-types.js';
-import type {
-  ObjectClose,
-  ObjectListQuery,
-  Objects,
-  ObjectSave,
-} from '../../base/records/objects.js';
+import type { ObjectClose, ObjectListQuery, Objects, ObjectSave } from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type {
   ObjectDescriptor,
@@ -128,7 +123,7 @@ export function objectMirror({
   text,
   now,
 }: ObjectMirrorOptions): MemoryEntry {
-  return createMemoryAt(
+  return createMemory(
     text.content,
     {
       tags: [source, ...text.tags],
@@ -142,14 +137,14 @@ export function objectMirror({
   );
 }
 
+/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror
+ * starts on. */
 /** Who closes or opens an object, and the instant the row is stamped with. */
 export interface ActedBy {
   readonly actor: string;
   readonly now: Date;
 }
 
-/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror
- * starts on. */
 export interface ObjectSaveSite {
   readonly baseHalfLifeDays: number;
   readonly tenantId: string;

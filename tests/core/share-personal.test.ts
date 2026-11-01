@@ -12,7 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -65,24 +65,14 @@ describe('share and promote refuse personal rows', () => {
 
   it('share refuses a personal row with a 400 and the exact text; a team row still shares', async () => {
     const err = await refusal(() =>
-      shareMemory(...sharingStores(hippoRoot), mine.id, {
-        embed: TEST_RUN,
-        detached: TEST_DETACHED,
-        tenantId: 'default',
-      }),
+      shareMemory(...sharingStores(hippoRoot), mine.id, { embed: TEST_RUN, tenantId: 'default' }),
     );
     expect(err.status).toBe(400);
     expect(err.message).toBe(
       `Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`,
     );
     expect(
-      (
-        await shareMemory(...sharingStores(hippoRoot), team.id, {
-          embed: TEST_RUN,
-          detached: TEST_DETACHED,
-          tenantId: 'default',
-        })
-      )?.content,
+      (await shareMemory(...sharingStores(hippoRoot), team.id, { embed: TEST_RUN, tenantId: 'default' }))?.content,
     ).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
@@ -91,13 +81,7 @@ describe('share and promote refuse personal rows', () => {
     expect(transferScore(mine)).toBeGreaterThanOrEqual(0.6);
     expect(transferScore(team)).toBeGreaterThanOrEqual(0.6);
     expect(
-      (
-        await autoShare(...sharingStores(hippoRoot), {
-          embed: TEST_RUN,
-          detached: TEST_DETACHED,
-          tenantId: ALL_TENANTS,
-        })
-      ).map((e) => e.content),
+      (await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS })).map((e) => e.content),
     ).toEqual([TEAM]);
     expect(globalContents()).toEqual([TEAM]);
   });

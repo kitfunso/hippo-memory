@@ -72,8 +72,8 @@ export const v14: Migration = {
     // Append-only invariant: kind='raw' rows cannot be deleted directly.
     // Use raw_archive flow: archive-then-update-then-delete (see src/store/sqlite/entries/raw-archive.ts).
     db.exec(CREATE_TRIGGER_TRG_MEMORIES_RAW_APPEND_ONLY_SQL);
-    // CHECK substitute: ALTER TABLE cannot add CHECK, so enforce kind allowed-set via
-    // INSERT/UPDATE triggers.
+    // CHECK substitute: ALTER TABLE cannot add CHECK, so enforce kind allowed-set via INSERT/UPDATE
+    // triggers.
     db.exec(CREATE_TRIGGER_TRG_MEMORIES_KIND_CHECK_INSERT_SQL);
     db.exec(CREATE_TRIGGER_TRG_MEMORIES_KIND_CHECK_UPDATE_SQL);
   },

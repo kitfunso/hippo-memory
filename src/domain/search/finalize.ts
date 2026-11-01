@@ -38,8 +38,8 @@ export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
 
 const DAG_CHILD_SCORE_FACTOR = 0.9;
 
-/** DAG drill-down: a matched summary pulls its children from `pool` in at DAG_CHILD_SCORE_FACTOR
- * times its score; sorts `results` in place. */
+/** DAG drill-down: a matched summary pulls its children from `pool` in at 0.9x its score; sorts
+ * `results` in place. */
 export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): SearchResult[] {
   const summaryIds = new Set(
     results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id),

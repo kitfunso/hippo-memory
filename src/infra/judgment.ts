@@ -1,6 +1,6 @@
 /** Typed judgment over capture candidates via TypeSafe's Jev (System One).
  *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so every captured memory currently lands on a
- *  flat schema_fit of DEFAULT_SCHEMA_FIT. */
+ *  flat schema_fit of 0.5. */
 
 import { ConfidenceLevel, EmotionalValence } from '../base/memory/entry.js';
 import type { Http } from '../base/ports/http.js';

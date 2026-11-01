@@ -1,7 +1,7 @@
 // The stages after the search: graph expansion, re-rank, goal boost, salience and the filters.
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
-import { expandOnGraphs, graphOf } from '../../domain/graph/recall.js';
+import { graphExpandRecall, graphOf } from '../../domain/graph/recall.js';
 import { Layer } from '../../base/memory/entry.js';
 import {
   outcomeNudge,
@@ -73,17 +73,17 @@ async function expandGraph(
   graph: RecallGraphHops,
   state: RankState,
 ): Promise<void> {
-  const local = graphOf(ctx.store, ctx.graph);
+  const local = graphOf(ctx.store);
   if (graph.hops <= 0 || local === undefined) return;
   const { requested } = poolScope(opts);
   // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would
   // hide both.
   const beforeGraphIds = new Set(state.results.map((r) => r.entry.id));
-  state.results = await expandOnGraphs(state.results, {
+  state.results = await graphExpandRecall(state.results, {
     hops: graph.hops,
     maxNeighbors: graph.maxNeighbors,
     store: local,
-    global: ctx.global && graphOf(ctx.global.store, ctx.global.graph),
+    global: ctx.global && graphOf(ctx.global.store),
     tenantId: ctx.tenantId,
     includeSuperseded: opts.includeSuperseded,
     asOf: opts.asOf,
@@ -139,8 +139,8 @@ function rescore(
 }
 
 function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
-  // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank,
-  // never delete.
+  // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never
+  // delete.
   const presentIds = new Set(state.results.map((r) => r.entry.id));
   state.results = rescore(opts, state.results, { stage: 'interference' }, (r) =>
     (r.entry.conflictsWith || []).some((peerId) => presentIds.has(peerId))
@@ -191,8 +191,8 @@ const NEAR_DUPLICATE_OVERLAP_MIN = 0.4;
 const SCORE_FLOOR_FRACTION = 0.5;
 const QUERY_COVERAGE_MIN = 0.6;
 const GOAL_TAG_BOOST = 1.5;
-// The near-duplicate check looks at this many top hits; the re-ordered pool is that many times
-// the hits it checked, at least NEAR_DUPLICATE_POOL_MIN.
+// The near-duplicate check looks at this many top hits; the re-ordered pool is three times that, at
+// least 9.
 const NEAR_DUPLICATE_WINDOW = 3;
 const NEAR_DUPLICATE_POOL_MIN = 9;
 
@@ -299,8 +299,7 @@ async function applyGoalBoosts(
   }
 }
 
-/** Soft-demotes rarely recalled rows to max(SALIENCE_MIN_MULTIPLIER, retrieval_count / T) of
- * their score; never drops one. */
+/** Soft-demotes rarely recalled rows: score *= max(0.5, retrieval_count / T); never drops one. */
 function applySalience(
   opts: RankRecallOptions,
   threshold: number,

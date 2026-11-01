@@ -19,7 +19,7 @@ import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/gith
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { handleCommentDeleted } from '../../src/surface/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
-import { resolveTenant, type RouteFallback } from '../../src/api/hippo-db/connector-events.js';
+import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/tenant-route.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -401,7 +401,7 @@ describe('GitHub connector — 200-event smoke test', () => {
         new Date().toISOString(),
       );
       const resolved = await resolveTenant(
-        { store: sqliteStore(root) },
+        sqliteStore(root),
         { connector: 'github', installationId: 'unknown-99' },
         fallback(),
       );

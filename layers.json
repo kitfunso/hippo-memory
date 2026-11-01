@@ -1,5 +1,14 @@
 {
-  "order": ["base", "host", "db", "store", "domain", "infra", "api", "surface"],
+  "order": [
+    "base",
+    "host",
+    "db",
+    "store",
+    "domain",
+    "infra",
+    "api",
+    "surface"
+  ],
   "folders": {
     "base": "base",
     "host": "host",
@@ -32,44 +41,5 @@
     "root": "surface/open-store.ts",
     "doors": ["store/sqlite/index.ts"],
     "testKit": { "file": "surface/testing-kit.ts", "door": "store/sqlite/fixtures.ts" }
-  },
-  "paths": {
-    "core": [
-      "base/ports/store.ts",
-      "base/ports/store-index.ts",
-      "base/ports/store/",
-      "api/types.ts",
-      "api/enrichment.ts",
-      "api/memories/remember.ts",
-      "api/recall/",
-      "api/context/",
-      "api/auth/"
-    ],
-    "localTier": ["base/ports/hippo-db.ts"],
-    "storeRules": ["store/rules/"],
-    "ioFree": ["@base", "@domain", "@api"],
-    "hostTypesOnly": ["@domain", "@api"],
-    "sqliteLoaders": ["db/sqlite.ts", "host/file-lock.ts"],
-    "grant": ["db/grant.ts"],
-    "grantMinter": ["store/sqlite/runtime/grant.ts"],
-    "configFile": ["host/config-file.ts"],
-    "env": ["base/util/env.ts"],
-    "envReaders": [
-      "cli.ts",
-      "surface/cli/",
-      "surface/server/",
-      "surface/mcp/",
-      "surface/hooks-install/",
-      "surface/connectors/*/webhook.ts",
-      "infra/",
-      "base/util/env.ts",
-      "base/util/log.ts",
-      "host/spawn-argv.ts",
-      "host/agent-homes.ts"
-    ],
-    "dashboard": ["surface/dashboard/"],
-    "cli": ["surface/cli/", "cli.ts"],
-    "recallVerbs": ["surface/cli/recall*.ts", "surface/cli/explain.ts"],
-    "bookkeeping": ["api/tokens.ts", "api/ledger-db.ts"]
   }
 }

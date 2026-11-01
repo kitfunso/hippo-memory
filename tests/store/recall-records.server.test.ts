@@ -89,8 +89,8 @@ async function viaHttp(handle: ServerHandle, c: RecallCall): Promise<Reply> {
 async function viaCli(s: Store, c: RecallCall): Promise<Reply> {
   const flags: CliFlags = { ...c.cli };
   if (c.session) flags['session-id'] = c.session;
-  const out = await runInProcess((cli) =>
-    handleRecall({ cli, hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  const out = await runInProcess(() =>
+    handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
   );
   return {
     status: out.status,

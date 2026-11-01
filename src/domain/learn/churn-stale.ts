@@ -1,5 +1,6 @@
 // Which memories the churn pass checks and what it writes.
-import type { Learning } from '../../base/records/learning.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import type { Learning } from '../../base/ports/store/learning.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import { GitReadError, type ChurnRepo } from './churn-git.js';
@@ -14,7 +15,6 @@ import {
   loadChurnGitView,
   churnEvidence,
 } from './churn-evidence.js';
-import type { HippoStore } from '../../base/ports/store.js';
 
 export interface DetectChurnStaleOptions {
   tenantId: string;
@@ -96,8 +96,8 @@ function collectChurnCandidates(
   return { candidates, skippedPinned };
 }
 
-/** An outcome row is stamped before it commits, so the recheck starts a little before the
- * first read. */
+/** An outcome row is stamped before it commits, so the recheck starts a little before the first
+ * read. */
 const CONFIRM_RECHECK_MARGIN_MS = MINUTE_MS;
 
 interface TagChurnStaleOptions {
@@ -115,8 +115,9 @@ async function tagChurnStale({
   confirmedAt,
   firstReadAt,
 }: TagChurnStaleOptions): Promise<void> {
-  // The git calls above can take seconds, and an outcome landing meanwhile moves the anchor past
-  // the evidence; only outcomes since the first read can have landed, so the recheck reads those.
+  // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past
+  // the evidence. Only outcomes since the first read can have landed, so that is all the recheck
+  // reads.
   const recheckSince = new Date(firstReadAt - CONFIRM_RECHECK_MARGIN_MS).toISOString();
   const confirmedSince = await learning.confirmedOutcomeTimes(tenantId, recheckSince);
   const unconfirmed = toTag.filter((stale) => {
@@ -131,8 +132,8 @@ async function tagChurnStale({
   );
 }
 
-/** Counts every candidate's evidence into `result` and returns the rows still to tag,
- * writing nothing. */
+/** Counts every candidate's evidence into `result` and returns the rows still to tag, writing
+ * nothing. */
 function recordChurnEvidence(
   git: ChurnGitView,
   candidates: readonly ChurnCandidate[],
@@ -166,8 +167,8 @@ async function readChurnAnchors(
   candidates: readonly ChurnCandidate[],
 ) {
   const firstReadAt = Date.now();
-  // A confirmation older than the oldest candidate cannot move any anchor, so the read
-  // starts there.
+  // A confirmation older than the oldest candidate cannot move any anchor, so the read starts
+  // there.
   const oldestCreated = candidates.reduce(
     (oldest, c) => Math.min(oldest, Date.parse(c.entry.created)),
     Infinity,
@@ -188,7 +189,7 @@ async function readChurnAnchors(
 }
 
 async function readChurnCandidates(
-  store: Pick<HippoStore, 'entriesWhere'>,
+  store: Pick<StoreWith<'learning'>, 'entriesWhere'>,
   opts: DetectChurnStaleOptions,
 ): Promise<ChurnCandidates> {
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
@@ -222,14 +223,14 @@ function churnNeeds(candidates: readonly ChurnCandidate[]): ChurnNeeds {
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
  * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export async function detectChurnStale(
-  store: HippoStore & { readonly hippoDb: { readonly learning: Learning } },
+  store: StoreWith<'learning'>,
   repo: ChurnRepo,
   opts: DetectChurnStaleOptions,
 ): Promise<ChurnStaleResult> {
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
-  const { learning } = store.hippoDb;
+  const { learning } = store;
   const { candidates, skippedPinned } = await readChurnCandidates(store, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 

@@ -5,8 +5,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { needsHippoDb } from '../_helpers/store-switch.js';
-import { onLocalTier } from '../_helpers/v1-route-rows.js';
+import { needsHippoDb, ROUTE_GROUPS } from '../_helpers/store-switch.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -241,7 +240,7 @@ describe('HTTP route status table: status and error text per route', () => {
       seeded[key] = entry.id;
     }
     vi.stubEnv('HIPPO_V1_RPS', '0');
-    handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
+    handle = await serveAsAdmin({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
   });
 
   afterAll(async () => {
@@ -274,14 +273,11 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   }
 
-  // A caller on this machine of these routes reaches the global store, the caller's project, sleep or hippo.db's tier.
-  const onHippoDbOnly = (method: string, path: string): boolean => {
-    if (onLocalTier(method, path)) return needsHippoDb('tier');
-    if (path.endsWith('/sleep')) return needsHippoDb('sleep');
-    return /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
-  };
+  // A caller on this machine of these routes reaches the global store, the caller's project or sleep.
+  const onHippoDbOnly = (path: string): boolean =>
+    path.endsWith('/sleep') ? needsHippoDb('sleep') : /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
   for (const [method, path, , [status, error]] of ROUTES) {
-    it.skipIf(onHippoDbOnly(method, path))(`${method} ${path} with no body on loopback`, async () => {
+    it.skipIf(onHippoDbOnly(path))(`${method} ${path} with no body on loopback`, async () => {
       const r = await call({ method, path: fill(path) });
       expect({ status: r.status, error: r.error, contentType: r.contentType }).toEqual({
         status,
@@ -296,7 +292,7 @@ describe('HTTP route status table: status and error text per route', () => {
       create: await post('/v1/memories', { content: 'parity http create', kind: 'distilled', tags: ['a'] }),
       graph: await get('/v1/graph?limit=5'),
       recall: await get('/v1/memories?q=zebra-route&limit=5&include_continuity=1'),
-      recallBadMode: await get('/v1/memories?q=x&mode=physics'),
+      recallBadMode: await get('/v1/memories?q=x&mode=nope'),
       assemble: await get('/v1/sessions/sess-1/assemble?budget=500'),
       drill: await get(`/v1/recall/drill/${seeded.recall}`),
       archive: await post(`/v1/memories/${seeded.raw}/archive`, { reason: 'parity' }),
@@ -312,7 +308,7 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.graph, 200, { truncated: false });
     shows(out.recall, 200, { results: [{ content: 'parity recall needle zebra-route' }] });
     expect(out.recall.cacheControl).toBe('no-store');
-    shows(out.recallBadMode, 400, { error: "mode must be 'bm25' or 'hybrid'" });
+    shows(out.recallBadMode, 400, { error: "mode must be 'bm25', 'hybrid', or 'physics'" });
     shows(out.assemble, 200, { sessionId: 'sess-1' });
     shows(out.drill, 422, { error: 'Id is a leaf row, not a level-2+ summary; nothing to drill into' });
     shows(out.archive, 200, { ok: true });
@@ -325,13 +321,16 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.sleep, 200, { dryRun: true });
   });
 
-  it('auth and audit routes with valid input', async () => {
+  it('auth, quarantine and audit routes with valid input', async () => {
     const mint = await post('/v1/auth/keys', { label: 'parity', role: 'member' });
     const keyId = isJsonObject(mint.json) && isText(mint.json.keyId) ? mint.json.keyId : 'hk_missing';
     const out = {
       list: await get('/v1/auth/keys?active=false'),
       listBad: await get('/v1/auth/keys?active=maybe'),
       revoke: await call({ method: 'DELETE', path: `/v1/auth/keys/${keyId}` }),
+      quarantine: await get('/v1/quarantine?status=all'),
+      approve: await post(`/v1/quarantine/${seeded.recall}/approve`),
+      reject: await post(`/v1/quarantine/${seeded.recall}/reject`),
       audit: await get('/v1/audit?limit=5'),
       auditBadOp: await get('/v1/audit?op=nope'),
     };
@@ -339,11 +338,14 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.list, 200, expect.arrayContaining([expect.objectContaining({ keyId, label: 'parity' })]));
     shows(out.listBad, 400, { error: "active must be 'true' or 'false'" });
     shows(out.revoke, 200, { ok: true });
+    shows(out.quarantine, 200, { quarantine: [] });
+    shows(out.approve, 404, { error: `not quarantined: ${seeded.recall}` });
+    shows(out.reject, 404, { error: `not quarantined: ${seeded.recall}` });
     shows(out.audit, 200, expect.arrayContaining([expect.objectContaining({ op: 'auth_revoke', targetId: keyId })]));
     shows(out.auditBadOp, 400, { error: expect.stringMatching(/^op must be one of: remember \| /) });
   });
 
-  it.skipIf(needsHippoDb('tier'))('prediction and decision routes with valid input', async () => {
+  it('prediction and decision routes with valid input', async () => {
     const out = {
       predict: await create('prediction', '/v1/predictions', {
         claim: 'ship by friday',
@@ -375,7 +377,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   });
 
-  it.skipIf(needsHippoDb('tier'))('incident and process routes with valid input', async () => {
+  it('incident and process routes with valid input', async () => {
     const out = {
       open: await create('incident', '/v1/incidents', { text: 'db down', linkedMemoryIds: [seeded.recall] }),
       incidents: await get('/v1/incidents?status=open'),
@@ -409,7 +411,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   });
 
-  it.skipIf(needsHippoDb('tier'))('policy and skill routes with valid input', async () => {
+  it('policy and skill routes with valid input', async () => {
     const out = {
       policy: await create('policy', '/v1/policies', {
         policyName: 'retention',
@@ -450,7 +452,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   });
 
-  it.skipIf(needsHippoDb('tier'))('project brief and customer note routes with valid input', async () => {
+  it('project brief and customer note routes with valid input', async () => {
     const out = {
       brief: await create('brief', '/v1/project-briefs', { repo: 'kitfunso/parity', summary: 'parity brief' }),
       briefs: await get('/v1/project-briefs?repo=kitfunso/parity'),
@@ -481,7 +483,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   });
 
-  it.skipIf(needsHippoDb('tier'))('a literal path segment wins over the parameterised route next to it', async () => {
+  it('a literal path segment wins over the parameterised route next to it', async () => {
     const out = {
       statsNotById: await get('/v1/predictions/stats'),
       asofNotById: await get('/v1/policies/asof'),
@@ -499,9 +501,7 @@ describe('HTTP route status table: status and error text per route', () => {
   });
 
   it('non-routes, wrong methods and malformed paths', async () => {
-    // A webhook answers 501 before its secret check on a store without the local tier.
-    const cases = NON_ROUTES.filter(([, method, path]) => !(needsHippoDb('tier') && onLocalTier(method, path)));
-    expect(await runCases(handle.url, cases)).toEqual(expected(cases));
+    expect(await runCases(handle.url, NON_ROUTES)).toEqual(expected(NON_ROUTES));
     const health = await get('/health');
     expect(Object.keys(isJsonObject(health.json) ? health.json : {}).sort()).toEqual([
       'audit_write_failures',
@@ -522,7 +522,7 @@ describe('HTTP route status table under the rate limiter', () => {
   it('throttles /v1 and /mcp but never /health or other paths', async () => {
     const home = makeRoot('route-parity-rl');
     vi.stubEnv('HIPPO_V1_RPS', '0.5');
-    const handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
+    const handle = await serveAsAdmin({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
     try {
       expect(await runCases(handle.url, LIMITED)).toEqual(expected(LIMITED));
     } finally {

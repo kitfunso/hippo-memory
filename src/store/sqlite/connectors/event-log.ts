@@ -1,9 +1,9 @@
 // The event-log statements both connectors share; each connector names its table, key column and
 // extra columns.
 
-import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
+import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
-import type { ConnectorEventRecord } from '../../../base/records/connectors.js';
+import type { ConnectorEventRecord } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
@@ -25,7 +25,7 @@ export function eventMemory(db: DatabaseSyncLike, log: EventLogSpec, key: string
   return row?.memory_id ?? null;
 }
 
-export interface MarkKeySeenOptions {
+export interface MarkEventSeenOptions {
   readonly log: EventLogSpec;
   readonly key: string;
   readonly extra: ReadonlyArray<readonly [string, string]>;
@@ -34,9 +34,9 @@ export interface MarkKeySeenOptions {
 
 /** Records the key unless a row holds it already; false means another writer got there first.
  * `extra` pairs connector-only columns with values. */
-export function markKeySeen(
+export function markEventSeen(
   db: DatabaseSyncLike,
-  { log, key, extra, memoryId }: MarkKeySeenOptions,
+  { log, key, extra, memoryId }: MarkEventSeenOptions,
 ): boolean {
   const names = [log.keyColumn, ...extra.map(([name]) => name), 'ingested_at', 'memory_id'];
   const values = [key, ...extra.map(([, value]) => value), handleStamp(db), memoryId];
@@ -44,10 +44,10 @@ export function markKeySeen(
     db,
     `INSERT OR IGNORE INTO ${log.table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`,
   ).run(...values);
-  return changedRows(inserted) > 0;
+  return Number(inserted.changes ?? 0) !== 0;
 }
 
-export function keyRecord(
+export function eventRecord(
   db: DatabaseSyncLike,
   log: EventLogSpec,
   key: string,

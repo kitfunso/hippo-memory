@@ -15,8 +15,8 @@ function optionalOptions(call: GitCall): ExecFileSyncOptions {
   return options;
 }
 
-/** execFileSync puts git's exit code on the error it throws; a kill or a failed start
- * leaves none. */
+/** execFileSync puts git's exit code on the error it throws; a kill or a failed start leaves
+ * none. */
 function exitStatus(error: Error): number | null {
   if (!('status' in error)) return null;
   const { status } = error;

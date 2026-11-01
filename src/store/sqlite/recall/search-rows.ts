@@ -23,17 +23,14 @@ import { escapeLike } from '../../../base/util/escape.js';
 import { ftsAnyPhrase } from './fts-phrase.js';
 import { placeholders } from '../../../db/sql.js';
 import type { OriginFilter } from '../../../base/ports/store/types.js';
-import type { RecallSearchEntriesOptions } from '../../../base/records/sharing.js';
+import type { RecallSearchEntriesOptions } from '../../../base/ports/store/sharing.js';
 import {
   VECTOR_CANDIDATE_LIMIT,
   type VectorCandidateSpec,
 } from '../../../base/ports/store/vectors.js';
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 import { tenantAnd } from '../runtime/tenant.js';
-
-/** Newest admitted rows LIKE tests for a term under 3 characters, which no trigram lookup
- * can answer. */
-const LIKE_WINDOW_ROWS = 2000;
+import { LIKE_WINDOW_ROWS } from '../../rules/windows.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
  * in recall-scope.ts is its JS twin. */
@@ -49,8 +46,8 @@ function recallScopeClause(
   if (scopeFilter.mode === 'default-deny') {
     return { sql: ` AND ${admit.sql}`, params: admit.params };
   }
-  // The trailing arm keeps a deliberately requested scope loadable, private or
-  // quarantined included.
+  // The trailing arm keeps a deliberately requested scope loadable, private or quarantined
+  // included.
   return {
     sql: ` AND (${admit.sql} OR ${col}scope = ?)`,
     params: [...admit.params, scopeFilter.value],
@@ -208,16 +205,15 @@ function listFtsCandidates(
   }
 }
 
-/** Substring matches in content or tags: the trigram index answers each term of MIN_TRIGRAM_CHARS
- * or more characters over every admitted row, and LIKE tests the rest over the newest
- * admitted rows. */
+/** Substring matches in content or tags: the trigram index answers each term of 3 or more
+ * characters over every admitted row, and LIKE tests the rest over the newest admitted rows. */
 function listLikeCandidates(
   db: DatabaseSyncLike,
   terms: string[],
   p: SearchPredicates,
   limit: number,
 ): MemoryRow[] {
-  // FTS5's trigram index cannot look up a term under MIN_TRIGRAM_CHARS; a store without FTS5 has
+  // A trigram holds 3 characters, so FTS5 cannot look up a shorter term; a store without FTS5 has
   // no index at all.
   const indexed = isFtsAvailable(db)
     ? terms.filter((term) => [...term].length >= MIN_TRIGRAM_CHARS)
@@ -329,8 +325,8 @@ export function listRecallEntries(
   }).map(rowToEntry);
 }
 
-/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when
- * it can. */
+/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it
+ * can. */
 export async function listVectorCandidateEntries(
   db: DatabaseSyncLike,
   queryVector: readonly number[],

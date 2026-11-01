@@ -3,8 +3,8 @@
 import type { DatabaseSyncLike } from '../../../db/index.js';
 
 const ROLLS_BACK_PART = /^\s*ROLLBACK\s+TO\b/i;
-// A transaction's writes become durable where it ends; ROLLBACK counts too, to err on the
-// safe side.
+// A transaction's writes become durable where it ends; ROLLBACK counts too, to err on the safe
+// side.
 const ENDS_TRANSACTION = /^\s*(?:COMMIT|END|RELEASE|ROLLBACK)\b/i;
 // Reads, and the statements that open a transaction: none makes a change durable on its own.
 const NEVER_COMMITS = /^\s*(?:SELECT|BEGIN|SAVEPOINT|PRAGMA|EXPLAIN)\b/i;

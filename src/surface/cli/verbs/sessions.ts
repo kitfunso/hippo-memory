@@ -7,6 +7,7 @@ import { type VerbSpec, verb } from '../verb-row.js';
 
 export const SESSION_VERBS = {
   snapshot: verb(() => import('../continuity.js'), 'handleSnapshot', {
+    needs: ['sessions'],
     flags: {
       switches: ['json'],
       values: ['id', 'next-step', 'session', 'source', 'status', 'summary', 'task'],
@@ -27,6 +28,7 @@ export const SESSION_VERBS = {
     ],
   }),
   session: verb(() => import('../session.js'), 'handleSession', {
+    needs: ['sessions'],
     flags: {
       switches: ['json'],
       values: ['content', 'id', 'outcome', 'session', 'source', 'summary', 'task', 'type'],
@@ -54,6 +56,7 @@ export const SESSION_VERBS = {
     ],
   }),
   handoff: verb(() => import('../handoff.js'), 'handleHandoff', {
+    needs: ['sessions'],
     flags: {
       switches: ['json'],
       values: [
@@ -90,9 +93,9 @@ export const SESSION_VERBS = {
     ],
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
-    checksOwnFlags: true,
-    // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does
-    // not read.
+    needs: ['cards'],
+    // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not
+    // read.
     flags: {
       switches: ['json'],
       values: [
@@ -144,6 +147,7 @@ export const SESSION_VERBS = {
     ],
   }),
   current: verb(() => import('../continuity.js'), 'handleCurrent', {
+    needs: ['sessions'],
     flags: { switches: ['json'] },
     usage: [
       `
@@ -171,13 +175,8 @@ export const SESSION_VERBS = {
     ],
   }),
   embed: verb(() => import('../maintenance.js'), 'handleEmbed', {
-    flags: { switches: ['global', 'status'] },
-    removedFlags: {
-      'reset-physics': {
-        removedIn: '3.0',
-        advice: 'Drop it: 3.0 removed the physics engine, so no state is left to reset.',
-      },
-    },
+    needs: ['vectors'],
+    flags: { switches: ['global', 'reset-physics', 'status'] },
     usage: [
       `
   embed                    Embed all memories for semantic search
@@ -187,10 +186,7 @@ export const SESSION_VERBS = {
   watch: verb(() => import('../learn.js'), 'handleWatch', {
     flags: {},
     removedFlags: {
-      shell: {
-        removedIn: '3.0',
-        advice: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.',
-      },
+      shell: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.',
     },
     usage: [
       `
@@ -198,6 +194,7 @@ export const SESSION_VERBS = {
     ],
   }),
   learn: verb(() => import('../learn.js'), 'handleLearn', {
+    needs: ['lessonWrites', 'vectors', 'vectorWrites'],
     scoped: true,
     flags: { switches: ['git'], values: ['repos'], numbers: ['days'] },
     usage: [
@@ -217,6 +214,7 @@ export const SESSION_VERBS = {
     ],
   }),
   share: verb(() => import('../transfer.js'), 'handleShare', {
+    needs: ['vectors', 'vectorWrites'],
     dryRun: {
       form: '--auto',
       honoured: (args, flags) => args[0] === '--auto' || boolFlag(flags, 'auto'),
@@ -354,6 +352,7 @@ export const SESSION_VERBS = {
     () => import('../hooks/session-end-worker.js'),
     'handleSessionEndWorker',
     {
+      needs: ['sessions', 'reports'],
       dryRun: false,
       flags: {
         switches: ['dry-run', 'no-learn', 'no-share', 'turn'],
@@ -373,6 +372,7 @@ export const SESSION_VERBS = {
     ],
   }),
   'compact-resume': verb(() => import('../hooks/compact-resume.js'), 'handleCompactResume', {
+    needs: ['sessions'],
     flags: {},
     usage: [
       `

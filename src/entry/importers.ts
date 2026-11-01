@@ -12,10 +12,10 @@ import * as sources from '../surface/importers/sources.js';
 import { importMarkdownInto } from '../surface/importers/markdown.js';
 import { importVaultInto, type VaultTarget } from '../surface/importers/vault.js';
 import {
-  sqliteImportFiles,
-  sqliteStore,
-  runSqliteBatch,
-  runSqliteRequest,
+  defaultImportFiles,
+  defaultStore,
+  runStoreBatch,
+  runStoreRequest,
 } from '../surface/open-store.js';
 import { entryInfra } from '../surface/entry-infra.js';
 import { evalClock } from '../infra/eval-switches.js';
@@ -23,7 +23,7 @@ import { evalClock } from '../infra/eval-switches.js';
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
   const batch = <T>(run: (files: ImportFiles) => T): T =>
-    runSqliteBatch((session) => run(sqliteImportFiles(root, { session })));
+    runStoreBatch((session) => run(defaultImportFiles(root, { session })));
   return { ...options, target: { root, batch, clock: evalClock() } };
 }
 
@@ -60,13 +60,13 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
 }
 
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on
- * the in-memory `existing` Map loaded once, so two concurrent runs over one vault
- * can double-insert. */
+ * the in-memory `existing` Map loaded once, so two concurrent runs over one vault can
+ * double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
   const batch: VaultTarget['batch'] = (run) =>
-    runSqliteRequest((session) => run(sqliteStore(options.hippoRoot, { session })), 'cli');
+    runStoreRequest((session) => run(defaultStore(options.hippoRoot, { session })), 'cli');
   return importVaultInto(folderPath, options, {
-    store: sqliteStore(options.hippoRoot),
+    store: defaultStore(options.hippoRoot),
     batch,
     infra: entryInfra(),
   });

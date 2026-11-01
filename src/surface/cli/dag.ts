@@ -3,11 +3,15 @@
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import * as api from '../../api/index.js';
-import { settleTokens } from '../../api/context/context-render.js';
-import { assembleCost, assembleHeading, drillCost } from '../../api/hippo-db/dag-render.js';
+import {
+  assembleCost,
+  assembleHeading,
+  drillCost,
+  settleTokens,
+} from '../../api/context/context-render.js';
 import { memoryList } from '../../api/memories/memories.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { MAX_DRILL_DOWN_DEPTH } from '../../api/objects/drill-down.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -19,7 +23,6 @@ import {
 import { requireInit } from './shared.js';
 import { CONTENT_PREVIEW_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
-import type { CliCommand } from './api-context.js';
 
 const TREE_CHILD_PREVIEW_CHARS = 70;
 const TREE_LEAF_PREVIEW_CHARS = 60;
@@ -27,14 +30,9 @@ const DAG_HEAD_CHARS = 120;
 const DAG_SUMMARY_PREVIEW_CHARS = 200;
 const DAG_CHILD_PREVIEW_CHARS = 100;
 
-export async function handleDag({
-  hippoRoot,
-  tenantId,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleDag({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const entries = await memoryList(cli.apiContext(hippoRoot, tenantId), { everyTenant: true });
+  const entries = await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
   const isStats = boolFlag(flags, 'stats');
 
   const byLevel = new Map<number, number>();
@@ -129,7 +127,6 @@ function printOrphanSummary(summary: MemoryEntry, children: readonly MemoryEntry
 }
 
 interface AssembleSessionOptions {
-  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly sessionId: string;
@@ -137,7 +134,6 @@ interface AssembleSessionOptions {
 }
 
 async function assembleSession({
-  cli,
   hippoRoot,
   tenantId,
   sessionId,
@@ -149,7 +145,7 @@ async function assembleSession({
   const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = !boolFlag(flags, 'no-summarize-older');
   const scope = stringFlag(flags, 'scope') || undefined;
-  const ctx = { ...cli.apiContext(hippoRoot, tenantId), actor: api.adminActor('cli:assemble') };
+  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:assemble') };
   const opts: api.AssembleOptions = {};
   if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
   if (Number.isFinite(freshTailCount) && freshTailCount! >= 0) opts.freshTailCount = freshTailCount;
@@ -173,24 +169,18 @@ async function assembleSession({
   );
 }
 
-// --depth N walks N levels down (default 1, hard cap MAX_DRILL_DOWN_DEPTH); out-of-range is
-// rejected, never silently clamped.
+// --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently
+// clamped.
 function drillDepthFlag(flags: CliFlags): number | undefined {
   const depth = numberFlag(flags, 'depth');
-  if (
-    depth !== undefined &&
-    (!Number.isInteger(depth) || depth < 1 || depth > MAX_DRILL_DOWN_DEPTH)
-  ) {
-    printError(
-      `--depth must be an integer between 1 and ${MAX_DRILL_DOWN_DEPTH} (got ${stringFlag(flags, 'depth')})`,
-    );
+  if (depth !== undefined && (!Number.isInteger(depth) || depth < 1 || depth > 10)) {
+    printError(`--depth must be an integer between 1 and 10 (got ${stringFlag(flags, 'depth')})`);
     throw new CliExit(2);
   }
   return depth;
 }
 
 interface DrillIntoSummaryOptions {
-  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly summaryId: string;
@@ -198,7 +188,6 @@ interface DrillIntoSummaryOptions {
 }
 
 async function drillIntoSummary({
-  cli,
   hippoRoot,
   tenantId,
   summaryId,
@@ -206,7 +195,7 @@ async function drillIntoSummary({
 }: DrillIntoSummaryOptions): Promise<void> {
   requireInit(hippoRoot);
   const opts = drillDownOptions(flags);
-  const ctx = { ...cli.apiContext(hippoRoot, tenantId), actor: api.adminActor('cli:drill') };
+  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:drill') };
   const r = await api.drillDown(ctx, summaryId, opts);
   if ('failure' in r) failDrill(r, summaryId);
   if (boolFlag(flags, 'json')) {
@@ -261,13 +250,12 @@ export async function handleDrill({
   tenantId,
   args,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const summaryId = args[0];
   if (!summaryId) {
     fail('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
   }
-  await drillIntoSummary({ cli, hippoRoot, tenantId, summaryId, flags });
+  await drillIntoSummary({ hippoRoot, tenantId, summaryId, flags });
 }
 
 export async function handleAssemble({
@@ -275,7 +263,6 @@ export async function handleAssemble({
   tenantId,
   args,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
@@ -283,5 +270,5 @@ export async function handleAssemble({
       'Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]',
     );
   }
-  await assembleSession({ cli, hippoRoot, tenantId, sessionId, flags });
+  await assembleSession({ hippoRoot, tenantId, sessionId, flags });
 }

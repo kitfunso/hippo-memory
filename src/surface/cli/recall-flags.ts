@@ -138,8 +138,8 @@ function parseStageFlags(flags: CliFlags): RecallStageFlags {
   };
 }
 
-/** What `hippo recall` reads: its flags, the store setting they pick, the tenant and the
- * store's config. */
+/** What `hippo recall` reads: its flags, the store setting they pick, the tenant and the store's
+ * config. */
 export interface ParsedRecallFlags {
   readonly budget: number;
   readonly limit: number;

@@ -1,13 +1,13 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context, EntryContext } from '../../api/index.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
+import type { ContextWith } from '../../api/types.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
 import type { BoundAddonRoute } from './route-table.js';
-import type { HippoStore } from '../../base/ports/store-index.js';
-import type { StoreReach } from '../../base/ports/store.js';
+import type { HippoStore, OptionalGroup, StoreGroup } from '../../base/ports/store-index.js';
+import type { RequiredStore, StoreReach, StoreWith } from '../../base/ports/store.js';
 import type { McpTools } from '../mcp/protocol.js';
 import type { LocalKey } from './local-key.js';
 import type { KeyVerifier } from './api-key.js';
@@ -15,7 +15,6 @@ import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
-import type { DetachedWork } from '../../domain/search/embed-memories.js';
 import type { ConnectorStore } from '../connectors/ingest.js';
 
 export interface ServerHandle {
@@ -53,13 +52,12 @@ export interface AddonCall {
 }
 
 /** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then
- * sends the returned value as 200 JSON. */
+ * sends the returned value as 200 JSON. Unset, `storeReady` means the route runs on hippo.db
+ * alone. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
-  /** Set, the route runs only on a store with hippo.db's local tier and answers 501 on another;
-   * unset, it runs on any store. */
-  readonly hippoDb?: true;
+  readonly storeReady?: StoreGroup;
 }
 
 export interface RateLimitSpec {
@@ -71,13 +69,13 @@ export interface ServeOptions {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
   authResolver?: AuthResolver;
-  /** Deadline for one authResolver call; defaults to 5000 ms, as does a value that is not a
-   * positive number. */
+  /** Deadline for one authResolver call; defaults to 5000 ms. */
   authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
-  /** Only `hippo serve` sets this: stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an
-   * uncaught exception or rejection. A stop 10000 ms past `shutdownDrainMs` exits as a failure. */
+  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or
+   * unhandled rejection. A stop still running 10 s past `shutdownDrainMs` ends the process with
+   * a failure exit. Only `hippo serve` sets this. */
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to
    * 5000 ms. */
@@ -90,9 +88,8 @@ export interface ServeOptions {
   store?: HippoStore;
   autoSleep?: false;
   routes?: readonly AddonRoute[];
-  /** Tests only: shortens the wait for a key-mint body, which defaults to 10000 ms. */
   mintBodyDeadlineMs?: number;
-  /** Tests only: shortens the wait for a signed webhook's body, which defaults to 10000 ms. */
+  /** Tests only: shortens the wait for a signed webhook's body, which defaults to 10 s. */
   webhookBodyDeadlineMs?: number;
   /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext
    * HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
@@ -103,8 +100,9 @@ export interface ServeOptions {
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so
    * it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
-  /** Request limits, each disabled by 'off': perCaller after auth, on by default (HIPPO_CALLER_RPS,
-   * else 20/s, burst 2x); perAddress replaces HIPPO_V1_RPS; failedAuthPerAddress guards scrypt. */
+  /** Request limits: perCaller after auth, on by default (HIPPO_CALLER_RPS, else 20 per second,
+   * burst 40); perAddress replaces HIPPO_V1_RPS when set; 'off' disables either;
+   * failedAuthPerAddress guards scrypt. */
   rateLimits?: {
     perCaller?: RateLimitSpec | 'off';
     perAddress?: RateLimitSpec | 'off';
@@ -122,16 +120,16 @@ export interface ServerCounts {
 
 export type ResolvedServeOptions = ServeOptions & {
   store: HippoStore;
-  /** The store is hippo.db rather than a caller's own, so its folder's config.json decides
-   * shared-ness and the server runs its sleeps. */
+  /** The store is hippo.db rather than a caller's own: its folder's config.json decides
+   * shared-ness, and an add-on route naming no group runs on it alone. */
   onHippoDb: boolean;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
   reachOf: (shared: boolean) => StoreReach;
   /** A store the server built at boot, as this request calls it: each call to a worker waits on
    * its deadline. */
   storeFor: <S extends HippoStore>(store: S) => S;
-  /** Fires when this request passes its deadline; unset outside a request and for an
-   * exempt route. */
+  /** Fires when this request passes its deadline; unset outside a request and for an exempt
+   * route. */
   signal?: AbortSignal;
   /** This server's own config reader: each request reads config.json through it. */
   configAt: ConfigReader;
@@ -139,7 +137,7 @@ export type ResolvedServeOptions = ServeOptions & {
   /** The /v1 rows for this store, each row's store need settled at boot. */
   v1Routes: RouteLookup<BoundRoute>;
   /** The MCP tools this store serves, each tool's store need settled at boot. */
-  mcpTools: McpTools<HippoStore>;
+  mcpTools: McpTools<RequiredStore>;
   /** The add-on routes by path, each with its store need settled at boot. */
   addonRoutes: ReadonlyMap<string, BoundAddonRoute>;
   callerLimiter?: RateLimiter;
@@ -150,11 +148,14 @@ export type ResolvedServeOptions = ServeOptions & {
   keyVerifier: KeyVerifier;
   /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
-  /** This server's outside services: one reranker registry for the server's life, the rest
-   * per Context. */
+  /** `callers` as one request reads them: the auto-sleep count runs on the request's own store,
+   * which `storeFor` maps. */
+  callersFor: (storeFor: <S extends HippoStore>(store: S) => S) => CallerState;
+  /** The served store as a ledger home, proved at boot; unset for a store that keeps no ledger. */
+  ledgerStore?: StoreWith<'ledger' | 'folderFiles'>;
+  /** This server's outside services: one reranker registry for the server's life, the rest per
+   * Context. */
   infra: () => InfraPorts;
-  /** Keeps the work a request starts and does not wait on; the server's stop settles it. */
-  detached: DetachedWork;
   sleeps: SleepQueue;
   counts: ServerCounts;
 };
@@ -172,8 +173,8 @@ export interface AuthedRouteRequest extends RouteRequest {
   ctx: Context;
 }
 
-/** A request past the gate on a store boot proved holds hippo.db's local tier. */
-export type HippoDbRequest = AuthedRouteRequest & { ctx: HippoDbContext };
+/** A request past the gate whose store boot proved holds the optional groups `G`. */
+export type GroupRequest<G extends OptionalGroup> = AuthedRouteRequest & { ctx: ContextWith<G> };
 
 /** A connector webhook's request, with the connector store boot proved; the handler checks the
  * sender itself. */
@@ -215,31 +216,36 @@ export type BoundRoute = { method: string; unported?: true } & (
   | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
 );
 
-/** A route that runs on any store. */
+/** A route that runs on any store, or with a `hippoDbOnly` reason on hippo.db alone. */
 type AnyStoreRoute = {
   method: string;
   auth: GatedAuth;
-  hippoDb?: never;
+  storeReady?: never;
+  hippoDbOnly?: string;
 } & PathEndpoint<AuthedRouteRequest>;
+
+/** A route that needs the optional group `G`: boot hands its handler the store it proved, or
+ * marks the row 501. */
+export type GroupRouteOf<G extends OptionalGroup> = {
+  method: string;
+  auth: GatedAuth;
+  storeReady: G;
+  hippoDbOnly?: never;
+} & PathEndpoint<GroupRequest<G>>;
+
+/** A route that needs any one optional group. */
+export type GroupRoute = { [G in OptionalGroup]: GroupRouteOf<G> }[OptionalGroup];
 
 /** A connector webhook: boot hands it the connector store it proved, or answers 501 for a store
  * without one. */
 export type WebhookRoute = {
   method: string;
   auth: 'webhook-signature';
-  hippoDb?: never;
+  storeReady?: never;
+  hippoDbOnly?: never;
 } & PathEndpoint<WebhookRouteRequest>;
 
-/** A route on hippo.db's local tier: boot hands its handler the request's tier, or marks the row
- * 501 on a store without it. */
-export type HippoDbRoute = {
-  method: string;
-  auth: GatedAuth;
-  /** The handler calls the local tier, so the row binds only on a store that carries `hippoDb`. */
-  hippoDb: true;
-} & PathEndpoint<HippoDbRequest>;
-
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under
- * another store a `hippoDb` row or a webhook answers 501; its hippo.db work runs on a worker
+ * another store it runs only with its `storeReady` group; its hippo.db work runs on a worker
  * thread when the store has one. */
-export type Route = AnyStoreRoute | WebhookRoute | HippoDbRoute;
+export type Route = AnyStoreRoute | GroupRoute | WebhookRoute;

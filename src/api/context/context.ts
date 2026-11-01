@@ -1,6 +1,6 @@
 // Ambient context injection: contextGet, the selection it drives and the retrieval it records.
-import type { TaskSnapshot } from '../../base/records/sessions.js';
-import { markRetrievedAt } from '../../base/memory/entry.js';
+import type { TaskSnapshot } from '../../base/ports/store/sessions.js';
+import { markRetrieved } from '../../base/memory/entry.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -17,7 +17,7 @@ import { selectBySearch } from './context-search.js';
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from '../recall/finish.js';
 import { keepShownIds } from '../recall/last-recalled.js';
-import type { Context } from '../types.js';
+import type { Context, ContextWith } from '../types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import {
   NO_QUERY,
@@ -216,11 +216,11 @@ interface RecordRetrievalOptions {
 
 /** Strengthens and marks the returned rows, then writes the trace and index together. */
 async function recordRetrieval(
-  ctx: Context,
+  ctx: ContextWith<never, 'lastRecall'>,
   { opts, plan, selected, activeSnapshot }: RecordRetrievalOptions,
 ): Promise<RecordedRetrieval> {
   const toUpdate = selected.map((s) => s.entry);
-  const updatedEntries = markRetrievedAt(toUpdate, plan.now, plan.strength);
+  const updatedEntries = markRetrieved(toUpdate, plan.now, plan.strength);
   const retrievedIds = updatedEntries.map((u) => u.id);
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
@@ -237,9 +237,8 @@ async function recordRetrieval(
   // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the
   // recall without one.
   const store = ctx.store;
-  const lastRecall = ctx.enrich?.lastRecall;
-  const traceId = lastRecall
-    ? await lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
+  const traceId = store.lastRecall
+    ? await store.lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
     : await store.finishRecall(writes).then(() => null);
   plan.obs?.traced(traceId);
   await store.bumpRecallStats(selected.length);

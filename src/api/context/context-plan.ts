@@ -1,7 +1,7 @@
 // Which stores a context call reaches and what it may spend.
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import type { ContextReads, HippoStore } from '../../base/ports/store.js';
+import type { ContextReads, RequiredStore, StoreWith } from '../../base/ports/store.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { ProjectRef } from '../../base/scope/project-identity.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
@@ -23,7 +23,8 @@ import type { AmbientRecallRequest } from '../../base/ports/store/context-reads.
 
 /** One store contextGet reads rows from: its base search and its context reads. */
 export interface ContextSource {
-  readonly store: HippoStore;
+  /** Sessions is read only for the unfinished handoff, where its absence means none. */
+  readonly store: StoreWith<never, 'sessions'>;
   readonly reads: ContextReads;
 }
 
@@ -59,7 +60,7 @@ export interface ContextPlan {
 }
 
 /** The operator's global store, which planContext proved present before it set hasGlobal. */
-export function globalStoreInReach(ctx: Context): HippoStore {
+export function globalStoreInReach(ctx: Context): RequiredStore {
   return globalInReach(ctx).store;
 }
 
@@ -73,7 +74,7 @@ export function globalInReach(ctx: Context): GlobalInReach {
 export const NO_QUERY = '*';
 
 /** A store's base search and context reads, both required on the port. */
-export function sourceOf(store: HippoStore): ContextSource {
+export function sourceOf(store: StoreWith<never, 'sessions'>): ContextSource {
   return { store, reads: store.contextReads };
 }
 
@@ -104,8 +105,8 @@ export function globalSource(ctx: Context): ContextSource {
   return sourceOf(globalStoreInReach(ctx));
 }
 
-/** Prices one entry against the budget: the caller's cost model when it gave one, else a
- * token estimate. */
+/** Prices one entry against the budget: the caller's cost model when it gave one, else a token
+ * estimate. */
 function entryPricer(
   cost: ContextOptions['cost'],
   currentProject: ContextPlan['currentProject'],
@@ -167,8 +168,8 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
   const config = ctx.config;
   const currentProject = opts.currentProject;
   const includeCrossProject = readsCrossProject(ctx, opts, reach.sharedStore);
-  // Decided before the ambient loads so the pinned-only FTS candidate query can share
-  // their connection.
+  // Decided before the ambient loads so the pinned-only FTS candidate query can share their
+  // connection.
   const promptRecallPending =
     pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
   const cost = opts.cost;
@@ -223,8 +224,8 @@ export function promptRecallRequest(
     : undefined;
 }
 
-/** Reports the block's facts to the observer and returns the budget left after the
- * fixed headers. */
+/** Reports the block's facts to the observer and returns the budget left after the fixed
+ * headers. */
 export function openBlockBudget(plan: ContextPlan, opts: ContextOptions, budget: number): number {
   const { config, cost, obs, pinnedOnly, promptRecallPending } = plan;
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;

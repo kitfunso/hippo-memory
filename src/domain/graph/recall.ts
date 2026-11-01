@@ -14,8 +14,8 @@ import {
 } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
-import type { Entity, GraphRows, GraphWalkQuery, Relation } from '../../base/records/graph.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import type { Entity, GraphRows, Relation } from '../../base/ports/store/graph.js';
+import type { RequiredStore, StoreGroups, StoreWith } from '../../base/ports/store.js';
 import {
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
@@ -26,26 +26,18 @@ import {
 export const MAX_HOPS = 3;
 /** Default per-hop fanout cap (bounds blow-up on a future dense graph). */
 export const DEFAULT_MAX_NEIGHBORS = 25;
-/** Per-hop relevance discount: a graph hit inherits its origin seed's score, scaled down by this
- *  fraction per hop, so it ranks just below its seed and orders by hop-distance. */
+/** Per-hop relevance discount: a graph hit inherits its origin seed's score, scaled down 1% per hop, so it ranks just
+ *  below its seed and orders by hop-distance. */
 const HOP_DISCOUNT = 0.01;
 type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
+type GraphStore = Pick<StoreGroups, 'graphReads'> & Pick<RequiredStore, 'entriesByIds'>;
 
-/** The graph reads a walk makes; only a store with hippo.db's local tier keeps a graph. */
-export interface GraphWalk {
-  graphRows(tenantId: string, query: GraphWalkQuery): Promise<GraphRows>;
-}
-
-type GraphStore = { readonly graphReads: GraphWalk } & Pick<HippoStore, 'entriesByIds'>;
-
-/** `store` with the graph its root found, as expansion walks it; with no graph there are no
- * neighbours to add. */
-export function graphOf(
-  store: Pick<HippoStore, 'entriesByIds'>,
-  graph: GraphWalk | undefined,
-): GraphStore | undefined {
-  if (graph === undefined) return undefined;
-  return { graphReads: graph, entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
+/** The graph a store keeps, as expansion walks it; a store that keeps none has no neighbours to
+ * add. */
+export function graphOf(store: StoreWith<never, 'graphReads'>): GraphStore | undefined {
+  const { graphReads } = store;
+  if (graphReads === undefined) return undefined;
+  return { graphReads, entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
 }
 type GraphHit = SearchResult & { graphVia: GraphVia };
 
@@ -70,14 +62,14 @@ export interface GraphExpandOptions {
   /** Budget cost per result; defaults to the memory text. */
   cost?: ResultCost;
   /** The recall --min-results floor: this many top base rows are kept regardless of budget, so graph expansion never
-   *  violates the floor. Defaults to DEFAULT_MIN_RESULTS. */
+   *  violates the floor. Defaults to 1. */
   minResults?: number;
   /**
    * Recall-side scope rule applied to graph-REACHED memories only (base results already passed the
-   * caller), mirroring SearchBothHybridOptions.recallScope. Omitted = default-deny (private and
+   * caller), mirroring HybridSearchOptions.recallScope. Omitted = default-deny (private and
    * quarantine excluded, NULL passes), the fail-closed default for SDK callers. { requested,
-   * additive: true } is CLI --scope unlock (passesCliRecallScopeFilter); otherwise exact
-   * narrowing (passesScopeFilterForRecall).
+   * additive: true } is CLI --scope unlock (passesCliRecallScopeFilter); otherwise exact narrowing
+   * (passesScopeFilterForRecall).
    */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
@@ -312,7 +304,7 @@ async function loadSuccessorValidFrom(
  * local AND global stores, each placed after its seed. Returns `baseResults` unchanged when `hops
  * <= 0`, there are no base results, or nothing new survives the filters and the token budget.
  */
-export async function expandOnGraphs(
+export async function graphExpandRecall(
   baseResults: SearchResult[],
   opts: GraphExpandOptions,
 ): Promise<SearchResult[]> {

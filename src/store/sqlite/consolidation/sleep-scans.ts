@@ -1,6 +1,6 @@
 // The scans sleep runs over every memory: object-backed rows and duplicate candidates.
 
-import { CURRENT_DISTILLED } from '../../../db/sql.js';
+import { CURRENT_DISTILLED } from '../../../db/sql-predicates.js';
 import { duplicateHash } from '../../../base/util/same-text.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from '../runtime/rows.js';
@@ -12,7 +12,7 @@ import type {
   DuplicateCandidates,
   HalfLifeRow,
   ObjectLink,
-} from '../../../base/records/consolidation.js';
+} from '../../../base/ports/store/consolidation.js';
 
 /** The typed-object tables whose rows name a backing memory in `memory_id`. */
 const OBJECT_TABLES = Object.values(KINDS).map((kind) => kind.table);

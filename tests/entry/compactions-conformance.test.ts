@@ -68,7 +68,7 @@ async function seed(dir: string): Promise<void> {
   } finally {
     closeHippoDb(db);
   }
-  const { compactions } = sqliteStore(dir).hippoDb;
+  const { compactions } = sqliteStore(dir);
   await compactions.start(TENANT_A, {
     sessionId: 'sA',
     originProject: 'acme/app',

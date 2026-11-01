@@ -42,8 +42,8 @@ export function buildSessionKey(tenantId: string, sessionId: string): string {
 }
 
 /**
- * Get-or-create a RingBuffer per session key, capped at `maxSessions` (default
- * DEFAULT_MAX_SESSIONS); at the cap the oldest-inserted key (first from Map.keys()) is evicted. */
+ * Get-or-create a RingBuffer per session key, capped at `maxSessions` (default 1000); at the cap
+ * the oldest-inserted key (first from Map.keys()) is evicted. */
 export function getOrCreateRing(
   map: Map<string, RingBuffer>,
   key: string,

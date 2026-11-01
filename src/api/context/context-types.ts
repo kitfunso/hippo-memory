@@ -1,6 +1,6 @@
 // Option and result shapes for contextGet.
 
-import type { TaskSnapshot, SessionEvent } from '../../base/records/sessions.js';
+import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
@@ -44,15 +44,15 @@ export interface ContextOptions {
   /**
    * The calling session's id, stamped on this call's recall trace. When it strictly equals the
    * active snapshot's `session_id` the read is unbounded; otherwise the snapshot must pass the
-   * freshness bound. Absent (undefined/null/'') never matches. Host-resolved, so this
-   * stays host-agnostic.
+   * freshness bound. Absent (undefined/null/'') never matches. Host-resolved, so this stays
+   * host-agnostic.
    */
   currentSessionId?: string | null;
-  /** Raw hook-payload prompt; only the pinned-only branch reads it, gated
-   * on `pinnedInject.promptRecall`. */
+  /** Raw hook-payload prompt; only the pinned-only branch reads it, gated on
+   * `pinnedInject.promptRecall`. */
   prompt?: string;
-  /** What the budget pays for, from the caller that renders the block. Absent = the memory
-   * text alone. */
+  /** What the budget pays for, from the caller that renders the block. Absent = the memory text
+   * alone. */
   cost?: ContextCost;
   /** @internal The CLI's delivery-ledger observer; it only reads, so selection is the same with
    *   or without it. */
@@ -66,8 +66,8 @@ export interface ContextCost {
   entry: (
     item: Pick<ContextResultEntry, 'entry' | 'isGlobal' | 'promptRecall' | 'origin' | 'category'>,
   ) => number;
-  /** Tokens of the headers and footer the block can print at this budget, reserved before
-   * any entry. */
+  /** Tokens of the headers and footer the block can print at this budget, reserved before any
+   * entry. */
   fixed: (
     budget: number,
     can: { cross: boolean; promptRecall: boolean; ambient: boolean },

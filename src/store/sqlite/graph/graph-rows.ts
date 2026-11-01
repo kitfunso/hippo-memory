@@ -8,7 +8,7 @@ import type {
   SourceKind,
   SourceObjectType,
   SourceObjectRef,
-} from '../../../base/records/graph.js';
+} from '../../../base/ports/store/graph.js';
 
 export const GRAPH_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'person',
@@ -56,8 +56,9 @@ export interface RelationRow {
 }
 
 export function rowToEntity(row: EntityRow): Entity {
-  // SAFETY: DB CHECKs hold entity_type, source_kind and source_object_type to exactly the
-  // EntityType, SourceKind and SourceObjectType values.
+  // SAFETY: entity_type/source_kind/source_object_type are DB CHECK-constrained to exactly the
+  // EntityType/SourceKind/SourceObjectType enum values, so the row's column values match those
+  // types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -72,8 +73,9 @@ export function rowToEntity(row: EntityRow): Entity {
   };
 }
 export function rowToRelation(row: RelationRow): Relation {
-  // SAFETY: DB CHECKs hold rel_type, source_kind and source_object_type to exactly the
-  // RelationType, SourceKind and SourceObjectType values.
+  // SAFETY: rel_type/source_kind/source_object_type are DB CHECK-constrained to exactly the
+  // RelationType/SourceKind/SourceObjectType enum values, so the row's column values match those
+  // types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -143,8 +145,8 @@ export interface InsertEntityOptions {
   sourceObject?: SourceObjectRef;
 }
 
-/** What an in-place entity update may change; type and source object are the row's identity
- * and stay. */
+/** What an in-place entity update may change; type and source object are the row's identity and
+ * stay. */
 export interface UpdateEntityOptions {
   name: string;
   memoryId?: string | null;

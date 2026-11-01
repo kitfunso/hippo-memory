@@ -53,8 +53,8 @@ export function formatFields(fields: LogFields = {}): string {
     .join('');
 }
 
-/** Same `[hippo] ` prefix the existing stderr lines use, so default-level output reads
- * as before. */
+/** Same `[hippo] ` prefix the existing stderr lines use, so default-level output reads as
+ * before. */
 export function formatLogLine(level: LogLevel, message: string, fields: LogFields = {}): string {
   const extras = formatFields(fields);
   return `[hippo] ${level}: ${oneLine(message)}${extras}`;
@@ -117,8 +117,8 @@ function sightOnceKey(key: string): 'new' | 'seen' {
   return 'new';
 }
 
-/** Write `message` at `level` the first time `key` is seen in this process; later calls
- * are dropped. */
+/** Write `message` at `level` the first time `key` is seen in this process; later calls are
+ * dropped. */
 function once(key: string, level: LogLevel, message: string, fields?: LogFields): void {
   if (sightOnceKey(key) === 'new') write(level, message, fields);
 }
@@ -133,8 +133,8 @@ const SAMPLE_EVERY = 100;
 const repeatCounts = new Map<string, number>();
 
 /** Warn the first time `key` is seen, then count repeats at debug and warn again with the
- * running count every SAMPLE_EVERY repeats, so a failure that keeps happening stays visible without
- * flooding stderr. */
+ * running count on every 100th, so a failure that keeps happening stays visible without flooding
+ * stderr. */
 function warnThenSample(key: string, message: string, fields?: LogFields): void {
   if (sightOnceKey(key) === 'new') {
     write('warn', message, fields);
@@ -252,8 +252,8 @@ export function expectedErrorText<E>(err: E): string {
   return errorMessage(err);
 }
 
-/** One post-compact failure, told once to the hook's output (`say`) and once to the
- * structured log. */
+/** One post-compact failure, told once to the hook's output (`say`) and once to the structured
+ * log. */
 export function reportCompactionFailure(
   say: (message: string) => void,
   step: string,

@@ -1,5 +1,5 @@
-import { MemoryEntry, Layer, createMemoryAt, HIGH_SCHEMA_FIT } from '../../base/memory/entry.js';
-import { calculateStrengthAt } from '../../base/memory/strength.js';
+import { MemoryEntry, Layer, createMemory } from '../../base/memory/entry.js';
+import { calculateStrength } from '../../base/memory/strength.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
@@ -12,7 +12,8 @@ import { isReusable } from '../../base/memory/memory-quality.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35; // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2; // minimum cluster size to merge
-// with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of DEFAULT_CONTEXT_BUDGET
+// with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of the 1,500-token context
+// budget
 const MERGE_MAX_SOURCES = 5;
 /** Characters of merged text the detail line quotes. */
 const MERGE_DETAIL_PREVIEW_CHARS = 60;
@@ -23,8 +24,8 @@ const MERGE_MAX_CHARS = 2000; // total source text; sources past either cap stay
 // recomputes live strength and never reads the stored field, so a stored-strength write is inert
 // for ranking and overwritten by the next decay pass.
 const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
-// deriveHalfLife grants its high-fit bonus only above HIGH_SCHEMA_FIT, so a rollup at it gets none.
-const MERGED_SCHEMA_FIT = HIGH_SCHEMA_FIT;
+// deriveHalfLife grants its high-fit bonus only above 0.7, so a rollup at 0.7 gets none.
+const MERGED_SCHEMA_FIT = 0.7;
 
 export async function retireHeldTexts(run: SleepRun): Promise<void> {
   const { survivors } = run;
@@ -118,8 +119,8 @@ interface MergePartition {
   origin: MemoryEntry['originProject'];
 }
 
-/** One partition's merge candidates, with the token set and length of each: all the overlap
- * join reads. */
+/** One partition's merge candidates, with the token set and length of each: all the overlap join
+ * reads. */
 interface MergeBucket {
   partition: MergePartition;
   ids: string[];
@@ -133,8 +134,9 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
   const alreadyMergedIds = new Set<string>();
   for await (const e of run.survivors.rows()) for (const id of e.parents) alreadyMergedIds.add(id);
 
-  // Partition before the overlap loop so no cluster spans tenants; Map keeps insertion order, so
-  // a single-tenant store gets one partition in the original order.
+  // Partition BEFORE the overlap loop so a cluster can never span tenants and merge cross-tenant
+  // content. Map keeps insertion order, so a single-tenant store gets one partition in the original
+  // order.
   const buckets = new Map<string, MergeBucket>();
   for await (const e of run.survivors.rows()) {
     const candidate =
@@ -215,8 +217,8 @@ interface MergeClusterOptions {
   readonly used: Set<string>;
 }
 
-/** Merges one cluster into a semantic row; returns false when a tombstone refuses the
- * merged text. */
+/** Merges one cluster into a semantic row; returns false when a tombstone refuses the merged
+ * text. */
 async function mergeCluster({
   run,
   partition,
@@ -227,8 +229,9 @@ async function mergeCluster({
   const { result, dryRun } = run;
   const mergedContent = mergeContents(cluster);
 
-  // Build the semantic entry first (createMemory is pure and cheap) so the tombstone check runs
-  // under the partition's tenant, the one every cluster member shares and the row lands in.
+  // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below
+  // runs under the partition's tenant, the one every cluster member shares and the row will land
+  // in.
   const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run);
 
   if (semantic && (await mergeRejected({ run, semantic, cluster, related, used }))) return false;
@@ -263,7 +266,7 @@ function semanticSummary(
   const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
   const maxValence = pickStrongestValence(cluster);
   return {
-    ...createMemoryAt(
+    ...createMemory(
       mergedContent,
       {
         layer: Layer.Semantic,
@@ -290,7 +293,7 @@ async function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): Promi
       ...e,
       halfLifeDays: Math.max(1, Math.floor(e.halfLifeDays * MERGE_SOURCE_HALF_LIFE_FACTOR)),
     };
-    return { ...row, strength: calculateStrengthAt(row, run.now, run.strength, run.decayOpts) };
+    return { ...row, strength: calculateStrength(row, run.now, run.strength, run.decayOpts) };
   });
   await run.survivors.set(demoted);
   for (const e of demoted) run.pendingWrites.push(e);

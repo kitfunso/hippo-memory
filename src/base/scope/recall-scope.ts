@@ -1,8 +1,8 @@
 /**
  * Recall-side scope predicates, in a leaf module so search-both.ts can apply the same default-deny
  * rule to searchBothHybrid's candidate loads without an import cycle. src/api/index.ts imports
- * these and re-exports them for back-compat (`api.isPrivateScope`, tests
- * importing `passesScopeFilterForRecall`).
+ * these and re-exports them for back-compat (`api.isPrivateScope`, tests importing
+ * `passesScopeFilterForRecall`).
  */
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';
@@ -44,7 +44,7 @@ export function isPrivateScope(scope: string | null | undefined): boolean {
 }
 
 export const PERSONAL_SCOPE_PREFIX = 'personal:private:';
-// The scope must fit the MAX_ID_LEN scope caps, so the owner gets what the prefix leaves.
+// The scope must fit the 256-character scope caps, so the owner gets what the prefix leaves.
 export const PERSONAL_OWNER_MAX = MAX_ID_LEN - PERSONAL_SCOPE_PREFIX.length;
 
 /** True for a `personal:private:<owner>` scope, any case, so a case variant is never mistaken

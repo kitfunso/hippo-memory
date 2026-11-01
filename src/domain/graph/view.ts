@@ -4,8 +4,8 @@
  * `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import type { ScopeActor } from '../../base/scope/recall-scope.js';
-import type { GraphReads, GraphRows } from '../../base/records/graph.js';
-import type { EntityType, RelationType } from '../../base/records/graph.js';
+import type { GraphReads, GraphRows } from '../../base/ports/store.js';
+import type { EntityType, RelationType } from '../../base/ports/store/graph.js';
 
 const DEFAULT_LAYOUT_ITERATIONS = 300;
 
@@ -32,8 +32,8 @@ export const DEFAULT_VIEW_LIMIT = 500;
 
 /**
  * Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named
- * so plus their 1-hop neighbors. Dangling edges (an endpoint outside the node set) are
- * always dropped. */
+ * so plus their 1-hop neighbors. Dangling edges (an endpoint outside the node set) are always
+ * dropped. */
 export async function buildGraphModel(
   graphReads: Pick<GraphReads, 'graphRows'>,
   tenantId: string,
@@ -49,8 +49,8 @@ export async function buildGraphModel(
   );
 }
 
-/** The reply model of the rows a store read: an edge with an endpoint outside the node set
- * is dropped. */
+/** The reply model of the rows a store read: an edge with an endpoint outside the node set is
+ * dropped. */
 function graphModelOf({ entities, relations, truncated }: GraphRows): GraphModel {
   const nodeIds = new Set(entities.map((e) => e.id));
   const nodes: GraphNode[] = entities.map((e) => ({
@@ -80,8 +80,8 @@ const MIN_DISTANCE = 0.01;
 /** Keeps nodes this many pixels off the viewport edge. */
 const EDGE_MARGIN_PX = 20;
 
-/** Distance from pj to pi and the unit vector between them, with a zero length floored
- * at MIN_DISTANCE. */
+/** Distance from pj to pi and the unit vector between them, with a zero length floored at
+ * MIN_DISTANCE. */
 function separation(pi: Point, pj: Point) {
   const dx = pi.x - pj.x;
   const dy = pi.y - pj.y;
@@ -103,8 +103,8 @@ function seedCircle(nodes: GraphNode[], width: number, height: number): Map<numb
   return pos;
 }
 
-/** Repulsion reaches this many ideal edge lengths; past it a pair pushes under k/REPULSION_REACH_K,
- * so the grid leaves it out. */
+/** Repulsion reaches this many ideal edge lengths; past it a pair pushes under k/2, so the grid
+ * leaves it out. */
 const REPULSION_REACH_K = 2;
 const CELL_KEY_STRIDE = 1 << 20;
 
@@ -217,10 +217,10 @@ function applyDisplacement(options: DisplacementOptions): void {
 
 /**
  * Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations,
- * no `Math.random`, so one model gives the same positions. Repulsion reaches REPULSION_REACH_K * k
- * and runs on a grid, so a pass costs the nodes near each node, not every pair; `opts.visits`
- * counts the pairs looked at. Non-finite coordinates are clamped to the viewport centre and all
- * positions to the bounds. */
+ * no `Math.random`, so one model gives the same positions. Repulsion reaches 2k and runs on a
+ * grid, so a pass costs the nodes near each node, not every pair; `opts.visits` counts the pairs
+ * looked at. Non-finite coordinates are clamped to the viewport centre and all positions to the
+ * bounds. */
 export function layoutGraph(
   model: GraphModel,
   opts: {

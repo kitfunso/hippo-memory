@@ -92,7 +92,7 @@ session id required (set HIPPO_SESSION_ID or pass --session-id)
 $ goal push (valueless policy) -> 1
 --- stdout
 --- stderr
---policy requires a value
+--policy requires a value (e.g., --policy error-prioritized)
 
 $ goal push (bad policy) -> 1
 --- stdout
@@ -102,7 +102,7 @@ Unknown --policy 'fastest'. Expected one of: schema-fit-biased | error-prioritiz
 $ goal push (valueless success) -> 1
 --- stdout
 --- stderr
---success requires a value
+--success requires a value (e.g., --success "<condition>")
 
 $ goal push (bad level) -> 1
 --- stdout
@@ -112,7 +112,7 @@ $ goal push (bad level) -> 1
 $ goal push (valueless parent) -> 1
 --- stdout
 --- stderr
---parent requires a value
+--parent requires a value (e.g., --parent <goalId>)
 
 $ goal push -> 0
 --- stdout
@@ -144,7 +144,7 @@ $ goal list -> 0
 --- stdout
 id                  status  name              outcome
 id#1  active  ship the release  -      
-id#2  active  fix[31m ci        -      
+id#2  active  fix?[31m ci       -      
 id#4  active  write docs        -      
 --- stderr
 
@@ -156,7 +156,7 @@ Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]
 $ goal complete (valueless outcome) -> 1
 --- stdout
 --- stderr
---outcome requires a value
+--outcome requires a value (e.g., --outcome 0.9)
 
 $ goal complete (bad outcome) -> 1
 --- stdout
@@ -193,7 +193,7 @@ $ goal list --all -> 0
 --- stdout
 id                  status     name              outcome
 id#1  active     ship the release  -      
-id#2  completed  fix[31m ci        0.9    
+id#2  completed  fix?[31m ci       0.9    
 id#4  suspended  write docs        -      
 --- stderr
 
@@ -216,7 +216,7 @@ $ goal list --all (after) -> 0
 --- stdout
 id                  status     name              outcome
 id#1  completed  ship the release  0.5    
-id#2  completed  fix[31m ci        0.9    
+id#2  completed  fix?[31m ci       0.9    
 id#4  active     write docs        -      
 --- stderr
 

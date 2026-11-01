@@ -6,6 +6,7 @@ import { COMPACTION_DB_WAIT_MS } from '../../../base/session/compaction-timing.j
 import { currentMachine } from '../../../infra/machine.js';
 import { postCompactHook } from '../../capture/compact.js';
 import { readHookStdin } from '../stdin.js';
+import { cliHookRequest, cliStore, cliSyncOptions } from '../api-context.js';
 import { type CommandContext, stringFlag } from '../flag-values.js';
 import { hookStoreRoot } from '../hook-runtime.js';
 
@@ -14,19 +15,18 @@ export async function handlePostCompact({
   hippoRoot,
   tenantId,
   flags,
-  cli,
 }: CommandContext): Promise<void> {
   const { text, timedOut } = await readHookStdin();
   const store = hookStoreRoot(hippoRoot);
-  const line = await cli.hookRequest((hook) =>
-    postCompactHook(store, hook.compactionHooks(store), {
+  const line = await cliHookRequest(() =>
+    postCompactHook(store, cliStore(store), {
       tenantId,
       stdinText: text,
       stdinTimedOut: timedOut,
       logFile: stringFlag(flags, 'log-file'),
       // Passed in, since src/surface/capture/ importing the sync would close an import cycle.
       afterSave: async (transcriptPath, cwd, log) => {
-        const sync = hook.syncOptions(tenantId, currentMachine(), {
+        const sync = cliSyncOptions(tenantId, currentMachine(), {
           busyWaitMs: COMPACTION_DB_WAIT_MS,
         });
         const report = await importSessionFolder(store, transcriptPath, cwd, sync);

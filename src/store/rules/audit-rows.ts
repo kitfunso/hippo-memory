@@ -18,6 +18,7 @@ export function summaryDirtyAudit(
   return { tenantId, actor, op: 'summary_marked_dirty', targetId: summaryId, metadata };
 }
 
+/** The tenant, actor and row of a refused write. */
 export interface RefusalAuditOptions {
   readonly tenantId: string;
   readonly actor: string;

@@ -3,7 +3,8 @@
 // the holder.
 import { createHost, type Host } from '../../../host/host.js';
 import type { HippoStore, StoreReach } from '../../../base/ports/store.js';
-import { createSqliteExecutor, type ExecutorOptions, workerCounts } from './executor.js';
+import { createSqliteExecutor, type ExecutorOptions } from './executor.js';
+import { workerCounts } from './executor-counts.js';
 import { isHippoDbStore } from './hippo-db-stores.js';
 import { createStoreHolder, type StoreHolder } from './held-connection.js';
 import { inSqliteSession, sqliteReach } from '../store.js';
@@ -12,7 +13,6 @@ import { globalStoresFor, storeForRequest, workerSqliteStore } from './worker-st
 import { StoreRuntime } from '../../../db/store-runtime.js';
 import type { RequestStores } from '../../../db/index.js';
 import type { RequestLimits } from '../../../base/util/request-scope.js';
-import { log } from '../../../base/util/log.js';
 
 export interface ServerRuntimeOptions extends ExecutorOptions {
   /** Served in place of hippo.db's worker store; the caller built it, so close() leaves it open. */
@@ -27,8 +27,8 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly store: HippoStore;
   /** The Host this server root keeps for its life; its ports and every reach share it. */
   readonly host: Host;
-  /** The store is hippo.db rather than a caller's own, so its folder's config.json
-   * decides shared-ness. */
+  /** The store is hippo.db rather than a caller's own, so its folder's config.json decides
+   * shared-ness. */
   readonly onHippoDb: boolean;
   /** The served store as one request calls it: each call to a worker carries the request's
    * deadline and signal, and an in-process store opens on the request's session. */
@@ -44,11 +44,7 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly runRequest: <T>(run: (session: RequestStores) => Promise<T>) => Promise<T>;
   /** What the store workers of this process refused, expired and replaced; /health reports them. */
   readonly workerCounts: Readonly<typeof workerCounts>;
-  /** Keeps the work a request starts and does not wait on, such as an embed; close() settles it. */
-  readonly detached: Pick<StoreRuntime, 'detach'>;
-  /** Waits up to `settleWithinMs` for the detached work, then closes the stores, the held
-   * connection last. */
-  readonly close: (settleWithinMs: number) => Promise<void>;
+  readonly close: () => Promise<void>;
   /** What the root's exit hook runs when the process exits before close(): the held writes and
    * handles of the server's store runtime. */
   readonly closeOnExit: () => void;
@@ -63,15 +59,6 @@ function boundToRequest<S extends HippoStore>(
 ): S {
   const bound = storeForRequest(own, limits);
   return session === undefined ? bound : inSqliteSession(bound, session);
-}
-
-/** Detached work still writes through the stores, so it settles before they close; an embed past
- * the bound fails on the closed stores, and embedMemoryInStore warns once and resolves 'failed'. */
-async function settleDetached(runtime: StoreRuntime, withinMs: number): Promise<void> {
-  const left = await runtime.settle(withinMs);
-  if (left === 0) return;
-  const line = `shutdown: ${left} handed-off task(s) still running after ${withinMs} ms; closing the stores`;
-  log.warn(line, { left });
 }
 
 /** hippo.db under `hippoRoot` as a server runs it: `opts.store` when given, else a worker store
@@ -104,18 +91,16 @@ export function sqliteServerRuntime(
       }),
     runRequest: (run) => runSqliteRequest(run, 'server', runtime),
     workerCounts,
-    detached: runtime,
     hold: holder.hold,
     afterResponse: holder.afterResponse,
-    close: async (settleWithinMs) => {
-      await settleDetached(runtime, settleWithinMs);
+    close: async () => {
       // The store's worker threads and the pooled handles close first, so the held one is still
       // SQLite's last.
       if (given === undefined) await store.close();
       await globalStores.close();
-      runtime.closeNow();
+      runtime.dispose();
       await holder.release();
     },
-    closeOnExit: () => runtime.closeNow(),
+    closeOnExit: () => runtime.dispose(),
   };
 }

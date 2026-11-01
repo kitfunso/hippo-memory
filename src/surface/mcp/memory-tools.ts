@@ -7,12 +7,12 @@ import {
   MCP_LEARN,
 } from '../../api/index.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
-import type { HippoDbToolCall, ToolCall } from './protocol.js';
+import { mcpApiContext, type GroupToolCall, type ToolCall } from './protocol.js';
 import { keptShownIds } from '../../api/recall/last-recalled.js';
 import { DEFAULT_LEARN_DAYS, MAX_CONTENT_LEN, MAX_ID_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, stringArg } from './tool-args.js';
 
-export async function runRememberTool({ args, ctx, api }: ToolCall): Promise<string> {
+export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> {
   const text = stringArg(args, 'text', MAX_CONTENT_LEN);
   if (!text) return 'No text provided.';
   const tags: string[] = [];
@@ -22,7 +22,7 @@ export async function runRememberTool({ args, ctx, api }: ToolCall): Promise<str
   // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the
   // auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio. It also starts the root's auto-sleep
   // when one is due.
-  const result = await apiRemember(api, {
+  const result = await apiRemember(mcpApiContext(ctx), {
     content: text,
     tags,
     personal: boolArg(args, 'personal'),
@@ -34,19 +34,23 @@ export async function runRememberTool({ args, ctx, api }: ToolCall): Promise<str
   return `Remembered [${result.id}] (half-life: ${result.halfLifeDays}d, tags: ${tagStr})${warnings}`;
 }
 
-export async function runOutcomeTool({ args, api }: ToolCall): Promise<string> {
+export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   const good = boolArg(args, 'good');
-  const ids = keptShownIds(api);
+  const apiCtx = mcpApiContext(ctx);
+  const ids = keptShownIds(apiCtx);
   if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
   // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved
   // ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips
   // cross-tenant ids silently.
-  const { applied } = await apiOutcome(api, ids, good);
+  const { applied } = await apiOutcome(apiCtx, ids, good);
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 
-export async function runLearnTool({ args, api }: HippoDbToolCall): Promise<string> {
+export async function runLearnTool({
+  args,
+  api,
+}: GroupToolCall<'lessonWrites' | 'vectors' | 'vectorWrites'>): Promise<string> {
   // 0 reads as unset, as it always has.
   const days = numberArg(args, 'days') || DEFAULT_LEARN_DAYS;
   // With no repoPath api learn reads the server's own folder, not a remote caller's, so it refuses

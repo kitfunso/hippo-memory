@@ -1,5 +1,6 @@
 // hippo.db's vector reads: the nearest-row scan yields between chunks, so its handle stays open
 // until it settles.
+import { loadPhysicsState } from '../../../db/physics-state.js';
 import { graphServesStore } from '../../../db/vector-graph-index.js';
 import { GraphFileIndex } from '../../../db/vector-graph-reader.js';
 import type { VectorIndex } from '../../../db/vector-match.js';
@@ -25,6 +26,7 @@ type PartReads = {
 
 const storedBodies: PartReads = {
   vectors: readStoredVectorViews,
+  particles: (db, ids) => loadPhysicsState(db, [...ids]),
 };
 
 const rowReadsBodies: Bodies<RowReads> = {
@@ -44,8 +46,8 @@ export function sqliteVectorReads(
     // An empty list needs no handle.
     stored: (part, ids) =>
       ids.length === 0 ? Promise.resolve(new Map()) : reads.stored(part, ids),
-    // The scan reads a page per event-loop turn, so the handle stays open until the
-    // promise settles.
+    // The scan reads a page per event-loop turn, so the handle stays open until the promise
+    // settles.
     nearestEntries: (queryVector, spec) =>
       onAsync((db) => listVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(
         rethrowInPortTerms,

@@ -1,8 +1,8 @@
 /**
  * Secret detection for memory content: conservative provider-bounded patterns (a bare `sk-` in
  * prose must not flag). Flagged rows are never shared to the global store or injected as ambient
- * context outside their project; explicit recall is unaffected. Leaf module: no imports
- * from store/api/shared.
+ * context outside their project; explicit recall is unaffected. Leaf module: no imports from
+ * store/api/shared.
  */
 import { tryParseJson } from './json.js';
 
@@ -12,8 +12,8 @@ export interface SecretDetection {
   reason: string | null;
 }
 
-/** Tags that flag a memory as secret, lower case; detectSecret folds a tag's case before
- * the lookup. */
+/** Tags that flag a memory as secret, lower case; detectSecret folds a tag's case before the
+ * lookup. */
 export const SECRET_TAGS: ReadonlySet<string> = new Set([
   'secret',
   'api-key',

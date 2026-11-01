@@ -2,15 +2,14 @@
 // caller's name.
 
 import { deduplicateStore, type DedupResult } from '../../domain/consolidate/dedupe.js';
-import { requireHostAdmin } from '../types.js';
-import type { HippoDbContext } from '../hippo-db-context.js';
+import { requireHostAdmin, type ContextWith } from '../types.js';
 
 export type { DedupResult };
 
 /** Removes the weaker copy of each same-text distilled row, tenant by tenant across the whole
  * store, so only a host admin may. */
 export async function dedupWholeStore(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'consolidation' | 'auditMaintenance'>,
   opts: { readonly dryRun: boolean },
 ): Promise<DedupResult> {
   requireHostAdmin(ctx, 'Deduplicating the store');

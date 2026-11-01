@@ -11,7 +11,7 @@ import type { SavableDescriptor } from './descriptor.js';
 import { requireText } from './fields.js';
 import { listObjects } from './lifecycle.js';
 import type { Policy, PolicyStatus } from '../../base/records/object-types.js';
-import type { Objects, PoliciesInForceQuery } from '../../base/records/objects.js';
+import type { Objects, PoliciesInForceQuery } from '../../base/ports/store.js';
 
 export type { Policy, PolicyStatus } from '../../base/records/object-types.js';
 
@@ -55,8 +55,8 @@ export function normalizePolicyDate(input: string, label: string = 'date'): stri
   return d.toISOString();
 }
 
-/** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to
- * > valid_from. */
+/** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to >
+ * valid_from. */
 export function validatePolicyDates(
   validFromRaw: string | undefined,
   validToRaw: string | undefined,

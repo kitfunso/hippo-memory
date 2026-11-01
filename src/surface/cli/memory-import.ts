@@ -17,11 +17,14 @@ import { importMarkdownInto } from '../importers/markdown.js';
 import { importVaultInto } from '../importers/vault.js';
 import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
 import {
+  cliApiContext,
+  cliImportBatch,
   cliInitGlobal,
   cliInfra,
+  cliStore,
+  cliStoreBatch,
+  cliSyncOptions,
   type CliContext,
-  type CliCommand,
-  type CliScope,
 } from './api-context.js';
 import { printError } from './output.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -58,14 +61,11 @@ async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err:
   );
 }
 
-/** Batch-embeds freshly imported rows before the command returns, since the command's store
- * runtime closes then. */
-async function backfillVectors(ctx: CliContext, embedCommand: string): Promise<void> {
-  try {
-    await memoryEmbedMissing(ctx);
-  } catch (err) {
-    await warnBackfillFailed(ctx, embedCommand, err);
-  }
+/** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the
+ * process alive until it settles, and awaiting would block the CLI on model load; `hippo embed`
+ * is the backstop if interrupted. */
+function backfillVectors(ctx: CliContext, embedCommand: string): void {
+  void memoryEmbedMissing(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
 }
 
 function warnRedacted(count: number | undefined): void {
@@ -77,8 +77,12 @@ function warnRedacted(count: number | undefined): void {
   }
 }
 
-export async function handleImport(cmd: CommandContext): Promise<void> {
-  const { hippoRoot, tenantId, args, flags, cli } = cmd;
+export async function handleImport({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags = stringListFlag(flags, 'tag') ?? [];
@@ -86,7 +90,7 @@ export async function handleImport(cmd: CommandContext): Promise<void> {
   const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
 
   if (boolFlag(flags, 'agents')) {
-    return await importAgentMemories(cmd, { useGlobal, dryRun });
+    return await importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
   }
 
   if (useGlobal) {
@@ -95,7 +99,6 @@ export async function handleImport(cmd: CommandContext): Promise<void> {
     requireInit(hippoRoot);
   }
   await importIntoStore({
-    cli,
     hippoRoot,
     tenantId,
     targetRoot,
@@ -108,7 +111,6 @@ export async function handleImport(cmd: CommandContext): Promise<void> {
 }
 
 interface ImportRun {
-  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly targetRoot: string;
@@ -121,14 +123,14 @@ interface ImportRun {
 
 /** A vault folder or one file, written to the store `--global` picked. */
 async function importIntoStore(run: ImportRun): Promise<void> {
-  const { cli, hippoRoot, tenantId, targetRoot, args, flags, useGlobal, dryRun, extraTags } = run;
+  const { hippoRoot, tenantId, targetRoot, args, flags, useGlobal, dryRun, extraTags } = run;
   const importOptions: TargetedImport = {
     dryRun,
     global: useGlobal,
     extraTags,
     hippoRoot,
     tenantId,
-    target: { root: targetRoot, batch: cli.importBatch(targetRoot), clock: cliInfra().clock },
+    target: { root: targetRoot, batch: cliImportBatch(targetRoot), clock: cliInfra().clock },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it
@@ -137,7 +139,6 @@ async function importIntoStore(run: ImportRun): Promise<void> {
   const vault = stringFlagOrExit(flags, 'vault');
   if (vault) {
     return await importVaultFolder({
-      cli,
       hippoRoot,
       tenantId,
       folderPath: vault,
@@ -147,13 +148,7 @@ async function importIntoStore(run: ImportRun): Promise<void> {
       dryRun,
     });
   }
-  await importFromFile(targetRoot, args, flags, {
-    cli,
-    importOptions,
-    useGlobal,
-    dryRun,
-    tenantId,
-  });
+  importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
 
 type FileImporter = (fp: string, opts: TargetedImport) => ReturnType<typeof importChatGPTInto>;
@@ -207,20 +202,19 @@ function pickImporter(args: string[], flags: CliFlags): PickedImporter {
 }
 
 interface ImportFromFileOptions {
-  readonly cli: CliCommand;
   readonly importOptions: TargetedImport;
   readonly useGlobal: boolean;
   readonly dryRun: boolean;
   readonly tenantId: string;
 }
 
-async function importFromFile(
+function importFromFile(
   targetRoot: string,
   args: string[],
   flags: CliFlags,
   options: ImportFromFileOptions,
-): Promise<void> {
-  const { cli, importOptions, useGlobal, dryRun, tenantId } = options;
+): void {
+  const { importOptions, useGlobal, dryRun, tenantId } = options;
   const { filePath, importer, importerName } = pickImporter(args, flags);
 
   if (!filePath || !importer) {
@@ -235,16 +229,17 @@ async function importFromFile(
   }
 
   const result = importer(filePath, importOptions);
-  const storeLabel = useGlobal ? `global (${hippoHomeDir()})` : targetRoot;
-  printFileImportSummary(result, { importerName, filePath, storeLabel, dryRun });
 
   // The importers' writeEntry sites don't embed, so the new rows are embedded here in one pass.
   if (!dryRun && result.imported >= 1) {
-    await backfillVectors(
-      cli.apiContext(targetRoot, tenantId),
+    backfillVectors(
+      cliApiContext(targetRoot, tenantId),
       useGlobal ? 'hippo embed --global' : 'hippo embed',
     );
   }
+
+  const storeLabel = useGlobal ? `global (${hippoHomeDir()})` : targetRoot;
+  printFileImportSummary(result, { importerName, filePath, storeLabel, dryRun });
 }
 
 interface FileImportSummary {
@@ -283,12 +278,13 @@ function printFileImportSummary(
 }
 
 async function importAgentMemories(
-  { cli, hippoRoot, tenantId }: CliScope,
+  hippoRoot: string,
+  tenantId: string,
   { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
 ): Promise<void> {
-  const opts = cli.syncOptions(tenantId, currentMachine(), { dryRun });
-  // A folder without a store of its own imports as session end would there, so its notes are
-  // not hidden.
+  const opts = cliSyncOptions(tenantId, currentMachine(), { dryRun });
+  // A folder without a store of its own imports as session end would there, so its notes are not
+  // hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
       ? await importForStore(useGlobal ? hippoHomeDir() : hippoRoot, opts)
@@ -298,7 +294,6 @@ async function importAgentMemories(
 }
 
 interface VaultFolderOptions {
-  cli: CliCommand;
   hippoRoot: string;
   tenantId: string;
   folderPath: string;
@@ -309,7 +304,7 @@ interface VaultFolderOptions {
 }
 
 async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
-  const { cli, hippoRoot, tenantId, folderPath, flags, importOptions, useGlobal, dryRun } = options;
+  const { hippoRoot, tenantId, folderPath, flags, importOptions, useGlobal, dryRun } = options;
   checkVaultArgs(folderPath, flags, useGlobal);
   const vaultOptions: ImportOptions = {
     ...importOptions,
@@ -317,15 +312,11 @@ async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
     scope: nonEmptyStringFlag(flags, 'scope'),
   };
   const vaultResult = await importVaultInto(folderPath, vaultOptions, {
-    store: cli.store(hippoRoot),
-    batch: cli.storeBatch(hippoRoot),
+    store: cliStore(hippoRoot),
+    batch: cliStoreBatch(hippoRoot),
     infra: cliInfra(),
   });
-  const ctx = cli.apiContext(hippoRoot, tenantId);
-  printVaultSummary(vaultResult, folderPath, ctx, dryRun);
-  // Vault rows write through api.remember, which never embeds, so backfill them as the single-file
-  // import does.
-  if (!dryRun && vaultResult.imported >= 1) await backfillVectors(ctx, 'hippo embed');
+  printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);
 }
 
 function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean): void {
@@ -371,4 +362,7 @@ function printVaultSummary(
     `  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`,
   );
   console.log(`  Store:                 ${ctx.hippoRoot}`);
+  // Vault rows write through api.remember, which never embeds, so backfill them as the single-file
+  // import does.
+  if (!dryRun && vaultResult.imported >= 1) backfillVectors(ctx, 'hippo embed');
 }

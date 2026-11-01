@@ -4,9 +4,6 @@ Tests that the hippo memory-as-physics engine stays energy-bounded under 10
 distinct workload profiles. Used as O1 evidence for the Frontier AI Discovery
 feasibility study (convergence proofs).
 
-3.0 removed the physics engine and both soak scripts, so the results here are a record and the
-commands below need a 2.x checkout.
-
 ## Run
 
 ```bash

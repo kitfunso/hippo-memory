@@ -1,7 +1,7 @@
-import { MemoryEntry, Layer, createMemoryAt, markRetrievedAt } from '../../base/memory/entry.js';
+import { MemoryEntry, Layer, createMemory, markRetrieved } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import type { SessionEvent } from '../../base/records/sessions.js';
-import type { SleepBegin, UntracedSession } from '../../base/records/consolidation.js';
+import type { SessionEvent } from '../../base/ports/store/sessions.js';
+import type { SleepBegin, UntracedSession } from '../../base/ports/store/consolidation.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { commonDerivationScope } from '../../base/scope/recall-scope.js';
@@ -24,7 +24,7 @@ export function traceWindow(
 
 // 1.4. Auto-promote complete sessions to traces: each session `traceWindow` names (idempotent via
 // source_session_id) is rendered as markdown and persisted as a Layer.Trace memory, which inherits
-// decay, search and replay. The store read the sessions with their events at sleep begin,
+// decay, search, replay and physics. The store read the sessions with their events at sleep begin,
 // and one tombstone read covers every trace.
 export async function promoteSessionTraces(
   run: SleepRun,
@@ -83,7 +83,7 @@ function sessionTrace(
     .filter((e) => e.eventType !== 'session_complete')
     .map((e) => ({ action: e.content, observation: '' }));
 
-  const trace = createMemoryAt(
+  const trace = createMemory(
     renderTraceContent({ task: summary, steps, outcome }),
     {
       layer: Layer.Trace,
@@ -123,8 +123,8 @@ function sessionEnding(
   return { outcome: outcomeRaw, summary };
 }
 
-// A tombstoned trace is left out; its refusal row names the session, and the digest it was
-// refused under.
+// A tombstoned trace is left out; its refusal row names the session, and the digest it was refused
+// under.
 async function auditRejectedTrace(
   run: SleepRun,
   trace: MemoryEntry,
@@ -165,7 +165,7 @@ export async function replayPass(run: SleepRun): Promise<void> {
     }),
   );
   if (picked.length === 0) return;
-  const rehearsed = markRetrievedAt(picked, now, run.strength);
+  const rehearsed = markRetrieved(picked, now, run.strength);
   // Update survivors in place so downstream passes see rehearsed state.
   await survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;

@@ -1,3 +1,0 @@
-### Changed
-
-- **The MCP status tool, `hippo inspect`, the PreCompact hook and the connector dead letters now read and write through `src/api`, and the CLI keeps no command state in module variables.** Commands, flags and printed output stay the same, with two exceptions. The PreCompact twin-fire check reads the store's clock, so with `HIPPO_FAKE_NOW` set a second fire within 10 seconds is skipped, as it is with the real clock. A remote caller's PreCompact logs its two failures with the local hook's wording: "snapshot save failed" and "stored snapshot unreadable, saving the derived one alone".

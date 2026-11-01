@@ -5,7 +5,7 @@ import { BadRequestError } from '../../../base/errors/api-errors.js';
 import { type DatabaseSyncLike } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { appendAuditEvents } from '../audit/audit.js';
-import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import type { PredictionBaserate } from '../../../base/ports/store/types.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { plural } from '../../../base/util/format.js';

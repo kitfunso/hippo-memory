@@ -4,16 +4,15 @@
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/churn-stale.js';
-import type { Context } from '../types.js';
-import { hasHippoDb, type HippoDbContext } from '../hippo-db-context.js';
-import type { HippoDbStore } from '../../base/ports/hippo-db.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import type { Context, ContextWith } from '../types.js';
 
 export type { ChurnStaleResult };
 
 /** A store the repo's memories can live in, and the folder the report names it by. */
 export interface ChurnStore {
   readonly root: string;
-  readonly store: HippoDbStore;
+  readonly store: StoreWith<'learning'>;
 }
 
 /** Tags, in each store, the memories of `repoDir`'s project whose files git says have churned. A
@@ -48,15 +47,14 @@ async function markChurnStale(
 }
 
 /** `markChurnStale` over the stores the context reaches: its own, named `root` in the report,
- * and the operator's global store when it is readable, another folder and on hippo.db's
- * local tier. */
+ * and the operator's global store when it is readable and another folder. */
 export function markChurnStaleInReach(
-  ctx: Pick<HippoDbContext, 'tenantId' | 'infra' | 'store' | 'reach'>,
+  ctx: Pick<ContextWith<'learning'>, 'tenantId' | 'infra' | 'store' | 'reach'>,
   opts: { readonly root: string; readonly repoDir: string; readonly dryRun: boolean },
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
   const { global } = ctx.reach ?? {};
   const stores: ChurnStore[] = [{ root: opts.root, store: ctx.store }];
-  if (global !== undefined && global.root !== opts.root && hasHippoDb(global.store)) {
+  if (global !== undefined && global.root !== opts.root) {
     stores.push({ root: global.root, store: global.store });
   }
   return markChurnStale(ctx, stores, opts);

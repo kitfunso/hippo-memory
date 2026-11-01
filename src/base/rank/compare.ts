@@ -1,7 +1,8 @@
 /**
- * Deterministic tie-break comparators for recall ranking. A leaf module: it imports from no
- * sort-site module (search, api, cli, goals, graph-recall, multihop, rerankers) and takes
- * structural param types instead, so every sort site can import it without an ESM cycle. */
+ * Deterministic tie-break comparators for recall ranking. A true LEAF module: it imports from no
+ * sort-site module (search, physics, api, cli, goals, graph-recall, multihop, rerankers), taking
+ * structural param types instead, because even a type-only import back would recreate the search
+ * <-> physics ESM cycle this module exists to avoid. */
 
 /** Minimal shape for a deterministic tie-break across fresh ingests into different stores; the metadata keys are
  *  optional so `{ content, id }` callers still fit. */
@@ -57,8 +58,8 @@ function compareTags(a: readonly string[] | undefined, b: readonly string[] | un
   return 0;
 }
 
-/** Minimal shape for score-primary sort sites (SearchResult and friends that carry
- *  `{ score, entry: { content, id } }`). */
+/** Minimal shape for score-primary sort sites (SearchResult and friends that carry `{ score, entry: { content, id }
+ *  }`). */
 export interface ScoredEntryLike {
   score: number;
   entry: EntryIdentity;
@@ -80,4 +81,27 @@ export function compareScoresDesc(a: number, b: number): number {
   if (a > b) return -1;
   if (a < b) return 1;
   return Number(Number.isNaN(a)) - Number(Number.isNaN(b));
+}
+
+/**
+ * Score-desc then tie-key comparator for the physics layer (no `entry`/`content` in scope): the
+ * default memoryId key is per-instance determinism only. Cross-ingest stability needs `tieKeyOf`
+ * (content), since the baseScore tie order picks the clusterTopK set. A factory, as two fields sort
+ * in turn.
+ */
+export function comparePhysicsResultsBy<T extends { memoryId: string }>(
+  scoreOf: (r: T) => number,
+  tieKeyOf?: (r: T) => string,
+): (a: T, b: T) => number {
+  return (a: T, b: T): number => {
+    const d = compareScoresDesc(scoreOf(a), scoreOf(b));
+    if (d !== 0) return d;
+    const ai = tieKeyOf ? tieKeyOf(a) : a.memoryId;
+    const bi = tieKeyOf ? tieKeyOf(b) : b.memoryId;
+    if (ai < bi) return -1;
+    if (ai > bi) return 1;
+    // Tie-key collision (e.g. duplicate content): fall through to memoryId so the comparator still
+    // yields a total order within one store.
+    return a.memoryId < b.memoryId ? -1 : a.memoryId > b.memoryId ? 1 : 0;
+  };
 }

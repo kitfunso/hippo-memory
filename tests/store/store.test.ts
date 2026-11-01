@@ -68,7 +68,7 @@ describe('store initialization', () => {
 
     // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
-    const stats = (await sqliteStore(tmpDir).hippoDb.reports.stats()) as {
+    const stats = (await sqliteStore(tmpDir).reports.stats()) as {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;
@@ -198,7 +198,7 @@ describe('stats tracking', () => {
 
     // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
-    const stats = (await sqliteStore(tmpDir).hippoDb.reports.stats()) as {
+    const stats = (await sqliteStore(tmpDir).reports.stats()) as {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;

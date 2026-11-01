@@ -1,8 +1,12 @@
-// The one module outside the SQLite adapter that imports it (.dependency-cruiser.cjs): a composition
-// root opens hippo.db, its sessions and runtimes through the adapter's functions under their own
-// names. The exit hooks live here too, since the store layers install none.
+// The one module outside the SQLite adapter that names it: each composition root opens the default
+// store, its request sessions, its store runtime and its server runtime here, so a second adapter
+// changes this file and no root (.dependency-cruiser.cjs). The exit hooks live here too, since the
+// store layers install none.
+import type { StoreRules } from '../base/ports/infra.js';
+import type { HippoStore, StoreGroups } from '../base/ports/store-index.js';
 import {
   sqliteServerRuntime,
+  sqliteStore as sqliteStoreWith,
   StoreRuntime,
   type ServerRuntimeOptions,
   type SqliteServerRuntime,
@@ -10,24 +14,24 @@ import {
 
 export {
   askingNearestFirst,
-  inSqliteSession,
-  runSqliteBatch,
-  runSqliteHookRequest,
-  runSqliteRequest,
+  inSqliteSession as inStoreSession,
+  runSqliteBatch as runStoreBatch,
+  runSqliteHookRequest as runStoreHookRequest,
+  runSqliteRequest as runStoreRequest,
   saveVectorGraphFile,
-  sqliteDashboardReads,
-  sqliteDiagnosticsStore,
-  sqliteImportFiles,
-  sqliteImportStores,
-  sqliteReach,
-  sqliteStore,
+  sqliteDashboardReads as defaultDashboardReads,
+  sqliteDiagnosticsStore as defaultDiagnostics,
+  sqliteImportFiles as defaultImportFiles,
+  sqliteImportStores as defaultImportStores,
+  sqliteReach as defaultReach,
+  sqliteStore as defaultStore,
   tenantOfApiKey,
   withSharedStoreHandles,
-  type RequestStores,
+  type RequestStores as StoreSession,
   type ResolveOptions,
   type ServerRuntimeOptions,
-  type SqliteServerRuntime,
-  type SqliteStoreOptions,
+  type SqliteServerRuntime as ServerRuntime,
+  type SqliteStoreOptions as StoreOptions,
   type StoreRuntime,
 } from '../store/sqlite/index.js';
 // The vector rules ./store-kit publishes under the names they have here.
@@ -41,26 +45,30 @@ export {
   type VectorRow,
 } from '../store/sqlite/index.js';
 
-/** Runs `fn` on a store runtime of its own, disposed with the work `fn` detached on it once `fn`
- * settles, or closed by its exit hook if the process exits first. */
+/** The default store as ./store-kit publishes it, with only the rules an add-on picks: a runtime
+ * or a session belongs to a composition root, and the published entries export neither. */
+export const publishedDefaultStore: (
+  hippoRoot: string,
+  rules?: StoreRules,
+) => HippoStore & StoreGroups = sqliteStoreWith;
+
+/** Runs `fn` on a store runtime of its own, disposed when `fn` settles, or by its exit hook if
+ * the process exits first. */
 export async function withStoreRuntime<T>(fn: (runtime: StoreRuntime) => Promise<T>): Promise<T> {
   const runtime = new StoreRuntime();
-  const onExit = (): void => runtime.closeNow();
+  const onExit = (): void => runtime.dispose();
   process.once('exit', onExit);
   try {
     return await fn(runtime);
   } finally {
-    try {
-      await runtime.dispose();
-    } finally {
-      process.off('exit', onExit);
-    }
+    process.off('exit', onExit);
+    runtime.dispose();
   }
 }
 
 /** hippo.db as a server serves it, with an exit hook that closes what the server opened if
  * close() never runs. */
-export function sqliteServerRuntimeWithExitHook(
+export function defaultServerRuntime(
   hippoRoot: string,
   opts: ServerRuntimeOptions = {},
 ): SqliteServerRuntime {
@@ -69,9 +77,9 @@ export function sqliteServerRuntimeWithExitHook(
   process.once('exit', onExit);
   return {
     ...runtime,
-    close: async (settleWithinMs) => {
+    close: async () => {
       process.off('exit', onExit);
-      await runtime.close(settleWithinMs);
+      await runtime.close();
     },
   };
 }

@@ -1,9 +1,9 @@
 // embedAll and embedMemory with a store embed through its vectorWrites group, never opening hippo.db in hippoRoot,
-// and through hippo.db's own store they leave the same index and model as the path without a store.
+// and through hippo.db's own store they leave the same index, model and particles as the path without a store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { PRODUCTION_STRENGTH, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
@@ -15,8 +15,12 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
-import type { HippoStore } from '../../src/base/ports/store.js';
+import { loadAllPhysicsState } from '../../src/db/physics-state.js';
+import { OTHER_STORE_MARKER, type PhysicsParticle } from '../../src/entry/store-kit.js';
+import type { StoreWith } from '../../src/base/ports/store.js';
+
+// The vector groups an add-on store keeps so its embeds go through vectorWrites.
+const VECTOR_GROUPS = ['vectors', 'vectorWrites'] as const;
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -27,10 +31,12 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { sqliteStore } = sessionPerTest();
 
+// Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';
 const HASHED_MODEL = embeddingIndexIdentity('openai:hashed-16');
@@ -61,20 +67,23 @@ interface ConfigFile {
   readonly embeddings: { readonly provider: string; readonly model: string; readonly apiBaseUrl: string };
 }
 
-/** Everything an embed run leaves in hippo.db's vector index: rows with their model and bytes, and the model meta row. */
+/** Everything an embed run leaves in hippo.db's vector index: rows with their model and bytes, the model meta row, and particles. */
 interface HippoDbIndex {
   readonly vectors: unknown[];
   readonly model: string;
+  readonly particles: [string, PhysicsParticle][];
 }
 
 /** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 /** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
-function on(hippoRoot: string, store: HippoStore): EmbedTarget {
+function on(hippoRoot: string, store: StoreWith<'vectors' | 'vectorWrites'>): EmbedTarget {
   return {
     groups: { vectors: store.vectors, vectorWrites: store.vectorWrites },
     embeddings: loadConfig(hippoRoot).embeddings,
     embedderFor: resolveEmbeddingProvider,
     failureNotices: new FailureNotices(),
+    strength: PRODUCTION_STRENGTH,
+    clock: evalNow,
   };
 }
 
@@ -98,6 +107,7 @@ function indexOn(root: string): HippoDbIndex {
         .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY memory_id')
         .all(),
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
+      particles: [...loadAllPhysicsState(db)].sort(([a], [b]) => (a < b ? -1 : 1)),
     };
   } finally {
     closeHippoDb(db);
@@ -145,7 +155,7 @@ afterEach(() => {
 describe('embedAll with a store', () => {
   it("embeds every tenant's memories through vectorWrites and leaves hippoRoot holding only its marker", async () => {
     const hippoRoot = markedFolder();
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const run = (): Promise<number> => embedAll(on(hippoRoot, side.store), undefined, provider('fake-a'));
     expect(await run()).toBe(4);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
@@ -165,7 +175,7 @@ describe('embedAll with a store', () => {
   it.each([
     { name: 'a first backfill', template: (): string => copyOf(), id: 'fake-a' },
     {
-      name: 'a model change, which rebuilds the index',
+      name: 'a model change, which rebuilds the index and every particle',
       template: (): string => copyOf(oldIndexed),
       id: 'fake-new',
     },
@@ -227,9 +237,9 @@ describe('embedAll with a store', () => {
       }
       return vectorsFor('fake-a', texts);
     });
-    const older = embedAll(on(markedFolder(), portOnlySide(root).store), undefined, held);
+    const older = embedAll(on(markedFolder(), portOnlySide(root, VECTOR_GROUPS).store), undefined, held);
     await atSecondPage;
-    const newerStore = portOnlySide(root).store;
+    const newerStore = portOnlySide(root, VECTOR_GROUPS).store;
     // The newer run is behind the older one once it asks the turn queue for its turn; that, not a pause, orders them.
     const queued = new Promise<void>((resolve) => {
       const run = embedTurns.run.bind(embedTurns);
@@ -286,7 +296,7 @@ describe('embedAll with a store', () => {
   });
 
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const [first] = seeded;
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
@@ -312,14 +322,19 @@ describe('embedAll with a store', () => {
 });
 
 describe('embedMemory with a store', () => {
-  it('stores the vector through the store, opening no hippo.db', async () => {
+  it('stores the vector and a first particle through the store, opening no hippo.db', async () => {
     const hippoRoot = markedFolder(hashedConfig());
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const entry = seeded[1];
     await embedMemoryInto(on(hippoRoot, side.store), entry);
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
     const expected = hashedVector(embeddingInputText(entry)).map(Math.fround);
     expect(Array.from((await side.store.vectors.stored('vectors', [entry.id])).get(entry.id) ?? [])).toEqual(expected);
+    expect((await side.store.vectors.stored('particles', [entry.id])).get(entry.id)).toMatchObject({
+      memoryId: entry.id,
+      position: expected,
+      lastSimulation: FAKE_NOW,
+    });
     expect(await side.store.vectors.embeddingIndexState()).toEqual({ storedModel: HASHED_MODEL, hasVectors: true });
   });
 
@@ -329,7 +344,7 @@ describe('embedMemory with a store', () => {
   ])(
     "leaves every tenant's vectors to embedAll when another model built the index and $name",
     async ({ stale, asked }) => {
-      const side = portOnlySide(copyOf(oldIndexed));
+      const side = portOnlySide(copyOf(oldIndexed), VECTOR_GROUPS);
       const staleVectors = {
         ...side.store.vectors,
         embeddingIndexState: async () => ({ storedModel: HASHED_MODEL, hasVectors: true }),

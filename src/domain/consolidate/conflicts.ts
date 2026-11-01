@@ -1,6 +1,6 @@
 import { MemoryEntry, EXTRACTED_TAG, Layer } from '../../base/memory/entry.js';
 import {
-  calculateStrengthAt,
+  calculateStrength,
   type DecayBasis,
   type StrengthModel,
 } from '../../base/memory/strength.js';
@@ -10,8 +10,8 @@ import { isPersonalScope } from '../../base/scope/recall-scope.js';
 import { CONFLICT_STOPWORDS } from '../../base/util/stopwords.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { DECAY_THRESHOLD } from './decay.js';
-import type { DetectedConflict } from '../../base/records/consolidation.js';
-import type { ConflictSide, LoserFate } from '../../base/records/conflicts.js';
+import type { DetectedConflict } from '../../base/ports/store/consolidation.js';
+import type { ConflictSide, LoserFate } from '../../base/ports/store/conflicts.js';
 import { BadRequestError } from '../../base/errors/api-errors.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The
@@ -57,7 +57,7 @@ export async function detectConflicts(
       // An unreviewed quarantined row must not taint a visible memory as conflicted.
       !isQuarantineScope(entry.scope ?? null) &&
       (rescuedIds.has(entry.id) ||
-        calculateStrengthAt(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
+        calculateStrength(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
     if (!live) continue;
     const places = byTenant.get(entry.tenantId);
     if (places) places.push(ids.length);
@@ -81,8 +81,8 @@ interface ConflictRow {
   id: string;
   trace: boolean;
   superseded: boolean;
-  /** Extracted facts and session digests restate other rows, so they are never one side of
-   * a conflict. */
+  /** Extracted facts and session digests restate other rows, so they are never one side of a
+   * conflict. */
   restated: boolean;
   scope: MemoryEntry['scope'];
   tenantId: string;
@@ -129,8 +129,9 @@ function tenantConflicts(
   for (const [i, a] of rows.entries()) {
     for (const j of partnersOf(i)) {
       const b = rows[j];
-      // Traces are variants, not contradictions: two strategies for one task can both be valid, and
-      // conflict detection is for stated-rule disagreement.
+      // Traces are variants of each other, not contradictions: two strategies for the same task can
+      // both be valid, and conflict detection is for stated-rule disagreement, not strategy
+      // diversity.
       if (
         (a.trace && b.trace) ||
         a.superseded ||
@@ -298,12 +299,12 @@ function containsAny(text: string, needles: string[]): boolean {
 
 /** A weakened loser keeps this share of its half-life, so it fades faster than the kept side. */
 export const WEAKEN_HALF_LIFE_FACTOR = 0.5;
-/** A weakened loser's half-life never drops under this, so repeated resolves cannot drive it
- * to zero. */
+/** A weakened loser's half-life never drops under this, so repeated resolves cannot drive it to
+ * zero. */
 export const WEAKEN_MIN_HALF_LIFE_DAYS = 1;
 
-/** What the caller asked for the loser: forget deletes it, rejectLoser also tombstones
- * its value. */
+/** What the caller asked for the loser: forget deletes it, rejectLoser also tombstones its
+ * value. */
 export interface LoserChoice {
   readonly forget?: boolean;
   readonly rejectLoser?: boolean;

@@ -8,14 +8,14 @@ import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { envRequireServer } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import * as api from '../../api/index.js';
+import type { ContextWith } from '../../api/types.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { callerKey } from '../server/local-key.js';
 import * as client from './client.js';
-import { type CliContext, type CliScope } from './api-context.js';
+import { type CliContext, cliApiContext } from './api-context.js';
 import { fail } from './exit.js';
 import { requireInit } from './shared.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
 
 /** One `hippo remember`, every flag parsed and checked. */
 export interface RememberRequest {
@@ -65,8 +65,8 @@ export interface Promoted {
   readonly globalStore?: string;
 }
 
-/** The same writes on the store and on the server. A refusal prints its reason and
- * throws CliExit(1). */
+/** The same writes on the store and on the server. A refusal prints its reason and throws
+ * CliExit(1). */
 export interface MemoryWrites {
   remember(request: RememberRequest): Promise<Remembered>;
   forget(id: string): Promise<void>;
@@ -80,7 +80,7 @@ const SERVED_KEY_HINT =
 
 /** What `hippo forget <id>` says when the store refuses it; the dry run says the same. */
 export async function forgetRefusal(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'dormant'>,
   id: string,
   cause: unknown,
 ): Promise<string> {
@@ -110,10 +110,10 @@ function promoteRefusal(reason: string): string {
 }
 
 /** The writes on the store at `root`, which must exist by the time one runs. */
-export function localWrites({ cli, hippoRoot: root, tenantId }: CliScope): MemoryWrites {
+export function localWrites(root: string, tenantId: string): MemoryWrites {
   const context = (): CliContext => {
     requireInit(root);
-    return cli.apiContext(root, tenantId);
+    return cliApiContext(root, tenantId);
   };
   return {
     remember: (request) => rememberHere(context(), request),
@@ -177,10 +177,10 @@ function failIfServerRequired(reason: string): void {
   }
 }
 
-/** The writes for this command: to the `hippo serve` that answers for `hippoRoot`, else on
- * its store. */
-export async function pickWrites({ cli, hippoRoot, tenantId }: CliScope): Promise<MemoryWrites> {
-  const local = localWrites({ cli, hippoRoot, tenantId });
+/** The writes for this command: to the `hippo serve` that answers for `hippoRoot`, else on its
+ * store. */
+export async function pickWrites(hippoRoot: string, tenantId: string): Promise<MemoryWrites> {
+  const local = localWrites(hippoRoot, tenantId);
   const server = await detectServer(hippoRoot);
   if (server) return serverWrites(hippoRoot, server, local);
   failIfServerRequired('no running server was detected for this hippoRoot');

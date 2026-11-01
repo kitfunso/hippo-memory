@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMMANDS } from '../../src/surface/cli/flags.js';
+import { COMMANDS } from '../../src/surface/cli/verbs.js';
 
 describe('destructive verbs', () => {
   it('are the rows flagged destructive in the verb table', () => {

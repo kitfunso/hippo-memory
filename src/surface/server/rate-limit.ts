@@ -121,8 +121,8 @@ export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
       buckets.set(key, bucket);
       return spend(bucket);
     },
-    // A refused bucket holds under one token and refills at ratePerSec, so one token is back
-    // within this.
+    // A refused bucket holds under one token and refills at ratePerSec, so one token is back within
+    // this.
     retryAfterSec: Math.max(1, Math.ceil(1 / ratePerSec)),
   };
 }

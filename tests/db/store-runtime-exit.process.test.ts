@@ -1,21 +1,14 @@
-// process.exit skips every finally, so only the root's exit hook can run held writes and close open handles; a root
-// that ends without one removes its hook.
-import { afterEach, describe, it, expect, vi } from 'vitest';
+// process.exit skips every finally, so only the root's exit hook can run held writes and close open handles.
+import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getHippoDbPath } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { withStoreRuntime } from '../../src/surface/open-store.js';
-import { StoreRuntime } from '../../src/db/store-runtime.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const built = (file: string): string => JSON.stringify(pathToFileURL(resolve(REPO_ROOT, 'dist', file)).href);
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 describe('process.exit inside a command store runtime', () => {
   it('runs the held mirror write and closes the open request handle', () => {
@@ -46,18 +39,5 @@ describe('process.exit inside a command store runtime', () => {
     expect(readFileSync(marker, 'utf8')).toBe('flushed');
     // SQLite removes the WAL when the last connection closes cleanly, so its absence shows the handle was closed.
     expect(existsSync(`${getHippoDbPath(root)}-wal`)).toBe(false);
-  });
-});
-
-describe('withStoreRuntime', () => {
-  it('removes its exit hook even when dispose throws', async () => {
-    const before = process.listenerCount('exit');
-    vi.spyOn(StoreRuntime.prototype, 'dispose').mockRejectedValue(new Error('closeNow threw'));
-    let during = 0;
-    const run = withStoreRuntime(async () => {
-      during = process.listenerCount('exit');
-    });
-    await expect(run).rejects.toThrow('closeNow threw');
-    expect([during, process.listenerCount('exit')]).toEqual([before + 1, before]);
   });
 });

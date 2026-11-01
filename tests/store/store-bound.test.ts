@@ -3,7 +3,7 @@ import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { describe, expect, it } from 'vitest';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
-import { answered, bound, type Bodies } from '../../src/store/sqlite/runtime/bound.js';
+import { answered, bound } from '../../src/store/sqlite/runtime/bound.js';
 import type { OnHandle } from '../../src/store/sqlite/runtime/open.js';
 
 interface Probe {
@@ -23,7 +23,7 @@ describe('bound', () => {
     opened.push(handle);
     return fn(handle, storeFilesOf('/nowhere'));
   };
-  const group = bound(on, {
+  const group = bound<Probe>(on, {
     boom: () => {
       throw new Error('nope');
     },
@@ -34,7 +34,7 @@ describe('bound', () => {
     note: (_db, text) => {
       notes.push(text);
     },
-  } satisfies Bodies<Probe>);
+  });
 
   it('rejects instead of throwing when the body throws', async () => {
     let result: Promise<void> | undefined;

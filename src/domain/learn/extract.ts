@@ -3,9 +3,10 @@ import {
   EXTRACTED_TAG,
   Layer,
   EmotionalValence,
-  createMemoryAt,
+  createMemory,
 } from '../../base/memory/entry.js';
-import { CLI_ACTOR } from '../../base/records/audit-ops.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import {
@@ -18,8 +19,6 @@ import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import type { Learning } from '../../base/records/learning.js';
 
 export interface ExtractedFact {
   content: string;
@@ -32,8 +31,8 @@ export interface ExtractOptions {
   model?: string;
   /**
    * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is
-   * set when the model call itself failed. Without it each failure logs a warn with its
-   * error fields.
+   * set when the model call itself failed. Without it each failure logs a warn with its error
+   * fields.
    */
   onError?: (msg: string, failure?: LlmFailure) => void;
   /** The request's abort signal; the model call stops when it fires. */
@@ -131,7 +130,7 @@ export interface StoreExtractedFactsOptions {
 }
 
 export async function storeExtractedFacts(
-  store: HippoStore & { readonly hippoDb: { readonly learning: Learning } },
+  store: StoreWith<'learning'>,
   { source, facts, baseHalfLifeDays, now }: StoreExtractedFactsOptions,
 ): Promise<MemoryEntry[]> {
   const inheritedTags = [
@@ -179,7 +178,7 @@ function buildExtractedEntry(
 ): MemoryEntry {
   const tags = [EXTRACTED_TAG, ...inheritedTags, ...fact.tags];
   return {
-    ...createMemoryAt(
+    ...createMemory(
       fact.content,
       {
         layer: Layer.Semantic,

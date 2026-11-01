@@ -1,6 +1,5 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
-import { contextCost } from '../../../api/context/context-render.js';
-import { assembleCost, drillCost } from '../../../api/hippo-db/dag-render.js';
+import { assembleCost, contextCost, drillCost } from '../../../api/context/context-render.js';
 import {
   assemble,
   type AssembleOptions,
@@ -16,7 +15,7 @@ import {
   continuityJson,
   sessionEventJson,
   snapshotJson,
-} from '../../../base/session/continuity-json.js';
+} from '../../../api/continuity/continuity-json.js';
 import {
   httpParams,
   optionalFlagParam,
@@ -25,9 +24,8 @@ import {
 } from '../../../api/recall/request.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
-import type { AuthedRouteRequest, HippoDbRequest, RouteParams } from '../types.js';
+import type { AuthedRouteRequest, GroupRequest, RouteParams } from '../types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
-import { MAX_DRILL_DOWN_DEPTH } from '../../../api/objects/drill-down.js';
 import {
   parseIntParam,
   parseLimitParam,
@@ -57,7 +55,7 @@ export async function handleRecallMemories({ res, ctx, query }: AuthedRouteReque
 // AssembledContextItem[] (fresh-tail raws, summary substitutions, bio-aware budget fit). Tenant
 // scope from the Bearer; default-deny on private rows.
 export async function handleAssembleSession(
-  { res, ctx, query }: HippoDbRequest,
+  { res, ctx, query }: GroupRequest<'dagReads'>,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'session id');
@@ -88,18 +86,18 @@ export async function handleAssembleSession(
 // level-2 summary (RecallResultItem.isSummary) to recover the originals. Tenant-scoped via Bearer;
 // default-deny on private scopes for the summary and its children.
 export async function handleDrillRecall(
-  { res, ctx, query }: HippoDbRequest,
+  { res, ctx, query }: GroupRequest<'dagReads'>,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'summary id');
   const limitRaw = query.get('limit');
   const limit = parseNumberParam(limitRaw, 'limit');
-  // Past the list ceiling the shared parser refuses, so the reply is the one every other list
-  // route gives.
+  // Past the list ceiling the shared parser refuses, so the reply is the one every other list route
+  // gives.
   if (limit !== undefined && limit > MAX_LIST_LIMIT) parseLimitParam(limitRaw);
   const budget = parseNumberParam(query.get('budget'), 'budget');
-  // depth walks N levels (default 1, hard cap MAX_DRILL_DOWN_DEPTH).
-  const depth = parseIntParam(query.get('depth'), 'depth', 1, MAX_DRILL_DOWN_DEPTH);
+  // depth walks N levels (default 1, hard cap 10).
+  const depth = parseIntParam(query.get('depth'), 'depth', 1, 10);
   const drillExtra: Pick<DrillDownOptions, 'limit' | 'budget' | 'depth'> = {};
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;

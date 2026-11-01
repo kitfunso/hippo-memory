@@ -41,7 +41,7 @@ function store(config?: MakeRootOptions['config']): FullContext {
 }
 
 const counted = async (ctx: FullContext): Promise<number> =>
-  Number((await sqliteStore(ctx.hippoRoot).hippoDb.reports.stats()).total_remembered);
+  Number((await sqliteStore(ctx.hippoRoot).reports.stats()).total_remembered);
 const rows = (ctx: FullContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
 function seed(ctx: FullContext, content: string, tags: string[]): void {
@@ -196,15 +196,18 @@ describe('rememberLocally starts the embedding', () => {
     await embeddings.close();
   });
 
-  // A context with no keeper of its own makes the write wait for its embed.
-  it('leaves a vector for the stored row before it returns, and none for a skipped write', async () => {
+  // The embedding is never awaited by the write, so the test waits for the local server's round trip on a busy box.
+  it('leaves a vector for the stored row, and none for a skipped write', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
     const ctx = store({
       ...SALIENCE_ON,
       embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url },
     });
     const entry = storedRow(await rememberLocally(ctx, { content: TEXT, tags: [] }));
-    expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]);
+    await vi.waitFor(() => expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]), {
+      timeout: 20_000,
+      interval: 50,
+    });
     const asked = embeddings.requests();
     expect((await rememberLocally(ctx, { content: TEXT, tags: [] })).status).toBe('skipped');
     expect(embeddings.requests()).toBe(asked);

@@ -2,7 +2,7 @@
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
-import type { SessionEvent, TaskSnapshot } from '../../base/records/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
 import { confidenceLabel } from '../../base/memory/strength.js';
 import type { ContextCost } from '../../api/context/context-types.js';
 import type { ContinuityBlock, RecallResult, RecallResultItem } from '../../api/recall/types.js';
@@ -102,8 +102,8 @@ export const memoryCostAt =
   (r: Pick<SearchResult, 'entry'>): number =>
     printedTokens(formatMemory(r, now));
 
-// The widest heading or the empty-list line, whichever costs more, so either prints inside
-// the budget.
+// The widest heading or the empty-list line, whichever costs more, so either prints inside the
+// budget.
 export function memoriesReserve(budget: number): number {
   return Math.max(printedTokens(memoriesHeading(budget)), estimateTokens(NO_MEMORIES));
 }
@@ -143,8 +143,8 @@ export const contextCostAt = (now: Date): ContextCost => ({
   trail: (events) => estimateTokens(trailPiece(events)),
 });
 
-// Rows the ranked list already shows drop out of this section, so pricing every row bounds what
-// it prints.
+// Rows the ranked list already shows drop out of this section, so pricing every row bounds what it
+// prints.
 export function tailSection(rows: RecallResultItem[]): string {
   if (rows.length === 0) return '';
   const lines: string[] = ['', '## Fresh tail / substituted summaries'];

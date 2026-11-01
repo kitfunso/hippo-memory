@@ -1,9 +1,9 @@
 /**
  * v1.7.4 -- MCP hippo_recall accepts session_id and applies the dlPFC
- * goal-stack boost to its hybrid result list before formatMemories.
+ * goal-stack boost to its physics/hybrid result list before formatMemories.
  *
  * Codex v2 finding: MCP's user-visible primary ordering does NOT come from
- * api.recall (it goes through hybridSearch separately), so
+ * api.recall (it goes through physicsSearch/hybridSearch separately), so
  * lifting the boost into api.recall alone leaves the MCP main band
  * unboosted. This test pins that the schema field is accepted AND that the
  * boost actually moves the goal-tagged memory ahead in the rendered output.
@@ -86,7 +86,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
     const res = await callTool('hippo_recall', { query: 'auth', budget: 2000, session_id: sessionId }, ctx);
     const text = extractText(res);
     expect(text).toContain('auth bug fix details');
-    // Side effect proves the boost ran on the MCP hybrid path: the
+    // Side effect proves the boost ran on the MCP physics/hybrid path: the
     // tagged memory landed in goal_recall_log.
     const db = openHippoDb(home);
     try {

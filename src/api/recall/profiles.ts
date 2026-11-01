@@ -2,12 +2,12 @@
 // docs/recall-surface-differences.md names the surface behind each profile.
 
 export interface RecallProfile {
-  /** 'engine' ranks with the hybrid engine and keeps its list and scores;
+  /** 'engine' ranks with the engine (physics or hybrid) and keeps its list and scores;
    * 'position' keeps every loaded row in load order, reordered only by an engine the request
    * names, and scores each row by its place. */
   readonly scoreForm: 'engine' | 'position';
-  /** The scope the engine boosts: the request's active scope, or the scope the request
-   * filters on. */
+  /** The scope the engine boosts: the request's active scope, or the scope the request filters
+   * on. */
   readonly scopeBoost: 'active' | 'filter';
   /** The fewest rows the lexical load reads, whatever the scorer window asks for. */
   readonly candidateFloor: number;
@@ -16,8 +16,8 @@ export interface RecallProfile {
   /** 'budget' has the engines spend the request's token budget and stops the list at its limit;
    * 'band' ranks every row and leaves the cut to the band composed from the list. */
   readonly resultCount: 'budget' | 'band';
-  /** Whether the goal-stack boost runs over the ranked list, and again over the band's
-   * position scores. */
+  /** Whether the goal-stack boost runs over the ranked list, and again over the band's position
+   * scores. */
   readonly goalBoost: { readonly ranked: boolean; readonly band: boolean };
 }
 

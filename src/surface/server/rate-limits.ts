@@ -53,8 +53,8 @@ export interface BootedLimiters {
 const DEFAULT_CALLER_RPS = 20;
 
 /**
- * The per-caller spec when serve() names none: HIPPO_CALLER_RPS (0 is off), else DEFAULT_CALLER_RPS
- * per second with a burst of twice that.
+ * The per-caller spec when serve() names none: HIPPO_CALLER_RPS (0 is off), else 20 per second with
+ * a burst of twice that.
  */
 function defaultCallerSpec(): RateLimitSpec | 'off' {
   const raw = envCallerRps();

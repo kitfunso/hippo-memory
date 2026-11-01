@@ -10,7 +10,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
-import { memoryCountAll } from '../../src/api/hippo-db/memory-count.js';
+import { memoryCountAll } from '../../src/api/memories/memories.js';
 import { adminActor } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntriesTogether, loadAllDirtySummaries, loadAllEntries } from '../_helpers/root-forms.js';

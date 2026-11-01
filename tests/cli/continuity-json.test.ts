@@ -8,7 +8,6 @@ import { appendSessionEvent, saveActiveTaskSnapshot } from '../_helpers/root-for
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { removeDir } from '../_helpers/remove-dir.js';
-import type { CliCommand } from '../../src/surface/cli/api-context.js';
 
 const SNAPSHOT_JSON =
   '{"id":1,"task":"pin the wire","summary":"s","next_step":"n","status":"active","source":"test",' +
@@ -18,16 +17,10 @@ const EVENT_JSON =
   '"scope":null,"metadata":{"k":1},"created_at":"<at>"}';
 
 let root = '';
-const c = (cli: CliCommand, args: string[], flags: CliFlags): CommandContext => ({
-  cli,
-  hippoRoot: root,
-  tenantId: 'default',
-  args,
-  flags,
-});
+const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: root, tenantId: 'default', args, flags });
 
 /** The printed JSON, key order kept, with each timestamp masked. */
-async function printed(run: (cli: CliCommand) => Promise<void>): Promise<string> {
+async function printed(run: () => Promise<void>): Promise<string> {
   const { stdout } = await runInProcess(run);
   return JSON.stringify(JSON.parse(stdout)).replace(/"\d{4}-\d{2}-\d{2}[T ][^"]*"/g, '"<at>"');
 }
@@ -59,20 +52,18 @@ afterEach(() => {
 
 describe('continuity --json keeps snake_case keys', () => {
   it('snapshot show', async () => {
-    expect(await printed((cli) => handleSnapshot(c(cli, ['show'], { json: true })))).toBe(
-      `{"snapshot":${SNAPSHOT_JSON}}`,
-    );
+    expect(await printed(() => handleSnapshot(c(['show'], { json: true })))).toBe(`{"snapshot":${SNAPSHOT_JSON}}`);
   });
 
   it('session show and session latest', async () => {
-    expect(await printed((cli) => handleSession(c(cli, ['show'], { json: true })))).toBe(`{"events":[${EVENT_JSON}]}`);
-    expect(await printed((cli) => handleSession(c(cli, ['latest'], { json: true })))).toBe(
+    expect(await printed(() => handleSession(c(['show'], { json: true })))).toBe(`{"events":[${EVENT_JSON}]}`);
+    expect(await printed(() => handleSession(c(['latest'], { json: true })))).toBe(
       `{"snapshot":${SNAPSHOT_JSON},"events":[${EVENT_JSON}]}`,
     );
   });
 
   it('current show', async () => {
-    expect(await printed((cli) => handleCurrent(c(cli, ['show'], { json: true })))).toBe(
+    expect(await printed(() => handleCurrent(c(['show'], { json: true })))).toBe(
       `{"snapshot":${SNAPSHOT_JSON},"events":[` +
         '{"id":1,"session_id":"sess-wire","event_type":"note","content":"a trail","created_at":"<at>"}]}',
     );

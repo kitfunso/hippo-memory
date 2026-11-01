@@ -1,6 +1,6 @@
 /** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (a store
  * may leave empty -wal and -shm files); never touches memory content. */
-import { envByName, envNamesStarting } from '../../base/util/env.js';
+import { envByName, processEnv } from '../../base/util/env.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -155,7 +155,10 @@ async function buildStores(opts: SupportBundleOptions): Promise<JsonValue[]> {
 }
 
 function listSetEnvNames(): string[] {
-  const names = new Set<string>(envNamesStarting('HIPPO_'));
+  const names = new Set<string>();
+  for (const key of Object.keys(processEnv())) {
+    if (key.startsWith('HIPPO_')) names.add(key);
+  }
   for (const key of OTHER_ENV_NAMES) {
     if (envByName(key) !== undefined) names.add(key);
   }
@@ -282,8 +285,8 @@ function mountedDrive(letter: string): string {
   return `(?:${letter}[:-]|(?:[-/](?:cygdrive|mnt))?[-/]${letter})`;
 }
 
-/** Regex source for one spelling of the home, or null when too little of it is left to
- * swap safely. */
+/** Regex source for one spelling of the home, or null when too little of it is left to swap
+ * safely. */
 function spellingPattern(spelling: string, deep: boolean): string | null {
   if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegex(spelling) : null;
   // Each tool that mounts a drive writes it its own way, so a home two or more folders below its
@@ -318,8 +321,8 @@ function buildHomePattern(home: string, probes: readonly string[]): RegExp | nul
         .filter(Boolean).length >= 2;
     for (const spell of HOME_SPELLINGS) spellings.push([spell(alias), deep]);
   }
-  // Longest first: where one home nests in another (a test home under the real one), swap
-  // the longer.
+  // Longest first: where one home nests in another (a test home under the real one), swap the
+  // longer.
   const patterns = new Map<string, string>();
   for (const [s, deep] of spellings.sort(([a], [b]) => b.length - a.length)) {
     const pattern = spellingPattern(s, deep);
@@ -372,8 +375,8 @@ function redactStrings(value: JsonValue, homePattern: RegExp | null): JsonValue 
 
 /** Read-only: builds one redacted support-ticket snapshot. Never reads a memory content column. */
 export async function buildSupportBundle(opts: SupportBundleOptions): Promise<JsonObject> {
-  // Before doctor: its read-only open leaves an empty -wal that the store's file list would
-  // then report.
+  // Before doctor: its read-only open leaves an empty -wal that the store's file list would then
+  // report.
   const stores = await buildStores(opts);
   const bundle: JsonObject = {
     format: 'hippo-support-bundle/1',
@@ -385,8 +388,9 @@ export async function buildSupportBundle(opts: SupportBundleOptions): Promise<Js
     env: listSetEnvNames(),
     logs: buildLogsSection(opts),
   };
-  // Store paths from the working folder arrive resolved, the global root as HIPPO_HOME was typed,
-  // and log lines often quote the temp folder, which usually sits under the home.
+  // Store paths found from the working folder arrive resolved; the global root arrives as
+  // HIPPO_HOME was typed, and log lines often quote the temp folder, which usually sits under the
+  // home.
   const redacted = redactStrings(
     bundle,
     buildHomePattern(opts.home, [hippoHomeDir(), os.tmpdir()]),

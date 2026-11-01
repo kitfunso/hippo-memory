@@ -21,7 +21,7 @@ import {
 import { errorMessage, log } from '../../../base/util/log.js';
 import { ScopeForbiddenError } from '../../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
-import { NoLocalTierError } from '../../../base/util/store-blocked.js';
+import { StoreNotPortedError } from '../../../base/util/store-blocked.js';
 
 type FieldValue = string | number | boolean | null | readonly string[];
 
@@ -59,7 +59,7 @@ const CLASSES = [
   ScopeForbiddenError,
   RawAppendOnlyError,
   SqliteBlockedError,
-  NoLocalTierError,
+  StoreNotPortedError,
   OtherStoreFolderError,
   StoreBusyError,
   IncompatibleBinaryError,
@@ -140,8 +140,8 @@ export function decodeError(wire: WireError): Error {
     wire.cause === undefined
       ? new Error(message)
       : new Error(message, { cause: decodeError(wire.cause) });
-  // The constructor is not run again: its arguments did not cross, and the fields below are what
-  // it set.
+  // The constructor is not run again: its arguments did not cross, and the fields below are what it
+  // set.
   Object.setPrototypeOf(rebuilt, PROTOTYPES.get(known) ?? Error.prototype);
   Object.assign(rebuilt, wire.fields);
   if (wire.stack !== undefined) rebuilt.stack = wire.stack;

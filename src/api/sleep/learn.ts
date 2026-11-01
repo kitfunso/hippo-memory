@@ -6,7 +6,6 @@ import { fetchGitLog, extractLessons, partitionLessons } from '../../domain/lear
 import type { HippoConfig } from '../../base/config/config.js';
 import { isGitRepo, type GitRunner } from '../../base/ports/git.js';
 import { embedMemoryDetached } from '../../domain/search/embed-memories.js';
-import { withDetached } from '../detached.js';
 import {
   extractInvalidationTarget,
   invalidateMatching,
@@ -17,7 +16,7 @@ import {
   type InvalidationTarget,
 } from '../../domain/learn/invalidation.js';
 import {
-  createMemoryAt,
+  createMemory,
   ERROR_TAG,
   Layer,
   schemaFitFrom,
@@ -27,18 +26,16 @@ import {
 import { extractPathTags } from '../../domain/search/path-context.js';
 import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js';
 import { duplicateKey, heldTextKeys, storedTextKeys } from '../../base/util/same-text.js';
-import type { LessonWrites } from '../../base/records/lesson-writes.js';
+import type { LessonWrites } from '../../base/ports/store.js';
 import { memoryPages } from '../memories/memories.js';
-import { countRemembered } from '../memories/remember.js';
-import { strengthOf, type Context } from '../types.js';
-import type { HippoDbContext } from '../hippo-db-context.js';
+import { strengthOf, type Context, type ContextWith } from '../types.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
   readonly tags: readonly string[];
   readonly source: string;
-  /** Also invalidate what a migration subject supersedes, score schema fit, path-tag and embed
-   * each row. */
+  /** Also invalidate what a migration subject supersedes, score schema fit, path-tag, count and
+   * embed each row. */
   readonly full: boolean;
 }
 
@@ -83,7 +80,10 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(ctx: HippoDbContext, opts: LearnOptions): Promise<LearnResult> {
+export async function learn(
+  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
+  opts: LearnOptions,
+): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -113,7 +113,7 @@ interface QueuedLesson {
 /** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so
  * a later lesson matches against them. */
 interface LessonBatch {
-  readonly ctx: HippoDbContext;
+  readonly ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>;
   readonly writes: LessonWrites;
   readonly live: MemoryEntry[];
   readonly keys: Set<string>;
@@ -144,8 +144,8 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
     if (at !== -1) live.splice(at, 1);
   }
   counts.added += landed.length;
-  await countRemembered(ctx, landed.length);
   if (!batch.full) return;
+  if (landed.length > 0) await ctx.store.bumpRemembered(landed.length);
   const { embedderFor, clock, failureNotices } = ctx.infra;
   const { store, config } = ctx;
   const target = {
@@ -156,9 +156,7 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
     strength: strengthOf(ctx),
     clock,
   };
-  await withDetached(ctx, (detached) => {
-    for (const entry of landed) embedMemoryDetached(target, entry, detached);
-  });
+  for (const entry of landed) embedMemoryDetached(target, entry);
 }
 
 /** The keys of the rows that may hold a lesson, the only rows that can be its copy. */
@@ -185,7 +183,7 @@ function newLessonMemory(
   inputs: LessonMemoryInputs,
 ): MemoryEntry {
   const { tenantId, config, fitSource, pathTags, now } = inputs;
-  const entry = createMemoryAt(
+  const entry = createMemory(
     lesson,
     {
       layer: Layer.Episodic,
@@ -203,8 +201,8 @@ function newLessonMemory(
 }
 
 interface TenantScan {
-  /** The rows a lesson's migration target can weaken; every lesson written this batch
-   * joins them. */
+  /** The rows a lesson's migration target can weaken; every lesson written this batch joins
+   * them. */
   readonly live: MemoryEntry[];
   readonly fitSource: SchemaFitSource;
   /** Duplicate keys of what the caller can read. */
@@ -237,7 +235,7 @@ async function scanTenant(
 }
 
 async function writeLessons(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
   lessons: readonly string[],
   opts: LearnOptions & { readonly repoPath: string },
   config: HippoConfig,
@@ -278,12 +276,12 @@ interface OpenedLessonBatch {
 }
 
 async function openLessonBatch(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
   lessons: readonly string[],
   opts: LearnOptions,
 ): Promise<OpenedLessonBatch> {
   const { profile } = opts;
-  const writes = ctx.store.hippoDb.lessonWrites;
+  const writes = ctx.store.lessonWrites;
   // One pass serves the batch: invalidation matches against `live`, which follows every write
   // below. Schema fit needs every readable row, and each lesson is scored against them as they were
   // before the batch.
@@ -324,7 +322,7 @@ export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 /** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or
  * only the one `options.onlyId` names. */
 export async function memoryInvalidate(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'learning' | 'lessonWrites'>,
   target: InvalidationTarget,
   options: InvalidationOptions,
 ): Promise<InvalidationResult> {

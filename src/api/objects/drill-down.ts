@@ -1,18 +1,18 @@
 // DAG drill-down from a summary to its children.
 
-import type { SummaryDescendants } from '../../base/records/dag-reads.js';
+import type { SummaryDescendants } from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import { descendantAdmits, type DescendantAdmission } from '../../base/scope/read-admission.js';
 import type { CallerProject } from '../prompt-hook.js';
-import type { HippoDbContext } from '../hippo-db-context.js';
+import type { ContextWith } from '../types.js';
 
 export const DEFAULT_DRILL_DOWN_LIMIT = 50;
 export const MAX_DRILL_DOWN_DEPTH = 10;
 
 export interface DrillDownOptions {
-  /** Cap on number of children returned. Default DEFAULT_DRILL_DOWN_LIMIT. */
+  /** Cap on number of children returned. Default 50. */
   limit?: number;
   /** Token budget: children append in created order until the next would exceed it (cost:
    * printed line under `cost`, else ceil(content.length / 4)). For depth > 1 the budget is
@@ -68,7 +68,7 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
  * reachable; children get recall's scope filter. Returns `DrillDownResult` or `{failure}`; HTTP
  * maps `not_drillable` to 422. */
 export async function drillDown(
-  ctx: HippoDbContext,
+  ctx: ContextWith<'dagReads'>,
   summaryId: string,
   opts: DrillDownOptions = {},
 ): Promise<DrillDownOutcome> {
@@ -81,7 +81,7 @@ export async function drillDown(
     project: opts.project,
   };
   const pastLimit = Math.floor(limit) + 1;
-  const walked = await ctx.store.hippoDb.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
+  const walked = await ctx.store.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
     depth,
     admit,
     // A leaf answers not_drillable, so nothing under it is read.
@@ -113,8 +113,8 @@ function drillResult(
   const summaryOut: DrillDownSummary = {
     id: summary.id,
     content: summary.content,
-    // The stored direct-child count; the fallback counts level-0 children, never the whole
-    // depth-N walk.
+    // The stored direct-child count; the fallback counts level-0 children, never the whole depth-N
+    // walk.
     descendantCount: summary.descendantCount ?? sizes[0] ?? 0,
     earliestAt: summary.earliestAt ?? null,
     latestAt: summary.latestAt ?? null,

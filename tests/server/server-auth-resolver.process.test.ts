@@ -736,7 +736,7 @@ describe('package surface', () => {
     (name) => {
       // The built d.ts text is what a consumer's compiler reads, so text is the contract here.
       const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
-      expect(dts).toMatch(new RegExp(`^export (?:\\{[^}]*\\b|declare (?:function|const) )${name}\\b`, 'm'));
+      expect(dts).toMatch(new RegExp(`^export (?:\\{[^}]*\\b|declare function )${name}\\b`, 'm'));
     },
   );
 });

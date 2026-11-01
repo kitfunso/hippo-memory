@@ -17,26 +17,16 @@ type BodyOf<M> = M extends (...args: infer A) => infer R
 /** Group `G` as SQL bodies, each taking the handle before its method's own arguments. */
 export type Bodies<G> = { readonly [K in keyof G]: BodyOf<G[K]> };
 
-/** A SQL body: the handle, then its method's own arguments. */
-type Body = (db: DatabaseSyncLike, ...args: never) => void;
-
-type MethodOf<B> = B extends (db: DatabaseSyncLike, ...args: infer A) => infer R
-  ? (...args: A) => Promise<Awaited<R>>
-  : never;
-
-/** The group `bound` makes of `bodies`, typed by the bodies themselves, each one's doc kept. */
-export type Bound<B> = { [K in keyof B]: MethodOf<B[K]> };
-
-/** `bodies` as a group: each call runs its body to its end on a handle `open` makes, closed
+/** `bodies` as group `G`: each call runs its body to its end on a handle `open` makes, closed
  * after, so no write scope spans an await, then answers through a Promise that rejects in the
  * port's terms. */
-export function bound<B extends { readonly [K in keyof B]: Body }>(
-  on: OnHandle,
-  bodies: B,
-  open?: HandleOpener,
-): Bound<B> {
-  // Typed as Function so that apply can pass each body its own argument list.
-  const methods = Object.entries<Function>(bodies).map(([key, body]) => {
+export function bound<G>(on: OnHandle, bodies: Bodies<G>, open?: HandleOpener): G {
+  const group: Partial<G> = {};
+  // SAFETY: Object.keys lists the own keys of the bodies, which are the keys of G by the Bodies
+  // mapping.
+  for (const key of Object.keys(bodies) as (keyof G)[]) {
+    // Typed as Function so that apply can pass each body its own argument list.
+    const body: Function = bodies[key];
     // Built here, not in a helper: an error stack keeps only 10 frames, and helper frames would
     // push the caller out.
     const method = (...args: never[]) => {
@@ -46,11 +36,12 @@ export function bound<B extends { readonly [K in keyof B]: Body }>(
         return Promise.reject(portError(error));
       }
     };
-    return [key, method];
-  });
-  // SAFETY: each entry pairs a body's key with that body run on a handle, its arguments after the
-  // handle's, which is that key's method of Bound<B>.
-  return Object.fromEntries(methods) as Bound<B>;
+    // SAFETY: the body takes the handle before the method's own arguments, so this call is G's
+    // method.
+    group[key] = method as G[typeof key];
+  }
+  // SAFETY: every key of the bodies was bound above, so the group holds all of G.
+  return group as G;
 }
 
 /** `run`'s value through a Promise, and its throw as a rejection in the port's terms, for a

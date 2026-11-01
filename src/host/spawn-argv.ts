@@ -7,8 +7,8 @@ import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { envPath, envPathExt } from '../base/util/env.js';
 import { isFile } from './real-path.js';
 
-/** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair
- * can expand. */
+/** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can
+ * expand. */
 export function quoteCmdArg(arg: string): string {
   // cmd.exe ends the command line at CR or LF, so what follows would run as a new command.
   if (/[\r\n]/.test(arg)) {
@@ -22,12 +22,12 @@ export function quoteCmdArg(arg: string): string {
   return `"${quoted.replace(/%/g, '"^%"')}"`;
 }
 
-/** cmd.exe arguments that run a .cmd or .bat shim with every forwarded argument
- * delivered verbatim. */
+/** cmd.exe arguments that run a .cmd or .bat shim with every forwarded argument delivered
+ * verbatim. */
 export function cmdShimArgs(shimPath: string, forwardArgs: readonly string[]): string[] {
   const command = `"${shimPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
-  // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the
-  // outer pair.
+  // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer
+  // pair.
   return ['/d', '/v:off', '/s', '/c', `"${command}"`];
 }
 
@@ -46,8 +46,8 @@ export function npmShimEntry(shimPath: string): string | null {
     log.warn(`cannot read the shim ${shimPath}: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
-  // Split on either slash, so the shim parses the same on every platform, not only where `\` is
-  // a separator.
+  // Split on either slash, so the shim parses the same on every platform, not only where `\` is a
+  // separator.
   const segments = NPM_SHIM_ENTRY.exec(text)?.[1]?.split(/[\\/]/);
   if (segments === undefined) return null;
   const dir = path.dirname(shimPath);

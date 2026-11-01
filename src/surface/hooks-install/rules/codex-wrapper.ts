@@ -75,8 +75,8 @@ export function pathEquals(a: string, b: string): boolean {
   return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 }
 
-// The launchers detectRealCodexPath looks for, so the only originals the installer can
-// have recorded.
+// The launchers detectRealCodexPath looks for, so the only originals the installer can have
+// recorded.
 export const CODEX_LAUNCHER_NAMES: readonly string[] =
   process.platform === 'win32' ? ['codex.cmd', 'codex.ps1', 'codex.exe', 'codex'] : ['codex'];
 

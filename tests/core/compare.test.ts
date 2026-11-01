@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { compareEntryIdentity, compareScoredResults } from '../../src/base/rank/compare.js';
+import { compareEntryIdentity, compareScoredResults, comparePhysicsResultsBy } from '../../src/base/rank/compare.js';
 
 describe('compareEntryIdentity', () => {
   it('orders by content ascending when content differs', () => {
@@ -132,5 +132,58 @@ describe('compareScoredResults', () => {
     const shuffled = [items[2], items[0], items[3], items[1]];
     const sorted = [...shuffled].sort(compareScoredResults);
     expect(sorted.map((r) => r.entry.content)).toEqual(['kiwi', 'apple', 'mango', 'zebra']);
+  });
+});
+
+describe('comparePhysicsResultsBy', () => {
+  it('orders by the supplied score field descending', () => {
+    const cmp = comparePhysicsResultsBy<{ memoryId: string; s: number }>((r) => r.s);
+    const a = { memoryId: 'm1', s: 1 };
+    const b = { memoryId: 'm2', s: 2 };
+    expect(cmp(a, b)).toBe(1); // b (higher score) first
+  });
+
+  it('falls back to memoryId ascending on an exact score tie (no content available)', () => {
+    const cmp = comparePhysicsResultsBy<{ memoryId: string; s: number }>((r) => r.s);
+    const a = { memoryId: 'mem-z', s: 5 };
+    const b = { memoryId: 'mem-a', s: 5 };
+    expect(cmp(a, b)).toBe(1); // b (mem-a) sorts first
+    expect(cmp(b, a)).toBe(-1);
+  });
+
+  it('supports two independent passes over the same array with different score fields', () => {
+    type R = { memoryId: string; baseScore: number; finalScore: number };
+    const results: R[] = [
+      { memoryId: 'a', baseScore: 1, finalScore: 9 },
+      { memoryId: 'b', baseScore: 2, finalScore: 1 },
+    ];
+    const byBase = [...results].sort(comparePhysicsResultsBy<R>((r) => r.baseScore));
+    expect(byBase.map((r) => r.memoryId)).toEqual(['b', 'a']);
+
+    const byFinal = [...results].sort(comparePhysicsResultsBy<R>((r) => r.finalScore));
+    expect(byFinal.map((r) => r.memoryId)).toEqual(['a', 'b']);
+  });
+});
+
+describe('comparePhysicsResultsBy tieKeyOf (content-stable cluster selection)', () => {
+  it('breaks score ties by the supplied tie key, not memoryId', () => {
+    const a = { memoryId: 'id-zzz', baseScore: 1 };
+    const b = { memoryId: 'id-aaa', baseScore: 1 };
+    const cmp = comparePhysicsResultsBy<typeof a>(
+      (r) => r.baseScore,
+      (r) => (r.memoryId === 'id-zzz' ? 'alpha content' : 'beta content'),
+    );
+    // tie key 'alpha content' < 'beta content' -> a first despite larger memoryId
+    expect([b, a].sort(cmp).map((r) => r.memoryId)).toEqual(['id-zzz', 'id-aaa']);
+  });
+
+  it('falls through tie-key collisions to memoryId for a total order', () => {
+    const a = { memoryId: 'id-bbb', baseScore: 1 };
+    const b = { memoryId: 'id-aaa', baseScore: 1 };
+    const cmp = comparePhysicsResultsBy<typeof a>(
+      (r) => r.baseScore,
+      () => 'same content',
+    );
+    expect([a, b].sort(cmp).map((r) => r.memoryId)).toEqual(['id-aaa', 'id-bbb']);
   });
 });

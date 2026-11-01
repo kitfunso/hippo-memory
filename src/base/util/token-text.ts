@@ -17,13 +17,13 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-/** Stable hash, FINGERPRINT_HEX_CHARS hex chars, of a rendered block, for change detection. */
+/** Stable 16-hex-char hash of a rendered block, for change detection. */
 export function blockHash(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, FINGERPRINT_HEX_CHARS);
 }
 
-/** A token allowance that sections pay from in print order; one that does not fit is
- * refused whole. */
+/** A token allowance that sections pay from in print order; one that does not fit is refused
+ * whole. */
 export function tokenPurse(allowance: number) {
   let left = allowance;
   return {

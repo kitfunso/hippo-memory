@@ -41,7 +41,7 @@ import { REAL_IO } from '../_helpers/real-io.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { testInfra } from '../_helpers/infra.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
 
@@ -749,13 +749,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
 
     expect(
       (
-        await autoShare(...sharingStores(root), {
-          embed: TEST_RUN,
-          detached: TEST_DETACHED,
-          tenantId: ALL_TENANTS,
-          minScore: 0,
-          dryRun: true,
-        })
+        await autoShare(...sharingStores(root), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0, dryRun: true })
       ).map((e) => e.content),
     ).toEqual([LONG_NEW]);
   });

@@ -3,7 +3,7 @@ import { appendAuditEvents } from './audit.js';
 import { reportAuditWriteFailure } from '../../../base/records/audit-report.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
 import type { JsonValue } from '../../../base/util/json.js';
-import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
+import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import type { AuditOp } from '../../../base/records/audit-ops.js';
 import { refusalAudit } from '../../rules/audit-rows.js';
 

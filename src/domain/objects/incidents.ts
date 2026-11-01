@@ -20,7 +20,7 @@ import type {
   IncidentOpenRefusal,
   IncidentResolve,
   Objects,
-} from '../../base/records/objects.js';
+} from '../../base/ports/store.js';
 
 export type { Incident, IncidentStatus } from '../../base/records/object-types.js';
 
@@ -41,8 +41,8 @@ export interface SaveIncidentOptions {
   extraTags?: string[];
 }
 
-// No draft: an incident is opened with linked memories and is never superseded, so it keeps its
-// own save.
+// No draft: an incident is opened with linked memories and is never superseded, so it keeps its own
+// save.
 export const INCIDENT: ObjectDescriptor<'incident'> = {
   kind: 'incident',
   label: 'incident',

@@ -1,13 +1,14 @@
 import { adminActor } from '../../../api/index.js';
-import { connectorContext, type ConnectorContext } from '../ingest.js';
+import type { ConnectorContext } from '../ingest.js';
 import {
   replayParked,
   type ConnectorDlq,
   type Reingest,
   type ReplayResult,
   type SignatureRefusal,
-} from '../../../api/dead-letters.js';
+} from '../dlq.js';
 import { ingestMessage } from './ingest.js';
+import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { verifySlackSignature } from './signature.js';
 import {
   isSlackEventEnvelope,
@@ -22,8 +23,7 @@ import type {
   SlackDlqBucket as DlqBucket,
   SlackDlqItem as DlqItem,
   SlackDlqInsert,
-} from '../../../base/records/connectors.js';
-import { resolveTenant, type RouteFallback } from '../../../api/hippo-db/connector-events.js';
+} from '../../../base/ports/store/connectors.js';
 
 export type { DlqBucket, DlqItem };
 
@@ -59,7 +59,6 @@ export async function replaySlackDlqEntry(
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
   return replayParked<'slack', JsonValue & SlackEventEnvelope>(
-    ctx,
     {
       dlq: slackDlq,
       refuseSignature: (row) => refuseSignature(row, opts),
@@ -71,7 +70,8 @@ export async function replaySlackDlqEntry(
           allowUnknown: opts.allowUnknownTeamFallback === true,
         }),
     },
-    { id, force: opts.force === true },
+    ctx.store,
+    { tenantId: ctx.tenantId, id, force: opts.force === true },
   );
 }
 
@@ -104,12 +104,12 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
 }
 
 async function reingest(
-  ports: Pick<ConnectorContext, 'store' | 'config' | 'infra'>,
+  { store, config, infra }: Pick<ConnectorContext, 'store' | 'config' | 'infra'>,
   envelope: JsonValue & SlackEventEnvelope,
   fallback: RouteFallback,
 ): Promise<Reingest> {
   const tenantId = await resolveTenant(
-    ports,
+    store,
     { connector: 'slack', teamId: envelope.team_id },
     fallback,
   );
@@ -125,7 +125,13 @@ async function reingest(
     return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
   }
 
-  const replayCtx = connectorContext(ports, tenantId, adminActor('connector:slack:replay'));
+  const replayCtx: ConnectorContext = {
+    tenantId,
+    actor: adminActor('connector:slack:replay'),
+    store,
+    config,
+    infra,
+  };
   return replayMessage(replayCtx, envelope, inner);
 }
 
