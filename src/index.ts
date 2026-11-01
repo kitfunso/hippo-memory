@@ -52,6 +52,7 @@ export {
   type RescueRank,
   type SleepContext,
   type SleepStore,
+  type DetachedWork,
   sleep,
   consolidate,
   strengthBucket,

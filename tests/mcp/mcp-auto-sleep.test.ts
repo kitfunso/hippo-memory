@@ -99,4 +99,19 @@ describe('MCP auto-sleep', () => {
       expect(s.session).not.toBe(frame);
     }
   });
+
+  it("is kept by the loop's keeper, so its settle waits for the sleep a write started", async () => {
+    const root = makeRoot('mcp-autosleep-kept');
+    roots.push(root);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 })),
+    );
+    const host = cliStdioHost();
+    await remember(host, root, 'the deploy moved to friday');
+    expect(await host.settle(20_000)).toBe(0);
+    expect(sleepRuns(root)).toBe(1);
+  });
 });

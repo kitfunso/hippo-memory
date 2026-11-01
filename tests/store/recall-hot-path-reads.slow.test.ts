@@ -91,6 +91,8 @@ describe('rankRecall with a global store', () => {
       ...Array.from({ length: 6 }, (_, i) => memory(`global note ${i} on the zephyrine cache warmup`)),
       memory('local note 0 on the zephyrine cache eviction'),
     ]);
+    // Recency reads the clock, so the clock stops before ctx.now is read and both rankings see one instant.
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
     const at = (root: string) => ({ store: sqliteStore(root), config: loadConfig(root) });
     const ctx = {
       ...at(local),
@@ -99,8 +101,6 @@ describe('rankRecall with a global store', () => {
       embedderFor: resolveEmbeddingProvider,
       now: evalNow(),
     };
-    // Recency reads the clock, so both rankings see one instant.
-    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
     const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local), BUDGET_RANKED));
     expect(countMatching(statements, /memories_fts MATCH|LOWER\(content\) LIKE/)).toBe(2);
 

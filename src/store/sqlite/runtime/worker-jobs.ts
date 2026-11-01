@@ -175,7 +175,7 @@ function post(port: MessagePort, reply: Reply, end: () => void): void {
 }
 
 // Each step still closes what is left when the one before it throws, so a failed flush leaves no
-// handle on the files. Held writes run first, then the thread's session closes, and dispose finds
+// handle on the files. Held writes run first, then the thread's session closes, and closeNow finds
 // no session left to close twice.
 function closeThread({ runtime, stores }: Thread, port: MessagePort): void {
   try {
@@ -183,7 +183,7 @@ function closeThread({ runtime, stores }: Thread, port: MessagePort): void {
     stores.close();
   } finally {
     try {
-      runtime.dispose();
+      runtime.closeNow();
     } finally {
       port.close();
     }
