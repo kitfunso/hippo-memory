@@ -12,10 +12,13 @@ import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } fr
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
 import { parkInDlq } from '../../../api/dead-letters.js';
-import { routeOncePerDelivery } from '../../../api/hippo-db/connector-events.js';
+import {
+  resolveTenant,
+  routeOncePerDelivery,
+  type RouteFallback,
+} from '../../../api/hippo-db/connector-events.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
-import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import {
   JSON_HEADERS,
@@ -198,7 +201,7 @@ async function tenantOrPark(d: SignedSlackRequest, body: JsonValue): Promise<str
     return envTenant();
   }
   const resolvedTenant = await resolveTenant(
-    d.store,
+    d,
     { connector: 'slack', teamId: body.team_id },
     hostFallback(),
   );
@@ -223,7 +226,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
   // null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
     teamIdFromRaw !== null
-      ? await resolveTenant(d.store, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
+      ? await resolveTenant(d, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
       : null;
   await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel

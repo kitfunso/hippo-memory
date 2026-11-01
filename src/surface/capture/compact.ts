@@ -32,7 +32,7 @@ import { isVscodeTranscript } from './copilot-transcript.js';
 import { transcriptWorkingState } from './working-state.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { preCompact, type PreCompactContext } from '../../api/pre-compact.js';
-import type { HippoDbStore } from '../../base/ports/hippo-db.js';
+import type { CompactionHooks } from '../../base/records/capture.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
@@ -225,9 +225,6 @@ export async function preCompactHook(
   exitAfterFlush(0);
 }
 
-/** The folder's store as a PostCompact hook reaches it, built by the CLI root. */
-export type CompactionStore = Pick<HippoDbStore, 'hippoDb'>;
-
 export interface PostCompactOptions {
   /** The tenant the CLI root resolved. */
   tenantId: string;
@@ -249,7 +246,7 @@ const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
  * the one line to show. Never throws, so the hook exits 0. */
 export async function postCompactHook(
   hippoRoot: string,
-  store: CompactionStore,
+  hooks: CompactionHooks,
   options: PostCompactOptions,
 ): Promise<string | null> {
   const logFile = options.logFile ?? defaultPreCompactLogPath(processHomes());
@@ -264,7 +261,7 @@ export async function postCompactHook(
       return null;
     }
     const receipt = readClaudeCodePostCompact(options.stdinText, options.stdinTimedOut ?? false);
-    const folder = { root: hippoRoot, store, tenantId: options.tenantId };
+    const folder = { root: hippoRoot, hooks, tenantId: options.tenantId };
     let line: string | null = null;
     let storeBusy = false;
     if (receipt.status !== 'received') {

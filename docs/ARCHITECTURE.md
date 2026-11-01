@@ -400,9 +400,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/surface/connectors/slack/web-client.ts
 - `module header`: fetcher is the one Task 13's `backfillChannel` consumes.
 
-### src/surface/connectors/slack/workspaces.ts
-- `module header`: Slack workspace registration helpers (T2B follow-up, 2026-05-24).
-- `module header`: Before T2B, populating this table required direct SQL — fine for a single-machine deployment, awkward for operators with multiple workspaces. These helpers give the CLI (`hippo slack workspaces add|list|remove`) a clean surface.
+### src/api/hippo-db/connector-events.ts
+- `mapSlackWorkspace`: Slack workspace registration helpers (T2B follow-up, 2026-05-24), first in src/surface/connectors/slack/workspaces.ts.
+- `mapSlackWorkspace`: Before T2B, populating this table required direct SQL — fine for a single-machine deployment, awkward for operators with multiple workspaces. These helpers give the CLI (`hippo slack workspaces add|list|remove`) a clean surface.
 
 ### src/domain/consolidate/conflicts.ts
 - `detectConflicts`: LC2-E3 (opt-in, default off): ids rescued by this cycle's decay pass. detectConflicts recomputes its own strength>=DECAY_THRESHOLD survivor filter independently of the decay pass above; without this bypass, rescued entries would be silently re-excluded from conflict detection every cycle even though the decay pass just decided to keep them. Default empty set: flag-off behavior is unchanged.

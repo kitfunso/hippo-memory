@@ -1,8 +1,28 @@
-// A remote caller's tool failures: one log row per request id, so a retried send gets the
-// first answer.
+// Tool failures on hippo.db's local tier: each failure's log row and the lessons a repeat check
+// reads. A remote caller's request id allows one row, so a retried send gets the first answer.
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { FailureEvent, FailureOutcome } from '../../base/records/rejections.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
+
+/** Where a failure is logged: a store with the local tier and the tenant its rows go under. */
+type FailureFolder = Pick<HippoDbContext, 'store' | 'tenantId'>;
+
+/** The failure's log row, in the folder's tenant; its id. */
+export function logFailure(
+  { store, tenantId }: FailureFolder,
+  event: Omit<FailureEvent, 'tenantId'>,
+): Promise<number> {
+  return store.hippoDb.failureLog.record({ ...event, tenantId });
+}
+
+/** The tenant's auto-captured lessons, under `origins` when a caller's project narrows them, for
+ * the repeat check before a new one is kept. */
+export function heldLessons(
+  { store, tenantId }: FailureFolder,
+  origins?: readonly string[],
+): Promise<string[]> {
+  return store.hippoDb.lessonWrites.contentsWithTag(tenantId, 'auto-captured', origins);
+}
 
 export type CallerFailureEvent = Omit<FailureEvent, 'tenantId' | 'requestId'> & {
   readonly requestId: string;

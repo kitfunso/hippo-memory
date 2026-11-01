@@ -42,7 +42,7 @@ export function ledgerAt(root: string): Pick<HippoDbRepos, 'ledger' | 'folderFil
 
 /** hippo.db under `root` and the tenant a compaction hook writes as. */
 export function compactionFolder(root: string, tenantId = 'default'): CompactionFolder {
-  return { root, store: storeAt(root), tenantId };
+  return { root, hooks: storeAt(root).hippoDb.compactionHooks, tenantId };
 }
 
 /** hippo.db's own vector index under `root`, as embedMemory and embedAll take it. */

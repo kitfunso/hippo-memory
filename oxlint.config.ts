@@ -5,6 +5,7 @@ import { defineConfig } from 'oxlint';
 interface Restricted {
   readonly object?: string;
   readonly property: string;
+  readonly allowObjects?: string[];
   readonly message: string;
 }
 interface ImportPattern {
@@ -48,9 +49,16 @@ const CTX_STORE = {
   message: 'Pass the context to a src/api function; only a composition root reads its store.',
 };
 
+// A route row's `hippoDb` flag is data; any other `.hippoDb` is the local tier reached past src/api.
+const HIPPO_DB = {
+  property: 'hippoDb',
+  allowObjects: ['route'],
+  message: "Reach hippo.db's local tier through a src/api function; only a composition root reads it.",
+};
+
 const SRC: Some<Restricted> = [STORE_ON, ENV, PROCESS, PREPARE];
 const SURFACE_ROOT: Some<Restricted> = [...SRC, ...RECORD_AS];
-const SURFACE: Some<Restricted> = [...SURFACE_ROOT, CTX_STORE];
+const SURFACE: Some<Restricted> = [...SURFACE_ROOT, CTX_STORE, HIPPO_DB];
 const CLI_ONLY: Some<Restricted> = [
   {
     property: 'finishRecall',
@@ -293,7 +301,8 @@ export default defineConfig({
       rules: { 'boundaries/no-hand-fail': 'off' },
     },
     {
-      files: ['src/surface/server/boot.ts', 'src/surface/mcp/request.ts'],
+      // sleep-child.ts is its process's root: it opens the job's store and builds the job's reach.
+      files: ['src/surface/server/boot.ts', 'src/surface/mcp/request.ts', 'src/surface/server/sleep-child.ts'],
       rules: { 'no-restricted-properties': restrict(...SURFACE_ROOT) },
     },
     {

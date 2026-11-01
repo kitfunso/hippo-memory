@@ -1,13 +1,16 @@
-// What a connector reads and writes beside its memories: the event log, backfill cursors and the
-// replay holds on signed deliveries, each in the caller's tenant where it has one.
+// What a connector reads and writes beside its memories: the event log, backfill cursors, the
+// replay holds on signed deliveries and the routing rows, each in the caller's tenant where it has one.
 import type {
   BackfillStream,
   ConnectorEvent,
   DeliveryClaim,
   EventMarked,
+  RouteQuery,
+  SlackWorkspace,
 } from '../../base/records/connectors.js';
 import { errorFields, log } from '../../base/util/log.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
+import { requireHostAdmin } from '../types.js';
 import { rawArchiveForEvent } from './connector-writes.js';
 
 /** A webhook holds a delivery before it has routed it to a tenant. */
@@ -90,4 +93,49 @@ export async function routeOncePerDelivery(
     throw err;
   }
   return true;
+}
+
+/** The host's tenant, which the root resolved, and the root's allow-unknown escape for the
+ * connector. */
+export interface RouteFallback {
+  readonly hostTenant: string;
+  readonly allowUnknown: boolean;
+}
+
+/** The tenant a webhook lands in, by one rule for every connector: the tenant its routing rows
+ * name; with no match, the host's when no row could have matched (a single-tenant install) or
+ * `allowUnknown` escapes, else null (fail closed). */
+export async function resolveTenant(
+  ctx: DeliveryContext,
+  query: RouteQuery,
+  { hostTenant, allowUnknown }: RouteFallback,
+): Promise<string | null> {
+  const route = await ctx.store.hippoDb.connectorEvents.route(query);
+  if (route.tenantId !== null) return route.tenantId;
+  return route.routes === 0 || allowUnknown ? hostTenant : null;
+}
+
+// A Slack team's row decides which tenant its webhooks land in, so it reaches past the caller's
+// tenant and only the host's operator changes or reads the map.
+
+/** Maps `teamId` to `tenantId`, overwriting its earlier tenant, so moving a workspace needs no
+ * delete first. */
+export async function mapSlackWorkspace(
+  ctx: HippoDbContext,
+  teamId: string,
+  tenantId: string,
+): Promise<SlackWorkspace> {
+  requireHostAdmin(ctx, 'mapping a Slack workspace');
+  return ctx.store.hippoDb.connectorEvents.registerSlackWorkspace(teamId, tenantId);
+}
+
+export async function slackWorkspaceMap(ctx: HippoDbContext): Promise<SlackWorkspace[]> {
+  requireHostAdmin(ctx, 'reading the Slack workspace map');
+  return ctx.store.hippoDb.connectorEvents.slackWorkspaces();
+}
+
+/** False when no workspace was mapped for `teamId`. */
+export async function unmapSlackWorkspace(ctx: HippoDbContext, teamId: string): Promise<boolean> {
+  requireHostAdmin(ctx, 'unmapping a Slack workspace');
+  return ctx.store.hippoDb.connectorEvents.removeSlackWorkspace(teamId);
 }

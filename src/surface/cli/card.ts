@@ -3,9 +3,20 @@
 import { isHandoffOutcome } from '../../base/session/handoff.js';
 import { type Card, type CardStatus, isCardStatus } from '../../base/records/card.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
-import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { keysetPages } from '../../api/pages.js';
 import type { CardDetail } from '../../base/records/cards.js';
+import {
+  blockCard,
+  boardPage,
+  cardDetail,
+  claimCard,
+  commentOnCard,
+  completeCard,
+  createCard,
+  heartbeatCard,
+  reclaimExpiredCards,
+  reviewCard,
+} from '../../api/hippo-db/cards.js';
 import { printError } from './output.js';
 import { printJsonList } from './json-list.js';
 import {
@@ -104,7 +115,7 @@ interface CardRefusalOptions {
 
 // Reads after the store already refused, so this only explains the refusal, never changes it.
 async function cardRefusal({ cli, hippoRoot, tenantId, id }: CardRefusalOptions): Promise<string> {
-  const detail = await cli.store(hippoRoot).hippoDb.cards.detail(tenantId, id);
+  const detail = await cardDetail(cli.apiContext(hippoRoot, tenantId), id);
   const liveRun = detail?.runs.find((r) => !r.ended);
   return `status ${detail?.card.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
@@ -174,7 +185,7 @@ async function cardCreate({ cli, hippoRoot, tenantId, flags }: CommandContext): 
 
   let card: Card;
   try {
-    card = await cli.store(hippoRoot).hippoDb.cards.create(tenantId, {
+    card = await createCard(cli.apiContext(hippoRoot, tenantId), {
       title,
       repo,
       contract,
@@ -192,7 +203,7 @@ async function cardShow({ cli, hippoRoot, tenantId, args, flags }: CommandContex
   if (!id) {
     throw usageError('show');
   }
-  const detail = await cli.store(hippoRoot).hippoDb.cards.detail(tenantId, id);
+  const detail = await cardDetail(cli.apiContext(hippoRoot, tenantId), id);
   if (!detail) {
     fail(`No card found with id ${id}.`);
   }
@@ -209,8 +220,8 @@ async function* cardPages(
   { cli, hippoRoot, tenantId }: CliScope,
   status?: CardStatus,
 ): AsyncGenerator<Card[]> {
-  const read = (after?: KeysetPosition) =>
-    cli.store(hippoRoot).hippoDb.cards.list(tenantId, { status, limit: MAX_LIST_LIMIT, after });
+  const ctx = cli.apiContext(hippoRoot, tenantId);
+  const read = (after?: KeysetPosition) => boardPage(ctx, after, status);
   for await (const page of keysetPages(read)) yield page.cards;
 }
 
@@ -245,7 +256,7 @@ async function cardClaim({ cli, hippoRoot, tenantId, args, flags }: CommandConte
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   let card: (Card & { runId: number }) | null;
   try {
-    card = await cli.store(hippoRoot).hippoDb.cards.claim(tenantId, id, runtime, sessionId);
+    card = await claimCard(cli.apiContext(hippoRoot, tenantId), id, runtime, sessionId);
   } catch (error) {
     fail(errorMessage(error));
   }
@@ -271,7 +282,7 @@ async function cardHeartbeat({
   }
   let card: Card | null;
   try {
-    card = await cli.store(hippoRoot).hippoDb.cards.heartbeat(tenantId, id, runId);
+    card = await heartbeatCard(cli.apiContext(hippoRoot, tenantId), id, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
@@ -292,7 +303,7 @@ async function cardBlock({ cli, hippoRoot, tenantId, args, flags }: CommandConte
   const runId = cardRunFlag(flags);
   let card: Card | null;
   try {
-    card = await cli.store(hippoRoot).hippoDb.cards.block(tenantId, id, reason, runId);
+    card = await blockCard(cli.apiContext(hippoRoot, tenantId), id, reason, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
@@ -318,7 +329,7 @@ async function cardReview({
   const runId = cardRunFlag(flags);
   let card: Card | null;
   try {
-    card = await cli.store(hippoRoot).hippoDb.cards.review(tenantId, id, runId);
+    card = await reviewCard(cli.apiContext(hippoRoot, tenantId), id, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
@@ -345,7 +356,7 @@ async function cardComplete({
   const runId = cardRunFlag(flags);
   let result: { card: Card; promotedChildren: string[] } | null;
   try {
-    result = await cli.store(hippoRoot).hippoDb.cards.complete(tenantId, id, outcomeRaw, runId);
+    result = await completeCard(cli.apiContext(hippoRoot, tenantId), id, outcomeRaw, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
@@ -364,7 +375,7 @@ async function cardReclaim({ cli, hippoRoot, tenantId, args }: CommandContext): 
   if (args.length > 1) {
     throw usageError('reclaim');
   }
-  const ids = await cli.store(hippoRoot).hippoDb.cards.reclaimExpired(tenantId);
+  const ids = await reclaimExpiredCards(cli.apiContext(hippoRoot, tenantId));
   if (ids.length === 0) {
     console.log('No expired leases.');
     return;
@@ -387,8 +398,8 @@ async function cardComment({
   }
   // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw
   // from the store instead.
-  const cards = cli.store(hippoRoot).hippoDb.cards;
-  const card = (await cards.detail(tenantId, id))?.card;
+  const ctx = cli.apiContext(hippoRoot, tenantId);
+  const card = (await cardDetail(ctx, id))?.card;
   if (!card) {
     fail(`No card found with id ${id}.`);
   }
@@ -397,7 +408,7 @@ async function cardComment({
     throw usageError('comment');
   }
   const author = stringFlagOrExit(flags, 'author') || 'cli';
-  const comment = await cards.comment(tenantId, id, author, body);
+  const comment = await commentOnCard(ctx, id, author, body);
   console.log(`Added comment ${comment.id} to card ${id}`);
 }
 

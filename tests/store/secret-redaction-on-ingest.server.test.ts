@@ -18,7 +18,8 @@ import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { captureError, partitionLessons } from '../../src/domain/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { addWorkspace } from '../../src/surface/connectors/slack/workspaces.js';
+import { mapSlackWorkspace } from '../../src/api/hippo-db/connector-events.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
 import { replaySlackDlqEntry } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -155,7 +156,7 @@ describe('connector webhooks', () => {
   };
 
   it('an unroutable Slack message lands in the dead-letter table redacted, and replays once routed', async () => {
-    await addWorkspace(sqliteStore(root), { teamId: 'T_OTHER', tenantId: 'default' });
+    await mapSlackWorkspace(apiCtx(root), 'T_OTHER', 'default');
     const body = JSON.stringify({
       type: 'event_callback',
       team_id: 'T1',
@@ -178,7 +179,7 @@ describe('connector webhooks', () => {
     expect(row.signature).toBeNull();
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
-    await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
+    await mapSlackWorkspace(apiCtx(root), 'T1', 'default');
     expect(
       (
         await replaySlackDlqEntry(

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/tenant-route.js';
+import { resolveTenant, type RouteFallback } from '../../src/api/hippo-db/connector-events.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { envTenant } from '../../src/base/util/env.js';
@@ -26,9 +26,9 @@ describe('resolveTenant', () => {
         'tenant-alpha',
         new Date().toISOString(),
       );
-      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAM1' }, fallback())).toBe(
-        'tenant-alpha',
-      );
+      expect(
+        await resolveTenant({ store: sqliteStore(root) }, { connector: 'slack', teamId: 'TTEAM1' }, fallback()),
+      ).toBe('tenant-alpha');
     } finally {
       closeHippoDb(db);
     }
@@ -43,13 +43,17 @@ describe('resolveTenant', () => {
         new Date().toISOString(),
       );
       // Prefix-extended id must NOT match — fail closed (workspaces non-empty).
-      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAMX' }, fallback())).toBeNull();
+      expect(
+        await resolveTenant({ store: sqliteStore(root) }, { connector: 'slack', teamId: 'TTEAMX' }, fallback()),
+      ).toBeNull();
       // Substring must NOT match — fail closed.
-      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEA' }, fallback())).toBeNull();
+      expect(
+        await resolveTenant({ store: sqliteStore(root) }, { connector: 'slack', teamId: 'TTEA' }, fallback()),
+      ).toBeNull();
       // Exact still works.
-      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAM' }, fallback())).toBe(
-        'tenant-short',
-      );
+      expect(
+        await resolveTenant({ store: sqliteStore(root) }, { connector: 'slack', teamId: 'TTEAM' }, fallback()),
+      ).toBe('tenant-short');
     } finally {
       closeHippoDb(db);
     }

@@ -4,6 +4,7 @@ import type { ContextReach, GlobalInReach } from '../../api/types.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import type { ConfiguredFolder } from '../../base/ports/store.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
+import type { CompactionHooks } from '../../base/records/capture.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
@@ -79,6 +80,9 @@ export interface CliCommand {
   /** The api Context on `root`, which some verbs point at the global store. A command's callers
    * start empty unless its caller holds a set; a CLI write starts no sleep. */
   apiContext(root: string, tenantId: string, callers?: CallerState): CliContext;
+  /** The compaction hooks' record work on `root`'s hippo.db, which a hook's spool and transcript
+   * reads drive. */
+  compactionHooks(root: string): CompactionHooks;
   /** A second store a CLI read searches beside its own, with that store's config. */
   secondStore(root: string): GlobalInReach;
   /** Where a hook on `root` books its ledger rows: the folder's store, else the global one. */
@@ -204,6 +208,7 @@ export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliC
     }),
     apiContext: (root, tenantId, callers = createCallerState()) =>
       contextOn(scope, root, tenantId, callers),
+    compactionHooks: (root) => storeOn(scope, root).hippoDb.compactionHooks,
     secondStore: (root) => {
       const store = storeOn(scope, root);
       return { root, store, config: cliConfig(root), enrich: globalEnrichment(store) };

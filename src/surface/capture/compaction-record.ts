@@ -28,7 +28,6 @@ import { errorFields, errorMessage, reportCompactionFailure } from '../../base/u
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { readTranscriptTail } from '../../infra/transcript-tail.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
-import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
@@ -38,11 +37,11 @@ export const PRE_COMPACT_INSTRUCTION =
   "earlier summary already listed under 'Memories for hippo', and anything this session already saved with " +
   "`hippo remember`. Write '- none' if nothing new remains.";
 
-/** A store folder, its store and the tenant a compaction hook writes as, which the CLI root
- * resolved. */
+/** A store folder, its store's compaction hooks and the tenant a compaction hook writes as, which
+ * the CLI root resolved. */
 export interface CompactionFolder {
   readonly root: string;
-  readonly store: Pick<HippoDbStore, 'hippoDb'>;
+  readonly hooks: CompactionHooks;
   readonly tenantId: string;
 }
 
@@ -110,7 +109,7 @@ export async function saveCompaction(
   payload: PostCompactPayload,
   log: Log,
 ): Promise<CompactionSaveResult> {
-  const { root, store, tenantId } = folder;
+  const { root, hooks, tenantId } = folder;
   const { compactSummary, ...meta } = payload;
   if (compactSummary === null) {
     log('skip: payload has no compact_summary');
@@ -121,7 +120,7 @@ export async function saveCompaction(
   if (!found) log('no memories section');
 
   const { defaultHalfLifeDays } = loadConfig(root);
-  const { result, spoolReason, notes } = await store.hippoDb.compactionHooks.save({
+  const { result, spoolReason, notes } = await hooks.save({
     tenantId,
     meta,
     text,
@@ -285,12 +284,12 @@ async function replayOpen(run: Replay): Promise<number> {
  * (`summarised` records, spool files, and `started` records the transcript can fill), never
  * throws. Returns how many compactions it saved. */
 export async function replayCompactions(
-  { root, store, tenantId }: CompactionFolder,
+  { root, hooks, tenantId }: CompactionFolder,
   log: Log,
   opts: ReplayOptions = {},
 ): Promise<number> {
   const run: Replay = {
-    hooks: store.hippoDb.compactionHooks,
+    hooks,
     root,
     tenantId,
     log,

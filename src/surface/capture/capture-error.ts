@@ -13,8 +13,13 @@ import {
   type FailureReading,
 } from './failure-reading.js';
 import type { JsonValue } from '../../base/util/json.js';
-import type { CaptureErrorOutcome, FailureOutcome } from '../../base/records/rejections.js';
+import type {
+  CaptureErrorOutcome,
+  FailureEvent,
+  FailureOutcome,
+} from '../../base/records/rejections.js';
 import type { HippoDbContext } from '../../api/hippo-db-context.js';
+import { heldLessons, logFailure } from '../../api/hippo-db/failure-log.js';
 
 /** The store a failure is logged and its lesson kept in, with that store's config. */
 export type FailureTarget = Pick<HippoDbContext, 'tenantId' | 'store' | 'config'> & {
@@ -59,7 +64,7 @@ async function logAndReport({
 }: LogAndReportOptions): Promise<void> {
   let id: number;
   try {
-    id = await logFailure(target, payload, lesson, outcome);
+    id = await logFailure(target, failureEvent(payload, lesson, outcome));
   } catch (error) {
     onLogged?.(null);
     throw error;
@@ -67,22 +72,21 @@ async function logAndReport({
   onLogged?.(id);
 }
 
-function logFailure(
-  { store, tenantId }: FailureTarget,
+/** The log row's fields: what the payload names, and hashes rather than the failure's text. */
+function failureEvent(
   payload: JsonValue,
   lesson: FailureReading,
   outcome: FailureOutcome,
-): Promise<number> {
+): Omit<FailureEvent, 'tenantId'> {
   const hash = (s: string | null): string | null => (s === null ? null : failureHash(s));
-  return store.hippoDb.failureLog.record({
-    tenantId,
+  return {
     sessionId: payloadString(payload, 'session_id'),
     tool: payloadString(payload, 'tool_name'),
     outcome,
     rule: 'rule' in lesson ? lesson.rule : null,
     sigHash: hash(lesson.text),
     detailHash: hash(lesson.detail),
-  });
+  };
 }
 
 /** Who sent a failure from another machine: the audit actor and the project its lesson and
@@ -99,11 +103,7 @@ export async function storeLesson(
   caller?: LessonCaller,
 ): Promise<'stored' | 'duplicate'> {
   const sig = failureSignature(text);
-  const held = await store.hippoDb.lessonWrites.contentsWithTag(
-    tenantId,
-    'auto-captured',
-    caller?.origins,
-  );
+  const held = await heldLessons({ store, tenantId }, caller?.origins);
   if (held.some((content) => failureSignature(content) === sig)) return 'duplicate';
   const entry = createMemory(
     text,

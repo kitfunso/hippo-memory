@@ -34,6 +34,13 @@ export interface TextsHoldingOptions {
 
 export type CapturedOutcome = 'captured' | 'skipped' | 'rejected';
 
+/** How many of a capture's items each outcome took. */
+export interface CaptureTally {
+  captured: number;
+  skipped: number;
+  rejected: number;
+}
+
 export interface CaptureWriteOptions {
   readonly actor?: string;
   /** No stats, as in a server process. */

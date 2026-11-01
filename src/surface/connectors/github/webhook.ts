@@ -23,9 +23,8 @@ import {
 } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../../../api/dead-letters.js';
-import { routeOncePerDelivery } from '../../../api/hippo-db/connector-events.js';
+import { resolveTenant, routeOncePerDelivery } from '../../../api/hippo-db/connector-events.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
-import { resolveTenant } from '../tenant-route.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import {
@@ -229,7 +228,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
 // Fail closed on multi-tenant installs with unknown routing - same policy as Slack.
 function resolveGitHubTenant(d: SignedDelivery, routing: DlqRouting): Promise<string | null> {
   return resolveTenant(
-    d.store,
+    d,
     { connector: 'github', ...routing },
     {
       hostTenant: envTenant(),
