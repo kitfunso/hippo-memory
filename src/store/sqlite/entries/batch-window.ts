@@ -40,8 +40,8 @@ function mergeOwnChanges({ base, ours, live }: MergeOwnChangesOptions): MemoryEn
   return row;
 }
 
-/** What one transaction's components did, for its full-text rows, dirty marks, mirrors and
- * warning. */
+/** What one transaction's components did, for its full-text rows, dirty marks, mirrors
+ * and warning. */
 export interface ChunkLog {
   written: MemoryEntry[];
   removedIds: string[];
@@ -82,8 +82,8 @@ function batchRow(
   return base && live ? mergeOwnChanges({ base, ours: op, live }) : op;
 }
 
-/** The writes of components [from, until), planned on their live rows and tombstones read
- * together. */
+/** The writes of components [from, until), planned on their live rows and tombstones
+ * read together. */
 export interface PlannedWindow {
   readonly from: number;
   readonly until: number;
@@ -233,8 +233,8 @@ function writeBatchRow(
   }
 }
 
-/** Full-text rows a batch must insert, and the ids whose old full-text rows it must delete
- * first. */
+/** Full-text rows a batch must insert, and the ids whose old full-text rows it must
+ * delete first. */
 export interface FtsChanges {
   rows: MemoryEntry[];
   staleIds: string[];

@@ -43,8 +43,8 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   return { llmError, llmOpts: { llm, model: config.extraction.model } };
 }
 
-/** Counts the survivors extraction could read and returns the first `limit` of them, holding no
- * others. */
+/** Counts the survivors extraction could read and returns the first `limit` of them, holding
+ * no others. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
   for await (const e of run.survivors.rows()) {

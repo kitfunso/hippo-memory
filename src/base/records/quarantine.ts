@@ -5,8 +5,8 @@ import type { KeysetPosition } from '../util/keyset.js';
 /** How many records a quarantine list reads when its query sets no `limit`. */
 export const QUARANTINE_LIST_LIMIT = 100;
 
-/** Which of a tenant's quarantine records a list reads; `limit` is QUARANTINE_LIST_LIMIT when
- * unset. */
+/** Which of a tenant's quarantine records a list reads; `limit` is QUARANTINE_LIST_LIMIT
+ * when unset. */
 export interface QuarantineListQuery {
   readonly status: QuarantineStatus | 'all';
   readonly limit?: number;

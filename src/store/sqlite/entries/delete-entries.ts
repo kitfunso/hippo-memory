@@ -77,8 +77,8 @@ function isRawTriggerAbort(cause: unknown): cause is Error {
   return cause instanceof Error && cause.message.includes(RAW_TRIGGER_TEXT);
 }
 
-/** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort becomes
- * RawAppendOnlyError. */
+/** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort
+ * becomes RawAppendOnlyError. */
 function deleteMemoryRow(db: DatabaseSyncLike, sql: string, params: SqlFragment['params']): number {
   try {
     return changedRows(cachedStatement(db, sql).run(...params));

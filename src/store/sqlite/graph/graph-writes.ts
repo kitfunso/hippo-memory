@@ -364,8 +364,8 @@ export function objectInForce(
   return row?.status === 'active' || row?.status === 'superseded';
 }
 
-/** The lowest-id entity of this type anchored to the source object, which is the row a rebuild
- * keeps. */
+/** The lowest-id entity of this type anchored to the source object, which is the row a
+ * rebuild keeps. */
 export function entityIdBySource(
   db: DatabaseSyncLike,
   tenantId: string,

@@ -122,8 +122,8 @@ export function appendConsolidationRun(
   writeStatsMirror(files, buildStatsFromDb(db));
 }
 
-/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24
- * hours. */
+/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most
+ * 24 hours. */
 export function createdSinceLastSleep(db: DatabaseSyncLike, tenantId: string, now: Date): number {
   const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
   const row = cachedStatement(

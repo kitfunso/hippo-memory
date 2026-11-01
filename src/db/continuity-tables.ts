@@ -4,8 +4,8 @@ import { MIGRATIONS } from './migrations/index.js';
 import { placeholders } from './sql.js';
 import { tableExists } from './tables.js';
 
-/** The session, card and quarantine tables a store can lose after its stamp passed their
- * migration. */
+/** The session, card and quarantine tables a store can lose after its stamp passed
+ * their migration. */
 export const HEALED_TABLES = [
   'task_snapshots',
   'session_events',

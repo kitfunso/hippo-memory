@@ -207,8 +207,8 @@ export function crossProjectLines(
     : [crossProjectHeading(items.length), ...items.map((item) => crossProjectLine(item))];
 }
 
-/** A header's token figure is part of the text it counts, so render until the figure matches the
- * text. */
+/** A header's token figure is part of the text it counts, so render until the figure matches
+ * the text. */
 export function settleTokens(render: (tokens: number) => string): string {
   let t = 0;
   let text = render(t);

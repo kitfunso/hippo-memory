@@ -2,8 +2,8 @@
 // callers with the comparator built from the same keys.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 
-/** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic
- * plane. */
+/** Byte order, as hippo.db compares text; JavaScript's own string order differs above the
+ * basic plane. */
 export const byBytes = (a: string, b: string): number =>
   Buffer.compare(Buffer.from(a), Buffer.from(b));
 

@@ -53,8 +53,8 @@ function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): Memo
   ];
 }
 
-/** Null when the rows the plan read have changed: nothing is written then, and the sync plans
- * again. */
+/** Null when the rows the plan read have changed: nothing is written then, and the sync
+ * plans again. */
 export function runSteps(
   db: DatabaseSyncLike,
   files: StoreFiles,

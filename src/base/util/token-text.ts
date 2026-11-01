@@ -22,8 +22,8 @@ export function blockHash(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, FINGERPRINT_HEX_CHARS);
 }
 
-/** A token allowance that sections pay from in print order; one that does not fit is refused
- * whole. */
+/** A token allowance that sections pay from in print order; one that does not fit is
+ * refused whole. */
 export function tokenPurse(allowance: number) {
   let left = allowance;
   return {

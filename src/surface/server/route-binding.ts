@@ -15,8 +15,8 @@ import type {
   WebhookRoute,
 } from './types.js';
 
-/** The one 501 of a route whose store lacks what it needs, thrown by the gate before the role
- * check. */
+/** The one 501 of a route whose store lacks what it needs, thrown by the gate before the
+ * role check. */
 export async function notPorted(): Promise<void> {
   throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }

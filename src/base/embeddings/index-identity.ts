@@ -13,8 +13,8 @@ export interface EmbeddingIndexState {
  * model change. */
 const EMBED_TEXT_FORMAT = 2;
 
-/** The stored identity for a provider id; compare and save must both go through it or every call
- * reindexes. */
+/** The stored identity for a provider id; compare and save must both go through it or every
+ * call reindexes. */
 export function embeddingIndexIdentity(providerId: string): string {
   return `${providerId}#t${EMBED_TEXT_FORMAT}`;
 }
@@ -31,8 +31,8 @@ export function indexNeedsRebuild(indexed: string | null, providerId: string): b
   return indexed !== null && indexed !== embeddingIndexIdentity(providerId);
 }
 
-/** The model the index was built by: the stored identity, else the default model when vectors
- * exist. */
+/** The model the index was built by: the stored identity, else the default model when
+ * vectors exist. */
 export function indexedModel(state: EmbeddingIndexState): string | null {
   return state.storedModel ?? (state.hasVectors ? DEFAULT_EMBEDDING_MODEL : null);
 }

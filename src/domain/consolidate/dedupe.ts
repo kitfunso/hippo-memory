@@ -1,8 +1,8 @@
 /**
  * Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so
  * `api.sleep` can dedupe without cli -> api imports. Survivor order is total and tenant-scoped:
- * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are not
- * candidates.
+ * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are
+ * not candidates.
  */
 
 import { textOverlap } from '../../base/util/tokenize.js';
@@ -83,8 +83,8 @@ function dedupRow(entry: MemoryEntry): DedupRow {
   };
 }
 
-/** The survivor total order: strength bucket desc, then retrievalCount desc, then
- * compareEntryIdentity. */
+/** The survivor total order: strength bucket desc, then retrievalCount desc,
+ * then compareEntryIdentity. */
 function survivorOrder(a: DedupRow, b: DedupRow): number {
   const bucketDiff = strengthTieKey(b.strength) - strengthTieKey(a.strength);
   if (bucketDiff !== 0) return bucketDiff;

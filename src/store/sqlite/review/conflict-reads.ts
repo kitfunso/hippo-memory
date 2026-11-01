@@ -79,8 +79,8 @@ function conflictSelect(tenantId: TenantId, filters: readonly SqlFragment[]): Sq
   };
 }
 
-/** One page of conflicts, newest change first, each with both members' columns from the same
- * JOIN. */
+/** One page of conflicts, newest change first, each with both members' columns from the
+ * same JOIN. */
 export function conflictPage(
   db: DatabaseSyncLike,
   { tenantId, status, limit, after }: ConflictListQuery,
@@ -128,8 +128,8 @@ export function countOpenConflicts(db: DatabaseSyncLike, tenantId: string): numb
   return Number(row.n);
 }
 
-/** The tenant's open conflicts naming `memoryId`, newest change first, each with both members'
- * columns. */
+/** The tenant's open conflicts naming `memoryId`, newest change first, each with both
+ * members' columns. */
 export function openConflictsNaming(
   db: DatabaseSyncLike,
   tenantId: string,

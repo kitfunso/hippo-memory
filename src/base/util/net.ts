@@ -45,8 +45,8 @@ export function parseOutboundUrl(
   return parsed;
 }
 
-/** A socket remote address on this machine; Node reports a dual-stack IPv4 peer as
- * '::ffff:127.x.x.x'. */
+/** A socket remote address on this machine; Node reports a dual-stack IPv4 peer
+ * as '::ffff:127.x.x.x'. */
 export function isLoopbackAddress(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false;
   if (remoteAddress === '::1') return true;

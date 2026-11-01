@@ -53,8 +53,8 @@ function contextCandidatePage(left: number, limit: number): number {
   );
 }
 
-/** A query reads recall's FTS window from each store; the search's vector arm adds the nearest
- * rows. */
+/** A query reads recall's FTS window from each store; the search's vector arm adds the
+ * nearest rows. */
 interface ContextQueryWindow {
   query: string;
   exactScope: string | undefined;
@@ -74,8 +74,8 @@ interface LoadAmbientEntriesOptions {
   readonly pinnedOnly: boolean;
   readonly recent: RecentRequest;
   readonly admit: (e: MemoryEntry) => boolean;
-  /** `admit` without the delivery observer, so a row checked twice is not refused twice in the
-   * ledger. */
+  /** `admit` without the delivery observer, so a row checked twice is not refused twice in
+   * the ledger. */
   readonly recheck: (e: MemoryEntry) => boolean;
   /** `recheck` as data, which the store applies in the pinned-only load. */
   readonly admission: AmbientAdmission;

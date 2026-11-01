@@ -21,8 +21,8 @@ export interface SelectBySearchOptions {
   readonly admission: ContextAdmission;
 }
 
-/** Real query: hybrid search over both stores, or over the local rows; emits the 'recall' audit
- * row. */
+/** Real query: hybrid search over both stores, or over the local rows; emits the 'recall'
+ * audit row. */
 export async function selectBySearch(
   ctx: Context,
   { plan, left, pools, admission }: SelectBySearchOptions,

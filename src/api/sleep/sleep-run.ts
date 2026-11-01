@@ -279,8 +279,8 @@ async function runQualityAudit(
   return { errorsRemoved: gone.length, warningCount: warnings.length };
 }
 
-/** The auto-share counts, each set only when non-zero so an idle share leaves the result as it
- * was. */
+/** The auto-share counts, each set only when non-zero so an idle share leaves the result as
+ * it was. */
 async function shareOnSleep(
   ctx: HippoDbContext,
   phases: SleepPhases,
@@ -387,8 +387,8 @@ interface TenantRebuild {
   readonly extracted?: Pick<GraphTotals, 'entities' | 'relations'>;
 }
 
-/** Rebuilds one dirty tenant's graph and drains its queue; on a failure the tenant stays
- * pending. */
+/** Rebuilds one dirty tenant's graph and drains its queue; on a failure the tenant
+ * stays pending. */
 async function rebuildDirtyTenant(
   ctx: HippoDbContext,
   phases: SleepPhases,

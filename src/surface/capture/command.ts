@@ -45,8 +45,8 @@ export interface CaptureOptions {
    * counts every tenant's.
    */
   tenantId: string;
-  /** The session's project: rows are stamped with its id, and dedup reads its rows under either
-   * name. */
+  /** The session's project: rows are stamped with its id, and dedup reads its rows under
+   * either name. */
   originProject?: ProjectRef;
 }
 

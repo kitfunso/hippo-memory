@@ -49,12 +49,12 @@ export interface ContextView {
   readonly framing: string;
   readonly rec: DeliveryRecorder | null;
   readonly result: ContextResult;
-  /** Where the ledger rows go; a shared store's reach has no global store, see
-   * promptHookContext. */
+  /** Where the ledger rows go; a shared store's reach has no global store,
+   * see promptHookContext. */
   readonly reach: LedgerReach;
   /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule; a string or
-   *  null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have
-   *  shown. */
+   *  null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never
+   *  have shown. */
   readonly printedHash?: string | null;
   /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
   readonly envelope?: HookEnvelope;
@@ -81,8 +81,8 @@ function hookReply(envelope: HookEnvelope, additionalContext: string): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext } });
 }
 
-/** A hook render's stdout and the hash of the static block it carries, null when it carries
- * none. */
+/** A hook render's stdout and the hash of the static block it carries, null when it
+ * carries none. */
 interface RenderedContext {
   readonly stdout: string;
   readonly staticHash: string | null;
@@ -229,8 +229,8 @@ interface SkipUnchangedStaticOptions {
   readonly staticCount: number;
 }
 
-/** True, after booking the skip row, when the hook may omit a static block this session already
- * holds. */
+/** True, after booking the skip row, when the hook may omit a static block this session
+ * already holds. */
 async function skipUnchangedStatic({
   view,
   surface,

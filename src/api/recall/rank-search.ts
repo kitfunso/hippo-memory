@@ -113,8 +113,8 @@ type EngineOptions = RankTime &
     | 'signal'
   >;
 
-/** What every engine ranks under, built once so a new ranking input reaches all three search
- * modes. */
+/** What every engine ranks under, built once so a new ranking input reaches all three
+ * search modes. */
 function engineOptions(ctx: RankRecallCtx, opts: SettledOptions): EngineOptions {
   return {
     budget: opts.budget,

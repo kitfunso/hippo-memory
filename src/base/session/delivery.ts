@@ -47,8 +47,8 @@ export interface DeliveryCandidateInput {
   tokens: number | null;
 }
 
-/** One event as the writer stores it; the writer adds `turn_seq`, `duplicate_of` and the format
- * version. */
+/** One event as the writer stores it; the writer adds `turn_seq`, `duplicate_of` and the
+ * format version. */
 export interface DeliveryEventInput {
   ts: string;
   tenantId: string;

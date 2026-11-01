@@ -194,8 +194,8 @@ function contextOn(
   };
 }
 
-/** The stores of one CLI command: each opens on `runtime` and, inside a request, on that request's
- * session. */
+/** The stores of one CLI command: each opens on `runtime` and, inside a request, on that
+ * request's session. */
 export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliCommand {
   const scope: Scope = { runtime, session };
   const inSession = (own: RequestStores): CliCommand => cliCommand(runtime, own);
@@ -237,14 +237,14 @@ export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliC
   };
 }
 
-/** Creates the global store, or finishes one that was partly made: what a first share needs of
- * it. */
+/** Creates the global store, or finishes one that was partly made: what a first share needs
+ * of it. */
 export function cliInitGlobal(): void {
   sqliteImportFiles(hippoHomeDir()).ensure();
 }
 
-/** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
- * it. */
+/** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write
+ * started it. */
 function rootAutoSleep(
   runtime: StoreRuntime,
   root: string,

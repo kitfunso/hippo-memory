@@ -21,8 +21,8 @@ import { isSyntheticMessage } from '../../base/session/transcript-calls.js';
 import { readOpenTranscriptTail } from '../../infra/transcript-tail.js';
 import { evalClock } from '../../infra/eval-switches.js';
 
-/** Bounds a detached worker's memory; the final message sits at the end, so a tail read loses
- * nothing. */
+/** Bounds a detached worker's memory; the final message sits at the end, so a tail read
+ * loses nothing. */
 export const READ_CAP_BYTES = 64 * 1024 * 1024;
 
 export interface DigestEdit {

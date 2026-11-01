@@ -145,8 +145,8 @@ export interface FailureReport {
   detail_hash: string | null;
 }
 
-/** {@link lessonFromFailure} plus the detail's hash, for a writer whose store is elsewhere.
- * Pure. */
+/** {@link lessonFromFailure} plus the detail's hash, for a writer whose store is
+ * elsewhere. Pure. */
 export function failureReport(payload: JsonValue): FailureReport {
   const reading = lessonFromFailure(payload, scrubForSharing);
   return {

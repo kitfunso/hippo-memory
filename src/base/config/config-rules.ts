@@ -12,8 +12,8 @@ import { log } from '../util/log.js';
 
 type Guard<T extends JsonValue | undefined> = (value: JsonValue | undefined) => value is T;
 
-/** Reads the value found at `path` of config.json; a bad one warns once and reads as its
- * fallback. */
+/** Reads the value found at `path` of config.json; a bad one warns once and reads as
+ * its fallback. */
 export type Reader<T> = (raw: JsonValue | undefined, path: string) => T;
 
 /** Reads one named field of a block. */
@@ -35,8 +35,8 @@ function reject({
   );
 }
 
-/** `absent` is what a missing value reads as, when that differs from the fallback a bad one
- * gets. */
+/** `absent` is what a missing value reads as, when that differs from the fallback a bad
+ * one gets. */
 export function check<T extends JsonValue | undefined>(
   expect: string,
   ok: Guard<T>,
@@ -117,8 +117,8 @@ export function flagOrAuto(fallback: boolean | 'auto'): Reader<boolean | 'auto'>
   return check('true, false or "auto"', either(isJsonBoolean, oneOf('auto')), fallback);
 }
 
-/** A missing value reads as null, which means every one; a malformed one reads as the empty
- * list. */
+/** A missing value reads as null, which means every one; a malformed one reads as the
+ * empty list. */
 export function textListOrAll(expect: string): Reader<string[] | null> {
   return check(
     expect,

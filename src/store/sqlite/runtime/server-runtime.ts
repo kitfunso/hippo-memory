@@ -27,8 +27,8 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly store: HippoStore;
   /** The Host this server root keeps for its life; its ports and every reach share it. */
   readonly host: Host;
-  /** The store is hippo.db rather than a caller's own, so its folder's config.json decides
-   * shared-ness. */
+  /** The store is hippo.db rather than a caller's own, so its folder's config.json
+   * decides shared-ness. */
   readonly onHippoDb: boolean;
   /** The served store as one request calls it: each call to a worker carries the request's
    * deadline and signal, and an in-process store opens on the request's session. */

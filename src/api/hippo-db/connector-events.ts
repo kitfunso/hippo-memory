@@ -95,8 +95,8 @@ export async function routeOncePerDelivery(
   return true;
 }
 
-/** The host's tenant, which the root resolved, and the root's allow-unknown escape for the
- * connector. */
+/** The host's tenant, which the root resolved, and the root's allow-unknown escape for
+ * the connector. */
 export interface RouteFallback {
   readonly hostTenant: string;
   readonly allowUnknown: boolean;

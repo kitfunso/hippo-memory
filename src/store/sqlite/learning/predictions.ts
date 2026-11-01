@@ -431,8 +431,8 @@ function listOpenPredictions(
   return rows.map(rowToPrediction);
 }
 
-/** One page of the tenant's predictions: the open ones, every one, or one class's, as the query
- * names. */
+/** One page of the tenant's predictions: the open ones, every one, or one class's, as the
+ * query names. */
 export function listPredictions(
   db: DatabaseSyncLike,
   tenantId: string,

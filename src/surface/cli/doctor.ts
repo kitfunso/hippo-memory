@@ -56,8 +56,8 @@ export interface DoctorOptions {
   now?: Date;
   /** Stands in for the fs the spool check reads; a test makes one call fail. */
   spoolFs?: SpoolFs;
-  /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens the
-   * store. */
+  /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens
+   * the store. */
   diagnosticsBodies: (hippoRoot: string) => DoctorStore;
 }
 

@@ -121,8 +121,8 @@ const relationsNewestFirst = newestFirst<RelationRow>({
 
 /** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbor query for
  * multi-hop traversal, one query for the whole frontier (no N+1). `limit` caps the rows of the
- * whole call, not of each id chunk, and must be a non-negative integer (raw `LIMIT ?` rejects a
- * fraction). */
+ * whole call, not of each id chunk, and must be a non-negative integer (raw `LIMIT ?` rejects
+ * a fraction). */
 function listNeighborRelations(
   db: DatabaseSyncLike,
   tenantId: string,

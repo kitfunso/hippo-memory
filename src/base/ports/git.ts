@@ -17,8 +17,8 @@ export interface GitCall {
   readonly input?: string;
 }
 
-/** git's stdout, or why it failed: `status` is the exit code, null when git was killed or never
- * started. */
+/** git's stdout, or why it failed: `status` is the exit code, null when git was killed or
+ * never started. */
 export type GitResult =
   | { readonly ok: true; readonly stdout: string }
   | { readonly ok: false; readonly status: number | null; readonly error: Error };

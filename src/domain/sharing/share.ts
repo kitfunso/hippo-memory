@@ -101,8 +101,8 @@ export const AUTO_SHARE_MIN_SCORE = 0.6;
 /** Below this transfer score a hand-run share copies a row only when forced. */
 const SHARE_MIN_SCORE = 0.3;
 
-/** transferScore's weights: where a row with no signal sits, then what each signal adds or takes
- * away. */
+/** transferScore's weights: where a row with no signal sits, then what each signal adds or
+ * takes away. */
 const TRANSFER_WEIGHTS = {
   neutral: 0.5,
   perTransferableTag: 0.1,
@@ -319,8 +319,8 @@ function clearsShareRules(
   return transferScore(entry) >= minScore;
 }
 
-/** A row that cleared the rules shares unless the global store holds its text or it carries a
- * secret. */
+/** A row that cleared the rules shares unless the global store holds its text or it carries
+ * a secret. */
 function isNewAndClean(
   entry: MemoryEntry,
   globalKeys: ReadonlySet<string>,

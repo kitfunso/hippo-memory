@@ -31,8 +31,8 @@ import {
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 import { tenantAnd } from '../runtime/tenant.js';
 
-/** Newest admitted rows LIKE tests for a term under 3 characters, which no trigram lookup can
- * answer. */
+/** Newest admitted rows LIKE tests for a term under 3 characters, which no trigram lookup
+ * can answer. */
 const LIKE_WINDOW_ROWS = 2000;
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
@@ -209,8 +209,8 @@ function listFtsCandidates(
 }
 
 /** Substring matches in content or tags: the trigram index answers each term of MIN_TRIGRAM_CHARS
- * or more characters over every admitted row, and LIKE tests the rest over the newest admitted
- * rows. */
+ * or more characters over every admitted row, and LIKE tests the rest over the newest
+ * admitted rows. */
 function listLikeCandidates(
   db: DatabaseSyncLike,
   terms: string[],
@@ -329,8 +329,8 @@ export function listRecallEntries(
   }).map(rowToEntry);
 }
 
-/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it
- * can. */
+/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when
+ * it can. */
 export async function listVectorCandidateEntries(
   db: DatabaseSyncLike,
   queryVector: readonly number[],

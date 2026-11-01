@@ -145,8 +145,8 @@ async function markBoundary(ctx: PreCompactContext, run: PreCompactRun): Promise
   return recordId;
 }
 
-/** Best effort, never throws: a compaction must not fail because its record could not be
- * written. */
+/** Best effort, never throws: a compaction must not fail because its record could not
+ * be written. */
 async function startRecord(begin: () => Promise<string>, failed: LineLog): Promise<string | null> {
   try {
     return await begin();

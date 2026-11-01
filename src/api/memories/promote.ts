@@ -51,8 +51,8 @@ export async function supersede(
   return { ok: true, oldId, newId: successor.id };
 }
 
-/** The tenant-scoped row to supersede; another tenant's id, or a row out of reach, reads as not
- * found. */
+/** The tenant-scoped row to supersede; another tenant's id, or a row out of reach, reads as
+ * not found. */
 function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null): MemoryEntry {
   const row = old ?? undefined;
   assertWriteRight(scopeReaderOf(ctx.actor), row, oldId, `Memory not found: ${oldId}`);

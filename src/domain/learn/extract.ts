@@ -32,8 +32,8 @@ export interface ExtractOptions {
   model?: string;
   /**
    * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is
-   * set when the model call itself failed. Without it each failure logs a warn with its error
-   * fields.
+   * set when the model call itself failed. Without it each failure logs a warn with its
+   * error fields.
    */
   onError?: (msg: string, failure?: LlmFailure) => void;
   /** The request's abort signal; the model call stops when it fires. */

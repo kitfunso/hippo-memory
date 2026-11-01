@@ -1,5 +1,5 @@
-/** Git reads for churn-staleness (src/domain/learn/churn-evidence.ts), through the caller's git
- * runner. */
+/** Git reads for churn-staleness (src/domain/learn/churn-evidence.ts), through the caller's
+ * git runner. */
 
 import type { GitResult, GitRunner } from '../../base/ports/git.js';
 import { DAY_MS, MINUTE_MS } from '../../base/util/time.js';
@@ -12,8 +12,8 @@ const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 // repo is slow, yet bounded so a wedged git cannot stall sleep.
 const GIT_TIMEOUT_MS = MINUTE_MS;
 
-/** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run on
- * this. */
+/** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run
+ * on this. */
 export class GitReadError extends Error {}
 
 /** The work tree churn checks read and the runner that starts git there. */

@@ -61,8 +61,8 @@ function createdPerDay(tallies: readonly ProjectTally[]): number[] {
   return days;
 }
 
-/** Named projects by the day each first appeared; one with no created time that parses counts as
- * today. */
+/** Named projects by the day each first appeared; one with no created time that parses counts
+ * as today. */
 function firstSeenPerDay(named: readonly ProjectTally[], nowMs: number): number[] {
   const days = noDays();
   for (const t of named) days[seriesDay(t.firstCreatedMs ?? Number.POSITIVE_INFINITY, nowMs)]++;

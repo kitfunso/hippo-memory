@@ -35,8 +35,8 @@ export function graphView(
   });
 }
 
-/** The graph as its store holds it, personal rows included, which only the host's operator reads
- * whole. */
+/** The graph as its store holds it, personal rows included, which only the host's operator
+ * reads whole. */
 export async function graphViewOnHost(
   ctx: HippoDbContext,
   query: { entity?: string; limit: number },

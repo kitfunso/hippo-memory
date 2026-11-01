@@ -111,8 +111,8 @@ function runSessionEndWork({
   });
 }
 
-/** Sleeps the folder's own store; a failure goes to the session log, and capture runs
- * regardless. */
+/** Sleeps the folder's own store; a failure goes to the session log, and capture
+ * runs regardless. */
 async function sleepFolderStore(cmd: CommandContext, closeLogFile: string | null): Promise<void> {
   try {
     await (await import('../sleep.js')).sleepStore(cmd);

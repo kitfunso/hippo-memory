@@ -220,8 +220,8 @@ async function askResolver(
   return clean;
 }
 
-/** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim the
- * tag. */
+/** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim
+ * the tag. */
 interface BearerIdentity extends ResolvedBearer {
   viaAuthResolver?: true;
   owner?: string;

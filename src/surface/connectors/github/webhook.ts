@@ -56,8 +56,8 @@ export function warnGitHubPreviousSecretOpen(): void {
   );
 }
 
-/** Reads the raw body and refuses it unless the signature matches the current or the previous
- * secret. */
+/** Reads the raw body and refuses it unless the signature matches the current or the
+ * previous secret. */
 async function readSignedBody(
   request: WebhookRequest,
   secret: string,
@@ -237,8 +237,8 @@ function resolveGitHubTenant(d: SignedDelivery, routing: DlqRouting): Promise<st
   );
 }
 
-/** Answers ping and parks every unusable body; returns the envelope only when ingest should go
- * on. */
+/** Answers ping and parks every unusable body; returns the envelope only when ingest should
+ * go on. */
 async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | null> {
   // Cheap regex extraction of installation_id / repo for DLQ rows that fail to JSON.parse - gives
   // operators something to triage.

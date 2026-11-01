@@ -50,8 +50,8 @@ function insertDesiredRelation(
   return true;
 }
 
-/** Applies one op; false when a writer since the diff made it stale, which the next run's diff
- * repairs. */
+/** Applies one op; false when a writer since the diff made it stale, which the next run's
+ * diff repairs. */
 function applyGraphOp(db: DatabaseSyncLike, tenantId: string, op: GraphOp): boolean {
   switch (op.op) {
     case 'deleteEntity':
@@ -97,8 +97,8 @@ function applyGraphOpsOn(
 }
 
 /** Applies `ops` from `opts.from` in one rebuild transaction, stopping at the first op boundary
- * past `opts.holdMs`; returns where the next chunk starts and how many ops were skipped as
- * stale. */
+ * past `opts.holdMs`; returns where the next chunk starts and how many ops were skipped
+ * as stale. */
 function applyGraphOps(
   db: DatabaseSyncLike,
   tenantId: string,

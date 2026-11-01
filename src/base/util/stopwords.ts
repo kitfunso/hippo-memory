@@ -226,8 +226,8 @@ export const INVALIDATION_STOPWORDS: ReadonlySet<string> = new Set([
   'using',
 ]);
 
-/** Pronouns and modals plus the verbs and duration units the forward-claim regexes already gate
- * on. */
+/** Pronouns and modals plus the verbs and duration units the forward-claim regexes already
+ * gate on. */
 export const FORWARD_CLAIM_STOPWORDS: ReadonlySet<string> = new Set([
   'the',
   'a',

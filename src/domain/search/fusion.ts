@@ -5,8 +5,8 @@ import { DEFAULT_GRAPH_SEED_COUNT } from '../../base/rank/search-types.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
 import type { DenseScores } from './vector.js';
 
-/** Opt-in third RRF list ranking in-pool candidates by graph proximity to the strong lexical
- * seeds. */
+/** Opt-in third RRF list ranking in-pool candidates by graph proximity to the strong
+ * lexical seeds. */
 export interface GraphStreamOptions {
   /** RRF weight for the graph list. Required (opt-in is explicit; no implicit default). */
   weight: number;
@@ -40,8 +40,8 @@ function rankBy(eligible: number[], scores: number[], entries: MemoryEntry[]): n
   });
 }
 
-/** Reciprocal rank fusion of the BM25 and dense rankings, plus the graph list when it ranks
- * anything. */
+/** Reciprocal rank fusion of the BM25 and dense rankings, plus the graph list when it
+ * ranks anything. */
 export async function fuseRanks(input: FusionInput): Promise<Map<number, number>> {
   const { entries, bm25Scores, dense } = input;
   const eligible = entries.map((_, i) => i).filter((i) => bm25Scores[i] > 0 || dense.cosine[i] > 0);

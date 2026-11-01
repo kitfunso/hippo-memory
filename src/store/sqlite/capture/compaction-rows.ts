@@ -86,8 +86,8 @@ interface LatestStartedOptions {
   readonly notBefore: string;
 }
 
-/** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both ISO
- * strings. */
+/** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both
+ * ISO strings. */
 export function latestStartedRows(
   db: DatabaseSyncLike,
   { tenantId, sessionId, notAfter, notBefore }: LatestStartedOptions,
@@ -307,8 +307,8 @@ export function restampCompactionOrigin(
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 type CompactionOriginRow = CompactionOrigin;
 
-/** Each distinct project name, transcript and working folder of the tenant's compactions, in one
- * read. */
+/** Each distinct project name, transcript and working folder of the tenant's compactions, in
+ * one read. */
 export function compactionOrigins(db: DatabaseSyncLike, tenantId: string): CompactionOrigin[] {
   return cachedStatement(
     db,

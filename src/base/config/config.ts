@@ -31,8 +31,8 @@ export interface HippoConfig {
      * 'voyage' | 'cohere' = opt-in API embedder needing the provider's API key in env
      * (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/infra/embedding-provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
-    /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost may use http). Ignored by the local
-     *  provider. */
+    /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost may use http). Ignored by the
+     *  local provider. */
     apiBaseUrl?: string;
     /** Batch size for API embedding requests. Default 64. */
     batchSize?: number;
@@ -41,8 +41,8 @@ export interface HippoConfig {
     enabled: boolean;
   };
   gitLearnPatterns: string[];
-  /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when embeddings are available: needs doc-to-doc
-   *  similarity. */
+  /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when embeddings are available: needs
+   *  doc-to-doc similarity. */
   mmr: {
     enabled: boolean;
     /** 1.0 = pure relevance, 0.0 = pure diversity; DEFAULT_MMR_LAMBDA by default. */
@@ -163,8 +163,8 @@ export interface HippoConfig {
   runtime?: RuntimeSettings;
 }
 
-/** Process settings a root reads from env vars; each absent field takes the default its reader
- * names. */
+/** Process settings a root reads from env vars; each absent field takes the default its
+ * reader names. */
 export interface RuntimeSettings {
   /** HIPPO_ANCHORING=off turns the anchoring hint off; on by default. */
   readonly anchoringHint?: boolean;
@@ -189,8 +189,8 @@ export interface RuntimeSettings {
   readonly clef?: ClefSettings;
 }
 
-/** The CLEF rerankers' transport, read by the root: HIPPO_CLEF_ENDPOINT wins over hosted Workers
- * AI. */
+/** The CLEF rerankers' transport, read by the root: HIPPO_CLEF_ENDPOINT wins over hosted
+ * Workers AI. */
 export interface ClefSettings {
   /** HIPPO_CLEF_ENDPOINT, trimmed. */
   readonly endpoint?: string;

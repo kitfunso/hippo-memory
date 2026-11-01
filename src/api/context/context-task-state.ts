@@ -16,8 +16,8 @@ import type { ContinuityKey } from '../../base/ports/store/types.js';
 /** Session events the continuity block carries beside the snapshot and handoff, the newest kept. */
 export const CONTINUITY_EVENT_LIMIT = 5;
 
-/** The task-state sections printed ahead of the memories, and the budget left once they are
- * paid. */
+/** The task-state sections printed ahead of the memories, and the budget left once they
+ * are paid. */
 export interface TaskSections {
   activeSnapshot: TaskSnapshot | null;
   shownSnapshot: TaskSnapshot | null;

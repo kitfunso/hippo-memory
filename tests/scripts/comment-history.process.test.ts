@@ -92,6 +92,31 @@ describe('check-comment-history.mjs', () => {
     });
   });
 
+  it('fails on a doc comment ending in one word alone, not on a one-word doc', () => {
+    const code = [
+      '/** A wrapped doc whose last word fell onto its own',
+      ' * line. */',
+      'export const a = 1;',
+      '/**',
+      ' * A doc closed on a line of its own after a one-word',
+      ' * ending.',
+      ' */',
+      'export const b = 1;',
+      '/** Word. */',
+      'export const c = 1;',
+      '/**',
+      ' * Word.',
+      ' */',
+      'export const d = 1;',
+      '',
+    ].join('\n');
+    withFixture({ 'src/a.ts': code }, (run) => {
+      const listed = run('--list').stdout.trim().split('\n');
+      expect(listed).toEqual(['src/a.ts:2 [orphan] * line.', 'src/a.ts:6 [orphan] * ending.']);
+      expect(run().status).toBe(1);
+    });
+  });
+
   it('counts a real leap day and scans .mts and .cts files', () => {
     const files = {
       'src/a.ts': '// Released 2028-02-29\n',

@@ -111,8 +111,8 @@ function listHolderIds(
 }
 
 /** The found rows read again under the write lock, each still in reach and still holding the
- * text; a row that sleep moved between the walk and the lock is read from the table it now sits
- * in. */
+ * text; a row that sleep moved between the walk and the lock is read from the table it now
+ * sits in. */
 function heldUnderLock(
   db: DatabaseSyncLike,
   rejection: Rejection,

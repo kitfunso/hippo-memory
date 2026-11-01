@@ -55,8 +55,8 @@ export interface RerankProvenance {
 }
 
 export interface RerankResult extends SearchResult {
-  /** Score assigned by the reranker. Replaces `score` for downstream ordering; original `score` preserved on the
-   *  SearchResult. */
+  /** Score assigned by the reranker. Replaces `score` for downstream ordering; original `score` preserved on
+   *  the SearchResult. */
   rerankScore: number;
   /** 1-indexed rank in the input to the reranker. */
   preRerankRank: number;

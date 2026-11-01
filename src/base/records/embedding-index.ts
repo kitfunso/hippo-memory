@@ -26,8 +26,8 @@ export interface IndexStepFields {
   readonly lock: NoFields;
   /** Opens a rebuild whose vectors wait apart from the live index. */
   readonly begin: NoFields;
-  /** Stages one page of the rebuild, skipping empty or non-finite vectors; answers how many it
-   * staged. */
+  /** Stages one page of the rebuild, skipping empty or non-finite vectors; answers how many
+   * it staged. */
   readonly stage: { readonly rows: readonly VectorRow[] };
   /** In one transaction, replaces every stored vector with the staged ones and records `model`
    * as what built them, then drops the staging, committed or not. */
@@ -87,8 +87,8 @@ export interface IdPageRequest {
   readonly afterId?: string;
 }
 
-/** A page of memory ids in id order, and the id the next page starts after; null on the last
- * page. */
+/** A page of memory ids in id order, and the id the next page starts after; null on the
+ * last page. */
 export interface IdPage {
   readonly ids: string[];
   readonly next: string | null;

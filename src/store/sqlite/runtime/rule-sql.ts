@@ -123,6 +123,6 @@ export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): Sql
   return { sql: `(${notPersonal} OR ${col}scope = ?)`, params: [ownScope] };
 }
 
-/** Admits every scope, for a reader that sees the whole store, such as the CLI on its own
- * machine. */
+/** Admits every scope, for a reader that sees the whole store, such as the CLI on its
+ * own machine. */
 export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });

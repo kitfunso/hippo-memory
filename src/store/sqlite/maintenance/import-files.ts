@@ -11,8 +11,8 @@ import { handlesOf, openStore } from '../runtime/handles.js';
 import { inPortTerms } from '../runtime/port-errors.js';
 import { refusedAmong } from '../review/rejections.js';
 
-/** The FolderFiles, EntryWrites, Rejections and Sharing calls an import makes, each answered at
- * once. */
+/** The FolderFiles, EntryWrites, Rejections and Sharing calls an import makes, each answered
+ * at once. */
 interface SqliteImportFiles {
   ensure(): void;
   writeEntry(write: EntryWrite): void;

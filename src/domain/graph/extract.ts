@@ -128,8 +128,8 @@ export interface LoadedType {
 }
 
 /** Close over one loader's row type so the table below holds uniform functions. Loads ACTIVE and SUPERSEDED rows (not
- *  `closed`), one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is
- *  full. */
+ *  `closed`), one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load
+ *  is full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
   load: (objects: Objects, tenant: string, opts: SourceLoadOptions) => Promise<T[]>,

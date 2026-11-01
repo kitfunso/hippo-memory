@@ -75,8 +75,8 @@ export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number 
   });
 }
 
-/** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same
- * deboost. */
+/** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the
+ * same deboost. */
 export function isDagSummary(entry: MemoryEntry): boolean {
   return entry.dagLevel === DAG_LEVEL.topic || entry.dagLevel === DAG_LEVEL.entity;
 }
@@ -106,8 +106,8 @@ export interface SummaryScoring {
   freshness: boolean;
 }
 
-/** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its scores
- * bit-identical. */
+/** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its
+ * scores bit-identical. */
 export const NO_SUMMARY_SCORING: SummaryScoring = { deboost: 1, freshness: false };
 
 export function summaryScoring(options: {
@@ -140,8 +140,8 @@ export function strengthRecencyMultipliers(
   };
 }
 
-/** What a ranking's strength and recency read from its caller: the eval switches and the root's
- * settings. */
+/** What a ranking's strength and recency read from its caller: the eval switches and the
+ * root's settings. */
 export interface RankRun {
   readonly switches?: EvalSwitches;
   readonly runtime?: RuntimeSettings;

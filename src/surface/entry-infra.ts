@@ -11,8 +11,8 @@ import { rootInfra } from '../infra/ports.js';
  * process's life. */
 export const entryHost = createHost();
 
-/** The failures the published entries have warned about, whoever built the rest of a caller's
- * ports. */
+/** The failures the published entries have warned about, whoever built the rest of a
+ * caller's ports. */
 const entryNotices = new FailureNotices();
 
 /** The published entries' infra source, built on first use. */

@@ -53,8 +53,8 @@ const SHARED_KIND: ReadonlyMap<string, FlagKind> = (() => {
   return shared;
 })();
 
-/** How parseArgs reads `--name` on the verb with these flags; `undefined` is a command the table
- * lacks. */
+/** How parseArgs reads `--name` on the verb with these flags; `undefined` is a command the
+ * table lacks. */
 export function flagKind(verb: VerbFlags | undefined, name: string): FlagKind {
   return (verb ? DECLARED.get(verb)?.get(name) : undefined) ?? SHARED_KIND.get(name) ?? 'value';
 }

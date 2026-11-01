@@ -96,8 +96,8 @@ function collectChurnCandidates(
   return { candidates, skippedPinned };
 }
 
-/** An outcome row is stamped before it commits, so the recheck starts a little before the first
- * read. */
+/** An outcome row is stamped before it commits, so the recheck starts a little before the
+ * first read. */
 const CONFIRM_RECHECK_MARGIN_MS = MINUTE_MS;
 
 interface TagChurnStaleOptions {
@@ -131,8 +131,8 @@ async function tagChurnStale({
   );
 }
 
-/** Counts every candidate's evidence into `result` and returns the rows still to tag, writing
- * nothing. */
+/** Counts every candidate's evidence into `result` and returns the rows still to tag,
+ * writing nothing. */
 function recordChurnEvidence(
   git: ChurnGitView,
   candidates: readonly ChurnCandidate[],

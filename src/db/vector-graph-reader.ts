@@ -174,8 +174,8 @@ class GraphFileView implements GraphView {
     return links;
   }
 
-  /** The node at `rowid`: records sit in rowid order, and of a reused rowid only the last is
-   * current. */
+  /** The node at `rowid`: records sit in rowid order, and of a reused rowid only the last
+   * is current. */
   nodeAt(rowid: number): number | undefined {
     let lo = 0;
     let hi = this.stamp.nodes;

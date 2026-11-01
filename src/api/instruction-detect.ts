@@ -4,8 +4,8 @@
  * (api/context/context-render.ts). Leaf module, no store/api imports.
  */
 
-/** What a member's flagged row in a shared scope carries: it is kept, and prints framed as
- * untrusted. */
+/** What a member's flagged row in a shared scope carries: it is kept, and prints framed
+ * as untrusted. */
 export const INSTRUCTION_LIKE_TAG = 'instruction-like';
 
 /** What every untrusted write (connector text) carries, so it prints framed whatever the
@@ -160,8 +160,8 @@ function referencedCharacter(
   return drawn ? String.fromCodePoint(code) : reference;
 }
 
-/** `content` as a reader or a model takes it in. For matching only: what is stored is never
- * this. */
+/** `content` as a reader or a model takes it in. For matching only: what is stored is
+ * never this. */
 function screeningForm(content: string): string {
   return (
     content

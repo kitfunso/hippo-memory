@@ -224,8 +224,8 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
   return { q, budget, limit, pinnedOnly, scope, includeRecent, crossProject };
 }
 
-/** Ranks with rankRecall under BUDGET_RANKED, then records what `core.show` prints; host admin
- * only. */
+/** Ranks with rankRecall under BUDGET_RANKED, then records what `core.show` prints; host
+ * admin only. */
 export async function retrieveWithCliCore(
   ctx: Context,
   opts: CliCoreQuery,
@@ -380,8 +380,8 @@ function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource
   };
 }
 
-/** The second store takes its own recall rows, unless the caller's store is the global one
- * already. */
+/** The second store takes its own recall rows, unless the caller's store is the global
+ * one already. */
 function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined {
   const sources = core.sources;
   return sources !== undefined && ctx.reach?.isGlobal !== true ? sources.store : undefined;

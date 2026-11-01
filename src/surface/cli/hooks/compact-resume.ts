@@ -39,8 +39,8 @@ export async function handleCompactResume({
 }
 
 /** Prints the snapshot and trail, but no pinned memories (UserPromptSubmit re-injects them). A
- * malformed payload or a store read failure degrades to empty stdout, never a failed
- * SessionStart. */
+ * malformed payload or a store read failure degrades to empty stdout, never a
+ * failed SessionStart. */
 async function resumeAfterCompact(
   { cli, hippoRoot, tenantId }: CliScope,
   stdinText: string | undefined,

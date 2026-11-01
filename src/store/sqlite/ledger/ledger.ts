@@ -43,8 +43,8 @@ interface EnsurePilotArmOptions {
   readonly opts?: { ownTenantOnly?: boolean; now?: string };
 }
 
-/** The stored arm, else the hash arm written once; on any error the hash arm comes back
- * unrecorded. */
+/** The stored arm, else the hash arm written once; on any error the hash arm comes
+ * back unrecorded. */
 // The wait is the caller's lock-wait scope (a hook's HOOK_DB_WAIT_MS, a server request's
 // SERVER_DB_WAIT_MS); it holds on a handle opened in that scope.
 function ensurePilotArm(
@@ -108,8 +108,8 @@ function ledgerSkipClass<E>(error: E): LedgerSkip {
 }
 
 /** Says why a ledger row did not land, at the level its class earns: busy warns once through
- * noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class and
- * stack. */
+ * noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class
+ * and stack. */
 function noteLedgerRowSkipped<E>(error: E, session: RequestStores | undefined): void {
   const skip = ledgerSkipClass(error);
   if (skip === 'busy') {
@@ -150,8 +150,8 @@ function recordRows(
   }
 }
 
-/** The delivery event on the rows' own handle, so it costs no second open; a failed write is
- * logged. */
+/** The delivery event on the rows' own handle, so it costs no second open; a failed write
+ * is logged. */
 function recordDelivery(
   db: DatabaseSyncLike,
   input: DeliveryEventInput,
@@ -164,8 +164,8 @@ function recordDelivery(
   }
 }
 
-/** The opener a ledger writes through, the session its busy skips tell, and its delivery prune
- * schedule. */
+/** The opener a ledger writes through, the session its busy skips tell, and its delivery
+ * prune schedule. */
 interface LedgerWiring {
   readonly on: OnHandle;
   readonly session: RequestStores | undefined;
@@ -190,8 +190,8 @@ function recordTurnVia({ on, session, prune }: LedgerWiring, turn: LedgerTurn): 
   }
 }
 
-/** `read`, or `fallback` once the failure is noted on `session`, so a hook never fails on its
- * ledger. */
+/** `read`, or `fallback` once the failure is noted on `session`, so a hook never fails on
+ * its ledger. */
 function noting<T>(session: RequestStores | undefined, read: () => T, fallback: () => T): T {
   try {
     return read();

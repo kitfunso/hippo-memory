@@ -25,8 +25,8 @@ const ENTRIES_BY_ID_PAGE = 64;
 // Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.
 const ID_PAGE = 1000;
 
-/** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed is
- * skipped. */
+/** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed
+ * is skipped. */
 async function* entryPages(rows: IndexRows, ids: readonly string[]): AsyncGenerator<MemoryEntry[]> {
   for (const page of chunked(ids, ENTRIES_BY_ID_PAGE)) {
     const byId = new Map((await rows.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]));
@@ -80,8 +80,8 @@ const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_FIRST_POLL_MS = 50;
 const EMBED_LOCK_MAX_POLL_MS = 1_000;
 
-/** Waits up to EMBED_LOCK_WAIT_MS for the index's lock, which the turn's session holds until it
- * closes. */
+/** Waits up to EMBED_LOCK_WAIT_MS for the index's lock, which the turn's session holds until
+ * it closes. */
 async function acquireIndexLock({ step }: IndexTurn): Promise<void> {
   const deadline = Date.now() + EMBED_LOCK_WAIT_MS;
   for (let wait = EMBED_LOCK_FIRST_POLL_MS; ; wait = Math.min(wait * 2, EMBED_LOCK_MAX_POLL_MS)) {
@@ -225,8 +225,8 @@ async function rebuildIndexForProvider(
   return staged;
 }
 
-/** One step on a session of its own, closed after, for an index read or write that takes no
- * lock. */
+/** One step on a session of its own, closed after, for an index read or write that takes
+ * no lock. */
 export async function indexStep<K extends IndexStepKind>(
   index: EmbeddingIndex,
   step: IndexStep<K>,

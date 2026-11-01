@@ -48,8 +48,8 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
 /**
  * Captures the session's statements into `ctx`'s tenant under the caller's project, skipping each
  * text a row the caller can see already holds. The write reads those rows again in its own
- * transaction, so no other write lands between the dedup and the write. No console output and no
- * process.exit.
+ * transaction, so no other write lands between the dedup and the write. No console output and
+ * no process.exit.
  */
 export async function captureSessionTexts(
   given: EntryContext,

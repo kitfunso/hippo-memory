@@ -206,8 +206,8 @@ function toSnapshot(row: DormantRow): DormantSnapshot | null {
     : null;
 }
 
-/** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one went
- * dormant. */
+/** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one
+ * went dormant. */
 export function replaceDormantEntry(
   db: DatabaseSyncLike,
   tenantId: string,

@@ -16,8 +16,8 @@ export interface ActionResult {
   body: unknown;
   /** True when a write committed, so the router moves the snapshot id. */
   changed: boolean;
-  /** The live entry an action acted on, so the router can build the detail after the cache is
-   * dropped. */
+  /** The live entry an action acted on, so the router can build the detail after the cache
+   * is dropped. */
   entry?: MemoryEntry;
 }
 

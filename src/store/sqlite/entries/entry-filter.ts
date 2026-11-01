@@ -110,8 +110,8 @@ export function narrowingAnd(
   };
 }
 
-/** A page of the rows `filter` keeps, in loadAllEntries' order or, with `page.newest`, newest
- * first. */
+/** A page of the rows `filter` keeps, in loadAllEntries' order or, with `page.newest`,
+ * newest first. */
 export function listEntriesWhere(
   db: DatabaseSyncLike,
   filter: EntryFilter,

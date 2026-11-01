@@ -3,8 +3,8 @@ import { errorCode, log } from '../../base/util/log.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { FailureNotices } from '../../base/util/failure-notices.js';
 
-/** A provider's `[]` row is a swallowed per-item failure; name the memory so the gap can be
- * traced. */
+/** A provider's `[]` row is a swallowed per-item failure; name the memory so the gap can
+ * be traced. */
 export function noteSkippedEmbedding(id: string): void {
   log.warn('memory not embedded; the next embed run retries it', { id });
 }

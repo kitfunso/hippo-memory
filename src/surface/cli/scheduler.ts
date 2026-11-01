@@ -148,8 +148,8 @@ export function quoteInsideWindowsArg(text: string): string {
   return text.replace(/(\\*)"/g, '$1$1\\"').replace(/\\+$/, '$&$&');
 }
 
-/** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split the
- * command. */
+/** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split
+ * the command. */
 export function buildSchtasksCreateArgs(taskName: string, cmd: string): string[] {
   return [
     '/create',

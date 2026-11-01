@@ -33,8 +33,8 @@ const CHILD_ENTRY = fileURLToPath(
   new URL('../../../dist/surface/server/sleep-child.js', import.meta.url),
 );
 
-/** The shape check for what crosses the IPC channel; the result's own fields are the API's to
- * define. */
+/** The shape check for what crosses the IPC channel; the result's own fields are the API's
+ * to define. */
 export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
   if (typeof message !== 'object' || message === null || !('ok' in message)) return false;
   if (message.ok === true) {
@@ -155,8 +155,8 @@ export interface SleepQueue {
   readonly sleep: (ctx: Context, opts: SleepOptions) => Promise<SleepResult>;
   /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
   readonly consolidate: () => Promise<void>;
-  /** Resolves once every sleep in line has ended, each by its deadline at the latest; it never
-   * rejects. */
+  /** Resolves once every sleep in line has ended, each by its deadline at the latest; it
+   * never rejects. */
   readonly settled: () => Promise<void>;
 }
 

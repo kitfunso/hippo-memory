@@ -109,8 +109,8 @@ function receiptHeadline(content: string): string {
   return truncateWithEllipsis(trimmed, MAX_RECEIPT_HEADLINE_LEN);
 }
 
-/** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never matches
- * `path:hippo`. */
+/** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never
+ * matches `path:hippo`. */
 function receiptTag(normalizedRepo: string): string {
   return `path:${normalizedRepo.toLowerCase()}`;
 }

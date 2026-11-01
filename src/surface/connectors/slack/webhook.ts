@@ -67,8 +67,8 @@ export async function handleSlackEventsWebhook(
   });
 }
 
-/** Reads the raw body and refuses it unless the signature matches the current or the previous
- * secret. */
+/** Reads the raw body and refuses it unless the signature matches the current or the
+ * previous secret. */
 async function readSignedSlackBody(
   request: WebhookRequest,
   secret: string,

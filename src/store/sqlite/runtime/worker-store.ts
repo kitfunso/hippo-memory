@@ -131,8 +131,8 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
   };
 }
 
-/** The groups with a body of their own below: base sits on the store itself, vectors rebuild a
- * Map. */
+/** The groups with a body of their own below: base sits on the store itself, vectors rebuild
+ * a Map. */
 type CustomGroup = 'base' | 'vectors';
 type PlainGroup = Exclude<WorkerGroup, CustomGroup>;
 
@@ -168,8 +168,8 @@ function hippoDbOnWorkers(sender: Sender, inProcess: HippoDbRepos): HippoDbRepos
   return Object.fromEntries(wrapped) as HippoDbRepos;
 }
 
-/** The rules a worker store's threads open with, and the server's runtime its checkpoints run
- * under. */
+/** The rules a worker store's threads open with, and the server's runtime its checkpoints
+ * run under. */
 export interface WorkerStoreOptions extends StoreRules {
   readonly runtime?: StoreRuntime | undefined;
 }

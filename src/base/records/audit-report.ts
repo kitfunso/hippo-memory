@@ -34,8 +34,8 @@ export function auditWriteFailureCount(): number {
   return auditWriteFailures;
 }
 
-/** Adds the failures a store worker counted on its own thread, so the process reports one
- * number. */
+/** Adds the failures a store worker counted on its own thread, so the process reports
+ * one number. */
 export function addAuditWriteFailures(count: number): void {
   auditWriteFailures += count;
 }

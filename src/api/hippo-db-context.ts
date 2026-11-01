@@ -35,8 +35,8 @@ export function withHippoDb<C extends { readonly store: Context['store'] }>(
 }
 
 /** The reach's global write target with its local tier proved and an embedder filled in: the
- * host's own, else the context's. Unset with no target, or one whose store has no tier to copy
- * into. */
+ * host's own, else the context's. Unset with no target, or one whose store has no tier to
+ * copy into. */
 export function globalTargetOf(
   ctx: Pick<Context, 'reach' | 'infra'>,
 ): ConfiguredFolder<HippoDbStore> | undefined {

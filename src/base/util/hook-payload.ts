@@ -1,7 +1,7 @@
 import { type JsonValue, isJsonObjectLiteral, isJsonString, tryParseJson } from './json.js';
 
-/** A Claude Code hook payload on stdin as a JSON object; null when empty, malformed or not an
- * object. */
+/** A Claude Code hook payload on stdin as a JSON object; null when empty, malformed or not
+ * an object. */
 function parseHookPayload(stdinText: string | undefined): { [key: string]: JsonValue } | null {
   if (!stdinText || stdinText.trim() === '') return null;
   const payload = tryParseJson(stdinText.trim());

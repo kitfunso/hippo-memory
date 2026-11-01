@@ -20,8 +20,8 @@ export interface LatestContinuity {
   events: SessionEvent[];
 }
 
-/** The active snapshot plus recent events for `sessionId`, falling back to the snapshot's own
- * session. */
+/** The active snapshot plus recent events for `sessionId`, falling back to the snapshot's
+ * own session. */
 export async function continuityLatest(
   ctx: HippoDbContext,
   opts: { sessionId?: string; limit: number },

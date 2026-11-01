@@ -79,8 +79,8 @@ interface Copies {
   readonly twins: Set<string>;
 }
 
-/** The rows to copy, in order: one per text, never a secret, and another project's only when
- * asked. */
+/** The rows to copy, in order: one per text, never a secret, and another project's only
+ * when asked. */
 function copiesOf(
   candidates: readonly EntryTextKey[],
   byId: ReadonlyMap<string, MemoryEntry>,

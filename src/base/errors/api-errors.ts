@@ -45,8 +45,8 @@ export function memoryNotFoundText(id: string): string {
   return `memory not found: ${id}`;
 }
 
-/** The row exists but its current state forbids the change (already superseded, closed, or
- * decided). */
+/** The row exists but its current state forbids the change (already superseded, closed,
+ * or decided). */
 export class ConflictError extends ApiError {
   readonly status = 409;
   constructor(message: string) {
@@ -66,8 +66,8 @@ export class CrossTenantIdError extends ConflictError {
 /**
  * Thrown by the write-path guard (checkRejectionGuard, via upsertEntryRow) when a write would
  * introduce a tombstoned value; carries what the transaction-owner catch blocks (writeEntry,
- * api.supersede) need to write the post-rollback `reject_refusal` audit row via
- * `auditRejectionRefusal`.
+ * api.supersede) need to write the post-rollback `reject_refusal` audit row
+ * via `auditRejectionRefusal`.
  */
 export class RejectedValueError extends BadRequestError {
   readonly digest: string;

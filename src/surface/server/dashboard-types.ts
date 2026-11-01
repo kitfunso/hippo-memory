@@ -17,8 +17,8 @@ export interface DashboardRouteRequest {
   readonly res: ServerResponse;
   readonly query: URLSearchParams;
   readonly session: DashboardSession;
-  /** The api Context the cards and the writes run as: the CLI's tenant, audited as the
-   * dashboard. */
+  /** The api Context the cards and the writes run as: the CLI's tenant, audited as
+   * the dashboard. */
   readonly ctx: DashboardContext;
   /** The dashboard reads, answered off the server thread. */
   readonly reader: DashboardReader;

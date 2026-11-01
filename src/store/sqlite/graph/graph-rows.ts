@@ -143,8 +143,8 @@ export interface InsertEntityOptions {
   sourceObject?: SourceObjectRef;
 }
 
-/** What an in-place entity update may change; type and source object are the row's identity and
- * stay. */
+/** What an in-place entity update may change; type and source object are the row's identity
+ * and stay. */
 export interface UpdateEntityOptions {
   name: string;
   memoryId?: string | null;

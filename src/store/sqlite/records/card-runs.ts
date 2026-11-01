@@ -265,8 +265,8 @@ export function reviewCard(
 
 /** Closes the live run of a card in review: 'success' moves it to done and promotes children
  * whose parents are all done; 'failure'/'partial' shelves it. Throws on an unknown card id;
- * returns null for a card not in review, or when `runId` is given and is not the card's live
- * run. */
+ * returns null for a card not in review, or when `runId` is given and is not the card's
+ * live run. */
 export function completeCard(
   db: DatabaseSyncLike,
   tenantId: string,

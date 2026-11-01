@@ -40,8 +40,8 @@ export function ledgerReachOf(ctx: Pick<Context, 'reach'>, shared?: boolean): Le
   return shared === true ? { local } : { local, global: ctx.reach?.global };
 }
 
-/** The call's own store, else the global store (the prompt hook fires where none is); null with
- * neither. */
+/** The call's own store, else the global store (the prompt hook fires where none is); null
+ * with neither. */
 export function ledgerHome(reach: LedgerReach): LedgerHome | null {
   if (reach.local !== undefined) return reach.local;
   const { global } = reach;
@@ -53,8 +53,8 @@ export async function bookTokenUse(use: TokenUse, reach: LedgerReach): Promise<v
   await ledgerHome(reach)?.ledger.recordTurn({ uses: [use] });
 }
 
-/** Books a turn's rows and then its delivery event on one connection of ledgerHome's store,
- * best-effort. */
+/** Books a turn's rows and then its delivery event on one connection of ledgerHome's
+ * store, best-effort. */
 export async function bookLedgerTurn(turn: LedgerTurn, reach: LedgerReach): Promise<void> {
   await ledgerHome(reach)?.ledger.recordTurn(turn);
 }
@@ -145,8 +145,8 @@ export function takeDelivery(rec: DeliveryRecorder | null): DeliveryEventInput |
 }
 
 /** Writes the recorder's event; a second flush is a no-op. A recorder started before the request
- * that flushes it passes that request's `ctx`, so the write takes the request's handle and lock
- * wait. */
+ * that flushes it passes that request's `ctx`, so the write takes the request's handle and
+ * lock wait. */
 export async function flushDeliveryRecorder(
   rec: DeliveryRecorder | null,
   ctx?: Pick<Context, 'reach' | 'store' | 'config'>,

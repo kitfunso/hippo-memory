@@ -78,8 +78,8 @@ export interface RepairResult {
 export type SessionMachine = Pick<Machine, 'platform' | 'env' | 'files' | 'projectIdentity'>;
 
 /** What a plan knows of the store's folder: the global store reads session folders on its
- * machine, and a project store folds only its own folder's old name, unless many people share
- * it. */
+ * machine, and a project store folds only its own folder's old name, unless many people
+ * share it. */
 export type StoreFolder =
   | { readonly isGlobal: true; readonly machine: SessionMachine }
   | {
@@ -94,8 +94,8 @@ interface Reader {
   readonly tenantId: string;
 }
 
-/** Every row of the tenant `narrowing` keeps, one page per call, so no one call holds a whole
- * tenant. */
+/** Every row of the tenant `narrowing` keeps, one page per call, so no one call holds a
+ * whole tenant. */
 async function* rowsOf(r: Reader, narrowing: EntryNarrowing): AsyncGenerator<MemoryEntry> {
   const filter = { ...narrowing, tenantId: r.tenantId };
   const read = (after?: EntryCursor) =>
@@ -193,8 +193,8 @@ async function transcriptsOf(
   return [...seen.values()];
 }
 
-/** Each Claude session folder a compaction recorded, with the names of each project it resolves
- * to. */
+/** Each Claude session folder a compaction recorded, with the names of each project it
+ * resolves to. */
 async function sessionOwners(
   r: Reader,
   machine: SessionMachine,

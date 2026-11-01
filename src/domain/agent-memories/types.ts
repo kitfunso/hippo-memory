@@ -42,8 +42,8 @@ export interface Listing {
   readonly tool: ToolId;
   readonly home: string;
   readonly containers: readonly Container[];
-  /** Problems finding containers, such as a malformed index file; an unlisted container is left
-   * alone. */
+  /** Problems finding containers, such as a malformed index file; an unlisted container is
+   * left alone. */
   readonly warnings: readonly string[];
 }
 
@@ -52,8 +52,8 @@ export interface Adapter {
   list(ctx: AdapterContext, scope: Scope): Listing;
 }
 
-/** The counter a sync's caller moves for the rows it remembered, which hippo.db keeps in its local
- * tier. */
+/** The counter a sync's caller moves for the rows it remembered, which hippo.db keeps in its
+ * local tier. */
 interface RememberedCounter {
   readonly hippoDb: { readonly stats: { bumpRemembered(count: number): Promise<void> } };
 }
@@ -72,8 +72,8 @@ export type ImportStore = HippoStore & {
  * owner as every other write. */
 export type CountRemembered = (store: ImportStore, count: number) => Promise<void>;
 
-/** How a sync reaches each store it targets: the caller's, so the sync never names a store
- * adapter. */
+/** How a sync reaches each store it targets: the caller's, so the sync never names a
+ * store adapter. */
 export interface ImportStores {
   /** `root`'s store; a set `busyWaitMs` is how long its container writes wait on a locked store. */
   open(root: string, opts: { readonly busyWaitMs?: number }): ImportStore;

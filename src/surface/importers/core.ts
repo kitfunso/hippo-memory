@@ -64,8 +64,8 @@ type AtOnce<F> = F extends (...args: infer A) => Promise<infer R> ? (...args: A)
 /** The port calls an import makes on its folder's store, answered at once; a composition root
  * builds them. */
 export interface ImportFiles {
-  /** Creates the store's files when they are missing, as a first import to the global store
-   * needs. */
+  /** Creates the store's files when they are missing, as a first import to the global
+   * store needs. */
   readonly ensure: () => void;
   readonly writeEntry: AtOnce<EntryWrites['writeEntry']>;
   readonly refusedAmong: AtOnce<Rejections['refusedAmong']>;
@@ -174,8 +174,8 @@ function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate
   return null;
 }
 
-/** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those
- * alone. */
+/** Only the rows holding the chunk's words can hold the chunk, so the store is asked for
+ * those alone. */
 function storeHolds({ files, tenantId }: OpenImport, chunk: string): boolean {
   const key = duplicateKey(chunk);
   return files
@@ -226,8 +226,8 @@ function createImportEntry({
   );
 }
 
-/** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses
- * it. */
+/** Writes the entry, or on a dry run only probes the guard; false when a rejected value
+ * refuses it. */
 function writeOrProbeImport(
   target: OpenImport,
   entry: MemoryEntry,

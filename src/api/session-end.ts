@@ -234,12 +234,12 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   held: HeldLog;
   /** Sleeps the folder's own store; reports its own failure. */
   sleep: () => Promise<void>;
-  /** Imports the session's agent notes into the global store, for a folder that does not sleep
-   * here. */
+  /** Imports the session's agent notes into the global store, for a folder that does not
+   * sleep here. */
   importAgentNotes: () => Promise<void>;
   readScan: (log: LineLog) => Scan | null;
-  /** This session's saved place in its transcript: the turns after it, and moving it past
-   * `turns`. */
+  /** This session's saved place in its transcript: the turns after it, and moving it
+   * past `turns`. */
   cursor: {
     after: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => readonly Turn[];
     save: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => void;

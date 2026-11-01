@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // CI comment gate. A src/ comment line carrying a ticket code, version tag, reviewer note, date, plan path or
-// section number fails, as does a one-word comment line; the history belongs in docs or the git log.
+// section number fails, as does a one-word comment line or doc ending; the history belongs in docs or the git log.
 // Usage: check-comment-history.mjs [--list [file...]].
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -28,6 +28,21 @@ const PATTERNS = [
 const LABEL_PATTERN = /\bFeature \d+:|\bW\d+[a-z]?:|\b[Pp]lan designs? \d+|\bCHANGELOG \d/;
 // A wrapped `//` comment's last word left alone on its line; any hit fails.
 const ONE_WORD = /^ [A-Za-z]+\.?\r?$/;
+// Paths the concurrent tail lane edits keep their one-word lines until it lands, so either merge order passes.
+const ORPHAN_PENDING = [
+  'src/base/memory/',
+  'src/api/recall/anchoring.ts',
+  'src/base/ports/infra.ts',
+  'src/base/util/env.ts',
+  'src/entry/eval.ts',
+  'src/infra/eval-switches.ts',
+  'src/infra/ports.ts',
+  'src/store/sqlite/entries/entry-writes.ts',
+  'src/store/sqlite/folder-files/mirrors.ts',
+  'src/store/sqlite/runtime/handles.ts',
+  'src/store/sqlite/runtime/open.ts',
+  'src/surface/cli/eval.ts',
+];
 
 const PRECEDES_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
@@ -60,8 +75,9 @@ function opensRegex(src, i, prev) {
   return /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i));
 }
 
-/** Returns [lineNumber, text, ownLine] for every comment line: `//` tails and each line of a block comment.
- * ownLine is true for a `//` comment with only space before it on its line. */
+/** Returns [lineNumber, text, ownLine, endsDoc] for every comment line: `//` tails and each line of a block comment.
+ * ownLine is true for a `//` comment with only space before it on its line; endsDoc for a block's last line of text
+ * when an earlier line holds text too. */
 function commentLines(src) {
   const out = [];
   const templateDepth = []; // brace depth inside each open `${ }`
@@ -94,7 +110,7 @@ function commentLines(src) {
     if (c === '/' && src[i + 1] === '/') {
       const end = src.indexOf('\n', i);
       const stop = end < 0 ? src.length : end;
-      out.push([line, src.slice(i + 2, stop), /^\s*$/.test(src.slice(src.lastIndexOf('\n', i - 1) + 1, i))]);
+      out.push([line, src.slice(i + 2, stop), /^\s*$/.test(src.slice(src.lastIndexOf('\n', i - 1) + 1, i)), false]);
       i = stop;
       continue;
     }
@@ -102,7 +118,9 @@ function commentLines(src) {
       const end = src.indexOf('*/', i + 2);
       const stop = end < 0 ? src.length : end;
       const parts = src.slice(i + 2, stop).split('\n');
-      parts.forEach((part, k) => out.push([line + k, part, false]));
+      const texts = parts.flatMap((part, k) => (docText(part) === '' ? [] : [k]));
+      const last = texts.length > 1 ? texts[texts.length - 1] : -1;
+      parts.forEach((part, k) => out.push([line + k, part, false, k === last]));
       line += parts.length - 1;
       i = stop + 2;
       continue;
@@ -140,6 +158,11 @@ function commentLines(src) {
   return out;
 }
 
+/** A block comment line's words, past its leading `*`s. */
+function docText(part) {
+  return part.replace(/^\s*\*+/, '').trim();
+}
+
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
@@ -154,10 +177,12 @@ function findHits() {
   const hits = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const src = readFileSync(file, 'utf8');
-    for (const [line, text, ownLine] of commentLines(src)) {
+    const pending = ORPHAN_PENDING.some((p) => file.startsWith(p));
+    for (const [line, text, ownLine, endsDoc] of commentLines(src)) {
       const kind = LABEL_PATTERN.test(text) ? 'label' : PATTERNS.find(([, re]) => re.test(text))?.[0];
       if (kind) hits.push({ file, line, kind, text: text.trim() });
-      if (ownLine && ONE_WORD.test(text)) hits.push({ file, line, kind: 'orphan', text: `//${text}`.trim() });
+      const orphan = (ownLine && ONE_WORD.test(text)) || (endsDoc && /^\S+$/.test(docText(text)));
+      if (orphan && !pending) hits.push({ file, line, kind: 'orphan', text: (ownLine ? `//${text}` : text).trim() });
     }
   }
   return hits;

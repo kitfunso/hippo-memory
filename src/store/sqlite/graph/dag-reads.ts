@@ -178,8 +178,8 @@ function firstRows(
   return childrenInOrder(db, walk, whole, -1);
 }
 
-/** Children parent by parent, each parent's by created then id; a negative `limit` reads them
- * all. */
+/** Children parent by parent, each parent's by created then id; a negative `limit` reads
+ * them all. */
 function childrenInOrder(
   db: DatabaseSyncLike,
   walk: PagedWalk,

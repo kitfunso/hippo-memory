@@ -39,8 +39,8 @@ const DEFAULT_BODY_DEADLINE_MS = 30_000;
 
 /**
  * How long any route waits for a request body, so a client that sends headers and then stalls
- * cannot hold a request open: DEFAULT_BODY_DEADLINE_MS, or the HIPPO_BODY_TIMEOUT_MS value the root
- * read.
+ * cannot hold a request open: DEFAULT_BODY_DEADLINE_MS, or the HIPPO_BODY_TIMEOUT_MS value the
+ * root read.
  */
 export function bodyDeadlineMs(configured?: number): number {
   return configured ?? DEFAULT_BODY_DEADLINE_MS;
@@ -49,8 +49,8 @@ export function bodyDeadlineMs(configured?: number): number {
 export interface ReadBodyOptions {
   /** Defaults to MAX_BODY_BYTES. */
   maxBytes?: number;
-  /** Fails with BodyTimeoutError when the whole body has not arrived by then; defaults to
-   * DEFAULT_BODY_DEADLINE_MS. */
+  /** Fails with BodyTimeoutError when the whole body has not arrived by then; defaults
+   * to DEFAULT_BODY_DEADLINE_MS. */
   deadlineMs?: number;
 }
 

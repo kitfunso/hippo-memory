@@ -38,8 +38,8 @@ export interface BatchWriteAndDeleteOptions {
 
 /** Writes, deletes and dormant moves in one transaction. With `snapshot`, a write keeps only the
  * fields the caller changed and never resurrects a gone row. Dormant moves (sqlite/dormant/dormant.ts)
- * leave `memories` like a delete; both skip rows no longer auto-deletable. Returns ids that left
- * `memories`. */
+ * leave `memories` like a delete; both skip rows no longer auto-deletable. Returns ids that
+ * left `memories`. */
 export function batchWriteAndDelete(
   db: DatabaseSyncLike,
   { files, toWrite, toDeleteIds, opts }: BatchWriteAndDeleteOptions,
@@ -59,8 +59,8 @@ export function batchWriteAndDelete(
   }).removedIds;
 }
 
-/** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit
- * row. */
+/** Tags a flush error with the ids of the component it stopped at, for the partial sleep
+ * audit row. */
 function noteFailedComponent(err: Error, component: FlushComponent | undefined): void {
   if (!component) return;
   noteFailedUnit(err, [

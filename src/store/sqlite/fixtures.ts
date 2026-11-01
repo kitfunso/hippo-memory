@@ -36,8 +36,8 @@ export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
   return loadAllEntriesIn(storeFilesOf(hippoRoot));
 }
 
-/** The row with `id` in any tenant, or null: an eval reads back what it wrote, as loadAllEntries
- * does. */
+/** The row with `id` in any tenant, or null: an eval reads back what it wrote, as
+ * loadAllEntries does. */
 export function readEntryInFolder(hippoRoot: string, id: string): MemoryEntry | null {
   return readEntryIn(storeFilesOf(hippoRoot), id);
 }

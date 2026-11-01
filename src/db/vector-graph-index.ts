@@ -51,8 +51,8 @@ interface Ready {
   seenOn: DatabaseSyncLike | undefined;
   dataVersion: number;
   refreshes: number;
-  /** The rowid a background catch-up reads above; until it ends, reads answer up to it from the
-   * graph. */
+  /** The rowid a background catch-up reads above; until it ends, reads answer up to it from
+   * the graph. */
   catchingUpFrom: number | undefined;
 }
 

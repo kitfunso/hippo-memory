@@ -11,8 +11,8 @@ import type { Consolidation } from '../../base/records/consolidation.js';
 /** The store's rows as this run loaded them: by created then id, with a dry run's half-life
  * preview applied. */
 export class SleepRows {
-  /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs an
-   * integer. */
+  /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs
+   * an integer. */
   private readonly idPage: number;
   /** The rows read so far that back a first-class object, asked page by page with the rows. */
   private readonly backed = new Set<string>();

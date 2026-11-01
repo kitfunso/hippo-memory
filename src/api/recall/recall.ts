@@ -217,16 +217,16 @@ function storeRankingOf(ranking: RankRecallResult): StoreRanking {
   };
 }
 
-/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows it
- * earned. */
+/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows
+ * it earned. */
 interface CallerCut {
   readonly show: ShowRanking;
   readonly ranking: StoreRanking;
   readonly goalLog: GoalRecallLogRow[];
 }
 
-/** The caller shows its cut of the ranking; its rows go after the window's, in the same one
- * write. */
+/** The caller shows its cut of the ranking; its rows go after the window's, in the same
+ * one write. */
 async function finishShownRecall(
   ctx: Context,
   opts: RecallOptions,

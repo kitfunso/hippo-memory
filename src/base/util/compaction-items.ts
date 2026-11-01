@@ -137,8 +137,8 @@ const PROTECTED_WORDS = new Set([
   'unless',
   'until',
 ]);
-/** Below this share of the held text's words, an item is a fragment of something longer, not a
- * restatement. */
+/** Below this share of the held text's words, an item is a fragment of something longer, not
+ * a restatement. */
 const RESTATE_MIN_SHARE = 0.5;
 
 /** The words restates compares: NFC, lower case, split on anything that is not a letter, mark,

@@ -68,8 +68,8 @@ export async function sharePeers(
   );
 }
 
-/** Copies the global rows the caller's store lacks into it; other projects' rows only with
- * `includeCrossProject`. */
+/** Copies the global rows the caller's store lacks into it; other projects' rows only
+ * with `includeCrossProject`. */
 export async function syncFromGlobal(
   ctx: HippoDbContext,
   opts: { readonly includeCrossProject: boolean },

@@ -134,8 +134,8 @@ function markParentsDirty(
 }
 
 /** archiveRawMemory for every row in `ids` in one write scope, in the same few statements for
- * one row or many; throws, archiving none, if any is missing or not raw. Returns the
- * archived_at. */
+ * one row or many; throws, archiving none, if any is missing or not raw. Returns
+ * the archived_at. */
 export function archiveRawMemories(
   db: DatabaseSyncLike,
   ids: readonly string[],

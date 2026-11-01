@@ -38,8 +38,8 @@ export function githubEventMemory(db: DatabaseSyncLike, idempotencyKey: string):
   return eventMemory(db, GITHUB_LOG, idempotencyKey);
 }
 
-/** False when the key was already logged, so a caller inside a write scope can roll its own row
- * back. */
+/** False when the key was already logged, so a caller inside a write scope can roll its own
+ * row back. */
 export function markGitHubEventSeen(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
   return markEventSeen(db, {
     log: GITHUB_LOG,

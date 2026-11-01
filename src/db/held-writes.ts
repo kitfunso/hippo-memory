@@ -42,8 +42,8 @@ export class HeldWrites {
     this.#hold(root, state, what, write);
   }
 
-  /** Holds `write` as the root's next `what` write, run within an interval of the root's last
-   * write. */
+  /** Holds `write` as the root's next `what` write, run within an interval of the root's
+   * last write. */
   hold(root: string, what: string, write: () => void): void {
     this.#hold(root, this.#stateOf(root), what, write);
   }

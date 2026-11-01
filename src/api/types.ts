@@ -24,8 +24,7 @@ export interface Actor {
   scopes?: readonly string[];
   /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */
   viaAuthResolver?: true;
-  /** The host's operator (CLI, stdio MCP, host-tenant admin key): may act beyond its
-   * tenant. */
+  /** The host's operator (CLI, stdio MCP, host-tenant admin key): may act beyond its tenant. */
   hostAdmin?: true;
   owner?: string; // the person behind the key; task state keys on it
 }
@@ -92,8 +91,8 @@ export interface Context {
   readonly detached?: DetachedWork | undefined;
 }
 
-/** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion
- * ratio. */
+/** The strength model `ctx` scores by: its root's eval switches with its config's
+ * loss-aversion ratio. */
 export function strengthOf(ctx: Pick<Context, 'infra' | 'config'>): StrengthModel {
   return strengthModelFor(ctx.infra.evalSwitches, ctx.config.runtime);
 }
@@ -133,8 +132,8 @@ export function ownerOrSubject(actor: Actor): string {
 
 /** Thrown by `api.recall` on a contract violation; the stable `code` lets callers discriminate
  * without parsing the message. 'fresh_tail_requires_session_id' (needs
- * HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1) or 'invalid_scorer_window' (0 would hit an uncapped
- * fallback). */
+ * HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1) or 'invalid_scorer_window' (0 would hit an
+ * uncapped fallback). */
 export class RecallContractError extends BadRequestError {
   public readonly code: 'fresh_tail_requires_session_id' | 'invalid_scorer_window';
   constructor(code: 'fresh_tail_requires_session_id' | 'invalid_scorer_window', message: string) {

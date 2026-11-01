@@ -285,8 +285,8 @@ function mountedDrive(letter: string): string {
   return `(?:${letter}[:-]|(?:[-/](?:cygdrive|mnt))?[-/]${letter})`;
 }
 
-/** Regex source for one spelling of the home, or null when too little of it is left to swap
- * safely. */
+/** Regex source for one spelling of the home, or null when too little of it is left to
+ * swap safely. */
 function spellingPattern(spelling: string, deep: boolean): string | null {
   if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegex(spelling) : null;
   // Each tool that mounts a drive writes it its own way, so a home two or more folders below its

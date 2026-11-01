@@ -30,8 +30,8 @@ export interface StoreSession {
 export interface ContainerWork {
   readonly tool: AgentMemoryTool;
   readonly container: Container;
-  /** `containerPrefix(tool, containerId)`: every row of the container has a source starting with
-   * it. */
+  /** `containerPrefix(tool, containerId)`: every row of the container has a source starting
+   * with it. */
   readonly prefix: string;
   /** Legacy rows that take an item's key as they are, by key. */
   readonly adopt: ReadonlyMap<string, readonly MemoryEntry[]>;
@@ -47,8 +47,8 @@ export interface ContainerView {
   readonly live: readonly MemoryEntry[];
   /** Dormant snapshots the moves bring under the prefix, as they will stand. */
   readonly movedDormant: readonly DormantSnapshot[];
-  /** Every live row under the prefix and the earlier ones, as read: what the apply checks still
-   * stands. */
+  /** Every live row under the prefix and the earlier ones, as read: what the apply checks
+   * still stands. */
   readonly read: readonly PlannedRow[];
   /** The adoptions and moves, in the order the store runs them. */
   readonly steps: readonly ImportStep[];

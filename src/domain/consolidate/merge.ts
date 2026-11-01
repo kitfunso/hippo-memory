@@ -118,8 +118,8 @@ interface MergePartition {
   origin: MemoryEntry['originProject'];
 }
 
-/** One partition's merge candidates, with the token set and length of each: all the overlap join
- * reads. */
+/** One partition's merge candidates, with the token set and length of each: all the overlap
+ * join reads. */
 interface MergeBucket {
   partition: MergePartition;
   ids: string[];
@@ -215,8 +215,8 @@ interface MergeClusterOptions {
   readonly used: Set<string>;
 }
 
-/** Merges one cluster into a semantic row; returns false when a tombstone refuses the merged
- * text. */
+/** Merges one cluster into a semantic row; returns false when a tombstone refuses the
+ * merged text. */
 async function mergeCluster({
   run,
   partition,

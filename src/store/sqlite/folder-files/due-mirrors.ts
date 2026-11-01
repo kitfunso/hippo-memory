@@ -70,8 +70,8 @@ function rewriteDueMirrorsIn({ hippoRoot, runtime }: StoreAt): void {
 }
 
 /** Rewrites each due mirror from its row as it stands now, a page at a time; a mark is cleared
- * once its file is written or its row is gone, and only if no later write has marked the row
- * again. */
+ * once its file is written or its row is gone, and only if no later write has marked the
+ * row again. */
 function rewriteDueMirrors(db: DatabaseSyncLike, hippoRoot: string): void {
   for (let marks = dueMarks(db, DUE); marks.length > 0; marks = dueMarks(db, marks.at(-1)!.key)) {
     // A mark names a row by id alone, and one rewrite serves the marks every tenant's jobs left.

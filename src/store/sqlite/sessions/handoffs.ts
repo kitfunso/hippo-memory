@@ -75,8 +75,8 @@ function sessionEndSource(
 }
 
 /** The handoff `source` writes. A same-task refresh carries forward the envelope fields nobody
- * cleared; a scope mismatch carries none, so private metadata never leaks into an unscoped
- * envelope. */
+ * cleared; a scope mismatch carries none, so private metadata never leaks into an
+ * unscoped envelope. */
 function sessionEndHandoff(
   sessionId: string,
   source: SessionEndSource,
@@ -105,8 +105,8 @@ function sessionEndHandoff(
   };
 }
 
-/** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff
- * lookup. */
+/** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card
+ * handoff lookup. */
 export const HANDOFF_COLUMNS =
   'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, ' +
   'evidence_json, outcome, target_runtime, card_id';
@@ -116,8 +116,8 @@ export type SessionHandoffDbRow = SessionHandoffRow;
 
 type HandoffColumn = readonly [column: string, value: string | null];
 
-/** The columns an insert and a transcript rewrite both write, so the two statements cannot drift
- * apart. */
+/** The columns an insert and a transcript rewrite both write, so the two statements cannot
+ * drift apart. */
 function handoffContentColumns(handoff: Omit<SessionHandoff, 'updatedAt'>): HandoffColumn[] {
   return [
     ['repo_root', handoff.repoRoot ?? null],
@@ -288,8 +288,8 @@ export function readHandoff(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-/** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows
- * changed. */
+/** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns
+ * rows changed. */
 export function stampHandoffOutcome(
   db: DatabaseSyncLike,
   tenantId: string,

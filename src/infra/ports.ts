@@ -13,8 +13,8 @@ import { realRerankers } from './rerankers/index.js';
 import { readApiCalls } from './transcript-calls.js';
 import { FailureNotices } from '../base/util/failure-notices.js';
 
-/** The Llm ANTHROPIC_API_KEY opens, or undefined when the key is unset: with no key, no model is
- * called. */
+/** The Llm ANTHROPIC_API_KEY opens, or undefined when the key is unset: with no key, no model
+ * is called. */
 export function anthropicLlmFromEnv(fetcher?: typeof fetch): Llm | undefined {
   const apiKey = envAnthropicApiKey();
   return apiKey ? anthropicLlm({ apiKey, fetcher }) : undefined;

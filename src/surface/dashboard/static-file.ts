@@ -90,8 +90,8 @@ function readAsset(file: string): Buffer | null {
   }
 }
 
-/** Every file under `root` with a type the dashboard serves, read once; null when the app is not
- * built. */
+/** Every file under `root` with a type the dashboard serves, read once; null when the app is
+ * not built. */
 export function loadStaticFiles(root: string = DASHBOARD_STATIC_ROOT): StaticFiles | null {
   if (builtStaticRoot(root) === null) return null;
   const files = new Map<string, StaticAsset>();

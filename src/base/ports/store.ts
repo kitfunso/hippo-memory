@@ -43,8 +43,8 @@ export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-b
 export interface HippoStore extends CoreGroups {
   /** A name for logs and errors. */
   readonly kind: string;
-  /** The API key record for `keyId` with its scope grants, revoked or not; null when none
-   * matches. */
+  /** The API key record for `keyId` with its scope grants, revoked or not; null when
+   * none matches. */
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
   /** Recall candidates for `query`: whole-word matches first, then part-word matches, then every
    * row in scope. */
@@ -56,8 +56,8 @@ export interface HippoStore extends CoreGroups {
    * admin, the api checks). One read for each walk of a filtered set of rows, so no group keeps
    * a read per caller. */
   entriesWhere(filter: EntryFilter, page: PageRequest): Promise<EntryPage>;
-  /** The session's active goals and their policies, read together so a goal and its policy never
-   * disagree. */
+  /** The session's active goals and their policies, read together so a goal and its policy
+   * never disagree. */
   activeGoals(opts: GetActiveGoalsOptions): Promise<ActiveGoals>;
   /** The first `count` (at most MAX_FRESH_RAW) unsuperseded raw rows of `tenantId` that a non-empty
    * session id and non-null `origins` (those projects and user-global rows) must narrow, by created
@@ -71,15 +71,15 @@ export interface HippoStore extends CoreGroups {
   ): Promise<MemoryEntry[]>;
   /** The newest active snapshot a non-null `key` must narrow to one owner and project (null only
    * on an unshared store), then for its session the newest handoff (same key) and `eventLimit`
-   * newest events returned oldest first, each tie broken by the larger id; the caller applies
-   * scope. */
+   * newest events returned oldest first, each tie broken by the larger id; the caller
+   * applies scope. */
   continuity(
     tenantId: string,
     eventLimit: number,
     key: ContinuityKey | null,
   ): Promise<ContinuityBlock>;
-  /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit
-   * row. */
+  /** Resolves a forward claim's tokens to one class and reads its baserate, writing no
+   * audit row. */
   planningFallacyEvidence(
     tenantId: string,
     classQueryTokens: readonly string[],

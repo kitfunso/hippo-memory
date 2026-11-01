@@ -51,8 +51,8 @@ export type CopyDbRow = {
   origin_project: string | null;
 };
 
-/** Which rows of the tenant a copy read looks at: `filter` adds predicates, each written ` AND
- * ...`. */
+/** Which rows of the tenant a copy read looks at: `filter` adds predicates, each written `
+ * AND ...`. */
 export interface CopyRead {
   readonly tenantId: TenantId;
   readonly filter: SqlFragment;

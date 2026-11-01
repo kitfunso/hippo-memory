@@ -78,8 +78,8 @@ function firstByKey<T>(rows: readonly T[], keyOf: (row: T) => string): Map<strin
 
 interface EntityDelta {
   ops: GraphOp[];
-  /** Entity id to key for each stored row that survives the diff; relations are matched through
-   * it. */
+  /** Entity id to key for each stored row that survives the diff; relations are matched
+   * through it. */
   keptKeyById: Map<number, string>;
 }
 

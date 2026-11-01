@@ -71,8 +71,8 @@ export interface SummaryDescendants {
 /** The reads behind session assembly and summary drill-down. None writes an audit row. */
 export interface DagReads {
   /** How many rows the session holds with no cap, under the scope rule
-   * `passesScopeFilterForRecall` applies, so the count never tells of a row the caller could not
-   * read. */
+   * `passesScopeFilterForRecall` applies, so the count never tells of a row the caller could
+   * not read. */
   sessionRawCount(query: SessionRawCount): Promise<number>;
   /** The rows `sessionRawCount` counts, newest `limit` of them oldest first (created then id),
    * as keys without content. */

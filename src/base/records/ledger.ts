@@ -99,8 +99,8 @@ export interface TokenSurfaceSummary {
   skipped: number;
   /** Tokens those skipped blocks would have cost. */
   tokensAvoided: number;
-  /** Tokens of these blocks that later model calls read again, from ended sessions; 0 off
-   * `REREAD_SURFACES`. */
+  /** Tokens of these blocks that later model calls read again, from ended sessions; 0
+   * off `REREAD_SURFACES`. */
   tokensReread: number;
   /** Distinct session ids seen (rows without one are not counted). */
   sessions: number;

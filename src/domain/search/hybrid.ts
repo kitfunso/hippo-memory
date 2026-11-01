@@ -121,8 +121,8 @@ export interface HybridSettings {
   cwd?: string;
 }
 
-/** The published wrapper's folder fields: hippo.db under `hippoRoot` when the caller names no
- * store. */
+/** The published wrapper's folder fields: hippo.db under `hippoRoot` when the caller names
+ * no store. */
 export interface HybridFolder {
   hippoRoot?: string;
   /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
@@ -148,8 +148,8 @@ export type HybridSearchOptions = HybridRanking & HybridFolder;
 /** rankHybrid's options once the caller names its stores; the folder fields belong to the
  * published wrapper. */
 export type HybridRankOptions = HybridRanking & {
-  /** The global store the graph stream also walks; the published wrapper opens it from
-   * `graphStream.globalRoot`. */
+  /** The global store the graph stream also walks; the published wrapper opens it
+   * from `graphStream.globalRoot`. */
   graphGlobal?: GraphWalk;
 };
 
@@ -211,8 +211,8 @@ function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOpti
   };
 }
 
-/** Score order, then MMR or the reranker over the deduped rows and their DAG children, then the
- * budget. */
+/** Score order, then MMR or the reranker over the deduped rows and their DAG children, then
+ * the budget. */
 async function orderAndFit(
   query: string,
   scored: SearchResult[],
@@ -234,8 +234,8 @@ async function orderAndFit(
   );
 }
 
-/** The vector arm over `store`, embedding queries with the provider `embedderFor` builds from
- * `config`. */
+/** The vector arm over `store`, embedding queries with the provider `embedderFor` builds
+ * from `config`. */
 export function vectorSourceOf({
   store,
   graph,

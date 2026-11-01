@@ -23,8 +23,8 @@ import { duplicateHash } from '../../../base/util/same-text.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import type { RenameSourceOptions } from '../../../base/records/agent-import.js';
 
-/** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
- * sound. */
+/** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without
+ * a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
   if (Object.hasOwn(entry, 'tenant_id') && entry.tenantId === undefined) {
     throw new TypeError('tenant_id was renamed to tenantId in 3.0');
@@ -268,8 +268,8 @@ export function stampOriginProjectForImport(
   };
 }
 
-/** Rewrites a live row's tags and its full-text row on the caller's transaction, with no audit
- * row. */
+/** Rewrites a live row's tags and its full-text row on the caller's transaction, with no
+ * audit row. */
 export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void {
   cachedStatement(
     db,

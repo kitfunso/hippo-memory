@@ -36,8 +36,8 @@ export interface VaultTarget {
 }
 
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on
- * the in-memory `existing` Map loaded once, so two concurrent runs over one vault can
- * double-insert. */
+ * the in-memory `existing` Map loaded once, so two concurrent runs over one vault
+ * can double-insert. */
 export async function importVaultInto(
   folderPath: string,
   options: ImportOptions,

@@ -1,8 +1,8 @@
 /**
  * Statistics and cost accounting for the token-efficiency evals: cost is priced over four buckets
  * (uncached input, cache write, cache read, output). Uncertainty uses paired, cluster
- * (same-repository tasks are not independent) and paired-ratio bootstraps; every resampler takes a
- * seed.
+ * (same-repository tasks are not independent) and paired-ratio bootstraps; every resampler takes
+ * a seed.
  */
 
 import { mulberry32 } from '../../base/util/prng.js';

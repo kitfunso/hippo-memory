@@ -42,8 +42,8 @@ export interface GraphView {
 export interface VectorGraphSearchOptions {
   k: number;
   ef: number;
-  /** Checked for every candidate before it can enter the result; a rejected node is still walked
-   * through. */
+  /** Checked for every candidate before it can enter the result; a rejected node is still
+   * walked through. */
   admit?: (node: number) => boolean;
   /** Most vectors the walk may score; past it the search stops with `aborted`. */
   visitBudget?: number;
@@ -157,8 +157,8 @@ interface WalkContext {
   graph: GraphView;
   score: (node: number) => number;
   admit?: (node: number) => boolean;
-  /** Vectors still allowed to be scored, shared by every layer of one search; negative means no
-   * budget. */
+  /** Vectors still allowed to be scored, shared by every layer of one search; negative means
+   * no budget. */
   budget: { left: number };
   /** Nodes the last layer's walk reached. */
   visited: number;
@@ -289,8 +289,8 @@ function unitOf(graph: VectorGraph, node: number): Float32Array {
   return unit;
 }
 
-/** Algorithm 4 without extendCandidates or keepPrunedConnections; `cands` must be sorted best
- * first. */
+/** Algorithm 4 without extendCandidates or keepPrunedConnections; `cands` must be sorted
+ * best first. */
 function selectNeighbours(cands: GraphHit[], m: number, unitFor: VectorLookup): number[] {
   const kept: number[] = [];
   for (const c of cands) {

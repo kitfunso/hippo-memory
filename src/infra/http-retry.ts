@@ -25,8 +25,8 @@ export interface RetryPolicy {
    * cannot commit twice. */
   retryTransport?: boolean;
   fetchFn?: typeof fetch;
-  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at
-   * once. */
+  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait
+   * at once. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   /** Replaces the clock `totalMs` is measured on. */

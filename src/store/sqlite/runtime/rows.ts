@@ -357,8 +357,8 @@ export function parseJsonArray(raw: string | null | undefined, site?: StoredJson
 
 /** Strict parse for `last_trace_id`: Number(raw) turns '' or garbage into 0/NaN (a masked FK
  * violation); require a clean positive integer string, else unset. The ONE place that decides
- * 'clean'; consumers read the validated value from `buildIndexFromDb`'s result and never
- * re-parse. */
+ * 'clean'; consumers read the validated value from `buildIndexFromDb`'s result and
+ * never re-parse. */
 export function parseLastTraceId(raw: string | null | undefined): string | null {
   const trimmed = (raw ?? '').trim();
   if (!/^\d+$/.test(trimmed) || Number(trimmed) <= 0) return null;

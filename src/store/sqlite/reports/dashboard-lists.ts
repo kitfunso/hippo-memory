@@ -102,8 +102,8 @@ interface AgeBindsOptions {
 }
 
 /** AGE_KEPT's parameters: a plain created is kept from createdFrom to createdTo, the instants
- * where daysBetween's arithmetic, done here on each candidate instant, turns the brush's two
- * tests. */
+ * where daysBetween's arithmetic, done here on each candidate instant, turns the brush's
+ * two tests. */
 function ageBinds({ minAgeDays: min, maxAgeDays: max, nowMs }: AgeBindsOptions) {
   const age = (ms: number): number => Math.max(0, (nowMs - ms) / DAY_MS);
   const from = firstHolding((ms) => age(ms) <= max);
@@ -122,8 +122,8 @@ interface ListScan {
   readonly binds: Record<string, SqlValue>;
 }
 
-/** What one list scan computes: its sort, whether a strength brush narrows it, and its text
- * filter. */
+/** What one list scan computes: its sort, whether a strength brush narrows it, and its
+ * text filter. */
 interface ScanPlan {
   readonly sort: DashboardSortKey;
   readonly descending: boolean;
@@ -153,12 +153,12 @@ function scanSql({ sort, descending, byStrength, holds }: ScanPlan, rules: Store
   );
 }
 
-/** The scan that writes list `list`: the filter's tally at position 0, then from 1 each kept id
- * the chip keeps, in sort order; a layer the query leaves out binds NULL, which no row's layer
- * equals. */
 /** The page query with the tenant and the time the scan dates its facts at. */
 type ScanQuery = DashboardPageQuery & { readonly tenantId: string; readonly nowMs: number };
 
+/** The scan that writes list `list`: the filter's tally at position 0, then from 1 each kept id
+ * the chip keeps, in sort order; a layer the query leaves out binds NULL, which no row's
+ * layer equals. */
 function listScan(
   db: DatabaseSyncLike,
   rules: StoreModel,
@@ -250,8 +250,8 @@ function listKey(tenantId: string, query: DashboardPageQuery, nowMs: number): st
   return `${JSON.stringify([tenantId, origin, layers, text, sort, descending, chip])} ${bounds.join(' ')}`;
 }
 
-/** The sorted lists one held reader keeps, scored by `rules`; a commit to the store drops them
- * all. */
+/** The sorted lists one held reader keeps, scored by `rules`; a commit to the store drops
+ * them all. */
 export class MemoryLists {
   readonly #db: DatabaseSyncLike;
   readonly #rules: StoreModel;

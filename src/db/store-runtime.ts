@@ -63,8 +63,8 @@ export class StoreRuntime {
     this.#open.delete(session);
   }
 
-  /** Whether a checkpointer of this runtime checkpoints the store at `key` off its connections'
-   * commits. */
+  /** Whether a checkpointer of this runtime checkpoints the store at `key` off its
+   * connections' commits. */
   checkpointsInBackground(key: string): boolean {
     return this.#background.has(key);
   }

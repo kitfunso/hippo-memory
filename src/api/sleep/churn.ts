@@ -48,8 +48,8 @@ async function markChurnStale(
 }
 
 /** `markChurnStale` over the stores the context reaches: its own, named `root` in the report,
- * and the operator's global store when it is readable, another folder and on hippo.db's local
- * tier. */
+ * and the operator's global store when it is readable, another folder and on hippo.db's
+ * local tier. */
 export function markChurnStaleInReach(
   ctx: Pick<HippoDbContext, 'tenantId' | 'infra' | 'store' | 'reach'>,
   opts: { readonly root: string; readonly repoDir: string; readonly dryRun: boolean },

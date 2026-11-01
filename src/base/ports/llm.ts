@@ -36,8 +36,8 @@ export function isPermanentFailure(failure: LlmFailure): boolean {
   return failure.kind === 'http' && PERMANENT_STATUSES.has(failure.status);
 }
 
-/** The first errno name (ECONNRESET, ENOTFOUND) along a cause chain; fetch puts it one level
- * down. */
+/** The first errno name (ECONNRESET, ENOTFOUND) along a cause chain; fetch puts it one
+ * level down. */
 function errnoOf(cause: unknown): string {
   for (
     let link = cause, depth = 0;

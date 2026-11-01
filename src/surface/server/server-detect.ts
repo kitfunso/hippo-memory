@@ -95,8 +95,8 @@ function isLiveLoopbackTarget(info: ServerInfo): boolean {
   );
 }
 
-/** The whole body as text, or null once it passes HEALTH_BODY_MAX_BYTES (the stream is then
- * cancelled). */
+/** The whole body as text, or null once it passes HEALTH_BODY_MAX_BYTES (the stream is
+ * then cancelled). */
 async function readCappedBody(body: ReadableStream<Uint8Array>): Promise<string | null> {
   // Read the body under a hard byte cap: the process on info.url may not be hippo (pid reuse), so
   // its response is untrusted and never goes unbounded into a parser.
@@ -133,8 +133,8 @@ function isConnectionRefused<E>(err: E): boolean {
   );
 }
 
-/** False for a /health body that is not an object (JSON null, a scalar) or reports another
- * started_at. */
+/** False for a /health body that is not an object (JSON null, a scalar) or reports
+ * another started_at. */
 function reportsStartedAt<T>(body: T, startedAt: string): boolean {
   return isObjectLike(body) && 'started_at' in body && body.started_at === startedAt;
 }

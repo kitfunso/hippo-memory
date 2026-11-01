@@ -101,8 +101,8 @@ async function requestScores(
   return scores;
 }
 
-/** Builds a Jev reranker around the reranker it degrades to. Exported so a test can pass a
- * stand-in. */
+/** Builds a Jev reranker around the reranker it degrades to. Exported so a test can pass
+ * a stand-in. */
 export function createJevReranker(localFallback: RerankerFn, http: Http): RerankerFn {
   const outage = createOutageWarning('jev', 'falling back to the local cross-encoder');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {

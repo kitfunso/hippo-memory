@@ -18,8 +18,8 @@ import type {
 import type { DeliveryRecorderInit } from './delivery-recorder.js';
 import type { Candidate, ObservedPick, RecorderState } from './delivery-observation.js';
 
-/** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a
- * prompt. */
+/** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not
+ * a prompt. */
 const carriesPrompt = (type: DeliveryEventType): boolean =>
   type === 'prompt-submit' || type === 'pinned-manual';
 

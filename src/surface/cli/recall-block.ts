@@ -86,8 +86,8 @@ export interface RecallBlockHints extends RecallHints {
 /** Hints for a list that dropped `held` merged copies. */
 type HintsFor = (list: SearchResult[], held: number) => RecallBlockHints;
 
-/** Each pipeline computes its hints over the list it returns, so they follow the list as it
- * shrinks. */
+/** Each pipeline computes its hints over the list it returns, so they follow the list as
+ * it shrinks. */
 function recallHinter(
   ctx: api.Context,
   query: string,
@@ -169,8 +169,8 @@ function renderRecallBlock(
   });
 }
 
-/** Pays the continuity sections in print order after the header; one that does not fit is
- * dropped. */
+/** Pays the continuity sections in print order after the header; one that does not fit
+ * is dropped. */
 function payContinuity(loaded: api.ContinuityBlock, sectionBudget: number) {
   let { activeSnapshot, sessionHandoff, recentSessionEvents } = loaded;
   const { pays, left } = tokenPurse(sectionBudget);
@@ -222,8 +222,8 @@ export interface FittedRecall extends RenderedRecall {
   readonly planningFallacyWatching: PlanningFallacyWatching | null;
 }
 
-/** Pays the continuity sections and the plan hint first, then fits the memories into what is
- * left. */
+/** Pays the continuity sections and the plan hint first, then fits the memories into what
+ * is left. */
 export function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
   const { ctx, query, parsed, ranked, loaded, planning } = options;
   const { budget } = parsed;

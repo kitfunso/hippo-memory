@@ -118,8 +118,8 @@ function stripHippoHooksFromEntries(entries: JsonValue[]) {
   return { survivingEntries, strippedAny };
 }
 
-/** True when the file is hippo's plugin as this release writes it, so install can skip the
- * write. */
+/** True when the file is hippo's plugin as this release writes it, so install can skip
+ * the write. */
 export function isCurrentPlugin(text: string): boolean {
   return text.includes(HIPPO_OPENCODE_PLUGIN_MARKER) && text === OPENCODE_PLUGIN_SOURCE;
 }

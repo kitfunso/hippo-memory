@@ -59,8 +59,8 @@ interface ScrubbedSummary {
   found: boolean;
 }
 
-/** What the record keeps of a compact_summary: the scrubbed body, and every parsed item
- * scrubbed. */
+/** What the record keeps of a compact_summary: the scrubbed body, and every parsed
+ * item scrubbed. */
 export function readCompactionText(compactSummary: string): ScrubbedSummary {
   const body = compactSummaryBody(compactSummary);
   const parsed = parseCompactionItems(body);
@@ -190,8 +190,8 @@ function transcriptSummary(
   return null;
 }
 
-/** How long a replay waits on a locked store, and the Date.now() after which it starts no new
- * record. */
+/** How long a replay waits on a locked store, and the Date.now() after which it starts no
+ * new record. */
 export interface ReplayOptions {
   busyWaitMs?: number;
   deadline?: number;

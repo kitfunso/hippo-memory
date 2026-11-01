@@ -117,8 +117,8 @@ interface RecordQuarantineOptions {
   actor: string;
 }
 
-/** Insert the quarantine row + its audit event; caller runs this inside the memory's own write
- * transaction. */
+/** Insert the quarantine row + its audit event; caller runs this inside the memory's own
+ * write transaction. */
 export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOptions): void {
   cachedStatement(
     db,

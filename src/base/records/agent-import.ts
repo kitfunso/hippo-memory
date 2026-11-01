@@ -75,8 +75,8 @@ interface WriteStep {
   readonly supersedes: readonly string[];
 }
 
-/** The dormant row returns as `revived`; when it is gone or its id is taken, `fresh` is written
- * instead. */
+/** The dormant row returns as `revived`; when it is gone or its id is taken, `fresh` is
+ * written instead. */
 export interface RestoreStep {
   readonly kind: 'restore';
   readonly dormantId: string;

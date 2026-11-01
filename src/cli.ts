@@ -288,8 +288,8 @@ async function main(
   await (spec.scoped ? cli.request(run) : run(cli));
 }
 
-/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe
- * side. */
+/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the
+ * safe side. */
 function warnUnknownFlagValues(): void {
   for (const entry of validateFlags()) {
     log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);

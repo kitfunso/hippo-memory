@@ -167,8 +167,8 @@ export function sqliteReach({
 }
 
 /** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the
- * project-tag reads on read-only handles, so a check never creates or migrates the store it
- * inspects. */
+ * project-tag reads on read-only handles, so a check never creates or migrates the store
+ * it inspects. */
 export function sqliteDiagnosticsStore(
   hippoRoot: string,
 ): { readonly diagnostics: Diagnostics } & ProjectTagReads {

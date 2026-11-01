@@ -28,8 +28,8 @@ export interface AuthCreateOptions {
   /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin
    * key has to be asked for by name. */
   role?: 'admin' | 'member';
-  /** Days until the key expires: above 0 and at most MAX_TTL_DAYS. Defaults to
-   * DEFAULT_KEY_TTL_DAYS. */
+  /** Days until the key expires: above 0 and at most MAX_TTL_DAYS. Defaults
+   * to DEFAULT_KEY_TTL_DAYS. */
   ttlDays?: number;
   /** True mints a key that never expires, which has to be asked for by name; refused together
    * with `ttlDays`. */
@@ -237,8 +237,8 @@ async function listRows(
     : keyWrites.listApiKeys({ ...opts, tenantId: ctx.tenantId, ...filter });
 }
 
-/** The key id of a member API key caller, whose owner decides what it lists; null for any other
- * caller. */
+/** The key id of a member API key caller, whose owner decides what it lists; null for any
+ * other caller. */
 function memberKeyIdOf(actor: Actor): string | null {
   return actor.role === 'admin' || actor.viaAuthResolver ? null : keyIdOfSubject(actor.subject);
 }

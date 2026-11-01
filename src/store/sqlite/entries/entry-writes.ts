@@ -24,8 +24,8 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 
 export interface WriteEntryOptions {
   actor?: string;
-  /** Runs after the row commits and before the mirrors, on an idle connection; keep it
-   * best-effort. */
+  /** Runs after the row commits and before the mirrors, on an idle connection; keep
+   * it best-effort. */
   afterCommit?: () => void;
 }
 

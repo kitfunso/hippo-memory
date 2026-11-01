@@ -103,8 +103,8 @@ export interface McpCaller<S extends HippoStore = HippoStore> {
   /** The transport root's per-caller state; without it no session ring, last-shown list or
    * auto-sleep is kept. */
   callers?: CallerState;
-  /** The outside services the transport's root built; every tool call's api Context carries
-   * them. */
+  /** The outside services the transport's root built; every tool call's api Context
+   * carries them. */
   infra: InfraPorts;
   /** Per-client key for state isolation under HTTP-MCP, a hash of bearer and address built in
    * src/surface/server/mcp-http.ts; absent on stdio, which keys by process and tenant. */
@@ -147,8 +147,8 @@ export function mcpActor(ctx: McpCaller | undefined): ApiActor {
   return actor;
 }
 
-/** Stdio or a host admin: the only callers whose server cwd and git history are their own to
- * read. */
+/** Stdio or a host admin: the only callers whose server cwd and git history are their own
+ * to read. */
 export function ownsServerCwd(ctx: McpCaller | undefined): boolean {
   return mcpActor(ctx).hostAdmin === true;
 }

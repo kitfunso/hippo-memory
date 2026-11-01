@@ -88,8 +88,8 @@ interface SpoolRead {
   unread: string;
 }
 
-/** Spool counts in their own try, so a spool that cannot be read never hides the database
- * counts. */
+/** Spool counts in their own try, so a spool that cannot be read never hides the
+ * database counts. */
 function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
   try {
     return { counts: spoolCounts(store, now, REPLAY_AFTER_MS, spoolFs), unread: '' };

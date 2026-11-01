@@ -24,8 +24,8 @@ import {
 
 type FailureSkip = Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'>;
 
-/** failureReport's reading of the payload, read on the caller's machine, plus the id its retries
- * carry. */
+/** failureReport's reading of the payload, read on the caller's machine, plus the id its
+ * retries carry. */
 export interface CallerFailureRequest {
   readonly sessionId: string;
   readonly project: CallerProject;

@@ -49,8 +49,8 @@ export type ConsolidateOptions = {
   budget?: Pick<WriteBudget, 'holdMs'>;
   /** The caller's config for `hippoRoot`; absent, `consolidate` reads the store's config.json. */
   config?: HippoConfig;
-  /** The tenant whose completed sessions become traces; absent, `consolidate` uses the default
-   * tenant. */
+  /** The tenant whose completed sessions become traces; absent, `consolidate` uses the
+   * default tenant. */
   tenantId?: string;
 };
 

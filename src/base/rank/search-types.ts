@@ -34,8 +34,8 @@ export const UTILITY_LENGTH_TOKENS = 10000;
 export const SALIENCE_MIN_MULTIPLIER = 0.5;
 
 /**
- * One score mutation applied after candidate generation; allocated only under `recall --why` or
- * `RecallOptions.trace.explain`.
+ * One score mutation applied after candidate generation; allocated only under `recall --why`
+ * or `RecallOptions.trace.explain`.
  */
 export interface RerankStep {
   /** One of: interference, value, utility, reranker, goal-boost, retrieval-count-downweight. */
