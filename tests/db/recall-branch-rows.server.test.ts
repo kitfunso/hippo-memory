@@ -285,7 +285,17 @@ const WANT = new Map<string, Record<Surface, Want>>(
     },
     'LIKE path': {
       http: { ids: ['mem_x_cafe'], audit: [SKIPPED, recallRow(1)], trace: 'api 1 -', ledger: 'http_recall 1 -' },
-      mcp: { ids: ['mem_x_cafe'], audit: [recallRow(1), SKIPPED], trace: 'mcp 1 -', ledger: 'mcp_recall 0 -' },
+      // Moved in #1135: accented letters now stay inside the word, so `caf` no longer matches the word café.
+      mcp: {
+        ids: [],
+        audit: [recallRow(0), SKIPPED],
+        trace: 'mcp 0 -',
+        ledger: 'mcp_recall 0 -',
+        check: (reply) =>
+          expect(text(reply)).toBe(
+            '## Cutoff\nShowing 0 of 1 candidates; 1 not shown (rank, budget or limit).\n\n---\n\nNo relevant memories found.',
+          ),
+      },
     },
   } satisfies Record<string, Record<Surface, Want>>),
 );

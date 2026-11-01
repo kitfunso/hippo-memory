@@ -3,9 +3,9 @@ export const CJK_SCRIPTS = String.raw`\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang
 /** CJK_SCRIPTS and ー, the prolonged-sound mark, a Common-script letter inside katakana words. */
 export const CJK_LETTERS = `${CJK_SCRIPTS}ー`;
 const HAS_CJK = new RegExp(`[${CJK_LETTERS}]`, 'u');
-// Other non-ASCII letters still split words, so `caf` keeps matching `café` as the recall goldens
-// pin.
-const NOT_WORD = new RegExp(String.raw`[^\w\s${CJK_LETTERS}]`, 'gu');
+// Letters, marks and digits of every script make words, so Cyrillic, Greek or Arabic text is not
+// cut into spaces and `café` stays one word.
+const NOT_WORD = new RegExp(String.raw`[^\p{L}\p{M}\p{N}_\s${CJK_LETTERS}]`, 'gu');
 const CJK_RUN = new RegExp(`[${CJK_LETTERS}]+`, 'gu');
 const CJK_RUN_SPLIT = new RegExp(`([${CJK_LETTERS}]+)`, 'u');
 
@@ -47,7 +47,7 @@ export function splitCjkRuns(word: string): string[] {
     .flatMap((part, i) => (i % 2 === 1 ? cjkGrams(part, 2) : part === '' ? [] : [part]));
 }
 
-/** Lower-cased words of `text` (runs of ASCII letters, digits and `_`) of 2 or more characters; a
+/** Lower-cased words of `text` (runs of letters, marks, digits and `_`) of 2 or more characters; a
  * CJK run becomes its letter bigrams, a lone CJK letter itself. */
 export function tokenize(text: string): string[] {
   return tokenizeMin(text, 2);

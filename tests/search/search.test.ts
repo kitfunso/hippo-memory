@@ -146,6 +146,18 @@ describe('tokenize', () => {
     expect(tokenize(text)).toEqual(tokens);
   });
 
+  it.each([
+    ['accented Latin', 'the café opens', ['the', 'café', 'opens']],
+    ['decomposed accent', 'café au lait', ['café', 'au', 'lait']],
+    ['Cyrillic', 'Сервер перезагружается ночью', ['сервер', 'перезагружается', 'ночью']],
+    ['Greek', 'ο διακομιστής ξεκινά', ['διακομιστής', 'ξεκινά']],
+    ['Arabic', 'الخادم يعيد التشغيل', ['الخادم', 'يعيد', 'التشغيل']],
+    ['Hebrew', 'השרת מופעל מחדש', ['השרת', 'מופעל', 'מחדש']],
+    ['Devanagari', 'सर्वर रात को चालू होता', ['सर्वर', 'रात', 'को', 'चालू', 'होता']],
+  ])('keeps each %s word whole', (_script, text, tokens) => {
+    expect(tokenize(text)).toEqual(tokens);
+  });
+
   it('splits a CJK run from the Latin word it touches', () => {
     expect(tokenize('Postgres数据库 pool，二')).toEqual(['postgres', '数据', '据库', 'pool', '二']);
   });

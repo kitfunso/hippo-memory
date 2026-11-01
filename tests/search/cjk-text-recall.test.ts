@@ -63,6 +63,31 @@ describe('CJK remember then recall, through the api', () => {
   });
 });
 
+// The word splitter once cut every non-ASCII letter into a space, so these had no words at all.
+const OTHER_SCRIPTS = [
+  { script: 'Cyrillic', fact: 'сервер перезагружается ночью', other: 'база данных хранит заказы', query: 'сервер' },
+  {
+    script: 'Greek',
+    fact: 'ο διακομιστής επανεκκινείται τη νύχτα',
+    other: 'η βάση δεδομένων κρατά παραγγελίες',
+    query: 'διακομιστής',
+  },
+  { script: 'Arabic', fact: 'الخادم يعيد التشغيل كل ليلة', other: 'قاعدة البيانات تحفظ الطلبات', query: 'الخادم' },
+  { script: 'Hebrew', fact: 'השרת מופעל מחדש בלילה', other: 'מסד הנתונים שומר הזמנות', query: 'השרת' },
+  { script: 'Devanagari', fact: 'सर्वर हर रात फिर से चालू होता है', other: 'डेटाबेस ऑर्डर सहेजता है', query: 'सर्वर' },
+  { script: 'accented Latin', fact: 'the café opens at nine', other: 'the cafeteria closes at noon', query: 'café' },
+];
+
+describe('other scripts, through the api', () => {
+  it.each(OTHER_SCRIPTS)('$script: one word finds the memory holding it, and only that one', async (c) => {
+    const ctx = apiHome();
+    await remember(ctx, { content: c.fact });
+    await remember(ctx, { content: c.other });
+    const { results } = await retrieve(ctx, { query: c.query, window: { limit: 5 } });
+    expect(results.map((r) => r.content)).toEqual([c.fact]);
+  });
+});
+
 /** `hippo <args>` run in this process from `cwd`; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   const saved = process.cwd();
