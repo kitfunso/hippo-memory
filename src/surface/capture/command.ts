@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import { isCertainReason, storedDefect } from '../../base/memory/memory-quality.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
@@ -9,13 +10,7 @@ import { isInitialized } from '../../host/project-identity.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import {
-  extractFromTexts,
-  textsAsOnceStored,
-  withoutBold,
-  legacyBoldAlias,
-  type ExtractedItem,
-} from './extract.js';
+import { boldTwins, extractFromTexts, type BoldTwin, type ExtractedItem } from './extract.js';
 import {
   type SessionTurn,
   collectSessionTurns,
@@ -128,17 +123,18 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
     return;
   }
 
-  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md:
-  // no secrets in memories).
-  const scrubbed = texts.map((text) => maskEmails(redactSecretsStrict(text)));
-  const extracted = extractFromTexts(scrubbed, userTexts);
+  // Scrub the texts and again each item: bold removal can rebuild an address or key the first
+  // pass could not see (AGENTS.md: no secrets in memories).
+  const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
+  const scrubbed = texts.map(scrub);
+  const extracted = scrubbedItems(extractFromTexts(scrubbed, userTexts), scrub);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
     return;
   }
 
-  const keys = await storedKeysInView(target.store, options, extracted, scrubbed);
+  const keys = await storedKeysInView(target.store, options, extracted, boldTwins(scrubbed, scrub));
 
   printCaptureTally(options, await captureFromCli(target, options, extracted, keys));
 }
@@ -162,25 +158,25 @@ async function captureFromCli(
   return previewCapture({ store, config }, writeOpts, extracted, keys);
 }
 
-const BARE_LEADING_MARKER = /^\*\*\s+/;
+/** The items with `scrub` applied to each text, as a path stores them. */
+export function scrubbedItems(
+  items: readonly ExtractedItem[],
+  scrub: (text: string) => string,
+): ExtractedItem[] {
+  return items.map((item) => ({ ...item, content: scrub(item.content) }));
+}
 
-/** Held keys, each also without its bold pairs. A pinned "** X" survives repair, so it holds "X". An unpinned
- * one is set aside unless an object names it (a captured rule is never raw or trusted); that twin is fine. */
-export function heldKeysOf(rows: readonly HeldText[], inputs: readonly string[]): Set<string> {
+/** Held keys, each twin's clean text too when a held row has its old text and repair keeps that
+ * row: a pinned row, or one whose text is no certain defect. */
+export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
   const keys = storedTextKeys(rows);
-  const seen = inputs.map(duplicateKey);
-  const pinned = Array.from(storedTextKeys(rows.filter((row) => row.pinned)), (held) =>
-    held.replace(BARE_LEADING_MARKER, ''),
-  );
-  // An old capture lost the closing "**" at the end of a line, so that row holds the paired text
-  // only when an input still shows the lost closer after the row's text.
-  const lostCloser = (form: string): boolean =>
-    ['', '.', '!', '?'].some((end) => seen.some((text) => text.includes(`${form}${end}**`)));
-  for (const form of [...Array.from(keys), ...pinned]) {
-    keys.add(duplicateKey(withoutBold(form)));
-    const alias = legacyBoldAlias(form);
-    if (alias !== null && lostCloser(form)) keys.add(duplicateKey(alias));
-  }
+  const pinned = storedTextKeys(rows.filter((row) => row.pinned));
+  const clean = twins
+    .filter(({ old }) =>
+      (isCertainReason(storedDefect(old)) ? pinned : keys).has(duplicateKey(old)),
+    )
+    .map((twin) => duplicateKey(twin.clean));
+  for (const key of clean) keys.add(key);
   return keys;
 }
 
@@ -190,12 +186,12 @@ async function storedKeysInView(
   store: Pick<StoreGroups, 'captures'>,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
-  scrubbed: readonly string[],
+  twins: readonly BoldTwin[],
 ): Promise<Set<string>> {
   const { tenantId, ...filter } = captureDedup(options);
   // The lookup matches stored text exactly, so it also asks for the lines as capture once stored them.
-  const texts = [...extracted.map((item) => item.content), ...textsAsOnceStored(scrubbed)];
-  return heldKeysOf(await store.captures.textsHolding(tenantId, texts, filter), scrubbed);
+  const texts = [...extracted.map((item) => item.content), ...twins.map((twin) => twin.old)];
+  return heldKeysOf(await store.captures.textsHolding(tenantId, texts, filter), twins);
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its

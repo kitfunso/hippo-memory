@@ -9,7 +9,6 @@
 - Capture skips only the sentence that starts inside a cut aside. The text before the cut stays as 3.1.0 stored it, for example `Always run the check (see the docs`.
 - Capture skips a whole rule that follows a cut aside directly, as in `main) Never push on Friday`. The skip removes it with the cut.
 - An unclosed `(` earlier in a block can make capture skip a later rule that holds a quoted `)`.
-- An old row with an unclosed `**` stays as it is, and capture stores no clean copy beside it.
 - Capture reads `**` by the Markdown rules. Two power operators in one line, such as `(n + 1)**2 and 2**-1`, read as a bold pair and lose their `**`.
 - Capture no longer refuses a text that arrives already cut, such as `done.** then always run the tests`. It stores that text as 3.1.0 did. Only the one-time repair sets such rows aside.
 - Repair reads only the text of a row. A rare valid row can be set aside, for example one with a quoted `test)`. Bring it back with `hippo dormant restore <id>`.

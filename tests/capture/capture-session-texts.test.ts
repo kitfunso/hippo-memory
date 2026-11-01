@@ -262,7 +262,7 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored, twin]);
   });
 
-  it('stores the twin of a held rule when no input shows the closer its row lost', async () => {
+  it('stores the twin of a held rule whose own text has no bold pair', async () => {
     const stored = 'Never call f(**kwargs) without validation';
     const twin = 'Never call f(kwargs) without validation';
     writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
@@ -274,9 +274,39 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored, twin]);
   });
 
+  it('adds no row for a held rule whose bold label an old capture kept', async () => {
+    const stored = '**Rule:** Always run tests before committing';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    const text = '- **Rule:** Always run tests before committing.';
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored]);
+  });
+
+  it('adds only the second rule when a held row kept the bold opener of the first', async () => {
+    const stored = '**Always run tests';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    const text = '**Always run tests. Never push to master.**';
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Never push to master']);
+  });
+
+  it('masks an address that bold removal rebuilds from a split one', async () => {
+    const text = 'Never contact **reviewer**@example.invalid without approval.';
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
+    expect(contents(root)).toEqual(['Never contact [email] without approval']);
+  });
+
+  it('redacts a secret that bold removal rebuilds from a split one', async () => {
+    const text = 'Never commit **api_key**=9f8e7d6c5b4a3210ffff to the repo.';
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
+    expect(contents(root)).toEqual(['Never commit [REDACTED] to the repo']);
+  });
+
   it('reads a held row without pinned, as an external store adapter returns it, as unpinned', () => {
     const external: HeldText = { content: '** Never backfill them', source: 'capture', originProject: 'acme-web' };
-    expect(heldKeysOf([external], []).has('Never backfill them')).toBe(false);
+    const twins = [{ old: external.content, clean: 'Never backfill them' }];
+    expect(heldKeysOf([external], twins).has('Never backfill them')).toBe(false);
+    expect(heldKeysOf([{ ...external, pinned: true }], twins).has('Never backfill them')).toBe(true);
   });
 
   it('is blocked by the caller project and user-global copies, never by another project', async () => {

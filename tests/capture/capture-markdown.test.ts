@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractFromTexts, legacyBoldAlias } from '../../src/surface/capture/extract.js';
+import { boldTwins, extractFromTexts } from '../../src/surface/capture/extract.js';
 import { startsInsideCut } from '../../src/base/memory/memory-quality.js';
 
 const contents = (text: string) => extractFromTexts([text]).map((item) => item.content);
@@ -81,15 +81,36 @@ describe('capture reads markdown the way it renders', () => {
     expect(contents(hostile)).toEqual([]);
   });
 
-  it('finds the opener a lost closing "**" belonged to, and nothing else', () => {
-    expect(legacyBoldAlias('**Never deploy before tests')).toBe('Never deploy before tests');
-    expect(legacyBoldAlias('Always run **npm test before deploying')).toBe('Always run npm test before deploying');
-    expect(legacyBoldAlias('Never call f(**kwargs) or g(**options) without validation')).toBe(
-      'Never call f(**kwargs) or g(options) without validation',
-    );
-    for (const none of ['Never compute 2**10 by hand', 'Always lint **/*.ts first', '** Never backfill them']) {
-      expect(legacyBoldAlias(none), none).toBeNull();
+  it.each([
+    ['**Never deploy before tests.**', '**Never deploy before tests', 'Never deploy before tests'],
+    [
+      'Always run **npm test before deploying.**',
+      'Always run **npm test before deploying',
+      'Always run npm test before deploying',
+    ],
+    ['- **Volume data.** Never backfill them.', '** Never backfill them', 'Never backfill them'],
+    [
+      '- **Rule:** Always run tests before committing.',
+      '**Rule:** Always run tests before committing',
+      'Always run tests before committing',
+    ],
+    ['**Always run tests. Never push to master.**', '**Always run tests', 'Always run tests'],
+  ])('pairs what an old capture stored for %s with what capture stores now', (text, old, clean) => {
+    expect(boldTwins([text], (value) => value)).toEqual([{ old, clean }]);
+  });
+
+  it('pairs nothing when both readings give the same text, or no text holds a "**"', () => {
+    for (const text of ['Never call f(**kwargs) without validation.', 'Never push to main.']) {
+      expect(
+        boldTwins([text], (value) => value),
+        text,
+      ).toEqual([]);
     }
+  });
+
+  it('runs the scrubber over the clean side of a twin', () => {
+    const [twin] = boldTwins(['Never contact **reviewer**@example.invalid without approval.'], () => '[scrubbed]');
+    expect(twin).toEqual({ old: 'Never contact **reviewer**@example.invalid without approval', clean: '[scrubbed]' });
   });
 
   it('pairs a closer with the nearest opener and keeps code spans whole', () => {

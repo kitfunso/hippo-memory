@@ -123,17 +123,10 @@ function pairedBold(line: string): number[] {
 
 /** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so each
  * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
-export function withoutBold(line: string): string {
+function withoutBold(line: string): string {
   return pairedBold(line)
     .sort((a, b) => a - b)
     .reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
-}
-
-/** What `withoutBold` gives for `held` plus a closing `**` that pairs with an opener in it, as an
- * old capture lost that closer at the end of a line; null when the closer pairs with none. */
-export function legacyBoldAlias(held: string): string | null {
-  const closed = `${held}**`;
-  return pairedBold(closed).includes(held.length) ? withoutBold(closed) : null;
 }
 
 function proseBlocks(text: string, clean: LineCleaner): string[] {
@@ -255,10 +248,13 @@ function extractSpecSections(text: string, clean: LineCleaner): ExtractedItem[] 
     .map((content) => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
 }
 
-function extractOne(text: string, clean: LineCleaner = withoutBold): ExtractedItem[] {
+// The items of the spec bullets first, then those of each prose block.
+function extractUnits(text: string, clean: LineCleaner): ExtractedItem[][] {
   const prose = proseOnly(text);
-  const items = extractSpecSections(prose, clean);
+  const units = [extractSpecSections(prose, clean)];
   for (const block of proseBlocks(prose, clean)) {
+    const items: ExtractedItem[] = [];
+    units.push(items);
     const cutByAside = asideCutter(block);
     let cursor = 0;
     for (const sentence of completeSentences(block)) {
@@ -276,7 +272,7 @@ function extractOne(text: string, clean: LineCleaner = withoutBold): ExtractedIt
       }
     }
   }
-  return items;
+  return units;
 }
 
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
@@ -285,7 +281,9 @@ export function extractFromTexts(texts: readonly string[], userTexts = 0): Extra
   const seen = new Set<string>();
   return texts
     .flatMap((text, i) =>
-      extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item)),
+      extractUnits(text, withoutBold)
+        .flat()
+        .map((item) => (i < userTexts ? { ...item, fromUser: true } : item)),
     )
     .filter((item) => {
       const key = duplicateKey(item.content);
@@ -295,9 +293,29 @@ export function extractFromTexts(texts: readonly string[], userTexts = 0): Extra
     });
 }
 
-/** What capture stored before it removed bold markers: the texts an older row may hold for the same
- * lines. */
-export function textsAsOnceStored(texts: readonly string[]): string[] {
-  if (!texts.some((text) => text.includes('**'))) return [];
-  return texts.flatMap((text) => extractOne(text, (line) => line).map((item) => item.content));
+/** A text an older capture, which kept every bold marker, stored for a line, and what capture
+ * extracts from that line now. */
+export interface BoldTwin {
+  readonly old: string;
+  readonly clean: string;
+}
+
+/** The twins of `texts`: both readings of a spec list or prose block pair by position when they
+ * give the same number of items, and a pair whose texts differ is a twin. */
+export function boldTwins(texts: readonly string[], scrub: (text: string) => string): BoldTwin[] {
+  const twins: BoldTwin[] = [];
+  for (const text of texts.filter((t) => t.includes('**'))) {
+    const before = extractUnits(text, (line) => line);
+    const after = extractUnits(text, withoutBold);
+    // Blocks pair by position only when both readings find as many; the spec list is always first.
+    const units = before.length === after.length ? before.length : 1;
+    for (let u = 0; u < units; u++) {
+      if (before[u].length !== after[u].length) continue;
+      before[u].forEach((item, i) => {
+        const fresh = after[u][i].content;
+        if (item.content !== fresh) twins.push({ old: item.content, clean: scrub(fresh) });
+      });
+    }
+  }
+  return twins;
 }

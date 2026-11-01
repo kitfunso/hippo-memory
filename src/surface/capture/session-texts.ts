@@ -5,9 +5,9 @@ import type { ContextWith, EntryContext } from '../../api/types.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
 import { scrubForSharing } from './share-scrub.js';
-import { captureExtractedItems, heldKeysOf, type CaptureTally } from './command.js';
+import { captureExtractedItems, heldKeysOf, scrubbedItems, type CaptureTally } from './command.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
-import { extractFromTexts, textsAsOnceStored } from './extract.js';
+import { boldTwins, extractFromTexts } from './extract.js';
 import { withEntryInfra } from '../entry-infra.js';
 import { withDetached } from '../../api/detached.js';
 
@@ -58,16 +58,18 @@ export async function captureSessionTexts(
   const ctx = withEntryInfra(given);
   assertSessionCapture(req);
   const scrubbed = req.texts.map(scrubForSharing);
-  const extracted = extractFromTexts(scrubbed);
+  // Scrubbed again after extraction: bold removal can rebuild an address or key.
+  const extracted = scrubbedItems(extractFromTexts(scrubbed), scrubForSharing);
   // The newest items win, since the end of a session states where it landed.
   const items = extracted.slice(-MAX_ITEMS);
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows
   // block a copy, other projects' rows do not.
   const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
+  const twins = boldTwins(scrubbed, scrubForSharing);
   const held = await ctx.store.captures.textsHolding(
     dedup.tenantId,
-    [...items.map((i) => i.content), ...textsAsOnceStored(scrubbed)],
+    [...items.map((i) => i.content), ...twins.map((twin) => twin.old)],
     { project: dedup.project },
   );
   const { store, config } = ctx;
@@ -85,7 +87,7 @@ export async function captureSessionTexts(
         now: ctx.infra.clock(),
       },
       items,
-      heldKeysOf(held, scrubbed),
+      heldKeysOf(held, twins),
     ),
   );
   return { ...tally, skipped: tally.skipped + extracted.length - items.length };

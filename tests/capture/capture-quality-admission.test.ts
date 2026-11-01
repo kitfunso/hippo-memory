@@ -309,7 +309,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
     expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, twin]);
   });
 
-  it('capture stores the twin of a held rule when no input shows the closer its row lost', async () => {
+  it('capture stores the twin of a held rule whose own text has no bold pair', async () => {
     const stored = 'Never call f(**kwargs) without validation';
     const twin = 'Never call f(kwargs) without validation';
     const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
@@ -325,6 +325,52 @@ describe('automatic quality does not govern manual or trusted import storage', (
       global: false,
     });
     expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, twin]);
+  });
+
+  it('capture adds no row for a held rule whose bold label an old capture kept', async () => {
+    const stored = '**Rule:** Always run tests before committing';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '- **Rule:** Always run tests before committing.' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored]);
+  });
+
+  it('capture adds only the second rule when a held row kept the bold opener of the first', async () => {
+    const stored = '**Always run tests';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '**Always run tests. Never push to master.**' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, 'Never push to master']);
+  });
+
+  it.each([
+    [
+      'an address',
+      'Never contact **reviewer**@example.invalid without approval.',
+      'Never contact [email] without approval',
+    ],
+    ['a secret', 'Never commit **api_key**=9f8e7d6c5b4a3210ffff to the repo.', 'Never commit [REDACTED] to the repo'],
+  ])('capture masks %s that bold removal rebuilds from a split one', async (_kind, text, expected) => {
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([expected]);
   });
 
   it('session capture stores a rule from the turn after one that left a fence open', async () => {
