@@ -194,12 +194,14 @@ function extractSpecSections(text: string, clean: LineCleaner): ExtractedItem[] 
     }
     if (/^#+\s/.test(trimmed) || /^[A-Z][a-z]+:$/.test(trimmed)) inSpecSection = false;
     const bullet = trimmed.match(BULLET);
+    const previousBullet = bullets.at(-1);
     const wrapped: boolean =
       inSpecSection &&
       open &&
       !bullet &&
       trimmed !== '' &&
-      (/^\s/.test(line) || continues(trimmed, bullets.at(-1)));
+      (/^\s/.test(line) ||
+        continues(trimmed, previousBullet === undefined ? previousBullet : clean(previousBullet)));
     if (inSpecSection && bullet) bullets.push(bullet[1].trim());
     else if (wrapped) bullets[bullets.length - 1] += ` ${trimmed}`;
     open = inSpecSection && (bullet !== null || wrapped);

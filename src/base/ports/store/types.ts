@@ -137,7 +137,7 @@ export interface AuditEvent {
   metadata: JsonObject;
 }
 
-export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject'>;
+export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject' | 'pinned'>;
 
 /** One project name, or every name a project's rows carry. */
 export type OriginFilter = string | readonly string[];

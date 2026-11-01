@@ -158,12 +158,14 @@ async function captureFromCli(
 
 const BARE_LEADING_MARKER = /^\*\*\s+/;
 
-/** The keys of the held rows, each also as capture now writes it: without its bold pairs and without
- * a bare leading "** ", so a row stored before that, even a pinned one, still holds its line. */
+/** The keys of the held rows, each also as capture now writes it, without its bold pairs. A pinned
+ * "** X" survives repair, so it also holds "X"; an unpinned one is set aside, so "X" is stored. */
 export function heldKeysOf(rows: readonly HeldText[]): Set<string> {
   const keys = storedTextKeys(rows);
-  const forms = Array.from(keys, (held) => [held, held.replace(BARE_LEADING_MARKER, '')]).flat();
-  for (const form of forms) keys.add(duplicateKey(withoutBold(form)));
+  const pinned = Array.from(storedTextKeys(rows.filter((row) => row.pinned)), (held) =>
+    held.replace(BARE_LEADING_MARKER, ''),
+  );
+  for (const form of [...Array.from(keys), ...pinned]) keys.add(duplicateKey(withoutBold(form)));
   return keys;
 }
 

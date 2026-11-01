@@ -133,9 +133,10 @@ function isBareCondition(bare: string): boolean {
 // A blanked code span reads as a letter that is no roman numeral, so it is never a list marker.
 const CODE_AS_LETTER = 'q';
 const LIST_MARKER_START = /[\s(,;:]/;
+const ROMAN_NUMERAL = /^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/i;
 const ROMAN_MARKER_START = /[(,;]/;
 const ROMAN_AFTER_WORD = /(?:^|[^A-Za-z])(?:option|step|item)\s+$/i;
-const BOLD_CLOSE_NEXT = /[\s.,;:!?)\]"'’”]/;
+const BOLD_CLOSE_NEXT = /[\s.,;:!?)\]"'’”—–]/;
 const CLOSING_QUOTE = /['"’”]/;
 const QUOTE_MARK = /['"‘’“”]/;
 
@@ -144,18 +145,18 @@ function opensInsideBold(text: string): boolean {
   const first = strongMarkers(blankCodeSpans(text, '`'))[0];
   if (first === undefined) return false;
   // "2**-1" and "2**(n + 1)" are exponents: a real closer is followed by a space, a mark or the end.
-  if (first.close && !first.open) return BOLD_CLOSE_NEXT.test(text[first.index + 2] ?? ' ');
+  if (first.close && BOLD_CLOSE_NEXT.test(text[first.index + 2] ?? ' ')) return true;
   return text.slice(0, first.index).trim() === '' && /^\s/.test(text.slice(first.index + 2));
 }
 
-/** "1)", "a)" and "ii)" mark list items; a roman word does only as a short lowercase label. */
+/** "1)", "a)" and "ii)" mark list items; so does a longer valid roman numeral in a label place. */
 function isListMarker(text: string, close: number): boolean {
   let start = close;
   while (start > 0 && /[A-Za-z0-9]/.test(text[start - 1])) start--;
   const token = text.slice(start, close);
   const before = text[start - 1] ?? '';
   if (token.length <= 3) return start === 0 || LIST_MARKER_START.test(before);
-  if (token.length > 4 || !/^[ivxlcdm]+$/.test(token)) return false;
+  if (!ROMAN_NUMERAL.test(token)) return false;
   return (
     start === 0 ||
     ROMAN_MARKER_START.test(before) ||

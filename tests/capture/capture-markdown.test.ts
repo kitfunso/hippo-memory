@@ -38,6 +38,18 @@ describe('capture reads markdown the way it renders', () => {
     ).toEqual(['Cache. Move the cache to Redis so restarts keep warm entries']);
   });
 
+  it('ends a spec bullet at a bold label that closes its sentence, as a prose line does', () => {
+    const question = ['## Plan', '- **Move the cache to Redis.**', 'should we keep the old cache?'].join('\n');
+    expect(extractFromTexts([question]).map((item) => [item.category, item.content])).toEqual([
+      ['spec', 'Move the cache to Redis.'],
+    ]);
+    const rule = ['## Plan', '- **Deploy note.**', 'never push to master on Friday.'].join('\n');
+    expect(extractFromTexts([rule]).map((item) => [item.category, item.content])).toEqual([
+      ['spec', 'Deploy note.'],
+      ['rule', 'never push to master on Friday'],
+    ]);
+  });
+
   it('cleans a wrapped spec bullet and prose line once their lines are joined', () => {
     const text = ['## Plan', '- Never change `**foo**', '  bar` in the signature'].join('\n');
     expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual([

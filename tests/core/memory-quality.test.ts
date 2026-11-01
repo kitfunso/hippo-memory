@@ -57,6 +57,10 @@ describe('automatic assertion quality', () => {
     ['must score a signal-week feature row") so a real staleness bug can never ship', 'sentence-fragment'],
     ['never lets a weight go below zero.) The mix is 0.345 CatBoost', 'sentence-fragment'],
     ['was mild) so the deploy went through on the retry', 'sentence-fragment'],
+    ['it is vivid) in the logs', 'sentence-fragment'],
+    ['done.** — then run the tests', 'sentence-fragment'],
+    ['done.**— then run the tests', 'sentence-fragment'],
+    ['done.**– then run the tests', 'sentence-fragment'],
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: false, reason });
     expect(isContentWorthStoring(content)).toBe(false);
@@ -141,6 +145,9 @@ describe('automatic assertion quality', () => {
     'Always match \\) as a literal parenthesis',
     'it works :-) once the cache is warm',
     'Option viii) is the default for the store',
+    'Option xviii) must pass before deploying',
+    'Option VIII) is the default for the store',
+    '(xviii) runs last',
     'step 1.) deploys to staging',
     'Keep 100%) coverage on the parser',
     'Ranges run 1-10) in the table',

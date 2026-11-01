@@ -49,6 +49,7 @@ export type CopyDbRow = {
   content: string;
   source: string;
   origin_project: string | null;
+  pinned: number;
 };
 
 /** Which rows of the tenant a copy read looks at: `filter` adds predicates, each written ` AND
@@ -68,7 +69,8 @@ function copyChunk(
   const bares = JSON.stringify([...new Set(texts.map(bareText))]);
   return cachedStatement(
     db,
-    `SELECT id, tenant_id, content, source, origin_project FROM memories WHERE ${phrases ? IN_PHRASE_HITS : '1'}` +
+    `SELECT id, tenant_id, content, source, origin_project, pinned FROM memories ` +
+      `WHERE ${phrases ? IN_PHRASE_HITS : '1'}` +
       `${tenant.sql}${read.filter.sql} AND ${MAY_HOLD_COPY_SQL}`,
   ).all(
     ...(phrases ? [phrases.join(' OR ')] : []),

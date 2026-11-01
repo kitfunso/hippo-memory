@@ -243,6 +243,24 @@ describe('automatic quality does not govern manual or trusted import storage', (
     expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored]);
   });
 
+  it('capture stores the clean rule beside an unpinned row with a bare leading "** "', async () => {
+    const stored = '** Never backfill them';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '- **Volume data.** Never backfill them.' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(
+      loadAllEntries(root, 'default')
+        .map((entry) => entry.content)
+        .sort(),
+    ).toEqual([stored, 'Never backfill them']);
+  });
+
   it('capture stores no copy of a rule a pinned row holds with a bare leading "** "', async () => {
     const stored = '** Never backfill them';
     const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;

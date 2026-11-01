@@ -205,6 +205,14 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored]);
   });
 
+  it('stores the clean rule beside an unpinned "** " row, which repair sets aside', async () => {
+    const stored = '** Never backfill them';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    const text = '- **Volume data.** Never backfill them.';
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Never backfill them']);
+  });
+
   it('is blocked by a pinned row that kept the bare "** " the old label split left', async () => {
     const stored = '** Never backfill them';
     writeEntry(root, { ...createMemory(stored, { pinned: true }), originProject: 'acme-web' });
