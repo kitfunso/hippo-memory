@@ -167,6 +167,8 @@ interface TaskSections {
   shownSnapshot: TaskSnapshot | null;
   snapshotMode: ContinuityMode;
   shownHandoff: SessionHandoff | null;
+  /** An eligible handoff the caller asked to leave out, kept so its transcript-digest row stays hidden. */
+  omittedHandoff: SessionHandoff | null;
   handoffMode: ContinuityMode;
   shownEvents: SessionEvent[];
   left: number;
@@ -187,7 +189,7 @@ export async function getContext(
 
   const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
-  const admission = ambientAdmission(opts, plan, sections.shownHandoff);
+  const admission = ambientAdmission(opts, plan, sections.shownHandoff ?? sections.omittedHandoff);
   const pools = await loadPools(ctx, plan, admission, promptRecallRequest(opts, plan));
   const noSections = !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
   if (nothingToInject(plan, pools, noSections)) {
@@ -411,8 +413,14 @@ async function loadTaskSections(
   // The same envelope rule ambientAdmitEntry applies to memory rows.
   const activeSnapshot =
     raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
-  const sessionHandoff =
+  const eligible =
     raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
+  // Left out of the counts below on purpose: it is neither shown nor dropped for budget.
+  const omittedHandoff =
+    opts.ownHandoffOnly && eligible && (!opts.currentSessionId || eligible.sessionId !== opts.currentSessionId)
+      ? eligible
+      : null;
+  const sessionHandoff = omittedHandoff ? null : eligible;
   const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.session_id, 'pointer');
   const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId, 'full');
   const shownSnapshot =
@@ -431,7 +439,9 @@ async function loadTaskSections(
       Number(sessionHandoff !== shownHandoff) +
       Number(recentSessionEvents.length !== shownEvents.length),
   );
-  return { activeSnapshot, shownSnapshot, snapshotMode, shownHandoff, handoffMode, shownEvents, left: left() };
+  return {
+    activeSnapshot, shownSnapshot, snapshotMode, shownHandoff, omittedHandoff, handoffMode, shownEvents, left: left(),
+  };
 }
 
 // The command must return this reader's row, so own, shared-store, unsafe-id print whole; no id: `hippo snapshot show`.

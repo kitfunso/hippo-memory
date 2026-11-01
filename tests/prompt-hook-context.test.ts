@@ -134,8 +134,8 @@ describe('promptHookContext', () => {
     expect(project).toMatchObject({ name: 'acme-proj', legacyName: 'proj', aliases: ['github.com/acme/proj', 'proj'] });
     const ctx = ctxFor(srvStore);
     const staticHash = expect.stringMatching(BLOCK_HASH_RE);
-    // The local hook points to another session's snapshot, so the remote route needs the opt-in to match it byte for byte.
-    const pointers: PromptHookOpts = { continuity: 'pointer' };
+    // The local hook points to another session's snapshot and drops its handoff, so the remote route needs both opt-ins to match it byte for byte.
+    const pointers: PromptHookOpts = { continuity: 'pointer', ownHandoffOnly: true };
     expect(await promptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt }, pointers)).toEqual({ arm: null, stdout: expected[0], staticHash });
     expect(await promptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt }, pointers)).toEqual({ arm: null, stdout: expected[1], staticHash });
   });
