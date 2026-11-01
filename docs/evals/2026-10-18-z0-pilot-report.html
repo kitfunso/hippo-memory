@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Z0 rustfs pilot report</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #1d2330; }
+  h1 { font-size: 1.6rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #d8dde6; padding-bottom: .2rem; }
+  .verdict { background: #fff4e5; border-left: 4px solid #e08a00; padding: .8rem 1rem; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .93rem; }
+  th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid #e6e9ef; }
+  th { background: #f4f6fa; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .pass { color: #19734a; font-weight: 600; } .fail { color: #b3261e; font-weight: 600; }
+  .muted { color: #5b6475; font-size: .9rem; }
+  code { background: #f4f6fa; padding: 0 .25rem; border-radius: 3px; }
+</style>
+<body>
+<h1>Z0 rustfs pilot: hippo against built-in memory</h1>
+<p class="muted">2026-10-18. One repository (rustfs), 9 arms, 316 task records. Analyzer at runner <code>45b57c6b</code>; grading and drop list committed in <code>3983cb6f</code> before the unblind.</p>
+
+<div class="verdict">
+  <b>The pilot is invalid, so it answers nothing.</b> Its positive control (G2) failed on the Claude Code half: perfect memory (A4) against no memory (A0) has a bootstrap interval of [-1, 0] on 6 units. All numbers below are exploratory. They point to one fix: hippo did not capture the rules it was taught.
+</div>
+
+<h2>Gates</h2>
+<table>
+  <tr><th>Gate</th><th>Result</th><th>What it read</th></tr>
+  <tr><td>G1 canaries and voids</td><td class="pass">pass</td><td>0 operator canaries; 1 void (X1, a read)</td></tr>
+  <tr><td>G2 positive control</td><td class="fail">fail</td><td>Claude Code half: A4 vs A0 [-1, 0]. Codex half passes the pilot reading (X4 vs X1 [-1, -0.667]).</td></tr>
+  <tr><td>G3 leaks</td><td class="pass">pass</td><td>0 of 6 (sequence, seed)s leaked</td></tr>
+  <tr><td>G4 plumbing</td><td class="pass">pass</td><td>worst invalid share 2.2% (one A5 session); gap 2.2 points</td></tr>
+  <tr><td>G5 grading</td><td class="pass">pass</td><td>34 pairs read blind, 2 disagree; 0 flipped lessons</td></tr>
+</table>
+
+<h2>Exploratory estimates (repeat-mistake rate, lower is better)</h2>
+<table>
+  <tr><th>Comparison</th><th>Estimate</th><th>Bootstrap 95%</th><th>Units</th></tr>
+  <tr><td>A2 hippo vs A1 built-in (H1)</td><td class="num">-0.278</td><td class="num">[-0.500, 0.000]</td><td class="num">9</td></tr>
+  <tr><td>A2 hippo vs A5 sham hippo (attribution)</td><td class="num">-0.278</td><td class="num">[-0.500, 0.000]</td><td class="num">9</td></tr>
+  <tr><td>A1 built-in vs A0 none</td><td class="num">0.000</td><td class="num">[0.000, 0.000]</td><td class="num">6</td></tr>
+  <tr><td>A4 perfect vs A1 built-in</td><td class="num">-0.667</td><td class="num">[-1.000, 0.000]</td><td class="num">6</td></tr>
+  <tr><td>X2 Codex + hippo vs X1 Codex none</td><td class="num">-0.463</td><td class="num">[-1.000, -0.167]</td><td class="num">9</td></tr>
+  <tr><td>X2 Codex + hippo vs X3 Codex built-in (H2)</td><td class="num">+0.370</td><td class="num">[-0.167, 0.833]</td><td class="num">9</td></tr>
+</table>
+<p class="muted">Both codings (violation, excluded) gave the same numbers. The fixed-repository t needs two repositories, so only the twin bootstrap reads (Amendment 4). Every arm resolved every task. Cost per resolved task: A0 $0.43, A1 $0.46, A2 $0.44, A4 $0.38, A5 $0.45.</p>
+
+<h2>Where the chain breaks</h2>
+<p>For each apply session: was the rule stored anywhere, shown to the agent, followed when shown, and captured as a hippo entry.</p>
+<table>
+  <tr><th>Family</th><th>Arm</th><th>Stored</th><th>Shown</th><th>Followed when shown</th><th>Captured</th></tr>
+  <tr><td>rf-f7</td><td>A1</td><td>0/6</td><td>0/6</td><td>-</td><td>-</td></tr>
+  <tr><td>rf-f7</td><td>A2</td><td>6/6</td><td>2/6</td><td>2/2</td><td>0/6</td></tr>
+  <tr><td>rf-f9</td><td>A1</td><td>0/6</td><td>0/6</td><td>-</td><td>-</td></tr>
+  <tr><td>rf-f9</td><td>A2</td><td>6/6</td><td>0/6</td><td>-</td><td>0/6</td></tr>
+  <tr><td>rf-f13</td><td>A1</td><td>6/6</td><td>0/6</td><td>-</td><td>-</td></tr>
+  <tr><td>rf-f13</td><td>A2</td><td>6/6</td><td>3/6</td><td>3/3</td><td>0/6</td></tr>
+</table>
+<p>The agent followed the rule every time it saw it (5 of 5). Hippo stored the session text but captured the rule in 0 of 18 sessions, so it showed the rule only 5 times in 18. Built-in memory never showed it.</p>
+
+<h2>The fix under test</h2>
+<p>Hippo's capture keeps a sentence only when it contains a rule word. A person's correction often has none. Candidate <b>c1</b> (<code>88c47f67</code>, branch <code>z0/r2-c1</code>) treats each statement in a person's reply to the agent's work as a rule, and pins it.</p>
+<table>
+  <tr><th>Teach messages that yield the rule</th><th>Frozen build</th><th>c1</th></tr>
+  <tr><td>Dev lessons (c1 was written on these)</td><td class="num">12 of 40</td><td class="num">38 of 40</td></tr>
+  <tr><td>rustfs lessons (unseen while writing c1)</td><td class="num">0 of 28</td><td class="num">28 of 28</td></tr>
+</table>
+<p>Each lesson is tried in the runner's two teach forms and two reworded forms. c1 is now in dev round 1 on conductor, zotero-format-metadata and magnetissimo, against the frozen build on the same seeds. It is kept only if its paired gain beats one standard error under both codings and its gain over sham hippo does not shrink.</p>
+
+<h2>What comes next</h2>
+<p>Round 2 confirms once, on fresh repositories that no one tuned on (draft prereg <code>2026-10-18-z0-round2-prereg.md</code>). The fixed sizer says the stage 2 calibration alone needs 25 to 30 repositories for 50 to 70% power at its bounds. The dev-round runs add three repositories to the calibration and should tighten those bounds before the repository count is fixed.</p>
+
+<p class="muted">Sources: <code>C:/z0-runs/scored/pilot/pilot-report.json</code>, <code>unblind-report.json</code>, <code>docs/evals/z0-pilot/grading.json</code>, <code>docs/evals/z0-scored-set-record.md</code>.</p>
+</body>
+</html>

@@ -1,0 +1,66 @@
+{
+  "droppedLessons": [],
+  "droppedFamilies": [],
+  "hookVoids": [
+    {
+      "sequence": "hu",
+      "seed": 2,
+      "position": 1
+    },
+    {
+      "sequence": "er",
+      "seed": 3,
+      "position": 7
+    },
+    {
+      "sequence": "pc",
+      "seed": 2,
+      "position": 9
+    },
+    {
+      "sequence": "pc",
+      "seed": 3,
+      "position": 6
+    },
+    {
+      "sequence": "jv",
+      "seed": 1,
+      "position": 9
+    },
+    {
+      "sequence": "jv",
+      "seed": 1,
+      "position": 11
+    },
+    {
+      "sequence": "pm",
+      "seed": 2,
+      "position": 1
+    },
+    {
+      "sequence": "pm",
+      "seed": 2,
+      "position": 6
+    },
+    {
+      "sequence": "au",
+      "seed": 2,
+      "position": 0
+    },
+    {
+      "sequence": "au",
+      "seed": 3,
+      "position": 8
+    },
+    {
+      "sequence": "pu",
+      "seed": 1,
+      "position": 2
+    },
+    {
+      "sequence": "pu",
+      "seed": 2,
+      "position": 0
+    }
+  ]
+}
