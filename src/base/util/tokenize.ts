@@ -23,6 +23,24 @@ export function cjkGrams(text: string, n: number): string[] {
   });
 }
 
+/** The terms the trigram index finds `text`'s CJK words by: each run's distinct letter trigrams, a
+ * shorter run whole. */
+export function cjkIndexTerms(text: string): string[] {
+  return [...new Set(cjkGrams(text, 3))];
+}
+
+/** `terms` split by the index that can find them: the word index holds a whole CJK run as one
+ * token, so CJK terms skip it for the substring indexes. */
+export function partitionCjkTerms(terms: Iterable<string>): {
+  readonly words: string[];
+  readonly cjk: string[];
+} {
+  const words: string[] = [];
+  const cjk: string[] = [];
+  for (const term of terms) (HAS_CJK.test(term) ? cjk : words).push(term);
+  return { words, cjk };
+}
+
 /** `word` with each CJK run in it replaced by the run's letter bigrams: those scripts put no space
  * between words, and a bigram, unlike a dictionary split, matches the same way in query and text. */
 export function splitCjkRuns(word: string): string[] {

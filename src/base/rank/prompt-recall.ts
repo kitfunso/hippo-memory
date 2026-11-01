@@ -1,5 +1,5 @@
 /** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
-import { cjkGrams, hasCjk, tokenizeMin } from '../util/tokenize.js';
+import { cjkIndexTerms, partitionCjkTerms, tokenizeMin } from '../util/tokenize.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
 export type PromptRecallMetric = 'jaccard' | 'cosine';
@@ -32,8 +32,7 @@ export function promptTokens(prompt: string): Set<string> {
  * cannot. */
 export function promptSearchTerms(prompt: string): string[] {
   const text = prompt.slice(0, PROMPT_RECALL_MAX_CHARS);
-  const words = [...contentTokens(text)].filter((t) => !hasCjk(t));
-  return [...words, ...new Set(cjkGrams(text, 3))];
+  return [...partitionCjkTerms(contentTokens(text)).words, ...cjkIndexTerms(text)];
 }
 
 export interface OverlapScore {
@@ -114,8 +113,7 @@ export function rarestFtsQuery(
   };
   // A word index holds a CJK run as one token, so it has no count for a CJK term.
   // SHORTCUT: CJK terms in prompt order; rarest-first needs their counts from the trigram index.
-  const cjk = terms.filter(hasCjk);
-  const counted = cjk.length > 0 ? terms.filter((t) => !hasCjk(t)) : terms;
+  const { words: counted, cjk } = partitionCjkTerms(terms);
   const picked = rarestPromptTerms(counted, termCount, maxTerms);
   return [...picked, ...cjk.slice(0, maxTerms - picked.length)].join(' ');
 }

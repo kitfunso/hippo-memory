@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
-import { textOverlap, tokenize, tokenizeMin } from '../../src/base/util/tokenize.js';
+import {
+  cjkIndexTerms,
+  partitionCjkTerms,
+  textOverlap,
+  tokenize,
+  tokenizeMin,
+} from '../../src/base/util/tokenize.js';
 import { markRetrieved } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -146,6 +152,17 @@ describe('tokenize', () => {
 
   it('keeps CJK tokens under a length floor that drops short words', () => {
     expect(tokenizeMin('an api 池 数据库', 3)).toEqual(['api', '池', '数据', '据库']);
+  });
+
+  it('gives the trigram index each CJK run as its distinct letter trigrams, a shorter run whole', () => {
+    expect(cjkIndexTerms('数据库连接 api 池 数据库')).toEqual(['数据库', '据库连', '库连接', '池']);
+  });
+
+  it('sends CJK terms past the word index, which holds a whole CJK run as one token', () => {
+    expect(partitionCjkTerms(['postgres', '数据', 'pool', '据库连'])).toEqual({
+      words: ['postgres', 'pool'],
+      cjk: ['数据', '据库连'],
+    });
   });
 });
 

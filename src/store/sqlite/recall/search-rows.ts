@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { isFtsAvailable, type DatabaseSyncLike } from '../../../db/index.js';
-import { cjkGrams, hasCjk, tokenize } from '../../../base/util/tokenize.js';
+import { cjkIndexTerms, partitionCjkTerms, tokenize } from '../../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../../base/scope/recall-scope.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import type { SqlFragment } from '../../../db/sql.js';
@@ -112,14 +112,12 @@ function listSearchRows(
     return listAllCandidates(db, p, limit);
   }
 
-  // memories_fts holds a CJK run as one token, so only the substring paths find a CJK word inside
-  // one; the run's trigrams reach the trigram index, which the 2-letter tokens cannot.
-  const cjk = terms.filter(hasCjk);
-  const words = terms.filter((term) => !hasCjk(term));
+  // The run's trigrams reach the trigram index, which the 2-letter tokens cannot.
+  const { words, cjk } = partitionCjkTerms(terms);
   const rows = interleaveRows(
     words.length > 0 ? listWordCandidates(db, words, p, limit) : [],
     cjk.length > 0
-      ? listLikeCandidates(db, [...new Set([...cjk, ...cjkGrams(query, 3)])], p, limit)
+      ? listLikeCandidates(db, [...new Set([...cjk, ...cjkIndexTerms(query)])], p, limit)
       : [],
     limit,
   );
