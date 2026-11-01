@@ -142,14 +142,14 @@ export function objectMirror({
   );
 }
 
-/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror
- * starts on. */
 /** Who closes or opens an object, and the instant the row is stamped with. */
 export interface ActedBy {
   readonly actor: string;
   readonly now: Date;
 }
 
+/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror
+ * starts on. */
 export interface ObjectSaveSite {
   readonly baseHalfLifeDays: number;
   readonly tenantId: string;
