@@ -222,9 +222,12 @@ describe('loadSearchEntries paths', () => {
     const all = vi.spyOn(StatementSync.prototype, 'all');
     try {
       loadSearchEntries(root, han, 200, 'default');
-      const likes = all.mock.calls.flat().filter((v) => typeof v === 'string' && v.startsWith('["%'));
+      const likes = all.mock.calls
+        .flat()
+        .map(String)
+        .filter((v) => v.startsWith('["%'));
       expect(likes).toHaveLength(1);
-      expect(JSON.parse(String(likes[0]))).toHaveLength(LIKE_WINDOW_TERMS);
+      expect(JSON.parse(likes[0] ?? '')).toHaveLength(LIKE_WINDOW_TERMS);
     } finally {
       all.mockRestore();
     }

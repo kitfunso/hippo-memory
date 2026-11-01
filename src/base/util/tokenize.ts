@@ -1,7 +1,6 @@
 /** Han, kana and Hangul, as the body of a `u`-flag character class. */
 export const CJK_SCRIPTS = String.raw`\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}`;
-/** CJK_SCRIPTS and ー, the kana prolonged-sound mark, a Common-script letter inside katakana
- * words. */
+/** CJK_SCRIPTS and ー, the prolonged-sound mark, a Common-script letter inside katakana words. */
 export const CJK_LETTERS = `${CJK_SCRIPTS}ー`;
 const HAS_CJK = new RegExp(`[${CJK_LETTERS}]`, 'u');
 // Other non-ASCII letters still split words, so `caf` keeps matching `café` as the recall goldens
@@ -25,18 +24,14 @@ export function cjkGrams(text: string, n: number): string[] {
   });
 }
 
-/** The terms the trigram index finds `text`'s CJK words by: each run's distinct letter trigrams, a
- * shorter run whole. */
+/** Each CJK run's distinct letter trigrams, a shorter run whole: the trigram index's terms. */
 export function cjkIndexTerms(text: string): string[] {
   return [...new Set(cjkGrams(text, 3))];
 }
 
 /** `terms` split by the index that can find them: the word index holds a whole CJK run as one
  * token, so CJK terms skip it for the substring indexes. */
-export function partitionCjkTerms(terms: Iterable<string>): {
-  readonly words: string[];
-  readonly cjk: string[];
-} {
+export function partitionCjkTerms(terms: Iterable<string>) {
   const words: string[] = [];
   const cjk: string[] = [];
   for (const term of terms) (HAS_CJK.test(term) ? cjk : words).push(term);
