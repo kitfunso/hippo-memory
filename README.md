@@ -264,7 +264,7 @@ hippo handoff show 3              # show a specific handoff by ID
 hippo session resume              # re-inject latest handoff as context
 ```
 
-The per-prompt hook (Claude Code and Codex) prints only your own session's handoff. It no longer prints another session's handoff, not even as a pointer. To pick up another session's work, run `hippo context --auto` or `hippo handoff latest --session=<id>`.
+The per-prompt hook (Claude Code and Codex) prints only your own session's handoff. It no longer prints another session's handoff, not even as a pointer. To pick up another session's work, run `hippo context --auto`.
 
 ### Working memory
 
