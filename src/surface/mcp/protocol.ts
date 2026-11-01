@@ -171,9 +171,8 @@ export interface McpHost<S extends HippoStore = HippoStore> {
   settle(withinMs: number): Promise<number>;
 }
 
-/** One tool call after the store, config and tenant are resolved; every handler reads the same
- * five. */
-/** One call's arguments and caller, with the api Context its root built for it once. */
+/** One tool call after the store, config and tenant are resolved, with the api Context its root
+ * built for it once. */
 export interface ToolCall {
   args: Record<string, JsonValue>;
   ctx: McpCaller;
