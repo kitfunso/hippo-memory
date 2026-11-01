@@ -28,6 +28,7 @@ const { loadConfig } = await import(new URL('../host/config-file.js', syncUrl).h
 const { sqliteImportStores } = await import(new URL('../store/sqlite/maintenance/agent-import-stores.js', syncUrl).href);
 const { currentMachine } = await import(new URL('../infra/machine.js', syncUrl).href);
 const { evalNow } = await import(new URL('../infra/eval-switches.js', syncUrl).href);
+const { PRODUCTION_STRENGTH } = await import(new URL('../base/memory/strength.js', syncUrl).href);
 mkdirSync(barrier, { recursive: true });
 const arrivedAt = Date.now();
 writeFileSync(join(barrier, 'ready-' + index), '');
@@ -37,7 +38,7 @@ while (!everyoneHere()) {
   if (Date.now() - arrivedAt > 20000) throw new Error('barrier timed out: the other workers never started');
   Atomics.wait(pause, 0, 0, 2);
 }
-const report = await importForStore(root, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine: { ...currentMachine(), home, env: {} }, run: { clock: evalNow } });
+const report = await importForStore(root, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine: { ...currentMachine(), home, env: {} }, run: { strength: PRODUCTION_STRENGTH, clock: evalNow } });
 const imported = report.tools.reduce((n, t) => n + t.tally.imported, 0);
 process.stdout.write(JSON.stringify({ imported, warnings: report.warnings, arrivedAt, doneAt: Date.now() }));
 `;
