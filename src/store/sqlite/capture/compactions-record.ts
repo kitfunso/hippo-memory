@@ -31,7 +31,7 @@ import {
   type CompactionRow,
   type CompactionStatus,
 } from './compaction-rows.js';
-import { strengthenRetrievedInTx, writeEntryMirrors } from '../entries/entry-writes.js';
+import { strengthenRetrieved, writeEntryMirrors } from '../entries/entry-writes.js';
 import { updateStats } from '../entries/index-and-stats.js';
 import type { StoreFiles } from '../runtime/open.js';
 import { errorFields, errorMessage, log as hippoLog } from '../../../base/util/log.js';
@@ -447,7 +447,7 @@ export function saveItems(
       tenantId: ctx.tenantId,
       recallBoostAblated: !files.strength.recallStrengthens,
     };
-    strengthenRetrievedInTx(db, written.restated, strengthen, files);
+    strengthenRetrieved({ inTx: db }, written.restated, strengthen, files);
     if (ctx.recordId !== null) {
       markCompactionDone(db, ctx.tenantId, ctx.recordId, written.written.length);
     }

@@ -4,7 +4,7 @@ import { DEFAULT_LIST_LIMIT } from '../../../base/util/limits.js';
 import { BadRequestError, NotFoundError } from '../../../base/errors/api-errors.js';
 import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { StoreFiles } from '../runtime/open.js';
-import { writeEntryRow } from '../entries/entry-writes.js';
+import { writeEntryInOwnTx } from '../entries/entry-writes.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { appendAuditEvents } from '../audit/audit.js';
 import type { KeysetPosition } from '../../../base/util/keyset.js';
@@ -139,13 +139,16 @@ export function writePrediction(
   // write share a SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
-  writeEntryRow(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
-    savedRow = insertPredictionRow(writeDb, {
-      memoryId,
-      tenantId,
-      opts: save,
-      stamp: { now, actor },
-    });
+  writeEntryInOwnTx(db, files, save.mirror, {
+    actor,
+    afterWrite: (writeDb, memoryId) => {
+      savedRow = insertPredictionRow(writeDb, {
+        memoryId,
+        tenantId,
+        opts: save,
+        stamp: { now, actor },
+      });
+    },
   });
 
   if (!savedRow) {

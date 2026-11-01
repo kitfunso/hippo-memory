@@ -166,11 +166,10 @@ describe('strengthenRetrieved', () => {
       seed(ctxFor(root), entries);
       const { result, statements } = recordStatements(() =>
         strengthenRetrieved(
-          root,
+          { hippoRoot: root, grant: grantFor({}) },
           entries.map((e) => e.id),
           { tenantId: 'default', recallBoostAblated: false },
           { strength: PRODUCTION_STRENGTH, clock: evalNow },
-          grantFor({}),
         ),
       );
       expect(result.size).toBe(n);
@@ -184,11 +183,10 @@ describe('strengthenRetrieved', () => {
     seed(ctxFor(root), [entry]);
     expect([
       ...strengthenRetrieved(
-        root,
+        { hippoRoot: root, grant: grantFor({}) },
         [entry.id, entry.id],
         { tenantId: 'default', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
-        grantFor({}),
       ),
     ]).toEqual([entry.id]);
     const after = readEntry(root, entry.id);

@@ -50,7 +50,6 @@ import { assertWriteRight, readerReaches, targetReader } from '../../../base/sco
 import { recordTraceOutcome } from '../recall/recall-trace.js';
 import type {
   EntryTarget,
-  EntryWrite,
   EntryWrites,
   OutcomeWrite,
   RawArchive,
@@ -117,16 +116,12 @@ export function writeEntriesTogether(
   entries: readonly MemoryEntry[],
 ): number {
   const stamped = entries.map((entry) => stampOriginProject(files, entry));
-  try {
+  auditingRefusal(db, CLI_ACTOR, () =>
     withWriteScope(db, 'write_entries_together', () => {
       for (const entry of stamped) writeEntryDbOnly(db, entry);
-    });
-    for (const entry of stamped) writeEntryMirrors(files.hippoRoot, entry);
-  } catch (error) {
-    // The scope has unwound, so the refusal row outlives the rollback, as writeEntry's does.
-    if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, CLI_ACTOR);
-    throw error;
-  }
+    }),
+  );
+  for (const entry of stamped) writeEntryMirrors(files.hippoRoot, entry);
   return stamped.length;
 }
 
@@ -182,27 +177,19 @@ export function addTagToEntries(
   if (tagged.length > 0) writeEntriesTogether(db, files, tagged);
 }
 
-/** writeEntry on the caller's open store, so a loop of writes opens the store once; each row
- * still commits alone. `opts.afterWrite` shares the INSERT's SAVEPOINT. */
+/** One row in a write scope of its own on the caller's handle, so a loop of writes opens the store
+ * once and each row commits alone; a store-side `opts.afterWrite` shares the INSERT's SAVEPOINT, so
+ * its throw undoes the row. Mirrors follow the commit. */
 export function writeEntryInOwnTx(
   db: DatabaseSyncLike,
   files: StoreFiles,
   entry: MemoryEntry,
   opts?: WriteEntryInternalOptions,
 ): void {
-  try {
-    const stamped = stampOriginProject(files, entry);
-    writeEntryDbOnly(db, stamped, opts);
-    opts?.afterCommit?.();
-    writeEntryMirrors(files.hippoRoot, stamped);
-  } catch (error) {
-    // writeEntryDbOnly's write scope has already unwound here, so the refusal audit lands
-    // post-rollback in a fresh implicit transaction; then rethrow so the caller sees it.
-    if (error instanceof RejectedValueError) {
-      auditRejectionRefusal(db, error, opts?.actor ?? CLI_ACTOR);
-    }
-    throw error;
-  }
+  const stamped = stampOriginProject(files, entry);
+  auditingRefusal(db, opts?.actor ?? CLI_ACTOR, () => writeEntryDbOnly(db, stamped, opts));
+  opts?.afterCommit?.();
+  writeEntryMirrors(files.hippoRoot, stamped);
 }
 
 /** DB-only write path: upsert, afterWrite hook and audit row inside one withWriteScope; the
@@ -251,59 +238,60 @@ export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
 }
 
-/** No ids, or a run that ablates the recall boost: nothing to strengthen, so no handle opens and
- * no scope starts. */
-function strengthensNothing(ids: readonly string[], opts: StrengthenOptions): boolean {
-  return ids.length === 0 || opts.recallBoostAblated;
+/** A handle of its own on a store, as the global store's strengthen opens. */
+interface OwnHandle {
+  readonly hippoRoot: string;
+  readonly grant: DbGrant;
 }
 
-/** strengthenRetrieved on an open handle in its own write scope, a savepoint inside a caller's
- * transaction, so a recall's last writes share one handle. */
-export function strengthenRetrievedInOwnTx(
-  db: DatabaseSyncLike,
+/** The handle a strengthen runs on: the caller's inside its transaction, where a failure throws for
+ * the caller to undo; the caller's in a write scope of its own, so a recall's last writes share it;
+ * or one it opens and closes. */
+export type StrengthenOn =
+  | { readonly inTx: DatabaseSyncLike }
+  | { readonly inOwnTx: DatabaseSyncLike }
+  | OwnHandle;
+
+/** Strengthens the live rows among `ids`: only their four retrieval columns change. Outside the
+ * caller's transaction it is best effort, so a failure logs and never fails the read. Returns the
+ * ids found. */
+export function strengthenRetrieved(
+  on: StrengthenOn,
   ids: readonly string[],
   opts: StrengthenOptions,
   rules: StoreModel,
 ): Set<string> {
-  if (strengthensNothing(ids, opts)) return new Set();
+  // No ids, or a run that ablates the recall boost: no handle opens and no scope starts.
+  if (ids.length === 0 || opts.recallBoostAblated) return new Set();
+  if ('inTx' in on) return strengthenRows(on.inTx, ids, opts, rules);
+  const db = 'inOwnTx' in on ? on.inOwnTx : openToStrengthen(on, rules);
+  if (db === undefined) return new Set();
   try {
-    return withWriteScope(db, 'strengthen_retrieved', () =>
-      strengthenRetrievedInTx(db, ids, opts, rules),
-    );
+    return withWriteScope(db, 'strengthen_retrieved', () => strengthenRows(db, ids, opts, rules));
   } catch (error) {
     warnStrengthenFailed(error);
     return new Set();
+  } finally {
+    if (!('inOwnTx' in on)) closeHippoDb(db);
+  }
+}
+
+/** Undefined, with a warning, when the store cannot open; a blocked store still throws. */
+function openToStrengthen(
+  { hippoRoot, grant }: OwnHandle,
+  rules: StoreModel,
+): DatabaseSyncLike | undefined {
+  try {
+    return bindHandleClock(grant.open(hippoRoot), rules.clock);
+  } catch (error) {
+    rethrowIfStoreBlocked(error);
+    warnStrengthenFailed(error);
+    return undefined;
   }
 }
 
 function warnStrengthenFailed<E>(error: E): void {
   log.warn(`retrieval stats not saved (${errorMessage(error)})`, errorFields(error));
-}
-
-/** Strengthen what a recall returned from the global store, on a handle of its own: only the
- * four retrieval columns of the live row change. Best effort: a failure logs and never fails the
- * read. Returns the ids found there. */
-export function strengthenRetrieved(
-  hippoRoot: string,
-  ids: readonly string[],
-  opts: StrengthenOptions,
-  rules: StoreModel,
-  grant: DbGrant,
-): Set<string> {
-  if (strengthensNothing(ids, opts)) return new Set();
-  let db: DatabaseSyncLike;
-  try {
-    db = bindHandleClock(grant.open(hippoRoot), rules.clock);
-  } catch (error) {
-    rethrowIfStoreBlocked(error);
-    warnStrengthenFailed(error);
-    return new Set();
-  }
-  try {
-    return strengthenRetrievedInOwnTx(db, ids, opts, rules);
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 // One statement text for any number of rows. Numbers round-trip through JSON exactly from 1e-80 up;
@@ -315,16 +303,13 @@ const RETRIEVAL_UPDATE_SQL =
   `FROM json_each(?)) UPDATE memories SET retrieval_count = v.rc, last_retrieved = v.lr, half_life_days = v.hl, ` +
   `strength = v.st FROM v WHERE memories.id = v.id`;
 
-/** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the
- * caller decides. */
-export function strengthenRetrievedInTx(
+function strengthenRows(
   db: DatabaseSyncLike,
   ids: readonly string[],
   opts: StrengthenOptions,
   rules: StoreModel,
 ): Set<string> {
   const found = new Set<string>();
-  if (strengthensNothing(ids, opts)) return found;
   const byId = readEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
   const updated = markRetrieved(live, rules.clock(), rules.strength);
@@ -479,7 +464,7 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
     ...bound(
       on,
       {
-        writeEntry: (db, write) => writeEntryRow(db, files, write),
+        writeEntry: (db, { entry, actor }) => writeEntryInOwnTx(db, files, entry, { actor }),
         applyOutcome: (db, ...args) => writeOutcome(db, files, ...args),
         setPinned: (db, pin) => {
           const entry = commitPinned(db, pin);
@@ -508,19 +493,6 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
       },
     } satisfies Bodies<Pick<EntryWrites, 'archiveRaw' | 'supersede'>>),
   };
-}
-
-/** A store-side hook writes on the row's handle inside its write scope, so its throw undoes the
- * row. */
-export function writeEntryRow(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  { entry, actor }: EntryWrite,
-  afterWrite?: WriteEntryInternalOptions['afterWrite'],
-): void {
-  const stamped = stampOriginProject(files, entry);
-  writeInOwnTenant(db, stamped, actor, afterWrite);
-  writeEntryMirrors(files.hippoRoot, stamped);
 }
 
 /** A trace link follows the commit on the same handle and names only the ids applied, so a
@@ -586,21 +558,6 @@ export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: (
     if (err instanceof RejectedValueError) auditRejectionRefusal(db, err, actor);
     throw err;
   }
-}
-
-/** writeEntryRow on the caller's handle, so a sibling group can read on it after the scope has
- * unwound. */
-export function writeInOwnTenant(
-  db: DatabaseSyncLike,
-  entry: MemoryEntry,
-  actor: string,
-  afterWrite?: WriteEntryInternalOptions['afterWrite'],
-): void {
-  auditingRefusal(db, actor, () =>
-    withWriteScope(db, 'write_entry_in_tenant', () => {
-      writeEntryDbOnly(db, entry, { actor, afterWrite });
-    }),
-  );
 }
 
 /** The read, row rewrites, audit rows and mirror marks share one BEGIN IMMEDIATE transaction,

@@ -579,7 +579,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
           closeHippoDb(db);
         }
         const rules = { strength: PRODUCTION_STRENGTH, clock: evalNow };
-        strengthenRetrieved(s.root, strengthen.ids, strengthen.opts, rules, grantFor({}));
+        strengthenRetrieved({ hippoRoot: s.root, grant: grantFor({}) }, strengthen.ids, strengthen.opts, rules);
       },
       (store) => store.finishRecall(finishWrites()),
     );

@@ -2,11 +2,7 @@
 // on the outcome's own handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../../db/index.js';
 import { appendAuditEvents } from '../audit/audit.js';
-import {
-  strengthenRetrieved,
-  strengthenRetrievedInOwnTx,
-  writeOutcome,
-} from '../entries/entry-writes.js';
+import { strengthenRetrieved, writeOutcome } from '../entries/entry-writes.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../sessions/goals.js';
 import { saveIndex } from '../entries/index-and-stats.js';
 import { readLastRecall } from '../folder-files/mirrors.js';
@@ -34,7 +30,7 @@ export function finishRecall(
   const traceAndStrengthen = (): RecallFinish => ({
     traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
     strengthened: writes.strengthen
-      ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts, rules)
+      ? strengthenRetrieved({ inOwnTx: db }, writes.strengthen.ids, writes.strengthen.opts, rules)
       : new Set<string>(),
   });
   // Alone, the fail-soft trace and strengthen keep their own scopes so a busy lock loses them,
@@ -81,11 +77,10 @@ export function sqliteLastRecall({ on, files }: Handles): LastRecall {
         const { traceId, strengthened } = on((db) => finishRecall(db, files, writes));
         if (globalRoot !== undefined) {
           strengthenRetrieved(
-            globalRoot,
+            { hippoRoot: globalRoot, grant: files.opens.grant },
             ids.filter((id) => !strengthened.has(id)),
             opts,
             files,
-            files.opens.grant,
           );
         }
         // One write for both keys, so an outcome never pairs these ids with an older trace; a lost

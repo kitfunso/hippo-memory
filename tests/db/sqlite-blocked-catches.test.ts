@@ -41,7 +41,7 @@ const ROWS: readonly Row[] = [
     'store/sqlite/entries/entry-writes.ts strengthenRetrieved',
     /strengthenRetrieved/,
     async (root) =>
-      `found ${strengthenRetrieved(root, [entry.id], { tenantId: 'default', recallBoostAblated: false }, { strength: PRODUCTION_STRENGTH, clock: evalNow }, grantFor({})).size}`,
+      `found ${strengthenRetrieved({ hippoRoot: root, grant: grantFor({}) }, [entry.id], { tenantId: 'default', recallBoostAblated: false }, { strength: PRODUCTION_STRENGTH, clock: evalNow }).size}`,
     'found 0',
   ],
   [

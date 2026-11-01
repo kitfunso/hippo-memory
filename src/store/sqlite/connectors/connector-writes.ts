@@ -12,8 +12,7 @@ import type {
   ConnectorWrites,
 } from '../../../base/records/connectors.js';
 import { recordQuarantine } from './quarantine.js';
-import { stampOriginProject } from '../entries/entry-row.js';
-import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from '../entries/entry-writes.js';
+import { archiveRaw, writeEntryInOwnTx } from '../entries/entry-writes.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever
  * sees it. */
@@ -23,9 +22,10 @@ class EventAlreadyLogged extends Error {}
  * second store must order them. */
 function writeWithCompanions(
   db: DatabaseSyncLike,
+  files: StoreFiles,
   { entry, actor, event, quarantine }: ConnectorWrite,
 ): void {
-  writeInOwnTenant(db, entry, actor, (handle, memoryId) => {
+  const afterWrite = (handle: DatabaseSyncLike, memoryId: string): void => {
     if (quarantine) {
       recordQuarantine(handle, {
         tenantId: entry.tenantId,
@@ -36,12 +36,17 @@ function writeWithCompanions(
       });
     }
     if (event && !logEvent(handle, event, memoryId)) throw new EventAlreadyLogged();
-  });
+  };
+  writeEntryInOwnTx(db, files, entry, { actor, afterWrite });
 }
 
-function writeOnce(db: DatabaseSyncLike, write: ConnectorWrite): ConnectorWriteOutcome {
+function writeOnce(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  write: ConnectorWrite,
+): ConnectorWriteOutcome {
   try {
-    writeWithCompanions(db, write);
+    writeWithCompanions(db, files, write);
     return { outcome: 'written' };
   } catch (err) {
     if (!(err instanceof EventAlreadyLogged) || !write.event) throw err;
@@ -69,12 +74,7 @@ export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
     ...bound(
       on,
       {
-        writeConnectorEntry: (db, write) => {
-          const entry = stampOriginProject(files, write.entry);
-          const result = writeOnce(db, { ...write, entry });
-          if (result.outcome === 'written') writeEntryMirrors(files.hippoRoot, entry);
-          return result;
-        },
+        writeConnectorEntry: (db, write) => writeOnce(db, files, write),
       } satisfies Bodies<Pick<ConnectorWrites, 'writeConnectorEntry'>>,
       openStore,
     ),
