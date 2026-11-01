@@ -206,7 +206,7 @@ const OWN = [
   },
 ] as const;
 
-// v64's duplicate_hash postdates that commit; it is listed as the hash of the row's own text, so the writer's value is checked.
+// v61's duplicate_hash postdates that commit; it is listed as the hash of the row's own text, so the writer's value is checked.
 function rowsBeforeTheGroup(migrated: boolean): Record<string, Column>[] {
   return OWN.map(({ flat, onDefault, ...own }) => ({
     ...SHARED,

@@ -1,4 +1,4 @@
-// Schema v60 adds the decay-key index that listContextCandidates reads past the cap.
+// Schema v57 adds the decay-key index that listContextCandidates reads past the cap.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -11,7 +11,7 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { DECAY_KEY_INDEX, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../src/db/decay-key.js';
-import { v60 } from '../../src/db/migrations/v60.js';
+import { v57 } from '../../src/db/migrations/v57.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 
@@ -39,14 +39,14 @@ function indexSql(db: DatabaseSyncLike): string | undefined {
 }
 
 beforeEach(() => {
-  home = makeRoot('migration-v60');
+  home = makeRoot('migration-v57');
 });
 
 afterEach(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('schema v60', () => {
+describe('schema v57', () => {
   it('a fresh store has the decay-key index, led by tenant and pinned, over rows with a half-life', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
@@ -55,7 +55,7 @@ describe('schema v60', () => {
   });
 
   it('a v56 store gains the index on open, keeps its rows, and a re-run changes nothing', () => {
-    home = makeRoot('migration-v60-old', { init: false });
+    home = makeRoot('migration-v57-old', { init: false });
     const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
     const old = new DatabaseSync(getHippoDbPath(home));
     // One transaction: on a rollback journal each statement of the schema would otherwise flush the disk on its own.
@@ -74,7 +74,7 @@ describe('schema v60', () => {
       const sql = indexSql(db);
       expect(sql).toContain(DECAY_KEY_INDEX);
       expect(db.prepare('SELECT id FROM memories').all()).toEqual([{ id: 'mem_v56_row' }]);
-      v60.up(db, {});
+      v57.up(db, {});
       expect(indexSql(db)).toBe(sql);
     });
   });

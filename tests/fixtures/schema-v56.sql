@@ -1,4 +1,4 @@
--- Frozen schema of a store at version 56, the last one before migration 60 (versions 57 to 59 were never used).
+-- Frozen schema of a store at version 56, the last one before migration 57.
 -- Built by opening a fresh store and dumping sqlite_master without idx_memories_decay_key; never regenerate it,
 -- so the migration chain is tested against a shape later migrations cannot change.
 

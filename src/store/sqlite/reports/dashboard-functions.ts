@@ -156,7 +156,7 @@ function holdsTextBinds(text: string | null): TextBinds {
 const MIN_PROBE_CHARS = 3;
 
 // Every row TEXT_ADMITS can admit for a probe: the trigram index's matches, and the rows it may
-// miss, read by the partial index v64 made for them.
+// miss, read by the partial index v61 made for them.
 const TEXT_CANDIDATES =
   `SELECT rowid FROM memories_trigram WHERE memories_trigram MATCH :phrase UNION ALL ` +
   `SELECT rowid FROM memories WHERE tenant_id = :tenant AND (${TEXT_OUTSIDE_TRIGRAMS})`;

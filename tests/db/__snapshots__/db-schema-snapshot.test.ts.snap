@@ -238,6 +238,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     "trigger trg_skills_tenant_match_insert: CREATE TRIGGER trg_skills_tenant_match_insert BEFORE INSERT ON skills WHEN NEW.memory_id IS NOT NULL BEGIN SELECT CASE WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id) THEN RAISE(ABORT, 'skills.tenant_id must match memories.tenant_id for the referenced memory') END; END",
     "trigger trg_skills_tenant_match_update: CREATE TRIGGER trg_skills_tenant_match_update BEFORE UPDATE ON skills WHEN NEW.memory_id IS NOT NULL AND (NEW.memory_id IS NOT OLD.memory_id OR NEW.tenant_id IS NOT OLD.tenant_id) BEGIN SELECT CASE WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id) THEN RAISE(ABORT, 'skills.tenant_id must match memories.tenant_id for the referenced memory') END; END",
   ],
-  "userVersion": 64,
+  "userVersion": 61,
 }
 `;

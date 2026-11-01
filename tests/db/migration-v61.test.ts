@@ -1,23 +1,35 @@
-// Schema v61 adds the predictions page index and the memories project index; the real reads must plan onto them.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { rmSync } from 'node:fs';
-import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { listEntriesWhere } from '../../src/store/sqlite/entries/entry-filter.js';
-import { createMemory } from '../../src/entry/memory.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
+// Schema v61 adds the trigram index substring search reads, the duplicate hash the duplicate read groups on, and the
+// audit and conflict indexes the bounded reads use.
+import { describe, expect, it } from 'vitest';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { v61 } from '../../src/db/migrations/v61.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
-import { loadAllPredictions, writeEntry } from '../_helpers/root-forms.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { recordStatements } from '../_helpers/count-statements.js';
+import { listDuplicateCandidates } from '../../src/store/sqlite/consolidation/sleep-scans.js';
 
-const PRED_INDEX = 'idx_predictions_tenant_created';
-const MEM_INDEX = 'idx_memories_tenant_origin_created';
-const TEMP_SORT = 'USE TEMP B-TREE FOR ORDER BY';
+function plan(db: DatabaseSyncLike, sql: string): string {
+  // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
+  const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>;
+  return rows.map((r) => r.detail).join(' | ');
+}
 
-let home: string;
+const V61_INDEXES = [
+  'idx_memories_duplicate_hash',
+  'idx_audit_log_tenant_op_ts',
+  'idx_memory_conflicts_updated',
+  'idx_memories_text_outside_trigrams',
+];
+const TRIGRAM_OBJECTS = [
+  'memories_trigram_insert',
+  'memories_trigram_delete',
+  'memories_trigram_update',
+  'memories_trigram',
+];
 
-function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
-  const db = openHippoDb(home);
+function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
+  const db = openHippoDb(root);
   try {
     return fn(db);
   } finally {
@@ -25,97 +37,84 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-function plan(db: DatabaseSyncLike, sql: string): string {
-  const binds = Array.from({ length: sql.split('?').length - 1 }, () => 'x');
-  // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
-  const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...binds) as Array<{
-    detail: string;
-  }>;
-  return rows.map((r) => r.detail).join(' | ');
+/** Takes a current store back to v60's shape: no trigram index, no duplicate hash and none of v61's indexes. */
+function toV60(db: DatabaseSyncLike): void {
+  for (const name of V61_INDEXES) db.exec(`DROP INDEX ${name}`);
+  db.exec('DROP TRIGGER memories_duplicate_hash_stale');
+  db.exec('ALTER TABLE memories DROP COLUMN duplicate_hash');
+  for (const name of TRIGRAM_OBJECTS.slice(0, 3)) db.exec(`DROP TRIGGER ${name}`);
+  db.exec('DROP TABLE memories_trigram');
 }
 
-function count(db: DatabaseSyncLike, table: string): number {
-  // SAFETY: one COUNT column.
-  return (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+function matches(db: DatabaseSyncLike, phrase: string): string[] {
+  // SAFETY: the SELECT names one TEXT column, content.
+  const rows = db
+    .prepare(
+      `SELECT m.content FROM memories_trigram t JOIN memories m ON m.rowid = t.rowid ` +
+        `WHERE memories_trigram MATCH ? ORDER BY m.content`,
+    )
+    .all(`"${phrase}"`) as Array<{ content: string }>;
+  return rows.map((row) => row.content);
 }
 
-function failNoSql(): never {
-  throw new Error('the read did not prepare the expected statement');
-}
+describe('migration v61', () => {
+  it('backfills the trigram index from the rows a v60 store holds and keeps it in step after', () => {
+    const root = makeRoot('migration-v61');
+    writeEntriesTogether(root, [
+      createMemory('the quillwort ledger moved'),
+      createMemory('a  quillwort\tledger moved'),
+      createMemory('nothing alike'),
+    ]);
+    withDb(root, (db) => {
+      toV60(db);
+      v61.up(db);
+      v61.up(db);
+      expect(matches(db, 'wort')).toEqual(['a  quillwort\tledger moved', 'the quillwort ledger moved']);
+      // SAFETY: the SELECT names one TEXT column, name.
+      const names = (db.prepare(`SELECT name FROM sqlite_master`).all() as Array<{ name: string }>).map((r) => r.name);
+      expect(names).toEqual(expect.arrayContaining([...V61_INDEXES, ...TRIGRAM_OBJECTS]));
 
-function insertPredictions(db: DatabaseSyncLike, count: number): void {
-  const add = db.prepare(
-    `INSERT INTO predictions (tenant_id, class_tag, claim_text, created_at) VALUES ('default', 'c', ?, ?)`,
-  );
-  for (let i = 0; i < count; i++) add.run(`claim ${i}`, new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString());
-}
-
-beforeEach(() => {
-  home = makeRoot('migration-v61');
-});
-
-afterEach(() => {
-  rmSync(home, { recursive: true, force: true });
-});
-
-describe('schema v61', () => {
-  it('pages predictions off the tenant index with no sort', async () => {
-    withDb((db) => insertPredictions(db, 12));
-    const first = await loadAllPredictions(home, 'default', { limit: 5 });
-    const last = first[first.length - 1];
-    const { statements } = await recordStatementsAsync(
-      async () =>
-        await loadAllPredictions(home, 'default', {
-          limit: 5,
-          after: { key: last.createdAt, id: last.id },
-        }),
-    );
-    const sql = statements.find((s) => s.includes('FROM predictions') && s.includes('ORDER BY created_at DESC'));
-    withDb((db) => {
-      const detail = plan(db, sql ?? failNoSql());
-      expect(detail).toContain(`USING INDEX ${PRED_INDEX}`);
-      expect(detail).not.toContain(TEMP_SORT);
+      db.exec(`UPDATE memories SET content = 'nothing alike, now a quillwort' WHERE content = 'nothing alike'`);
+      db.exec(`DELETE FROM memories WHERE content = 'the quillwort ledger moved'`);
+      expect(matches(db, 'wort')).toEqual(['a  quillwort\tledger moved', 'nothing alike, now a quillwort']);
     });
   });
 
-  it('pages one project off the tenant and project index with no sort', () => {
-    for (let i = 0; i < 6; i++) {
-      writeEntry(home, {
-        ...createMemory(`row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-        originProject: 'alpha',
-      });
-    }
-    const { statements } = recordStatements(() =>
-      withDb((db) =>
-        listEntriesWhere(db, { tenantId: 'default', origins: ['alpha'], live: true }, { limit: 2, after: undefined }),
-      ),
-    );
-    const sql = statements.find((s) => s.includes('origin_project = ?') && s.includes('ORDER BY created ASC'));
-    withDb((db) => {
-      const detail = plan(db, sql ?? failNoSql());
-      expect(detail).toContain(`USING INDEX ${MEM_INDEX}`);
-      expect(detail).not.toContain(TEMP_SORT);
+  it('groups duplicates by their spaceless text through the duplicate hash index', () => {
+    const root = makeRoot('migration-v61-key');
+    writeEntriesTogether(root, [
+      createMemory('a  b\tc'),
+      createMemory('ab c'),
+      createMemory('abc', { kind: 'raw' }),
+      createMemory('other'),
+    ]);
+    withDb(root, (db) => {
+      const { result, statements } = recordStatements(() => listDuplicateCandidates(db));
+      expect(result.rows.map((row) => row.content).sort()).toEqual(['a  b\tc', 'ab c']);
+      const keyRead = statements.find((sql) => sql.includes('HAVING COUNT(*) > 1'));
+      expect(plan(db, keyRead!)).toMatch(/USING (COVERING )?INDEX idx_memories_duplicate_hash/);
     });
   });
 
-  it('upgrades a v60 store with rows in it and keeps every row', () => {
-    withDb((db) => insertPredictions(db, 4));
-    writeEntry(home, { ...createMemory('kept', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), originProject: 'alpha' });
-    withDb((db) => {
-      db.exec(`DROP INDEX ${PRED_INDEX}`);
-      db.exec(`DROP INDEX ${MEM_INDEX}`);
-      db.prepare(`UPDATE meta SET value = '60' WHERE key = 'schema_version'`).run();
-      db.exec('PRAGMA user_version = 60');
-    });
-    withDb((db) => {
-      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      // SAFETY: one `name` TEXT column.
-      const names = (
-        db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{ name: string }>
-      ).map((r) => r.name);
-      expect(names).toEqual(expect.arrayContaining([PRED_INDEX, MEM_INDEX]));
-      expect(count(db, 'predictions')).toBe(4);
-      expect(count(db, 'memories')).toBe(1);
+  it('hashes the rows v60 held, and finds a row an older binary wrote or edited without its hash', () => {
+    const root = makeRoot('migration-v61-old-writes');
+    writeEntriesTogether(root, [createMemory('a  b c'), createMemory('kept apart'), createMemory('x y')]);
+    withDb(root, (db) => {
+      toV60(db);
+      v61.up(db);
+      // SAFETY: the SELECT names one INTEGER column, n.
+      const unhashed = () =>
+        (db.prepare('SELECT COUNT(*) AS n FROM memories WHERE duplicate_hash IS NULL').get() as { n: number }).n;
+      expect(unhashed()).toBe(0);
+
+      db.exec(`UPDATE memories SET content = 'ab c' WHERE content = 'kept apart'`);
+      // An older binary's insert leaves the column it does not know empty.
+      db.exec(`CREATE TEMP TABLE copied AS SELECT * FROM memories WHERE content = 'x y'`);
+      db.exec(`UPDATE copied SET id = 'old_binary', content = 'x' || char(9) || 'y', duplicate_hash = NULL`);
+      db.exec(`INSERT INTO memories SELECT * FROM copied`);
+      expect(unhashed()).toBe(2);
+      const contents = listDuplicateCandidates(db).rows.map((row) => row.content);
+      expect(contents.sort()).toEqual(['a  b c', 'ab c', 'x\ty', 'x y']);
     });
   });
 });

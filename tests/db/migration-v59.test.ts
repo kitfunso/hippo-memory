@@ -1,4 +1,4 @@
-// Schema v62 adds four partial indexes for the sleep path; each real read must plan onto its index.
+// Schema v59 adds four partial indexes for the sleep path; each real read must plan onto its index.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -85,14 +85,14 @@ function seedLogs(): void {
 }
 
 beforeEach(() => {
-  home = makeRoot('migration-v62');
+  home = makeRoot('migration-v59');
 });
 
 afterEach(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('schema v62', () => {
+describe('schema v59', () => {
   it('a fresh store has the four indexes', () => {
     withDb((db) => expect(indexNames(db)).toEqual(expect.arrayContaining(ALL)));
   });
@@ -129,13 +129,13 @@ describe('schema v62', () => {
     });
   });
 
-  it('upgrades a v61 store with rows in it and keeps every row', () => {
+  it('upgrades a v58 store with rows in it and keeps every row', () => {
     seedMemories();
     seedLogs();
     withDb((db) => {
       for (const name of ALL) db.exec(`DROP INDEX ${name}`);
-      db.prepare(`UPDATE meta SET value = '61' WHERE key = 'schema_version'`).run();
-      db.exec('PRAGMA user_version = 61');
+      db.prepare(`UPDATE meta SET value = '58' WHERE key = 'schema_version'`).run();
+      db.exec('PRAGMA user_version = 58');
     });
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);

@@ -1,10 +1,10 @@
-// Schema v63 indexes the memories that hold conflict refs, so the conflict refresh reads those rows, not every memory,
+// Schema v60 indexes the memories that hold conflict refs, so the conflict refresh reads those rows, not every memory,
 // and recall traces by ts for their prune (tests/db/recall-trace-prune.test.ts).
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { v63 } from '../../src/db/migrations/v63.js';
+import { v60 } from '../../src/db/migrations/v60.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
 import { layerDir } from '../../src/store/sqlite/folder-files/mirrors.js';
@@ -80,7 +80,7 @@ function fill(db: DatabaseSyncLike, templateId: string, n: number): void {
 
 /** Five rows in three open conflicts among `size` memories, after one refresh has settled their refs. */
 function seededStore(size: number): string {
-  const root = makeRoot('v63-flat');
+  const root = makeRoot('v60-flat');
   writeEntriesTogether(root, [...['m_a', 'm_b', 'm_c', 'm_d', 'm_e'].map((id) => entry(id)), entry('m_plain')]);
   withDb(root, (db) => fill(db, 'm_plain', size - 6));
   replaceDetectedConflicts(root, PAIRS);
@@ -107,9 +107,9 @@ function measureRefresh(size: number): RefreshRead {
   });
 }
 
-describe('schema v63', () => {
+describe('schema v60', () => {
   it('a fresh store has both indexes', () => {
-    const root = makeRoot('v63-fresh');
+    const root = makeRoot('v60-fresh');
     withDb(root, (db) => expect(indexNames(db)).toEqual(expect.arrayContaining(BOTH)));
   });
 
@@ -126,8 +126,8 @@ describe('schema v63', () => {
   });
 
   it('clears refs a shared copy carries with no conflict row behind them', async () => {
-    const local = makeRoot('v63-share-local');
-    const global = makeRoot('v63-share-global');
+    const local = makeRoot('v60-share-local');
+    const global = makeRoot('v60-share-global');
     const held = entry('m_held', { conflictsWith: ['m_peer'] });
     writeEntriesTogether(local, [held]);
     const copy = await shareMemory(...sharingStores(local, global), held.id, {
@@ -143,7 +143,7 @@ describe('schema v63', () => {
   });
 
   it('clears refs a markdown mirror brought in with no conflict row behind them', () => {
-    const root = makeRoot('v63-markdown', { init: false });
+    const root = makeRoot('v60-markdown', { init: false });
     const mirrored = entry('m_mirrored', { conflictsWith: ['m_gone'] });
     mkdirSync(layerDir(root, mirrored.layer), { recursive: true });
     writeFileSync(join(layerDir(root, mirrored.layer), `${mirrored.id}.md`), serializeEntry(mirrored));
@@ -152,13 +152,13 @@ describe('schema v63', () => {
     expect(readEntry(root, mirrored.id)?.conflictsWith).toEqual([]);
   });
 
-  it('upgrades a v62 store once, keeps every row, and a second run of v63 changes nothing', () => {
+  it('upgrades a v59 store once, keeps every row, and a second run of v60 changes nothing', () => {
     const root = seededStore(20);
     const before = withDb(root, refsOf);
     withDb(root, (db) => {
       for (const name of BOTH) db.exec(`DROP INDEX ${name}`);
-      db.prepare(`UPDATE meta SET value = '62' WHERE key = 'schema_version'`).run();
-      db.exec('PRAGMA user_version = 62');
+      db.prepare(`UPDATE meta SET value = '59' WHERE key = 'schema_version'`).run();
+      db.exec('PRAGMA user_version = 59');
     });
     const creates = /CREATE INDEX IF NOT EXISTS (idx_memories_conflicted|idx_recall_traces_ts) /;
     const upgrade = recordStatements(() => withDb(root, (db) => [getSchemaVersion(db), indexNames(db)] as const));
@@ -170,7 +170,7 @@ describe('schema v63', () => {
     expect(reopen.result).toEqual(before);
     withDb(root, (db) => {
       const indexes = indexNames(db).sort();
-      v63.up(db);
+      v60.up(db);
       expect(indexNames(db).sort()).toEqual(indexes);
     });
   });

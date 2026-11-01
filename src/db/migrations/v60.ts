@@ -1,14 +1,16 @@
-import { DECAY_KEY_INDEX, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../decay-key.js';
 import type { Migration } from './types.js';
+
+const CONFLICTED = `idx_memories_conflicted ON memories(id) WHERE conflicts_with_json != '[]'`;
+const TRACES_BY_TS = 'idx_recall_traces_ts ON recall_traces(ts)';
 
 export const v60: Migration = {
   version: 60,
   up: (db) => {
-    // Pinned leads the key so pinned rows and fresh rows of one tenant are two index ranges
-    // (listContextCandidates).
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS ${DECAY_KEY_INDEX} ` +
-        `ON memories(tenant_id, pinned, (${DECAY_KEY_SQL})) WHERE ${DECAY_KEY_WHERE}`,
-    );
+    // The WHERE repeats the conflict refresh's own term, so SQLite can prove the index holds every
+    // row that read wants.
+    db.exec(`CREATE INDEX IF NOT EXISTS ${CONFLICTED}`);
+    // The trace prune reads by ts alone, which idx_recall_traces_tenant_ts cannot serve: it leads
+    // with tenant_id.
+    db.exec(`CREATE INDEX IF NOT EXISTS ${TRACES_BY_TS}`);
   },
 };

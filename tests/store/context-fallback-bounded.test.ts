@@ -1,4 +1,4 @@
-// When the v60 decay-key subset cannot prove its rank, loadContextCandidates ranks the tenant in one scan. It hands back
+// When the v57 decay-key subset cannot prove its rank, loadContextCandidates ranks the tenant in one scan. It hands back
 // the cap and no more, in the same three statements, whatever the store's size.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

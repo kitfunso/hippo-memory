@@ -10,8 +10,8 @@ const CONFLICT_AUDIT = `idx_audit_log_conflict_resolve ON audit_log(ts) WHERE op
 const UNCLEANED_MIRRORS =
   'idx_raw_archive_mirror_pending ON raw_archive(memory_id) WHERE mirror_cleaned_at IS NULL';
 
-export const v62: Migration = {
-  version: 62,
+export const v59: Migration = {
+  version: 59,
   up: (db) => {
     // Each WHERE names the rare rows, and repeats the read's own terms so SQLite can prove the
     // index covers it.
