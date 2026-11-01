@@ -63,8 +63,9 @@ function withoutEmphasis(line: string): string {
 check                    rule  pref  error  other   cut?   false flags
 first ** is a closer       33     4      1      0   38/38            0
 first ) before any (       17     1      1      0   19/19            0
-total set aside            50     5      2      0   57               0
-pinned among the 57                                  0
+bare leading "** "         13     0      6      0   19/19            0
+total set aside            63     5      8      0   76               0
+pinned among the 76                                  0
 decision, spec, compaction, shared, consolidation:   0 flagged
 </script>
     </doc-code>
@@ -94,7 +95,7 @@ opensInsideAside: a ")" attached to a word comes before any "(";
   certainDefect()               @ src/domain/learn/extract.ts:145          -- LLM facts: a cut fact is dropped
   certainDefect()               @ src/domain/consolidate/dag-summary.ts:50 -- a cut summary is dropped
   automaticDefect()             @ src/base/memory/memory-audit.ts:195      -- repair: set-aside
-  isWorthSurfacing()            @ src/base/memory/memory-quality.ts:339    -- recent context hides the 57
+  isWorthSurfacing()            @ src/base/memory/memory-quality.ts:339    -- recent context hides the 76
 </script>
       </doc-calls>
     </doc-claim>
@@ -123,7 +124,7 @@ setMeta(db, META_KEY.qualityRepairAuto, '1');
     </doc-claim>
     <doc-claim>
       <p>Pinned rows, raw receipts and trusted notes stay.</p>
-      <doc-code src="src/base/memory/memory-audit.ts" lines="128-145" hl="142" caption="PROTECTED_ROWS does not change. None of the 57 rows is pinned."></doc-code>
+      <doc-code src="src/base/memory/memory-audit.ts" lines="128-145" hl="142" caption="PROTECTED_ROWS does not change. None of the 76 rows is pinned."></doc-code>
     </doc-claim>
   </doc-claim>
   <doc-claim>
@@ -144,20 +145,20 @@ tests/cli-maintenance-writes.process.test.ts:272   reads the new key
     </doc-code>
     <doc-claim>
       <p>A copy of the global store shows the preview list.</p>
-      <doc-code caption="Manual check: the repair preview on a copy must list the 57 rows by id, and no other new row; the real store stays untouched.">
+      <doc-code caption="Manual check: the repair preview on a copy must list the 76 rows by id, and no other new row; the real store stays untouched.">
 <script type="text/plain">
 cp ~/.hippo/hippo.db $SP/store-copy/hippo.db
 HIPPO_HOME=$SP/store-copy node dist/cli.js audit repair        # preview only
-compare the new set-aside ids with $SP/cap-flagged3.tsv (excluding lead-bold)
+compare the new set-aside ids with every id in $SP/cap-flagged3.tsv
 </script>
       </doc-code>
     </doc-claim>
   </doc-claim>
   <doc-claim aux="scope">
-    <p>Not changing: cut-start words, leading bold rows, protection and recall.</p>
+    <p>Not changing: cut-start words, protection and recall.</p>
     <ul>
       <li>No lowercase cut-start check. Capture strips labels such as "Decision:", so a lowercase start is often a whole statement, and user text is not marked.</li>
-      <li>19 stored rows that start with "** " stay. Their text is useful, such as "One test broke because GitHub's Node 22 bundles a newer SQLite". The extractor fix stops new ones.</li>
+      <li>Changed after review: the 19 stored rows that start with "** " also go dormant. A new capture of the same line stores a clean copy. So each old row is a duplicate with a stray marker. <code>hippo dormant restore &lt;id&gt;</code> brings one back.</li>
       <li>The other stored lowercase fragments (approximately 100) stay for a later fix with a labelled sample.</li>
       <li>Chat stored as a rule is a separate fix in the rule patterns.</li>
       <li>No cost claim and no Z0 rerun in this episode.</li>

@@ -205,6 +205,14 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored]);
   });
 
+  it('is blocked by a pinned row that kept the bare "** " the old label split left', async () => {
+    const stored = '** Never backfill them';
+    writeEntry(root, { ...createMemory(stored, { pinned: true }), originProject: 'acme-web' });
+    const text = '- **Volume data.** Never backfill them.';
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored]);
+  });
+
   it('is blocked by the caller project and user-global copies, never by another project', async () => {
     writeEntry(root, { ...createMemory(ITEMS[0]!), originProject: 'other' });
     writeEntry(root, { ...createMemory(ITEMS[1]!), originProject: '' });

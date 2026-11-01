@@ -133,34 +133,52 @@ function isBareCondition(bare: string): boolean {
 // A blanked code span reads as a letter that is no roman numeral, so it is never a list marker.
 const CODE_AS_LETTER = 'q';
 const LIST_MARKER_START = /[\s(,;:]/;
+const ROMAN_MARKER_START = /[(,;]/;
+const ROMAN_AFTER_WORD = /(?:^|[^A-Za-z])(?:option|step|item)\s+$/i;
+const BOLD_CLOSE_NEXT = /[\s.,;:!?)\]"'’”]/;
+const CLOSING_QUOTE = /['"’”]/;
+const QUOTE_MARK = /['"‘’“”]/;
 
 // A "**" that only closes, or a bare one opening the text, shows the text began inside a bold span.
 function opensInsideBold(text: string): boolean {
   const first = strongMarkers(blankCodeSpans(text, '`'))[0];
   if (first === undefined) return false;
-  if (first.close && !first.open) return true;
+  // "2**-1" and "2**(n + 1)" are exponents: a real closer is followed by a space, a mark or the end.
+  if (first.close && !first.open) return BOLD_CLOSE_NEXT.test(text[first.index + 2] ?? ' ');
   return text.slice(0, first.index).trim() === '' && /^\s/.test(text.slice(first.index + 2));
 }
 
-/** "1)", "a)" and "ii)" mark list items: 1 to 3 letters or digits, or any run of roman numerals. */
+/** "1)", "a)" and "ii)" mark list items; a roman word does only as a short lowercase label. */
 function isListMarker(text: string, close: number): boolean {
   let start = close;
   while (start > 0 && /[A-Za-z0-9]/.test(text[start - 1])) start--;
   const token = text.slice(start, close);
-  const short = token.length <= 3 || /^[ivxlcdm]+$/i.test(token);
-  return short && (start === 0 || LIST_MARKER_START.test(text[start - 1]));
+  const before = text[start - 1] ?? '';
+  if (token.length <= 3) return start === 0 || LIST_MARKER_START.test(before);
+  if (token.length > 4 || !/^[ivxlcdm]+$/.test(token)) return false;
+  return (
+    start === 0 ||
+    ROMAN_MARKER_START.test(before) ||
+    ROMAN_AFTER_WORD.test(text.slice(Math.max(0, start - 12), start))
+  );
 }
 
-// A ")" after a letter, before any "(" or open "[", closes an aside the text began inside.
+// A ")" after a letter, a closing quote or "letter." closes an aside; a quoted ")" does not.
+function closesAside(text: string, i: number): boolean {
+  const before = text[i - 1] ?? '';
+  if (/[A-Za-z]/.test(before)) return !isListMarker(text, i);
+  if (CLOSING_QUOTE.test(before)) return !QUOTE_MARK.test(text[i + 1] ?? '');
+  return before === '.' && /[A-Za-z]/.test(text[i - 2] ?? '');
+}
+
+// A ")" before any "(" or open "[" closes an aside the text began inside.
 function opensInsideAside(text: string): boolean {
   let brackets = 0;
   for (let i = 0; i < text.length; i++) {
     if (text[i] === '(') return false;
     if (text[i] === '[') brackets++;
     else if (text[i] === ']') brackets = Math.max(0, brackets - 1);
-    else if (text[i] === ')' && brackets === 0 && /[A-Za-z]/.test(text[i - 1] ?? '')) {
-      if (!isListMarker(text, i)) return true;
-    }
+    else if (text[i] === ')' && brackets === 0 && closesAside(text, i)) return true;
   }
   return false;
 }

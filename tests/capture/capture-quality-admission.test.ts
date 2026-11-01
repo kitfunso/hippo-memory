@@ -243,6 +243,20 @@ describe('automatic quality does not govern manual or trusted import storage', (
     expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored]);
   });
 
+  it('capture stores no copy of a rule a pinned row holds with a bare leading "** "', async () => {
+    const stored = '** Never backfill them';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic, pinned: true }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '- **Volume data.** Never backfill them.' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored]);
+  });
+
   it('session capture stores a rule from the turn after one that left a fence open', async () => {
     const turns: SessionTurn[] = [
       { role: 'user', text: 'Here is the log:\n```\nError: build failed' },

@@ -38,6 +38,13 @@ describe('capture reads markdown the way it renders', () => {
     ).toEqual(['Cache. Move the cache to Redis so restarts keep warm entries']);
   });
 
+  it('cleans a wrapped spec bullet and prose line once their lines are joined', () => {
+    const text = ['## Plan', '- Never change `**foo**', '  bar` in the signature'].join('\n');
+    expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual([
+      ['spec', 'Never change `**foo** bar` in the signature'],
+    ]);
+  });
+
   it('keeps globs, kwargs, exponents and dunder names as written', () => {
     for (const rule of [
       'Always lint **/*.ts and src/** first',
@@ -48,6 +55,7 @@ describe('capture reads markdown the way it renders', () => {
       'Never call f(**kwargs) or g(**options) without validation',
       'Never pass **kwargs and call f(**opts)',
       'Never compute 2**10 and 3**4 by hand',
+      'Never compute 2**-1 or 2**(n + 1) by hand',
       'Always use the Hippo**Memory** client for recall',
     ]) {
       expect(contents(`${rule}.`), rule).toEqual([rule]);

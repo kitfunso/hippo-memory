@@ -123,7 +123,8 @@ function proseBlocks(text: string, clean: LineCleaner): string[] {
   const blocks: string[] = [];
   let pending: string[] = [];
   const flush = (): void => {
-    if (pending.length > 0) blocks.push(pending.join(' '));
+    // Cleaned once the lines are joined, as a spec bullet is, so a span that wraps a line stays whole.
+    if (pending.length > 0) blocks.push(clean(pending.join(' ')));
     pending = [];
   };
   for (const line of text.split('\n')) {
@@ -133,8 +134,9 @@ function proseBlocks(text: string, clean: LineCleaner): string[] {
       continue;
     }
     const bullet = trimmed.match(BULLET);
-    if (bullet || !continues(trimmed, pending.at(-1))) flush();
-    pending.push(clean(bullet?.[1] ?? trimmed));
+    const previous = pending.at(-1);
+    if (bullet || !continues(trimmed, previous === undefined ? previous : clean(previous))) flush();
+    pending.push(bullet?.[1] ?? trimmed);
   }
   flush();
   return blocks;
@@ -198,11 +200,13 @@ function extractSpecSections(text: string, clean: LineCleaner): ExtractedItem[] 
       !bullet &&
       trimmed !== '' &&
       (/^\s/.test(line) || continues(trimmed, bullets.at(-1)));
-    if (inSpecSection && bullet) bullets.push(clean(bullet[1].trim()));
-    else if (wrapped) bullets[bullets.length - 1] += ` ${clean(trimmed)}`;
+    if (inSpecSection && bullet) bullets.push(bullet[1].trim());
+    else if (wrapped) bullets[bullets.length - 1] += ` ${trimmed}`;
     open = inSpecSection && (bullet !== null || wrapped);
   }
+  // Cleaned once the lines are joined, so a code span or a pair that wraps a line keeps its text.
   return bullets
+    .map(clean)
     .filter((content) => content.length <= MAX_CHARS && !content.endsWith('?'))
     .map((content) => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
 }

@@ -53,6 +53,10 @@ describe('automatic assertion quality', () => {
     ['** Ship it as the web app', 'sentence-fragment'],
     ['sleep** (when plugged in)', 'sentence-fragment'],
     ['`git add -A`) before the commit', 'sentence-fragment'],
+    ['falls back to discovery")', 'sentence-fragment'],
+    ['must score a signal-week feature row") so a real staleness bug can never ship', 'sentence-fragment'],
+    ['never lets a weight go below zero.) The mix is 0.345 CatBoost', 'sentence-fragment'],
+    ['was mild) so the deploy went through on the retry', 'sentence-fragment'],
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: false, reason });
     expect(isContentWorthStoring(content)).toBe(false);
@@ -141,7 +145,8 @@ describe('automatic assertion quality', () => {
     'Keep 100%) coverage on the parser',
     'Ranges run 1-10) in the table',
     'Step1) deploys to staging',
-    'must score a signal-week feature row") so a real staleness bug can never ship',
+    'Never compute 2**-1 by hand',
+    'Always use 2**(n + 1) for the buffer size',
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
   });
