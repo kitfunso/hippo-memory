@@ -25,8 +25,8 @@ function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValue
 const AUDIT_ROW_COLUMNS = 'ts, tenant_id, actor, op, target_id, metadata_json';
 const INSERT_AUDIT_ROW_SQL = `INSERT INTO audit_log (${AUDIT_ROW_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`;
 
-// Every column is text, so one JSON array binds any number of rows and the statement's text never
-// changes.
+// Every column is text, so one JSON array binds any number of rows and the statement's text
+// never changes.
 const INSERT_AUDIT_ROWS_SQL =
   `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) ` +
   `SELECT ?, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ` +

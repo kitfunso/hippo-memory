@@ -21,8 +21,8 @@ export function tokenSummary(
   );
 }
 
-/** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default
- * DEFAULT_REPORT_WINDOW_DAYS). */
+/** Failed tool calls by outcome, and repeats across sessions, over the last `days` days
+ * (default DEFAULT_REPORT_WINDOW_DAYS). */
 export function failureSummary(
   ctx: HippoDbContext,
   opts: { days?: number } = {},

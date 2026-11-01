@@ -287,8 +287,8 @@ async function importAgentMemories(
   { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
 ): Promise<void> {
   const opts = cli.syncOptions(tenantId, currentMachine(), { dryRun });
-  // A folder without a store of its own imports as session end would there, so its notes are not
-  // hidden.
+  // A folder without a store of its own imports as session end would there, so its notes are
+  // not hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
       ? await importForStore(useGlobal ? hippoHomeDir() : hippoRoot, opts)

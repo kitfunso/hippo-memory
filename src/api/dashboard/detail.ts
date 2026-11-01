@@ -128,8 +128,8 @@ export interface DashboardWrite {
 }
 
 /** Drops the held stamp after a committed write, then the detail of the entry it acted on,
- * stamped with the last id so the panels refetch on the next read; null when the write names no
- * entry. */
+ * stamped with the last id so the panels refetch on the next read; null when the write names
+ * no entry. */
 export async function dashboardDetailAfterWrite(
   ctx: Context,
   view: { readonly reads: DetailReads; readonly clock: SnapshotClock },

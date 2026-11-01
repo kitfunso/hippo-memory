@@ -8,7 +8,7 @@ import { detectSecret } from '../../../base/util/secret-detect.js';
 import { auditRejectionRefusal } from '../audit/audit-event.js';
 import { stampOriginProject } from '../entries/entry-row.js';
 import { writeEntryDbOnly } from '../entries/entry-writes.js';
-import { CLI_ACTOR } from '../../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
 import type { GatedWriteResult } from '../../../base/records/agent-import.js';
 import type { StoreFiles } from '../runtime/open.js';
 

@@ -32,8 +32,8 @@ export interface Kpi {
 }
 
 export interface Overview {
-  /** Bumped on each rebuild and seeded from the wall clock, so ids keep rising across server
-   * restarts. */
+  /** Bumped on each rebuild and seeded from the wall clock, so ids keep rising across
+   * server restarts. */
   snapshotId: number;
   generatedAt: string;
   total: number;

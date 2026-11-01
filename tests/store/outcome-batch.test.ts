@@ -15,9 +15,9 @@ import {
   writeEntriesTogether,
   writeEntryDbOnly,
   writeEntryMirrors,
-  writeOutcome,
   auditingRefusal,
 } from '../../src/store/sqlite/entries/entry-writes.js';
+import { writeOutcome } from '../../src/store/sqlite/entries/sqlite-entry-writes.js';
 import { readEntriesByIds } from '../../src/store/sqlite/entries/entry-reads.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import type { OutcomeWrite } from '../../src/base/ports/store/entry-writes.js';

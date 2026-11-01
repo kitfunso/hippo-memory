@@ -45,8 +45,8 @@ function stillServes(
   );
 }
 
-/** Stamps over the store's commit signal; `now` dates the strengths, `cacheClock` ages the
- * stamp. */
+/** Stamps over the store's commit signal; `now` dates the strengths, `cacheClock` ages
+ * the stamp. */
 export function createSnapshotClock(
   reads: Pick<DashboardReads, 'commitCount'>,
   now: () => number,

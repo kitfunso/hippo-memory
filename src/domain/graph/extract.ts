@@ -2,7 +2,7 @@
  *  policies, customer_notes, project_briefs). Writes go through the sqlite/graph/graph-writes.ts consolidated-source
  *  guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
-import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
+import { MAX_ENTITY_NAME_LEN } from '../../base/records/graph.js';
 import type {
   DesiredEntity,
   DesiredGraph,
@@ -128,8 +128,8 @@ export interface LoadedType {
 }
 
 /** Close over one loader's row type so the table below holds uniform functions. Loads ACTIVE and SUPERSEDED rows (not
- *  `closed`), one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is
- *  full. */
+ *  `closed`), one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load
+ *  is full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
   load: (objects: Objects, tenant: string, opts: SourceLoadOptions) => Promise<T[]>,
@@ -329,9 +329,8 @@ function referenceTargets(created: readonly DerivedEntity[]): Map<string, Derive
   return byName;
 }
 
-// Pass 3: a `references` edge when one object's text names another entity, matched on word
-// boundaries, self-skipped, deduped and capped per source; the edge is anchored to the source
-// object.
+// Pass 3: a `references` edge, anchored to the source object, when its text names another entity;
+// matched on word boundaries, self-skipped, deduped and capped per source.
 function deriveReferences(
   created: readonly DerivedEntity[],
   supersededPairs: ReadonlySet<string>,

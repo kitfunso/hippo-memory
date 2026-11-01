@@ -48,8 +48,8 @@ export interface CandidateRejection {
   readonly tokens?: number;
 }
 
-/** What contextGet reports while it selects. Every method only reads; none changes what is
- * selected. */
+/** What contextGet reports while it selects. Every method only reads; none changes what
+ * is selected. */
 export interface DeliveryObserver {
   facts(facts: DeliveryFacts): void;
   sections(shown: number, dropped: number): void;
@@ -121,13 +121,12 @@ export interface DeliveryRecorderInit {
    * would say claude-code.
    */
   runtime?: DeliveryRuntime;
-  /** Set by hooks that are not prompt or context calls; without it the payload's hook event
-   * decides. */
+  /** Set by hooks that are not prompt or context calls; without it the payload's hook
+   * event decides. */
   eventType?: DeliveryEventType;
   /** Makes this recorder throw at one stage; only tests set it, and no CLI flag or environment
    * variable reaches it. */
   fault?: DeliveryFault;
-  /** The instant the event is stamped with. */
   now: Date;
 }
 

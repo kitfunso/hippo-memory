@@ -4,13 +4,13 @@ import { compareScoresDesc } from '../../base/rank/compare.js';
 import { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
+import type { ConfiguredFolder } from '../../base/ports/store.js';
 import {
   passesScopeFilterForRecall,
   passesCliRecallScopeFilter,
   recallScopeFilter,
 } from '../../base/scope/recall-scope.js';
 import { rankHybrid, vectorSourceOf } from '../search/hybrid.js';
-import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { fitBudget } from '../search/finalize.js';
 import {
   DEFAULT_LOCAL_BUMP,

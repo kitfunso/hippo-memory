@@ -95,8 +95,8 @@ function suppressionCounts(i: SuppressionInputs): SuppressionCounts {
   };
 }
 
-/** The window band's fresh-tail and summary rows that the shown list holds neither by id nor by
- * text. */
+/** The window band's fresh-tail and summary rows that the shown list holds neither by id nor
+ * by text. */
 function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): RecallResultItem[] {
   const shownIds = new Set(list.map((r) => r.entry.id));
   const shownKeys = storedTextKeys(list.map((r) => r.entry));
@@ -197,8 +197,8 @@ export interface ToolRecallRequest {
   readonly opts: SharedRecallOptions;
   /** The caller's token budget; the store's defaultBudget when absent. */
   readonly budget: number | undefined;
-  /** The caller's project on a shared store, which keeps the list to its rows and user-global
-   * ones. */
+  /** The caller's project on a shared store, which keeps the list to its rows and
+   * user-global ones. */
   readonly project: CallerProject | undefined;
 }
 

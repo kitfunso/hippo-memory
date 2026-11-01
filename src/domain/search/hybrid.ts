@@ -5,7 +5,15 @@ import { tokenize } from '../../base/util/tokenize.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
-import { DEFAULT_EMBEDDING_WEIGHT } from '../../base/rank/recall-defaults.js';
+import {
+  DEFAULT_EMBEDDING_WEIGHT,
+  DEFAULT_MMR_LAMBDA,
+  DEFAULT_RECALL_BUDGET,
+  rankNow,
+  type RankTime,
+  type ResultCost,
+  type SearchResult,
+} from '../../base/rank/search-types.js';
 import type { RerankerFn, RerankerOptions } from '../../base/ports/reranker.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
@@ -22,14 +30,6 @@ import { fuseRanks, type FusionInput, type GraphStreamOptions } from './fusion.j
 import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
-import {
-  DEFAULT_MMR_LAMBDA,
-  DEFAULT_RECALL_BUDGET,
-  rankNow,
-  type RankTime,
-  type ResultCost,
-  type SearchResult,
-} from '../../base/rank/search-types.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { GraphWalk } from '../graph/recall.js';
 
@@ -121,8 +121,8 @@ export interface HybridSettings {
   cwd?: string;
 }
 
-/** The published wrapper's folder fields: hippo.db under `hippoRoot` when the caller names no
- * store. */
+/** The published wrapper's folder fields: hippo.db under `hippoRoot` when the caller names
+ * no store. */
 export interface HybridFolder {
   hippoRoot?: string;
   /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
@@ -148,8 +148,8 @@ export type HybridSearchOptions = HybridRanking & HybridFolder;
 /** rankHybrid's options once the caller names its stores; the folder fields belong to the
  * published wrapper. */
 export type HybridRankOptions = HybridRanking & {
-  /** The global store the graph stream also walks; the published wrapper opens it from
-   * `graphStream.globalRoot`. */
+  /** The global store the graph stream also walks; the published wrapper opens it
+   * from `graphStream.globalRoot`. */
   graphGlobal?: GraphWalk;
 };
 
@@ -196,8 +196,8 @@ type ArmFusion = Omit<FusionInput, 'graph' | 'graphStream'>;
 
 function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOptions): ArmFusion {
   const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
-  // A prepared corpus covers the caller's entries only, so rows the vector arm added force a
-  // rebuild.
+  // A prepared corpus covers the caller's entries only, so rows the vector arm added force
+  // a rebuild.
   const corpus =
     (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
   const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));
@@ -211,8 +211,8 @@ function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOpti
   };
 }
 
-/** Score order, then MMR or the reranker over the deduped rows and their DAG children, then the
- * budget. */
+/** Score order, then MMR or the reranker over the deduped rows and their DAG children, then
+ * the budget. */
 async function orderAndFit(
   query: string,
   scored: SearchResult[],
@@ -234,8 +234,8 @@ async function orderAndFit(
   );
 }
 
-/** The vector arm over `store`, embedding queries with the provider `embedderFor` builds from
- * `config`. */
+/** The vector arm over `store`, embedding queries with the provider `embedderFor` builds
+ * from `config`. */
 export function vectorSourceOf({
   store,
   graph,

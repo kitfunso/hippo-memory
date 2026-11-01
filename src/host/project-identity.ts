@@ -141,8 +141,8 @@ interface MarkerWalk {
   reachedHome: boolean;
 }
 
-/** Climb from start toward the root; home (never a project) and every stop dir end the walk
- * unchecked. */
+/** Climb from start toward the root; home (never a project) and every stop dir end the
+ * walk unchecked. */
 function walkProjectMarkers(start: string, home: string, stopDirs: readonly string[]): MarkerWalk {
   let hippoRoot: string | null = null;
   let gitRoot: string | null = null;
@@ -199,8 +199,8 @@ export function isInitialized(hippoRoot: string): boolean {
 
 /** True when `p` IS the global store root, so a global store whose parent chain contains
  * `.git`/`.hippo` (git-managed HIPPO_HOME) still backfills as user-global ('') instead of being
- * stamped with the surrounding repo's name, which would hide the global corpus from every
- * project. */
+ * stamped with the surrounding repo's name, which would hide the global corpus from
+ * every project. */
 export function isGlobalStoreRoot(p: string): boolean {
   return samePath(realpathOrResolve(path.resolve(p)), realpathOrResolve(hippoHomeDir()));
 }

@@ -1,5 +1,5 @@
-// hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
-// bodies. No other store implements them, so none is part of the store port.
+// hippo.db's local tier on the SQLite handles, the repositories src/base/ports/hippo-db.ts names,
+// and what each method does to the store.
 import { sqliteEmbeddingIndex } from './vectors/embedding-index.js';
 import { EMBEDDING_INDEX_EFFECTS } from './hippo-db-effects.js';
 import { sqliteGoals } from './sessions/goals.js';
@@ -57,8 +57,8 @@ import { sqliteConnectorWrites } from './connectors/connector-writes.js';
 import { CONNECTOR_WRITES_EFFECTS, CONNECTOR_EVENTS_EFFECTS } from './hippo-db-effects.js';
 import { AUDIT_MAINTENANCE_EFFECTS } from './hippo-db-effects.js';
 import { sqliteAuditMaintenance } from './audit/audit-maintenance.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import type { MethodEffects } from '../../base/ports/store/effects.js';
+import type { HippoDbRepos } from '../../base/ports/hippo-db.js';
+import type { MethodEffects } from '../../base/ports/store/types.js';
 import { SESSIONS_EFFECTS } from './hippo-db-effects.js';
 import { sqliteQuarantine } from './connectors/quarantine.js';
 import { sqliteStats } from './entries/index-and-stats.js';
@@ -66,7 +66,7 @@ import { sqliteSessions } from './sessions/sessions.js';
 import type { Handles } from './runtime/open.js';
 
 /** Every local repository on `handles`; the SQLite store carries them as `hippoDb`. */
-export function hippoDbRepos(handles: Handles) {
+export function hippoDbRepos(handles: Handles): HippoDbRepos {
   return {
     stats: sqliteStats(handles),
     quarantine: sqliteQuarantine(handles),
@@ -103,16 +103,6 @@ export function hippoDbRepos(handles: Handles) {
     embeddingIndex: sqliteEmbeddingIndex(handles),
   };
 }
-
-export type HippoDbRepos = ReturnType<typeof hippoDbRepos>;
-
-/** A store that carries the local tier. */
-export interface HippoDbTier {
-  readonly hippoDb: HippoDbRepos;
-}
-
-/** hippo.db's own store: the core port and the local tier. */
-export type HippoDbStore = HippoStore & HippoDbTier;
 
 /** What each local method does to the store, which places it on a worker; a method missing here
  * fails to compile. */

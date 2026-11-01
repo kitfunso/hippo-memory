@@ -54,8 +54,8 @@ export function folderVectorSource({
 
 /**
  * BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 *
- * strength * recency otherwise. Reads hippo.db under `hippoRoot` when no `source` or `store` is
- * passed.
+ * strength * recency otherwise. Reads hippo.db under `hippoRoot` when no `source` or `store`
+ * is passed.
  */
 export async function hybridSearch(
   query: string,

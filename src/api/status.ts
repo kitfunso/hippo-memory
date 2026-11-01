@@ -1,5 +1,5 @@
-// Store-wide status reads: counts, stats, vector index state and the correction and provenance
-// reports.
+// Store-wide status reads: counts, stats, vector index state and the correction and
+// provenance reports.
 
 import { isJsonObject, isJsonString } from '../base/util/json.js';
 import type { LegacyStats } from '../base/records/reports.js';
@@ -134,8 +134,8 @@ async function allRawProvenance(reports: Reports): Promise<RawProvenance> {
   }
 }
 
-/** Correction latency over every superseded row in the store. Every tenant, so the host admin
- * only. */
+/** Correction latency over every superseded row in the store. Every tenant, so the host
+ * admin only. */
 export async function correctionLatencyReport(
   ctx: HippoDbContext,
 ): Promise<CorrectionLatencyReport> {
@@ -143,8 +143,8 @@ export async function correctionLatencyReport(
   return buildCorrectionLatency(await allCorrectionLinks(ctx.store.hippoDb.reports));
 }
 
-/** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin
- * only. */
+/** Provenance coverage over every kind=raw row in the store. Every tenant, so the host
+ * admin only. */
 export async function provenanceCoverageReport(ctx: HippoDbContext): Promise<ProvenanceCoverage> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildProvenanceCoverage(await allRawProvenance(ctx.store.hippoDb.reports));

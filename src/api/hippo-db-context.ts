@@ -1,15 +1,12 @@
 // The context a local feature's api module takes: a store that carries hippo.db's local tier.
 // Only a surface that proved the tier at composition builds one, so no core path reaches it.
-import type { HippoDbStore, HippoDbTier } from '../store/sqlite/hippo-db.js';
+import type { HippoDbStore, HippoDbTier } from '../base/ports/hippo-db.js';
 import { NoLocalTierError } from '../base/util/store-blocked.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { EmbedderFor } from '../base/ports/embedder.js';
-import type { StoreReach } from '../base/ports/store.js';
+import type { ConfiguredFolder, StoreReach } from '../base/ports/store.js';
 import type { Context, ContextReach, LedgerHome } from './types.js';
 import type { CoreEnrichment, GlobalEnrichment, SleepCount } from './enrichment.js';
-
-export type { HippoDbStore, HippoDbTier } from '../store/sqlite/hippo-db.js';
 
 export interface HippoDbContext extends Context {
   /** The store with the tier on it, so the one rebind a request makes of `store` binds both. */
@@ -18,7 +15,9 @@ export interface HippoDbContext extends Context {
 
 /** Whether `store` carries hippo.db's local tier; a surface asks once, as it binds a local route
  * or tool. */
-export function hasHippoDb<S extends Context['store']>(store: S): store is S & HippoDbTier {
+export function hasHippoDb<S extends Context['store'] | HippoDbTier>(
+  store: S,
+): store is S & HippoDbTier {
   // An unset tier counts as absent, so a spread that cleared it reads as a core-only store.
   return 'hippoDb' in store && store.hippoDb !== undefined;
 }
@@ -38,8 +37,8 @@ export function withHippoDb<C extends { readonly store: Context['store'] }>(
 }
 
 /** The reach's global write target with its local tier proved and an embedder filled in: the
- * host's own, else the context's. Unset with no target, or one whose store has no tier to copy
- * into. */
+ * host's own, else the context's. Unset with no target, or one whose store has no tier to
+ * copy into. */
 export function globalTargetOf(
   ctx: Pick<Context, 'reach' | 'infra'>,
 ): ConfiguredFolder<HippoDbStore> | undefined {
@@ -69,6 +68,17 @@ export function coreEnrichment(store: Context['store']): CoreEnrichment | undefi
     sleepCount,
     remembered: stats,
   };
+}
+
+export interface EnrichedFields {
+  readonly store?: Context['store'];
+  readonly enrich?: CoreEnrichment;
+}
+
+/** `ctx` with its store's local tier as the core paths read it, unless its builder set `enrich`. */
+export function withCoreEnrichment<C extends EnrichedFields>(ctx: C): C {
+  const enrich = ctx.enrich ?? (ctx.store && coreEnrichment(ctx.store));
+  return enrich === undefined ? ctx : { ...ctx, enrich };
 }
 
 /** What a core path reads from the global store's local tier; unset on a store without one. */

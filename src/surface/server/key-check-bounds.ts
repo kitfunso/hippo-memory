@@ -1,13 +1,12 @@
-// Bounds on the scrypt work a bearer key check may start: how many derive at once, how many of
-// those one key id holds, how many one address holds, and how many one address starts for one key
-// id.
+// Caps on the scrypt work bearer key checks may start: derives in flight overall, per key id and
+// per address, and derives one address starts for one key id.
 import { HttpError } from '../../base/errors/http-errors.js';
 import { createRateLimiter } from './rate-limit.js';
 
 // libuv runs scrypt on a pool of four threads by default, so two stay free for file and DNS work.
 const MAX_IN_FLIGHT = 2;
-// Four rounds of two, so a burst of unproved keys waits its turn and no wait is longer than four
-// derivations.
+// Four rounds of two, so a burst of unproved keys waits its turn and no wait is longer than
+// four derivations.
 const MAX_WAITING = 8;
 // Key ids are not secret, so one key id flooded from many addresses keeps a slot and two waits,
 // never the whole queue. A proved key's concurrent checks share one derivation, so its own first
@@ -17,8 +16,8 @@ const KEY_MAX_WAITING = 2;
 // Many addresses on a few known key ids could fill the queue key by key; one address holds at most
 // two slots.
 const ADDRESS_MAX_HELD = 2;
-// Room for a mistyped or rotated secret; a secret is 160 random bits, so this bounds CPU, not
-// guessing.
+// Room for a mistyped or rotated secret; a secret is 160 random bits, so this bounds CPU,
+// not guessing.
 const KEY_ADDRESS_BURST = 5;
 // One more try every 12 s: past its burst, an address starts at most five derivations a minute for
 // one key id.

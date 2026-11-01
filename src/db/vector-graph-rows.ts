@@ -49,8 +49,8 @@ export interface GraphRows {
   /** The memory id and rowid of each node. */
   readonly ids: string[];
   readonly rowids: number[];
-  /** The node that holds each memory's current vector; a node no id points at holds a replaced
-   * one. */
+  /** The node that holds each memory's current vector; a node no id points at holds a
+   * replaced one. */
   readonly nodeOf: Map<string, number>;
   /** The highest rowid read. */
   lastRowid: number;
@@ -160,8 +160,8 @@ export type CatchUp =
   | { readonly kind: 'current' | 'lost' }
   | { readonly kind: 'behind'; readonly afterRowid: number };
 
-/** Inserts the rows another connection wrote since the graph last read, up to `inlineRows` of
- * them. */
+/** Inserts the rows another connection wrote since the graph last read, up to `inlineRows`
+ * of them. */
 export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number): CatchUp {
   if (storedModel(db) !== g.model) return { kind: 'lost' };
   const afterRowid = intactRowid(db, g);

@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { CUSTOMER_NOTE, loadCustomerNotes } from '../../src/domain/objects/customer-notes.js';
 import { makeRoot } from '../_helpers/make-root.js';

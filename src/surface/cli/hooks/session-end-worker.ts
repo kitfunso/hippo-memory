@@ -76,6 +76,7 @@ function runSessionEndWork({
   const sessionId = stringFlag(flags, 'session-id') ?? null;
   const logLine: LineLog = (line, opts) => appendSessionEndCloseLog(logFile, line, opts);
   const ctx = cli.apiContext(hippoRoot, tenantId);
+  const { config } = ctx;
   return runSessionEnd<SessionTurn, SessionScan>(ctx, {
     mode,
     sessionId,
@@ -104,14 +105,14 @@ function runSessionEndWork({
       });
     },
     digest: (scan, key, log) =>
-      recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
+      recordSessionDigest(hippoRoot, cli.store(hippoRoot), scan, { key, tenantId, log, config }),
     workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
     evidence: () => collectHandoffEvidence(workingFolder(ctx), 'unknown'),
   });
 }
 
-/** Sleeps the folder's own store; a failure goes to the session log, and capture runs
- * regardless. */
+/** Sleeps the folder's own store; a failure goes to the session log, and capture
+ * runs regardless. */
 async function sleepFolderStore(cmd: CommandContext, closeLogFile: string | null): Promise<void> {
   try {
     await (await import('../sleep.js')).sleepStore(cmd);

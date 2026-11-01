@@ -22,8 +22,8 @@ export interface ApiErrorReply {
  * stays in the server log.
  */
 export function mapApiError<E>(err: E): ApiErrorReply {
-  // A held lock is a retryable 503 in every store, so the surfaces need not know any store's busy
-  // codes.
+  // A held lock is a retryable 503 in every store, so the surfaces need not know any store's
+  // busy codes.
   if (isStoreBusy(err)) return { status: 503, message: STORE_BUSY_MESSAGE };
   // An add-on can build an HttpError from any number, and writeHead throws on one outside 100-999.
   if (

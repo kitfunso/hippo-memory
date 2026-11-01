@@ -19,8 +19,8 @@ export interface AuditMaintenance {
    * audit_prune row; resolves to the count. */
   pruneAuditRows(prune: AuditPrune): Promise<number>;
   /** A preview, or with `apply` the moves of certain defects to dormant storage behind a backup;
-   * a row `repairKeeps(row, backsObject, protect)` names is kept, checked inside the repair's
-   * write. */
+   * a row `repairKeeps(row, backsObject, protect)` names is kept, checked inside the
+   * repair's write. */
   repairQuality(
     tenantId: string,
     apply: boolean,

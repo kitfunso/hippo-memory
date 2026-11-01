@@ -54,8 +54,8 @@ export function slackEventSeen(db: DatabaseSyncLike, eventId: string): boolean {
   return eventSeen(db, SLACK_LOG, eventId);
 }
 
-/** Records the event unless a row already holds its id; false means another writer got there
- * first. */
+/** Records the event unless a row already holds its id; false means another writer got
+ * there first. */
 export function markSlackEventSeen(
   db: DatabaseSyncLike,
   eventId: string,

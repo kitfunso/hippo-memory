@@ -19,7 +19,6 @@ import type { ContextOptions } from './context-types.js';
 import type { Context } from '../types.js';
 import { NO_QUERY, globalSource, type ContextPlan, type ContextSource } from './context-plan.js';
 
-/** The ambient admit rules. */
 export interface ContextAdmission {
   /** `admit` as data, for a store to apply. */
   rule: AmbientAdmission;
@@ -54,8 +53,8 @@ function contextCandidatePage(left: number, limit: number): number {
   );
 }
 
-/** A query reads recall's FTS window from each store; the search's vector arm adds the nearest
- * rows. */
+/** A query reads recall's FTS window from each store; the search's vector arm adds the
+ * nearest rows. */
 interface ContextQueryWindow {
   query: string;
   exactScope: string | undefined;
@@ -75,8 +74,8 @@ interface LoadAmbientEntriesOptions {
   readonly pinnedOnly: boolean;
   readonly recent: RecentRequest;
   readonly admit: (e: MemoryEntry) => boolean;
-  /** `admit` without the delivery observer, so a row checked twice is not refused twice in the
-   * ledger. */
+  /** `admit` without the delivery observer, so a row checked twice is not refused twice in
+   * the ledger. */
   readonly recheck: (e: MemoryEntry) => boolean;
   /** `recheck` as data, which the store applies in the pinned-only load. */
   readonly admission: AmbientAdmission;
@@ -216,8 +215,8 @@ function refusalReporter(
   );
 }
 
-// The window's predicates are ones admit applies anyway, so below the cap the admitted rows are
-// unchanged.
+// The window's predicates are ones admit applies anyway, so below the cap the admitted rows
+// are unchanged.
 function candidateWindow(
   plan: ContextPlan,
   searches: boolean,

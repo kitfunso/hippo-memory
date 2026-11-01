@@ -14,8 +14,8 @@ const KEY_FILE = 'server.key';
 // Its own prefix, so the token never reaches an auth resolver or the API-key table.
 const KEY_PREFIX = 'hl_';
 const KEY_BYTES = 32;
-/** The audit actor of a request the local key signs, as the CLI on this machine has always been
- * named. */
+/** The audit actor of a request the local key signs, as the CLI on this machine has always
+ * been named. */
 export const LOCAL_KEY_SUBJECT = 'localhost:cli';
 
 function digest(token: string): Buffer {
@@ -54,8 +54,8 @@ export interface LocalKey {
   matches(token: string): boolean;
 }
 
-/** Writes a fresh local key for the server on `hippoRoot`, so the key of any earlier run stops
- * working. */
+/** Writes a fresh local key for the server on `hippoRoot`, so the key of any earlier run
+ * stops working. */
 export function issueLocalKey(hippoRoot: string): LocalKey {
   const token = `${KEY_PREFIX}${randomBytes(KEY_BYTES).toString('base64url')}`;
   writeSecretFile(localKeyPath(hippoRoot), `${token}\n`, (tmp) => {

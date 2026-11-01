@@ -117,8 +117,8 @@ export async function conflictResolve(
     reason,
     at: ctx.infra.clock().toISOString(),
   });
-  // Every check passed above, so false here is another resolver, or a scope change, getting there
-  // first.
+  // Every check passed above, so false here is another resolver, or a scope change, getting
+  // there first.
   if (!resolved) throw new ConflictError(`conflict ${conflictId} is already resolved`);
   return { conflictId, keptId: keep.id, loserId: loser.id };
 }

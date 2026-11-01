@@ -3,8 +3,7 @@
 // the holder.
 import { createHost, type Host } from '../../../host/host.js';
 import type { HippoStore, StoreReach } from '../../../base/ports/store.js';
-import { createSqliteExecutor, type ExecutorOptions } from './executor.js';
-import { workerCounts } from './executor-counts.js';
+import { createSqliteExecutor, type ExecutorOptions, workerCounts } from './executor.js';
 import { isHippoDbStore } from './hippo-db-stores.js';
 import { createStoreHolder, type StoreHolder } from './held-connection.js';
 import { inSqliteSession, sqliteReach } from '../store.js';
@@ -28,8 +27,8 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly store: HippoStore;
   /** The Host this server root keeps for its life; its ports and every reach share it. */
   readonly host: Host;
-  /** The store is hippo.db rather than a caller's own, so its folder's config.json decides
-   * shared-ness. */
+  /** The store is hippo.db rather than a caller's own, so its folder's config.json
+   * decides shared-ness. */
   readonly onHippoDb: boolean;
   /** The served store as one request calls it: each call to a worker carries the request's
    * deadline and signal, and an in-process store opens on the request's session. */
@@ -66,8 +65,8 @@ function boundToRequest<S extends HippoStore>(
   return session === undefined ? bound : inSqliteSession(bound, session);
 }
 
-/** Detached work still writes through the stores, so it settles before they close; one past the
- * bound fails against the closed stores, and DetachedSet logs it. */
+/** Detached work still writes through the stores, so it settles before they close; an embed past
+ * the bound fails on the closed stores, and embedMemoryInStore warns once and resolves 'failed'. */
 async function settleDetached(runtime: StoreRuntime, withinMs: number): Promise<void> {
   const left = await runtime.settle(withinMs);
   if (left === 0) return;

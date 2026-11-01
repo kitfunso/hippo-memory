@@ -1,14 +1,8 @@
-// The write half every connector's ingest shares, after its own pre-check of the event log.
+// What every connector's ingest shares: its Context on the server's ports and the result it answers.
 
-import { rememberUntrusted, type RememberOptions } from '../../api/index.js';
 import type { Actor } from '../../api/types.js';
-import {
-  coreEnrichment,
-  type HippoDbContext,
-  type HippoDbStore,
-} from '../../api/hippo-db-context.js';
-import type { ConnectorEvent } from '../../base/records/connectors.js';
-import { RejectedValueError } from '../../base/errors/api-errors.js';
+import { coreEnrichment, type HippoDbContext } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
@@ -40,33 +34,4 @@ export type IngestStatus = 'ingested' | 'duplicate' | 'skipped' | 'skipped_dupli
 export interface IngestResult {
   status: IngestStatus;
   memoryId: string | null;
-}
-
-/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are
- * logged with no memory, so a redelivery acks instead of retrying. */
-export async function rememberWithEventLog(
-  ctx: ConnectorContext,
-  event: ConnectorEvent,
-  opts: RememberOptions | null,
-): Promise<IngestResult> {
-  if (!opts) return markSkipped(ctx, event);
-  try {
-    // No actor fallback: every caller builds ctx with its connector subject.
-    const result = await rememberUntrusted(ctx, { ...opts, event });
-    // Another worker logged this key between the pre-check and the write: its memory stands and
-    // ours was not stored.
-    if (result.duplicate) {
-      return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
-    }
-    return { status: 'ingested', memoryId: result.id };
-  } catch (e) {
-    // A tombstone refusal is permanent, so a DLQ retry would hit it forever.
-    if (e instanceof RejectedValueError) return markSkipped(ctx, event);
-    throw e;
-  }
-}
-
-async function markSkipped(ctx: ConnectorContext, event: ConnectorEvent): Promise<IngestResult> {
-  await ctx.store.hippoDb.connectorEvents.markEventSeen(event);
-  return { status: 'skipped', memoryId: null };
 }

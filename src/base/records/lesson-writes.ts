@@ -6,8 +6,8 @@ import type { HeldText } from '../ports/store/types.js';
 /** The reads and writes behind git auto-learn's batch. */
 export interface LessonWrites {
   /** Content, source and origin of the tenant's rows that may hold one of `texts`, as
-   * `captures.textsHolding` reads them, among the rows a team member or `ownScope`'s owner may
-   * touch. */
+   * `captures.textsHolding` reads them, among the rows a team member or `ownScope`'s owner
+   * may touch. */
   textsHolding(
     tenantId: string,
     texts: readonly string[],

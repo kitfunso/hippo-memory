@@ -6,7 +6,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
-import type { HippoDbStore } from '../../src/store/sqlite/hippo-db.js';
+import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import type { JsonValue } from '../../src/base/util/json.js';

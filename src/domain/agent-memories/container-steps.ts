@@ -73,8 +73,8 @@ function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntr
     },
     s.now,
   );
-  // The note's own time when it is earlier than now; the loader reads any form but toISOString as
-  // drift.
+  // The note's own time when it is earlier than now; the loader reads any form but toISOString
+  // as drift.
   const created = Number.isFinite(item.updatedAt)
     ? new Date(Math.min(item.updatedAt, Date.parse(base.created))).toISOString()
     : base.created;

@@ -36,7 +36,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/runtime/handles.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
 import { saveCustomerNote, saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { detailLines } from '../_helpers/sleep-lines.js';

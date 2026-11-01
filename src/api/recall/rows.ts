@@ -15,7 +15,7 @@ import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContinuityBlock } from '../../base/ports/store.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { Context } from '../types.js';
-import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
+import { CONTINUITY_EVENT_LIMIT } from '../context/context-task-state.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
@@ -132,8 +132,8 @@ export function fitRecall<R>(ranked: SearchResult[], fit: RecallFit<R>): R {
   const fitted = fitBudget(ranked, fit.room, fit.floor, fit.cost);
   let kept = fitted.length;
   let rendered = fit.render(fitted.slice(0, kept));
-  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each
-  // drop.
+  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after
+  // each drop.
   while (kept > fit.floor && estimateTokens(fit.textOf(rendered)) > fit.budget) {
     kept--;
     rendered = fit.render(fitted.slice(0, kept));

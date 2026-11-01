@@ -202,6 +202,7 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     configure(s.root, { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } });
     failingScript(s);
     const first = await s.run('remember', TEXT);
+    expect(Object.keys(loadEmbeddingIndex(s.root))).toEqual(ids(s.rows()));
     expect(await s.run('watch', 'node', 'fail.js')).toEqual(LEARNED);
     const rows = s.rows();
     expect(first).toEqual(remembered(rows[0]!));
@@ -219,6 +220,7 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     embeddings.setFault(300);
     try {
       expect((await s.run('remember', TEXT)).status).toBe(0);
+      expect(Object.keys(loadEmbeddingIndex(s.root))).toEqual(ids(s.rows()));
       expect((await s.run('watch', 'node', 'fail.js')).status).toBe(3);
     } finally {
       embeddings.setFault(null);

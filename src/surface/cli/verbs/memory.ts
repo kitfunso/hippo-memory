@@ -13,12 +13,10 @@ import {
   VALUE_MULT_MAX,
   VALUE_MULT_MIN,
   VALUE_MULT_SLOPE,
-} from '../../../base/rank/search-types.js';
-import {
   DEFAULT_EMBEDDING_WEIGHT,
   DEFAULT_GRAPH_HOPS,
   DEFAULT_GRAPH_SEED_COUNT,
-} from '../../../base/rank/recall-defaults.js';
+} from '../../../base/rank/search-types.js';
 import { DEFAULT_CONTEXT_BUDGET } from '../../../api/context/context.js';
 import { DEFAULT_MAX_NEIGHBORS } from '../../../domain/graph/recall.js';
 import { JEV_DEFAULT_TOP_K } from '../../../domain/rerankers/hosted.js';

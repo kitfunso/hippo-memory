@@ -18,8 +18,8 @@ export interface QuarantineListItem {
 
 const QUARANTINE_PREVIEW_CHARS = 200;
 
-/** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review
- * queue). */
+/** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the
+ * review queue). */
 export async function quarantineList(
   ctx: HippoDbContext,
   opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
@@ -60,8 +60,8 @@ export async function quarantineApprove(ctx: HippoDbContext, id: string): Promis
   throw refusalError(id, result);
 }
 
-/** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched
- * (append-only). */
+/** Keep a quarantined memory hidden for good. Admin only; the raw row is
+ * untouched (append-only). */
 export async function quarantineReject(ctx: HippoDbContext, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can reject a quarantined memory');

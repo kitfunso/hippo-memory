@@ -11,7 +11,8 @@ import {
 } from '../../domain/predictions/planning-fallacy.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { LastRecall, LastRecallWrites } from '../../base/records/last-recall.js';
+import type { LastRecallWrites } from '../../base/records/last-recall.js';
+import type { LastRecallFinish } from '../enrichment.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { estimateTokens } from '../../base/util/token-text.js';
@@ -44,8 +45,8 @@ import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 
 const MAX_RECALL_LIMIT = 1000;
-// recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds remote
-// cost.
+// recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds
+// remote cost.
 const MAX_SCORER_WINDOW = 1000;
 // Bounds BM25 tokenisation cost while covering pasted error messages.
 const MAX_CONTEXT_QUERY_LEN = 1024;
@@ -223,8 +224,8 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
   return { q, budget, limit, pinnedOnly, scope, includeRecent, crossProject };
 }
 
-/** Ranks with rankRecall under BUDGET_RANKED, then records what `core.show` prints; host admin
- * only. */
+/** Ranks with rankRecall under BUDGET_RANKED, then records what `core.show` prints; host
+ * admin only. */
 export async function retrieveWithCliCore(
   ctx: Context,
   opts: CliCoreQuery,
@@ -331,7 +332,7 @@ async function recordShown(
     trace: traceOf(ctx, opts, core, shown.results),
   };
   const audited = await finishOrReport(() =>
-    finishShown(store, core.lastRecall, writes, ids.length > 0),
+    finishShown(store, ctx.enrich?.lastRecall, writes, ids.length > 0),
   );
   if (audited && second !== undefined) await finishSecond(ctx, second, recallRow, heldElsewhere);
   // The caller prints whether or not the record was written, so the ring and the ledger still take
@@ -347,8 +348,8 @@ async function recordShown(
   });
 }
 
-// The second store logs that it was searched, and strengthens only the rows the first does not
-// hold.
+// The second store logs that it was searched, and strengthens only the rows the first does
+// not hold.
 function finishSecond(
   ctx: Context,
   second: HippoStore,
@@ -379,15 +380,15 @@ function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource
   };
 }
 
-/** The second store takes its own recall rows, unless the caller's store is the global one
- * already. */
+/** The second store takes its own recall rows, unless the caller's store is the global
+ * one already. */
 function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined {
   const sources = core.sources;
   return sources !== undefined && ctx.reach?.isGlobal !== true ? sources.store : undefined;
 }
 
-// The caller has ranked and is about to print, so a failed audit write is logged and counted, never
-// thrown.
+// The caller has ranked and is about to print, so a failed audit write is logged and counted,
+// never thrown.
 async function finishOrReport(finish: () => Promise<number | null | void>): Promise<boolean> {
   try {
     await finish();
@@ -429,12 +430,14 @@ function traceOf(
 }
 
 // A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs
-// these ids with an older trace; an empty one leaves the marker on the previous recall.
+// these ids with an older trace; an empty one, or a store that keeps none, leaves the marker alone.
 function finishShown(
   store: HippoStore,
-  lastRecall: LastRecall,
+  lastRecall: LastRecallFinish | undefined,
   writes: LastRecallWrites,
   marks: boolean,
 ): Promise<number | null | void> {
-  return marks ? lastRecall.finishRecall(writes, undefined) : store.finishRecall(writes);
+  return marks && lastRecall
+    ? lastRecall.finishRecall(writes, undefined)
+    : store.finishRecall(writes);
 }

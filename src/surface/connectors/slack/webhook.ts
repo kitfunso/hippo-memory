@@ -12,10 +12,13 @@ import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } fr
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
 import { parkInDlq } from '../../../api/dead-letters.js';
-import { errorFields, log } from '../../../base/util/log.js';
+import {
+  resolveTenant,
+  routeOncePerDelivery,
+  type RouteFallback,
+} from '../../../api/hippo-db/connector-events.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
-import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import {
   JSON_HEADERS,
@@ -64,8 +67,8 @@ export async function handleSlackEventsWebhook(
   });
 }
 
-/** Reads the raw body and refuses it unless the signature matches the current or the previous
- * secret. */
+/** Reads the raw body and refuses it unless the signature matches the current or the
+ * previous secret. */
 async function readSignedSlackBody(
   request: WebhookRequest,
   secret: string,
@@ -106,28 +109,14 @@ const REPLAY_HOLD_MS = DAY_MS;
 /** Routes a verified request once: the signature covers the timestamp and the body, so a repeat
  * is the same request. */
 async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
-  const events = d.store.hippoDb.connectorEvents;
-  const held = await events.claimDelivery({
+  const claim = {
     connector: 'slack',
     key: d.signature,
     nowMs: Date.now(),
     ttlMs: REPLAY_HOLD_MS,
-  });
-  if (!held) {
+  } as const;
+  if (!(await routeOncePerDelivery(d, claim, () => routeSignedSlackPayload(d)))) {
     sendJson(d.res, 200, { ok: true, status: 'duplicate' });
-    return;
-  }
-  try {
-    await routeSignedSlackPayload(d);
-  } catch (err) {
-    // A request that failed left nothing stored, so Slack's retry must get through.
-    await events.releaseDelivery('slack', d.signature).catch((releaseErr) => {
-      log.warn(
-        'slack webhook: could not free the replay hold of a failed delivery',
-        errorFields(releaseErr),
-      );
-    });
-    throw err;
   }
 }
 
@@ -212,7 +201,7 @@ async function tenantOrPark(d: SignedSlackRequest, body: JsonValue): Promise<str
     return envTenant();
   }
   const resolvedTenant = await resolveTenant(
-    d.store,
+    d,
     { connector: 'slack', teamId: body.team_id },
     hostFallback(),
   );
@@ -237,7 +226,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
   // null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
     teamIdFromRaw !== null
-      ? await resolveTenant(d.store, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
+      ? await resolveTenant(d, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
       : null;
   await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel

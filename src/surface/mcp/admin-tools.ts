@@ -4,7 +4,7 @@ import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListOpen, conflictPages, conflictResolve } from '../../api/hippo-db/conflicts.js';
 import { memoryGetTouchable } from '../../api/memories/memories.js';
-import { mcpApiContext, type HippoDbToolCall, type LocalToolCall } from './protocol.js';
+import type { HippoDbToolCall, LocalToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
 import { tenantStatus } from '../../api/status.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -102,23 +102,22 @@ export async function runResolveTool({ args, api }: HippoDbToolCall): Promise<st
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export async function runShareTool({ args, ctx, store }: LocalToolCall): Promise<string> {
+export async function runShareTool({ args, api, store }: LocalToolCall): Promise<string> {
   const shareId = stringArg(args, 'id', MAX_ID_LEN);
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = boolArg(args, 'force');
-  const apiCtx = mcpApiContext(ctx);
   // Checked before the share, whose personal-row refusal would tell another person the id exists.
-  await memoryGetTouchable(apiCtx, shareId);
+  await memoryGetTouchable(api, shareId);
   // The share reads the id in the caller's tenant only, so tenant A cannot copy tenant B's row to
   // the global store.
-  const shared = await shareToGlobal({ ...apiCtx, store }, shareId, { force });
+  const shared = await shareToGlobal({ ...api, store }, shareId, { force });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
 }
 
-export async function runPeersTool({ ctx }: LocalToolCall): Promise<string> {
+export async function runPeersTool({ api }: LocalToolCall): Promise<string> {
   // Tenant-scope peer discovery to the caller, as hippo_share does.
-  const peers = await sharePeers(mcpApiContext(ctx));
+  const peers = await sharePeers(api);
   if (peers.length === 0) return 'No peers found.';
   return peers
     .map(

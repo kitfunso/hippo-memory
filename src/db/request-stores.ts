@@ -7,8 +7,8 @@ import { settledStoreFacts } from './migrate.js';
 import { storeKey, type StoreRuntime } from './store-runtime.js';
 
 export interface RequestStoresOptions {
-  /** Its pool lends and takes back the session's handles, and its exit closes a session still
-   * open. */
+  /** Its pool lends and takes back the session's handles, and its exit closes a session
+   * still open. */
   readonly runtime?: StoreRuntime | undefined;
   /** Lock wait of every open in the session that does not pass its own. */
   readonly busyWaitMs?: number | undefined;

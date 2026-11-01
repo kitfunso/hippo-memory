@@ -109,8 +109,8 @@ function snakeCaseFields(payload: JsonObject): JsonObject {
  * no change comes back exactly as sent. */
 export function normalizeHookPayload(text: string | undefined): string | undefined {
   if (text === undefined || text.trim() === '') return text;
-  // Not JSON: each reader already treats that as a malformed payload, so it passes through
-  // untouched.
+  // Not JSON: each reader already treats that as a malformed payload, so it passes
+  // through untouched.
   const payload = tryParseJson(text.trim());
   if (!isJsonObjectLiteral(payload)) return text;
   const added = snakeCaseFields(payload);

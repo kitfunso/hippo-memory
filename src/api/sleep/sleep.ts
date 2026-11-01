@@ -5,7 +5,7 @@ import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { strengthOf } from '../types.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
-import type { SleepEvent } from './events.js';
+import type { SleepEvent } from './sleep-run.js';
 import { runSleep } from './sleep-run.js';
 
 /** Options for `sleep`, one consolidation cycle on a store with hippo.db's local tier that returns

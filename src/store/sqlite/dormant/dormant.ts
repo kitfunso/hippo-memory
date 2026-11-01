@@ -135,9 +135,8 @@ function restoreInWriteScope(
       const entry = stampOriginProject(files, reviveDormant(snapshot, now, restore.revival));
       writeEntryDbOnly(db, entry, { actor: restore.actor });
       deleteDormantRow(db, restore.tenantId, restore.id);
-      // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle
-      // trains on. Same write scope as the restore, so the label exists exactly when the restore
-      // does.
+      // A restore is a labelled "forgot it, then needed it" event a learned lifecycle trains on;
+      // it shares the restore's write scope, so the label exists exactly when the restore does.
       auditDormantRestore(db, restore, snapshot, now);
       return { status: 'restored', entry };
     },

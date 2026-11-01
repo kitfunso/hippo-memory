@@ -16,7 +16,7 @@ import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js'
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
-import type { HippoDbStore } from '../../src/api/hippo-db-context.js';
+import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor, type SqliteExecutor } from '../../src/store/sqlite/runtime/executor.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

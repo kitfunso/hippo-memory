@@ -13,8 +13,8 @@ export const SCATTER_COLS = 64;
 
 export const SCATTER_ROWS = 32;
 
-/** Each left-out row counts under the first of quarantined, superseded and archived that fits
- * it. */
+/** Each left-out row counts under the first of quarantined, superseded and archived that
+ * fits it. */
 export interface ExcludedCounts {
   superseded: number;
   archived: number;
@@ -44,8 +44,8 @@ export interface ProjectTally {
   readonly maxAgeDays: number;
   /** The earliest created time that parses, or null when none does. */
   readonly firstCreatedMs: number | null;
-  /** Rows per seriesDay of their created time (one that does not parse is today), indices 0 to
-   * SERIES_DAYS. */
+  /** Rows per seriesDay of their created time (one that does not parse is today), indices 0
+   * to SERIES_DAYS. */
   readonly createdDays: readonly number[];
 }
 
@@ -165,8 +165,8 @@ export interface DashboardReads {
   ): Promise<{ tally: FilterTally; rows: ListedRow[] } | null>;
   /** `needle` is lower-case, matched against lower-cased content and tags. */
   search(tenantId: string, needle: string): Promise<SearchTally[]>;
-  /** The tenant's open conflicts naming `memoryId`, newest change first, each with both members'
-   * columns. */
+  /** The tenant's open conflicts naming `memoryId`, newest change first, each with both
+   * members' columns. */
   openConflictsOf(tenantId: string, memoryId: string): Promise<ConflictRow[]>;
   /** Whether a vector is stored for `id`, whatever its tenant. */
   hasVector(id: string): Promise<boolean>;

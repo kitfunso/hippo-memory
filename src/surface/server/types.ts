@@ -15,7 +15,7 @@ import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
-import type { DetachedWork } from '../../domain/search/detached-work.js';
+import type { DetachedWork } from '../../domain/search/embed-memories.js';
 import type { ConnectorStore } from '../connectors/ingest.js';
 
 export interface ServerHandle {
@@ -130,8 +130,8 @@ export type ResolvedServeOptions = ServeOptions & {
   /** A store the server built at boot, as this request calls it: each call to a worker waits on
    * its deadline. */
   storeFor: <S extends HippoStore>(store: S) => S;
-  /** Fires when this request passes its deadline; unset outside a request and for an exempt
-   * route. */
+  /** Fires when this request passes its deadline; unset outside a request and for an
+   * exempt route. */
   signal?: AbortSignal;
   /** This server's own config reader: each request reads config.json through it. */
   configAt: ConfigReader;
@@ -150,8 +150,8 @@ export type ResolvedServeOptions = ServeOptions & {
   keyVerifier: KeyVerifier;
   /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
-  /** This server's outside services: one reranker registry for the server's life, the rest per
-   * Context. */
+  /** This server's outside services: one reranker registry for the server's life, the rest
+   * per Context. */
   infra: () => InfraPorts;
   /** Keeps the work a request starts and does not wait on; the server's stop settles it. */
   detached: DetachedWork;

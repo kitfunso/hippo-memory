@@ -170,8 +170,8 @@ function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> 
         stdio: 'ignore',
         windowsHide: true,
       });
-      // An async spawn failure (ENOENT, EAGAIN) arrives as an 'error' event, which a try cannot
-      // catch.
+      // An async spawn failure (ENOENT, EAGAIN) arrives as an 'error' event, which a try
+      // cannot catch.
       worker.on('error', failed);
       worker.once('spawn', () => resolve(true));
       worker.unref();

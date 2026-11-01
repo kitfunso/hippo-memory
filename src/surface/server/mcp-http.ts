@@ -6,14 +6,9 @@ import {
   envMcpSseMaxStreams,
 } from '../../base/util/env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from '../../api/index.js';
 import { sharedStoreOf } from '../../api/types.js';
-import {
-  handleMcpRequest,
-  mcpErrorResponse,
-  type McpContext,
-  type McpRequest,
-} from '../mcp/server.js';
+import { handleMcpRequest, mcpErrorResponse, type McpRequest } from '../mcp/server.js';
+import { mcpContextOn } from '../mcp/request.js';
 import { HttpError } from '../../base/errors/http-errors.js';
 import { bodyDeadlineMs, readBody, sendJson } from '../http/http-util.js';
 import { errorFields, log } from '../../base/util/log.js';
@@ -77,36 +72,6 @@ export function callerProjectFromHeaders(
   return { name, legacyName: name, aliases };
 }
 
-function mcpContextFor(
-  ctx: Context,
-  opts: ResolvedServeOptions,
-  project?: CallerProject,
-): McpContext {
-  const mcpCtx: McpContext = {
-    hippoRoot: opts.hippoRoot,
-    tenantId: ctx.tenantId,
-    // McpContext.actor stays string; extract subject at the boundary.
-    actor: ctx.actor.subject,
-    // The caller's real role: MCP tools must not run a member key as admin.
-    role: ctx.actor.role,
-    scopes: ctx.actor.scopes,
-    viaAuthResolver: ctx.actor.viaAuthResolver,
-    hostAdmin: ctx.actor.hostAdmin,
-    owner: ctx.actor.owner,
-    clientKey: ctx.clientKey,
-    store: ctx.store,
-    storeFor: opts.storeFor,
-    tools: opts.mcpTools,
-    config: ctx.config,
-    reach: ctx.reach,
-    callers: ctx.callers,
-    infra: ctx.infra,
-    detached: ctx.detached,
-  };
-  if (project !== undefined) mcpCtx.project = project;
-  return mcpCtx;
-}
-
 export async function handleMcpPost(
   req: IncomingMessage,
   res: ServerResponse,
@@ -128,7 +93,8 @@ export async function handleMcpPost(
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, opts, project));
+    const host = { hippoRoot: opts.hippoRoot, storeFor: opts.storeFor, tools: opts.mcpTools };
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextOn(ctx, host, project));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, callName(rpcReq));
   }
@@ -289,8 +255,8 @@ function writePing(res: ServerResponse): boolean {
 }
 
 function endStreamWithReason(res: ServerResponse, reason: string): void {
-  // A socket that refused the write is already logged; end() on it would only log the same failure
-  // again.
+  // A socket that refused the write is already logged; end() on it would only log the same
+  // failure again.
   if (writeChunk(res, `event: closed\ndata: ${JSON.stringify({ reason })}\n\n`)) endReply(res);
   else res.destroy();
 }

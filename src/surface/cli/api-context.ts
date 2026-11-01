@@ -1,10 +1,13 @@
 import { adminActor } from '../../api/index.js';
 import type { ContextReach, GlobalInReach } from '../../api/types.js';
-import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
+import type { ConfiguredFolder } from '../../base/ports/store.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
+import type { CompactionHooks } from '../../base/records/capture.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
-import type { HippoDbContext, HippoDbStore } from '../../api/hippo-db-context.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
 import { autoSleepConsolidate } from '../../api/sleep/sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
@@ -25,7 +28,7 @@ import {
   type StoreRuntime,
   type RequestStores,
 } from '../open-store.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import {
   envClefSettings,
   envLossAversionRatio,
@@ -33,13 +36,12 @@ import {
   envTenant,
 } from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
-import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { createCallerState, type AutoSleepHost, type CallerState } from '../../api/callers.js';
 import { rootInfra, rootStoreRules } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
 import { contextReach, coreEnrichment, globalEnrichment } from '../../api/hippo-db-context.js';
-import type { DetachedWork } from '../../domain/search/detached-work.js';
+import type { DetachedWork } from '../../domain/search/embed-memories.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
  * parses an unchanged config.json once. */
@@ -77,6 +79,9 @@ export interface CliCommand {
   /** The api Context on `root`, which some verbs point at the global store. A command's callers
    * start empty unless its caller holds a set; a CLI write starts no sleep. */
   apiContext(root: string, tenantId: string, callers?: CallerState): CliContext;
+  /** The compaction hooks' record work on `root`'s hippo.db, which a hook's spool and transcript
+   * reads drive. */
+  compactionHooks(root: string): CompactionHooks;
   /** A second store a CLI read searches beside its own, with that store's config. */
   secondStore(root: string): GlobalInReach;
   /** Where a hook on `root` books its ledger rows: the folder's store, else the global one. */
@@ -188,8 +193,8 @@ function contextOn(
   };
 }
 
-/** The stores of one CLI command: each opens on `runtime` and, inside a request, on that request's
- * session. */
+/** The stores of one CLI command: each opens on `runtime` and, inside a request, on that
+ * request's session. */
 export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliCommand {
   const scope: Scope = { runtime, session };
   const inSession = (own: RequestStores): CliCommand => cliCommand(runtime, own);
@@ -202,6 +207,7 @@ export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliC
     }),
     apiContext: (root, tenantId, callers = createCallerState()) =>
       contextOn(scope, root, tenantId, callers),
+    compactionHooks: (root) => storeOn(scope, root).hippoDb.compactionHooks,
     secondStore: (root) => {
       const store = storeOn(scope, root);
       return { root, store, config: cliConfig(root), enrich: globalEnrichment(store) };
@@ -230,14 +236,14 @@ export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliC
   };
 }
 
-/** Creates the global store, or finishes one that was partly made: what a first share needs of
- * it. */
+/** Creates the global store, or finishes one that was partly made: what a first share needs
+ * of it. */
 export function cliInitGlobal(): void {
   sqliteImportFiles(hippoHomeDir()).ensure();
 }
 
-/** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
- * it. */
+/** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write
+ * started it. */
 function rootAutoSleep(
   runtime: StoreRuntime,
   root: string,
@@ -298,8 +304,8 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
         detached: runtime,
       };
     };
-  // Frames interleave, so each takes a session of its own and hands it to every store its context
-  // builds.
+  // Frames interleave, so each takes a session of its own and hands it to every store its
+  // context builds.
   return {
     runFrame: (signal, run) =>
       runSqliteRequest((session) => run(contextIn(session, signal)), 'cli', runtime),

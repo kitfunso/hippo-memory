@@ -9,13 +9,13 @@ export interface RecallSearchArgs {
   readonly explicitScopeMode: 'exact' | 'additive';
   readonly includeSuperseded: boolean;
   readonly originProjects?: OriginFilter;
-  /** The caller's personal scope, which the default deny admits; undefined admits no personal
-   * row. */
+  /** The caller's personal scope, which the default deny admits; undefined admits no
+   * personal row. */
   readonly ownScope: string | undefined;
 }
 
-/** Everything one recall writes once its reply is decided, so a store writes it on one
- * connection. */
+/** Everything one recall writes once its reply is decided, so a store writes it on
+ * one connection. */
 export interface RecallWrites {
   /** Insert or ignore on (memory_id, goal_id), so the first row wins, a duplicate inside this
    * batch included. First drop a row whose memory_id is in no memories row of this store,
@@ -45,8 +45,8 @@ export interface RecallTraceInput {
   tenantId: string;
   sessionId?: string | null;
   pipeline: 'api' | 'cli' | 'context' | 'mcp';
-  /** Raw query text. NEVER persisted: only its sha256/16 hash + length are stored (GDPR Path A / audit convention,
-   *  CLI). */
+  /** Raw query text. NEVER persisted: only its sha256/16 hash + length are stored (GDPR Path A / audit
+   *  convention, CLI). */
   query: string;
   /** True when the caller ran with explain/--why (per-result rerank steps may be present).
    * Defaults to false. */

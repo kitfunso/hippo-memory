@@ -3,6 +3,7 @@ import { DEFAULT_TENANT_ID } from '../../../base/util/tenant.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { isoInstant } from '../../../base/memory/created-stamp.js';
 import {
+  changedRows,
   type DatabaseSyncLike,
   ftsRowCounts,
   isFtsAvailable,
@@ -19,9 +20,11 @@ import { chunked } from '../../../base/util/chunked.js';
 import { MEMORY_ROW_COLUMNS } from '../runtime/rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../../db/sql.js';
 import { duplicateHash } from '../../../base/util/same-text.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
+import type { RenameSourceOptions } from '../../../base/records/agent-import.js';
 
-/** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
- * sound. */
+/** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without
+ * a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
   if (Object.hasOwn(entry, 'tenant_id') && entry.tenantId === undefined) {
     throw new TypeError('tenant_id was renamed to tenantId in 3.0');
@@ -121,8 +124,8 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   ];
 }
 
-// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep recounts
-// it.
+// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep
+// recounts it.
 function markFtsDrifted(db: DatabaseSyncLike): void {
   try {
     setFtsInSync(db, false);
@@ -263,4 +266,134 @@ export function stampOriginProjectForImport(
     ...entry,
     originProject: fromSource ?? fallbackOrigin(host, hippoRoot),
   };
+}
+
+/** Rewrites a live row's tags and its full-text row on the caller's transaction, with no
+ * audit row. */
+export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void {
+  cachedStatement(
+    db,
+    `UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+  ).run(JSON.stringify(entry.tags), entry.id, entry.tenantId);
+  syncFtsRow(db, entry);
+}
+
+/** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's
+ * dormant move does, and marks its summary parent dirty. */
+export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
+  cachedStatement(db, 'DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(
+    entry.id,
+    entry.tenantId,
+  );
+  deleteFtsRow(db, entry.id);
+  if (entry.dagParentId) {
+    markSummaryDirtyInTx(db, { summaryId: entry.dagParentId, tenantId: entry.tenantId, actor });
+  }
+}
+
+// The last value given for an id wins, as a row-by-row write left it: UPDATE FROM applies any one
+// of an id's matches.
+const lastPerId = (pairs: ReadonlyArray<readonly [string, number | string]>): string =>
+  JSON.stringify([...new Map(pairs)]);
+
+const HALF_LIFE_UPDATE_SQL =
+  `WITH v AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS hl FROM json_each(?)) ` +
+  `UPDATE memories SET half_life_days = v.hl FROM v WHERE memories.id = v.id`;
+
+/** One half-life per memory id, in one statement on the caller's transaction. */
+export function setHalfLives(
+  db: DatabaseSyncLike,
+  rows: readonly { id: string; halfLifeDays: number }[],
+): void {
+  if (rows.length === 0) return;
+  cachedStatement(db, HALF_LIFE_UPDATE_SQL).run(lastPerId(rows.map((r) => [r.id, r.halfLifeDays])));
+}
+
+/** A tenant's project `from` and the project `into` that takes its rows. */
+export interface OriginMoveOptions {
+  readonly tenantId: string;
+  readonly from: string;
+  readonly into: string;
+}
+
+/** Moves every row of `from` in a tenant to project `into`. */
+export function restampOriginProject(
+  db: DatabaseSyncLike,
+  { tenantId, from, into }: OriginMoveOptions,
+): void {
+  cachedStatement(
+    db,
+    `UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`,
+  ).run(into, tenantId, from);
+}
+
+const ORIGIN_STAMP_SQL =
+  `WITH v AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS origin FROM json_each(?)) ` +
+  `UPDATE memories SET origin_project = v.origin, updated_at = datetime('now') FROM v ` +
+  `WHERE memories.id = v.id AND memories.tenant_id = ?`;
+
+/** Stamps each id with its project, in one statement. */
+export function stampOriginProjects(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  rows: readonly { id: string; origin: string }[],
+): void {
+  if (rows.length === 0) return;
+  cachedStatement(db, ORIGIN_STAMP_SQL).run(lastPerId(rows.map((r) => [r.id, r.origin])), tenantId);
+}
+
+interface RenameEntrySourceOptions {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly from: string;
+  readonly to: string;
+}
+
+/** Renames a live row's source from `from` to `to`; the count is 0 when another writer moved or
+ * superseded it first. */
+export function renameEntrySource(
+  db: DatabaseSyncLike,
+  { tenantId, id, from, to }: RenameEntrySourceOptions,
+): number {
+  const moved = cachedStatement(
+    db,
+    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
+  ).run(to, id, tenantId, from);
+  return changedRows(moved);
+}
+
+/** Renames a row's source and, when `origin` is not null, its project; the count is 0 when the
+ * row is gone or moved. */
+export function renameEntrySourceAndOrigin(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+  options: RenameSourceOptions,
+): number {
+  const { from, to, origin } = options;
+  const done = cachedStatement(
+    db,
+    `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
+      `AND source = ?`,
+  ).run(to, origin, id, tenantId, from);
+  return changedRows(done);
+}
+
+/** A tenant's row `id` and the row `newId` that supersedes it. */
+interface SupersedeEntryOptions {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly newId: string;
+}
+
+/** Marks `id` superseded by `newId`; false when another writer superseded it first. */
+export function supersedeEntry(
+  db: DatabaseSyncLike,
+  { tenantId, id, newId }: SupersedeEntryOptions,
+): boolean {
+  const result = cachedStatement(
+    db,
+    `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`,
+  ).run(newId, id, tenantId);
+  return changedRows(result) > 0;
 }

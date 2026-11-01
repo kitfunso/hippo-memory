@@ -1,5 +1,5 @@
-// Graceful shutdown and the socket deadlines for hippo's HTTP listeners: the API server and the
-// dashboard.
+// Graceful shutdown and the socket deadlines for hippo's HTTP listeners: the API server and
+// the dashboard.
 import type { Server, ServerResponse } from 'node:http';
 import { envBodyTimeoutMs } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../http/http-util.js';

@@ -113,8 +113,8 @@ function drillResult(
   const summaryOut: DrillDownSummary = {
     id: summary.id,
     content: summary.content,
-    // The stored direct-child count; the fallback counts level-0 children, never the whole depth-N
-    // walk.
+    // The stored direct-child count; the fallback counts level-0 children, never the whole
+    // depth-N walk.
     descendantCount: summary.descendantCount ?? sizes[0] ?? 0,
     earliestAt: summary.earliestAt ?? null,
     latestAt: summary.latestAt ?? null,

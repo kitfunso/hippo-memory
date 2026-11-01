@@ -1,7 +1,7 @@
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { AmbientTallies } from '../../memory/ambient.js';
 import type { AmbientAdmission, AmbientRefusalReason } from '../../scope/read-admission.js';
-import type { MethodEffects } from './effects.js';
+import type { MethodEffects } from './types.js';
 
 export type { AmbientAdmission, AmbientRefusalReason };
 
@@ -69,8 +69,8 @@ export interface ContextCandidateFilter {
   exactScope?: string;
   /** The caller's personal scope, which the default deny admits. */
   ownScope?: string;
-  /** Rows carrying one of these project names, and user-global rows, pass; absent admits every
-   * origin. */
+  /** Rows carrying one of these project names, and user-global rows, pass; absent admits
+   * every origin. */
   project?: readonly string[];
   /** Most rows returned; past it, the rows decay has worn least win. */
   cap: number;
@@ -90,11 +90,11 @@ export interface AmbientStoreFilter {
   exactScope?: string;
   /** The reader's personal scope, which the default deny admits. */
   ownScope?: string;
-  /** Rows carrying one of these project names, and user-global rows, pass; absent admits every
-   * origin. */
+  /** Rows carrying one of these project names, and user-global rows, pass; absent admits
+   * every origin. */
   project?: readonly string[];
-  /** The reader's project names: a secret-tagged row counts only inside its own non-empty origin
-   * project. */
+  /** The reader's project names: a secret-tagged row counts only inside its own non-empty
+   * origin project. */
   currentProject: readonly string[];
   now: Date;
 }

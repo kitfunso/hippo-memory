@@ -69,8 +69,8 @@ export interface ContinuityStamp {
   readonly origin: string;
 }
 
-/** The columns a keyed write stamps; a partial key throws, since a row it wrote would match no
- * reader. */
+/** The columns a keyed write stamps; a partial key throws, since a row it wrote would match
+ * no reader. */
 export function continuityStamp(key: ContinuityKey): ContinuityStamp {
   const origin = key.project.find((n) => n !== '');
   if (key.owner === '' || origin === undefined) {
@@ -169,3 +169,10 @@ export interface EntryPage {
   /** The cursor that reads the page after this one, or null when this was the last. */
   next: EntryCursor | null;
 }
+
+// The effect of a store method, stated once beside its port signature.
+/** 'write' changes the store; 'read' leaves it as it was. */
+export type MethodEffect = 'read' | 'write';
+
+/** One effect for every method of a group, so a method missing from its table fails tsc. */
+export type MethodEffects<G> = { readonly [M in keyof G]-?: MethodEffect };

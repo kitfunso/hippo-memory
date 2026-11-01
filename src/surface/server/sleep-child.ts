@@ -32,8 +32,8 @@ const storeIn = (session: RequestStores) => (root: string) =>
 const childHost = createHost();
 const childInfra = rootInfra(childHost);
 
-/** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global
- * store. */
+/** The served sleep, with the reach `hippo sleep` probes, so it shares into the same
+ * global store. */
 function sleepJob(
   { hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>,
   session: RequestStores,
@@ -89,8 +89,8 @@ process.once('message', (message) => {
           infra: childInfra(),
         })
       : sleepJob(job, session);
-  // The server's own session and lock wait, so a busy store answers as it did when sleep ran in the
-  // server.
+  // The server's own session and lock wait, so a busy store answers as it did when sleep ran in
+  // the server.
   runSqliteRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failureReply)
     // Exit only once the reply is written, or the parent could see the process end first.

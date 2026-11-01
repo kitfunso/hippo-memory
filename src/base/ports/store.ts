@@ -1,5 +1,6 @@
 // The async store interface: every method answers a Promise and takes only data, so any backend can
 // serve it from any thread, and hippo.db is one adapter. Type-only apart from the store errors.
+import type { HippoConfig } from '../config/config.js';
 import type { MemoryEntry } from '../memory/entry.js';
 import type { TenantId } from '../util/tenant.js';
 import type { TokenUse } from '../records/ledger.js';
@@ -12,7 +13,7 @@ import type { KeyWrites } from './store/keys.js';
 import type { ContextReads } from './store/context-reads.js';
 import type { RecallSearchArgs, RecallWrites } from './store/recall-writes.js';
 import type { EntryFilter, PageRequest } from '../records/reports.js';
-export type { FolderStore, StoreReach } from './store/reach.js';
+import type { EmbedderFor } from './embedder.js';
 import type {
   ApiKeyRecord,
   ActiveGoals,
@@ -42,8 +43,8 @@ export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-b
 export interface HippoStore extends CoreGroups {
   /** A name for logs and errors. */
   readonly kind: string;
-  /** The API key record for `keyId` with its scope grants, revoked or not; null when none
-   * matches. */
+  /** The API key record for `keyId` with its scope grants, revoked or not; null when
+   * none matches. */
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
   /** Recall candidates for `query`: whole-word matches first, then part-word matches, then every
    * row in scope. */
@@ -55,8 +56,8 @@ export interface HippoStore extends CoreGroups {
    * admin, the api checks). One read for each walk of a filtered set of rows, so no group keeps
    * a read per caller. */
   entriesWhere(filter: EntryFilter, page: PageRequest): Promise<EntryPage>;
-  /** The session's active goals and their policies, read together so a goal and its policy never
-   * disagree. */
+  /** The session's active goals and their policies, read together so a goal and its policy
+   * never disagree. */
   activeGoals(opts: GetActiveGoalsOptions): Promise<ActiveGoals>;
   /** The first `count` (at most MAX_FRESH_RAW) unsuperseded raw rows of `tenantId` that a non-empty
    * session id and non-null `origins` (those projects and user-global rows) must narrow, by created
@@ -70,15 +71,15 @@ export interface HippoStore extends CoreGroups {
   ): Promise<MemoryEntry[]>;
   /** The newest active snapshot a non-null `key` must narrow to one owner and project (null only
    * on an unshared store), then for its session the newest handoff (same key) and `eventLimit`
-   * newest events returned oldest first, each tie broken by the larger id; the caller applies
-   * scope. */
+   * newest events returned oldest first, each tie broken by the larger id; the caller
+   * applies scope. */
   continuity(
     tenantId: string,
     eventLimit: number,
     key: ContinuityKey | null,
   ): Promise<ContinuityBlock>;
-  /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit
-   * row. */
+  /** Resolves a forward claim's tokens to one class and reads its baserate, writing no
+   * audit row. */
   planningFallacyEvidence(
     tenantId: string,
     classQueryTokens: readonly string[],
@@ -142,3 +143,32 @@ export type { AuditLog } from './store/audit.js';
 
 // Value exports of the effect tables, kept in a port file of their own.
 export { BASE_EFFECTS, STORE_EFFECTS } from './store/store-effects.js';
+
+/** A store and the folder its root opened it from; the folder is for the root's own config read. */
+export interface FolderStore<S extends HippoStore = HippoStore> {
+  readonly root: string;
+  readonly store: S;
+}
+
+/** A store with the config its root loaded and the root's embedder, so a write into it embeds
+ * with the provider that config names. */
+export interface ConfiguredFolder<S> {
+  readonly store: S;
+  readonly config: HippoConfig;
+  readonly embedderFor: EmbedderFor;
+}
+
+/** Which stores a call reaches, probed once by a composition root so the api reads this instead of
+ * the disk. */
+export interface StoreReach {
+  readonly hasLocal: boolean; // the primary store has a project of its own, or has no local files
+  readonly isGlobal: boolean; // the primary root is the operator's global store
+  readonly shared: boolean; // a store serving many people, so the operator's global store stays out
+  // Set only when readable; churn marks its rows stale, and a hook books its ledger rows there, each
+  // proving the store's local tier where it reads one.
+  readonly global?: FolderStore;
+  // The primary store has local files, whose folder `hippo embed` and sleep reach.
+  readonly isHippoDb?: boolean;
+  // Where share, promote and sync write, each proving its local tier; perhaps not created.
+  readonly globalTarget?: FolderStore;
+}

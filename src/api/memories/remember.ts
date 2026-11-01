@@ -31,8 +31,8 @@ import { isQuarantineScope } from '../../domain/trust/quarantine.js';
 import type { Context } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 
-/** Row fields the caller's own process decides, as the CLI does from its flags and its salience
- * gate. */
+/** Row fields the caller's own process decides, as the CLI does from its flags and its
+ * salience gate. */
 export interface RememberLocal {
   layer?: Layer;
   pinned?: boolean;
@@ -121,8 +121,8 @@ function rememberScope(ctx: Context, opts: RememberOptions, untrusted: boolean):
   return own;
 }
 
-/** A row's owner is the person behind the caller's key; only an admin may write one for someone
- * else. */
+/** A row's owner is the person behind the caller's key; only an admin may write one for
+ * someone else. */
 function assertOwnerIsCallers(ctx: Context, owner: string | undefined): void {
   if (owner === undefined || owner === ctx.actor.owner) return;
   if (ctx.actor.role === 'admin' || ctx.actor.hostAdmin) return;
@@ -138,8 +138,8 @@ export interface PreparedRemember {
   readonly warnings: readonly string[];
 }
 
-/** `untrusted` marks connector content an agent doesn't control, which the instruction check
- * gates. */
+/** `untrusted` marks connector content an agent doesn't control, which the instruction
+ * check gates. */
 export function prepareRemember(
   ctx: Context,
   opts: RememberOptions,
@@ -263,8 +263,8 @@ async function salienceVerdict(
 }
 
 /** Store one memory, then start the root's auto-sleep if enough new memories have landed
- * (`ctx.callers`). With `salienceGate` the write may be dropped instead (see
- * GatedRememberOptions). */
+ * (`ctx.callers`). With `salienceGate` the write may be dropped instead
+ * (see GatedRememberOptions). */
 export async function remember(
   ctx: Context,
   opts: GatedRememberOptions,

@@ -18,7 +18,7 @@ export interface Learning {
   readEntry(id: string, tenantId: string): Promise<MemoryEntry | null>;
   /** Adds `tag` to each of the tenant's rows `ids` names that lacks it, in one transaction. */
   addTagToEntries(tenantId: string, ids: readonly string[], tag: string): Promise<void>;
-  /** When each memory was last confirmed by a good outcome at or after `since` (an ISO time), by
-   * id. */
+  /** When each memory was last confirmed by a good outcome at or after `since` (an ISO time),
+   * by id. */
   confirmedOutcomeTimes(tenantId: string, since: string): Promise<Map<string, string>>;
 }

@@ -123,9 +123,8 @@ export async function handleResolve(cmd: CommandContext): Promise<void> {
   }
 
   const forgetLoser = boolFlag(flags, 'forget');
-  // --reject-loser tombstones the loser's digest so it cannot be re-asserted, as well as removing
-  // it. --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and
-  // keepId.
+  // --reject-loser also tombstones the loser's digest so it cannot be re-asserted. --reason is
+  // optional, unlike `hippo reject`: resolve already has the conflict id and keepId.
   const rejectLoser = boolFlag(flags, 'reject-loser');
   const reasonFlag = stringFlag(flags, 'reason');
   const result = await api.conflictResolve(cli.apiContext(hippoRoot, tenantId), conflictId, {

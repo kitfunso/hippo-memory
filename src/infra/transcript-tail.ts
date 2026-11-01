@@ -43,8 +43,8 @@ export function readOpenTranscriptTail(
   fs.readSync(fd, buf, 0, length, start);
   const text = buf.toString('utf8');
   if (onLineBoundary) return text;
-  // A read that lands mid-line drops the partial first line, so every line left parses as complete
-  // JSON.
+  // A read that lands mid-line drops the partial first line, so every line left parses as
+  // complete JSON.
   const nl = text.indexOf('\n');
   return nl === -1 ? '' : text.slice(nl + 1);
 }

@@ -143,7 +143,7 @@ describe('loadSearchEntries paths', () => {
         expect(tested('zzzznonexistenttokenxxxxxx')).toBe(0);
         return tested('zq');
       });
-      // Both stores outgrow the 2,000-row window LIKE tests (LIKE_WINDOW_ROWS in src/store/rules/windows.ts).
+      // Both stores outgrow the 2,000-row window LIKE tests (LIKE_WINDOW_ROWS in src/store/sqlite/recall/search-rows.ts).
       expect(rowsTested[0]).toBe(2000);
       expect(rowsTested[1]).toBe(rowsTested[0]);
     } finally {

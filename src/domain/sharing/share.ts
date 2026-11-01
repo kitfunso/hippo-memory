@@ -9,7 +9,7 @@ import {
   ERROR_TAG,
   EXTRACTED_TAG,
 } from '../../base/memory/entry.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import {
   AGENT_MEMORY_SOURCE_PREFIX,
   AGENT_MEMORY_TAGS,
@@ -22,19 +22,18 @@ import {
   folderEmbedTarget,
   type EmbedRun,
 } from '../search/embed-memories.js';
-import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
-import type { DetachedWork } from '../search/detached-work.js';
+import type { DetachedWork } from '../search/embed-memories.js';
 import type { SharingStore } from './text-keys.js';
 import type { EntrySignals } from '../../base/records/sharing.js';
 import type { PageRequest } from '../../base/records/reports.js';
 import type { StoreHome } from '../../base/records/folder-files.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import type { ConfiguredFolder, HippoStore } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import type { Captures } from '../../base/records/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
@@ -102,8 +101,8 @@ export const AUTO_SHARE_MIN_SCORE = 0.6;
 /** Below this transfer score a hand-run share copies a row only when forced. */
 const SHARE_MIN_SCORE = 0.3;
 
-/** transferScore's weights: where a row with no signal sits, then what each signal adds or takes
- * away. */
+/** transferScore's weights: where a row with no signal sits, then what each signal adds or
+ * takes away. */
 const TRANSFER_WEIGHTS = {
   neutral: 0.5,
   perTransferableTag: 0.1,
@@ -299,8 +298,8 @@ function clearsShareRules(
   minScore: number,
   stats: AutoShareStats | undefined,
 ): boolean {
-  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on
-  // one.
+  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting
+  // on one.
   if (
     isQuarantineScope(entry.scope ?? null) ||
     isPersonalScope(entry.scope ?? null) ||
@@ -308,8 +307,8 @@ function clearsShareRules(
   ) {
     return false;
   }
-  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the
-  // bar.
+  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears
+  // the bar.
   if (
     entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) ||
     entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)
@@ -320,8 +319,8 @@ function clearsShareRules(
   return transferScore(entry) >= minScore;
 }
 
-/** A row that cleared the rules shares unless the global store holds its text or it carries a
- * secret. */
+/** A row that cleared the rules shares unless the global store holds its text or it carries
+ * a secret. */
 function isNewAndClean(
   entry: MemoryEntry,
   globalKeys: ReadonlySet<string>,
@@ -452,8 +451,8 @@ export async function autoShare(
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
   const to = global.store;
   await to.hippoDb.folderFiles.ensure();
-  // Every page is judged before any is written, so a copy written early cannot hide a later row's
-  // twin.
+  // Every page is judged before any is written, so a copy written early cannot hide a later
+  // row's twin.
   const candidates: MemoryEntry[] = [];
   for await (const page of autoSharePages(from.store, minScore, options.tenantId)) {
     candidates.push(...(await pageCandidates(to.hippoDb.captures, page, minScore, options.stats)));

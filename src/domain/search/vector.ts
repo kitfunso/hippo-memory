@@ -191,8 +191,8 @@ async function fillVectorArm(
   arm.useEmbeddings = true;
 }
 
-/** The stored vectors of the arm's rows; null when the index needs a rebuild or none can be
- * used. */
+/** The stored vectors of the arm's rows; null when the index needs a rebuild or none can
+ * be used. */
 async function usableVectors(
   arm: VectorArm,
   source: VectorSource,

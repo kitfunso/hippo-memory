@@ -1,7 +1,7 @@
 import { BadRequestError } from './api-errors.js';
 
-/** The refusal a delete of a raw row gets; a plain Error subclass, so it joins no HTTP status
- * family. */
+/** The refusal a delete of a raw row gets; a plain Error subclass, so it joins no HTTP
+ * status family. */
 export class RawAppendOnlyError extends Error {
   /** `cause` is the SQLite trigger's abort; a store with no trigger refuses with none. */
   constructor(cause?: Error) {

@@ -114,8 +114,8 @@ export const HIGH_SCHEMA_FIT = 0.7;
 const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
 const LOW_SCHEMA_FIT = 0.3;
 const LOW_FIT_HALF_LIFE_FACTOR = 0.5;
-// Schema fit blends tag coverage and content similarity; a content match needs this share of shared
-// tokens.
+// Schema fit blends tag coverage and content similarity; a content match needs this share of
+// shared tokens.
 const TAG_FIT_WEIGHT = 0.6;
 const CONTENT_FIT_WEIGHT = 0.4;
 const CONTENT_TOKEN_SHARE_MIN = 0.2;
@@ -344,8 +344,8 @@ export interface SchemaFitSource {
 const FILLER_TOKEN_MAX_LENGTH = 3;
 // Matching half the tags at average weight scores about 0.5, so the raw overlap ratio is doubled.
 const TAG_OVERLAP_SCALE = 2;
-// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on one
-// hit.
+// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on
+// one hit.
 const CONTENT_ENOUGH_MIN_MATCHES = 5;
 
 function significantTokens(text: string): Set<string> {

@@ -21,8 +21,8 @@ import { clamp } from '../../base/util/stats.js';
 const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
 const DECISION_TAG_BOOST = 1.2;
-// A memory tagged for the active scope outranks a neutral one; one tagged for another scope is
-// demoted.
+// A memory tagged for the active scope outranks a neutral one; one tagged for another scope
+// is demoted.
 const SCOPE_MATCH_BOOST = 1.5;
 const SCOPE_MISMATCH_BOOST = 0.5;
 const EXTRACTION_TAG_BOOST = 1.3;
@@ -75,8 +75,8 @@ export function outcomeBoostFor(entry: MemoryEntry, ablated: boolean): number {
   });
 }
 
-/** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same
- * deboost. */
+/** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the
+ * same deboost. */
 export function isDagSummary(entry: MemoryEntry): boolean {
   return entry.dagLevel === DAG_LEVEL.topic || entry.dagLevel === DAG_LEVEL.entity;
 }
@@ -106,8 +106,8 @@ export interface SummaryScoring {
   freshness: boolean;
 }
 
-/** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its scores
- * bit-identical. */
+/** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its
+ * scores bit-identical. */
 export const NO_SUMMARY_SCORING: SummaryScoring = { deboost: 1, freshness: false };
 
 export function summaryScoring(options: {
@@ -140,8 +140,8 @@ export function strengthRecencyMultipliers(
   };
 }
 
-/** What a ranking's strength and recency read from its caller: the eval switches and the root's
- * settings. */
+/** What a ranking's strength and recency read from its caller: the eval switches and the
+ * root's settings. */
 export interface RankRun {
   readonly switches?: EvalSwitches;
   readonly runtime?: RuntimeSettings;

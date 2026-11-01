@@ -55,8 +55,8 @@ export function normalizePolicyDate(input: string, label: string = 'date'): stri
   return d.toISOString();
 }
 
-/** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to >
- * valid_from. */
+/** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to
+ * > valid_from. */
 export function validatePolicyDates(
   validFromRaw: string | undefined,
   validToRaw: string | undefined,

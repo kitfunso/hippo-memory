@@ -1,6 +1,6 @@
-// Parsing helpers and the port-parameter scan for check-store-port.mjs.
+// Parsing helpers and the port-parameter scan for check-store-port.mjs, over the core port and hippo.db's local tier.
 import { existsSync, readFileSync } from 'node:fs';
-import { posix } from 'node:path';
+import { posix, resolve } from 'node:path';
 import ts from 'typescript';
 
 export const parse = (file) =>
@@ -14,7 +14,7 @@ export function resolveSpec(file, spec) {
   return [`${base}.ts`, `${base}/index.ts`].find((c) => existsSync(c));
 }
 
-const declaresPort = (f) => f === 'src/base/ports/store.ts' || f.startsWith('src/base/ports/store/');
+const declaresPort = (f) => f.startsWith('src/base/ports/') || f.startsWith('src/base/records/');
 const typeTables = new Map();
 
 /** The interfaces and type aliases a file declares, and the file and name each imported or re-exported name comes from. */
@@ -112,13 +112,17 @@ function functionInDeclared(file, iface, seen) {
   return null;
 }
 
-const STORE_ROOT = 'src/base/ports/store.ts';
+// The store port every store implements, and the repositories of the local tier only hippo.db serves.
+const STORE_ROOT = { file: 'src/base/ports/store.ts', name: 'HippoStore' };
+const TIER_ROOT = { file: 'src/base/ports/hippo-db.ts', name: 'HippoDbRepos' };
+const declared = ({ file, name }) => existsSync(file) && typeTable(file).decls.has(name);
 
-/** The interfaces and aliases the store hands out, as `file#name`: HippoStore and every type its members and return types
- * reach, parameters left out. A type only ever passed in is implemented by the caller, and the method that takes it
- * already counts its function. Null when the root is not declared (a fixture without it scans every port type). */
+/** The interfaces and aliases the store hands out, as `file#name`: every type the roots' members and return types reach,
+ * parameters left out. A type only ever passed in is implemented by the caller, and the method that takes it already
+ * counts its function. Null when no root is declared (a fixture without one scans every port type). */
 function storeImplemented() {
-  if (!existsSync(STORE_ROOT) || !typeTable(STORE_ROOT).decls.has('HippoStore')) return null;
+  const roots = [STORE_ROOT, TIER_ROOT].filter(declared);
+  if (roots.length === 0) return null;
   const seen = new Set();
   const walkMembers = (file, members) => {
     for (const m of members) walkType(file, m.type);
@@ -159,8 +163,29 @@ function storeImplemented() {
       }
     }
   };
-  walkName(STORE_ROOT, 'HippoStore');
+  for (const { file, name } of roots) walkName(file, name);
   return seen;
+}
+
+/** Why the scan could not read a root in hippo-memory's own folder, where a root it misses leaves its types unchecked:
+ * a root file or name that is gone, or a repository the tier types as no declared interface. */
+export function unreadRoots() {
+  const pkg = resolve('package.json');
+  if (!existsSync(pkg) || JSON.parse(readFileSync(pkg, 'utf8')).name !== 'hippo-memory') return [];
+  const gone = [STORE_ROOT, TIER_ROOT].filter((root) => !declared(root));
+  if (gone.length > 0) return gone.map(({ file, name }) => `${file} declares no ${name}`);
+  const { sf, decls } = typeTable(TIER_ROOT.file);
+  const repos = decls.get(TIER_ROOT.name).flatMap((node) => (ts.isInterfaceDeclaration(node) ? node.members : []));
+  const named = (m) =>
+    m.type && ts.isTypeReferenceNode(m.type) && ts.isIdentifier(m.type.typeName)
+      ? declarationsOf(TIER_ROOT.file, m.type.typeName.text).length > 0
+      : false;
+  const blind = repos.filter((m) => !named(m));
+  const where = (m) => `${TIER_ROOT.file}:${lineOf(sf, m)} ${TIER_ROOT.name}.${m.name.getText(sf)}`;
+  return [
+    ...(repos.length === 0 ? [`${TIER_ROOT.file} ${TIER_ROOT.name} lists no repository`] : []),
+    ...blind.map((m) => `${where(m)} names no interface the scan can read`),
+  ];
 }
 
 /** `file:line Owner.method(param.path)` for each parameter of a method on a port interface or object alias whose type holds a function. */

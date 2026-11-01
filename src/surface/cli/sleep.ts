@@ -151,7 +151,7 @@ async function runSleepCommand(cmd: CommandContext): Promise<void> {
   if (!boolFlag(flags, 'dry-run')) {
     const warn: Log = (message, fields) => log.warn(`compaction replay: ${message}`, fields);
     const finished = await replayCompactions(
-      { root: hippoRoot, store: cli.store(hippoRoot), tenantId },
+      { root: hippoRoot, hooks: cli.compactionHooks(hippoRoot), tenantId },
       warn,
     );
     if (finished > 0) {

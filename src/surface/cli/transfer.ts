@@ -111,8 +111,8 @@ export async function handlePeers({
   flags,
   cli,
 }: CommandContext): Promise<void> {
-  // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer
-  // discovery.
+  // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant
+  // peer discovery.
   const allTenants = boolFlag(flags, 'all-tenants');
   const peers = await api.sharePeers(cli.apiContext(hippoRoot, tenantId), { allTenants });
   if (peers.length === 0) {

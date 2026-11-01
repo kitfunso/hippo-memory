@@ -46,8 +46,8 @@ export function parseBudgetFlag<F extends number | undefined>(
   if (!isStringFlag(value)) {
     fail('--budget requires an integer value (e.g. --budget 1500).');
   }
-  // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message
-  // rejects.
+  // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this
+  // message rejects.
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
     fail(`Invalid --budget: "${value}". Must be a non-negative integer.`);

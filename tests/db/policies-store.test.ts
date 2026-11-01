@@ -14,7 +14,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { POLICY, loadPolicies, policiesAsOf, normalizePolicyDate } from '../../src/domain/objects/policies.js';
 import { makeRoot } from '../_helpers/make-root.js';

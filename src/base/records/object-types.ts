@@ -156,8 +156,8 @@ export interface ObjectByKind {
 
 export type ObjectKind = keyof ObjectByKind;
 
-/** What one save stores, per kind the shared save writes; core has checked and resolved every
- * value. */
+/** What one save stores, per kind the shared save writes; core has checked and resolved
+ * every value. */
 export interface ObjectFields {
   decision: { readonly decisionText: string; readonly context: string | undefined };
   process: {
@@ -202,8 +202,8 @@ export function isObjectRefusal<T extends object>(
  * resolved instead. */
 export type SavableKind = keyof ObjectFields;
 
-/** What opening an incident stores; core has checked the text, and the store checks each linked
- * id. */
+/** What opening an incident stores; core has checked the text, and the store checks each
+ * linked id. */
 export interface IncidentFields {
   readonly incidentText: string;
   readonly context: string | undefined;

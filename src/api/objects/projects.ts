@@ -44,8 +44,8 @@ async function folderOf(ctx: RepairContext): Promise<StoreFolder> {
   return { isGlobal: false, shared: sharedStoreOf(ctx), project };
 }
 
-/** The reads a project-name plan takes: the tier's project tags, and rows and audit from the
- * port. */
+/** The reads a project-name plan takes: the tier's project tags, and rows and audit from
+ * the port. */
 function tagReads(store: HippoDbContext['store']): ProjectTagReads {
   const { entriesWhere, auditLog } = store;
   return { projectTags: store.hippoDb.projectTags, entriesWhere, auditLog };

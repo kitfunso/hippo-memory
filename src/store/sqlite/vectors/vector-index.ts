@@ -97,8 +97,8 @@ export function embeddingModelRequiresReindex(
   return indexNeedsRebuild(resolveIndexedEmbeddingModel(on, index), model);
 }
 
-/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via
- * `readStoredVectorViews`. */
+/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks
+ * via `readStoredVectorViews`. */
 export function listAllVectors(db: DatabaseSyncLike): Record<string, number[]> {
   return Object.fromEntries(loadVectors(db));
 }

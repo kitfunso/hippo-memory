@@ -21,8 +21,8 @@ export interface SelectBySearchOptions {
   readonly admission: ContextAdmission;
 }
 
-/** Real query: hybrid search over both stores, or over the local rows; emits the 'recall' audit
- * row. */
+/** Real query: hybrid search over both stores, or over the local rows; emits the 'recall'
+ * audit row. */
 export async function selectBySearch(
   ctx: Context,
   { plan, left, pools, admission }: SelectBySearchOptions,
@@ -119,8 +119,8 @@ function bothVectorSources(ctx: Context, plan: ContextPlan) {
       onHippoDb: ctx.reach?.isHippoDb,
       embedderFor: ctx.infra.embedderFor,
     }),
-    // Its own config.json names the global store's embedding model, read only when the vector arm
-    // runs.
+    // Its own config.json names the global store's embedding model, read only when the vector
+    // arm runs.
     global: globalVectorSource(ctx),
   };
 }

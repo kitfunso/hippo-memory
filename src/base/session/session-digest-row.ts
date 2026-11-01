@@ -15,8 +15,8 @@ export function isSessionDigestRow(
   );
 }
 
-/** Same session, same row: a second worker for one session updates the digest instead of adding
- * one. */
+/** Same session, same row: a second worker for one session updates the digest instead of
+ * adding one. */
 export function sessionDigestId(tenantId: string, key: string): string {
   return `mem_${createHash('sha256').update(`${SESSION_DIGEST_TAG}\n${tenantId}\n${key}`).digest('hex').slice(0, 12)}`;
 }

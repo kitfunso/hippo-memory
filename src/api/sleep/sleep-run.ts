@@ -18,13 +18,23 @@ import { strengthOf, type Context } from '../types.js';
 import { auditRemoveErrors } from '../hippo-db/audit-maintenance.js';
 import { withDetached } from '../detached.js';
 import type { SleepOptions, SleepResult } from './sleep.js';
-import type { SleepEvent } from './events.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import { globalTargetOf, type HippoDbContext, type HippoDbStore } from '../hippo-db-context.js';
+import { globalTargetOf, type HippoDbContext } from '../hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
+import type { ConsolidateEvent } from '../../domain/consolidate/events.js';
+
+/** What a sleep did beyond its consolidation, as data; the CLI and the /v1/sleep reply turn each
+ * event into its line. */
+export type SleepEvent =
+  | ConsolidateEvent
+  | { kind: 'graphSnapshotFailed'; message: string }
+  | { kind: 'graphDrainFailed'; message: string }
+  | { kind: 'graphStaleOpsSkipped'; count: number }
+  | { kind: 'graphExtractFailed'; message: string };
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial:
  * true` row, or shrink the pages dedup, the audit and ambient read; production never sets them. */
@@ -246,8 +256,8 @@ async function runQualityAudit(
   options: QualityAuditOptions,
 ): Promise<AuditSummary> {
   const { dryRun, consolidateResult, dedupResult, pages } = options;
-  // The pages follow consolidation and dedup, so only a dry run still holds the rows they would
-  // remove.
+  // The pages follow consolidation and dedup, so only a dry run still holds the rows they
+  // would remove.
   const wouldGo = dryRun
     ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)]
     : [];
@@ -269,8 +279,8 @@ async function runQualityAudit(
   return { errorsRemoved: gone.length, warningCount: warnings.length };
 }
 
-/** The auto-share counts, each set only when non-zero so an idle share leaves the result as it
- * was. */
+/** The auto-share counts, each set only when non-zero so an idle share leaves the result as
+ * it was. */
 async function shareOnSleep(
   ctx: HippoDbContext,
   phases: SleepPhases,
@@ -377,8 +387,8 @@ interface TenantRebuild {
   readonly extracted?: Pick<GraphTotals, 'entities' | 'relations'>;
 }
 
-/** Rebuilds one dirty tenant's graph and drains its queue; on a failure the tenant stays
- * pending. */
+/** Rebuilds one dirty tenant's graph and drains its queue; on a failure the tenant
+ * stays pending. */
 async function rebuildDirtyTenant(
   ctx: HippoDbContext,
   phases: SleepPhases,

@@ -1,6 +1,12 @@
 // `hippo session`: log, show, complete and resume one agent session.
 
-import { continuityLatest } from '../../api/hippo-db/continuity-latest.js';
+import {
+  completeSession,
+  continuityLatest,
+  latestHandoff,
+  logSessionEvent,
+  sessionEvents,
+} from '../../api/hippo-db/continuity.js';
 import {
   isHandoffOutcome,
   formatHandoffEvidenceLine,
@@ -35,7 +41,7 @@ async function sessionLog(
     );
   }
 
-  const event = await cli.store(hippoRoot).hippoDb.sessions.save(tenantId, 'event', {
+  const event = await logSessionEvent(cli.apiContext(hippoRoot, tenantId), {
     sessionId: s.sessionId,
     task: s.task || null,
     eventType: eventType || 'note',
@@ -52,7 +58,7 @@ async function sessionShow(
   { cli, hippoRoot, tenantId, flags }: CommandContext,
   s: SessionArgs,
 ): Promise<void> {
-  const events = await cli.store(hippoRoot).hippoDb.sessions.read(tenantId, 'event', {
+  const events = await sessionEvents(cli.apiContext(hippoRoot, tenantId), {
     sessionId: s.sessionId || undefined,
     task: s.task || undefined,
     limit: s.limit,
@@ -98,11 +104,6 @@ async function sessionLatest(
   printSessionEvents(events);
 }
 
-type SessionCompleteMetadata = {
-  ended_at: string;
-  summary?: string;
-};
-
 async function sessionComplete(
   { cli, hippoRoot, tenantId, flags }: CommandContext,
   s: SessionArgs,
@@ -121,24 +122,15 @@ async function sessionComplete(
   }
   const outcome: HandoffOutcome = outcomeRaw;
 
-  const metadata: SessionCompleteMetadata = { ended_at: new Date().toISOString() };
-  if (summary) metadata.summary = summary;
-
-  const event = await cli.store(hippoRoot).hippoDb.sessions.save(tenantId, 'event', {
+  const { event, stamped } = await completeSession(cli.apiContext(hippoRoot, tenantId), {
     sessionId,
     task: task || null,
-    eventType: 'session_complete',
-    content: outcome,
+    outcome,
+    summary: summary || undefined,
     source: stringFlagOrExit(flags, 'source') ?? 'cli',
-    metadata,
   });
 
   console.log(`Completed session ${event.sessionId} with outcome=${outcome} (event #${event.id})`);
-
-  const stamped = await cli.store(hippoRoot).hippoDb.sessions.save(tenantId, 'handoff', {
-    sessionId,
-    outcome,
-  });
   if (stamped > 0) {
     console.log(`Stamped outcome on handoff for session ${sessionId}`);
   }
@@ -176,10 +168,7 @@ async function sessionResume({
   tenantId,
   sessionId,
 }: SessionResumeOptions): Promise<void> {
-  const query = { sessionId: sessionId || null };
-  const handoff = await cli
-    .store(hippoRoot)
-    .hippoDb.sessions.read(tenantId, 'handoff', query, null);
+  const handoff = await latestHandoff(cli.apiContext(hippoRoot, tenantId), sessionId || null);
   if (!handoff) {
     console.log('No handoff to resume from.');
     return;

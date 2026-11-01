@@ -256,7 +256,7 @@ export function envLogJson(): boolean {
   return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json';
 }
 
-// Server.
+// Server and its clients.
 export const envPort = text('HIPPO_PORT');
 /**
  * How long a client waits for a running server's /health before writing to the store directly;
@@ -326,7 +326,7 @@ export function envCloudflareApiToken(): string {
   return cloudflareApiToken() ?? '';
 }
 
-// Connectors.
+// Slack and GitHub connectors.
 export const envSlackBotToken = text('SLACK_BOT_TOKEN');
 export const envSlackTeamId = text('SLACK_TEAM_ID');
 export const envSlackSigningSecret = text('SLACK_SIGNING_SECRET');

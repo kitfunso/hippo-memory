@@ -163,8 +163,8 @@ export function shellFolder(): WriteOrigin {
   return { folder: process.cwd() };
 }
 
-/** Every save goes through here, so a refused write always prints the store's message and exits
- * 1. */
+/** Every save goes through here, so a refused write always prints the store's message and
+ * exits 1. */
 async function refusalExits<T>(save: () => Promise<T>): Promise<T> {
   try {
     return await save();

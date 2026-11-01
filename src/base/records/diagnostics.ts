@@ -6,8 +6,8 @@ import type { JsonObject } from '../util/json.js';
 export interface Diagnostics {
   /** Rejects when the store cannot be opened or its schema version read. */
   health(cutoffs: HealthCutoffs): Promise<StoreHealth>;
-  /** Schema version, oldest allowed binary and row count of every table; never reads a memory
-   * column. */
+  /** Schema version, oldest allowed binary and row count of every table; never reads a
+   * memory column. */
   inventory(): Promise<StoreInventory>;
 }
 
@@ -65,7 +65,7 @@ export interface StoreInventory {
 
 /** What GET /ready asks of a store. */
 export interface Readiness {
-  /** Resolves once one cheap read has answered; rejects with the store's own error when it
-   * cannot. */
+  /** Resolves once one cheap read has answered; rejects with the store's own error when
+   * it cannot. */
   ping(): Promise<void>;
 }

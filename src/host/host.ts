@@ -16,8 +16,8 @@ export interface Host {
   readonly isSharedStore: (hippoRoot: string) => boolean;
 }
 
-// A walk costs milliseconds and a batch write stamps every row, so each path is walked once per
-// host.
+// A walk costs milliseconds and a batch write stamps every row, so each path is walked once
+// per host.
 const IDENTITY_CACHE_MAX = 1_000;
 
 /** A root's Host: a CLI command, a server, an MCP host or a store object each build one and drop

@@ -32,7 +32,7 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
   });
 
   /** The hits for one source file, compiled on its own. */
-  function hitsFor(body: string): { line: number; text: string }[] {
+  function hitsFor(body: string, opts?: { voidMarks?: boolean }): { line: number; text: string }[] {
     const src = join(dir, 'src');
     mkdirSync(src, { recursive: true });
     const file = join(src, 'entry.ts');
@@ -45,7 +45,7 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
       noEmit: true,
       noLib: true,
     });
-    return findFloatingPromises(program, src).map(({ line, text }) => ({ line, text }));
+    return findFloatingPromises(program, src, opts).map(({ line, text }) => ({ line, text }));
   }
 
   it('flags a promise call statement that nothing awaits', () => {
@@ -81,6 +81,16 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
       'void 0;',
     ].join('\n');
     expect(hitsFor(body).map((h) => h.line)).toEqual([2, 3]);
+  });
+
+  it('with voidMarks, as for tests, passes a void call and still flags a bare one', () => {
+    const body = [
+      'async function work(): Promise<number> { return 1; }',
+      'void work();',
+      'work();',
+      'void (async () => 1)();',
+    ].join('\n');
+    expect(hitsFor(body, { voidMarks: true }).map((h) => h.line)).toEqual([3]);
   });
 
   it('flags a one-argument .then or a .finally with no handler before it', () => {

@@ -25,7 +25,7 @@ import { AT_RISK_BELOW } from '../../../base/memory/strength-bands.js';
 import { SCATTER_COLS, SCATTER_ROWS } from '../../../base/records/dashboard-reads.js';
 import { type MemoryRow, parseJsonArray } from '../runtime/rows.js';
 import { isFtsAvailable } from '../../../db/meta.js';
-import { TAGS_NOT_AS_WRITTEN, TEXT_OUTSIDE_TRIGRAMS } from '../../../db/sql-predicates.js';
+import { TAGS_NOT_AS_WRITTEN, TEXT_OUTSIDE_TRIGRAMS } from '../../../db/sql.js';
 
 /** The columns each fact function reads first, in this order. */
 export const FACT_COLUMNS =

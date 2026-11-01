@@ -165,8 +165,8 @@ function rankedSentences(
   digestSentences(maskEmails(redactSecretsStrict(finalText))).forEach((sentence, index) => {
     if (/[?:]$/.test(sentence) || opensOnReferent(sentence) || echoes(sentence, windows)) return;
     const text = rewriteRepoPaths(sentence, relativePath);
-    // A home-directory path names its user and the store may be shared, so such a sentence is
-    // dropped.
+    // A home-directory path names its user and the store may be shared, so such a sentence
+    // is dropped.
     if (text.length > MAX_SENTENCE_CHARS || USER_SEGMENT.some((re) => re.test(text))) return;
     kept.push({ index, text, score: sentenceScore(text) });
   });

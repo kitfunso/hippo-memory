@@ -49,8 +49,8 @@ export function withoutHandlers(
   return removed ? kept : null;
 }
 
-/** Removes the matching handlers from one event's groups; the event key goes once no group is
- * left. */
+/** Removes the matching handlers from one event's groups; the event key goes once no group
+ * is left. */
 export function stripHandlers(
   hooks: JsonObject,
   event: string,

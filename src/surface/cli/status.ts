@@ -10,7 +10,7 @@ import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-repeats.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/hippo-db/token-reports.js';
@@ -113,8 +113,8 @@ async function printEmbeddingStatus(
   const summary = await vectorSummary(ctx);
   if (!embAvail && summary.vectors === 0) return;
   console.log(embeddedLine(counts, summary));
-  // No index argument: the check then asks hippo.db whether any vector exists instead of loading
-  // them.
+  // No index argument: the check then asks hippo.db whether any vector exists instead of
+  // loading them.
   if (await embeddingReindexNeeded(ctx, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }

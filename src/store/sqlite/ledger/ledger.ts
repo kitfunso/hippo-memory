@@ -25,8 +25,7 @@ import { answered, bound, type Bodies } from '../runtime/bound.js';
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate
-// in basis points in `items`; readers outside this repo depend on these rows, so their shape is
-// fixed.
+// in basis points in `items`; readers outside this repo depend on that fixed shape.
 /** The session's first stored arm, or null; never writes. */
 function readPilotArm(
   db: DatabaseSyncLike,
@@ -44,8 +43,8 @@ interface EnsurePilotArmOptions {
   readonly opts?: { ownTenantOnly?: boolean; now?: string };
 }
 
-/** The stored arm, else the hash arm written once; on any error the hash arm comes back
- * unrecorded. */
+/** The stored arm, else the hash arm written once; on any error the hash arm comes
+ * back unrecorded. */
 // The wait is the caller's lock-wait scope (a hook's HOOK_DB_WAIT_MS, a server request's
 // SERVER_DB_WAIT_MS); it holds on a handle opened in that scope.
 function ensurePilotArm(
@@ -82,15 +81,15 @@ function ensurePilotArm(
       { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
     );
   } catch (err) {
-    // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash
-    // arm.
+    // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the
+    // hash arm.
     log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`, errorFields(err));
     return hashed;
   }
 }
 
-// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no
-// database.
+// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is
+// no database.
 const SQLITE_CORRUPT = 11;
 const SQLITE_NOTADB = 26;
 
@@ -109,8 +108,8 @@ function ledgerSkipClass<E>(error: E): LedgerSkip {
 }
 
 /** Says why a ledger row did not land, at the level its class earns: busy warns once through
- * noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class and
- * stack. */
+ * noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class
+ * and stack. */
 function noteLedgerRowSkipped<E>(error: E, session: RequestStores | undefined): void {
   const skip = ledgerSkipClass(error);
   if (skip === 'busy') {
@@ -151,8 +150,8 @@ function recordRows(
   }
 }
 
-/** The delivery event on the rows' own handle, so it costs no second open; a failed write is
- * logged. */
+/** The delivery event on the rows' own handle, so it costs no second open; a failed write
+ * is logged. */
 function recordDelivery(
   db: DatabaseSyncLike,
   input: DeliveryEventInput,
@@ -165,8 +164,8 @@ function recordDelivery(
   }
 }
 
-/** The opener a ledger writes through, the session its busy skips tell, and its delivery prune
- * schedule. */
+/** The opener a ledger writes through, the session its busy skips tell, and its delivery
+ * prune schedule. */
 interface LedgerWiring {
   readonly on: OnHandle;
   readonly session: RequestStores | undefined;
@@ -191,8 +190,8 @@ function recordTurnVia({ on, session, prune }: LedgerWiring, turn: LedgerTurn): 
   }
 }
 
-/** `read`, or `fallback` once the failure is noted on `session`, so a hook never fails on its
- * ledger. */
+/** `read`, or `fallback` once the failure is noted on `session`, so a hook never fails on
+ * its ledger. */
 function noting<T>(session: RequestStores | undefined, read: () => T, fallback: () => T): T {
   try {
     return read();

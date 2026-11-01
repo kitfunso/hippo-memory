@@ -1,6 +1,5 @@
-// The store's handle types and the legacy setup a first open runs; src/store/sqlite/runtime/handles.ts
-// opens hippo.db, the source of truth, and Markdown and JSON files are human-readable mirrors of
-// it.
+// Handle types and the legacy setup a first open runs; runtime/handles.ts opens hippo.db, the
+// source of truth, whose Markdown and JSON files are human-readable mirrors.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -25,7 +24,7 @@ import { deserializeEntry } from '../../../base/memory/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from '../entries/entry-row.js';
 import { layerDir } from '../folder-files/mirrors.js';
 import { isJsonObject, type JsonValue } from '../../../base/util/json.js';
-import { CLI_ACTOR } from '../../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
 import { createHost, type Host } from '../../../host/host.js';
 import { META_KEY } from '../../../db/meta.js';
 import { handleNow, handleStamp } from './handle-clock.js';
@@ -54,11 +53,9 @@ export interface GrantedOpens {
 
 export type HandleOpener = (hippoRoot: string, opts: GrantedOpens) => DatabaseSyncLike;
 
-/** A read-write handle on the store's grant. */
 export const readWrite: HandleOpener = (hippoRoot, { grant, busyWaitMs }) =>
   grant.open(hippoRoot, busyWaitMs);
 
-/** A read-only handle on the store's grant, which leaves the store as it is. */
 export const readOnly: HandleOpener = (hippoRoot, { grant }) => grant.openReadOnly(hippoRoot);
 
 /** One call on a handle of the store's own, closed after; `open` defaults to a bare handle,

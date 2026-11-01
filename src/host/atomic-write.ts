@@ -171,8 +171,8 @@ export function writeFileAtomic(
     fs.accessSync(target, fs.constants.W_OK);
   }
   if (inPlace && old !== undefined && old.nlink > 1) {
-    // A rename gives the file a new inode, which would leave the other hard links on the old
-    // content.
+    // A rename gives the file a new inode, which would leave the other hard links on the
+    // old content.
     writeInPlace(target, data);
     return;
   }

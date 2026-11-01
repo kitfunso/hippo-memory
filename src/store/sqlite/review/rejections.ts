@@ -5,7 +5,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { heldTexts } from '../../../base/util/same-text.js';
 import { audit } from '../audit/audit-event.js';
-import { deleteEntryCore } from '../entries/delete-and-batch.js';
+import { deleteEntryCore } from '../entries/delete-entries.js';
 import {
   deleteDormantRow,
   dormantSnapshotsByIds,
@@ -111,8 +111,8 @@ function listHolderIds(
 }
 
 /** The found rows read again under the write lock, each still in reach and still holding the
- * text; a row that sleep moved between the walk and the lock is read from the table it now sits
- * in. */
+ * text; a row that sleep moved between the walk and the lock is read from the table it now
+ * sits in. */
 function heldUnderLock(
   db: DatabaseSyncLike,
   rejection: Rejection,
@@ -248,8 +248,8 @@ function removeHolders(
     };
     removeLiveRows(db, files, sweep);
     removeDormantCopies(db, sweep);
-    // Still inside the write scope: a failed audit row is reported and the removal commits without
-    // it.
+    // Still inside the write scope: a failed audit row is reported and the removal commits
+    // without it.
     const { tenantId, actor, memoryId } = rejection;
     const { removedIds } = removal;
     audit(db, 'reject_value', {

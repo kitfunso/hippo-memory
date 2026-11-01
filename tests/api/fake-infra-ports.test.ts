@@ -7,7 +7,7 @@ import { adminActor, contextGet, remember, sleepWholeStore } from '../../src/api
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { recallRerankerPick } from '../../src/api/recall/rows.js';
 import type { HippoDbContext } from '../../src/api/hippo-db-context.js';
-import { contextReach } from '../../src/api/hippo-db-context.js';
+import { contextReach, coreEnrichment } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import type { InfraPorts } from '../../src/base/ports/infra.js';
@@ -123,6 +123,7 @@ function contextOn(fake: FakeInfra): HippoDbContext {
     reach: contextReach(sqliteReach({ hippoRoot, store }), loadConfig, fake.infra.embedderFor),
     config: loadConfig(hippoRoot),
     infra: fake.infra,
+    enrich: coreEnrichment(store),
   };
 }
 
@@ -158,7 +159,6 @@ describe('the api on fake infra ports', () => {
           explain: false,
         },
         show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
-        lastRecall: ctx.store.hippoDb.lastRecall,
       },
     );
     expect(recalled.results.length).toBeGreaterThan(0);

@@ -1,8 +1,8 @@
 /**
  * Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so
  * `api.sleep` can dedupe without cli -> api imports. Survivor order is total and tenant-scoped:
- * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are not
- * candidates.
+ * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are
+ * not candidates.
  */
 
 import { textOverlap } from '../../base/util/tokenize.js';
@@ -11,7 +11,7 @@ import { canAutoDelete } from '../../base/memory/keep-rules.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { AuditMaintenance } from '../../base/records/audit-maintenance.js';
 import type { Consolidation } from '../../base/records/consolidation.js';
@@ -83,8 +83,8 @@ function dedupRow(entry: MemoryEntry): DedupRow {
   };
 }
 
-/** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then
- * compareEntryIdentity. */
+/** The survivor total order: strength bucket desc, then retrievalCount desc,
+ * then compareEntryIdentity. */
 function survivorOrder(a: DedupRow, b: DedupRow): number {
   const bucketDiff = strengthTieKey(b.strength) - strengthTieKey(a.strength);
   if (bucketDiff !== 0) return bucketDiff;
@@ -152,7 +152,7 @@ async function partitionRows(pages: RowPages): Promise<Partitions> {
   for await (const page of pages) {
     for (const entry of page) {
       if (!isCurrentDistilled(entry)) continue;
-      // EI2: also split by restricted scope, else a private copy can delete the readable one.
+      // Also split by restricted scope, else a private copy can delete the readable one.
       const partition = derivationPartitionKey(entry.tenantId, entry.scope, entry.originProject);
       let groups = partitions.get(partition);
       if (!groups) partitions.set(partition, (groups = new Map()));

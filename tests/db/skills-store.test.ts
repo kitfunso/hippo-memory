@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeObject, listObjects } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { SKILL, skillsMarkdown } from '../../src/domain/objects/skills.js';
 import { makeRoot } from '../_helpers/make-root.js';

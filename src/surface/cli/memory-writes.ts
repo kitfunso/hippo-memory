@@ -65,8 +65,8 @@ export interface Promoted {
   readonly globalStore?: string;
 }
 
-/** The same writes on the store and on the server. A refusal prints its reason and throws
- * CliExit(1). */
+/** The same writes on the store and on the server. A refusal prints its reason and
+ * throws CliExit(1). */
 export interface MemoryWrites {
   remember(request: RememberRequest): Promise<Remembered>;
   forget(id: string): Promise<void>;
@@ -177,8 +177,8 @@ function failIfServerRequired(reason: string): void {
   }
 }
 
-/** The writes for this command: to the `hippo serve` that answers for `hippoRoot`, else on its
- * store. */
+/** The writes for this command: to the `hippo serve` that answers for `hippoRoot`, else on
+ * its store. */
 export async function pickWrites({ cli, hippoRoot, tenantId }: CliScope): Promise<MemoryWrites> {
   const local = localWrites({ cli, hippoRoot, tenantId });
   const server = await detectServer(hippoRoot);

@@ -1,13 +1,7 @@
 // The graph rebuild's diff: the ops that turn the stored rows into the derived graph, so a rebuild
 // writes only what changed and an entity keeps the id its relations hang on. hippo.db runs the same
-// rule in SQL (sqlite/graph/graph-delta.ts).
-import type {
-  DesiredEntity,
-  DesiredGraph,
-  DesiredRelation,
-  GraphOp,
-  NaturalKey,
-} from '../../base/records/graph.js';
+// rule in SQL (store/sqlite/graph/graph-delta.ts).
+import type { DesiredEntity, DesiredGraph, DesiredRelation, GraphOp, NaturalKey } from './graph.js';
 
 /** The entity columns a rebuild diffs against. */
 export interface StoredEntity {
@@ -84,8 +78,8 @@ function firstByKey<T>(rows: readonly T[], keyOf: (row: T) => string): Map<strin
 
 interface EntityDelta {
   ops: GraphOp[];
-  /** Entity id to key for each stored row that survives the diff; relations are matched through
-   * it. */
+  /** Entity id to key for each stored row that survives the diff; relations are matched
+   * through it. */
   keptKeyById: Map<number, string>;
 }
 

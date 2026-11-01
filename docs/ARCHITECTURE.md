@@ -7,7 +7,7 @@ Domain code gets every model and socket through a port in `src/base/ports`: `Emb
 `src/base` imports no `fs`, `os` or `child_process`; those reads live in `src/host`, and domain and api import host for its types only, getting its answers from the machine port or their caller. The `no-io-below-host` and `host-types-only` rules in `.dependency-cruiser.cjs` hold both lines. A host keeps no module state: the project-walk cache and the sticky shared-store flag live in a `Host` (`src/host/host.ts`) that each root builds and drops with itself (a CLI command through `currentMachine()`, a server runtime, the sleep child, and each SQLite store object through `storeFilesOf`).
 The roots wire the real adapters in. Every api `Context` carries them as `ctx.infra`, which its composition root sets. A published entry takes an `EntryContext`, where `infra` is optional, and `withEntryInfra` in `src/surface/entry-infra.ts` fills in the real ports. `ctx.infra` hands api code the context's embedder, and a `ConfiguredFolder` or `globalTarget` carries its `embedderFor`, so a target built from it embeds with no further wiring. Eval and benchmark scripts import the wired `embedAll`, `folderIndex`, `getReranker` and `judgeAll` from `src/entry/eval-scripts.ts`.
 The tree shows them: `src/base`, `src/domain` and `src/surface` hold one folder per feature, and `src/db`, `src/store` and `src/api` are one feature each. `src/entry` and the five root files stay at the top of `src` because package.json exports and bin/hippo.js name their dist paths.
-A file imports only from its own layer or a lower one. `layers.json` is the map; `.dependency-cruiser.cjs` builds its rules from it, so `npm run check:deps` fails any upward import and any src folder or root file the map does not list. `.dependency-cruiser-cycles.cjs` fails a runtime import cycle between two features or two top folders. The name rules (SQLite words in src/api and src/domain) are oxlint rules in `oxlint.config.ts`.
+A file imports only from its own layer or a lower one. `layers.json` is the map, and its `paths` groups hold every file and folder a rule names (the core files, the environment readers, the SQLite loaders); `.dependency-cruiser.cjs` builds its rules from it, so `npm run check:deps` fails any upward import and any src folder or root file the map does not list. `.dependency-cruiser-cycles.cjs` fails a runtime import cycle between two features or two top folders. The name rules (SQLite words in src/api and src/domain) are oxlint rules in `oxlint.config.ts`.
 
 ## Store port
 
@@ -19,7 +19,7 @@ node:sqlite is synchronous, and the store port is async so another store can do 
 
 The store has two tiers. The core port is `HippoStore` in `src/base/ports/store.ts` and `src/base/ports/store/`: the base methods and the groups `keyWrites`, `entryWrites`, `contextReads`, `auditLog`, `vectors` and `vectorWrites`. Every store sets all of it, and no member is optional.
 
-hippo.db's local tier is `store.hippoDb`, which `src/store/sqlite/hippo-db.ts` builds from the SQLite repositories. No other store has it, so it is not part of the port. Its methods run on the store workers like the port's, and `HIPPO_DB_EFFECTS` places each one.
+hippo.db's local tier is `store.hippoDb`. Its port is `HippoDbRepos` in `src/base/ports/hippo-db.ts`, and `src/store/sqlite/hippo-db.ts` builds it from the SQLite repositories. No other store has it, so it is not part of the core port. Its methods run on the store workers like the port's, and `HIPPO_DB_EFFECTS` places each one.
 
 A surface proves the tier once, when it binds, with `hasHippoDb` from `src/api/hippo-db-context.ts`. A route marked `hippoDb: true`, a webhook, the dashboard and an MCP tool bound with `onHippoDb` bind only on a store with the tier. On any other store each one answers the same refusal, `NoLocalTierError`, a 501. A local api module takes a `HippoDbContext`, whose `store` carries the tier, so binding the store to a request binds the tier with it.
 
@@ -29,7 +29,7 @@ A core path that can use the tier but works without it reads `ctx.enrich`, a `Co
 
 Domain code never imports `src/store`. A domain function that calls the tier names the repositories it calls under `hippoDb`. Their interfaces, and the record and request shapes they pass, live in `src/base/records`; their effect table is `src/store/sqlite/hippo-db-effects.ts`.
 
-Three checks hold the line. The depcruise rule `core-port-no-sqlite` fails a core file (the port, and the remember, recall, context, auth and audit api files) that reaches `src/store/sqlite` through any module, type-only imports included, so a local function in a core folder lives in `src/api/hippo-db`. `scripts/checks/check-store-port.mjs` fails a port or tier method that takes a function, which cannot cross to a store worker; it reads the tier's method types as `hippoDbRepos` infers them. `tests/api/published-tier-types.slow.test.ts` fails a symbol a package export publishes whose type reaches a type the tier door declares.
+Three checks hold the line. The depcruise rule `core-port-no-sqlite` fails a core file (the port, and the remember, recall, context, auth and audit api files) that reaches `src/store/sqlite` or the tier's port through any module, type-only imports included, so a local function in a core folder lives in `src/api/hippo-db`. `scripts/checks/check-store-port.mjs` fails a port or tier method that takes a function, which cannot cross to a store worker. `tests/api/published-tier-types.slow.test.ts` fails a symbol a package export publishes whose type reaches a type the tier's port declares.
 
 ### Where the port lives
 
@@ -37,7 +37,7 @@ The port is `src/base/ports/store.ts`, with its core groups in `src/base/ports/s
 
 ### What lives in src/store
 
-`src/store` holds two folders: `sqlite/`, the SQLite adapter and its row shapes, SQL text and plumbing, and `rules/`, the rules the adapter shares across files and store-kit exports, which import only `src/base` and each other. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live under `src/base`. The `store-folders` and `store-rules-pure` rules in `.dependency-cruiser.cjs` fail a file anywhere else under `src/store` and a rules file that imports more, so a new pure helper filed there fails CI.
+`src/store` holds two folders: `sqlite/`, the SQLite adapter and its row shapes, SQL text and plumbing, and `rules/`, the rules the adapter shares across files, which import only `src/base` and each other. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live under `src/base`. The `store-folders` and `store-rules-pure` rules in `.dependency-cruiser.cjs` fail a file anywhere else under `src/store` and a rules file that imports more, so a new pure helper filed there fails CI.
 
 ### Read verbs
 
@@ -400,9 +400,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/surface/connectors/slack/web-client.ts
 - `module header`: fetcher is the one Task 13's `backfillChannel` consumes.
 
-### src/surface/connectors/slack/workspaces.ts
-- `module header`: Slack workspace registration helpers (T2B follow-up, 2026-05-24).
-- `module header`: Before T2B, populating this table required direct SQL — fine for a single-machine deployment, awkward for operators with multiple workspaces. These helpers give the CLI (`hippo slack workspaces add|list|remove`) a clean surface.
+### src/api/hippo-db/connector-events.ts
+- `mapSlackWorkspace`: Slack workspace registration helpers (T2B follow-up, 2026-05-24), first in src/surface/connectors/slack/workspaces.ts.
+- `mapSlackWorkspace`: Before T2B, populating this table required direct SQL — fine for a single-machine deployment, awkward for operators with multiple workspaces. These helpers give the CLI (`hippo slack workspaces add|list|remove`) a clean surface.
 
 ### src/domain/consolidate/conflicts.ts
 - `detectConflicts`: LC2-E3 (opt-in, default off): ids rescued by this cycle's decay pass. detectConflicts recomputes its own strength>=DECAY_THRESHOLD survivor filter independently of the decay pass above; without this bypass, rescued entries would be silently re-excluded from conflict detection every cycle even though the decay pass just decided to keep them. Default empty set: flag-off behavior is unchanged.
@@ -696,7 +696,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `resolveConsolidatedSource`: source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only row (E2 objects are consolidated by construction).
 - `extraction queue section`: Extraction queue (the interface the deferred sleep enqueue-hook + E3.1 will use)
 - `enqueueExtraction`: The producer hook in `hippo sleep` is deferred (E3.1); this is the API it will call.
-- `clearGraph`: Lives in graph.ts (the sole sanctioned graph writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Removed in E8b: the rebuild applies the difference `graphReads.graphDelta` plans (store/rules/graph-delta.ts) through `applyGraphOps`, and `updateEntity` renames in place so relations keep their endpoints.
+- `clearGraph`: Lives in graph.ts (the sole sanctioned graph writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Removed in E8b: the rebuild applies the difference `graphReads.graphDelta` plans (base/records/graph-delta.ts) through `applyGraphOps`, and `updateEntity` renames in place so relations keep their endpoints.
 - `sleep enqueue-hook section`: E3 sleep enqueue-hook — producer helper + drain support
 - `markGraphDirty`: NEVER throws into the caller — a graph-dirty signal failing must not abort a core E2 write. ... Called POST-COMMIT from the E2 graph-source save/close mutations of decision, policy, customer_note and project_brief. / swallowed so the already-committed E2 write is never rolled back.
 - `removeGraphEntitiesForObject`: Remove the graph rows sourced from one E2 object, by its (type, id). ... Fail-soft like `markGraphDirty` (never throws into the E2 close caller; graph staleness is recoverable).

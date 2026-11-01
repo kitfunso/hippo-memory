@@ -106,8 +106,8 @@ async function listGoals({
     return;
   }
 
-  // Four columns (id, status, goal_name, outcome); tests only check substrings, so the count is not
-  // asserted.
+  // Four columns (id, status, goal_name, outcome); tests only check substrings, so the count is
+  // not asserted.
   const rows = goals.map((g) => ({
     id: g.id,
     status: g.status,

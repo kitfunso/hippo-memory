@@ -9,8 +9,8 @@ import { sendJson } from '../http/http-util.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import type { RouteParams } from './types.js';
 
-// The caller's id lands in a response header and in logs, so only a short plain token is echoed
-// back.
+// The caller's id lands in a response header and in logs, so only a short plain token is
+// echoed back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */

@@ -21,7 +21,7 @@ import { mapApiError } from '../../src/api/error-reply.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
 import { saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';

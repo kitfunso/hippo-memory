@@ -206,8 +206,8 @@ function listSafely(adapter: Adapter, pass: Pass, report: ImportReport): Listing
 
 interface OpenStore {
   readonly store: ImportStore;
-  /** The folder whose config scores the rows; a stand-in plans by the absent target's, its
-   * defaults. */
+  /** The folder whose config scores the rows; a stand-in plans by the absent target's,
+   * its defaults. */
   readonly root: string;
   readonly global: boolean;
 }

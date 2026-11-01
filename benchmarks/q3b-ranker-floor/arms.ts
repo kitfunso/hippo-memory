@@ -49,7 +49,7 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
   const reranker = q.stages.reranker ? getReranker(q.stages.reranker) : null;
   let shown: readonly SearchResult[] = [];
   const [, retrieveMs] = await timed(() => retrieveWithCliCore(
-    ctx,
+    { ...ctx, enrich: { lastRecall: ctx.store.hippoDb.lastRecall } },
     { query: q.text, boost: { sessionId: q.stages.sessionId ?? '', goalTag: q.stages.goalTag ?? '' } },
     {
       rank: {
@@ -73,7 +73,6 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
       sources: globalRoot !== ctx.hippoRoot && isInitialized(globalRoot)
         ? { root: globalRoot, store: sqliteStore(globalRoot), config: loadConfig(globalRoot) }
         : undefined,
-      lastRecall: ctx.store.hippoDb.lastRecall,
       show: (ranking) => {
         shown = ranking.results;
         return { results: ranking.results, hints: { anchoring: null, availability: null }, tokens: ranking.results.reduce((n, r) => n + r.tokens, 0) };

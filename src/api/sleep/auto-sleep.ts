@@ -8,8 +8,8 @@ import type { SleepCount } from '../enrichment.js';
 
 /**
  * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes
- * one that runs it off its event loop, in a child process; stdio passes one that runs it in its
- * own.
+ * one that runs it off its event loop, in a child process; stdio passes one that runs it in
+ * its own.
  */
 export type AutoSleepRunner = () => Promise<void>;
 

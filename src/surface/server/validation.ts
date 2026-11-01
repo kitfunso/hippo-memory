@@ -38,8 +38,8 @@ export function parseLimitParam(
   return limit;
 }
 
-/** An optional query number that must be above zero, or from zero when `allowZero`; absent is
- * undefined. */
+/** An optional query number that must be above zero, or from zero when `allowZero`; absent
+ * is undefined. */
 export function parseNumberParam(
   raw: string | null,
   name: string,

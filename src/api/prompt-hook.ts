@@ -49,12 +49,12 @@ export interface ContextView {
   readonly framing: string;
   readonly rec: DeliveryRecorder | null;
   readonly result: ContextResult;
-  /** Where the ledger rows go; a shared store's reach has no global store, see
-   * promptHookContext. */
+  /** Where the ledger rows go; a shared store's reach has no global store,
+   * see promptHookContext. */
   readonly reach: LedgerReach;
   /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule; a string or
-   *  null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have
-   *  shown. */
+   *  null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never
+   *  have shown. */
   readonly printedHash?: string | null;
   /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
   readonly envelope?: HookEnvelope;
@@ -81,8 +81,8 @@ function hookReply(envelope: HookEnvelope, additionalContext: string): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext } });
 }
 
-/** A hook render's stdout and the hash of the static block it carries, null when it carries
- * none. */
+/** A hook render's stdout and the hash of the static block it carries, null when it
+ * carries none. */
 interface RenderedContext {
   readonly stdout: string;
   readonly staticHash: string | null;
@@ -229,8 +229,8 @@ interface SkipUnchangedStaticOptions {
   readonly staticCount: number;
 }
 
-/** True, after booking the skip row, when the hook may omit a static block this session already
- * holds. */
+/** True, after booking the skip row, when the hook may omit a static block this session
+ * already holds. */
 async function skipUnchangedStatic({
   view,
   surface,
@@ -240,8 +240,8 @@ async function skipUnchangedStatic({
 }: SkipUnchangedStaticOptions): Promise<boolean> {
   const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
-  // Session start is the only injection Copilot gets, so a resumed session needs the whole block
-  // again.
+  // Session start is the only injection Copilot gets, so a resumed session needs the whole
+  // block again.
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') {
     return false;
   }
@@ -310,8 +310,8 @@ async function recordAdditionalContextRows(
   );
 }
 
-// The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two
-// drift.
+// The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the
+// two drift.
 const HOOK_INCLUDE_RECENT = 5;
 const HOOK_BUDGET = DEFAULT_CONTEXT_BUDGET;
 const HOOK_FRAMING = 'observe';
@@ -381,8 +381,8 @@ export async function buildPromptHookContext(
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
   if (sharedStore || sharedStoreOf(ctx)) assertCallerProject(req.project);
-  // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here
-  // either.
+  // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows
+  // here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
   const reach = ledgerReachOf(ctx, sharedStore);

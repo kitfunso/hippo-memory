@@ -220,8 +220,8 @@ async function askResolver(
   return clean;
 }
 
-/** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim the
- * tag. */
+/** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim
+ * the tag. */
 interface BearerIdentity extends ResolvedBearer {
   viaAuthResolver?: true;
   owner?: string;
@@ -250,8 +250,8 @@ async function resolveBearer(
   if (opts.localKey.matches(token)) {
     return { tenantId: envTenant(), subject: LOCAL_KEY_SUBJECT, role: 'member', scopes: [] };
   }
-  // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's
-  // identity.
+  // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a
+  // key's identity.
   if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
     const t = opts.authResolverTimeoutMs;
     const deadlineMs =
@@ -303,8 +303,8 @@ async function checkAuth(req: IncomingMessage, opts: AuthOptions): Promise<Beare
     throw new HttpError(401, 'invalid api key');
   }
   if (auth.kind === 'bearer') return resolveBearer(req, auth.token, opts);
-  // Only this machine's own user is told where the key is; a proxied caller or a page learns
-  // nothing.
+  // Only this machine's own user is told where the key is; a proxied caller or a page
+  // learns nothing.
   throw new HttpError(401, isLocalCaller(req) ? KEY_REQUIRED_MESSAGE : 'auth required');
 }
 
@@ -380,8 +380,8 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   // A store other than hippo.db is a team's central server, so its folder's config.json must not
   // decide shared-ness.
   const team = !opts.onHippoDb;
-  // The reader keys on the file's stamp, so each request still sees an edit made while the server
-  // runs.
+  // The reader keys on the file's stamp, so each request still sees an edit made while the
+  // server runs.
   const config = opts.configAt(opts.hippoRoot);
   const { store, signal, detached } = opts;
   const enrich = coreEnrichment(store);

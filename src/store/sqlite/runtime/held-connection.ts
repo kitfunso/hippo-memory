@@ -21,8 +21,8 @@ export interface StoreHolder {
   release: () => Promise<void>;
 }
 
-/** Holds a connection to the hippo.db under `hippoRoot` once it exists, so serving never creates
- * one. */
+/** Holds a connection to the hippo.db under `hippoRoot` once it exists, so serving never
+ * creates one. */
 function holdSqliteConnection(hippoRoot: string, runtime: StoreRuntime): StoreHolder {
   // Handlers open and close their own connections; while this one is held, none of those closes is
   // SQLite's last, which checkpoints and deletes the WAL.

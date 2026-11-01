@@ -132,7 +132,7 @@ export interface Reports {
   /** The kind='raw' count and a page of the raw rows missing provenance, by created then id:
    * host admin. */
   rawProvenance(page: ReportPage): Promise<RawProvenancePage>;
-  /** Rows the tenant created since the last sleep of the store, looking back at most a day from
-   * `now`. */
+  /** Rows the tenant created since the last sleep of the store, looking back at most a day
+   * from `now`. */
   createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
 }

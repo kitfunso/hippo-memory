@@ -105,8 +105,8 @@ function judgeOverlappingNonError(
   window: MemoryEntry[],
   duplicateMatch: ReturnType<typeof findBestOverlap>,
 ): SalienceResult {
-  // A near-duplicate may be a changed value (port 8080 then 8081), so only the same text is
-  // skipped.
+  // A near-duplicate may be a changed value (port 8080 then 8081), so only the same text
+  // is skipped.
   const key = duplicateKey(trimmed);
   const same = window.find((m) => heldTextKeys(m).includes(key));
   if (!same) {

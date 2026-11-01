@@ -56,8 +56,8 @@ export interface RankRecallEngine {
    * keeps the load order. */
   engineNamed?: boolean;
   multihop: boolean;
-  /** Graph-stream rrf fusion over the local store; hop and seed counts fall back to the engine
-   * defaults. */
+  /** Graph-stream rrf fusion over the local store; hop and seed counts fall back to the
+   * engine defaults. */
   graphStream?: RecallGraphStream;
   mmr?: boolean;
   mmrLambda?: number;
@@ -92,8 +92,8 @@ export interface RankRecallFilters {
   /** `--scope` unlocks that envelope scope on top of the default-admitted set. Under `scopeMode:
    * 'exact'` it is the only scope read. */
   explicitScope: string | null;
-  /** 'additive' (the default) for the CLI operator, who has no identity; 'exact' for an API
-   * caller. */
+  /** 'additive' (the default) for the CLI operator, who has no identity; 'exact' for an
+   * API caller. */
   scopeMode?: 'additive' | 'exact';
   /** The API caller's own personal scope, which the default deny still admits. */
   ownScope?: string;
@@ -187,8 +187,8 @@ export function rankCtxOf(ctx: Context): RankRecallCtx {
 }
 
 /** Ranks memories for a query under the caller's `profile`; notes go to `ctx.note`, and the
- * caller supplies the cost function and reranker in `request` and writes the returned goal-log
- * rows. */
+ * caller supplies the cost function and reranker in `request` and writes the returned
+ * goal-log rows. */
 export async function rankRecall(
   ctx: RankRecallCtx,
   request: RankRecallOptions,

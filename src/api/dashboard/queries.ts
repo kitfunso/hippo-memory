@@ -66,8 +66,8 @@ function toRow(row: ListedRow): MemoryRow {
   };
 }
 
-/** One page of a project's memories under the query's sort and filters, or null when the key is
- * unknown. */
+/** One page of a project's memories under the query's sort and filters, or null when the key
+ * is unknown. */
 export async function buildMemoryPage(
   reads: Pick<DashboardReads, 'memoryPage'>,
   stamp: Stamp,

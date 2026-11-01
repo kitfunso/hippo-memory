@@ -12,17 +12,16 @@ import { replaySlackDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
 import { backfillChannel } from '../connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../connectors/slack/web-client.js';
 import {
-  addWorkspace as addSlackWorkspace,
-  listWorkspaces as listSlackWorkspaces,
-  removeWorkspace as removeSlackWorkspace,
-} from '../connectors/slack/workspaces.js';
+  mapSlackWorkspace,
+  slackWorkspaceMap,
+  unmapSlackWorkspace,
+} from '../../api/hippo-db/connector-events.js';
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
 import { stringFlag, type CommandContext } from './flag-values.js';
 import { runDlqReplay } from './dlq-replay.js';
 import { CliExit, fail } from './exit.js';
 import { errorMessage } from '../../base/util/log.js';
-import type { CliCommand } from './api-context.js';
 
 async function backfillSlack({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const channel = stringFlag(flags, 'channel');
@@ -85,18 +84,22 @@ async function replaySlackDlq({
   );
 }
 
-async function registerSlackWorkspace({ cli, hippoRoot, flags }: CommandContext): Promise<void> {
-  const teamId = (stringFlag(flags, 'team') ?? '').trim();
-  const tenantId = (stringFlag(flags, 'tenant') ?? '').trim();
+async function registerSlackWorkspace(cmd: CommandContext): Promise<void> {
+  const teamId = (stringFlag(cmd.flags, 'team') ?? '').trim();
+  const tenantId = (stringFlag(cmd.flags, 'tenant') ?? '').trim();
   if (!teamId || !tenantId) {
     fail('Usage: hippo slack workspaces add --team <T> --tenant <t>');
   }
-  const ws = await addSlackWorkspace(cli.store(hippoRoot), { teamId, tenantId });
+  const ws = await mapSlackWorkspace(
+    cmd.cli.apiContext(cmd.hippoRoot, cmd.tenantId),
+    teamId,
+    tenantId,
+  );
   console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
 }
 
-async function printSlackWorkspaces(cli: CliCommand, hippoRoot: string): Promise<void> {
-  const items = await listSlackWorkspaces(cli.store(hippoRoot));
+async function printSlackWorkspaces({ cli, hippoRoot, tenantId }: CommandContext): Promise<void> {
+  const items = await slackWorkspaceMap(cli.apiContext(hippoRoot, tenantId));
   if (items.length === 0) {
     console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
     return;
@@ -106,12 +109,17 @@ async function printSlackWorkspaces(cli: CliCommand, hippoRoot: string): Promise
   }
 }
 
-async function unregisterSlackWorkspace({ cli, hippoRoot, flags }: CommandContext): Promise<void> {
+async function unregisterSlackWorkspace({
+  cli,
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   if (!teamId) {
     fail('Usage: hippo slack workspaces remove --team <T>');
   }
-  const removed = await removeSlackWorkspace(cli.store(hippoRoot), teamId);
+  const removed = await unmapSlackWorkspace(cli.apiContext(hippoRoot, tenantId), teamId);
   if (!removed) {
     fail(`no workspace registered for team ${teamId}`);
   }
@@ -119,7 +127,7 @@ async function unregisterSlackWorkspace({ cli, hippoRoot, flags }: CommandContex
 }
 
 export async function handleSlack(cmd: CommandContext): Promise<void> {
-  const { hippoRoot, args, cli } = cmd;
+  const { args } = cmd;
   const sub = args[0];
   if (sub === 'backfill') {
     await backfillSlack(cmd);
@@ -140,7 +148,7 @@ export async function handleSlack(cmd: CommandContext): Promise<void> {
       return;
     }
     if (action === 'list') {
-      await printSlackWorkspaces(cli, hippoRoot);
+      await printSlackWorkspaces(cmd);
       return;
     }
     if (action === 'remove') {

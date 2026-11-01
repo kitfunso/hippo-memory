@@ -4,7 +4,7 @@ import { adminActor } from '../../src/api/index.js';
 import { parkInDlq, replayParked } from '../../src/api/dead-letters.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
-import { rememberWithEventLog } from '../../src/surface/connectors/ingest.js';
+import { rememberOncePerEvent } from '../../src/api/hippo-db/connector-writes.js';
 import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -29,20 +29,21 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
 
   it('an empty body is logged with no memory, and both logs answer the same record shape', async () => {
     expect([githubEventRecord(root, 'k1'), slackEventRecord(root, 'Ev1')]).toEqual([{ seen: false }, { seen: false }]);
-    const results = [await rememberWithEventLog(ctx, gh, null), await rememberWithEventLog(ctx, sl, null)];
+    const results = [await rememberOncePerEvent(ctx, gh, () => null), await rememberOncePerEvent(ctx, sl, () => null)];
     expect(results).toEqual([
       { status: 'skipped', memoryId: null },
       { status: 'skipped', memoryId: null },
     ]);
     const seen = { seen: true, memoryId: null };
     expect([githubEventRecord(root, 'k1'), slackEventRecord(root, 'Ev1')]).toEqual([seen, seen]);
+    const build = () => {
+      throw new Error('a logged event runs no transform');
+    };
+    expect(await rememberOncePerEvent(ctx, gh, build)).toEqual({ status: 'logged', memoryId: null });
   });
 
   it('ingest stores a short low-salience text: the connector path runs no salience gate', async () => {
-    const result = await rememberWithEventLog(ctx, gh, {
-      content: 'yes',
-      tags: [],
-    });
+    const result = await rememberOncePerEvent(ctx, gh, () => ({ content: 'yes', tags: [] }));
     expect(result.status).toBe('ingested');
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['yes']);
   });

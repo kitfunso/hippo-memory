@@ -11,7 +11,7 @@ import { overlapPartners } from './overlap-index.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import { applyRebuild, settleFreshSummary } from './summary-settle.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { Consolidation } from '../../base/records/consolidation.js';
@@ -88,9 +88,8 @@ export interface DagBuildResult {
   rejected: number;
 }
 
-// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order, so
-// a single-tenant store iterates as before. buildEntityProfiles partitions its L2s with this same
-// key.
+// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order,
+// so a single-tenant store iterates as before. buildEntityProfiles partitions its L2s by it too.
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {

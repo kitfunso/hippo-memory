@@ -5,7 +5,7 @@ import {
   EmotionalValence,
   createMemoryAt,
 } from '../../base/memory/entry.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import {
@@ -32,8 +32,8 @@ export interface ExtractOptions {
   model?: string;
   /**
    * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is
-   * set when the model call itself failed. Without it each failure logs a warn with its error
-   * fields.
+   * set when the model call itself failed. Without it each failure logs a warn with its
+   * error fields.
    */
   onError?: (msg: string, failure?: LlmFailure) => void;
   /** The request's abort signal; the model call stops when it fires. */

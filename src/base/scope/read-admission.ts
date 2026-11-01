@@ -10,8 +10,8 @@ import { detectSecret } from '../util/secret-detect.js';
 /** The rows an ambient read admits. */
 export interface AmbientAdmission {
   /**
-   * A secret-flagged row passes only inside this project, and another project's row only with
-   * `includeCrossProject`.
+   * A secret-flagged row passes only inside this project, and another project's row only
+   * with `includeCrossProject`.
    */
   readonly currentProject: ProjectRef;
   readonly includeCrossProject: boolean;
@@ -40,8 +40,8 @@ export interface DescendantAdmission {
   readonly project?: ProjectRef;
 }
 
-/** The secret half of the ambient policy alone: a flagged row is admitted only inside its owning
- * project. */
+/** The secret half of the ambient policy alone: a flagged row is admitted only inside its
+ * owning project. */
 export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
   if (!detectSecret(e).flagged) return true;
   const origin = e.originProject;

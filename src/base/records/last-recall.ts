@@ -3,8 +3,8 @@
 import type { EntryTarget } from '../ports/store/entry-writes.js';
 import type { RecallWrites } from '../ports/store/recall-writes.js';
 
-/** A recall's writes when the store keeps it as its last one: `strengthen.ids` are the ids it
- * returned. */
+/** A recall's writes when the store keeps it as its last one: `strengthen.ids` are the ids
+ * it returned. */
 export type LastRecallWrites = RecallWrites & Required<Pick<RecallWrites, 'strengthen'>>;
 
 /** The last recall a store keeps, so a later outcome can name it, and the outcome linked to a

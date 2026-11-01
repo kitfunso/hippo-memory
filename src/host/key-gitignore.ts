@@ -1,5 +1,5 @@
-// A store folder can sit inside a user's repo, so the file holding the live server key must never be
-// committable.
+// A store folder can sit inside a user's repo, so the file holding the live server key must never
+// be committable.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { errorCode } from '../base/util/log.js';

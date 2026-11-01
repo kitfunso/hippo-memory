@@ -43,12 +43,9 @@ function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
       if (msg === 'locked') resolve();
     });
   });
-  const released = new Promise<void>((resolve) => {
+  const released = new Promise<void>((resolve, reject) => {
     worker.on('message', (msg) => {
-      if (msg === 'released') {
-        worker.terminate();
-        resolve();
-      }
+      if (msg === 'released') worker.terminate().then(() => resolve(), reject);
     });
   });
   // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
@@ -159,12 +156,9 @@ function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: nu
       if (msg === 'locked') resolve();
     });
   });
-  const released = new Promise<void>((resolve) => {
+  const released = new Promise<void>((resolve, reject) => {
     worker.on('message', (msg) => {
-      if (msg === 'released') {
-        worker.terminate();
-        resolve();
-      }
+      if (msg === 'released') worker.terminate().then(() => resolve(), reject);
     });
   });
   // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.

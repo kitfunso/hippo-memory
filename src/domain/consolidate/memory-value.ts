@@ -32,8 +32,8 @@ const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
   'contentLength',
 ];
 
-/** The keep-budget operating point (the only point with measured evidence): a code constant tied to that evidence, not
- *  user-tunable. */
+/** The keep-budget operating point (the only point with measured evidence): a code constant tied to that evidence,
+ *  not user-tunable. */
 const RESCUE_BUDGET = 0.3;
 
 /**
@@ -56,8 +56,8 @@ export interface MvFeatureVector {
 /**
  * Blind v1 feature dict for one entry, restricted to the 8 dims the frozen weights carry.
  * `strength` is CLOCK-BASIS `calculateStrength(entry, now)` with no DecayOptions, as in the
- * weights' training; passing the production decay basis would silently break parity with the frozen
- * weights.
+ * weights' training; passing the production decay basis would silently break parity with the
+ * frozen weights.
  */
 function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
@@ -108,8 +108,8 @@ export function validateWeights(
 /**
  * Min-max normalize the 8 features over the given entries (constant -> 0), then score =
  * dot(weights, normalized); callers set the scope. An entry with any non-finite feature (NaN from a
- * malformed `created`) is excluded from normalization and scores -Infinity, so it can never be
- * rescued.
+ * malformed `created`) is excluded from normalization and scores -Infinity, so it can never
+ * be rescued.
  */
 export function scoreEntries(
   entries: MemoryEntry[],
@@ -284,8 +284,8 @@ function tieGroups(
     const ids = group
       .map(([id]) => id)
       .sort((a, b) => compareScoresDesc(scores.get(a)!, scores.get(b)!));
-    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's doc
-    // comment.
+    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's
+    // doc comment.
     const keepN =
       ids.length < MIN_RESCUE_GROUP
         ? 0

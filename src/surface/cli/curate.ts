@@ -72,8 +72,8 @@ interface PreviewForgetOptions {
   readonly archive: boolean;
 }
 
-// Refuses exactly where the real run would, with its words, so "Would forget" is a promise, not a
-// guess.
+// Refuses exactly where the real run would, with its words, so "Would forget" is a promise, not
+// a guess.
 async function previewForget({
   cli,
   hippoRoot,

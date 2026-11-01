@@ -8,7 +8,6 @@ import {
   type SignatureRefusal,
 } from '../../../api/dead-letters.js';
 import { ingestMessage } from './ingest.js';
-import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { verifySlackSignature } from './signature.js';
 import {
   isSlackEventEnvelope,
@@ -24,6 +23,7 @@ import type {
   SlackDlqItem as DlqItem,
   SlackDlqInsert,
 } from '../../../base/records/connectors.js';
+import { resolveTenant, type RouteFallback } from '../../../api/hippo-db/connector-events.js';
 
 export type { DlqBucket, DlqItem };
 
@@ -109,7 +109,7 @@ async function reingest(
   fallback: RouteFallback,
 ): Promise<Reingest> {
   const tenantId = await resolveTenant(
-    ports.store,
+    ports,
     { connector: 'slack', teamId: envelope.team_id },
     fallback,
   );

@@ -77,8 +77,8 @@ function pagedDescendants(
   return { summary: walk.summary, levels, sizes };
 }
 
-// Reads four short columns of every child, since the level below needs each admitted id as a
-// parent.
+// Reads four short columns of every child, since the level below needs each admitted id as
+// a parent.
 function keyedLevel(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -178,8 +178,8 @@ function firstRows(
   return childrenInOrder(db, walk, whole, -1);
 }
 
-/** Children parent by parent, each parent's by created then id; a negative `limit` reads them
- * all. */
+/** Children parent by parent, each parent's by created then id; a negative `limit` reads
+ * them all. */
 function childrenInOrder(
   db: DatabaseSyncLike,
   walk: PagedWalk,

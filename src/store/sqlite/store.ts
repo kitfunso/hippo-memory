@@ -14,14 +14,15 @@ import { listEntriesWhere } from './entries/entry-filter.js';
 import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
-import { sqliteEntryWrites } from './entries/entry-writes.js';
+import { sqliteEntryWrites } from './entries/sqlite-entry-writes.js';
 import { finishRecall } from './recall/last-recall.js';
 import { sqliteVectorReads } from './vectors/vector-reads.js';
 import { readLatestHandoff } from './sessions/handoffs.js';
 import { updateStats } from './entries/index-and-stats.js';
 
 import { sqliteKeyWrites } from './keys/keys.js';
-import { hippoDbRepos, type HippoDbStore } from './hippo-db.js';
+import { hippoDbRepos } from './hippo-db.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import { type Handles, type OnHandle, readOnly, type StoreFiles } from './runtime/open.js';
 import { handlesOf, openStore } from './runtime/handles.js';
 import { answered, bound, skipEmpty, type Bodies } from './runtime/bound.js';
@@ -166,8 +167,8 @@ export function sqliteReach({
 }
 
 /** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the
- * project-tag reads on read-only handles, so a check never creates or migrates the store it
- * inspects. */
+ * project-tag reads on read-only handles, so a check never creates or migrates the store
+ * it inspects. */
 export function sqliteDiagnosticsStore(
   hippoRoot: string,
 ): { readonly diagnostics: Diagnostics } & ProjectTagReads {

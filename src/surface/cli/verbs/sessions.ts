@@ -91,8 +91,8 @@ export const SESSION_VERBS = {
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
     checksOwnFlags: true,
-    // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not
-    // read.
+    // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does
+    // not read.
     flags: {
       switches: ['json'],
       values: [

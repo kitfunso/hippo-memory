@@ -14,7 +14,7 @@ import type { SavableDescriptor } from './descriptor.js';
 import { requireText } from './fields.js';
 import { listObjects } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../../base/records/object-types.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 
 export type { Decision, DecisionStatus } from '../../base/records/object-types.js';
 

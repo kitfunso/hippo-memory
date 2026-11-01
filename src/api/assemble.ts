@@ -42,8 +42,8 @@ export interface AssembleCost {
 export interface AssembledContextItem {
   id: string;
   content: string;
-  /** ISO timestamp of the source row's `created` field (or `earliest_at` for substituted
-   * summaries). */
+  /** ISO timestamp of the source row's `created` field (or `earliest_at` for
+   * substituted summaries). */
   createdAt: string;
   /** Fresh-tail protected window (last freshTailCount raws). */
   isFreshTail?: boolean;
@@ -218,8 +218,8 @@ function freshTailItem(r: MemoryEntry): AssembledContextItem {
   };
 }
 
-/** Older rows with every level-2 parent shared by two or more of them standing in for those
- * rows. */
+/** Older rows with every level-2 parent shared by two or more of them standing in for
+ * those rows. */
 interface SubstitutedOlder {
   olderItems: AssembledContextItem[];
   summarized: number;
@@ -287,8 +287,8 @@ function summaryItem(parent: MemoryEntry, claimed: string[]): AssembledContextIt
   };
 }
 
-/** Drops the weakest non-fresh-tail item until the total fits `room`; fresh-tail items are never
- * evicted. */
+/** Drops the weakest non-fresh-tail item until the total fits `room`; fresh-tail items are
+ * never evicted. */
 interface BudgetFit {
   items: AssembledContextItem[];
   tokens: number;

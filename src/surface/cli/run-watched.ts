@@ -22,8 +22,8 @@ export class RunWatchedTimeoutError extends Error {
 }
 
 /** Runs argv with no shell, so `;`, `&` and `$()` reach it literally; stderr streams live and
- * only its last STDERR_TAIL_BYTES come back. Rejects with RunWatchedTimeoutError past
- * `deadlineMs`. */
+ * only its last STDERR_TAIL_BYTES come back. Rejects with RunWatchedTimeoutError
+ * past `deadlineMs`. */
 export function runWatched(
   argv: readonly string[],
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,

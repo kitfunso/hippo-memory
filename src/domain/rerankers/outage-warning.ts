@@ -8,8 +8,8 @@ const REPEAT_MS = 5 * MINUTE_MS;
 export interface OutageDetail {
   /** The error's class and stack, for the warning line. */
   readonly fields?: LogFields | undefined;
-  /** The request's abort signal; once it fired, the client hung up and the reranker did not
-   * fail. */
+  /** The request's abort signal; once it fired, the client hung up and the reranker did
+   * not fail. */
   readonly signal?: AbortSignal | undefined;
 }
 

@@ -19,8 +19,8 @@ export {
 export type { WriteEntryOptions } from '../surface/testing-kit.js';
 export { embedMemory, loadRecallSearchEntries } from './folder-search.js';
 export { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from './object-saves.js';
-// Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these
-// forms.
+// Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes
+// these forms.
 export type { MemoryWire } from '../base/memory/memory-wire.js';
 export {
   ambientSecretAdmitWire,
