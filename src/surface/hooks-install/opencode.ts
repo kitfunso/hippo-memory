@@ -34,8 +34,8 @@ function migrateLegacyOpencodeHooksBlock() {
 export function installOpencodePlugin(): OpencodePluginInstallResult {
   const pluginPath = resolveOpencodePluginPath();
   const { migrated, jsonRepairFailed } = migrateLegacyOpencodeHooksBlock();
-  // A marker-only match with stale content is rewritten, so plugin-source patches reach existing
-  // installs.
+  // A marker-only match with stale content is rewritten, so plugin-source patches reach
+  // existing installs.
   if (fs.existsSync(pluginPath) && isCurrentPlugin(fs.readFileSync(pluginPath, 'utf8'))) {
     return { installed: false, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
   }

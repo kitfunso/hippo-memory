@@ -73,13 +73,13 @@ export interface RecallSearchEntriesOptions {
 }
 
 // The global write behind `promote`: a promoted copy written into the operator's global store.
-/** How a promoted copy is written: the actor its `remember` row names and the local row it
- * copies. */
+/** How a promoted copy is written: the actor its `remember` row names and the local row
+ * it copies. */
 export interface PromotedCopy {
   readonly actor?: string;
   readonly sourceId: string;
-  /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own
-   * transaction. */
+  /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's
+   * own transaction. */
   readonly auditAs?: { readonly tenantId: string; readonly actor: string };
 }
 

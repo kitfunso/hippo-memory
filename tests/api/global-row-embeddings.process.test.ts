@@ -98,9 +98,8 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     const promoted = await promote(apiCtx(localRoot), entry.id);
     expect(promoted.globalId).toMatch(/^g_/);
 
-    // provider.isAvailable() is synchronous and false here (config-disabled),
-    // so embedMemory's fire-and-forget call returns before any fs write,
-    // no waitFor needed, the absence is observable immediately.
+    // The global store's config turns embeddings off, so promote's embed returns 'off' before it
+    // writes anything, and the empty index shows at once.
     const index = loadEmbeddingIndex(globalRoot);
     expect(index[promoted.globalId]).toBeUndefined();
   });
@@ -334,14 +333,8 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
 // ---------------------------------------------------------------------------
 
 describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
-  // Real-process counterpart of the in-process "promote waits for its embed"
-  // test above; it covers the built CLI path. Spawns real `node` subprocesses
-  // (same pattern as the "hippo embed --global CLI" test above) so the actual
-  // promote -> embedMemory fire is exercised end-to-end: init, remember,
-  // embed (warms the local vector + model cache), promote, then poll the
-  // GLOBAL store's embedding index for the minted g_ id. A producer-wiring
-  // regression (wrong root, dropped void embed call) would fail this test even
-  // when every in-process test above is skipping.
+  // The built CLI's promote end to end: a wrong root, or an embed the command does not settle
+  // before it exits, leaves the minted g_ id out of the GLOBAL index even when the tests above skip.
   it('promoting a remembered row lands a vector in the GLOBAL embedding index', async () => {
     const home = makeRoot('gre-wiring-home', { init: false });
     const cwd = makeRoot('gre-wiring-cwd', { init: false });
@@ -365,9 +358,7 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
       expect(rememberMatch).not.toBeNull();
       const localId = rememberMatch![1];
 
-      // Ensures the local vector exists (deterministic, not racing remember's
-      // own fire-and-forget embed) and warms the on-disk model cache before
-      // promote runs.
+      // Warms the on-disk model cache before promote; remember settled its own vector before exiting.
       if (isEmbeddingAvailable()) execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
 
       const promoteOut = execFileSync('node', [HIPPO_BIN, 'promote', localId], { cwd, env, encoding: 'utf-8' });

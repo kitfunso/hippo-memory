@@ -17,6 +17,20 @@ function srcPaths(folders, roots = []) {
 
 const keysOf = (record, layer) => Object.keys(record).filter((key) => record[key] === layer);
 const layerPaths = (layer) => srcPaths(keysOf(layers.folders, layer), keysOf(layers.rootFiles, layer));
+// Every src file the map lists, for a rule that starts from any of them.
+const ANY_SRC = srcPaths(Object.keys(layers.folders), Object.keys(layers.rootFiles));
+
+/** The regex for one path group entry: `@layer`, a folder ending in `/`, or a file; `*` stands for one name. */
+function entryPaths(entry) {
+  if (entry.startsWith('@')) return layerPaths(entry.slice(1));
+  return `^src/${escape(entry).replaceAll('\\*', '[^/]*')}${entry.endsWith('/') ? '' : '$'}`;
+}
+
+/** The regexes of the path group `name` in layers.json, which holds every path a rule below names. */
+function group(name) {
+  if (!(name in layers.paths)) throw new Error(`layers.json has no path group "${name}"`);
+  return layers.paths[name].map(entryPaths);
+}
 
 /** Every src folder or root file layers.json lacks, every entry that no longer exists, and every named file gone. */
 function mapProblems() {
@@ -41,12 +55,25 @@ function mapProblems() {
   for (const file of [...named, ...Object.keys(layers.barrels)]) {
     if (!existsSync(join(SRC, file))) problems.push(`src/${file} is named but does not exist`);
   }
+  const files = readdirSync(SRC, { recursive: true }).map((p) => `src/${String(p).replaceAll('\\', '/')}`);
+  for (const [name, entries] of Object.entries(layers.paths)) {
+    for (const entry of entries) {
+      const known = entry.startsWith('@')
+        ? layers.order.includes(entry.slice(1))
+        : files.some((f) => new RegExp(entryPaths(entry)).test(f));
+      if (!known) {
+        problems.push(`path group ${name} entry ${entry} matches no src file`);
+      }
+    }
+  }
   return problems;
 }
 
 const problems = mapProblems();
 if (problems.length > 0) {
-  throw new Error(`layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`);
+  throw new Error(
+    `layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`,
+  );
 }
 
 /** One rule per layer: its files import nothing from a higher layer, type-only imports included. */
@@ -77,19 +104,7 @@ const barrels = Object.entries(layers.barrels).map(([file, folder]) => ({
 const { adapter, dbReach } = layers;
 const adapterPath = srcPaths([adapter.folder]);
 const entrances = [adapter.root, adapter.testKit.file];
-// The published store kit, the one surface file that names src/store: a pure rule it re-exports.
-const STORE_KIT = 'entry/store-kit.ts';
-// hippo.db's local tier: src/api's local modules take its types, and its code stays in the adapter.
-const tierDoor = '^src/store/sqlite/hippo-db\\.ts$';
 const outsideAdapter = [adapterPath, srcPaths([], entrances)];
-// The core files, which run on any store: the port and the api's remember, recall, context, auth and audit paths.
-const coreFiles = [
-  '^src/base/ports/store(-index)?\\.ts$',
-  '^src/base/ports/store/',
-  '^src/api/(types|enrichment)\\.ts$',
-  '^src/api/memories/remember\\.ts$',
-  '^src/api/(recall|context|auth)/',
-];
 
 const adapterRules = [
   {
@@ -97,21 +112,7 @@ const adapterRules = [
     comment: `only src/${adapter.root} and the test kit import src/${adapter.folder}; others take the store from the Context`,
     severity: 'error',
     from: { pathNot: outsideAdapter },
-    to: { path: adapterPath, pathNot: tierDoor },
-  },
-  {
-    name: 'tier-door-types',
-    comment: 'outside the adapter, src/store/sqlite/hippo-db.ts is imported for its types only',
-    severity: 'error',
-    from: { pathNot: outsideAdapter },
-    to: { path: tierDoor, dependencyTypesNot: ['type-only', 'type-import'] },
-  },
-  {
-    name: 'tier-door-api',
-    comment: 'outside the adapter, only src/api imports src/store/sqlite/hippo-db.ts',
-    severity: 'error',
-    from: { pathNot: [...outsideAdapter, '^src/api/'] },
-    to: { path: tierDoor },
+    to: { path: adapterPath },
   },
   {
     name: 'adapter-root-doors',
@@ -142,59 +143,50 @@ const storeReach = [
     name: 'db-through-store',
     comment: `files outside src/${dbReach.layer} and src/${dbReach.through} reach the db through a store function or the adapter door`,
     severity: 'error',
-    from: { path: '^src/', pathNot: [layerPaths(dbReach.layer), layerPaths(dbReach.through)] },
+    from: { path: ANY_SRC, pathNot: [layerPaths(dbReach.layer), layerPaths(dbReach.through)] },
     to: { path: layerPaths(dbReach.layer) },
   },
   {
     name: 'db-grant-mint',
     comment: 'only the SQLite adapter mints a hippo.db grant; other code imports the DbGrant type',
     severity: 'error',
-    from: { path: '^src/', pathNot: '^src/store/sqlite/runtime/grant\\.ts$' },
-    to: { path: '^src/db/grant\\.ts$', dependencyTypesNot: ['type-only', 'type-import'] },
+    from: { path: ANY_SRC, pathNot: group('grantMinter') },
+    to: { path: group('grant'), dependencyTypesNot: ['type-only', 'type-import'] },
   },
   {
     name: 'api-store-port',
     comment: 'the api reads the store through the port in src/base/ports and takes shared rules from src/base',
     severity: 'error',
-    from: { path: '^src/api/' },
-    to: { path: '^src/store/', pathNot: tierDoor },
+    from: { path: layerPaths('api') },
+    to: { path: layerPaths(dbReach.through) },
   },
   {
     name: 'core-port-no-sqlite',
-    comment: `a core file reaches src/${adapter.folder} through no module, type-only imports included; its local work lives in src/api/hippo-db`,
+    comment: `a core file reaches src/${adapter.folder} and the local tier's port through no module, type-only imports included; its local work lives in src/api/hippo-db`,
     severity: 'error',
-    from: { path: coreFiles },
-    to: { path: adapterPath, reachable: true },
+    from: { path: group('core') },
+    to: { path: [adapterPath, ...group('localTier')], reachable: true },
   },
   {
     name: 'surface-through-api',
-    comment: `a surface calls src/api, never the store or the db; only ${entrances.map((f) => `src/${f}`).join(' and ')} open one, and src/${STORE_KIT} re-exports the pure graph diff from src/store/rules`,
+    comment: `a surface calls src/api, never the store or the db; only ${entrances.map((f) => `src/${f}`).join(' and ')} open one`,
     severity: 'error',
-    from: { path: layerPaths('surface'), pathNot: srcPaths([], [...entrances, STORE_KIT]) },
+    from: { path: layerPaths('surface'), pathNot: srcPaths([], entrances) },
     to: { path: [layerPaths(dbReach.layer), layerPaths(dbReach.through)] },
   },
   {
     name: 'dashboard-not-cli',
     comment: 'the dashboard reads and writes through src/api, never through the CLI',
     severity: 'error',
-    from: { path: '^src/surface/dashboard/' },
-    to: { path: '^src/(surface/cli/|cli\\.ts$)' },
+    from: { path: group('dashboard') },
+    to: { path: group('cli') },
   },
 ];
 
 const IO_MODULES = '^(fs|fs/promises|os|child_process)$';
 const SQLITE_MODULE = '^node:sqlite$';
 const notType = ['type-only', 'type-import'];
-// The composition roots and adapters, which read the environment once and pass settings down.
-const ENV_READERS = [
-  '^src/cli\\.ts$',
-  '^src/surface/(cli|server|mcp|hooks-install)/',
-  '^src/surface/connectors/[^/]+/webhook\\.ts$',
-  '^src/infra/',
-  '^src/base/util/(env|log)\\.ts$',
-  '^src/host/(spawn-argv|agent-homes)\\.ts$',
-];
-const STRAY_STORE = { path: '^src/store/', pathNot: '^src/store/(sqlite|rules)/' };
+const STRAY_STORE = { path: layerPaths(dbReach.through), pathNot: [adapterPath, ...group('storeRules')] };
 const strayStore = {
   comment: 'src/store holds the SQLite adapter and the rules it shares; a rule with no SQL goes in src/base',
   severity: 'error',
@@ -203,7 +195,8 @@ const strayStore = {
 // One rule per depth, for the file's own folder, its parent and its grandparent: $1 is that folder.
 const ownBarrels = ['', '[^/]+/', '[^/]+/[^/]+/'].map((below, up) => ({
   name: `no-own-barrel-${up}`,
-  comment: 'a file imports the module that defines a name, never the index.ts of its folder or one above, which re-exports the file and loops back',
+  comment:
+    'a file imports the module that defines a name, never the index.ts of its folder or one above, which re-exports the file and loops back',
   severity: 'error',
   from: { path: `^(src/.+/)${below}[^/]+$`, pathNot: up === 0 ? '/index\\.ts$' : '^$' },
   to: { path: '^$1index\\.ts$' },
@@ -212,38 +205,40 @@ const ownBarrels = ['', '[^/]+/', '[^/]+/[^/]+/'].map((below, up) => ({
 const reachRules = [
   {
     name: 'no-io-below-host',
-    comment: 'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
+    comment:
+      'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
     severity: 'error',
-    from: { path: '^src/(base|domain|api)/' },
+    from: { path: group('ioFree') },
     to: { path: IO_MODULES },
   },
   {
     name: 'host-types-only',
     comment: 'src/domain and src/api take what src/host reads from their caller, and may name its types',
     severity: 'error',
-    from: { path: '^src/(domain|api)/' },
-    to: { path: '^src/host/', dependencyTypesNot: notType },
+    from: { path: group('hostTypesOnly') },
+    to: { path: layerPaths('host'), dependencyTypesNot: notType },
   },
   {
     name: 'sqlite-in-data-layer',
-    comment: 'only src/db/sqlite.ts loads node:sqlite, and src/host/file-lock.ts for a data-free lock database; every other SQLite connection is made through src/db/sqlite.ts',
+    comment:
+      'only src/db/sqlite.ts loads node:sqlite, and src/host/file-lock.ts for a data-free lock database; every other SQLite connection is made through src/db/sqlite.ts',
     severity: 'error',
-    from: { pathNot: ['^src/db/sqlite\\.ts$', '^src/host/file-lock\\.ts$'] },
+    from: { pathNot: group('sqliteLoaders') },
     to: { path: SQLITE_MODULE },
   },
   {
     name: 'db-dynamic-import',
     comment: 'src/db is imported statically, so the DbGrant lint ban sees every hippo.db opener a file names',
     severity: 'error',
-    from: { path: '^src/' },
-    to: { path: '^src/db/', dependencyTypes: ['dynamic-import'] },
+    from: { path: ANY_SRC },
+    to: { path: layerPaths(dbReach.layer), dependencyTypes: ['dynamic-import'] },
   },
   {
     name: 'store-rules-pure',
     comment: 'src/store/rules runs no SQL and opens nothing: it imports src/base and itself only',
     severity: 'error',
-    from: { path: '^src/store/rules/' },
-    to: { pathNot: '^src/(base|store/rules)/' },
+    from: { path: group('storeRules') },
+    to: { pathNot: [layerPaths('base'), ...group('storeRules')] },
   },
   ...ownBarrels,
   { name: 'store-folders', ...strayStore, from: STRAY_STORE, to: {} },
@@ -251,24 +246,25 @@ const reachRules = [
   { name: 'store-folders-orphan', ...strayStore, from: { ...STRAY_STORE, orphan: true }, to: {} },
   {
     name: 'config-file-in-surface',
-    comment: 'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
+    comment:
+      'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
     severity: 'error',
-    from: { path: '^src/', pathNot: [layerPaths('surface'), layerPaths('host')] },
-    to: { path: '^src/host/config-file\\.ts$', dependencyTypesNot: notType },
+    from: { path: ANY_SRC, pathNot: [layerPaths('surface'), layerPaths('host')] },
+    to: { path: group('configFile'), dependencyTypesNot: notType },
   },
   {
     name: 'env-in-roots',
     comment: 'src/base/util/env.ts is read by the composition roots and adapters, which pass settings down',
     severity: 'error',
-    from: { path: '^src/', pathNot: ENV_READERS },
-    to: { path: '^src/base/util/env\\.ts$' },
+    from: { path: ANY_SRC, pathNot: group('envReaders') },
+    to: { path: group('env') },
   },
   {
     name: 'recall-verbs-book-nothing',
     comment: 'hippo recall and hippo explain book tokens and ledger turns through retrieveWithCliCore(), never by hand',
     severity: 'error',
-    from: { path: '^src/surface/cli/(recall[\\w-]*|explain)\\.ts$' },
-    to: { path: '^src/api/(tokens|ledger-db)\\.ts$' },
+    from: { path: group('recallVerbs') },
+    to: { path: group('bookkeeping') },
   },
 ];
 
@@ -277,7 +273,7 @@ module.exports = {
   required: adapterRequired,
   options: {
     // The node modules a rule names are kept, so a rule can bar a src file from them.
-    includeOnly: ['^src/', IO_MODULES, SQLITE_MODULE],
+    includeOnly: [ANY_SRC, IO_MODULES, SQLITE_MODULE],
     exclude: { path: '\\.d\\.ts$' },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },

@@ -29,8 +29,8 @@ export interface DatabaseSyncLike {
   close(): void;
   /** A SQL function on this connection, called once per row that names it. */
   function(name: string, options: FunctionOptions, fn: (...args: SqlValue[]) => SqlResult): void;
-  /** An aggregate on this connection: `start` per group, `step` per row, `result` once per
-   * group. */
+  /** An aggregate on this connection: `start` per group, `step` per row, `result` once
+   * per group. */
   aggregate<T extends SqlResult>(name: string, options: AggregateOptions<T>): void;
   readonly isOpen?: boolean;
   readonly isTransaction?: boolean;

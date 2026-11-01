@@ -73,7 +73,7 @@ async function finishGlobalCompactions({
 }: CliScope): Promise<void> {
   const warn: Log = (message, fields) => log.warn(`compaction replay: ${message}`, fields);
   const finished = await replayCompactions(
-    { root: globalRoot, store: cli.store(globalRoot), tenantId },
+    { root: globalRoot, hooks: cli.compactionHooks(globalRoot), tenantId },
     warn,
   );
   if (finished > 0) {

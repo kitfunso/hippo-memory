@@ -35,8 +35,8 @@ function attempt<T>(read: () => T): Attempt<T> {
   }
 }
 
-/** Everything `hippo doctor` reads from one store; throws when its schema version cannot be
- * read. */
+/** Everything `hippo doctor` reads from one store; throws when its schema version cannot
+ * be read. */
 function storeHealth(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth {
   return {
     schemaVersion: getSchemaVersion(db),

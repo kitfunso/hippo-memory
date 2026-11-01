@@ -3,13 +3,13 @@
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
-import type { DetachedWork } from '../search/detached-work.js';
-import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
+import type { DetachedWork } from '../search/embed-memories.js';
+import type { ConfiguredFolder } from '../../base/ports/store.js';
 import { log } from '../../base/util/log.js';
 import type { EntryTextKey, Sharing } from '../../base/records/sharing.js';
 import { logEmbedAllFailure } from './search-both.js';
@@ -79,8 +79,8 @@ interface Copies {
   readonly twins: Set<string>;
 }
 
-/** The rows to copy, in order: one per text, never a secret, and another project's only when
- * asked. */
+/** The rows to copy, in order: one per text, never a secret, and another project's only
+ * when asked. */
 function copiesOf(
   candidates: readonly EntryTextKey[],
   byId: ReadonlyMap<string, MemoryEntry>,
@@ -143,8 +143,8 @@ async function copyMissingRows(
     first.twins.size === 0
       ? first
       : copiesOf(candidates, byId, rules, await refusedTexts(into.store, first));
-  // A locally rejected value must not come back through sync down: skipped per item, printed as one
-  // line.
+  // A locally rejected value must not come back through sync down: skipped per item, printed as
+  // one line.
   const written =
     copies.length === 0
       ? []

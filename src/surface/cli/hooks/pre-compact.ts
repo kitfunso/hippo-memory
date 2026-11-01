@@ -1,5 +1,5 @@
-// The PreCompact hook: records the compaction and saves a working-state snapshot before the host
-// summarises.
+// The PreCompact hook: records the compaction and saves a working-state snapshot before the
+// host summarises.
 import { flushDeliveryRecorder, startDeliveryRecorder } from '../../../api/ledger-db.js';
 import { preCompactHook } from '../../capture/compact.js';
 import { readHookStdin } from '../stdin.js';

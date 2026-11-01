@@ -8,8 +8,8 @@ export function isoInstant(stamp: string): string | null {
   return Number.isNaN(ms) ? null : new Date(ms).toISOString();
 }
 
-// The length of toISOString's 'YYYY-MM-DDTHH:mm:ss.sssZ', the one form whose text order is time
-// order.
+// The length of toISOString's 'YYYY-MM-DDTHH:mm:ss.sssZ', the one form whose text order is
+// time order.
 const ISO_STAMP_CHARS = 24;
 
 /** `stamp` itself in toISOString's form, else the instant Date reads in it, else '' so it sorts

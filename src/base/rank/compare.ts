@@ -57,8 +57,8 @@ function compareTags(a: readonly string[] | undefined, b: readonly string[] | un
   return 0;
 }
 
-/** Minimal shape for score-primary sort sites (SearchResult and friends that carry `{ score, entry: { content, id }
- *  }`). */
+/** Minimal shape for score-primary sort sites (SearchResult and friends that carry
+ *  `{ score, entry: { content, id } }`). */
 export interface ScoredEntryLike {
   score: number;
   entry: EntryIdentity;

@@ -24,8 +24,8 @@ import type { DormantSnapshot } from '../../../base/ports/store/types.js';
 import { narrowingAnd, type FilterColumn } from '../entries/entry-filter.js';
 import { tenantAnd } from '../runtime/tenant.js';
 
-// SAFETY: every read cast to this row selects DORMANT_COLUMNS; scripts/checks/check-row-casts.mjs proves
-// it.
+// SAFETY: every read cast to this row selects DORMANT_COLUMNS; scripts/checks/check-row-casts.mjs
+// proves it.
 interface DormantRow {
   tenant_id: string;
   id: string;
@@ -206,8 +206,8 @@ function toSnapshot(row: DormantRow): DormantSnapshot | null {
     : null;
 }
 
-/** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one went
- * dormant. */
+/** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one
+ * went dormant. */
 export function replaceDormantEntry(
   db: DatabaseSyncLike,
   tenantId: string,

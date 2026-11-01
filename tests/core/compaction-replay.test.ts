@@ -630,13 +630,12 @@ describe('a replay failure keeps its error fields', () => {
     seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 30, transcript });
     const folder = compactionFolder(s.hippoRoot);
     const hooks = {
-      ...folder.store.hippoDb.compactionHooks,
+      ...folder.hooks,
       fill: async (): Promise<never> => {
         throw new Error('fill refused');
       },
     };
-    const store = { ...folder.store, hippoDb: { ...folder.store.hippoDb, compactionHooks: hooks } };
-    await replayCompactions({ ...folder, store }, logFields);
+    await replayCompactions({ ...folder, hooks }, logFields);
     const failed = caught.find((c) => c.message.startsWith('transcript fill of cmp-1 failed'));
     expect(failed?.fields).toMatchObject({ recordId: 'cmp-1', errorClass: 'Error' });
   });

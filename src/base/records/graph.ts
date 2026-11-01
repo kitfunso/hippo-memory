@@ -46,7 +46,7 @@ export interface GraphReads {
    * `limit` entities and relations; from a name, its held entities and the newest `limit`
    * relations among them. A walk fills one list. */
   graphRows(tenantId: string, query: GraphViewQuery | GraphWalkQuery): Promise<GraphRows>;
-  /** The ops that turn the tenant's stored graph into `desired`, as store/rules/graph-delta.ts
+  /** The ops that turn the tenant's stored graph into `desired`, as base/records/graph-delta.ts
    * diffGraph plans them. Read outside any write lock, so the apply re-checks each op against
    * what changed since. */
   graphDelta(tenantId: string, desired: DesiredGraph): Promise<GraphOp[]>;
@@ -154,3 +154,7 @@ export interface ApplyGraphOpsOptions {
   readonly from: number;
   readonly holdMs: number;
 }
+
+/** The graph's entity-name cap, in base so the API check, the extractor's trim and the writer's
+ * refusal share it without reaching into the store. */
+export const MAX_ENTITY_NAME_LEN = 512;

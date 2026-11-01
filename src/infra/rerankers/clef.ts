@@ -46,8 +46,8 @@ function isRejection(v: ClefScores | string): v is string {
   return v.constructor === String;
 }
 
-// fetch quotes a rejected header value in its error, so a token it would reject must never reach
-// it.
+// fetch quotes a rejected header value in its error, so a token it would reject must never
+// reach it.
 function checkHeaderSafe(name: string, token: string): void {
   if (!/^[\x21-\x7e]+$/.test(token)) {
     throw new Error(`${name} has characters a header cannot carry`);

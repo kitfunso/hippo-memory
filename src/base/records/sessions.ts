@@ -76,8 +76,8 @@ export interface HandoffStamp {
   readonly outcome: HandoffOutcome;
 }
 
-/** One handoff by its row id, or the newest a session id (null: any session) and the filter
- * admit. */
+/** One handoff by its row id, or the newest a session id (null: any session) and the
+ * filter admit. */
 export type HandoffQuery =
   | { readonly id: number }
   | (HandoffFilter & { readonly sessionId: string | null });

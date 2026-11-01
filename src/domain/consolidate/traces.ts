@@ -123,8 +123,8 @@ function sessionEnding(
   return { outcome: outcomeRaw, summary };
 }
 
-// A tombstoned trace is left out; its refusal row names the session, and the digest it was refused
-// under.
+// A tombstoned trace is left out; its refusal row names the session, and the digest it was
+// refused under.
 async function auditRejectedTrace(
   run: SleepRun,
   trace: MemoryEntry,

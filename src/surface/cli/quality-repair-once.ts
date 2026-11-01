@@ -1,5 +1,5 @@
-// Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs no
-// command.
+// Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs
+// no command.
 
 import * as path from 'node:path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';

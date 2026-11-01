@@ -7,6 +7,7 @@ import {
   type SessionHandoff,
 } from '../../base/session/handoff.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
+import { handoffById, latestHandoff, saveHandoff } from '../../api/hippo-db/continuity.js';
 import { requireInit } from './shared.js';
 import { printHandoff } from './print.js';
 import {
@@ -33,9 +34,7 @@ async function handoffCreate({ cli, hippoRoot, tenantId, flags }: CommandContext
   }
 
   const handoff = handoffFromFlags(flags, summary, handoffOutcomeFlag(flags));
-  printCreatedHandoff(
-    await cli.store(hippoRoot).hippoDb.sessions.save(tenantId, 'handoff', { handoff }, null),
-  );
+  printCreatedHandoff(await saveHandoff(cli.apiContext(hippoRoot, tenantId), handoff));
 }
 
 function handoffOutcomeFlag(flags: CliFlags): HandoffOutcome | undefined {
@@ -103,10 +102,7 @@ function printCreatedHandoff(handoff: SessionHandoff): void {
 async function handoffLatest({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const sessionId =
     (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') || undefined;
-  const query = { sessionId: sessionId ?? null };
-  const handoff = await cli
-    .store(hippoRoot)
-    .hippoDb.sessions.read(tenantId, 'handoff', query, null);
+  const handoff = await latestHandoff(cli.apiContext(hippoRoot, tenantId), sessionId ?? null);
 
   if (!handoff) {
     if (boolFlag(flags, 'json')) {
@@ -139,9 +135,7 @@ async function handoffShow({
 
   const handoffId = parsePositiveId(idArg, 'handoff');
 
-  const handoff = await cli
-    .store(hippoRoot)
-    .hippoDb.sessions.read(tenantId, 'handoff', { id: handoffId });
+  const handoff = await handoffById(cli.apiContext(hippoRoot, tenantId), handoffId);
 
   if (!handoff) {
     if (boolFlag(flags, 'json')) {

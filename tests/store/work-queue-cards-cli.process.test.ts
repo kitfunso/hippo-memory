@@ -6,7 +6,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { handleCard } from '../../src/surface/cli/card.js';
 import { parseArgs } from '../../src/cli.js';
-import { COMMANDS } from '../../src/surface/cli/verbs.js';
+import { COMMANDS } from '../../src/surface/cli/flags.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';

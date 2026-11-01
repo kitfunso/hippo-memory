@@ -27,8 +27,8 @@ export interface Consolidation {
     readonly limit: number;
     readonly after?: EntryCursor;
   }): Promise<EntryIdPage>;
-  /** The tenant's tombstones among `digests`, in their order, in one read however many are
-   * asked. */
+  /** The tenant's tombstones among `digests`, in their order, in one read however many
+   * are asked. */
   rejected(tenantId: string, digests: readonly string[]): Promise<RejectedValueRow[]>;
   /** The `limit` dirty summaries changed last, each with its live children by created then id,
    * and whether more were waiting. */
@@ -57,8 +57,8 @@ export interface Consolidation {
   duplicateCandidates(): Promise<DuplicateCandidates>;
   /** Tenants with pending graph work, each with its highest pending queue id. */
   dirtyGraphTenants(): Promise<{ tenantId: string; maxPendingId: number }[]>;
-  /** Marks the tenant's pending graph work up to `maxId` processed; returns how many rows it
-   * marked. */
+  /** Marks the tenant's pending graph work up to `maxId` processed; returns how many rows
+   * it marked. */
   markGraphDrained(tenantId: string, maxId: number): Promise<number>;
 }
 
@@ -124,8 +124,8 @@ export interface SummarySettle {
   readonly audit: readonly AppendAuditOptions[];
 }
 
-/** `changed` when this call's write hit the row; `refused` when a tombstone kept the new content
- * out. */
+/** `changed` when this call's write hit the row; `refused` when a tombstone kept the new
+ * content out. */
 export interface SummarySettled {
   readonly changed: boolean;
   readonly refused: boolean;
@@ -142,8 +142,8 @@ export interface SleepCommit {
    * null keeps them. */
   readonly expireBefore: string | null;
   readonly dryRun: boolean;
-  /** How long one transaction may hold the write lock; zero commits one component per
-   * transaction. */
+  /** How long one transaction may hold the write lock; zero commits one component
+   * per transaction. */
   readonly holdMs: number;
 }
 
@@ -170,8 +170,8 @@ export type DetectedConflict = {
   score: number;
 };
 
-/** Ops that must commit in one transaction, so a flush split across several never lands part of
- * one. */
+/** Ops that must commit in one transaction, so a flush split across several never lands part
+ * of one. */
 export interface FlushComponent {
   /** Decay's new strengths, each set on the row as it stands at commit; they go before `writes`. */
   refreshes: readonly StrengthRefresh[];

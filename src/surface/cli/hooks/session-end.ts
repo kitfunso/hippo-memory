@@ -51,8 +51,8 @@ export async function handleSessionEnd({
   // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
-  // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not
-  // boundaries.
+  // Only a host payload ends a session: a manual run and a reply's end (turn mode) are
+  // not boundaries.
   const rec =
     !turn && input !== null && !input.manual
       ? await startSessionEndRecorder({ cli, hippoRoot: root, tenantId }, stdinText, runtime)
@@ -190,8 +190,8 @@ function spawnSessionEndWorker(workerArgs: readonly string[]): void {
     stdio: 'ignore',
     windowsHide: true,
   });
-  // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught
-  // exception.
+  // An async spawn failure arrives as an 'error' event, which with no listener is an
+  // uncaught exception.
   child.on('error', (err) =>
     log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`, errorFields(err)),
   );

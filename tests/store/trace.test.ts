@@ -15,9 +15,9 @@ beforeEach(() => {
   hippoDir = path.join(tmpDir, '.hippo');
 });
 
-async function runHippo(args: string[]): Promise<string> {
+async function runHippo(args: string[], env: NodeJS.ProcessEnv = {}): Promise<string> {
   const globalDir = path.join(tmpDir, 'global');
-  return await runCliOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
+  return await runCliOut(args, { env: { ...process.env, HIPPO_HOME: globalDir, ...env }, cwd: tmpDir });
 }
 
 describe('hippo session complete', () => {
@@ -38,6 +38,17 @@ describe('hippo session complete', () => {
     const complete = events.find((e) => e.eventType === 'session_complete');
     expect(complete?.content).toBe('success');
     expect(complete!.metadata.summary).toBe('refactored auth module');
+  });
+
+  it('stamps ended_at from the fake clock, as it stamps created_at', async () => {
+    initTestStore(hippoDir);
+    const now = '2026-02-01T00:00:00.000Z';
+    await runHippo(['session', 'complete', '--session', 'sess-x', '--outcome', 'success'], { HIPPO_FAKE_NOW: now });
+
+    const events = listSessionEvents(hippoDir, 'default', { session_id: 'sess-x' });
+    const complete = events.find((e) => e.eventType === 'session_complete');
+    expect(complete?.createdAt).toBe(now);
+    expect(complete?.metadata.ended_at).toBe(now);
   });
 
   it('rejects invalid outcomes', async () => {

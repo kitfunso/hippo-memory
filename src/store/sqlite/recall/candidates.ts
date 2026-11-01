@@ -44,15 +44,14 @@ import type {
 } from '../../../base/ports/store/context-reads.js';
 import type { SourceTally } from '../../../base/records/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../../../base/records/reports.js';
-import { SCHEMA_FIT_WINDOW_ROWS } from '../../rules/windows.js';
 
-// The status tally: each row scored by calculateStrength and confidenceFacets, summed in the order
-// given so the average rounds the same on every run.
+/** How many of a tenant's newest rows schemaFit reads; older rows no longer move the fit. */
+const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
-/** What one row's status reads: its strength and confidence inputs and its layer. */
 type StatusInputs = StrengthInputs & ConfidenceInputs & { readonly layer: Layer };
 
-/** The counts over `rows`; the caller adds the conflict and vector counts. */
+/** The counts over `rows`, summed in the order given so the average rounds the same on every run;
+ * the caller adds the conflict and vector counts. */
 function tallyStatus(
   rows: Iterable<StatusInputs>,
   now: Date,
@@ -593,9 +592,8 @@ const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
   'outcome_negative',
 ];
 
-// Scored in JavaScript, not with strengthSql: SQLite reads fewer date shapes than Date does, so its
-// counts would differ. rowToEntry's defaults for these columns, so a row scores as its loaded entry
-// would.
+// Scored in JavaScript, not strengthSql: SQLite reads fewer date shapes than Date, so its counts
+// would differ; rowToEntry's column defaults apply, so a row scores as its loaded entry would.
 function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
   for (const row of rows) {
     yield {

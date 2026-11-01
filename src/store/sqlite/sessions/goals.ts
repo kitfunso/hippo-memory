@@ -23,8 +23,8 @@ import { handleStamp } from '../runtime/handle-clock.js';
 // The goal stack's rules: its ids, its depth cap, the parent check, a new goal and policy, and
 // the strength a completed goal passes to the memories recalled under it.
 
-// The CLI prints these ids and the sequential-learning adapter reads them back as this many hex
-// characters.
+// The CLI prints these ids and the sequential-learning adapter reads them back as this many
+// hex characters.
 const GOAL_ID_CHARS = 16;
 const MAX_ACTIVE_GOAL_DEPTH = 3;
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
@@ -66,7 +66,6 @@ function retrievalPolicyOf(
   };
 }
 
-/** The goal a push stores. */
 function pushedGoal(
   id: string,
   opts: PushGoalOptions,

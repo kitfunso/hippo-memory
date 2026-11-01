@@ -45,8 +45,8 @@ export function decodeVector(blob: Uint8Array): Float32Array {
   return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
 }
 
-/** Insert or replace vectors, skipping empty or non-finite ones; the caller owns any surrounding
- * transaction. */
+/** Insert or replace vectors, skipping empty or non-finite ones; the caller owns any
+ * surrounding transaction. */
 export function upsertVectors(
   db: DatabaseSyncLike,
   rows: Iterable<readonly [string, readonly number[]]>,
@@ -71,8 +71,8 @@ const STAGED_VECTORS_DDL =
   'CREATE TEMP TABLE IF NOT EXISTS staged_vectors (memory_id TEXT PRIMARY KEY, dim INTEGER NOT NULL, vector BLOB ' +
   'NOT NULL)';
 
-/** An empty staging table on `db` for a full rebuild's vectors; writing it takes no lock on
- * hippo.db. */
+/** An empty staging table on `db` for a full rebuild's vectors; writing it takes no lock
+ * on hippo.db. */
 export function openVectorStaging(db: DatabaseSyncLike): void {
   db.exec(STAGED_VECTORS_DDL);
   db.exec('DELETE FROM temp.staged_vectors');
@@ -183,8 +183,8 @@ export function loadVectors(db: DatabaseSyncLike, ids?: readonly string[]): Map<
   return out;
 }
 
-/** `loadVectors` for `ids` with no copy: each value views the bytes the store returned for that
- * row. */
+/** `loadVectors` for `ids` with no copy: each value views the bytes the store returned for
+ * that row. */
 export function loadVectorViews(
   db: DatabaseSyncLike,
   ids: readonly string[],

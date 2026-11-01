@@ -33,10 +33,6 @@ import { type CliFlags, stringFlag } from './flag-values.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /**
- * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one
- * stage failing does not block the other.
- */
-/**
  * A folder without its own store never sleeps at session end, so its project's agent notes go to
  * the global store here.
  */
@@ -191,8 +187,8 @@ export async function inPilotHoldout(
   return (await sessionPilotArm(tenantId, sessionId, opts.write, { reach })) === 'holdout';
 }
 
-/** What capture writes into for a store folder: its port, its config and what embeds the new
- * rows. */
+/** What capture writes into for a store folder: its port, its config and what embeds the
+ * new rows. */
 export function captureTarget(cli: CliCommand, root: string): CaptureTarget {
   const folder = cli.folder(root);
   return {

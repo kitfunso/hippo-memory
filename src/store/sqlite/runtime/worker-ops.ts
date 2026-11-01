@@ -6,8 +6,8 @@ import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
 import type { StoreRules } from '../../../base/ports/infra.js';
 
-/** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses every
- * write. */
+/** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses
+ * every write. */
 export type OpMode = 'read' | 'write';
 
 /** Where the executor sends a call: by its mode, or 'pinned-read' for a read only the first
@@ -65,8 +65,8 @@ function placedOps<E extends EffectTable>(effects: E, prefix = ''): PlacedOps<E>
  * the server thread runs no SQLite; finishRecall writes the global rows from this writer too. */
 export const WORKER_OPS = placedOps(STORE_EFFECTS);
 
-/** Each method of hippo.db's local tier, placed by its effect; its op is
- * `hippoDb.<repo>.<method>`. */
+/** Each method of hippo.db's local tier, placed by its effect; its op
+ * is `hippoDb.<repo>.<method>`. */
 export const HIPPO_DB_OPS = placedOps(HIPPO_DB_EFFECTS, 'hippoDb.');
 
 /** Sent by the executor itself and by no store method: the writer runs the store's open-time
@@ -80,7 +80,6 @@ export type HippoDbRepo = keyof typeof HIPPO_DB_OPS;
 /** The group part of an op's name. */
 export type OpGroup = WorkerGroup | `hippoDb.${HippoDbRepo}`;
 
-/** The base methods the op table names. */
 export type WorkerBase = Pick<HippoStore, keyof typeof WORKER_OPS.base>;
 
 export interface WorkerInit {
@@ -88,14 +87,14 @@ export interface WorkerInit {
   readonly mode: OpMode;
   /** Lock wait of the thread's connection. */
   readonly busyWaitMs: number;
-  /** Set on the first reader alone, which answers 'pinned-read' calls from the vector graph it
-   * holds. */
+  /** Set on the first reader alone, which answers 'pinned-read' calls from the vector graph
+   * it holds. */
   readonly pinned?: boolean;
   /** Stored vectors a store holds before the pinned reader builds its graph;
    * VECTOR_GRAPH_THRESHOLD when omitted. */
   readonly vectorGraphThreshold?: number | undefined;
-  /** Stored vectors past which the pinned reader keeps no graph; the config default when
-   * omitted. */
+  /** Stored vectors past which the pinned reader keeps no graph; the config default
+   * when omitted. */
   readonly vectorGraphMaxVectors?: number | undefined;
   /** One shared integer the writer sets to a job's id before that job may commit; the server
    * thread reads it when the job passes its deadline. */

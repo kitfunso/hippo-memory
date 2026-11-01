@@ -34,8 +34,8 @@ import {
 } from './flag-values.js';
 import { CliExit, fail } from './exit.js';
 
-// `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and
-// env.
+// `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd
+// and env.
 interface RememberTags {
   requested: string[];
   all: string[];

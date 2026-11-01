@@ -4,11 +4,11 @@ import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { EntryContext } from '../../api/types.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../../base/util/compaction-items.js';
 import { scrubCompactionItems } from './compaction-record.js';
-import { log } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { assertRequestId, assertTrigger, bindCaller, callerInHoldout } from './caller-session.js';
 import { withEntryInfra } from '../entry-infra.js';
 import { withHippoDb } from '../../api/hippo-db-context.js';
+import { saveCallerCompactionItems } from '../../api/pre-compact.js';
 
 export interface CallerItemsRequest {
   readonly sessionId: string;
@@ -34,14 +34,14 @@ export async function saveCompactionItemsForCaller(
   const ctx = withHippoDb(withEntryInfra(given));
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
-  // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's
-  // growth.
+  // Refused before the scrub, as failure text is, so the cut after it only ever takes back a
+  // mask's growth.
   if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) {
     throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
   }
   const key = await bindCaller(ctx, req.sessionId, req.project);
   if (await callerInHoldout(ctx, req.sessionId)) return { written: 0 };
-  const { written, notes } = await ctx.store.hippoDb.compactions.saveCallerItems(ctx.tenantId, {
+  const written = await saveCallerCompactionItems(ctx, {
     sessionId: req.sessionId,
     trigger: req.trigger,
     requestId: req.requestId,
@@ -49,8 +49,6 @@ export async function saveCompactionItemsForCaller(
     items: scrubCompactionItems(req.items),
     owner: key.owner,
     origins: key.project,
-    baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
   });
-  for (const note of notes) log.info(`post-compact: ${note}`);
   return { written };
 }

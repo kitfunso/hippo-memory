@@ -4,13 +4,10 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../../base/memory/entry.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
-import {
-  coreEnrichment,
-  type HippoDbContext,
-  type HippoDbStore,
-} from '../../api/hippo-db-context.js';
-import type { EntryCursor } from '../../base/ports/store/types.js';
-import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
+import { rawRowsUnder } from '../../api/memories/memories.js';
+import { wouldRefuse } from '../../api/hippo-db/rejections.js';
+import { coreEnrichment, type HippoDbContext } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../host/config-file.js';
@@ -26,7 +23,7 @@ import {
 import { realpathOrResolve } from '../../host/real-path.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
-// K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
+// The vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
 // (src/surface/connectors/slack|github). A changed note appends a new raw row after rawArchive of
 // the old one; NEVER `supersede` a raw row (it yields 'distilled' and escapes the deletion rescan).
 
@@ -39,8 +36,8 @@ export interface VaultTarget {
 }
 
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on
- * the in-memory `existing` Map loaded once, so two concurrent runs over one vault can
- * double-insert. */
+ * the in-memory `existing` Map loaded once, so two concurrent runs over one vault
+ * can double-insert. */
 export async function importVaultInto(
   folderPath: string,
   options: ImportOptions,
@@ -141,8 +138,8 @@ async function importVaultNotes(
   const importNotes = async (into: VaultImportRun): Promise<void> => {
     for (const relpath of relpaths) await importVaultNote(into, relpath);
   };
-  // A dry run probes the rejection guard once per changed note; one batch lets every probe share a
-  // handle.
+  // A dry run probes the rejection guard once per changed note; one batch lets every probe share
+  // a handle.
   if (run.dryRun) await batch((store) => importNotes({ ...run, ctx: { ...run.ctx, store } }));
   else await importNotes(run);
 }
@@ -226,17 +223,9 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
 
 async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, MemoryEntry[]>> {
   // One load serves both per-file idempotency and the deletion diff.
-  const under = {
-    tenantId: ctx.tenantId,
-    kinds: ['raw'],
-    artifactRefPrefix: `vault:${vaultName}:`,
-  } as const;
-  const rows = await readAll((after?: EntryCursor) =>
-    ctx.store.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
-  );
-  // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
-  // later changed or deletion pass must archive them all or older raw vault content stays
-  // searchable.
+  const rows = await rawRowsUnder(ctx, `vault:${vaultName}:`);
+  // Every live row per artifactRef (several only after a concurrent double-insert): a later changed
+  // or deletion pass must archive them all or older raw vault content stays searchable.
   const existing = new Map<string, MemoryEntry[]>();
   for (const row of rows) {
     if (row.artifactRef === null) continue;
@@ -424,10 +413,7 @@ async function storeVaultNote({
   // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches
   // what a real run would refuse.
   if (run.dryRun) {
-    const [refused] = await run.ctx.store.hippoDb.rejections.refusedAmong([
-      { tenantId: run.ctx.tenantId, entryId: echo.id, content: echo.content },
-    ]);
-    return !refused;
+    return !(await wouldRefuse(run.ctx, echo));
   }
   try {
     // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now,

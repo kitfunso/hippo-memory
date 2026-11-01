@@ -17,7 +17,6 @@ const UNROUTABLE_TENANT = '__unroutable__';
 
 const DEFAULT_BUCKET = 'parse_error';
 
-/** The caller's tenant and the store its dead letters live in. */
 export type DeadLetterContext = Pick<HippoDbContext, 'tenantId' | 'store'>;
 
 /** A webhook parks before it has routed the payload, so the row's tenant comes with the row. */
@@ -79,8 +78,8 @@ export function listDlq<C extends DeadLetterConnector>(
   });
 }
 
-/** Every outcome a replay reports; a connector that re-ingests inline reports the ingest outcome
- * itself. */
+/** Every outcome a replay reports; a connector that re-ingests inline reports the ingest
+ * outcome itself. */
 export type ReplayStatus =
   | 'not_found'
   | 'sig_missing'
@@ -108,8 +107,8 @@ function replayFailed(status: ReplayStatus, retryCount: number, reason: string):
   return { ok: false, status, memoryId: null, retryCount, reason };
 }
 
-/** A replay that failed after the row was read: counts it exactly once, then reports the new
- * count. */
+/** A replay that failed after the row was read: counts it exactly once, then reports the
+ * new count. */
 async function failAndBump(
   { store }: ParkContext,
   dlq: ConnectorDlq<DeadLetterConnector, never, never>,

@@ -14,14 +14,14 @@ export interface AgentFiles {
   exists(p: string): boolean;
   /** True for a folder or a link to one; false when the path is missing. */
   isFolder(p: string): boolean;
-  /** The folders directly in `dir`, sorted, links not followed; throws when `dir` cannot be
-   * read. */
+  /** The folders directly in `dir`, sorted, links not followed; throws when `dir` cannot
+   * be read. */
   folderNames(dir: string): string[];
   /** Up to `bytes` from the start of a file as UTF-8; null when it is not there, and any other
    * failure throws. */
   readHead(file: string, bytes: number): string | null;
-  /** A file's text, or why it was skipped: empty, too big, holds a NUL byte (not text), or
-   * unreadable. */
+  /** A file's text, or why it was skipped: empty, too big, holds a NUL byte (not text),
+   * or unreadable. */
   readText(file: string): TextFile;
   /** Files in a folder as '/'-separated relative paths, sorted; dot entries skipped, linked
    * folders not followed. */

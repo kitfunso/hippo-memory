@@ -1,5 +1,13 @@
 import type { MemoryEntry } from '../memory/entry.js';
 
+// Ranking defaults that `hippo recall --help` prints; the help and the rankers read the same value.
+/** Share of the blended score that cosine takes. */
+export const DEFAULT_EMBEDDING_WEIGHT = 0.6;
+/** Default hops expanded from each seed (MVP; hard cap MAX_HOPS reused from graph recall). */
+export const DEFAULT_GRAPH_HOPS = 2;
+/** Default number of top lexical seeds expanded from. */
+export const DEFAULT_GRAPH_SEED_COUNT = 10;
+
 /** Default candidate-pool size for `listSearchEntries` when `limit` is undefined; `api.recall`
  * imports it for `RecallResult.windowSize` so the two cannot drift. */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
@@ -8,8 +16,8 @@ export const DEFAULT_RECALL_BUDGET = 4000;
 
 /** Results a search keeps whatever they cost when the caller names no minimum. */
 export const DEFAULT_MIN_RESULTS = 1;
-// Local memories outrank global ones by this factor; contextGet applies it as a 1/x global
-// discount.
+// Local memories outrank global ones by this factor; contextGet applies it as a 1/x
+// global discount.
 export const DEFAULT_LOCAL_BUMP = 1.2;
 // The relevance side of the MMR relevance-versus-diversity trade; config and hybrid recall both
 // default to it.
@@ -26,8 +34,8 @@ export const UTILITY_LENGTH_TOKENS = 10000;
 export const SALIENCE_MIN_MULTIPLIER = 0.5;
 
 /**
- * One score mutation applied after candidate generation; allocated only under `recall --why` or
- * `RecallOptions.trace.explain`.
+ * One score mutation applied after candidate generation; allocated only under `recall --why`
+ * or `RecallOptions.trace.explain`.
  */
 export interface RerankStep {
   /** One of: interference, value, utility, reranker, goal-boost, retrieval-count-downweight. */

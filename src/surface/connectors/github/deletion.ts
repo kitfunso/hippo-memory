@@ -1,8 +1,9 @@
+import { archiveArtifactForEvent } from '../../../api/hippo-db/connector-events.js';
 import type { ConnectorContext } from '../ingest.js';
 
 export interface DeletionInput {
-  /** artifact_ref of the comment, e.g. 'github://acme/repo/issue/42/comment/123' or
-   *  'github://acme/repo/pull/7/review_comment/456'. */
+  /** artifact_ref of the comment, e.g. 'github://acme/repo/issue/42/comment/123'
+   *  or 'github://acme/repo/pull/7/review_comment/456'. */
   artifactRef: string;
   /** Source idempotency key for this delete event (sha256 of artifact_ref + ':' + updated_at). */
   idempotencyKey: string;
@@ -28,12 +29,8 @@ export async function handleCommentDeleted(
 ): Promise<DeletionResult> {
   const { artifactRef, idempotencyKey, deliveryId, eventName } = input;
   const event = { connector: 'github', idempotencyKey, deliveryId, eventName } as const;
-  const done = await ctx.store.hippoDb.connectorEvents.markEventSeen(event, {
-    tenantId: ctx.tenantId,
-    actor: ctx.actor.subject,
-    artifactRef,
-    reason: `source_deleted:github:${eventName}:${deliveryId}`,
-  });
+  const reason = `source_deleted:github:${eventName}:${deliveryId}`;
+  const done = await archiveArtifactForEvent(ctx, event, artifactRef, reason);
   if (done.duplicate) return { status: 'duplicate', archivedCount: 0 };
   if (done.archived === 0) return { status: 'archive_skipped_not_found', archivedCount: 0 };
   return { status: 'archived', archivedCount: done.archived };

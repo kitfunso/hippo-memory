@@ -1,6 +1,6 @@
 import { loadConfig } from '../../src/host/config-file.js';
 import type { ObjectByKind, SavableKind } from '../../src/base/records/object-types.js';
-import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
 import type { SavableDescriptor } from '../../src/domain/objects/descriptor.js';
 import { saveObject, type ObjectSaveSite } from '../../src/domain/objects/lifecycle.js';
 import { objectsAt } from './objects-at.js';

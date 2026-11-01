@@ -13,6 +13,7 @@ import {
   type UnrejectOutcome,
 } from '../../domain/trust/reject-flow.js';
 import type { RejectedValueRow } from '../../base/records/rejections.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { requireHostAdmin } from '../types.js';
 import { memoryGet } from '../memories/memories.js';
 import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js';
@@ -85,6 +86,16 @@ export function liftRejection(
     digestOrPrefix,
     actor: ctx.actor.subject,
   });
+}
+
+/** Writes nothing, so a dry run counts what a real run refuses. */
+export async function wouldRefuse(
+  ctx: HippoDbContext,
+  entry: Pick<MemoryEntry, 'id' | 'content'>,
+): Promise<boolean> {
+  const check = { tenantId: ctx.tenantId, entryId: entry.id, content: entry.content };
+  const [refused] = await ctx.store.hippoDb.rejections.refusedAmong([check]);
+  return refused === true;
 }
 
 /** Every tombstone of the caller's tenant. */

@@ -1,5 +1,5 @@
-// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
-// binding.
+// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and
+// session-owner binding.
 import { freshActiveSnapshot } from '../../../base/session/session-snapshot.js';
 import {
   changedRows,
@@ -46,9 +46,14 @@ import {
   saveActiveTaskSnapshot,
 } from './task-snapshots.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { RECENT_MIRROR_EVENTS, TRACE_EVENT_ROWS } from '../../rules/windows.js';
 import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../../../base/util/limits.js';
 import { handleNow, handleStamp } from '../runtime/handle-clock.js';
+
+/** Events of one completed session a sleep reads to render its trace, the newest kept. */
+const TRACE_EVENT_ROWS = 1000;
+
+/** Newest session events the recent-session mirror file holds after each append. */
+const RECENT_MIRROR_EVENTS = 20;
 
 /** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
 function clearActiveTaskSnapshot(
@@ -258,7 +263,6 @@ export function listUntracedSessions(
   return ids.map((sessionId) => ({ sessionId, events: events.get(sessionId) ?? [] }));
 }
 
-/** The owner a session id is bound to, or null. */
 function readSessionOwner(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -317,11 +321,11 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     () => {
       const row = { tenantId, sessionId, owner, createdAt: handleStamp(db) };
       const bound = insertOwnerRow(db, row);
-      // An older binary supersedes across owners, so the first binding shuts it out in the same
-      // transaction.
+      // An older binary supersedes across owners, so the first binding shuts it out in the
+      // same transaction.
       if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-      // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller
-      // knows.
+      // Pruned on write, as the failure log is; a pruned session id is a UUID no other
+      // caller knows.
       deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
     },
     { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },

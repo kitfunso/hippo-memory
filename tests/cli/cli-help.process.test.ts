@@ -12,7 +12,7 @@ import { parseArgs, runCli, usageText, verbUsage } from '../../src/cli.js';
 import type { VerbFlags } from '../../src/surface/cli/flags.js';
 import { USAGE_EXAMPLES, USAGE_HEADER } from '../../src/surface/cli/usage.js';
 import type { VerbRow } from '../../src/surface/cli/verb-row.js';
-import { COMMANDS } from '../../src/surface/cli/verbs.js';
+import { COMMANDS } from '../../src/surface/cli/flags.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 

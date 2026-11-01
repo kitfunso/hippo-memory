@@ -49,8 +49,8 @@ before you finish.
 `.trim(),
 ];
 
-/** VS Code attaches a User `*.instructions.md` file to every chat request its `applyTo` glob
- * matches. */
+/** VS Code attaches a User `*.instructions.md` file to every chat request its `applyTo`
+ * glob matches. */
 const withApplyToAll = (text: string): string => `---\napplyTo: "**"\n---\n${text}\n`;
 
 /** The whole file hippo writes in each VS Code User folder. */
@@ -120,8 +120,8 @@ export function copilotMcpSnippet(host: McpHost = COPILOT_CLI_MCP): string {
   return `"${MCP_KEY}": ${JSON.stringify(host.server())}`;
 }
 
-/** An MCP config file's parsed object and the server table under the host's key, edited in
- * place. */
+/** An MCP config file's parsed object and the server table under the host's key, edited
+ * in place. */
 export interface McpConfig {
   readonly config: JsonObject;
   readonly servers: JsonObject;

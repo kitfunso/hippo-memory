@@ -189,7 +189,6 @@ export function deleteRereadRows(db: DatabaseSyncLike, tenantId: string, session
   ).run(tenantId, sessionId);
 }
 
-/** The first stored pilot arm hash for a session in `tenantId`. */
 export function firstPilotArmHash(
   db: DatabaseSyncLike,
   sessionId: string,

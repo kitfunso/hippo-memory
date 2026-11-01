@@ -31,8 +31,8 @@ export function resolveTransformersPackage(): TransformersPackage | null {
   return null;
 }
 
-// Neither resolver finding the package means it is not installed, and the caller tries the next
-// one.
+// Neither resolver finding the package means it is not installed, and the caller tries the
+// next one.
 const NOT_INSTALLED = ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_PACKAGE_PATH_NOT_EXPORTED'];
 
 function entryUrl(name: string): string | null {

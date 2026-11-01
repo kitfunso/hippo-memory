@@ -18,8 +18,8 @@ export const REWARD_FACTOR_SQL = rewardFactorAt(PRODUCTION_STRENGTH.rewardSlope)
  * tenant, and a tenant with fewer rows inside it than the cap is small enough to scan. */
 export const DECAY_KEY_HALF_LIVES = 2;
 
-/** Far above julianday's rounding (5e-10 day), so a row the key leaves out has decayed past
- * DECAY_KEY_HALF_LIVES. */
+/** Far above julianday's rounding (5e-10 day), so a row the key leaves out has decayed
+ * past DECAY_KEY_HALF_LIVES. */
 export const DECAY_KEY_SLACK_DAYS = 1e-3;
 
 /** True of every row (pinned is 0 or 1); only a query that repeats it can pick the index, so no

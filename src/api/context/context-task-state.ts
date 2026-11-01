@@ -12,10 +12,12 @@ import type { ContextPlan } from './context-plan.js';
 import type { ContextOptions } from './context-types.js';
 import { type Context, ownerOrSubject } from '../types.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
-import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
 
-/** The task-state sections printed ahead of the memories, and the budget left once they are
- * paid. */
+/** Session events the continuity block carries beside the snapshot and handoff, the newest kept. */
+export const CONTINUITY_EVENT_LIMIT = 5;
+
+/** The task-state sections printed ahead of the memories, and the budget left once they
+ * are paid. */
 export interface TaskSections {
   activeSnapshot: TaskSnapshot | null;
   shownSnapshot: TaskSnapshot | null;

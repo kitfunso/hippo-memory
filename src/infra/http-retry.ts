@@ -25,8 +25,8 @@ export interface RetryPolicy {
    * cannot commit twice. */
   retryTransport?: boolean;
   fetchFn?: typeof fetch;
-  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at
-   * once. */
+  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait
+   * at once. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   /** Replaces the clock `totalMs` is measured on. */
@@ -105,8 +105,8 @@ interface RetryLogEntry {
 
 function logRetry(entry: RetryLogEntry): void {
   const { init, url, reason, attempt, attempts, delayMs } = entry;
-  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final
-  // failure.
+  // Debug: an attempt that may still succeed is not a warning, and the caller reports the
+  // final failure.
   log.debug('http retry', {
     method: (init.method ?? 'GET').toUpperCase(),
     target: redactedTarget(url),

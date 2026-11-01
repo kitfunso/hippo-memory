@@ -128,8 +128,8 @@ export async function rememberLocally(
 
 /** What a caller asks of fact extraction; the model is the one its Context carries. */
 export interface FactExtractionRequest {
-  /** The caller asked for extraction (`--extract`); the store's config can turn it on without
-   * that. */
+  /** The caller asked for extraction (`--extract`); the store's config can turn it on
+   * without that. */
   readonly requested: boolean;
 }
 

@@ -13,8 +13,8 @@ import { isJsonObject, type JsonValue } from '../base/util/json.js';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 import { realpathOrResolve } from './real-path.js';
 
-/** Reads the folder's config.json on every call; a root that loads often holds a configReader
- * instead. */
+/** Reads the folder's config.json on every call; a root that loads often holds a
+ * configReader instead. */
 export function loadConfig(hippoRoot: string): HippoConfig {
   // A caller that names no folder, as an add-on serving another store does, gets the defaults,
   // never the working folder's config.json.
@@ -56,8 +56,8 @@ export function configReader(runtime?: () => RuntimeSettings): ConfigReader {
 }
 
 /** A file's mtime and size, which an edit changes; null when it is missing. A permission refusal
- * throws, as readConfigFile does: the file is there, and defaults would silently drop its
- * settings. */
+ * throws, as readConfigFile does: the file is there, and defaults would silently drop
+ * its settings. */
 function fileStamp(file: string): string | null {
   try {
     const stat = fs.statSync(file, { throwIfNoEntry: false });

@@ -17,8 +17,7 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
-import { AUDIT_OPS } from '../../base/records/audit-ops.js';
+import { CLI_ACTOR, AUDIT_OPS } from '../../base/records/audit-ops.js';
 import type { AuditEvent } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 

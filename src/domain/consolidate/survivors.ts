@@ -11,8 +11,8 @@ import type { Consolidation } from '../../base/records/consolidation.js';
 /** The store's rows as this run loaded them: by created then id, with a dry run's half-life
  * preview applied. */
 export class SleepRows {
-  /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs an
-   * integer. */
+  /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs
+   * an integer. */
   private readonly idPage: number;
   /** The rows read so far that back a first-class object, asked page by page with the rows. */
   private readonly backed = new Set<string>();
@@ -113,8 +113,8 @@ export class Survivors {
     const loaded = new Map(
       (await this.stored.read(fresh.map((row) => row.id))).map((row) => [row.id, row]),
     );
-    // A row gone since decay read it is its own base, so the flush skips it rather than write it
-    // back.
+    // A row gone since decay read it is its own base, so the flush skips it rather than write
+    // it back.
     for (const row of fresh) this.bases.set(row.id, loaded.get(row.id) ?? row);
     for (const row of rows) this.held.set(row.id, row);
   }

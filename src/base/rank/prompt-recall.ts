@@ -86,8 +86,8 @@ export function rarestPromptTerms(
     .map((x) => x.t);
 }
 
-/** The pieces FTS5's unicode61 tokenizer indexes a term as, so `journal_mode` is `journal` and
- * `mode`. */
+/** The pieces FTS5's unicode61 tokenizer indexes a term as, so `journal_mode` is `journal`
+ * and `mode`. */
 export function ftsTermParts(term: string): string[] {
   return term.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 }

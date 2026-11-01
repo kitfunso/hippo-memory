@@ -139,8 +139,8 @@ function rescore(
 }
 
 function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
-  // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never
-  // delete.
+  // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank,
+  // never delete.
   const presentIds = new Set(state.results.map((r) => r.entry.id));
   state.results = rescore(opts, state.results, { stage: 'interference' }, (r) =>
     (r.entry.conflictsWith || []).some((peerId) => presentIds.has(peerId))

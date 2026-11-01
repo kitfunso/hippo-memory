@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in
-// surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
+// surface/cli/flags.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import * as fs from 'node:fs';
@@ -26,8 +26,8 @@ import {
   flagKind,
   isKnownFlag,
   undeclaredFlags,
+  COMMANDS,
 } from './surface/cli/flags.js';
-import { COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
 import { cliCommand, type CliCommand } from './surface/cli/api-context.js';
@@ -52,8 +52,8 @@ function dryRunRefusal(
 
 function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   if (Array.isArray(flags[key])) {
-    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array
-    // member.
+    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other
+    // array member.
     (flags[key] as string[]).push(value);
   } else {
     flags[key] = [value];
@@ -236,8 +236,8 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
     printError(`Unknown flag ${flagNames(unknown)} for hippo ${command}. Nothing was changed.`);
     throw new CliExit(2);
   }
-  // main() refuses --dry-run by name on a verb without one, so that flag is not also called
-  // ignored.
+  // main() refuses --dry-run by name on a verb without one, so that flag is not also
+  // called ignored.
   const ignored = declared
     ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run')
     : unknown;
@@ -288,8 +288,8 @@ async function main(
   await (spec.scoped ? cli.request(run) : run(cli));
 }
 
-/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe
- * side. */
+/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the
+ * safe side. */
 function warnUnknownFlagValues(): void {
   for (const entry of validateFlags()) {
     log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);

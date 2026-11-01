@@ -1,5 +1,5 @@
-// The strength cut points every surface (status, MCP, dashboard) reads, so none can drift from the
-// others.
+// The strength cut points every surface (status, MCP, dashboard) reads, so none can drift from
+// the others.
 
 /** An unpinned memory under this strength is at risk of fading out. */
 export const AT_RISK_BELOW = 0.2;

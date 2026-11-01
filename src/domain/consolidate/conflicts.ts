@@ -81,8 +81,8 @@ interface ConflictRow {
   id: string;
   trace: boolean;
   superseded: boolean;
-  /** Extracted facts and session digests restate other rows, so they are never one side of a
-   * conflict. */
+  /** Extracted facts and session digests restate other rows, so they are never one side of
+   * a conflict. */
   restated: boolean;
   scope: MemoryEntry['scope'];
   tenantId: string;
@@ -129,9 +129,8 @@ function tenantConflicts(
   for (const [i, a] of rows.entries()) {
     for (const j of partnersOf(i)) {
       const b = rows[j];
-      // Traces are variants of each other, not contradictions: two strategies for the same task can
-      // both be valid, and conflict detection is for stated-rule disagreement, not strategy
-      // diversity.
+      // Traces are variants, not contradictions: two strategies for one task can both be valid, and
+      // conflict detection is for stated-rule disagreement.
       if (
         (a.trace && b.trace) ||
         a.superseded ||
@@ -299,12 +298,12 @@ function containsAny(text: string, needles: string[]): boolean {
 
 /** A weakened loser keeps this share of its half-life, so it fades faster than the kept side. */
 export const WEAKEN_HALF_LIFE_FACTOR = 0.5;
-/** A weakened loser's half-life never drops under this, so repeated resolves cannot drive it to
- * zero. */
+/** A weakened loser's half-life never drops under this, so repeated resolves cannot drive it
+ * to zero. */
 export const WEAKEN_MIN_HALF_LIFE_DAYS = 1;
 
-/** What the caller asked for the loser: forget deletes it, rejectLoser also tombstones its
- * value. */
+/** What the caller asked for the loser: forget deletes it, rejectLoser also tombstones
+ * its value. */
 export interface LoserChoice {
   readonly forget?: boolean;
   readonly rejectLoser?: boolean;

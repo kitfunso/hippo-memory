@@ -46,8 +46,8 @@ export interface LedgerTurn {
   readonly delivery?: DeliveryEventInput;
 }
 
-// Token ledger row and summary shapes of the store port; the ledger group and the reports group use
-// them.
+// Token ledger row and summary shapes of the store port; the ledger group and the reports group
+// use them.
 /** Where a block was sent: `hook`/`hook_recall` (per-prompt hook), `compact_resume`,
  * `context`/`recall` (CLI), `mcp_*`, `http_*`, and `pilot` (session pilot arm row,
  * src/api/pilot-arm.ts; not a send, so in no surface list). */
@@ -99,8 +99,8 @@ export interface TokenSurfaceSummary {
   skipped: number;
   /** Tokens those skipped blocks would have cost. */
   tokensAvoided: number;
-  /** Tokens of these blocks that later model calls read again, from ended sessions; 0 off
-   * `REREAD_SURFACES`. */
+  /** Tokens of these blocks that later model calls read again, from ended sessions; 0
+   * off `REREAD_SURFACES`. */
   tokensReread: number;
   /** Distinct session ids seen (rows without one are not counted). */
   sessions: number;

@@ -13,8 +13,8 @@ interface RootWrites {
   timer?: NodeJS.Timeout;
 }
 
-// Derived files are rebuilt from the store, so a failed write warns instead of failing a committed
-// change.
+// Derived files are rebuilt from the store, so a failed write warns instead of failing a
+// committed change.
 function runWrite(what: string, write: () => void): void {
   try {
     write();
@@ -42,8 +42,8 @@ export class HeldWrites {
     this.#hold(root, state, what, write);
   }
 
-  /** Holds `write` as the root's next `what` write, run within an interval of the root's last
-   * write. */
+  /** Holds `write` as the root's next `what` write, run within an interval of the root's
+   * last write. */
   hold(root: string, what: string, write: () => void): void {
     this.#hold(root, this.#stateOf(root), what, write);
   }
@@ -75,8 +75,8 @@ export class HeldWrites {
     state.timer.unref();
   }
 
-  // A root idle for a full interval needs no throttle state, so the map holds only recently written
-  // roots.
+  // A root idle for a full interval needs no throttle state, so the map holds only recently
+  // written roots.
   #dropIdle(): void {
     const now = Date.now();
     for (const [root, state] of this.#roots) {

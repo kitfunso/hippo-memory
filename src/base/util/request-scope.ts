@@ -59,8 +59,8 @@ export interface RequestLimits {
   readonly signal?: AbortSignal | undefined;
 }
 
-// Only the log request id lives in AsyncLocalStorage; a request's deadline and signal ride on its
-// Context.
+// Only the log request id lives in AsyncLocalStorage; a request's deadline and signal ride on
+// its Context.
 export const requestScopes = new AsyncLocalStorage<RequestScope>();
 
 /** The id of the request this code runs for, if any. */

@@ -24,8 +24,8 @@ export function readCompactResumePayload(
   // must not reach the print path.
   let suppressOutput = stdinTimedOut && !nonEmptyStdin;
   let payloadSessionId: string | null = null;
-  // A boundary is a manual run or a payload that says it follows a compaction; anything else is not
-  // one.
+  // A boundary is a manual run or a payload that says it follows a compaction; anything else is
+  // not one.
   let boundary = !nonEmptyStdin && !stdinTimedOut;
 
   if (nonEmptyStdin) {

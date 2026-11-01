@@ -62,8 +62,8 @@ export type ConnectorEvent =
       readonly eventName: string;
     };
 
-/** One signed delivery to hold, by the key its connector signs: Slack's signature, GitHub's body
- * signature. */
+/** One signed delivery to hold, by the key its connector signs: Slack's signature, GitHub's
+ * body signature. */
 export interface DeliveryClaim {
   readonly connector: ConnectorEvent['connector'];
   readonly key: string;
@@ -113,8 +113,8 @@ export type TenantRoute =
   | { readonly tenantId: string }
   | { readonly tenantId: null; readonly routes: number };
 
-/** One payload a webhook could not use, already redacted, for the dead-letter queue of its
- * connector. */
+/** One payload a webhook could not use, already redacted, for the dead-letter queue of
+ * its connector. */
 export type ConnectorDeadLetter =
   | ({ readonly connector: 'slack' } & SlackDlqInsert)
   | ({ readonly connector: 'github' } & GitHubDlqInsert);
@@ -195,16 +195,14 @@ export interface GitHubDlqItem {
 /** The three GitHub streams a backfill drains, each with its own high-water mark. */
 export type GitHubStream = 'issues' | 'issueComments' | 'prReviewComments';
 
-/** Where a backfill resumes: a Slack channel's newest timestamp, or one GitHub stream's
- * high-water mark. */
-export type CursorKey =
-  | { readonly connector: 'slack'; readonly tenantId: string; readonly channelId: string }
-  | {
-      readonly connector: 'github';
-      readonly tenantId: string;
-      readonly repo: string;
-      readonly stream: GitHubStream;
-    };
+/** What a backfill drains: a Slack channel, or one GitHub stream of a repository. */
+export type BackfillStream =
+  | { readonly connector: 'slack'; readonly channelId: string }
+  | { readonly connector: 'github'; readonly repo: string; readonly stream: GitHubStream };
+
+/** Where a backfill resumes, per tenant: a Slack channel's newest timestamp, or one GitHub
+ * stream's high-water mark. */
+export type CursorKey = BackfillStream & { readonly tenantId: string };
 
 export interface SlackWorkspace {
   teamId: string;

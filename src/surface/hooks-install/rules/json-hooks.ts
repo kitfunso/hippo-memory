@@ -21,8 +21,8 @@ import { planCodexHooks, uninstallCodexHooks } from './codex-hooks.js';
 import { nothingInstalled, type HookInstallPlan } from './install-plan.js';
 import { copilotHooksTable } from './copilot.js';
 
-/** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display
- * name. */
+/** A target's hook settings file, the log its SessionEnd hook writes, and the tool's
+ * display name. */
 export interface JsonHookPaths {
   settings: string;
   logFile: string;
@@ -38,8 +38,8 @@ export interface InstallResult {
   installedUserPromptSubmit: boolean;
   installedPreCompact: boolean;
   installedCompactResume: boolean;
-  /** PostCompact -> `hippo post-compact` (saves the summary's memories, tells the user how
-   * many). */
+  /** PostCompact -> `hippo post-compact` (saves the summary's memories, tells the user
+   * how many). */
   installedPostCompact: boolean;
   /** PostToolUseFailure -> `hippo capture-error` (failed tool calls become error memories). */
   installedCaptureError: boolean;
@@ -83,8 +83,8 @@ export function settingsText(settings: JsonValue): string {
   return JSON.stringify(settings, null, 2) + '\n';
 }
 
-/** Hippo owns this whole file, so install writes the full table and a second install changes no
- * byte. */
+/** Hippo owns this whole file, so install writes the full table and a second install changes
+ * no byte. */
 export function planCopilotHooks(settingsPath: string, current: string | null): HookInstallPlan {
   const result = nothingInstalled('copilot', settingsPath);
   const table = copilotHooksTable();

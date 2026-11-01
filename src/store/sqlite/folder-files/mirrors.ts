@@ -256,8 +256,8 @@ export function buildIndexFromDb(db: DatabaseSyncLike): HippoIndex {
 
   const entries: Record<string, IndexEntry> = {};
   for (const row of rows) {
-    // SAFETY: layer is only ever written from the Layer enum by this module's own INSERT/UPDATE
-    // paths.
+    // SAFETY: layer is only ever written from the Layer enum by this module's own
+    // INSERT/UPDATE paths.
     const layer = row.layer as Layer;
     entries[row.id] = {
       id: row.id,

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
-import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey } from '../../base/util/same-text.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
@@ -16,10 +16,12 @@ import {
   sessionTail,
   resolveLastSessionTranscript,
 } from './transcript.js';
-import type { CaptureDedup, CapturedOutcome } from '../../base/records/capture.js';
+import type { CaptureDedup, CaptureTally } from '../../base/records/capture.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
-import type { HippoDbStore } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
+import { ensureStoreFiles } from '../../api/store-init.js';
+import { captureOnce, refusedOnWrite, textKeysHeldUnder } from '../../api/hippo-db/captures.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -43,8 +45,8 @@ export interface CaptureOptions {
    * counts every tenant's.
    */
   tenantId: string;
-  /** The session's project: rows are stamped with its id, and dedup reads its rows under either
-   * name. */
+  /** The session's project: rows are stamped with its id, and dedup reads its rows under
+   * either name. */
   originProject?: ProjectRef;
 }
 
@@ -101,7 +103,7 @@ function writeLogBanner(logFile: string): boolean {
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   if (options.global) {
-    await target.store.hippoDb.folderFiles.ensure();
+    await ensureStoreFiles(target.store);
   } else if (!isInitialized(target.root)) {
     console.error(
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
@@ -133,7 +135,8 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
     return;
   }
 
-  const keys = await storedKeysInView(target.store, options, extracted);
+  const contents = extracted.map((item) => item.content);
+  const keys = await textKeysHeldUnder(target, captureDedup(options), contents);
 
   printCaptureTally(options, await captureFromCli(target, options, extracted, keys));
 }
@@ -155,18 +158,6 @@ async function captureFromCli(
     return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys);
   }
   return previewCapture({ store, config }, writeOpts, extracted, keys);
-}
-
-// Dedup only against rows this capture's reader sees: another tenant's or project's rows are
-// hidden, so they must not stop its own copy.
-async function storedKeysInView(
-  store: Pick<HippoDbStore, 'hippoDb'>,
-  options: CaptureOptions,
-  extracted: readonly ExtractedItem[],
-): Promise<Set<string>> {
-  const { tenantId, ...filter } = captureDedup(options);
-  const texts = extracted.map((item) => item.content);
-  return storedTextKeys(await store.hippoDb.captures.textsHolding(tenantId, texts, filter));
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its
@@ -246,12 +237,6 @@ function readSessionTexts(options: CaptureOptions): { texts: string[]; userTexts
   return { texts: [...users, ...assistants], userTexts: users.length };
 }
 
-export interface CaptureTally {
-  captured: number;
-  skipped: number;
-  rejected: number;
-}
-
 /** What a capture's rows carry. The CLI passes no tenant for the global store, so `global` never
  * reaches the writes. */
 export interface CaptureWriteOptions {
@@ -276,36 +261,6 @@ export interface ConfiguredStore {
   readonly embed: (entry: MemoryEntry) => void;
 }
 
-/** The entries to write, and per item the entry whose outcome it takes, or -1 for a text the
- * store already holds. */
-interface CapturePlan {
-  readonly entries: MemoryEntry[];
-  readonly keys: string[];
-  readonly slots: number[];
-}
-
-/** One entry per new text: building can throw, so a held text or a repeat within the batch is
- * never built. */
-function planCapture(
-  extracted: readonly ExtractedItem[],
-  held: ReadonlySet<string>,
-  build: (item: ExtractedItem) => MemoryEntry,
-): CapturePlan {
-  const plan: CapturePlan = { entries: [], keys: [], slots: [] };
-  const firstSlot = new Map<string, number>();
-  for (const item of extracted) {
-    const key = duplicateKey(item.content);
-    let slot = held.has(key) ? -1 : firstSlot.get(key);
-    if (slot === undefined) {
-      slot = plan.entries.push(build(item)) - 1;
-      plan.keys.push(key);
-      firstSlot.set(key, slot);
-    }
-    plan.slots.push(slot);
-  }
-  return plan;
-}
-
 /** Writes each new text once; a repeat of a captured text in the same batch counts as skipped,
  * as a held one does. */
 export async function captureExtractedItems(
@@ -314,24 +269,11 @@ export async function captureExtractedItems(
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
 ): Promise<CaptureTally> {
-  const plan = planCapture(extracted, keys, (item) =>
-    captureEntry(item, options, config.defaultHalfLifeDays),
-  );
   const { actor, lean, dedup } = options;
-  const outcomes = await store.hippoDb.captures.write(plan.entries, { actor, lean, dedup });
-  const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
-  const counted = new Set<number>();
-  for (const slot of plan.slots) {
-    const outcome: CapturedOutcome = slot === -1 ? 'skipped' : outcomes[slot];
-    tally[counted.has(slot) && outcome === 'captured' ? 'skipped' : outcome]++;
-    counted.add(slot);
-  }
-  outcomes.forEach((outcome, i) => {
-    if (outcome !== 'captured') return;
-    keys.add(plan.keys[i]);
-    if (!options.lean) embed(plan.entries[i]);
-  });
-  return tally;
+  const build = (item: ExtractedItem) => captureEntry(item, options, config.defaultHalfLifeDays);
+  const written = await captureOnce({ store }, extracted, build, keys, { actor, lean, dedup });
+  if (!lean) for (const entry of written.captured) embed(entry);
+  return written.tally;
 }
 
 interface PreviewStore {
@@ -342,23 +284,16 @@ interface PreviewStore {
 /** A dry run asks the store the same rejected-value question the write's gate does, so a
  * tombstoned item previews as rejected rather than captured. */
 async function previewCapture(
-  {
-    store: {
-      hippoDb: { rejections },
-    },
-    config,
-  }: PreviewStore,
+  { store, config }: PreviewStore,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: ReadonlySet<string>,
 ): Promise<CaptureTally> {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const fresh = extracted.filter((item) => !keys.has(duplicateKey(item.content)));
-  const refused = await rejections.refusedAmong(
-    fresh.map((item) => {
-      const entry = captureEntry(item, options, config.defaultHalfLifeDays);
-      return { tenantId: entry.tenantId, entryId: entry.id, content: entry.content };
-    }),
+  const refused = await refusedOnWrite(
+    { store },
+    fresh.map((item) => captureEntry(item, options, config.defaultHalfLifeDays)),
   );
   let next = 0;
   for (const item of extracted) {

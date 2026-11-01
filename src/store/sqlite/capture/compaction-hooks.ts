@@ -255,8 +255,8 @@ function fillRecord(
 ): boolean {
   const { tenantId, record, text, log } = fill;
   if (text === null) {
-    // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays
-    // empty.
+    // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach
+    // stays empty.
     if (closeStartedWithoutSummary(db, tenantId, record.id) > 0) {
       log(`${record.id} closed as no-summary: its transcript holds no summary for it`);
     }

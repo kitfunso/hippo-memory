@@ -5,6 +5,7 @@ import { defineConfig } from 'oxlint';
 interface Restricted {
   readonly object?: string;
   readonly property: string;
+  readonly allowObjects?: string[];
   readonly message: string;
 }
 interface ImportPattern {
@@ -41,10 +42,24 @@ const RECORD_AS = RECORD_AS_NAMES.map((property) => ({
   message: 'Pass recordAs to retrieve(); src/api/recall/finish.ts records it.',
 }));
 
+// Matches the identifier `ctx` only; a store reached as `r.ctx.store` or `cli.store()` is not seen.
+const CTX_STORE = {
+  object: 'ctx',
+  property: 'store',
+  message: 'Pass the context to a src/api function; only a composition root reads its store.',
+};
+
+// A route row's `hippoDb` flag is data; any other `.hippoDb` is the local tier reached past src/api.
+const HIPPO_DB = {
+  property: 'hippoDb',
+  allowObjects: ['route'],
+  message: "Reach hippo.db's local tier through a src/api function; only a composition root reads it.",
+};
+
 const SRC: Some<Restricted> = [STORE_ON, ENV, PROCESS, PREPARE];
-const SURFACE: Some<Restricted> = [...SRC, ...RECORD_AS];
-const CLI: Some<Restricted> = [
-  ...SURFACE,
+const SURFACE_ROOT: Some<Restricted> = [...SRC, ...RECORD_AS];
+const SURFACE: Some<Restricted> = [...SURFACE_ROOT, CTX_STORE, HIPPO_DB];
+const CLI_ONLY: Some<Restricted> = [
   {
     property: 'finishRecall',
     message: 'The CLI recalls through retrieveWithCliCore(), which writes every recall row.',
@@ -54,6 +69,8 @@ const CLI: Some<Restricted> = [
     message: 'A CLI verb changes rows through a src/api function that takes the Context.',
   },
 ];
+const CLI_ROOT: Some<Restricted> = [...SURFACE_ROOT, ...CLI_ONLY];
+const CLI: Some<Restricted> = [...SURFACE, ...CLI_ONLY];
 const CLI_NAMES: Some<string> = [
   'sqliteStoreOn',
   ...RECORD_AS_NAMES,
@@ -282,6 +299,15 @@ export default defineConfig({
     {
       files: ['src/surface/cli/exit.ts'],
       rules: { 'boundaries/no-hand-fail': 'off' },
+    },
+    {
+      // sleep-child.ts is its process's root: it opens the job's store and builds the job's reach.
+      files: ['src/surface/server/boot.ts', 'src/surface/mcp/request.ts', 'src/surface/server/sleep-child.ts'],
+      rules: { 'no-restricted-properties': restrict(...SURFACE_ROOT) },
+    },
+    {
+      files: ['src/surface/cli/api-context.ts'],
+      rules: { 'no-restricted-properties': restrict(...CLI_ROOT) },
     },
     {
       files: ['src/surface/open-store.ts'],

@@ -5,28 +5,21 @@ import { join } from 'node:path';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import type { HippoDbStore } from '../../src/api/hippo-db-context.js';
-import { bindMcpTools } from '../../src/surface/mcp/request.js';
-import {
-  mcpApiContext,
-  type HippoDbToolCall,
-  type McpCaller,
-  type McpResponse,
-} from '../../src/surface/mcp/protocol.js';
+import type { HippoDbStore } from '../../src/base/ports/hippo-db.js';
+import { allMcpTools, bindMcpTools } from '../../src/surface/mcp/request.js';
+import type { McpContext, McpResponse } from '../../src/surface/mcp/protocol.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-import { runAssembleTool, runDrillTool } from '../../src/surface/mcp/recall-tools.js';
-import { runStatusTool } from '../../src/surface/mcp/admin-tools.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
+import { runMcpTool } from '../_helpers/mcp-context.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 
-type Runner = (call: HippoDbToolCall) => Promise<string>;
-// Each call with the tool body it runs, so the tools' own reads can be counted apart from the host.
-const CALLS: readonly (readonly [string, Record<string, string>, Runner])[] = [
-  ['hippo_drill', { summary_id: 'sum_none' }, runDrillTool],
-  ['hippo_assemble', { session_id: 'sess-none' }, runAssembleTool],
-  ['hippo_status', {}, runStatusTool],
+// Three tools that read the tier groups the counting store watches.
+const CALLS: readonly (readonly [string, Record<string, string>])[] = [
+  ['hippo_drill', { summary_id: 'sum_none' }],
+  ['hippo_assemble', { session_id: 'sess-none' }],
+  ['hippo_status', {}],
 ];
 
 /** A reply from a tool that ran: a result with content, neither an error nor a refusal. */
@@ -108,9 +101,9 @@ describe('MCP tools on a served store', () => {
     }
     const served = reads() - atBoot;
 
-    // The same tool bodies called directly: their reads are the tools' own and nothing else.
+    // The same tools run with no server around them: their reads are the tools' own and nothing else.
     const own = counting(sqliteStore(fixture.dir));
-    const caller: McpCaller<HippoDbStore> = {
+    const caller: McpContext<HippoDbStore> = {
       hippoRoot: fixture.dir,
       tenantId: TENANT_A,
       actor: 'mcp',
@@ -120,11 +113,10 @@ describe('MCP tools on a served store', () => {
       config: loadConfig(fixture.dir),
       stdio: true,
       infra: testInfra(),
+      tools: allMcpTools(),
     };
-    const { hippoRoot, tenantId, config } = caller;
-    for (const [, args, run] of CALLS) {
-      const api = { ...mcpApiContext(caller), store: own.store };
-      expect(await run({ ctx: caller, hippoRoot, store: own.store, config, tenantId, args, api })).not.toBe('');
+    for (const [name, args] of CALLS) {
+      expect(await runMcpTool(caller, name, args)).not.toBe('');
     }
 
     expect(own.reads()).toBeGreaterThan(0);

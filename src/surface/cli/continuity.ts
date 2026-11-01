@@ -1,7 +1,15 @@
 // Where-you-left-off verbs that read or save the live state: snapshot, current and working memory.
 
-import { CONTINUITY_EVENT_LIMIT } from '../../api/continuity/continuity.js';
-import { continuityLatest } from '../../api/hippo-db/continuity-latest.js';
+import { CONTINUITY_EVENT_LIMIT } from '../../api/context/context-task-state.js';
+import {
+  activeSnapshot,
+  clearSnapshot,
+  clearWorkingMemory,
+  continuityLatest,
+  pushWorkingMemory,
+  saveSnapshot,
+  workingMemory,
+} from '../../api/hippo-db/continuity.js';
 import type { SessionEvent, TaskSnapshot } from '../../base/records/sessions.js';
 import { snapshotJson } from '../../base/session/continuity-json.js';
 import { requireInit } from './shared.js';
@@ -26,18 +34,13 @@ async function snapshotSave({ cli, hippoRoot, tenantId, flags }: CommandContext)
     );
   }
 
-  const snapshot = await cli.store(hippoRoot).hippoDb.sessions.save(
-    tenantId,
-    'snapshot',
-    {
-      task,
-      summary,
-      nextStep,
-      source: stringFlagOrExit(flags, 'source') ?? 'cli',
-      sessionId: sessionId || null,
-    },
-    null,
-  );
+  const snapshot = await saveSnapshot(cli.apiContext(hippoRoot, tenantId), {
+    task,
+    summary,
+    nextStep,
+    source: stringFlagOrExit(flags, 'source') ?? 'cli',
+    sessionId: sessionId || null,
+  });
 
   console.log(`Saved active task snapshot #${snapshot.id}`);
   console.log(`   Task: ${snapshot.task}`);
@@ -49,9 +52,7 @@ async function snapshotSave({ cli, hippoRoot, tenantId, flags }: CommandContext)
 
 async function snapshotClear({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const status = stringFlagOrExit(flags, 'status') ?? 'cleared';
-  const cleared = await cli
-    .store(hippoRoot)
-    .hippoDb.sessions.clear(tenantId, 'snapshot', { status });
+  const cleared = await clearSnapshot(cli.apiContext(hippoRoot, tenantId), status);
   if (cleared === 0) {
     console.log('No active task snapshot to clear.');
     return;
@@ -60,7 +61,7 @@ async function snapshotClear({ cli, hippoRoot, tenantId, flags }: CommandContext
 }
 
 async function snapshotShow({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  const snapshot = await cli.store(hippoRoot).hippoDb.sessions.loadSnapshot(tenantId, {}, null);
+  const snapshot = await activeSnapshot(cli.apiContext(hippoRoot, tenantId));
   if (!snapshot) {
     if (boolFlag(flags, 'json')) {
       console.log(JSON.stringify({ snapshot: null }));
@@ -171,7 +172,7 @@ export async function handleWm(cmd: CommandContext): Promise<void> {
     const scope = stringFlagOrExit(flags, 'scope') || undefined;
     const sessionId = stringFlagOrExit(flags, 'session') || undefined;
 
-    const count = await cli.store(hippoRoot).hippoDb.sessions.clear(tenantId, 'working_memory', {
+    const count = await clearWorkingMemory(cli.apiContext(hippoRoot, tenantId), {
       scope,
       sessionId,
     });
@@ -183,7 +184,7 @@ export async function handleWm(cmd: CommandContext): Promise<void> {
     const scope = stringFlagOrExit(flags, 'scope') || undefined;
     const sessionId = stringFlagOrExit(flags, 'session') || undefined;
 
-    const count = await cli.store(hippoRoot).hippoDb.sessions.clear(tenantId, 'working_memory', {
+    const count = await clearWorkingMemory(cli.apiContext(hippoRoot, tenantId), {
       scope,
       sessionId,
     });
@@ -207,7 +208,7 @@ async function wmPushCmd({ cli, hippoRoot, tenantId, flags }: CommandContext): P
     );
   }
 
-  const id = await cli.store(hippoRoot).hippoDb.sessions.save(tenantId, 'working_memory', {
+  const id = await pushWorkingMemory(cli.apiContext(hippoRoot, tenantId), {
     scope,
     content,
     importance,
@@ -223,7 +224,7 @@ async function wmReadCmd({ cli, hippoRoot, tenantId, flags }: CommandContext): P
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   const limit = numberFlag(flags, 'limit') || WM_MAX_ENTRIES;
 
-  const items = await cli.store(hippoRoot).hippoDb.sessions.read(tenantId, 'working_memory', {
+  const items = await workingMemory(cli.apiContext(hippoRoot, tenantId), {
     scope,
     sessionId,
     limit,

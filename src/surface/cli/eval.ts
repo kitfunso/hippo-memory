@@ -228,8 +228,8 @@ function loadEvalBaseline(baselinePath: string): EvalBaseline | undefined {
   try {
     parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
   } catch (err) {
-    // No baseline file is a first run and says nothing; a file that is there and cannot be used
-    // warns.
+    // No baseline file is a first run and says nothing; a file that is there and cannot be
+    // used warns.
     if (errorCode(err) !== 'ENOENT') {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
@@ -359,8 +359,8 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   const cmp = compareSummaries(readCompareBaseline(comparePath), summary);
 
   if (asJson) {
-    // The main JSON output already emitted; append comparison to stderr so both can be captured
-    // independently.
+    // The main JSON output already emitted; append comparison to stderr so both can be
+    // captured independently.
     printError(JSON.stringify({ compare: cmp }, null, 2));
     return;
   }

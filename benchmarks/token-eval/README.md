@@ -47,7 +47,7 @@ It replays each trace through the real hook in two arms:
 - `every-turn`: the behaviour before TE2;
 - `skip-unchanged`: the default.
 
-It prices only hippo's injected text: written to the cache once at 1.25x, then re-read at 0.1x on every later prompt until a compaction drops it. `tests/eval/token-eval-replay.test.ts` runs a short trace in CI.
+It prices only hippo's injected text: written to the cache once at 1.25x, then re-read at 0.1x on every later prompt until a compaction drops it. `tests/eval/token-eval-replay.process.test.ts` runs a short trace in CI.
 
 **Latest run, `replay-results.json`, on synthetic traces:**
 

@@ -1,6 +1,5 @@
-// The project names of a store: the reads `hippo projects`, doctor and the note sync plan from, and
-// the merge and the repair, each one transaction, backed up first, whose mirror files follow the
-// commit.
+// A store's project names: the reads behind `hippo projects`, doctor and the note sync plan, and
+// the merge and repair, each one backed-up transaction whose mirror files follow the commit.
 
 import type { MemoryEntry } from '../memory/entry.js';
 import type { AuditLog } from '../ports/store/audit.js';
@@ -13,8 +12,8 @@ export interface ProjectTags {
   /** The readable dormant snapshots whose row `filter` keeps, by tenant then id. Live rows come
    * from entriesWhere. */
   dormantWhere(filter: EntryFilter): Promise<DormantSnapshot[]>;
-  /** Each distinct project name, transcript and working folder the tenant's compactions recorded
-   * together. */
+  /** Each distinct project name, transcript and working folder the tenant's compactions
+   * recorded together. */
   compactionOrigins(tenantId: string): Promise<CompactionOrigin[]>;
   /** Folds `from` into `into` and writes the project_merge audit row; a dry run rolls back and
    * writes nothing, backup and mirrors included. */
@@ -45,8 +44,8 @@ export type SetAsideResult =
   | { readonly kind: 'untagged'; readonly entry: MemoryEntry }
   | { readonly kind: 'dormant'; readonly id: string };
 
-/** A compaction's project name ('' when none was recorded), Claude transcript and working
- * folder. */
+/** A compaction's project name ('' when none was recorded), Claude transcript and
+ * working folder. */
 export interface CompactionOrigin {
   readonly origin: string;
   readonly transcript: string | null;
@@ -111,8 +110,8 @@ export interface RepairPlan {
   readonly folds: readonly ProjectFold[];
   /** Live user-global sleep merges to re-tag. */
   readonly toProject: readonly RowRetag[];
-  /** Live user-global sleep merges whose parents sit in two projects, retired to dormant
-   * storage. */
+  /** Live user-global sleep merges whose parents sit in two projects, retired to
+   * dormant storage. */
   readonly setAside: readonly string[];
   /** Named in the audit row only. */
   readonly untraced: readonly string[];

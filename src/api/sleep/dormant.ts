@@ -9,8 +9,8 @@ import type { HippoDbContext } from '../hippo-db-context.js';
 
 /**
  * A tenant's dormant memories (sqlite/dormant/dormant.ts): what sleep moved out of active memory when
- * `dormant.enabled` is on. Newest first; `opts.query` keeps rows containing every term
- * (case-insensitive). */
+ * `dormant.enabled` is on. Newest first; `opts.query` keeps rows containing every
+ * term (case-insensitive). */
 export function dormantList(
   ctx: HippoDbContext,
   opts: ListDormantOptions = {},

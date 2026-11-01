@@ -201,8 +201,8 @@ function readLatestHandoffForCard(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-/** Appends a comment to cardId in any card status; throws if cardId is not a card of this
- * tenant. */
+/** Appends a comment to cardId in any card status; throws if cardId is not a card of
+ * this tenant. */
 function addCardComment(
   db: DatabaseSyncLike,
   tenantId: string,

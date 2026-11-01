@@ -1,17 +1,10 @@
 // SessionStart after a compaction, for a caller on another machine: the owner's fresh snapshot for
 // this session, as the local hook prints it.
-import type { Context, EntryContext } from '../../api/types.js';
-import {
-  COMPACT_RESUME_EVENT_CONTENT_CAP,
-  COMPACT_RESUME_MAX_AGE_MS,
-  compactResumeText,
-} from '../../api/context/context-render.js';
+import type { EntryContext } from '../../api/types.js';
 import { bookTokenUse, ledgerReachOf } from '../../api/ledger-db.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
-import type { Sessions, SessionEvent } from '../../base/records/sessions.js';
+import { compactResumeBlock } from '../../api/session-end.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { bindCaller, callerInHoldout } from './caller-session.js';
 import type { CallerHookOutput } from './pre-compact-caller.js';
 import { withEntryInfra } from '../entry-infra.js';
@@ -33,15 +26,8 @@ export async function compactResumeForCaller(
   if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) {
     return { stdout: '' };
   }
-  const { sessions } = ctx.store.hippoDb;
-  const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
-  const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, key);
-  // One owner's concurrent sessions must not cross-restore; a snapshot with no session still
-  // restores, as on the local path.
-  if (snapshot === null || (snapshot.sessionId !== null && snapshot.sessionId !== req.sessionId)) {
-    return { stdout: '' };
-  }
-  const text = compactResumeText(snapshot, await sessionTrail(ctx, sessions, snapshot.sessionId));
+  const text = await compactResumeBlock(ctx, req.sessionId, key);
+  if (text === null) return { stdout: '' };
   await bookTokenUse(
     {
       tenantId: ctx.tenantId,
@@ -54,22 +40,4 @@ export async function compactResumeForCaller(
     ledgerReachOf(ctx, true),
   );
   return { stdout: text };
-}
-
-/** A bad trail row costs the trail, not the snapshot. */
-async function sessionTrail(
-  ctx: Context,
-  sessions: Sessions,
-  sessionId: string | null,
-): Promise<SessionEvent[]> {
-  if (!sessionId) return [];
-  try {
-    return (await sessions.read(ctx.tenantId, 'event', { sessionId })).map((e) => ({
-      ...e,
-      content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
-    }));
-  } catch (err) {
-    log.warn(`compact-resume: trail skipped: ${errorMessage(err)}`, errorFields(err));
-    return [];
-  }
 }

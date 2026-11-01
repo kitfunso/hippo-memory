@@ -16,7 +16,7 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { deriveOriginProject, isInitialized } from '../../src/host/project-identity.js';
 import { removeEntryMirrors } from '../../src/store/sqlite/folder-files/mirrors.js';
-import { deleteEntryRowInTx } from '../../src/store/sqlite/entries/entry-writes.js';
+import { deleteEntryRowInTx } from '../../src/store/sqlite/entries/entry-row.js';
 import {
   agentRows,
   auditCount,

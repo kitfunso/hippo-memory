@@ -94,8 +94,8 @@ export async function handleDrillRecall(
   validateIdSegment(id, 'summary id');
   const limitRaw = query.get('limit');
   const limit = parseNumberParam(limitRaw, 'limit');
-  // Past the list ceiling the shared parser refuses, so the reply is the one every other list route
-  // gives.
+  // Past the list ceiling the shared parser refuses, so the reply is the one every other list
+  // route gives.
   if (limit !== undefined && limit > MAX_LIST_LIMIT) parseLimitParam(limitRaw);
   const budget = parseNumberParam(query.get('budget'), 'budget');
   // depth walks N levels (default 1, hard cap MAX_DRILL_DOWN_DEPTH).

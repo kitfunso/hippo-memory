@@ -1,5 +1,5 @@
-// The SessionStart(compact) hook: re-prints the task snapshot and session trail that compaction
-// dropped.
+// The SessionStart(compact) hook: re-prints the task snapshot and session trail that
+// compaction dropped.
 import { estimateTokens } from '../../../base/util/token-text.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { isInitialized } from '../../../host/project-identity.js';
@@ -39,8 +39,8 @@ export async function handleCompactResume({
 }
 
 /** Prints the snapshot and trail, but no pinned memories (UserPromptSubmit re-injects them). A
- * malformed payload or a store read failure degrades to empty stdout, never a failed
- * SessionStart. */
+ * malformed payload or a store read failure degrades to empty stdout, never a
+ * failed SessionStart. */
 async function resumeAfterCompact(
   { cli, hippoRoot, tenantId }: CliScope,
   stdinText: string | undefined,
@@ -93,7 +93,11 @@ async function restoreCompactSnapshot(
   payloadSessionId: string | null,
   rec: DeliveryRecorder | null,
 ): Promise<void> {
-  const text = await compactResumeBlock(cli.apiContext(hippoRoot, tenantId), payloadSessionId);
+  const text = await compactResumeBlock(
+    cli.apiContext(hippoRoot, tenantId),
+    payloadSessionId,
+    null,
+  );
   if (text === null) return;
   // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);

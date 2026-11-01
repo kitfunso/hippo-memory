@@ -13,7 +13,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
-import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { CLI_ACTOR } from '../../src/base/records/audit-ops.js';
 import { DECISION } from '../../src/domain/objects/decisions.js';
 import { refreshedBrief } from '../../src/domain/objects/project-briefs.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';

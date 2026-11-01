@@ -4,8 +4,9 @@ import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/recall/candidates.js';
 import { evalSwitches } from '../../../src/infra/eval-switches.js';
-import { deleteEntriesInBatches } from '../../../src/store/sqlite/entries/delete-and-batch.js';
-import * as deleteAndBatchSql from '../../../src/store/sqlite/entries/delete-and-batch.js';
+import { deleteEntriesInBatches } from '../../../src/store/sqlite/entries/delete-entries.js';
+import * as deleteEntriesSql from '../../../src/store/sqlite/entries/delete-entries.js';
+import * as batchFlushSql from '../../../src/store/sqlite/entries/batch-flush.js';
 import type { DormantMemory, ListDormantOptions } from '../../../src/base/records/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/runtime/rule-sql.js';
@@ -92,7 +93,7 @@ export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS
 }
 
 export function memoriesBackingAmong(hippoRoot: string, ids: readonly string[]): Set<string> {
-  return onHandle(hippoRoot, (db) => deleteAndBatchSql.memoriesBackingAmong(db, ids));
+  return onHandle(hippoRoot, (db) => deleteEntriesSql.memoriesBackingAmong(db, ids));
 }
 
 export function deleteEntry(
@@ -226,7 +227,7 @@ export function commitInChunks(
   opts: { snapshot: LoadedRows; budget: WriteBudget; busyWaitMs: number },
 ): Promise<string[]> {
   return handlesOf(hippoRoot).onAsync(
-    (db, files) => deleteAndBatchSql.commitInChunks(db, files, components, opts),
+    (db, files) => batchFlushSql.commitInChunks(db, files, components, opts),
     waitingOpener(opts.busyWaitMs, openStore),
   );
 }

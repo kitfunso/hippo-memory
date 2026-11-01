@@ -1,7 +1,8 @@
 // How many rows the scope rule hid from a recall, for `hippo explain`, read through hippo.db's
 // local tier.
 import { passesCliRecallScopeFilter } from '../../base/scope/recall-scope.js';
-import type { HippoDbContext, HippoDbStore } from '../hippo-db-context.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
 
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
  *  window-capped, so this is a floor on a large store. */

@@ -13,16 +13,15 @@ import { type ResolveProjectIdentityOptions } from '../../base/scope/project-ide
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { findHippoStoreDir } from '../../host/project-identity.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
-import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import type { HippoDbContext, HippoDbStore } from '../../api/hippo-db-context.js';
-import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
+import type { HippoDbStore } from '../../base/ports/hippo-db.js';
+import type { ConfiguredFolder } from '../../base/ports/store.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
-import { coreEnrichment } from '../../api/hippo-db-context.js';
-import type { DetachedWork } from '../../domain/search/detached-work.js';
+import type { DetachedWork } from '../../domain/search/embed-memories.js';
 
 /** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are
  * the test seam. */
@@ -104,8 +103,8 @@ export interface McpCaller<S extends HippoStore = HippoStore> {
   /** The transport root's per-caller state; without it no session ring, last-shown list or
    * auto-sleep is kept. */
   callers?: CallerState;
-  /** The outside services the transport's root built; every tool call's api Context carries
-   * them. */
+  /** The outside services the transport's root built; every tool call's api Context
+   * carries them. */
   infra: InfraPorts;
   /** Per-client key for state isolation under HTTP-MCP, a hash of bearer and address built in
    * src/surface/server/mcp-http.ts; absent on stdio, which keys by process and tenant. */
@@ -148,33 +147,8 @@ export function mcpActor(ctx: McpCaller | undefined): ApiActor {
   return actor;
 }
 
-/** The api Context a tool call runs as: the transport's store, reach and config under the
- * caller's actor. */
-export function mcpApiContext(ctx: McpCaller): ApiContext {
-  return {
-    tenantId: ctx.tenantId,
-    actor: mcpActor(ctx),
-    store: ctx.store,
-    reach: ctx.reach,
-    config: ctx.config,
-    callers: ctx.callers,
-    clientKey: mcpClientKey(ctx),
-    infra: ctx.infra,
-    signal: ctx.signal,
-    enrich: coreEnrichment(ctx.store),
-    detached: ctx.detached,
-  };
-}
-
-/** The transport's client key, else `stdio-<pid>:<tenant>`; a caller's project narrows either,
- * so two repos on one shared store keep apart lists. */
-function mcpClientKey(ctx: McpCaller): string {
-  const base = ctx.clientKey || `stdio-${process.pid}:${ctx.tenantId || DEFAULT_TENANT_ID}`;
-  return ctx.project ? `${base}:${ctx.project.name}` : base;
-}
-
-/** Stdio or a host admin: the only callers whose server cwd and git history are their own to
- * read. */
+/** Stdio or a host admin: the only callers whose server cwd and git history are their own
+ * to read. */
 export function ownsServerCwd(ctx: McpCaller | undefined): boolean {
   return mcpActor(ctx).hostAdmin === true;
 }
@@ -197,11 +171,12 @@ export interface McpHost<S extends HippoStore = HippoStore> {
   settle(withinMs: number): Promise<number>;
 }
 
-/** One tool call after the store, config and tenant are resolved; every handler reads the same
- * five. */
+/** One tool call after the store, config and tenant are resolved, with the api Context its root
+ * built for it once. */
 export interface ToolCall {
   args: Record<string, JsonValue>;
   ctx: McpCaller;
+  api: ApiContext;
   hippoRoot: string;
   store: HippoStore;
   config: HippoConfig;

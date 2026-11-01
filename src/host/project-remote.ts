@@ -166,8 +166,8 @@ export function originRemoteId(gitRoot: string): string | null {
 }
 
 export const PROJECT_FILE = '.hippo-project.json';
-/** A committed id longer than this is not a project name, so the remote or folder name stands
- * in. */
+/** A committed id longer than this is not a project name, so the remote or folder name
+ * stands in. */
 const MAX_PROJECT_ID_CHARS = 200;
 
 /** The `id` a team committed in `.hippo-project.json` at root, lowercased like every project

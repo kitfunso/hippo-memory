@@ -106,8 +106,8 @@ export interface Objects {
    * unset), and active or superseded by a row whose validFrom is after asOf. Newest validFrom
    * first, compared as text in byte order, then larger id. No audit row. */
   listObjects(tenantId: string, kind: 'policy', query: PoliciesInForceQuery): Promise<Policy[]>;
-  /** At most `limit` of the tenant's skills in `status`, in the query's by-name order. No audit
-   * row. */
+  /** At most `limit` of the tenant's skills in `status`, in the query's by-name order. No
+   * audit row. */
   listObjects(tenantId: string, kind: 'skill', query: SkillsByNameQuery): Promise<Skill[]>;
   /** At most `limit` predictions, in the newest-first order of the typed objects. No audit row. */
   listObjects(
@@ -162,8 +162,8 @@ export interface Objects {
   ): Promise<ObjectByKind[K] | ObjectRefusal>;
   /** In one transaction, in order: writes `mirror` as `EntryWrites.writeEntry` does; checks each
    * linked id is a memory of the tenant; inserts the row open under the next id; appends the
-   * incident_open row, then the mirror's remember row. A refusal leaves no mirror, row or audit
-   * row. */
+   * incident_open row, then the mirror's remember row. A refusal leaves no mirror, row or
+   * audit row. */
   saveObject(
     tenantId: string,
     kind: 'incident',

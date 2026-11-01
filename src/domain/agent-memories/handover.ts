@@ -86,8 +86,8 @@ async function handOverPlan(
   tenantId: string,
   prefixes: readonly string[],
 ): Promise<ContainerApply> {
-  // A note the local pass could not read has no local row yet, so its global copy stays until it
-  // does.
+  // A note the local pass could not read has no local row yet, so its global copy stays until
+  // it does.
   const unread = new Set(work.container.skipped);
   const tag = work.tool.tag;
   const rows: MemoryEntry[] = [];

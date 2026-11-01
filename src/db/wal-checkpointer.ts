@@ -57,8 +57,8 @@ export interface WalCheckpointer {
   /** Counts one finished response and starts a checkpoint when enough have finished, unless one
    * is still running. */
   noteResponse(): void;
-  /** Resolves once the worker's connection is closed, so the caller's own close can be SQLite's
-   * last. */
+  /** Resolves once the worker's connection is closed, so the caller's own close can be
+   * SQLite's last. */
   stop(): Promise<void>;
 }
 

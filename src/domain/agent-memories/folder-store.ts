@@ -53,8 +53,8 @@ export function readFolderStore(
   return { scope, path: dir, readable: true, items, skipped, warnings, textKeyed: false };
 }
 
-/** Markdown notes directly in, or anywhere under, the folder, with the tool's index file left
- * out. */
+/** Markdown notes directly in, or anywhere under, the folder, with the tool's index file
+ * left out. */
 export function markdownNotes(rel: string): boolean {
   return rel.endsWith('.md') && rel !== 'MEMORY.md';
 }

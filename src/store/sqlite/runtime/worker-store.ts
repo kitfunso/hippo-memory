@@ -26,7 +26,7 @@ import {
   type WorkerGroup,
   WORKER_OPS,
 } from './worker-ops.js';
-import type { HippoDbRepos, HippoDbStore } from '../hippo-db.js';
+import type { HippoDbRepos, HippoDbStore } from '../../../base/ports/hippo-db.js';
 import { asHippoDb } from './hippo-db-stores.js';
 import { handlesOf } from './handles.js';
 
@@ -131,8 +131,8 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
   };
 }
 
-/** The groups with a body of their own below: base sits on the store itself, vectors rebuild a
- * Map. */
+/** The groups with a body of their own below: base sits on the store itself, vectors rebuild
+ * a Map. */
 type CustomGroup = 'base' | 'vectors';
 type PlainGroup = Exclude<WorkerGroup, CustomGroup>;
 
@@ -168,8 +168,8 @@ function hippoDbOnWorkers(sender: Sender, inProcess: HippoDbRepos): HippoDbRepos
   return Object.fromEntries(wrapped) as HippoDbRepos;
 }
 
-/** The rules a worker store's threads open with, and the server's runtime its checkpoints run
- * under. */
+/** The rules a worker store's threads open with, and the server's runtime its checkpoints
+ * run under. */
 export interface WorkerStoreOptions extends StoreRules {
   readonly runtime?: StoreRuntime | undefined;
 }
@@ -199,8 +199,8 @@ export function workerSqliteStore(
 }
 
 function rebound<V>(value: V, limits: RequestLimits): V {
-  // SAFETY: a rebind makes the same worker call again, so the new function has the old one's
-  // signature.
+  // SAFETY: a rebind makes the same worker call again, so the new function has the old
+  // one's signature.
   return isRebindable(value) ? (value[REBIND](limits) as V) : value;
 }
 
@@ -208,8 +208,7 @@ function isPlainObject<V>(value: V): value is V & object {
   return value instanceof Object && Object.getPrototypeOf(value) === Object.prototype;
 }
 
-// Down every level of plain objects, since hippo.db's local tier holds its methods two levels
-// down.
+// Down every level of plain objects, since hippo.db's local tier holds its methods two levels down.
 function reboundAll<V>(value: V, limits: RequestLimits): V {
   if (!isPlainObject(value)) return rebound(value, limits);
   const members = Object.entries(value).map(([key, member]) => [key, reboundAll(member, limits)]);

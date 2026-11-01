@@ -43,8 +43,8 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   return { llmError, llmOpts: { llm, model: config.extraction.model } };
 }
 
-/** Counts the survivors extraction could read and returns the first `limit` of them, holding no
- * others. */
+/** Counts the survivors extraction could read and returns the first `limit` of them, holding
+ * no others. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
   for await (const e of run.survivors.rows()) {
@@ -76,8 +76,8 @@ export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<
   if (llm === null || run.dryRun) return;
   if (batch.length > 0) {
     const stopped = await extractionPass(run, llm, batch);
-    // The DAG passes call the same API with the same key and model, so they would fail the same
-    // way.
+    // The DAG passes call the same API with the same key and model, so they would fail the
+    // same way.
     if (stopped) return;
   }
 

@@ -9,8 +9,8 @@ type LookupRow = { readonly method: string } & (
   | { readonly regex: RegExp }
 );
 
-/** A route's run for one request, bound to the path's params, or null when method or path
- * differ. */
+/** A route's run for one request, bound to the path's params, or null when method or
+ * path differ. */
 export type RouteMatcher<T = Route, Q = RouteRequest> = (
   route: T,
   method: string,

@@ -39,8 +39,8 @@ export function answerAtDeadline(
     abandoned.add(res);
     reply();
   };
-  // One turn of the loop later, so a handler that fails on the store's answer sends that answer
-  // itself.
+  // One turn of the loop later, so a handler that fails on the store's answer sends that
+  // answer itself.
   const timer = setTimeout(() => {
     // Before the wait for store calls, so a call still queued is dropped rather than run for a
     // caller who left.

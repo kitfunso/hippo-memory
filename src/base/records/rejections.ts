@@ -77,8 +77,8 @@ export type LiftedRejection =
 export interface FailureLog {
   /** Appends one row and answers its id. */
   record(event: FailureEvent): Promise<number>;
-  /** The outcome logged under the request id, or null; an id another session logged rejects with
-   * ConflictError. */
+  /** The outcome logged under the request id, or null; an id another session logged rejects
+   * with ConflictError. */
   requestOutcome(
     tenantId: string,
     requestId: string,
@@ -87,8 +87,8 @@ export interface FailureLog {
   settleOutcome(tenantId: string, requestId: string, outcome: FailureOutcome): Promise<void>;
 }
 
-/** One failed tool call, for `recordFailure`. Never the failure text: it can carry paths and
- * secrets. */
+/** One failed tool call, for `recordFailure`. Never the failure text: it can carry paths
+ * and secrets. */
 export interface FailureEvent {
   tenantId: string;
   /** Host session id from the hook payload; null when it had none. */

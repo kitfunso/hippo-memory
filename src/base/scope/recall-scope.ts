@@ -1,8 +1,8 @@
 /**
  * Recall-side scope predicates, in a leaf module so search-both.ts can apply the same default-deny
  * rule to searchBothHybrid's candidate loads without an import cycle. src/api/index.ts imports
- * these and re-exports them for back-compat (`api.isPrivateScope`, tests importing
- * `passesScopeFilterForRecall`).
+ * these and re-exports them for back-compat (`api.isPrivateScope`, tests
+ * importing `passesScopeFilterForRecall`).
  */
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';

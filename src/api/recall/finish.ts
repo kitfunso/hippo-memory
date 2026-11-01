@@ -61,8 +61,8 @@ export function recallAuditRow(
   return { tenantId: who.tenantId, actor: who.actor, op, targetId, metadata };
 }
 
-// The row stores a hash of the query, never its text, so an archived memory's words cannot persist
-// there.
+// The row stores a hash of the query, never its text, so an archived memory's words cannot
+// persist there.
 export function recallAuditMetadata(query: string, results: number) {
   return { ...auditQueryFields(query), results };
 }

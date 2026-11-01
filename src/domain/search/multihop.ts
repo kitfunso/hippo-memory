@@ -32,8 +32,8 @@ export function rankMultihop(
   options: Bm25SearchOptions & RankTime,
 ): SearchResult[] {
   const budget = options.budget ?? DEFAULT_RECALL_BUDGET;
-  // Pass 1 searches wide to find entities, so each return fits the caller's budget, as search()
-  // does.
+  // Pass 1 searches wide to find entities, so each return fits the caller's budget, as
+  // search() does.
   const fit = (ordered: SearchResult[]): SearchResult[] =>
     fitBudget(ordered, budget, options.minResults, options.cost);
   const pass1 = rankBm25(query, entries, { ...options, budget: budget * 2 });

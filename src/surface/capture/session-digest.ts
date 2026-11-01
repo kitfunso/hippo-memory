@@ -6,7 +6,7 @@ import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import { adminActor } from '../../api/types.js';
 import {
   writeSessionDigest,
@@ -21,8 +21,8 @@ import { isSyntheticMessage } from '../../base/session/transcript-calls.js';
 import { readOpenTranscriptTail } from '../../infra/transcript-tail.js';
 import { evalClock } from '../../infra/eval-switches.js';
 
-/** Bounds a detached worker's memory; the final message sits at the end, so a tail read loses
- * nothing. */
+/** Bounds a detached worker's memory; the final message sits at the end, so a tail read
+ * loses nothing. */
 export const READ_CAP_BYTES = 64 * 1024 * 1024;
 
 export interface DigestEdit {
@@ -299,8 +299,8 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
     turns,
     finalText: state.claudeFinal || state.codexFinal || state.codexUnphased,
     cwd: state.firstCwd,
-    // An unanswered call may never have run, so an edit counts only once its result says it
-    // applied.
+    // An unanswered call may never have run, so an edit counts only once its result says
+    // it applied.
     edits: state.pending
       .filter((e) => state.landed.has(e.callId))
       .map(({ filePath, base }) => ({ filePath, base })),
@@ -443,8 +443,8 @@ export async function recordSessionDigest(
   scan: SessionScan | null,
   opts: DigestRunOptions,
 ): Promise<void> {
-  // The digest names this repo's files, so it goes only to the repo's own store, never the global
-  // one.
+  // The digest names this repo's files, so it goes only to the repo's own store, never the
+  // global one.
   if (!isInitialized(hippoRoot)) {
     opts.log('digest: skip: this folder has no store of its own');
     return;

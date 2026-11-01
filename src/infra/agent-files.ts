@@ -28,8 +28,8 @@ function readText(file: string): TextFile {
 function readOpenTextFile(file: string, fd: number): TextFile {
   const stat = fs.fstatSync(fd);
   if (!stat.isFile()) return { ok: false, reason: `${file}: not a file` };
-  // A tool rewriting a file truncates it first; read as holding no notes, every row would be set
-  // aside.
+  // A tool rewriting a file truncates it first; read as holding no notes, every row would be
+  // set aside.
   if (stat.size === 0) return { ok: false, reason: `${file}: empty` };
   if (stat.size > MAX_ITEM_BYTES) {
     return { ok: false, reason: `${file}: over ${MAX_ITEM_BYTES} bytes` };

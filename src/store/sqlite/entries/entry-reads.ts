@@ -75,8 +75,8 @@ export function readEntriesByIds(
   return byId;
 }
 
-/** Direct children of each parent, one query per chunk; each list is in `created ASC, id ASC`
- * order. */
+/** Direct children of each parent, one query per chunk; each list is in `created ASC, id
+ * ASC` order. */
 export function readChildrenByParent(
   db: DatabaseSyncLike,
   parentIds: readonly string[],
@@ -223,8 +223,8 @@ export function readSessionRawRows(
 
 /** Last N kind='raw' memories by `created` desc, tenant-scoped, at most MAX_FRESH_RAW; pass
  * `sessionId` or concurrent sessions show up in each other's fresh tail. The tenant-wide shape
- * is discouraged: `api.recall` throws `RecallContractError` for it when
- * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
+ * is discouraged: `api.recall` throws `RecallContractError` for it
+ * when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
 export function listFreshRawMemories(
   db: DatabaseSyncLike,
   count: number,

@@ -22,7 +22,7 @@ import {
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { handleMcpRequest } from './request.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import { hasHippoDb } from '../../api/hippo-db-context.js';
+import { ensureStoreFiles } from '../../api/store-init.js';
 import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';
 import { randomUUID } from 'node:crypto';
@@ -209,10 +209,8 @@ async function createGlobalStoreOnFirstRun<S extends HippoStore>(
   tenantId: string,
 ): Promise<string> {
   const root = hippoHomeDir();
-  const target = contextFor(root, tenantId).reach?.globalTarget;
   // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
-  if (target === undefined || !hasHippoDb(target.store)) return root;
-  await target.store.hippoDb.folderFiles.ensure();
+  if (!(await ensureStoreFiles(contextFor(root, tenantId).reach?.globalTarget?.store))) return root;
   log.warn(
     `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
   );
@@ -302,8 +300,8 @@ export function startStdioLoop<S extends HippoStore>(host: McpHost<S>): void {
   process.stdin.on(
     'data',
     frameReader((body) => {
-      // One id per frame, so the error reply and every line logged for the call name the same
-      // request.
+      // One id per frame, so the error reply and every line logged for the call name the
+      // same request.
       const abort = new AbortController();
       runWithRequestId(randomUUID(), () => dispatch(body, abort, host));
     }),
@@ -317,8 +315,8 @@ export function startStdioLoop<S extends HippoStore>(host: McpHost<S>): void {
   });
 
   exitOnStreamError();
-  // A crash waits for the calls in flight as stdin's end does, so a client is not left without its
-  // reply.
+  // A crash waits for the calls in flight as stdin's end does, so a client is not left without
+  // its reply.
   installCrashHandlers('mcp', {
     run: () => drainInFlight(host),
     boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS,
@@ -338,8 +336,8 @@ function exitOnStreamError(): void {
     exitAfterFlush(1);
   });
 
-  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an exit
-  // code.
+  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an
+  // exit code.
   process.stderr.on('error', (err: NodeJS.ErrnoException) => {
     exitAfterFlush(err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED' ? 0 : 1);
   });

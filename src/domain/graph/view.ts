@@ -32,8 +32,8 @@ export const DEFAULT_VIEW_LIMIT = 500;
 
 /**
  * Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named
- * so plus their 1-hop neighbors. Dangling edges (an endpoint outside the node set) are always
- * dropped. */
+ * so plus their 1-hop neighbors. Dangling edges (an endpoint outside the node set) are
+ * always dropped. */
 export async function buildGraphModel(
   graphReads: Pick<GraphReads, 'graphRows'>,
   tenantId: string,
@@ -49,8 +49,8 @@ export async function buildGraphModel(
   );
 }
 
-/** The reply model of the rows a store read: an edge with an endpoint outside the node set is
- * dropped. */
+/** The reply model of the rows a store read: an edge with an endpoint outside the node set
+ * is dropped. */
 function graphModelOf({ entities, relations, truncated }: GraphRows): GraphModel {
   const nodeIds = new Set(entities.map((e) => e.id));
   const nodes: GraphNode[] = entities.map((e) => ({
@@ -80,8 +80,8 @@ const MIN_DISTANCE = 0.01;
 /** Keeps nodes this many pixels off the viewport edge. */
 const EDGE_MARGIN_PX = 20;
 
-/** Distance from pj to pi and the unit vector between them, with a zero length floored at
- * MIN_DISTANCE. */
+/** Distance from pj to pi and the unit vector between them, with a zero length floored
+ * at MIN_DISTANCE. */
 function separation(pi: Point, pj: Point) {
   const dx = pi.x - pj.x;
   const dy = pi.y - pj.y;

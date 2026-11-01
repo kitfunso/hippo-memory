@@ -34,8 +34,8 @@ export async function bindCaller(
   return { owner: ownerOrSubject(ctx.actor), project: projectNames(project) };
 }
 
-/** Read only: the session's first prompt booked its arm, and a holdout session gets nothing from
- * hippo. */
+/** Read only: the session's first prompt booked its arm, and a holdout session gets nothing
+ * from hippo. */
 export async function callerInHoldout(ctx: Context, sessionId: string): Promise<boolean> {
   const reach = ledgerReachOf(ctx, true);
   const armOpts = { reach, ownTenantOnly: true };

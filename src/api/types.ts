@@ -1,17 +1,16 @@
-// Request context (caller identity and tenant) shared by every API module, plus the recall contract
-// error.
+// Request context (caller identity and tenant) shared by every API module, plus the recall
+// contract error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
-import type { HippoStore, StoreReach } from '../base/ports/store.js';
+import type { ConfiguredFolder, HippoStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
 import type { CoreEnrichment, FolderHome, GlobalEnrichment, LedgerBook } from './enrichment.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { FailureNotices } from '../base/util/failure-notices.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
 import type { StrengthModel } from '../base/memory/strength.js';
-import type { DetachedWork } from '../domain/search/detached-work.js';
+import type { DetachedWork } from '../domain/search/embed-memories.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -25,8 +24,7 @@ export interface Actor {
   scopes?: readonly string[];
   /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */
   viaAuthResolver?: true;
-  /** The host's operator (CLI, stdio MCP, host-tenant admin key): may act beyond its
-   * tenant. */
+  /** The host's operator (CLI, stdio MCP, host-tenant admin key): may act beyond its tenant. */
   hostAdmin?: true;
   owner?: string; // the person behind the key; task state keys on it
 }
@@ -93,8 +91,8 @@ export interface Context {
   readonly detached?: DetachedWork | undefined;
 }
 
-/** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion
- * ratio. */
+/** The strength model `ctx` scores by: its root's eval switches with its config's
+ * loss-aversion ratio. */
 export function strengthOf(ctx: Pick<Context, 'infra' | 'config'>): StrengthModel {
   return strengthModelFor(ctx.infra.evalSwitches, ctx.config.runtime);
 }
@@ -134,8 +132,8 @@ export function ownerOrSubject(actor: Actor): string {
 
 /** Thrown by `api.recall` on a contract violation; the stable `code` lets callers discriminate
  * without parsing the message. 'fresh_tail_requires_session_id' (needs
- * HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1) or 'invalid_scorer_window' (0 would hit an uncapped
- * fallback). */
+ * HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1) or 'invalid_scorer_window' (0 would hit an
+ * uncapped fallback). */
 export class RecallContractError extends BadRequestError {
   public readonly code: 'fresh_tail_requires_session_id' | 'invalid_scorer_window';
   constructor(code: 'fresh_tail_requires_session_id' | 'invalid_scorer_window', message: string) {

@@ -43,7 +43,6 @@ function cliCore(): CliCoreRecall {
       explain: false,
     },
     show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
-    lastRecall: sqliteStore(hippoRoot).hippoDb.lastRecall,
   };
 }
 
@@ -75,7 +74,7 @@ afterEach(() => {
 
 describe('retrieve with the CLI ranking core', () => {
   it('writes the recall through a store that is not hippo.db when the context carries one', async () => {
-    const inner = portOnlyStore(hippoRoot);
+    const store = portOnlyStore(hippoRoot);
     const writes: RecallWrites[] = [];
     const lastRecall = sqliteStore(hippoRoot).hippoDb.lastRecall;
     const traced: LastRecall = {
@@ -85,16 +84,16 @@ describe('retrieve with the CLI ranking core', () => {
         return lastRecall.finishRecall(w, root);
       },
     };
-    const store = { ...inner, lastRecall: traced };
     const ctx: Context = {
       tenantId: 'default',
       actor: adminActor('cli'),
       store,
       config: loadConfig(hippoRoot),
       infra: testInfra(),
+      enrich: { lastRecall: traced },
     };
 
-    const result = await retrieveWithCliCore(ctx, { query: 'deploy' }, { ...cliCore(), lastRecall: traced });
+    const result = await retrieveWithCliCore(ctx, { query: 'deploy' }, cliCore());
 
     expect(store.kind).toBe('port-only');
     expect(result.results.map((r) => r.id).sort()).toEqual(['mem_core_0', 'mem_core_1']);

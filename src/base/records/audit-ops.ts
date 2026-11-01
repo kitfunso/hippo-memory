@@ -27,9 +27,8 @@ export const AUDIT_OPS = [
   'recall_anchor_detected_memory_dominance',
   'recall_anchor_skipped_no_session', // telemetry: no sessionId, so ring tracking was skipped
   'recall_availability_detected', // emitted when the availability/recency-bias hint fires
-  // The typed-object ops: the objects store group writes each one with its row, from saveObject (a
-  // create, or a supersede when the save replaces an active row), closeObject, openIncident and
-  // resolveOpenIncident.
+  // Typed-object ops the objects group writes with each row: saveObject's create or supersede,
+  // closeObject, openIncident and resolveOpenIncident.
   'decision_create',
   'decision_supersede',
   'decision_close',
@@ -71,3 +70,6 @@ export const AUDIT_OPS = [
 ] as const;
 
 export type AuditOp = (typeof AUDIT_OPS)[number];
+
+/** The audit actor for work a local command runs; HTTP and MCP callers pass their own. */
+export const CLI_ACTOR = 'cli';

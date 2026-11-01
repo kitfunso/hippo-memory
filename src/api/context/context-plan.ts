@@ -104,8 +104,8 @@ export function globalSource(ctx: Context): ContextSource {
   return sourceOf(globalStoreInReach(ctx));
 }
 
-/** Prices one entry against the budget: the caller's cost model when it gave one, else a token
- * estimate. */
+/** Prices one entry against the budget: the caller's cost model when it gave one, else a
+ * token estimate. */
 function entryPricer(
   cost: ContextOptions['cost'],
   currentProject: ContextPlan['currentProject'],
@@ -167,8 +167,8 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
   const config = ctx.config;
   const currentProject = opts.currentProject;
   const includeCrossProject = readsCrossProject(ctx, opts, reach.sharedStore);
-  // Decided before the ambient loads so the pinned-only FTS candidate query can share their
-  // connection.
+  // Decided before the ambient loads so the pinned-only FTS candidate query can share
+  // their connection.
   const promptRecallPending =
     pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
   const cost = opts.cost;
@@ -223,8 +223,8 @@ export function promptRecallRequest(
     : undefined;
 }
 
-/** Reports the block's facts to the observer and returns the budget left after the fixed
- * headers. */
+/** Reports the block's facts to the observer and returns the budget left after the
+ * fixed headers. */
 export function openBlockBudget(plan: ContextPlan, opts: ContextOptions, budget: number): number {
   const { config, cost, obs, pinnedOnly, promptRecallPending } = plan;
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;

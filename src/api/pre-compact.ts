@@ -1,9 +1,9 @@
-// A compaction's PreCompact on the store: the twin-fire skip, the boundary record and the merged
-// working-state snapshot, for the local hook and for a caller the server answers.
+// A compaction on the store: PreCompact's twin-fire skip, boundary record and merged working-state
+// snapshot, for the local hook and a caller the server answers, and a caller's PostCompact items.
 
 import type { CaptureInput } from '../base/session/capture-contract.js';
 import { mergeWorkingState, type WorkingState } from '../base/session/working-state.js';
-import type { CompactionStart } from '../base/records/capture.js';
+import type { CallerItems, CompactionStart } from '../base/records/capture.js';
 import type { TaskSnapshot } from '../base/records/sessions.js';
 import type { ContinuityKey } from '../base/ports/store/types.js';
 import { errorFields, errorMessage, log, type LineLog } from '../base/util/log.js';
@@ -145,8 +145,8 @@ async function markBoundary(ctx: PreCompactContext, run: PreCompactRun): Promise
   return recordId;
 }
 
-/** Best effort, never throws: a compaction must not fail because its record could not be
- * written. */
+/** Best effort, never throws: a compaction must not fail because its record could not
+ * be written. */
 async function startRecord(begin: () => Promise<string>, failed: LineLog): Promise<string | null> {
   try {
     return await begin();
@@ -216,4 +216,19 @@ async function markSnapshotOnRecord(
       fields: errorFields(err),
     });
   }
+}
+
+/** A caller's PostCompact items as rows on its config's half-life; the count written, which a
+ * retried request id answers again without a second write. */
+export async function saveCallerCompactionItems(
+  ctx: Pick<HippoDbContext, 'tenantId' | 'store' | 'config'>,
+  items: Omit<CallerItems, 'baseHalfLifeDays'>,
+): Promise<number> {
+  const baseHalfLifeDays = ctx.config.defaultHalfLifeDays;
+  const saved = await ctx.store.hippoDb.compactions.saveCallerItems(ctx.tenantId, {
+    ...items,
+    baseHalfLifeDays,
+  });
+  for (const note of saved.notes) log.info(`post-compact: ${note}`);
+  return saved.written;
 }

@@ -1,6 +1,5 @@
-// What a root keeps for the callers it serves. A server, the stdio host and a CLI process each
-// build one and hand it down on the Context, so no module holds caller state and no test resets
-// one.
+// Caller state a root keeps: a server, the stdio host and a CLI process each build one and pass it
+// down on the Context, so no module holds caller state and no test resets it.
 import { RecentRecalls } from './recall/last-recalled.js';
 import type { RecallSurface, RingBuffer } from './recall/session-rings.js';
 import type { AutoSleepRunner } from './sleep/auto-sleep.js';

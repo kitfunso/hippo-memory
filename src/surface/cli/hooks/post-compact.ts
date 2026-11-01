@@ -19,7 +19,7 @@ export async function handlePostCompact({
   const { text, timedOut } = await readHookStdin();
   const store = hookStoreRoot(hippoRoot);
   const line = await cli.hookRequest((hook) =>
-    postCompactHook(store, hook.store(store), {
+    postCompactHook(store, hook.compactionHooks(store), {
       tenantId,
       stdinText: text,
       stdinTimedOut: timedOut,

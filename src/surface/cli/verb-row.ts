@@ -1,5 +1,5 @@
-// The shape of one row of the verb table, and the helper that builds it with a type-checked lazy
-// import.
+// The shape of one row of the verb table, and the helper that builds it with a type-checked
+// lazy import.
 
 import type { CliFlags, CommandContext } from './flag-values.js';
 import type { VerbFlags } from './flags.js';
@@ -19,8 +19,8 @@ export interface RemovedFlag {
   readonly advice: string;
 }
 
-/** What a verb declares; its key in the table is its name, and the table's order is the help
- * listing's. */
+/** What a verb declares; its key in the table is its name, and the table's order is the
+ * help listing's. */
 export interface VerbRow {
   /** The flags this verb reads; any other flag still parses, and the verb says it ignores it. */
   readonly flags: VerbFlags;
@@ -38,8 +38,8 @@ export interface VerbRow {
   /** Runs on a session of its own, opening each store once; set on api-backed verbs, as hook
    * verbs open their own. */
   readonly scoped?: true;
-  /** Routine verbs after which a previously installed codex wrapper is repaired (never
-   * first-installed). */
+  /** Routine verbs after which a previously installed codex wrapper is repaired
+   * (never first-installed). */
   readonly repairsCodexWrapper?: true;
   /** Deletes or hides memories: an unknown flag stops the run instead of being ignored. */
   readonly destructive?: true;

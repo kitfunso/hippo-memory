@@ -48,8 +48,8 @@ export class VerifiedKeyCache {
 
   has(keyHash: string, plaintext: string): boolean {
     const digest = this.proven.peek(keyHash);
-    // A wrong secret misses but leaves the entry, so a flood of bad guesses cannot evict a good
-    // key.
+    // A wrong secret misses but leaves the entry, so a flood of bad guesses cannot evict a
+    // good key.
     if (!digest || !timingSafeEqual(digest, secretDigest(plaintext))) return false;
     return this.proven.get(keyHash) !== undefined;
   }
@@ -135,8 +135,8 @@ async function secretMatches(
     scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
   const check = (bound ? bound(keyId, derive) : derive()).then((derived) => {
     const matched = parsed.matches(derived);
-    // Only successes are kept: keeping misses would let junk tokens fill the cache and evict real
-    // keys.
+    // Only successes are kept: keeping misses would let junk tokens fill the cache and evict
+    // real keys.
     if (matched) verifiedKeys.add(keyHash, plaintext);
     return matched;
   });

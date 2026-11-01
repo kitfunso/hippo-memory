@@ -19,8 +19,8 @@ export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
 }
 
-/** A store's folder and the runtime its opens run under; undefined runs every open step on every
- * open. */
+/** A store's folder and the runtime its opens run under; undefined runs every open step on
+ * every open. */
 export interface StoreAt {
   readonly hippoRoot: string;
   readonly runtime: StoreRuntime | undefined;

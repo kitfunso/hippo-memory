@@ -2,7 +2,7 @@
 import type { JsonValue } from '../../util/json.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { TenantId } from '../../util/tenant.js';
-import type { MethodEffects } from './effects.js';
+import type { MethodEffects } from './types.js';
 
 export interface KeyRevoke {
   readonly tenantId: string;
@@ -113,8 +113,8 @@ export interface ListApiKeysOptions {
   ownerSubject?: string;
   /** Only this one key. */
   keyId?: string;
-  /** Resume after this row: the position the previous page ended on (key and id are both the row
-   * id). */
+  /** Resume after this row: the position the previous page ended on (key and id are both the
+   * row id). */
   after?: KeysetPosition;
   limit?: number;
 }
@@ -127,8 +127,8 @@ export interface NewApiKey {
   readonly label: string | null;
   readonly role: 'admin' | 'member';
   readonly createdAt: string;
-  /** The auth-resolver subject a self-service key belongs to; null for a key an admin or the CLI
-   * mints. */
+  /** The auth-resolver subject a self-service key belongs to; null for a key an admin or the
+   * CLI mints. */
   readonly ownerSubject: string | null;
   /** ISO time the key stops working; null means it never expires. */
   readonly expiresAt: string | null;

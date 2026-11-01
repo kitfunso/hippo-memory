@@ -58,10 +58,6 @@ export function warnClaudeSettingsUnusable(
 }
 
 /**
- * Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a
- * scheduled task on Windows; skips if installed.
- */
-/**
  * Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo
  * init` or `hippo setup`.
  */
@@ -98,6 +94,8 @@ function warnSchedulerTimedOut(command: string): void {
   );
 }
 
+/** Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a
+ * scheduled task on Windows; skips if installed. */
 export function setupDailySchedule(
   globalRoot: string,
   run: RunScheduler = execFileSync,

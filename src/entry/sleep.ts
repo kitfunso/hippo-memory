@@ -21,9 +21,9 @@ import { withEntryInfra } from '../surface/entry-infra.js';
 
 export { ConsolidationResult } from '../domain/consolidate/run.js';
 export type { SleepOptions, SleepResult } from '../api/sleep/sleep.js';
-export type { SleepEvent } from '../api/sleep/events.js';
+export type { SleepEvent } from '../api/sleep/sleep-run.js';
 export type { RescueRank } from '../domain/consolidate/events.js';
-export type { DetachedWork } from '../domain/search/detached-work.js';
+export type { DetachedWork } from '../domain/search/embed-memories.js';
 
 /** Sleeps the whole store under `ctx`; a store without hippo.db's local tier rejects before any
  * pass runs. */

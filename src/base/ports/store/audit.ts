@@ -4,8 +4,7 @@
 import type { AuditOp } from '../../records/audit-ops.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../util/limits.js';
-import type { AuditEvent } from './types.js';
-import type { MethodEffects } from './effects.js';
+import type { AuditEvent, MethodEffects } from './types.js';
 
 /** The rows an audit list reads for `limit`: one past the cap, since GET /v1/audit reads a row
  * ahead to tell whether another page exists. */

@@ -1,6 +1,6 @@
 // The MS-MARCO MiniLM cross-encoder from Transformers.js, behind the cross-encoder port the
 // reranker scores through.
-import type { CrossEncoderFn, CrossEncoderLoad } from '../base/ports/cross-encoder.js';
+import type { CrossEncoderFn, CrossEncoderLoad } from '../base/ports/reranker.js';
 import { createModelLoads, importTransformers, MODEL_LOAD_POLICY } from './transformers.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';

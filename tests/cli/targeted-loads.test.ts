@@ -137,11 +137,10 @@ describe('strengthenRetrieved', () => {
     const ids = await seed(4);
     const { result, statements } = recordStatements(() =>
       strengthenRetrieved(
-        root,
+        { hippoRoot: root, grant: grantFor({}) },
         ids,
         { tenantId: 'default', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
-        grantFor({}),
       ),
     );
     expect([...result].sort()).toEqual([...ids].sort());

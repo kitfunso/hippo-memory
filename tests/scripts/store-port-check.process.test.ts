@@ -9,12 +9,22 @@ const SCRIPT = join(REPO, 'scripts', 'checks', 'check-store-port.mjs');
 
 type Run = { status: number | null; stdout: string; stderr: string; sites: string[] };
 
-/** The whole stderr of a run that could not read the local tier, for the one reason `site`. */
-const UNREAD = (site: string): string =>
-  "The scan could not read hippo.db's local tier, so none of its methods was checked:\n" +
-  `  ${site}\n` +
-  'Point TIER_DOOR in scripts/lib/tier-type-facts.mjs at the file that exports hippoDbRepos(), whose return type lists' +
-  ' each repository and its methods.\n';
+/** The whole stderr of a run that could not read a root of the store's types, for the reasons `sites`. */
+const UNREAD = (...sites: string[]): string =>
+  "The scan could not read a root of the store's types, so the types it reaches went unchecked:\n" +
+  sites.map((site) => `  ${site}\n`).join('') +
+  'Point STORE_ROOT or TIER_ROOT in scripts/lib/port-type-facts.mjs at the interface, and type each repository by a' +
+  ' declared interface.\n';
+
+const PKG = { 'package.json': '{ "name": "hippo-memory" }\n' };
+const STORE = { 'src/base/ports/store.ts': 'export interface HippoStore { readonly kind: string }\n' };
+
+/** A tier port listing the one repository `Rows`, declared in src/base/records/rows.ts as `body`. */
+const tierOf = (body: string) => ({
+  'src/base/ports/hippo-db.ts':
+    "import type { Rows } from '../records/rows.js';\nexport interface HippoDbRepos { readonly rows: Rows }\n",
+  'src/base/records/rows.ts': body,
+});
 
 function runOn(files: Record<string, string>): Run {
   const root = mkdtempSync(join(tmpdir(), 'hippo-store-port-'));
@@ -56,7 +66,7 @@ describe('check-store-port.mjs', () => {
       'src/api/a.ts': 'export interface NotPort { visit(each: () => void): void }\n',
     });
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain('A port method takes a parameter whose type holds a function');
+    expect(r.stderr).toContain('A port or local-tier method takes a parameter whose type holds a function');
     expect(r.sites.sort()).toEqual([
       'src/base/ports/store.ts:5 Group.visit(each)',
       'src/base/ports/store.ts:6 Group.repair(protect)',
@@ -81,65 +91,62 @@ describe('check-store-port.mjs', () => {
     ]);
   });
 
-  it('fails on a local-tier method parameter that holds a function, read from the types hippoDbRepos infers', () => {
-    const r = runOn({
-      'src/store/sqlite/hippo-db.ts': [
-        'export interface Row { readonly at: Date; readonly hooks: { readonly onRow: () => void } }',
-        'export function hippoDbRepos() {',
-        '  return {',
-        '    rows: {',
-        '      visit(each: (row: string) => void): void {},',
-        '      read(tenantId: string, at: Date): string { return tenantId; },',
-        '      watch(row: Row): void {},',
-        '    },',
-        '  };',
-        '}',
-      ].join('\n'),
-    });
+  it('fails on a local-tier method parameter that holds a function, and leaves out a records type no repository lists', () => {
+    const r = runOn(
+      tierOf(
+        [
+          'export interface Row { readonly at: Date; readonly hooks: { readonly onRow: () => void } }',
+          'export interface Rows {',
+          '  visit(each: (row: string) => void): Promise<void>;',
+          '  read(tenantId: string, at: Date): Promise<string>;',
+          '  watch(row: Row): Promise<void>;',
+          '}',
+          'export interface Unlisted { visit(each: () => void): void }',
+        ].join('\n'),
+      ),
+    );
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain("A method of hippo.db's local tier takes a parameter whose type holds a function");
+    expect(r.stderr).toContain('A port or local-tier method takes a parameter whose type holds a function');
     expect(r.sites.sort()).toEqual([
-      'src/store/sqlite/hippo-db.ts:5 rows.visit(each)',
-      'src/store/sqlite/hippo-db.ts:7 rows.watch(row.hooks.onRow)',
+      'src/base/records/rows.ts:3 Rows.visit(each)',
+      'src/base/records/rows.ts:5 Rows.watch(row.hooks.onRow)',
     ]);
   });
 
   it('reads every overload of a local-tier method, at the overload that takes the function', () => {
-    const r = runOn({
-      'src/store/sqlite/hippo-db.ts': [
-        'function read(id: string): string;',
-        'function read(id: string, each: (row: string) => void): void;',
-        'function read(id: string, each?: (row: string) => void): string | void { return id; }',
-        'export function hippoDbRepos() {',
-        '  return { rows: { read } };',
-        '}',
-      ].join('\n'),
-    });
+    const r = runOn(
+      tierOf(
+        [
+          'export interface Rows {',
+          '  read(id: string): Promise<string>;',
+          '  read(id: string, each: (row: string) => void): Promise<void>;',
+          '}',
+        ].join('\n'),
+      ),
+    );
     expect(r.status).toBe(1);
-    expect(r.sites).toEqual(['src/store/sqlite/hippo-db.ts:2 rows.read(each)']);
+    expect(r.sites).toEqual(['src/base/records/rows.ts:3 Rows.read(each)']);
   });
 
   it('reads a function inside a generic declared outside src, and passes one that holds only data', () => {
-    const r = runOn({
-      'src/store/sqlite/hippo-db.ts': [
-        'type Hook = () => void;',
-        'export function hippoDbRepos() {',
-        '  return {',
-        '    rows: {',
-        '      table(hooks: Record<string, () => void>): void {},',
-        '      keyed(hooks: Map<string, Hook>): void {},',
-        '      later(hook: Promise<Hook>): void {},',
-        '      plain(rows: Map<string, Date>, at: Promise<number>): void {},',
-        '    },',
-        '  };',
-        '}',
-      ].join('\n'),
-    });
+    const r = runOn(
+      tierOf(
+        [
+          'type Hook = () => void;',
+          'export interface Rows {',
+          '  table(hooks: Record<string, () => void>): Promise<void>;',
+          '  keyed(hooks: Map<string, Hook>): Promise<void>;',
+          '  later(hook: Promise<Hook>): Promise<void>;',
+          '  plain(rows: Map<string, Date>, at: Promise<number>): Promise<void>;',
+          '}',
+        ].join('\n'),
+      ),
+    );
     expect(r.status).toBe(1);
     expect(r.sites.sort()).toEqual([
-      'src/store/sqlite/hippo-db.ts:5 rows.table(hooks)',
-      'src/store/sqlite/hippo-db.ts:6 rows.keyed(hooks)',
-      'src/store/sqlite/hippo-db.ts:7 rows.later(hook)',
+      'src/base/records/rows.ts:3 Rows.table(hooks)',
+      'src/base/records/rows.ts:4 Rows.keyed(hooks)',
+      'src/base/records/rows.ts:5 Rows.later(hook)',
     ]);
   });
 
@@ -181,39 +188,38 @@ describe('check-store-port.mjs', () => {
     expect(r.status, r.stderr).toBe(0);
   });
 
-  it("fails in hippo-memory's own folder when the tier door is missing, under its own heading and fix", () => {
-    const r = runOn({
-      'package.json': '{ "name": "hippo-memory" }\n',
-      'src/base/ports/store.ts':
-        'export interface Group { read(tenantId: string, opts: { readonly limit: number }): void }\n',
-    });
-    expect(r.status).toBe(1);
-    expect(r.stderr).toBe(UNREAD('src/store/sqlite/hippo-db.ts is missing'));
-  });
-
-  it("fails in hippo-memory's own folder when hippoDbRepos returns any or a tier with no methods", () => {
-    const pkg = { 'package.json': '{ "name": "hippo-memory" }\n' };
-    const typedAny = runOn({
-      ...pkg,
-      'src/store/sqlite/hippo-db.ts': 'export function hippoDbRepos(): any { return {}; }\n',
-    });
-    const noMethods = runOn({
-      ...pkg,
-      'src/store/sqlite/hippo-db.ts': 'export function hippoDbRepos() { return { rows: {} }; }\n',
-    });
-    expect([typedAny.status, noMethods.status]).toEqual([1, 1]);
-    expect(typedAny.stderr).toBe(
-      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos() returns 0 repositories and no method the checker can read'),
-    );
-    expect(noMethods.stderr).toBe(
-      UNREAD('src/store/sqlite/hippo-db.ts:1 hippoDbRepos() returns 1 repositories and no method the checker can read'),
+  it("fails in hippo-memory's own folder when a root is gone, under its own heading and fix", () => {
+    const noTier = runOn({ ...PKG, ...STORE });
+    const renamed = runOn({ ...PKG, 'src/base/ports/hippo-db.ts': 'export interface LocalRepos { readonly n: 1 }\n' });
+    expect([noTier.status, renamed.status]).toEqual([1, 1]);
+    expect(noTier.stderr).toBe(UNREAD('src/base/ports/hippo-db.ts declares no HippoDbRepos'));
+    expect(renamed.stderr).toBe(
+      UNREAD('src/base/ports/store.ts declares no HippoStore', 'src/base/ports/hippo-db.ts declares no HippoDbRepos'),
     );
   });
 
-  it('fails a tier door that exports no hippoDbRepos under the same heading', () => {
-    const r = runOn({ 'src/store/sqlite/hippo-db.ts': 'export function otherRepos() { return {}; }\n' });
-    expect(r.status).toBe(1);
-    expect(r.stderr).toBe(UNREAD('src/store/sqlite/hippo-db.ts:1 exports no hippoDbRepos'));
+  it("fails in hippo-memory's own folder on a tier that lists no repository, or one typed as no declared interface", () => {
+    const empty = runOn({ ...PKG, ...STORE, 'src/base/ports/hippo-db.ts': 'export interface HippoDbRepos {}\n' });
+    const blind = runOn({
+      ...PKG,
+      ...STORE,
+      'src/base/ports/hippo-db.ts': [
+        'interface Real { read(id: string): Promise<string> }',
+        'export interface HippoDbRepos {',
+        '  readonly real: Real;',
+        '  readonly typedAny: any;',
+        '  readonly gone: Gone;',
+        '}',
+      ].join('\n'),
+    });
+    expect([empty.status, blind.status]).toEqual([1, 1]);
+    expect(empty.stderr).toBe(UNREAD('src/base/ports/hippo-db.ts HippoDbRepos lists no repository'));
+    expect(blind.stderr).toBe(
+      UNREAD(
+        'src/base/ports/hippo-db.ts:4 HippoDbRepos.typedAny names no interface the scan can read',
+        'src/base/ports/hippo-db.ts:5 HippoDbRepos.gone names no interface the scan can read',
+      ),
+    );
   });
 
   it('passes on the real repo', () => {

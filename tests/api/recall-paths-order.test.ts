@@ -207,7 +207,6 @@ describe('retrieve paths: order and writes', () => {
       {
         ...cliCore(),
         show: (ranking) => ({ results: ranking.results.slice(0, 2), hints: CALLER_HINTS, tokens: 7 }),
-        lastRecall: caller.store.hippoDb.lastRecall,
       },
     );
     expect(idsOf(result)).toEqual(CORE_IDS);

@@ -34,6 +34,13 @@ export interface TextsHoldingOptions {
 
 export type CapturedOutcome = 'captured' | 'skipped' | 'rejected';
 
+/** How many of a capture's items each outcome took. */
+export interface CaptureTally {
+  captured: number;
+  skipped: number;
+  rejected: number;
+}
+
 export interface CaptureWriteOptions {
   readonly actor?: string;
   /** No stats, as in a server process. */
@@ -49,11 +56,10 @@ export interface CaptureDedup {
   readonly everyScope?: boolean;
 }
 
-// The local compaction hooks' record work, as data: the spool and the transcript a replay reads
-// stay with the surface, and each line a step would log comes back as a note for the surface's own
-// log.
-/** Each method opens hippo.db with the hook's wait, so a busy store costs the hook a bounded
- * delay. */
+// The local compaction hooks' record work, as data: the spool and transcript a replay reads stay
+// with the surface, and each line a step would log comes back as a note for the surface's log.
+/** Each method opens hippo.db with the hook's wait, so a busy store costs the hook a
+ * bounded delay. */
 export interface CompactionHooks {
   /** PreCompact's `started` record; its id. */
   start(tenantId: string, start: Omit<CompactionStart, 'originProject'>): Promise<string>;
@@ -61,8 +67,8 @@ export interface CompactionHooks {
   markSnapshotSaved(tenantId: string, recordId: string): Promise<void>;
   /** PostCompact's save: the summary's record, then its items. Never throws. */
   save(save: CompactionSave): Promise<CompactionSaveOutcome>;
-  /** Writes the items of `summarised` records a killed hook or a busy store left, until
-   * `deadline`. */
+  /** Writes the items of `summarised` records a killed hook or a busy store left,
+   * until `deadline`. */
   saveStalled(tenantId: string, opts: StalledOptions): Promise<StalledSaved>;
   /** Puts one spooled summary on its record, as its PostCompact would have; the record its items
    * go under. */
@@ -165,8 +171,8 @@ export interface OpenCompaction extends CompactionRef {
   readonly nextStartedAt: string | null;
 }
 
-/** Why a step failed; `busy` when the store was locked, so a replay stops and a later one tries
- * again. */
+/** Why a step failed; `busy` when the store was locked, so a replay stops and a later one
+ * tries again. */
 export interface StepFailure {
   readonly busy: boolean;
   readonly message: string;
@@ -185,14 +191,13 @@ export interface FillOutcome {
   notes: string[];
 }
 
-// The Compactions group, kept apart from port.ts: the record and items of a compaction a caller on
-// another machine sends, under the caller's tenant and project, never the server's folder or
-// environment.
+// The Compactions group, apart from port.ts: a compaction a caller on another machine sends, kept
+// under the caller's tenant and project, never the server's folder or environment.
 export interface Compactions {
   /** A `started` record; its id. */
   start(tenantId: string, start: CompactionStart): Promise<string>;
-  /** Marks the record as having its snapshot saved; an id the tenant does not hold changes
-   * nothing. */
+  /** Marks the record as having its snapshot saved; an id the tenant does not hold
+   * changes nothing. */
   markSnapshotSaved(tenantId: string, recordId: string): Promise<void>;
   /** The items under the request's record, all in one transaction, so two sessions never both
    * write one text; a request id another session holds rejects with ConflictError. */

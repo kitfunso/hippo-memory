@@ -13,8 +13,8 @@ export const HIPPO_DIR = '.hippo';
 type Env = Readonly<Record<string, string | undefined>>;
 
 /** Everything the agent-memory adapters and the hook installers may know about the machine, its
- * disk and git included; src/infra/machine.ts builds the real one and tests hand in a scratch
- * one. */
+ * disk and git included; src/infra/machine.ts builds the real one and tests hand in a
+ * scratch one. */
 export interface Machine {
   readonly home: string;
   readonly env: Env;

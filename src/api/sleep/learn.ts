@@ -203,8 +203,8 @@ function newLessonMemory(
 }
 
 interface TenantScan {
-  /** The rows a lesson's migration target can weaken; every lesson written this batch joins
-   * them. */
+  /** The rows a lesson's migration target can weaken; every lesson written this batch
+   * joins them. */
   readonly live: MemoryEntry[];
   readonly fitSource: SchemaFitSource;
   /** Duplicate keys of what the caller can read. */

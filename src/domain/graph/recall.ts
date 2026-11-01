@@ -76,8 +76,8 @@ export interface GraphExpandOptions {
    * Recall-side scope rule applied to graph-REACHED memories only (base results already passed the
    * caller), mirroring SearchBothHybridOptions.recallScope. Omitted = default-deny (private and
    * quarantine excluded, NULL passes), the fail-closed default for SDK callers. { requested,
-   * additive: true } is CLI --scope unlock (passesCliRecallScopeFilter); otherwise exact narrowing
-   * (passesScopeFilterForRecall).
+   * additive: true } is CLI --scope unlock (passesCliRecallScopeFilter); otherwise exact
+   * narrowing (passesScopeFilterForRecall).
    */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }

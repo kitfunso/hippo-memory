@@ -38,8 +38,8 @@ export function markSummaryDirtyInTx(
 }
 
 /** markSummaryDirtyInTx's flip for many summaries of one tenant in one statement, with no audit
- * rows: the caller writes them in its own order. Returns the dag_level of each summary that
- * flipped. */
+ * rows: the caller writes them in its own order. Returns the dag_level of each summary
+ * that flipped. */
 export function markSummariesDirtyInTx(
   db: DatabaseSyncLike,
   summaryIds: readonly string[],

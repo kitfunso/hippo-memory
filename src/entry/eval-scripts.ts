@@ -9,8 +9,7 @@ import { evalNow, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switc
 export { evalNow, isRecallBoostAblated } from '../infra/eval-switches.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
-import type { ConfiguredFolder } from '../base/config/configured-folder.js';
-import type { HippoStore } from '../base/ports/store.js';
+import type { ConfiguredFolder, HippoStore } from '../base/ports/store.js';
 import { withHippoDb } from '../api/hippo-db-context.js';
 import { judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
@@ -105,4 +104,4 @@ export const ingestEvent = connector(ingestGithubEvent);
 export const ingestMessage = connector(ingestSlackMessage);
 export { adminActor, goalPush, outcome } from '../api/index.js';
 export type { EntryContext as Context } from '../api/index.js';
-export type { DetachedWork } from '../domain/search/detached-work.js';
+export type { DetachedWork } from '../domain/search/embed-memories.js';

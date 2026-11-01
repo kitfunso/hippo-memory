@@ -26,8 +26,8 @@ export interface Llm {
   send(request: LlmRequest): Promise<LlmReply>;
 }
 
-// A bad or missing key, no credit, no permission, an unknown model: every later call gets the same
-// answer.
+// A bad or missing key, no credit, no permission, an unknown model: every later call gets the
+// same answer.
 const PERMANENT_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 404]);
 
 /** True for a failure the next call would repeat, so a caller looping over items should stop
@@ -36,8 +36,8 @@ export function isPermanentFailure(failure: LlmFailure): boolean {
   return failure.kind === 'http' && PERMANENT_STATUSES.has(failure.status);
 }
 
-/** The first errno name (ECONNRESET, ENOTFOUND) along a cause chain; fetch puts it one level
- * down. */
+/** The first errno name (ECONNRESET, ENOTFOUND) along a cause chain; fetch puts it one
+ * level down. */
 function errnoOf(cause: unknown): string {
   for (
     let link = cause, depth = 0;

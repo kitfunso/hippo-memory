@@ -5,8 +5,8 @@
  * any other. */
 export const ZERO_NORM = 1e-10;
 
-// Four running sums, which V8 runs faster than one: vector index inserts spend most of their time
-// here.
+// Four running sums, which V8 runs faster than one: vector index inserts spend most of their
+// time here.
 export function dot(a: ArrayLike<number>, b: ArrayLike<number>): number {
   let s0 = 0;
   let s1 = 0;

@@ -13,8 +13,8 @@ import type { CliCommand } from './api-context.js';
 // Auth subcommands
 // ---------------------------------------------------------------------------
 
-/** --role as given, or undefined for the default; anything else exits 1, so a typo never picks a
- * role. */
+/** --role as given, or undefined for the default; anything else exits 1, so a typo never picks
+ * a role. */
 function roleFlagOrExit(flags: CliFlags): 'admin' | 'member' | undefined {
   const roleFlag = stringFlag(flags, 'role');
   if (roleFlag !== undefined && roleFlag !== 'admin' && roleFlag !== 'member') {
@@ -23,8 +23,8 @@ function roleFlagOrExit(flags: CliFlags): 'admin' | 'member' | undefined {
   return roleFlag;
 }
 
-/** Says which defaults a mint took and how to ask for the wider key. Stderr keeps --json output
- * clean. */
+/** Says which defaults a mint took and how to ask for the wider key. Stderr keeps --json
+ * output clean. */
 function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
   const notes: string[] = [];
   if (!roleGiven) {
