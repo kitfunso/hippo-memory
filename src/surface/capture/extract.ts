@@ -119,6 +119,14 @@ export function withoutBold(line: string): string {
   return cuts.reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
 }
 
+/** `text` without a leading `**` that opens a span nothing closes, as an old capture stored it. */
+export function withoutOrphanOpener(text: string): string {
+  const [first, ...later] = strongMarkers(blankCodeSpans(text, '`'));
+  if (first === undefined || !first.open || text.slice(0, first.index).trim() !== '') return text;
+  if (later.some((marker) => marker.close)) return text;
+  return text.slice(0, first.index) + text.slice(first.index + 2);
+}
+
 function proseBlocks(text: string, clean: LineCleaner): string[] {
   const blocks: string[] = [];
   let pending: string[] = [];

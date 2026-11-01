@@ -9,7 +9,13 @@ import { isInitialized } from '../../host/project-identity.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { extractFromTexts, textsAsOnceStored, withoutBold, type ExtractedItem } from './extract.js';
+import {
+  extractFromTexts,
+  textsAsOnceStored,
+  withoutBold,
+  withoutOrphanOpener,
+  type ExtractedItem,
+} from './extract.js';
 import {
   type SessionTurn,
   collectSessionTurns,
@@ -165,7 +171,11 @@ export function heldKeysOf(rows: readonly HeldText[]): Set<string> {
   const pinned = Array.from(storedTextKeys(rows.filter((row) => row.pinned)), (held) =>
     held.replace(BARE_LEADING_MARKER, ''),
   );
-  for (const form of [...Array.from(keys), ...pinned]) keys.add(duplicateKey(withoutBold(form)));
+  // An old capture stored "**X" with the closer lost; that row passes the gate and still holds "X".
+  for (const form of [...Array.from(keys), ...pinned]) {
+    keys.add(duplicateKey(withoutBold(form)));
+    keys.add(duplicateKey(withoutOrphanOpener(withoutBold(form))));
+  }
   return keys;
 }
 

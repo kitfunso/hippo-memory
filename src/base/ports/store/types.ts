@@ -137,7 +137,9 @@ export interface AuditEvent {
   metadata: JsonObject;
 }
 
-export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject' | 'pinned'>;
+/** A stored text the capture dedup reads; `pinned` is optional so an adapter that omits it still fits. */
+export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject'> &
+  Partial<Pick<MemoryEntry, 'pinned'>>;
 
 /** One project name, or every name a project's rows carry. */
 export type OriginFilter = string | readonly string[];

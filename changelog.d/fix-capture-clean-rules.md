@@ -5,5 +5,5 @@
 
 ### Known limitations
 
-- The checks miss some cuts, and a missed cut stays stored as before. A `)` right after a code span, a cut word of 3 letters or fewer before `)`, and a `**` cut that a later bold pair follows all pass. On the global store measured for this fix, 72 of 76 cut rows are set aside. One is the code-span case. Three are merged rows with no automatic parent, which `hippo audit repair` lists for review.
+- The checks miss some cuts, and a missed cut stays stored as before. A text cut inside a code span (its first backtick closes the span), a cut word of 3 letters or fewer before `)`, a `**` cut that a later bold pair follows, and a `**` cut after a word and followed by another word (`cache** files`) all pass. On the global store measured for this fix, 72 of 76 cut rows are set aside. One miss is the code-span case. Three are merged rows with no automatic parent, which `hippo audit repair` lists for review.
 - The upgrade notice counts only the rows it moved or listed for review. A pinned cut row stays, and the notice does not name it. `hippo audit repair` shows it.

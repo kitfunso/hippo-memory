@@ -138,6 +138,8 @@ const ROMAN_MARKER_START = /[(,;]/;
 const ROMAN_AFTER_WORD = /(?:^|[^A-Za-z])(?:option|step|item)\s+$/i;
 const BOLD_CLOSE_NEXT = /[\s.,;:!?)\]"'’”—–]/;
 const SENTENCE_MARK = /[.!?;:,]/;
+const WORD_OR_CODE = /[\p{L}\p{N}`]/u;
+const MARK_OR_END_AFTER = /^\s*(?:$|[()—–:;,.!?])/;
 const DASH_OR_SPACE = /[\s—–]/;
 const CLOSING_QUOTE = /['"’”]/;
 const QUOTE_MARK = /['"‘’“”]/;
@@ -149,7 +151,12 @@ function opensInsideBold(text: string): boolean {
   if (first === undefined) return false;
   // "2**-1" and "2**(n + 1)" are exponents: a real closer is followed by a space, a mark or the end.
   const next = text[first.index + 2] ?? ' ';
-  if (first.close && !first.open) return BOLD_CLOSE_NEXT.test(next);
+  if (first.close && !first.open) {
+    // After a word, "cache** files" and "2** -1" are literal: only a mark or the end cuts there.
+    const afterWord = WORD_OR_CODE.test(text[first.index - 1] ?? '');
+    if (!BOLD_CLOSE_NEXT.test(next)) return false;
+    return !afterWord || MARK_OR_END_AFTER.test(text.slice(first.index + 2));
+  }
   // A quoted "**", "(**.env**)" and "foo**bar**" can open too: only "done.**— then" with no closer is a cut.
   if (first.close) {
     const closerFollows = later.some((marker) => marker.close);

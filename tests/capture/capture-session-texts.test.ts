@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
+import { heldKeysOf } from '../../src/surface/capture/command.js';
+import type { HeldText } from '../../src/base/ports/store/types.js';
 import {
   captureSessionTexts,
   type CaptureContext,
@@ -233,6 +235,22 @@ describe('captureSessionTexts', () => {
     const text = '- **Volume data.** Never backfill them.';
     expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
     expect(contents(root)).toEqual([stored]);
+  });
+
+  it('is blocked by a row an old capture stored with its closing bold marker lost', async () => {
+    const stored = '**Never deploy before tests';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    expect(await captureSessionTexts(ctxFor(root), req([`${stored}.**`]))).toEqual({
+      captured: 0,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(contents(root)).toEqual([stored]);
+  });
+
+  it('reads a held row without pinned, as an external store adapter returns it, as unpinned', () => {
+    const external: HeldText = { content: '** Never backfill them', source: 'capture', originProject: 'acme-web' };
+    expect(heldKeysOf([external]).has('Never backfill them')).toBe(false);
   });
 
   it('is blocked by the caller project and user-global copies, never by another project', async () => {
