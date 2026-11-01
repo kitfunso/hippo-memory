@@ -134,14 +134,25 @@ describe('gatePromptRecall', () => {
 });
 
 describe('memoryTokens', () => {
-  it('adds each letter of a longer CJK run, so a one-letter prompt word matches inside it', () => {
+  it('adds a one-letter CJK prompt word the memory holds inside a longer run, and no other letter', () => {
     const memory = '연결 풀은 이십으로 설정한다';
-    expect(scoreOverlap(promptTokens('풀'), contentTokens(memory), 'jaccard').shared).toBe(0);
-    expect(scoreOverlap(promptTokens('풀'), memoryTokens(memory), 'jaccard').shared).toBe(1);
+    const p = promptTokens('풀');
+    expect(scoreOverlap(p, contentTokens(memory), 'jaccard').shared).toBe(0);
+    expect(scoreOverlap(p, memoryTokens(memory, p), 'jaccard').shared).toBe(1);
+    expect([...memoryTokens(memory, p)].filter((t) => [...t].length === 1)).toEqual(['풀']);
+    expect(memoryTokens('배포 전에 캐시를 비운다', p).has('풀')).toBe(false);
+  });
+
+  it('scores a multi-letter CJK prompt as contentTokens does, so a long note still clears the 0.04 gate', () => {
+    const note = '上线前在预发布环境执行数据库迁移脚本确认全部服务健康检查通过后再切换生产流量并通知值班同事';
+    const p = promptTokens('数据库');
+    const before = scoreOverlap(p, contentTokens(note), 'jaccard');
+    expect(scoreOverlap(p, memoryTokens(note, p), 'jaccard')).toEqual(before);
+    expect(before.score).toBeGreaterThanOrEqual(0.04);
   });
 
   it('keeps the length floor and stop words of contentTokens for other words', () => {
-    expect([...memoryTokens('the db cache')]).toEqual(['cache']);
+    expect([...memoryTokens('the db cache', new Set())]).toEqual(['cache']);
   });
 });
 

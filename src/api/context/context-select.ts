@@ -96,8 +96,8 @@ export function selectPinned({
 
   // Prompt recall gates the backfill on the prompt instead of recency.
   if (plan.promptRecallPending) {
-    const candidates = (): PromptCandidate[] =>
-      promptRecallCandidates({ plan, pools, admit: admission.admit, rankedPinned, nowP });
+    const candidates = (prompt: ReadonlySet<string>): PromptCandidate[] =>
+      promptRecallCandidates({ plan, pools, admit: admission.admit, rankedPinned, nowP, prompt });
     backfillFromPrompt(opts, plan, { pinnedCfg, candidates, picked, recentBudget });
   } else if (plan.includeRecent > 0) {
     backfillRecent(plan, { localPool, globalPool, picked, recentBudget, nowP });
@@ -155,7 +155,7 @@ function rankPinned(
 
 interface BackfillFromPromptOptions {
   readonly pinnedCfg: HippoConfig;
-  readonly candidates: () => PromptCandidate[];
+  readonly candidates: (prompt: ReadonlySet<string>) => PromptCandidate[];
   readonly picked: Picked<ContextResultEntry>;
   readonly recentBudget: number;
 }
@@ -179,7 +179,7 @@ function backfillFromPrompt(
   const gate = promptRecallGateOf(pinnedCfg.pinnedInject);
   const p = promptTokens(opts.prompt ?? '');
   if (p.size === 0) return;
-  const candidateItems = candidates();
+  const candidateItems = candidates(p);
   const gated = gatePromptRecall(p, candidateItems, gate);
   plan.obs?.gated(p, candidateItems, gate, gated);
   const rows = gated.map((g) => ({
@@ -198,6 +198,7 @@ interface PromptRecallCandidatesOptions {
   readonly admit: (e: MemoryEntry) => boolean;
   readonly rankedPinned: ContextResultEntry[];
   readonly nowP: Date;
+  readonly prompt: ReadonlySet<string>;
 }
 
 // Candidates came off the ambient load's own connection (the recall request), not a fresh open.
@@ -207,6 +208,7 @@ function promptRecallCandidates({
   admit,
   rankedPinned,
   nowP,
+  prompt,
 }: PromptRecallCandidatesOptions): PromptCandidate[] {
   const { obs, primaryIsGlobal } = plan;
   // A candidate carrying a pin's text would inject that memory a second time.
@@ -243,13 +245,14 @@ function promptRecallCandidates({
     'eligible',
     'duplicate',
   );
-  return promptCandidateItems(localCandidates, globalCandidates, primaryIsGlobal);
+  return promptCandidateItems(localCandidates, globalCandidates, primaryIsGlobal, prompt);
 }
 
 function promptCandidateItems(
   localCandidates: MemoryEntry[],
   globalCandidates: MemoryEntry[],
   primaryIsGlobal: boolean,
+  prompt: ReadonlySet<string>,
 ): PromptCandidate[] {
   const seenCandidateIds = new Set<string>();
   const candidateItems: PromptCandidate[] = [];
@@ -261,7 +264,7 @@ function promptCandidateItems(
     for (const e of entries) {
       if (seenCandidateIds.has(e.id)) continue;
       seenCandidateIds.add(e.id);
-      candidateItems.push({ id: e.id, tokens: memoryTokens(e.content), entry: e, isGlobal });
+      candidateItems.push({ id: e.id, tokens: memoryTokens(e.content, prompt), entry: e, isGlobal });
     }
   }
   return candidateItems;
