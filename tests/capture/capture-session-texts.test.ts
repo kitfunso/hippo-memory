@@ -274,6 +274,19 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored, twin]);
   });
 
+  it('stores the Redis rule beside a held bold question whose bullet it follows', async () => {
+    const stored = '**Should we deploy on Fridays?**';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    const text = [
+      '## Plan',
+      '- **Should we deploy on Fridays?**',
+      '- **Move the cache to Redis.**',
+      'should we keep the old cache?',
+    ].join('\n');
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Move the cache to Redis.']);
+  });
+
   it('adds no row for a held rule whose bold label an old capture kept', async () => {
     const stored = '**Rule:** Always run tests before committing';
     writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });

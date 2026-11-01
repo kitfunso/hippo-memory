@@ -5,11 +5,7 @@ import {
   QUOTE_MARK,
 } from '../../base/memory/memory-quality.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
-import {
-  blankCodeSpans,
-  strongMarkers,
-  unclosedRuns,
-} from '../../base/memory/markdown-delimiters.js';
+import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
 export interface ExtractedItem {
   content: string;
@@ -109,7 +105,11 @@ function continues(line: string, previous: string | undefined): boolean {
   return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
 }
 
-type LineCleaner = (line: string) => string;
+/** The sorted offsets of the `**` markers a reading of a line removes. */
+type Cutter = (line: string) => number[];
+
+/** What capture read before it removed bold markers. */
+const keepAll: Cutter = () => [];
 
 /** Offsets of each `**` that pairs with the nearest opener before it. */
 function pairedBold(line: string): number[] {
@@ -127,39 +127,116 @@ function pairedBold(line: string): number[] {
 
 /** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so each
  * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
-function withoutBold(line: string): string {
+const boldPairs: Cutter = (line) => pairedBold(line).sort((a, b) => a - b);
+
+/** `line` without the two characters at each of the sorted `cuts`, built in one pass. */
+function cutOut(line: string, cuts: readonly number[]): string {
   let out = '';
   let kept = 0;
-  for (const at of pairedBold(line).sort((a, b) => a - b)) {
+  for (const at of cuts) {
     out += line.slice(kept, at);
     kept = at + 2;
   }
   return out + line.slice(kept);
 }
 
-function proseBlocks(text: string, clean: LineCleaner): string[] {
-  const blocks: string[] = [];
-  let pending: string[] = [];
-  // The backtick runs the pending lines leave open: the next line continues that code span.
-  let open: number[] = [];
-  const flush = (): void => {
-    // Cleaned once the lines are joined, as a spec bullet is, so a span that wraps a line stays whole.
-    if (pending.length > 0) blocks.push(clean(pending.join(' ')));
-    pending = [];
-    open = [];
+/** How many of the sorted `values` are at most `limit`. */
+function countUpTo(values: readonly number[], limit: number): number {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (values[middle] <= limit) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+// Per line: whether the line break above it lies inside a code span. A span ends at a blank line,
+// heading or bullet, and a backtick run with no closer is plain text.
+function insideCodeSpan(lines: readonly string[]): boolean[] {
+  const inside: boolean[] = lines.map(() => false);
+  let first = 0;
+  const settle = (end: number): void => {
+    const blanked = blankCodeSpans(lines.slice(first, end).join('\n'));
+    let at = 0;
+    for (let i = first; i < end; i++) {
+      if (i > first) inside[i] = blanked[at - 1] !== '\n';
+      at += lines[i].length + 1;
+    }
   };
-  for (const line of text.split('\n')) {
+  lines.forEach((line, i) => {
     const trimmed = line.trim();
+    const bullet = BULLET.test(trimmed);
+    if (trimmed && !/^#+\s/.test(trimmed) && !bullet) return;
+    settle(i);
+    first = bullet ? i : i + 1;
+  });
+  settle(lines.length);
+  return inside;
+}
+
+/** A line of text and where it starts in the prose. */
+interface Piece {
+  text: string;
+  at: number;
+}
+
+/** The text of a prose block with its markers cut, and where a range of it came from. */
+interface Block {
+  readonly text: string;
+  sourceOf(from: number, to: number): [number, number];
+}
+
+function blockOf(pieces: readonly Piece[], cuts: Cutter): Block {
+  const raw = pieces.map((piece) => piece.text).join(' ');
+  const cutAt = cuts(raw);
+  // Where each cut sits in the cut text, and where each piece starts in the raw text.
+  const shifted = cutAt.map((at, k) => at - 2 * k);
+  const starts: number[] = [];
+  let sum = 0;
+  for (const piece of pieces) {
+    starts.push(sum);
+    sum += piece.text.length + 1;
+  }
+  const toProse = (rawIndex: number): number => {
+    const k = Math.max(0, countUpTo(starts, rawIndex) - 1);
+    return pieces[k].at + Math.min(rawIndex - starts[k], pieces[k].text.length);
+  };
+  return {
+    text: cutOut(raw, cutAt),
+    sourceOf: (from, to) => [
+      toProse(from + 2 * countUpTo(shifted, from)),
+      toProse(to + 2 * countUpTo(shifted, to - 1)),
+    ],
+  };
+}
+
+function proseBlocks(prose: string, cuts: Cutter): Block[] {
+  const blocks: Block[] = [];
+  let pending: Piece[] = [];
+  // Cut once the lines are joined, as a spec bullet is, so a span that wraps a line stays whole.
+  const flush = (): void => {
+    if (pending.length > 0) blocks.push(blockOf(pending, cuts));
+    pending = [];
+  };
+  const lines = prose.split('\n');
+  const inside = insideCodeSpan(lines);
+  let offset = 0;
+  for (const [i, line] of lines.entries()) {
+    const trimmed = line.trim();
+    const end = offset + line.trimEnd().length;
+    offset += line.length + 1;
     if (!trimmed || /^#+\s/.test(trimmed)) {
       flush();
       continue;
     }
     const bullet = trimmed.match(BULLET);
-    const previous = pending.at(-1);
-    const detached = open.length === 0 && !continues(trimmed, previous && clean(previous));
-    if (bullet || detached) flush();
-    pending.push(bullet?.[1] ?? trimmed);
-    open = unclosedRuns(pending[pending.length - 1], open);
+    const previous = pending.at(-1)?.text;
+    const joined = inside[i] || continues(trimmed, previous && cutOut(previous, cuts(previous)));
+    if (bullet || !joined) flush();
+    const text = bullet?.[1] ?? trimmed;
+    pending.push({ text, at: end - text.length });
   }
   flush();
   return blocks;
@@ -229,14 +306,24 @@ function extractFromPatterns(
   return content.length <= MAX_CHARS ? { content, category, tags: [category, 'captured'] } : null;
 }
 
-function extractSpecSections(text: string, clean: LineCleaner): ExtractedItem[] {
-  const bullets: string[] = [];
+/** An item and the range of the prose it came from. */
+interface Sourced {
+  readonly item: ExtractedItem;
+  readonly from: number;
+  readonly to: number;
+}
+
+function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
+  const bullets: Array<Piece & { to: number }> = [];
   let inSpecSection = false;
   let open = false;
-  // The backtick runs the bullet's lines leave open: the next line continues that code span.
-  let runs: number[] = [];
-  for (const line of text.split('\n')) {
+  const lines = prose.split('\n');
+  const inside = insideCodeSpan(lines);
+  let offset = 0;
+  for (const [i, line] of lines.entries()) {
     const trimmed = line.trim();
+    const end = offset + line.trimEnd().length;
+    offset += line.length + 1;
     if (SPEC_HEADING_PATTERNS.some((pattern) => pattern.test(trimmed))) {
       inSpecSection = true;
       open = false;
@@ -244,44 +331,44 @@ function extractSpecSections(text: string, clean: LineCleaner): ExtractedItem[] 
     }
     if (/^#+\s/.test(trimmed) || /^[A-Z][a-z]+:$/.test(trimmed)) inSpecSection = false;
     const bullet = trimmed.match(BULLET);
-    const previousBullet = bullets.at(-1);
+    const last = bullets.at(-1);
     const wrapped: boolean =
       inSpecSection &&
       open &&
       !bullet &&
       trimmed !== '' &&
       (/^\s/.test(line) ||
-        runs.length > 0 ||
-        continues(trimmed, previousBullet === undefined ? previousBullet : clean(previousBullet)));
+        inside[i] ||
+        continues(trimmed, last && cutOut(last.text, cuts(last.text))));
     if (inSpecSection && bullet) {
-      bullets.push(bullet[1].trim());
-      runs = unclosedRuns(bullet[1]);
-    } else if (wrapped) {
-      bullets[bullets.length - 1] += ` ${trimmed}`;
-      runs = unclosedRuns(trimmed, runs);
-    } else {
-      runs = [];
+      const text = bullet[1].trim();
+      bullets.push({ text, at: end - text.length, to: end });
+    } else if (wrapped && last) {
+      last.text += ` ${trimmed}`;
+      last.to = end;
     }
     open = inSpecSection && (bullet !== null || wrapped);
   }
-  // Cleaned once the lines are joined, so a code span or a pair that wraps a line keeps its text.
+  // Cut once the lines are joined, so a code span or a pair that wraps a line keeps its text.
   return bullets
-    .map(clean)
-    .filter((content) => content.length <= MAX_CHARS && !content.endsWith('?'))
-    .map((content) => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
+    .map(({ text, at, to }) => ({ content: cutOut(text, cuts(text)), from: at, to }))
+    .filter(({ content }) => content.length <= MAX_CHARS && !content.endsWith('?'))
+    .map(({ content, from, to }) => ({
+      item: { content, category: 'spec', tags: ['spec', 'captured'] },
+      from,
+      to,
+    }));
 }
 
 // The items of the spec bullets first, then those of each prose block.
-function extractUnits(text: string, clean: LineCleaner): ExtractedItem[][] {
+function extractSourced(text: string, cuts: Cutter): Sourced[] {
   const prose = proseOnly(text);
-  const units = [extractSpecSections(prose, clean)];
-  for (const block of proseBlocks(prose, clean)) {
-    const items: ExtractedItem[] = [];
-    units.push(items);
-    const cutByAside = asideCutter(block);
+  const found = extractSpecSections(prose, cuts);
+  for (const block of proseBlocks(prose, cuts)) {
+    const cutByAside = asideCutter(block.text);
     let cursor = 0;
-    for (const sentence of completeSentences(block)) {
-      const at = Math.max(block.indexOf(sentence, cursor), cursor);
+    for (const sentence of completeSentences(block.text)) {
+      const at = Math.max(block.text.indexOf(sentence, cursor), cursor);
       cursor = at + sentence.length;
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
@@ -289,13 +376,14 @@ function extractUnits(text: string, clean: LineCleaner): ExtractedItem[][] {
       for (const [category, patterns] of CATEGORIES) {
         const item = extractFromPatterns(sentence, patterns, category);
         if (item) {
-          items.push(item);
+          const [from, to] = block.sourceOf(at, at + sentence.length);
+          found.push({ item, from, to });
           break;
         }
       }
     }
   }
-  return units;
+  return found;
 }
 
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
@@ -304,9 +392,9 @@ export function extractFromTexts(texts: readonly string[], userTexts = 0): Extra
   const seen = new Set<string>();
   return texts
     .flatMap((text, i) =>
-      extractUnits(text, withoutBold)
-        .flat()
-        .map((item) => (i < userTexts ? { ...item, fromUser: true } : item)),
+      extractSourced(text, boldPairs).map(({ item }) =>
+        i < userTexts ? { ...item, fromUser: true } : item,
+      ),
     )
     .filter((item) => {
       const key = duplicateKey(item.content);
@@ -323,21 +411,25 @@ export interface BoldTwin {
   readonly clean: string;
 }
 
-/** The twins of `texts`: both readings of a spec list or prose block pair by position when they
- * give the same number of items, and a pair whose texts differ is a twin. */
+/** The twins of `texts`: an old and a new item of one category pair, one to one, when the lines
+ * they came from overlap, and a pair whose texts differ is a twin. */
 export function boldTwins(texts: readonly string[], scrub: (text: string) => string): BoldTwin[] {
   const twins: BoldTwin[] = [];
   for (const text of texts.filter((t) => t.includes('**'))) {
-    const before = extractUnits(text, (line) => line);
-    const after = extractUnits(text, withoutBold);
-    // Blocks pair by position only when both readings find as many; the spec list is always first.
-    const units = before.length === after.length ? before.length : 1;
-    for (let u = 0; u < units; u++) {
-      if (before[u].length !== after[u].length) continue;
-      before[u].forEach((item, i) => {
-        const fresh = after[u][i].content;
-        if (item.content !== fresh) twins.push({ old: item.content, clean: scrub(fresh) });
-      });
+    const before = extractSourced(text, keepAll);
+    const after = extractSourced(text, boldPairs);
+    for (const category of new Set(before.map(({ item }) => item.category))) {
+      const fresh = after.filter(({ item }) => item.category === category);
+      let next = 0;
+      // Both lists run in text order, so one sweep pairs them.
+      for (const { item: old, from, to } of before.filter(
+        ({ item }) => item.category === category,
+      )) {
+        while (next < fresh.length && fresh[next].to <= from) next++;
+        if (next >= fresh.length || fresh[next].from >= to) continue;
+        const clean = fresh[next++].item.content;
+        if (old.content !== clean) twins.push({ old: old.content, clean: scrub(clean) });
+      }
     }
   }
   return twins;

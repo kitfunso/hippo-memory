@@ -49,30 +49,6 @@ export function blankCodeSpans(text: string, fill = 'x'): string {
   return out + text.slice(copied);
 }
 
-/** The lengths of the backtick runs in `text` that no later run of equal length closes, after those
- * of `before`, the text above it. A run an equal one closes takes the runs between them along. */
-export function unclosedRuns(text: string, before: readonly number[] = []): number[] {
-  const open = [...before];
-  let at = 0;
-  while (at < text.length) {
-    if (text[at] === '\\') {
-      at += 2;
-      continue;
-    }
-    if (text[at] !== '`') {
-      at++;
-      continue;
-    }
-    let end = at;
-    while (text[end] === '`') end++;
-    const waiting = open.indexOf(end - at);
-    if (waiting < 0) open.push(end - at);
-    else open.length = waiting;
-    at = end;
-  }
-  return open;
-}
-
 /** One `**` delimiter run and the roles CommonMark gives it. */
 export interface StrongMarker {
   readonly index: number;

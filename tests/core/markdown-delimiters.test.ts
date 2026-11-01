@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blankCodeSpans, strongMarkers, unclosedRuns } from '../../src/base/memory/markdown-delimiters.js';
+import { blankCodeSpans, strongMarkers } from '../../src/base/memory/markdown-delimiters.js';
 
 describe('blankCodeSpans', () => {
   it.each([
@@ -53,30 +53,4 @@ describe('strongMarkers', () => {
       expect(strongMarkers(text)).toEqual([]);
     },
   );
-});
-
-describe('unclosedRuns', () => {
-  it.each([
-    ['a `b` c', []],
-    ['a ``b`c`` d', []],
-    ['a ```b``c``` d', []],
-    ['a `b c', [1]],
-    ['a ``b ` c', [2, 1]],
-    ['a ``b`c`` d `', [1]],
-    ['a \\`b', []],
-  ])('lists the runs no later run of equal length closes: %s', (text, open) => {
-    expect(unclosedRuns(text)).toEqual(open);
-  });
-
-  it('carries the runs the text above leaves open, and a closer ends them', () => {
-    expect(unclosedRuns('more text', [1])).toEqual([1]);
-    expect(unclosedRuns('end` here', [1])).toEqual([]);
-    expect(unclosedRuns('end`` here', [1])).toEqual([1, 2]);
-  });
-
-  it('judges many unclosed runs of different lengths in one pass', () => {
-    const lengths = Array.from({ length: 400 }, (_, i) => i + 1);
-    const hostile = lengths.map((n) => '`'.repeat(n)).join(' a ');
-    expect(unclosedRuns(hostile)).toEqual(lengths);
-  });
 });

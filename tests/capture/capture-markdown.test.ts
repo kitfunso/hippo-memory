@@ -100,6 +100,17 @@ describe('capture reads markdown the way it renders', () => {
     expect(boldTwins([text], (value) => value)).toEqual([{ old, clean }]);
   });
 
+  it('pairs by the lines an item came from, so a dropped question pairs with nothing', () => {
+    const text = [
+      '## Plan',
+      '- **Should we deploy on Fridays?**',
+      '- **Move the cache to Redis.**',
+      'should we keep the old cache?',
+    ].join('\n');
+    expect(extractFromTexts([text]).map((item) => item.content)).toEqual(['Move the cache to Redis.']);
+    expect(boldTwins([text], (value) => value)).toEqual([]);
+  });
+
   it('pairs nothing when both readings give the same text, or no text holds a "**"', () => {
     for (const text of ['Never call f(**kwargs) without validation.', 'Never push to main.']) {
       expect(
@@ -155,6 +166,108 @@ describe('capture reads markdown the way it renders', () => {
   ])('keeps the next line attached while a code span is open: %j', (text, expected) => {
     expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
   });
+
+  // Each list is what base 3.1.0 gives: a backtick run with no closer is plain text, so it joins nothing.
+  it.each([
+    [
+      'Never use a lone ` in names\nAlways run lint before push',
+      [
+        ['rule', 'Never use a lone ` in names'],
+        ['rule', 'Always run lint before push'],
+      ],
+    ],
+    [
+      "Don't use ` in a branch name\nNever push to main",
+      [
+        ['preference', "Don't use ` in a branch name"],
+        ['rule', 'Never push to main'],
+      ],
+    ],
+    [
+      '1. Never use ` in names\nAlways run lint before push',
+      [
+        ['rule', 'Never use ` in names'],
+        ['rule', 'Always run lint before push'],
+      ],
+    ],
+    [' Use ``` for fences \nNever push to main', [['rule', 'Never push to main']]],
+    ['Use `C:\\dir\\`\nNever push to main', [['rule', 'Never push to main']]],
+    [
+      'Press the ` key to open the console\nNever push to main\nAlways run tests first.',
+      [
+        ['rule', 'Never push to main'],
+        ['rule', 'Always run tests first'],
+      ],
+    ],
+    [
+      'Don`t push to main on Friday\nNever push to main\nAlways run tests first.',
+      [
+        ['rule', 'Never push to main'],
+        ['rule', 'Always run tests first'],
+      ],
+    ],
+    [
+      '- Press the ` key to open the console\n- Never push to main\n- Always run tests first.',
+      [
+        ['rule', 'Never push to main'],
+        ['rule', 'Always run tests first'],
+      ],
+    ],
+    [
+      '- Don`t push to main on Friday\n- Never push to main\n- Always run tests first.',
+      [
+        ['rule', 'Never push to main'],
+        ['rule', 'Always run tests first'],
+      ],
+    ],
+    [
+      'We decided to name the flag with a `\nNever push to main on Friday.',
+      [
+        ['decision', 'We decided to name the flag with a `'],
+        ['rule', 'Never push to main on Friday'],
+      ],
+    ],
+    [
+      '## Plan\n- Never use ` in names\nplain line one\nplain line two',
+      [['spec', 'Never use ` in names plain line one plain line two']],
+    ],
+    [
+      '## Plan\n- Never use ` in names\n  plain line one\n  plain line two',
+      [['spec', 'Never use ` in names plain line one plain line two']],
+    ],
+    [
+      '## Plan\n- Press the ` key to open the console\n- Never push to main\n- Always run tests first.',
+      [
+        ['spec', 'Press the ` key to open the console'],
+        ['spec', 'Never push to main'],
+        ['spec', 'Always run tests first.'],
+        ['rule', 'Always run tests first'],
+      ],
+    ],
+    [
+      '## Plan\n- Don`t push to main on Friday\n- Never push to main\n- Always run tests first.',
+      [
+        ['spec', 'Don`t push to main on Friday'],
+        ['spec', 'Never push to main'],
+        ['spec', 'Always run tests first.'],
+        ['rule', 'Always run tests first'],
+      ],
+    ],
+  ])('joins a line break only inside a matched code span: %j', (text, expected) => {
+    expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
+  });
+
+  it('keeps a stray backtick from joining the 2000 lines below it', () => {
+    const log = Array.from({ length: 2000 }, (_, i) => `Line ${i + 1} of the build log.`).join('\n');
+    const items = extractFromTexts([`Never use a lone \` in names\n${log}\nAlways run lint before push`]);
+    expect(items.map((item) => item.content)).toEqual(['Never use a lone ` in names', 'Always run lint before push']);
+  });
+
+  it('reads 100,000 lines below a stray backtick before the watchdog fires', () => {
+    const text = `Never use a lone \`\n${'Line of the build log.\n'.repeat(100_000)}`;
+    expect(() => scanWithinWatchdog((value) => extractFromTexts([value]), text, 5_000)).not.toThrow();
+    expect(() => scanWithinWatchdog((value) => boldTwins([`**${value}`], (v) => v), text, 5_000)).not.toThrow();
+  }, 30_000);
 
   it('pairs a closer with the nearest opener and keeps code spans whole', () => {
     expect(contents('Never pass **kwargs to **the** store writer.')).toEqual([
