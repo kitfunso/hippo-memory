@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Z0 Round 2 Plan</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+
+<header>
+  <h1>Z0 Round 2 in hippo-memory Evals</h1>
+  <doc-changes new="3" changed="8"></doc-changes>
+  <details class="thread"><summary>Why · 3 requests</summary>
+    <doc-quote via="prompt" from="Keith" at="2026-10-18">then go back and optimise until we can prove hippo-memory work. continue z0 please focus</doc-quote>
+    <doc-quote via="prompt" from="Keith" at="2026-10-18">continue please, i want results</doc-quote>
+    <doc-quote via="prompt" from="Keith">go on then, you drive it, do what's best for us</doc-quote>
+  </details>
+</header>
+
+<main>
+<doc-plan>
+
+<!-- 1 -->
+<doc-claim>
+  <p>Hippo changes only after a paired test on development families.</p>
+  <doc-flow caption="A dev round loops until the cap in claim 1.4 stops it.">
+<script type="text/plain">
+pilot = Pilot read / rustfs
+chain = Chain report / 4 links
++ fix = Hippo change [green]
++ dev = Dev round / paired A2
++ keep = Keep or drop
++ tag = Freeze tag [green]
+| pilot | chain | fix |
+| tag   | keep  | dev |
+pilot -> chain : A2 records
+chain -> fix : weakest link
+fix -> dev
+dev -> keep : check half
+keep -> chain : next round
+keep -> tag : cap
+</script>
+  </doc-flow>
+
+  <doc-claim>
+    <p>Every family that exists before the new tag is dev or burned.</p>
+    <doc-code title="Family status before the new tag · sketch" lang="text">
+<script type="text/plain">
+burned  rustfs X f3 f4 f5 · R f7 f9 f13   scored once in the pilot (Amendment 3, item 4)
+burned  every family a screen dropped     A0 followed the rule
+dev     magnetissimo f1 f4 f5 f6          screened on A0 and A4 only
+dev     conductor f2 f9 f10               screened on A0 and A4 only
+dev     zotero-format-metadata f2 f3 f7   screened on A0 and A4 only
+dev     leakcanary f2 f7 · maigret f8     screened on A0 and A4 only
+dev     nacos, linguist, Turing.jl, halo,
+        hackathon-starter, langextract    authored, never screened
+dev     cj, bm, hp, ml, ff                stage 2 calibration (stage2-record:225)
+</script>
+    </doc-code>
+    <doc-note tone="info">The pilot hippo arms on rustfs stopped early and run again now (record, last two bullets). Rustfs is burned either way.</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Each dev round reports the chain for A2 on every family.</p>
+    <doc-code src="docs/evals/2026-09-29-z0-built-in-memory-prereg.md" lines="178-184" wrap></doc-code>
+    <doc-note tone="idea"><strong>First suspects, not tested</strong> Capture is phrase-based (prereg 182). The prompt hook shows pinned rules and the five newest memories (prereg 30).</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>No hippo change can match the fixed teach template.</p>
+    <doc-code src="docs/evals/2026-09-29-z0-built-in-memory-prereg.md" lines="105-109" hl="106,107" wrap>
+      <doc-pin line="106" tone="risk" title="Same text in dev and fresh runs">A capture rule tuned to it carries into the confirm.</doc-pin>
+    </doc-code>
+    <doc-note tone="warn">The registration greps every hippo diff after <code>z0-freeze</code> for "Please fix it", "Yes, keep doing that" and "because". A match blocks the tag. Each kept change also passes a dev check with paraphrased teach messages.</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A change stays only if its paired gain clears one standard error.</p>
+    <doc-code title="keep rule for one dev round · sketch" lang="js">
+<script type="text/plain">
+// The best A2 build and the candidate run side by side, same seeds, in lockstep.
+// Pick the weakest link on the tune half; judge only on the check half.
+const g = pairedGain(candidate, best, checkHalf);        // per coding
+const keep = CODINGS.every((c) => g[c].estimate > g[c].se)
+  && attribution(candidate, A5, checkHalf) >= attribution(best, A5, checkHalf)
+  && paraphraseCheck(candidate).pass;
+</script>
+    </doc-code>
+    <doc-ask id="stop">
+      <p>What caps the dev rounds?</p>
+      <label><input type="radio" name="stop" value="three" checked> 3 rounds at most <small>stop early after 2 rounds with no kept change</small></label>
+      <label><input type="radio" name="stop" value="two"> 2 rounds at most <small>an earlier freeze, less tuning</small></label>
+    </doc-ask>
+  </doc-claim>
+</doc-claim>
+
+<!-- 2 -->
+<doc-claim>
+  <p>A new family gets written only if A0 breaks its rule.</p>
+  <doc-mock frame="terminal" title="probe" w="470" caption="A dropped candidate uses no family number."><template><span class="dim">></span> s3x-prescreen.ps1 r1-candidates.json
+r1-c1  A0 broke <b>2 of 2</b>     <span class="g">author writes r1-f1</span>
+r1-c2  A0 followed 2 of 2  <span class="r">dropped, no number</span>
+r1-c3  A0 broke <b>1 of 2</b>     <span class="g">author writes r1-f2</span>
+<span class="dim">2 of 3 go on · 6 A0 sessions</span></template></doc-mock>
+
+  <doc-claim>
+    <p>The inventory brief asks for rules against the usual default.</p>
+    <doc-code diff file="C:/eval-authors/r2-inventory-template.md" title="r2-inventory-template.md, a copy of the pinned s3x brief">
+<script type="text/plain">
+@@ -34,1 +34,2 @@
+ 6. Its text, with list markers and `**` removed, contains none of: remember, CLAUDE.md, AGENTS.md, CLAUDE.local.md, MEMORY.md, `.claude/rules`, auto memory.
++7. It goes against the default: an agent in a repository of this language, with no rule file, does something else. Name that default.
+</script>
+      <doc-pin line="35" tone="info" title="New criterion">In 17 of 18 stage 3 drops, A0 already followed the rule.</doc-pin>
+    </doc-code>
+    <doc-note tone="warn">Criterion 7 gives the blind author an earlier result (prereg 60). It comes from A0 only, so it favours neither A1 nor A2. The verdict then covers rules against the default, a new limit, and the two-thirds maintainer floor (prereg 51) must still hold.</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A0 runs a probe task before the author writes the family.</p>
+    <doc-code title="s3x-prescreen.ps1 · sketch" lang="powershell">
+<script type="text/plain">
+param([Parameter(Mandatory)][string]$Candidates, [int]$Attempts = 2)
+# A probe is one screen task and its checker. A0 only; no hippo or built-in arm runs.
+foreach ($c in (Get-Content $Candidates | ConvertFrom-Json)) {
+  $broke = Invoke-A0Probe $c -Attempts $Attempts   # screen.mjs steps, arm A0
+  if ($broke -ge 1) { Add-Family $c } else { Write-Drop $c 'A0 followed' }
+}
+# Probe sessions never count toward the screen's 4 A0 attempts.
+</script>
+    </doc-code>
+    <doc-ask id="prescreen">
+      <p>How many A0 attempts does the probe use?</p>
+      <label><input type="radio" name="prescreen" value="2" checked> Two, keep on one break <small>2 sessions for each candidate</small></label>
+      <label><input type="radio" name="prescreen" value="1"> One, keep on a break <small>cheaper, but it drops more good rules</small></label>
+    </doc-ask>
+  </doc-claim>
+</doc-claim>
+
+<!-- 3 -->
+<doc-claim>
+  <p>Round 2 scores fresh repositories at the size z0-size gives.</p>
+  <doc-code title="sizes-a2x-e0.15-r10.json · the design of the go, excerpt" lang="json" caption="The go fixed this design on 2026-10-16. It does not pass at the spread bounds.">
+<script type="text/plain">
+"repos": 10,
+"H1": { "familiesPerRepo": 3, "families": 30, "power": { "win": 0.913, "tie": 0.9205 },
+        "boundsPower": { "win": 0.5195, "tie": 0.515 } },
+"setN": { "tasksPerRepo": 6, "tasks": 60 },
+"sessions": 5186.69,
+"boundsPass": false
+</script>
+  </doc-code>
+  <doc-ask id="scope">
+    <p>Which hypotheses does round 2 test?</p>
+    <label><input type="radio" name="scope" value="h1" checked> H1 and the H4 harm gate <small>a repository needs 3 kept families, not 6</small></label>
+    <label><input type="radio" name="scope" value="h1h2"> H1 and H2, as the go fixed <small>each repository needs 3 X and 3 R</small></label>
+  </doc-ask>
+  <div data-if="scope=h1"><doc-note tone="info">H1 stays at 0.025. The frozen analyzer runs Holm over H1 and H2 with an unrun H2 as NaN (z0-hypotheses.mjs:154-158), so H1 gets 2p (eval-stats.ts:339-344). G2 needs only its Claude Code half (z0-gates.mjs:28-35). The gain is 3 families for each repository.</doc-note></div>
+  <div data-if="scope=h1h2"><doc-note tone="warn">Stage 3 found only rustfs with 3 X and 3 R families.</doc-note></div>
+
+  <doc-claim>
+    <p>Fresh repositories come only from shortlist output nobody read.</p>
+    <doc-mock frame="terminal" title="scored-shortlist counts" w="470" caption="Batch 2 waits, unread, until the new tag exists."><template>pool_full.json        <b>6,552</b> repositories
+batch 1   screened 226, kept 48   <span class="r">excluded</span>
+          passed gates 10, split 1 (rustfs)
+batch 2   screened 189, kept 50   <span class="g">unread rules</span>
+<span class="dim">excluded too: cj, bm, hp, ml, ff</span></template></doc-mock>
+    <doc-note tone="warn">The tuner reads no batch output before the tag. The names and rule counts of batch 2 were listed on 2026-10-18; no rule text was read.</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>If fewer than 10 repositories qualify, the run sizes at that count.</p>
+    <doc-code title="registration rule · sketch" lang="markdown">
+<script type="text/plain">
+- Gate target: 25 gated repositories (stage 3: 4 of 10 gated reach 3 kept R families).
+- Batches screen on until the target, or until the authoring budget ends.
+- Fewer than 10 qualify: z0-size runs at the count reached. If no design
+  passes there, the run does not start and reports the size it needs (prereg 215).
+- A session budget covers authoring, probes, screens and dev rounds; the
+  9,500 ceiling covers scored sessions only (sizes json, notes).
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The fixed z0-size runs on dev-round data from the frozen build.</p>
+    <doc-code src="scripts/token-eval/z0-size-sim.mjs" lines="73-80" hl="78-79" caption="Fixed in ca92f0f5. At the record's bounds, H1 power at the bounds reads 0.146, not 0.52.">
+      <doc-pin line="79" tone="ok" title="Each spread widens its own mean square">The old code raised E too, so a zero estimate kept a zero bound.</doc-pin>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Hippo counts as working only if H1 wins and A2 beats A5.</p>
+    <doc-code src="docs/evals/2026-09-29-z0-built-in-memory-prereg.md" lines="138-148" hl="138,148" wrap></doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- 4 -->
+<doc-claim>
+  <p>Every arm of a cell runs on the same box state.</p>
+  <doc-mock frame="terminal" title="box and hooks, 2026-10-18" w="470" caption="In the pilot, A0, A1 and A4 ended before 03:25; A2 ran after 11:23."><template><span class="dim">></span> bash box-check.sh
+before reboot  median 3,523 ms  <span class="r">fail</span> (limit 150)
+after reboot   median <b>48</b> ms     <span class="g">pass</span>
+<span class="dim">></span> node hook-check.mjs &lt;run&gt;
+before reboot  prompt hook cancelled at 5.9 s
+after reboot   slowest hippo hook <b>720</b> ms, <span class="g">0 failed</span></template></doc-mock>
+
+  <doc-claim>
+    <p>Runners split by seed, never by arm.</p>
+    <doc-code title="launch for one repository · sketch" lang="powershell">
+<script type="text/plain">
+# Each runner holds every arm of one seed, so lockstep (prereg 120) holds inside it.
+foreach ($s in 1, 2, 3) {
+  & C:/z0-runs/scored/s3x-run.ps1 -Merged $M -Toolchain $T -Arms 'A0,A1,A2,A4,A5' `
+    -Seeds $s -Out "$P/$key-s$s" -TokenVar (Get-SubFor $s)
+}
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Each runner chunk starts only after box-check.sh passes.</p>
+    <doc-code diff file="C:/z0-runs/scored/s3x-run.ps1" title="s3x-run.ps1 · done 2026-10-18">
+<script type="text/plain">
+@@ -5,2 +5,5 @@
+ . 'C:/eval-authors/s3x-env.ps1'
++# Hippo's 5 s hooks timed out on a slow box (5.9 s, 2026-10-18); bare bash here is WSL, so Git Bash by path.
++& 'C:/Program Files/Git/bin/bash.exe' C:/z0-runs/s7/box-check.sh
++if ($LASTEXITCODE) { throw 'box check failed: reboot before a scored session' }
+ if (Test-Path $Out) { throw "$Out exists" }
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A cancelled hippo hook voids its cell in every arm.</p>
+    <doc-code title="registration rule · done in 986d8f3b" lang="markdown">
+<script type="text/plain">
+- hook-check.mjs runs after every session batch. A cancelled or timed-out
+  hippo start or prompt hook voids that position in every arm (drop list
+  hookVoids). Only that session lacked hippo's text; the store is the same.
+- More than 5% of positions hook-voided makes the run invalid, as G4 does.
+- The analyzer has this filter before the new analyzer hash is recorded.
+</script>
+    </doc-code>
+    <doc-ask id="hookfix">
+      <p>Does a faster hook launch ship in the new freeze?</p>
+      <label><input type="radio" name="hookfix" value="no" checked> No, the gate and the void rule guard it <small>hooks took 0.72 s at most after the reboot</small></label>
+      <label><input type="radio" name="hookfix" value="yes"> Yes, hooks call node directly <small>a product change, tested in a dev round</small></label>
+    </doc-ask>
+  </doc-claim>
+</doc-claim>
+
+<!-- 5 -->
+<doc-claim>
+  <p>A new registration fixes round 2 before any fresh family exists.</p>
+  <doc-code title="2026-10-xx-z0-round2-prereg.md · sketch" lang="markdown">
+<script type="text/plain">
+# Z0 round 2. Pre-registration
+## Carries over       the 2026-09-29 design and Amendments 1 to 4
+## Changes            hippo tag, scope (claim 3), probe, seed-split runners, hook voids
+## Family status      the list in claim 1.1; every family before the tag is dev or burned
+## Order              tag, then this file, then batch 2 opens, then authoring
+## Sizes              z0-size on the frozen build's dev data, committed
+## Publication        round 2 is published whatever it shows (prereg 243);
+                      a later round reports every earlier confirm
+</script>
+  </doc-code>
+  <doc-note tone="info">Prereg 240: a later hippo change means a new registration.</doc-note>
+</doc-claim>
+
+<doc-claim aux="shared">
+  <p>Shared: the authoring and runner scripts the claims change.</p>
+  <doc-tree caption="Green is new. The runner stays frozen; the analyzer and sizer change on feat/z0-fixed-repo.">
+<script type="text/plain">
+C:/eval-authors/
+  + r2-inventory-template.md    # s3x brief (sha pinned, record 36) + criterion 7 (claim 2.1)
+  ~ s3x-fill.mjs                # numbers after the probe (record 37)
+C:/z0-runs/scored/
+  ~ s3x-run.ps1                 # box gate, -Seeds, -Tasks, -Runner, done (claim 4.1)
+  ~ combine.mjs                 # numbers after the probe (record 84)
+  ~ split.mjs                   # admissible split for set R only (record 30)
+  + s3x-prescreen.ps1           # the probe (claim 2.2)
+hippo scripts/token-eval/ on feat/z0-fixed-repo
+  ~ z0-filters.mjs              # hook-void filter (claim 4.3), done
+  ~ z0-size-sim.mjs             # spread bounds fix, done
+  ab-run.mjs                    # frozen at 45b57c6b
+</script>
+  </doc-tree>
+</doc-claim>
+
+<doc-claim aux="scope">
+  <p>Not changing: the hypotheses, gate levels, minimum effect and ceiling.</p>
+  <ul>
+    <li>H1, H3 and H4 as the prereg writes them; H1 stays at 0.025.</li>
+    <li>The levels of G1 to G5. G2 reads only its Claude Code half when H2 does not run.</li>
+    <li>The 15-point minimum effect and the 9,500-session ceiling of the go.</li>
+    <li>The pilot verdict: invalid on G2 (Amendment 4). Its read stays exploratory.</li>
+  </ul>
+</doc-claim>
+
+</doc-plan>
+</main>
+</body>
+</html>
