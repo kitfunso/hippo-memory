@@ -1,6 +1,7 @@
 // Invalidation by text: finding the memories a migration, removal or deprecation names, and weakening them.
 import type { StoreWith } from '../../base/ports/store.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
+import { CJK_LETTERS, hasCjk, splitCjkRuns } from '../../base/util/tokenize.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
@@ -238,12 +239,15 @@ function weakenEntry(entry: MemoryEntry): void {
   }
 }
 
+const NOT_INVALIDATION_WORD = new RegExp(String.raw`[^a-z0-9\s_.${CJK_LETTERS}-]`, 'gu');
+
 function invalidationTokenize(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s_.-]/g, ' ')
+    .replace(NOT_INVALIDATION_WORD, ' ')
     .split(/\s+/)
-    .filter((t) => t.length >= 2 && !INVALIDATION_STOPWORDS.has(t));
+    .flatMap(splitCjkRuns)
+    .filter((t) => (t.length >= 2 || hasCjk(t)) && !INVALIDATION_STOPWORDS.has(t));
 }
 
 function matchScore(fromTokens: string[], contentTokens: string[]): number {

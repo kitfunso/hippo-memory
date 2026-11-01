@@ -32,6 +32,10 @@ describe('contentTokens / promptTokens', () => {
     expect([...toks]).toEqual(['api', 'sql']);
   });
 
+  it('keeps CJK bigrams, which are shorter than the length floor', () => {
+    expect([...contentTokens('the 数据库 api')]).toEqual(['数据', '据库', 'api']);
+  });
+
   it('keeps a token that ends exactly at the cut', () => {
     const pad = 'a '.repeat((PROMPT_RECALL_MAX_CHARS - 4) / 2) + 'zulu'; // pad ends in a space, then a 4-char word up to the cut
     const toks = promptTokens(pad);
@@ -190,6 +194,17 @@ describe('rarestFtsQuery', () => {
     const terms = Array.from({ length: 20 }, (_, i) => `t${String(i).padStart(2, '0')}`).reverse();
     expect(rarestFtsQuery(terms, () => 1).split(' ')).toEqual(terms.slice().sort().slice(0, RAREST_TERM_COUNT));
     expect(rarestFtsQuery(terms, () => 1, 2)).toBe('t00 t01');
+  });
+
+  it('fills the slots the counted terms leave with CJK terms, in order, since a word index cannot count them', () => {
+    const counts = new Map([['postgres', 3]]);
+    const asked: string[] = [];
+    const docCount = (part: string): number => {
+      asked.push(part);
+      return counts.get(part) ?? 0;
+    };
+    expect(rarestFtsQuery(['数据', 'postgres', '据库', 'never'], docCount, 2)).toBe('postgres 数据');
+    expect(asked.sort()).toEqual(['never', 'postgres']);
   });
 
   it('is the empty query when no term is indexed', () => {

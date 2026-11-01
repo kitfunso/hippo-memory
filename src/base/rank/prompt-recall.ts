@@ -1,5 +1,5 @@
 /** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
-import { tokenize } from '../util/tokenize.js';
+import { hasCjk, tokenizeMin } from '../util/tokenize.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
 export type PromptRecallMetric = 'jaccard' | 'cosine';
@@ -14,11 +14,11 @@ export interface PromptRecallGate {
 // Latency bound, not tuned: fixed in the prereg regardless of gate config.
 const PROMPT_RECALL_MAX_CHARS = 4000;
 
-/** Distinct content tokens: longer than 2 chars, not a stop word. */
+/** Distinct content tokens: longer than 2 chars or CJK, not a stop word. */
 export function contentTokens(text: string): Set<string> {
   const out = new Set<string>();
-  for (const t of tokenize(text)) {
-    if (t.length > 2 && !MEMORY_QUALITY_STOPWORDS.has(t)) out.add(t);
+  for (const t of tokenizeMin(text, 3)) {
+    if (!MEMORY_QUALITY_STOPWORDS.has(t)) out.add(t);
   }
   return out;
 }
@@ -103,5 +103,10 @@ export function rarestFtsQuery(
     const parts = ftsTermParts(t);
     return parts.length === 0 ? 0 : Math.min(...parts.map(docCount));
   };
-  return rarestPromptTerms(terms, termCount, maxTerms).join(' ');
+  // A word index holds a CJK run as one token, so it has no count for a CJK term.
+  // SHORTCUT: CJK terms in prompt order; rarest-first needs their counts from the trigram index.
+  const cjk = terms.filter(hasCjk);
+  const counted = cjk.length > 0 ? terms.filter((t) => !hasCjk(t)) : terms;
+  const picked = rarestPromptTerms(counted, termCount, maxTerms);
+  return [...picked, ...cjk.slice(0, maxTerms - picked.length)].join(' ');
 }

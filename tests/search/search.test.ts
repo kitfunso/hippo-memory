@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
-import { textOverlap } from '../../src/base/util/tokenize.js';
+import { textOverlap, tokenize, tokenizeMin } from '../../src/base/util/tokenize.js';
 import { markRetrieved } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -106,6 +106,40 @@ describe('textOverlap (Jaccard)', () => {
     const o = textOverlap('cache error in pipeline', 'pipeline cache failure');
     // Shared {cache, pipeline} over the union {cache, error, in, pipeline, failure}.
     expect(o).toBe(2 / 5);
+  });
+
+  it('returns 0 for two different Chinese sentences', () => {
+    expect(textOverlap('数据库连接池', '部署前运行迁移')).toBe(0);
+  });
+});
+
+describe('tokenize', () => {
+  it('splits English text as before: words of 2 or more letters, digits or underscores', () => {
+    expect(tokenize("Don't cache the FRED_series: v2.1 is a fix!")).toEqual([
+      'don',
+      'cache',
+      'the',
+      'fred_series',
+      'v2',
+      'is',
+      'fix',
+    ]);
+  });
+
+  it.each([
+    ['zh', '数据库连接池', ['数据', '据库', '库连', '连接', '接池']],
+    ['ja', '接続プール', ['接続', '続プ', 'プー', 'ール']],
+    ['ko', '연결 풀 크기는', ['연결', '풀', '크기', '기는']],
+  ])('%s: a CJK run becomes its character bigrams, a lone character itself', (_lang, text, tokens) => {
+    expect(tokenize(text)).toEqual(tokens);
+  });
+
+  it('splits a CJK run from the Latin word it touches', () => {
+    expect(tokenize('Postgres数据库 pool，二')).toEqual(['postgres', '数据', '据库', 'pool', '二']);
+  });
+
+  it('keeps CJK tokens under a length floor that drops short words', () => {
+    expect(tokenizeMin('an api 池 数据库', 3)).toEqual(['api', '池', '数据', '据库']);
   });
 });
 

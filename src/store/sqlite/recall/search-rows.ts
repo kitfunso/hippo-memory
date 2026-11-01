@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { isFtsAvailable, type DatabaseSyncLike } from '../../../db/index.js';
-import { tokenize } from '../../../base/util/tokenize.js';
+import { cjkGrams, hasCjk, tokenize } from '../../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../../base/scope/recall-scope.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import type { SqlFragment } from '../../../db/sql.js';
@@ -112,17 +112,49 @@ function listSearchRows(
     return listAllCandidates(db, p, limit);
   }
 
-  if (isFtsAvailable(db)) {
-    const rows = listFtsCandidates(db, terms, p, limit);
-    if (rows.length > 0) return rows;
-  }
-
-  const rows = listLikeCandidates(db, terms, p, limit);
+  // memories_fts holds a CJK run as one token, so only the substring paths find a CJK word inside
+  // one; the run's trigrams reach the trigram index, which the 2-letter tokens cannot.
+  const cjk = terms.filter(hasCjk);
+  const words = terms.filter((term) => !hasCjk(term));
+  const rows = interleaveRows(
+    words.length > 0 ? listWordCandidates(db, words, p, limit) : [],
+    cjk.length > 0
+      ? listLikeCandidates(db, [...new Set([...cjk, ...cjkGrams(query, 3)])], p, limit)
+      : [],
+    limit,
+  );
   if (rows.length > 0) return rows;
 
   // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded
   // fallback would misstate the candidate-pool size.
   return listAllCandidates(db, p, limit);
+}
+
+/** FTS5 matches for `terms`, else their substring matches. */
+function listWordCandidates(
+  db: DatabaseSyncLike,
+  terms: string[],
+  p: SearchPredicates,
+  limit: number,
+): MemoryRow[] {
+  if (isFtsAvailable(db)) {
+    const rows = listFtsCandidates(db, terms, p, limit);
+    if (rows.length > 0) return rows;
+  }
+  return listLikeCandidates(db, terms, p, limit);
+}
+
+/** `a` and `b` taken in turn, each row once, up to `limit`; with one list empty, the other as it
+ * is. */
+function interleaveRows(a: MemoryRow[], b: MemoryRow[], limit: number): MemoryRow[] {
+  if (a.length === 0 || b.length === 0) return a.length === 0 ? b : a;
+  const out = new Map<string, MemoryRow>();
+  for (let i = 0; out.size < limit && i < Math.max(a.length, b.length); i++) {
+    for (const row of [a[i], b[i]]) {
+      if (row !== undefined && out.size < limit) out.set(row.id, row);
+    }
+  }
+  return [...out.values()];
 }
 
 function searchPredicates(

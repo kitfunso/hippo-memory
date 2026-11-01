@@ -1,0 +1,3 @@
+### Fixed
+
+- **Recall finds Chinese, Japanese and Korean memories.** The word splitter kept only ASCII letters, so a query such as `hippo recall "数据库连接池"` had no words and printed "No memories found", even with embeddings on. Text in those scripts now splits into overlapping two-letter pieces, which match the same way in a query and in a memory. A CJK query reads the substring indexes, not the word index, which holds a whole CJK run as one token, so a mixed English and Chinese query finds rows holding either word. The prompt hook, conflict check, schema fit and `hippo invalidate` read CJK words the same way.

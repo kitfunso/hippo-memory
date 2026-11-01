@@ -174,6 +174,44 @@ describe('loadSearchEntries paths', () => {
     }
   }, 30_000);
 
+  it('CJK path: a Chinese query returns only the rows holding its words', () => {
+    writeEntry(root, makeRaw('数据库连接池的大小必须设置为二十'));
+    writeEntry(root, makeRaw('部署前必须先运行迁移脚本'));
+    writeEntry(root, makeRaw('alpha beta'));
+    const results = loadSearchEntries(root, '数据库连接池', 200, 'default');
+    expect(results.map((e) => e.content)).toEqual(['数据库连接池的大小必须设置为二十']);
+  });
+
+  it('CJK path: a row holding a Korean word as a whole FTS5 token does not hide the row holding it with a particle', () => {
+    writeEntry(root, makeRaw('크기 확인'));
+    writeEntry(root, makeRaw('연결 풀 크기는 이십'));
+    writeEntry(root, makeRaw('alpha beta'));
+    const results = loadSearchEntries(root, '크기', 200, 'default');
+    expect(results.map((e) => e.content).sort()).toEqual(['연결 풀 크기는 이십', '크기 확인']);
+  });
+
+  it('mixed query: a Chinese-only row joins the FTS rows of the English word', () => {
+    writeEntry(root, makeRaw('postgres tuning notes'));
+    writeEntry(root, makeRaw('连接池在部署后泄漏'));
+    writeEntry(root, makeRaw('alpha beta'));
+    const results = loadSearchEntries(root, 'postgres 连接池', 200, 'default');
+    expect(results.map((e) => e.content).sort()).toEqual(['postgres tuning notes', '连接池在部署后泄漏'].sort());
+  });
+
+  it('CJK substring path: a Chinese row older than the 2,000 newest is found through the trigram index', () => {
+    const db = openHippoDb(root);
+    try {
+      db.exec('BEGIN');
+      writeEntryDbOnly(db, makeRaw('数据库连接池的大小必须设置为二十'));
+      for (let i = 0; i < 2500; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
+      db.exec('COMMIT');
+      const found = listRecallEntries(db, '数据库连接池', { limit: 200, tenantId: 'default' });
+      expect(found.map((e) => e.content)).toEqual(['数据库连接池的大小必须设置为二十']);
+    } finally {
+      closeHippoDb(db);
+    }
+  }, 30_000);
+
   it('Full-store fallback path: terms that match nothing in FTS5 or LIKE return every row', () => {
     writeEntry(root, makeRaw('one row'));
     writeEntry(root, makeRaw('another row'));
