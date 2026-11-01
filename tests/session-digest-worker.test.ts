@@ -165,8 +165,8 @@ describe('a folder with only the global store', SLOW, () => {
 });
 
 describe('context prints the handoff or the digest, never both', SLOW, () => {
-  // No session id means an unknown caller, who gets the handoff as a pointer; JSON stays whole.
-  const context = (format: 'additional-context' | 'json', sessionId?: string): string => {
+  // No session id means an unknown caller: the hook text leaves every handoff out, markdown points to it, JSON stays whole.
+  const context = (format: 'additional-context' | 'markdown' | 'json', sessionId?: string): string => {
     const input = sessionId === undefined ? '' : JSON.stringify({ session_id: sessionId });
     const result = hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], input);
     expect(result.status).toBe(0);
@@ -178,9 +178,13 @@ describe('context prints the handoff or the digest, never both', SLOW, () => {
     claudeWorker('S1', claudeTranscript('s1'));
     expect(loadAllEntries(path.join(repo, '.hippo')).map((e) => e.id)).toEqual([sessionDigestId('default', 'S1')]);
     const text = context('additional-context');
-    expect(text).toContain('run `hippo handoff latest --session=S1`');
+    expect(text).not.toContain('hippo handoff latest');
     expect(text).not.toContain('Changed:');
     expect(text).not.toContain('upload timeout');
+    const pointer = context('markdown');
+    expect(pointer).toContain('run `hippo handoff latest --session=S1`');
+    expect(pointer).not.toContain('Changed:');
+    expect(pointer).not.toContain('upload timeout');
     const json = JSON.parse(context('json'));
     expect(json.sessionHandoff.sessionId).toBe('S1');
     expect(json.sessionHandoff.summary).toContain('upload timeout');

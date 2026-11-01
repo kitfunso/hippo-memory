@@ -232,6 +232,8 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     prompt: input.session.prompt,
     // JSON stays whole for the programs that parse it; every text format points to another session's state.
     continuity: input.format === 'json' ? 'full' : 'pointer',
+    // Only the per-prompt hook text; copilot's session start is its one injection, so it keeps the pointer.
+    ownHandoffOnly: input.pinnedOnly && input.format === 'additional-context',
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
     cost: contextCost(
       input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown',
