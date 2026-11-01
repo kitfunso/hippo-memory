@@ -11,6 +11,7 @@ import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import type { EmbedderFor } from '../../src/base/ports/embedder.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { testInfra } from '../_helpers/infra.js';
+import { TEST_DETACHED } from '../_helpers/test-run.js';
 
 describe('the per-request Context', () => {
   it('embeds a global-store write with the embedder the infra ports carry', async () => {
@@ -38,6 +39,7 @@ describe('the per-request Context', () => {
       configAt: () => DEFAULT_CONFIG,
       onHippoDb: true,
       infra: () => infra,
+      detached: TEST_DETACHED,
     });
     expect(ctx.reach?.globalTarget?.embedderFor).toBe(swapped);
   });

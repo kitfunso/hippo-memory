@@ -8,6 +8,7 @@ import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
+import type { DetachedWork } from '../search/detached-work.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { log } from '../../base/util/log.js';
 import type { EntryTextKey, Sharing } from '../../base/ports/store.js';
@@ -21,7 +22,7 @@ import { textKeyPages, type SharingStore } from './text-keys.js';
 export async function syncGlobalToLocal(
   into: ConfiguredFolder<SharingStore>,
   global: { readonly store: SharingStore },
-  opts: { includeCrossProject?: boolean; embed: EmbedRun },
+  opts: { includeCrossProject?: boolean } & SyncEmbed,
 ): Promise<number> {
   const home = await into.store.folderFiles.home();
   if (home.shared) {
@@ -33,7 +34,13 @@ export async function syncGlobalToLocal(
   if (!(await global.store.folderFiles.home()).exists) return 0;
 
   const rules = { project: home.project, includeCrossProject: opts.includeCrossProject };
-  return copyMissingRows(into, global.store, rules, opts.embed);
+  return copyMissingRows(into, global.store, rules, opts);
+}
+
+/** The root's ports that score the copies, and the keeper of the embed that follows them. */
+interface SyncEmbed {
+  readonly embed: EmbedRun;
+  readonly detached: DetachedWork;
 }
 
 const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
@@ -120,7 +127,7 @@ async function copyMissingRows(
   into: ConfiguredFolder<SharingStore>,
   from: SharingStore,
   rules: CopyRules,
-  embed: EmbedRun,
+  embedding: SyncEmbed,
 ) {
   const candidates = await missingRows(into.store.sharing, from.sharing);
   if (candidates.length === 0) return 0;
@@ -142,7 +149,7 @@ async function copyMissingRows(
     copies.length === 0
       ? []
       : await into.store.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
-  finishSyncDown(into, written.length, copies.length - written.length, embed);
+  finishSyncDown(into, written.length, copies.length - written.length, embedding);
   return written.length;
 }
 
@@ -150,7 +157,7 @@ function finishSyncDown(
   into: ConfiguredFolder<SharingStore>,
   count: number,
   rejected: number,
-  embed: EmbedRun,
+  { embed, detached }: SyncEmbed,
 ): void {
   if (rejected > 0) {
     log.warn(
@@ -161,8 +168,10 @@ function finishSyncDown(
   // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row
   // (same batching invariant as autoShare).
   if (count > 0) {
-    void embedAll(folderEmbedTarget(into, embed)).catch((err) =>
-      logEmbedAllFailure('syncGlobalToLocal', err),
+    detached.detach(
+      embedAll(folderEmbedTarget(into, embed)).catch((err) =>
+        logEmbedAllFailure('syncGlobalToLocal', err),
+      ),
     );
   }
 }

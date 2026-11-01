@@ -6,6 +6,7 @@ import { fetchGitLog, extractLessons, partitionLessons } from '../../domain/lear
 import type { HippoConfig } from '../../base/config/config.js';
 import { isGitRepo, type GitRunner } from '../../base/ports/git.js';
 import { embedMemoryDetached } from '../../domain/search/embed-memories.js';
+import { withDetached } from '../detached.js';
 import {
   extractInvalidationTarget,
   invalidateMatching,
@@ -156,7 +157,9 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
     strength: strengthOf(ctx),
     clock,
   };
-  for (const entry of landed) embedMemoryDetached(target, entry);
+  await withDetached(ctx, (detached) => {
+    for (const entry of landed) embedMemoryDetached(target, entry, detached);
+  });
 }
 
 /** The keys of the rows that may hold a lesson, the only rows that can be its copy. */

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Z0 round 2 report</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #1d2330; }
+  h1 { font-size: 1.6rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #d8dde6; padding-bottom: .2rem; }
+  .verdict { background: #fdecea; border-left: 4px solid #b3261e; padding: .8rem 1rem; margin: 1rem 0; }
+  .verdict p { margin: .4rem 0; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .93rem; }
+  th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid #e6e9ef; }
+  th { background: #f4f6fa; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .pass { color: #19734a; font-weight: 600; } .fail { color: #b3261e; font-weight: 600; } .warn { color: #a05a00; font-weight: 600; }
+  .muted { color: #5b6475; font-size: .9rem; }
+  code { background: #f4f6fa; padding: 0 .25rem; border-radius: 3px; }
+</style>
+<body>
+<h1>Z0 round 2: hippo against built-in memory on 16 fresh repositories</h1>
+<p class="muted">2026-10-28. 16 repositories, 32 lesson families, arms A0, A1, A2, A4 and A5, sets R and N. Prereg <code>2026-10-18-z0-round2-prereg.md</code> with Amendments 1 to 6. Analyzer hashes from <code>docs/evals/z0-r2-freeze/analyzer.sha256</code>. Grading file sha256 <code>315882be...</code>, drop list <code>623fa962...</code>.</p>
+
+<div class="verdict">
+<p><b>H4 fails: hippo costs more on tasks with no lesson.</b> On set N, A2 costs 1.119 times what A1 costs [1.065, 1.175]. The upper bound is over the 1.10 gate. The resolve rate holds: 0.8 points lower [-1.9, +0.3], inside the 5-point bound.</p>
+<p><b>H1 is a small win.</b> Hippo cut the repeat-mistake rate by 12.0 points [3.5, 20.4] with not-applicable counted as a violation, and by 10.4 points [2.7, 18.1] with it excluded (adjusted p 0.016 and 0.023). Both are below the 15-point minimum effect that the prereg set.</p>
+<p><b>Attribution fails.</b> A2 beats the sham A5 by 11.4 points [1.2, 21.5] under the violation coding, but only by 7.2 points [-3.1, +17.5] under the excluded coding. So this run writes H1 as "installing hippo changed behaviour, and this run cannot say its lessons did" (prereg 148).</p>
+<p><b>Verdict: under the prereg rule, hippo does not count as working.</b> That rule needs H1 to win under both codings and A2 to beat A5. The second part fails.</p>
+</div>
+
+<h2>Gates</h2>
+<table>
+  <tr><th>Gate</th><th>Result</th><th>What it read</th></tr>
+  <tr><td>G1 canaries and voids</td><td class="pass">pass</td><td>0 operator canaries. Void share: A0 0.2%, A1 4.2%, A2 1.0%, A4 0.0%, A5 1.3%. All 41 voids were read voids.</td></tr>
+  <tr><td>G2 positive control (Claude Code half)</td><td class="pass">pass</td><td>-0.935 [-1.005, -0.865], 57 units. The Codex half did not run.</td></tr>
+  <tr><td>G3 leaks</td><td class="pass">pass</td><td>0 of 48 planned sequence-and-seed pairs leaked.</td></tr>
+  <tr><td>G4 plumbing and hook voids</td><td class="pass">pass</td><td>Worst invalid-or-missing share 0.3%, gap 0.3 points. 13 positions hook-voided.</td></tr>
+  <tr><td>G5 grading (first-check reader pairs, Amendments 5 and 6)</td><td class="pass">pass</td><td>3 of 45 first-check pairs disagree (6.7%; the bar is at least 30 pairs and at most 10%). 2 flipped lessons, 5 acceptance flips.</td></tr>
+</table>
+<p class="muted">Every planned record is present: A0 416, A1 624, A2 624, A4 416, A5 624. None is abandoned or missing.</p>
+
+<h2>H1: repeat-mistake rate, A2 hippo against A1 built-in (lower is better)</h2>
+<table>
+  <tr><th>Comparison</th><th>Coding</th><th>Estimate (points)</th><th>95% interval</th><th>Units</th></tr>
+  <tr><td>A2 vs A1 (H1)</td><td>violation</td><td class="num">-12.0</td><td class="num">[-20.4, -3.5]</td><td class="num">87</td></tr>
+  <tr><td>A2 vs A1 (H1)</td><td>excluded</td><td class="num">-10.4</td><td class="num">[-18.1, -2.7]</td><td class="num">86</td></tr>
+  <tr><td>A2 vs A5 sham (attribution)</td><td>violation</td><td class="num">-11.4</td><td class="num">[-21.5, -1.2]</td><td class="num">87</td></tr>
+  <tr><td>A2 vs A5 sham (attribution)</td><td>excluded</td><td class="num"><span class="fail">-7.2</span></td><td class="num">[-17.5, +3.1]</td><td class="num">82</td></tr>
+</table>
+<p class="muted">H2 and set X did not run, so Holm over H1 and H2 judges H1 at an effective two-sided 0.025 (prereg item 1). H1's repository-mean t over the 16 repositories gives -12.6 [-21.7, -3.5] (violation). Of the 16 repository means, 9 favour A2, 4 are tied and 3 favour A1.</p>
+
+<h2>For scale, no verdicts</h2>
+<table>
+  <tr><th>Comparison</th><th>Violation coding (points)</th><th>Excluded coding (points)</th></tr>
+  <tr><td>A1 built-in vs A0 no memory</td><td class="num">-74.5 [-88.5, -60.5]</td><td class="num">-76.8 [-90.2, -63.5]</td></tr>
+  <tr><td>A4 perfect memory vs A1 built-in</td><td class="num">-19.0 [-32.0, -6.1]</td><td class="num">-16.7 [-28.7, -4.6]</td></tr>
+  <tr><td>A2 vs A1, first apply task only</td><td class="num">-19.8 [-29.0, -10.5]</td><td class="num">-19.8 [-31.6, -8.0]</td></tr>
+  <tr><td>A2 vs A1, maintainer-written lessons only</td><td class="num">-13.3 [-26.5, -0.2]</td><td class="num">-11.7 [-24.0, +0.6]</td></tr>
+</table>
+<p class="muted">Built-in memory already removes most repeat mistakes. Perfect memory (A4) leaves 19 points on the table over built-in, and hippo recovers about 12 of them.</p>
+
+<h2>H3 and H4: cost</h2>
+<table>
+  <tr><th>Measure</th><th>Result</th></tr>
+  <tr><td>H3 cost ratio, A2/A1, priced tokens, sets R and N</td><td class="num"><span class="warn">1.102</span> [1.058, 1.147]. First session 1.129 [1.091, 1.168]; teach and correction turns 1.003 [0.885, 1.135].</td></tr>
+  <tr><td>H4 harm gate on set N: cost ratio upper bound under 1.10</td><td class="num"><span class="fail">fail</span>: 1.119 [1.065, 1.175]</td></tr>
+  <tr><td>H4 harm gate on set N: resolve rate no more than 5 points lower</td><td class="num"><span class="pass">holds</span>: -0.8 points [-1.9, +0.3]</td></tr>
+</table>
+<p class="muted">Hippo's extra cost sits in the first session of each task, most likely from the context hippo injects there. The correction turns cost the same in both arms.</p>
+
+<table>
+  <tr><th>Arm</th><th>Tasks</th><th>Resolve rate</th><th>Cost per resolved task (priced tokens)</th></tr>
+  <tr><td>A0 no memory</td><td class="num">374</td><td class="num">0.757 [0.627, 0.881]</td><td class="num">0.517 [0.416, 0.652]</td></tr>
+  <tr><td>A1 built-in</td><td class="num">571</td><td class="num">0.883 [0.817, 0.944]</td><td class="num">0.373 [0.323, 0.432]</td></tr>
+  <tr><td>A2 built-in plus hippo</td><td class="num">569</td><td class="num">0.886 [0.824, 0.946]</td><td class="num">0.410 [0.356, 0.473]</td></tr>
+  <tr><td>A4 perfect memory</td><td class="num">375</td><td class="num">0.899 [0.841, 0.954]</td><td class="num">0.340 [0.297, 0.392]</td></tr>
+  <tr><td>A5 sham hippo</td><td class="num">571</td><td class="num">0.874 [0.809, 0.936]</td><td class="num">0.382 [0.334, 0.439]</td></tr>
+</table>
+<p class="muted">Set R's resolve rate and cost per resolved task are understated by the Amendment 5 defect below, so they are not read as evidence for or against hippo.</p>
+
+<h2>Where the chain breaks</h2>
+<p>Pooled over the 32 families, from the analyzer's failure chain. The count behind each rate is in brackets.</p>
+<table>
+  <tr><th>Arm</th><th>Stored</th><th>Shown</th><th>Followed when shown</th><th>Captured by hippo</th></tr>
+  <tr><td>A0 no memory</td><td class="num">0.00 (120)</td><td class="num">0.00 (120)</td><td class="num">-</td><td class="num">-</td></tr>
+  <tr><td>A1 built-in</td><td class="num">0.68 (184)</td><td class="num">0.57 (184)</td><td class="num">0.98 (102)</td><td class="num">-</td></tr>
+  <tr><td>A2 built-in plus hippo</td><td class="num">1.00 (183)</td><td class="num">0.95 (183)</td><td class="num">0.96 (174)</td><td class="num">0.97 (183)</td></tr>
+  <tr><td>A4 perfect memory</td><td class="num">1.00 (120)</td><td class="num">1.00 (120)</td><td class="num">0.97 (120)</td><td class="num">-</td></tr>
+  <tr><td>A5 sham hippo</td><td class="num">0.76 (184)</td><td class="num">0.60 (184)</td><td class="num">0.96 (104)</td><td class="num">-</td></tr>
+</table>
+<p>Hippo fixes the step where built-in memory breaks. It stores the lesson every time and shows it 95% of the time, against 57% for built-in memory. When any arm shows a lesson, the agent follows it 96 to 98% of the time. So the open question is not recall. It is why showing the lesson 38 points more often cuts repeat mistakes by only 12 points.</p>
+
+<h2>Grading defects found, and what they touch</h2>
+<ul>
+  <li><b>Final checks of command rules (Amendment 5).</b> No authored checker reads <code>CHECK_RESUME_COMMANDS</code>, so a final check fails every corrected session whose first session broke a command rule. This touches only set R's resolved status. Set R's resolve rate and cost per resolved task are therefore understated, more so in an arm that needs more corrections, and are not read as evidence for or against hippo.</li>
+  <li><b>fk-f3-l1 (Amendment 6).</b> The checker passed one <code>-n</code> per added test, and minitest 6.0.6 keeps only the last, so it could fail a session that did write a failing test first. It was fixed, every arm of fk was re-graded with <code>regrade --post-fix</code>, and fk drew a new reader round. Both of fk's round 1 disagreements cleared, and round 2 scored 0 of 5.</li>
+  <li><b>Final-check reader pairs.</b> 13 of 35 final-check pairs disagree, which is the Amendment 5 defect above. G5 reads first-check pairs only.</li>
+</ul>
+
+<h2>Stored sample (prereg 179, reported only)</h2>
+<p>Agreement 0.906 [0.758, 0.968], kappa 0.813, n 32. The reader and the key-phrase judgement agree on 16 yes and 13 no units. All 3 disagreements fall in the same cell (<code>noYes</code>); the other cell (<code>yesNo</code>) is 0.</p>
+
+<h2>What this means for hippo</h2>
+<ul>
+  <li>The run is valid, and installing hippo cut repeat mistakes against built-in memory. The cut is real but smaller than the 15 points the prereg asked for.</li>
+  <li>It cost about 10% more tokens overall and 12% more on tasks with no lesson. That breaks the harm gate.</li>
+  <li>The sham arm keeps hippo's prompt and injection but drops capture. A2 beats it under one coding and not the other, so this run cannot credit the gain to hippo's own lessons.</li>
+  <li>The next lever is first-session cost: trim what hippo injects when no lesson matches. The chain says recall is already at 95%.</li>
+</ul>
+
+<p class="muted">Sources: <code>C:/z0-runs/scored/r2-analysis/unblinded.txt</code> and <code>unblinded.stdout</code> (analyzer <code>--unblind</code> run), <code>C:/z0-runs/scored/r2-analysis/blind-2.stdout</code>, <code>docs/evals/z0-r2/grading.json</code>, <code>docs/evals/z0-r2/drop-list.json</code>, <code>docs/evals/z0-scored-set-record.md</code>.</p>
+</body>
+</html>

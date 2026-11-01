@@ -144,7 +144,7 @@ $ goal list -> 0
 --- stdout
 id                  status  name              outcome
 id#1  active  ship the release  -      
-id#2  active  fix?[31m ci       -      
+id#2  active  fix[31m ci        -      
 id#4  active  write docs        -      
 --- stderr
 
@@ -193,7 +193,7 @@ $ goal list --all -> 0
 --- stdout
 id                  status     name              outcome
 id#1  active     ship the release  -      
-id#2  completed  fix?[31m ci       0.9    
+id#2  completed  fix[31m ci        0.9    
 id#4  suspended  write docs        -      
 --- stderr
 
@@ -216,7 +216,7 @@ $ goal list --all (after) -> 0
 --- stdout
 id                  status     name              outcome
 id#1  completed  ship the release  0.5    
-id#2  completed  fix?[31m ci       0.9    
+id#2  completed  fix[31m ci        0.9    
 id#4  active     write docs        -      
 --- stderr
 

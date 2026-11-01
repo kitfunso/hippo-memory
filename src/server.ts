@@ -65,6 +65,8 @@ export type {
 } from './surface/server/types.js';
 // ServeOptions takes a HippoStore; the rest of the store contract is on hippo-memory/store-kit.
 export type { HippoStore } from './base/ports/store-index.js';
+// What a caller sets as Context.detached to keep the embeds a call hands off.
+export type { DetachedWork } from './domain/search/detached-work.js';
 // An add-on route replies 4xx with HttpError, renders the prompt hook elsewhere with
 // promptHookContext, and types its body as JsonValue.
 export { HttpError } from './base/errors/http-errors.js';

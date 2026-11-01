@@ -1,0 +1,482 @@
+{
+  "schema": "z0-size/1",
+  "settings": {
+    "repos": [
+      14,
+      15
+    ],
+    "effects": [
+      0.15
+    ],
+    "power": 0.8,
+    "sims": 2000,
+    "seed": 1,
+    "searchSims": 200,
+    "maxFamilies": 60,
+    "maxFamiliesPerRepo": 2,
+    "maxNTasks": 600,
+    "spreadBound": 0.8,
+    "seedCap": 9,
+    "targetZ": 3.5,
+    "onMiss": "cap",
+    "levelSims": 20000,
+    "firstWave": 3,
+    "holmLevel": 0.025,
+    "quota": {
+      "claude-code": {
+        "usdPerDay": 229.2,
+        "source": "flag"
+      },
+      "codex": {
+        "usdPerDay": 100,
+        "source": "default assumption"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-cj4/runs.regraded.jsonl",
+      "sha256": "4b553cba71dbff53002d35232bf493ccc5648f2bd5c44713cf505692a061d43d"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/s7/cal-bm4/runs.regraded.jsonl",
+      "sha256": "142957fe4d138d6f164a51df31a71eb2cb991f31d706c393ece329cbcd95791b"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/dev/r2-base/co-b0c1c/runs.jsonl",
+      "sha256": "a7683cc8d47cbb449f72ad3c2755de7696490d559a95afce2e8cdf71fce1a309"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/dev/r2-base/zf-b0c1c/runs.jsonl",
+      "sha256": "fc05cf72eccb73575ca8fe793bd83ddc4f0bd667a5d5a6ece9ee7dabbc374ade"
+    },
+    {
+      "role": "runs",
+      "file": "C:/z0-runs/dev/r2-base/mg-b0c1c/runs.jsonl",
+      "sha256": "0bcba60e52a9b431f4c9516ed2830aed260e7ff7266cda136510e8422c28c2e2"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-cj4/plan.json",
+      "sha256": "13f8432f81d3eec5bf95282635f6b6ad52219bbed6a40e4ad3a2a3e6841300fd"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/s7/cal-bm4/plan.json",
+      "sha256": "fed1f59fb564b20bd83193b22dee5ab72a51bb9b34c7b4823ab786fb343822b2"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/dev/r2-base/co-b0c1c/plan.json",
+      "sha256": "c7c3341be245c74ae0342c2f639db952cb792f8d5f0a6b4e18bc11a1822bbc70"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/dev/r2-base/zf-b0c1c/plan.json",
+      "sha256": "fcca68217d2f3a63fa6206b6066bc3f00056847460953151e8102f2c00ec53f6"
+    },
+    {
+      "role": "plan",
+      "file": "C:/z0-runs/dev/r2-base/mg-b0c1c/plan.json",
+      "sha256": "996369ec06b8c5524d678929ff13c68e9ef993040a64c19cf2daae131e3d6093"
+    },
+    {
+      "role": "prices",
+      "file": "C:/z0-runs/s7/prices.json",
+      "sha256": "8978b782e6a85656828ac6aea5c47a8f813c2482671645001a9ed7f9a6423393"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-records.mjs",
+      "sha256": "74b5c7628e15d3a7e6ede4ae5dd7342681cacd8741bd475ba3e3568360e93281"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-filters.mjs",
+      "sha256": "e3db161743d857117c07d373a0fd698cf258be9a1928b5926f239acf62d10564"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-hypotheses.mjs",
+      "sha256": "eb7ef8d54a15adfc9c64d86e89b37533681da566ff4d73cfaf5ef26925fe52ca"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-gates.mjs",
+      "sha256": "099d24b531d42a221c16a9f6c41f03e53c87dd8dd30d6a1afc009de6920dcc02"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-blind.mjs",
+      "sha256": "9ea5b6cb50e562b3be393e44e3f4ac6fac12f346bf315265bd13f2d981bf4d30"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-analyze.mjs",
+      "sha256": "ca5abaee7478e02d077135b5b07771c39e2d03c4b8c50862591220d82f1e786c"
+    },
+    {
+      "role": "source",
+      "file": "src/eval/eval-stats.ts",
+      "sha256": "83bb5f2c0a6b8616fc6a415eb8a0c99427d3cc36f82e41c8ed8dd265a7d8e6ee"
+    },
+    {
+      "role": "source",
+      "file": "dist/eval/eval-stats.js",
+      "sha256": "a5b06d32b21bfccdfa3cf2c73970d94e073267e324dba1860620266578c0fba4"
+    },
+    {
+      "role": "source",
+      "file": "src/eval/repository-t.ts",
+      "sha256": "ebbb3de2744580c628892dc8d8b5a4a3fc7844b9bd0c4ed4b518df2defffaac1"
+    },
+    {
+      "role": "source",
+      "file": "dist/eval/repository-t.js",
+      "sha256": "967ad624fe71f0d1caebec2fa501eaf316b21f1759c610c9a9a018c8e05e0f34"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-size.mjs",
+      "sha256": "56bbdb9edea3e7019e3d36d1a6248550e83b72649293ee54daa5e3fac8e8fd7d"
+    },
+    {
+      "role": "source",
+      "file": "scripts/token-eval/z0-size-sim.mjs",
+      "sha256": "43ddb3655f4690eaebbea89ff7a019317efc43b2ce30a571abb8a2e80ed032d6"
+    }
+  ],
+  "warnings": [],
+  "calibration": {
+    "records": 571,
+    "scored": 548,
+    "abandoned": [],
+    "H1": {
+      "naRate": 0,
+      "violation": {
+        "components": {
+          "repos": 5,
+          "families": 15,
+          "units": 39,
+          "noise": 0.042245370370370364,
+          "family": 0.05034722222222223,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.06060965446995881,
+            "family": 0.09152745210785396,
+            "sequence": 0
+          },
+          "df": {
+            "family": 10,
+            "sequence": 8,
+            "noise": 16
+          },
+          "sBar": 2.6,
+          "kBar": 3
+        },
+        "loss": 0
+      },
+      "excluded": {
+        "components": {
+          "repos": 5,
+          "families": 15,
+          "units": 39,
+          "noise": 0.042245370370370364,
+          "family": 0.05034722222222223,
+          "sequence": 0,
+          "upper": {
+            "noise": 0.06060965446995881,
+            "family": 0.09152745210785396,
+            "sequence": 0
+          },
+          "df": {
+            "family": 10,
+            "sequence": 8,
+            "noise": 16
+          },
+          "sBar": 2.6,
+          "kBar": 3
+        },
+        "loss": 0
+      }
+    },
+    "H2": {
+      "reason": "X2, X3 not in the calibration plan"
+    },
+    "H4": {
+      "components": {
+        "repos": 2,
+        "families": 11,
+        "units": 22,
+        "noise": 0.07295309512428619,
+        "family": 0,
+        "sequence": 0,
+        "upper": {
+          "noise": 0.12203928665273635,
+          "family": 0.011778514882984634,
+          "sequence": 0
+        },
+        "df": {
+          "family": 9,
+          "sequence": 2,
+          "noise": 9
+        },
+        "sBar": 2,
+        "kBar": 5.5
+      },
+      "controlSd": 0.3688877705506565,
+      "resolve": {
+        "pairs": 22,
+        "discordant": 0,
+        "both": 1,
+        "oneSide": 0.03527221309066533,
+        "oneSideEstimate": 0
+      }
+    },
+    "plan": {
+      "R": {
+        "families": 15,
+        "teachPerFamily": 1.1333333333333333,
+        "applyPerFamily": 2.1333333333333333,
+        "familySizes": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          5,
+          5
+        ],
+        "noLessonRatio": 0.22448979591836735
+      },
+      "X": null
+    },
+    "perRecord": {
+      "A1/teach": {
+        "records": 43,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.6105891720930231,
+          "codex": 0
+        }
+      },
+      "A*/teach": {
+        "records": 158,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.5654385987341771,
+          "codex": 0
+        }
+      },
+      "A2/teach": {
+        "records": 43,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.6418869255813954,
+          "codex": 0
+        }
+      },
+      "A4/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.3759489714285714,
+          "codex": 0
+        }
+      },
+      "A5/teach": {
+        "records": 44,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.5658398772727271,
+          "codex": 0
+        }
+      },
+      "A0/teach": {
+        "records": 14,
+        "sessions": 2,
+        "usd": {
+          "claude-code": 0.3801847285714285,
+          "codex": 0
+        }
+      },
+      "A2/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3077292090909091,
+          "codex": 0
+        }
+      },
+      "A*/no-lesson": {
+        "records": 110,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.30164589818181825,
+          "codex": 0
+        }
+      },
+      "A4/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3237837,
+          "codex": 0
+        }
+      },
+      "A5/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.3005585454545456,
+          "codex": 0
+        }
+      },
+      "A0/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.2859712636363636,
+          "codex": 0
+        }
+      },
+      "A1/no-lesson": {
+        "records": 22,
+        "sessions": 1,
+        "usd": {
+          "claude-code": 0.2901867727272727,
+          "codex": 0
+        }
+      },
+      "A2/apply": {
+        "records": 83,
+        "sessions": 1.036144578313253,
+        "usd": {
+          "claude-code": 0.31318564096385537,
+          "codex": 0
+        }
+      },
+      "A*/apply": {
+        "records": 301,
+        "sessions": 1.1461794019933556,
+        "usd": {
+          "claude-code": 0.30523585913621254,
+          "codex": 0
+        }
+      },
+      "A4/apply": {
+        "records": 26,
+        "sessions": 1.0769230769230769,
+        "usd": {
+          "claude-code": 0.20060894615384617,
+          "codex": 0
+        }
+      },
+      "A5/apply": {
+        "records": 83,
+        "sessions": 1.072289156626506,
+        "usd": {
+          "claude-code": 0.30612249156626503,
+          "codex": 0
+        }
+      },
+      "A0/apply": {
+        "records": 26,
+        "sessions": 1.8846153846153846,
+        "usd": {
+          "claude-code": 0.3731553923076923,
+          "codex": 0
+        }
+      },
+      "A1/apply": {
+        "records": 83,
+        "sessions": 1.1204819277108433,
+        "usd": {
+          "claude-code": 0.3078981421686747,
+          "codex": 0
+        }
+      }
+    }
+  },
+  "unavailable": [],
+  "effects": [
+    {
+      "minimumEffect": 0.15,
+      "rows": [
+        {
+          "repos": 14,
+          "H1": {
+            "familiesPerRepo": null,
+            "families": null,
+            "power": {
+              "win": 0.7845,
+              "tie": 0.7295,
+              "falseWin": 0.01,
+              "meanSeeds": 6.6345,
+              "stopShare": 0
+            },
+            "boundsPower": null
+          },
+          "H2": null,
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 42,
+            "power": {
+              "pass": 0.9015
+            }
+          },
+          "fits": false
+        },
+        {
+          "repos": 15,
+          "H1": {
+            "familiesPerRepo": null,
+            "families": null,
+            "power": {
+              "win": 0.8195,
+              "tie": 0.7875,
+              "falseWin": 0.009,
+              "meanSeeds": 6.26,
+              "stopShare": 0
+            },
+            "boundsPower": null
+          },
+          "H2": null,
+          "H4": {
+            "tasksPerRepo": 3,
+            "tasks": 45,
+            "power": {
+              "pass": 0.928
+            }
+          },
+          "fits": false
+        }
+      ],
+      "chosen": null,
+      "level": null
+    }
+  ],
+  "notes": [
+    "Power runs through the analyzer's own fixed-repository t tests (family is the unit) at Holm's strictest level, 0.05/2 over H1 and H2 (prereg 209, Amendment 2); a win needs both codings.",
+    "H3 is reported with no verdict, so it sets no size; set R is sized by H1 alone.",
+    "Seeds follow the blind rule: wave 1 runs 3 seeds, then the fewest up to seedCap whose predicted standard error is at most the minimum effect over targetZ, the larger of the two codings. A run the rule cannot size runs at seedCap (onMiss cap, the default); with onMiss stop it stops and counts as neither win nor tie.",
+    "A size passes at the calibration's point estimates. boundsPower repeats that size with every spread at its one-sided spreadBound upper bound, and choose prefers the rows that pass there.",
+    "Set N's one-sided resolve share is taken at its exact one-sided spreadBound upper bound (Clopper-Pearson); resolve.oneSideEstimate is the point value.",
+    "Families per repository are capped at maxFamiliesPerRepo. Each size is found by a search at searchSims, then confirmed at sims one size at a time; reported power is from the full sim count.",
+    "Sessions count each record's first session plus its teach and correction resumes, at the rule's mean seeds; screen sessions are not counted. usageAtCap prices the rule's arms at seedCap.",
+    "Days are list-price dollars of usage over the per-day quota; a quota marked \"default assumption\" is a placeholder, not a measurement.",
+    "level is the share of true-zero runs below Holm's strictest 0.025, at the chosen design under the seed rule at the bounds, the seed rule at the point estimates, 3 seeds, 2 seeds at the bounds and 0/1 values. Each cell is read against 0.025 plus 2 simulation errors of the runs it kept (a rule cell drops the runs it stopped), and a cell with no run fails; held: false stops the freeze."
+  ]
+}

@@ -1,0 +1,624 @@
+{
+  "acceptanceFlips": 5,
+  "flippedLessons": [
+    "pc-f1-l1",
+    "pt-f3-l1"
+  ],
+  "g5": {
+    "allPairs": {
+      "disagreements": 16,
+      "n": 80
+    },
+    "amendment": "round 2 prereg, Amendments 5 and 6: readerSample counts the first-check pairs of each folder's latest scored round",
+    "finalPairs": {
+      "disagreements": 13,
+      "n": 35
+    },
+    "folders": [
+      {
+        "file": "C:/z0-runs/scored/r2run/gz-w1b/run/grading.json",
+        "sha256": "a68580d4ebffd3e10bc04b49bafc9f668144db6b69c9fb15c271818e2f8b9f8e",
+        "g5": {
+          "cells": 154,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 120,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 23,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 2,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 3,
+            "disagreements": 0
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/gm-w1b/run/grading.json",
+        "sha256": "461555c2d745a30c9894320a8ef215941798a315a53c5cdf497dfb182d1824cc",
+        "g5": {
+          "cells": 182,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 161,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 4,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 2,
+            "disagreements": 1
+          },
+          "final": {
+            "n": 3,
+            "disagreements": 3
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/pt-w1b/run/grading.json",
+        "sha256": "2c1847bf7f5a50c978ac352b3b0e504be5a54dceefc66c95045b4f76922befb0",
+        "g5": {
+          "cells": 156,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 56,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 5,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 0,
+            "disagreements": 0
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/er-w1b/run/grading.json",
+        "sha256": "0a1f83ffb9031c8b5716c4e2ee30fd74818b9f595d8cdff19123c3fa01c165be",
+        "g5": {
+          "cells": 182,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 151,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 1,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 4,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 1,
+            "disagreements": 1
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/hl-w1b/run/grading.json",
+        "sha256": "a364e974aaa83103117a4d2fbcb3199beeba060775ec96825fb7a60cc427b3f7",
+        "g5": {
+          "cells": 182,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 156,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 3,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 2,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 3,
+            "disagreements": 3
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/au-w1b/run/grading.json",
+        "sha256": "b273646887270b30289429db74122b210a9a31fad4471181311daac2c10e1712",
+        "g5": {
+          "cells": 156,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 113,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 2,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 3,
+            "disagreements": 1
+          },
+          "final": {
+            "n": 2,
+            "disagreements": 1
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/op-w1b/run/grading.json",
+        "sha256": "d2a5d91f609e29cc5aa96d5bda84c9d7cf6daf05046e310bc6bb787396ccdfc7",
+        "g5": {
+          "cells": 156,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 119,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 1,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 1,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 1,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 4,
+            "disagreements": 1
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/kt-w1b/run/grading.json",
+        "sha256": "2b74b45ede54f830ca5c7ed37c3c179b3b6db32eb797f9b938507350c3bd6893",
+        "g5": {
+          "cells": 182,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 160,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 1,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 3,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 2,
+            "disagreements": 0
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/fk-w1b/run/grading.json",
+        "sha256": "9707b7236187c3960d6368f3bccc5297b0813b9bf60334da3af4673371983f78",
+        "g5": {
+          "cells": 156,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "postfix",
+          "readerEligible": 120,
+          "readerIneligible": 0,
+          "readerRound": 2,
+          "readerRound1Rescored": {
+            "disagreements": 0,
+            "n": 5
+          },
+          "unblindable": 3,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 1,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 4,
+            "disagreements": 0
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/jv-w1b/run/grading.json",
+        "sha256": "48687be4804514800b971228c69bcbd1a0b2c89ba2d1aa2d2b518b1556866fd2",
+        "g5": {
+          "cells": 156,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 123,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 1,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 1,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 4,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 1,
+            "disagreements": 1
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/pu-w1b/run/grading.json",
+        "sha256": "816c2695a4404e400f7eb39b3472ee707255c35a7b5dc65b3c2dc7fabac201d4",
+        "g5": {
+          "cells": 182,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 152,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 1,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 4,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 1,
+            "disagreements": 1
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/pc-w1b/run/grading.json",
+        "sha256": "3ffc14716551db843bc067b9fece38632250ca314f13e722cbedf8661c1ebfcd",
+        "g5": {
+          "cells": 182,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 99,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 1,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 3,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 2,
+            "disagreements": 0
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/pm-w1b/run/grading.json",
+        "sha256": "a4a543ea1ea4bced21a4c66c55f53f3c852892c4b8c758bf9f2e42c51ee8e721",
+        "g5": {
+          "cells": 182,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 153,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 5,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 0,
+            "disagreements": 0
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/ol-w1b/run/grading.json",
+        "sha256": "d1a0fa57493fb1259ec1e583df905640bcceee685e7d2cec9ffe294829c4e925",
+        "g5": {
+          "cells": 156,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 113,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 2,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 1,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 1,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 4,
+            "disagreements": 1
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/hu-w1b/run/grading.json",
+        "sha256": "86362e84ed72120bd739c9a13609ca4a75c06e429ded9253291ea1d03f887320",
+        "g5": {
+          "cells": 181,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 155,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 2,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 3,
+            "disagreements": 1
+          },
+          "final": {
+            "n": 2,
+            "disagreements": 1
+          }
+        }
+      },
+      {
+        "file": "C:/z0-runs/scored/r2run/dc-w1b/run/grading.json",
+        "sha256": "d5093a71b2ebf38eb1c5b2d5b1dca2309ff1aa0010b86a8bcdc6d80c6a95fbf9",
+        "g5": {
+          "cells": 156,
+          "extraEnvKeys": [
+            "EXEPATH",
+            "MSYSTEM",
+            "PLINK_PROTOCOL"
+          ],
+          "pass": "repro",
+          "readerEligible": 115,
+          "readerIneligible": 0,
+          "readerRound": 1,
+          "readerRound1Rescored": null,
+          "unblindable": 0,
+          "unreproducible": {
+            "cells": 0,
+            "lessons": []
+          }
+        },
+        "readerSample": {
+          "disagreements": 0,
+          "n": 5
+        },
+        "split": {
+          "first": {
+            "n": 2,
+            "disagreements": 0
+          },
+          "final": {
+            "n": 3,
+            "disagreements": 0
+          }
+        }
+      }
+    ]
+  },
+  "readerSample": {
+    "disagreements": 3,
+    "n": 45
+  },
+  "storedSample": {
+    "n": 32,
+    "agree": 29,
+    "agreement": 0.90625,
+    "ci95": [
+      0.7578184527161212,
+      0.9675984487016337
+    ],
+    "kappa": 0.8125,
+    "table": {
+      "yesYes": 16,
+      "yesNo": 0,
+      "noYes": 3,
+      "noNo": 13
+    },
+    "excluded": {
+      "cut": 87,
+      "empty": 0,
+      "hiddenHit": 2
+    }
+  }
+}

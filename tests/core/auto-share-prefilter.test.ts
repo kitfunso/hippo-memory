@@ -14,7 +14,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
@@ -143,6 +143,7 @@ describe('autoShare prefilter', () => {
         const stats: AutoShareStats = { secretSkipped: 0 };
         const picked = await autoShare(...sharingStores(root), {
           embed: TEST_RUN,
+          detached: TEST_DETACHED,
           minScore,
           dryRun: true,
           tenantId,
@@ -166,7 +167,7 @@ describe('autoShare prefilter', () => {
     const errorId = put('error', {}, ['error']);
     for (const tenantId of ['default', ALL_TENANTS] as const) {
       const { result, statements, rowsRead } = await recordStatementsAsync(() =>
-        autoShare(...sharingStores(root), { embed: TEST_RUN, dryRun: true, tenantId }),
+        autoShare(...sharingStores(root), { embed: TEST_RUN, detached: TEST_DETACHED, dryRun: true, tenantId }),
       );
       expect(result.map((e) => e.id)).toEqual([errorId]);
       expect(countMatching(statements, WHOLE_READ)).toBe(0);

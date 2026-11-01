@@ -27,7 +27,7 @@ import {
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -119,6 +119,7 @@ describe('shared store origin stamp', () => {
       expect(originFromSource(promoted.source)).toBeNull();
       const shared = await shareMemory(...sharingStores(store), entry.id, {
         embed: TEST_RUN,
+        detached: TEST_DETACHED,
         tenantId: 'default',
         force: true,
         skipEmbed: true,
@@ -138,6 +139,7 @@ describe('shared store origin stamp', () => {
       expect(promoted.source).toBe(`promoted:${store}`);
       const shared = await shareMemory(...sharingStores(store), entry.id, {
         embed: TEST_RUN,
+        detached: TEST_DETACHED,
         tenantId: 'default',
         force: true,
         skipEmbed: true,
@@ -152,9 +154,9 @@ describe('shared store origin stamp', () => {
     initTestStore(getGlobalRoot());
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(true)) {
-      await expect(syncGlobalToLocal(...sharingStores(store, getGlobalRoot()), { embed: TEST_RUN })).rejects.toThrow(
-        BadRequestError,
-      );
+      await expect(
+        syncGlobalToLocal(...sharingStores(store, getGlobalRoot()), { embed: TEST_RUN, detached: TEST_DETACHED }),
+      ).rejects.toThrow(BadRequestError);
       expect(loadAllEntries(store, 'default')).toHaveLength(0);
     }
   });
@@ -163,7 +165,9 @@ describe('shared store origin stamp', () => {
     initTestStore(getGlobalRoot());
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(false)) {
-      expect(await syncGlobalToLocal(...sharingStores(store, getGlobalRoot()), { embed: TEST_RUN })).toBe(1);
+      expect(
+        await syncGlobalToLocal(...sharingStores(store, getGlobalRoot()), { embed: TEST_RUN, detached: TEST_DETACHED }),
+      ).toBe(1);
       expect(loadAllEntries(store, 'default')).toHaveLength(1);
     }
   });

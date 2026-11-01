@@ -5,6 +5,7 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as api from '../../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
+import { sanitizeLogMessage } from '../capture/compact.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -27,11 +28,6 @@ const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
 
 function isGoalPolicyType(value: string): value is PolicyType {
   return GOAL_POLICY_TYPES.some((type) => type === value);
-}
-
-function sanitizeGoalName(s: string): string {
-  // Strip C0 control chars + DEL to prevent terminal escape injection.
-  return s.replace(/[^\x20-\x7e\u0080-\uffff]/g, '?');
 }
 
 function resolveGoalSession(flags: CliFlags, defaultTenantId: string) {
@@ -76,13 +72,14 @@ async function pushGoal(
   flags: CliFlags,
 ): Promise<void> {
   const rawName = args.join(' ').trim();
-  if (!rawName) {
+  // Sanitize at WRITE time so corrupt names never enter the DB, and before the empty check so a
+  // name of control characters alone is no name.
+  const name = sanitizeLogMessage(rawName).trim();
+  if (!name) {
     fail(
       'Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]',
     );
   }
-  // Sanitize at WRITE time so corrupt names never enter the DB.
-  const name = sanitizeGoalName(rawName);
   if (name !== rawName) {
     printError('note: stripped control characters from goal name');
   }
@@ -132,7 +129,7 @@ async function listGoals(
   const rows = goals.map((g) => ({
     id: g.id,
     status: g.status,
-    name: sanitizeGoalName(g.goalName),
+    name: sanitizeLogMessage(g.goalName),
     outcome: g.outcomeScore !== undefined ? g.outcomeScore.toString() : '-',
   }));
   const widths = {

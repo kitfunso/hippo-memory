@@ -12,7 +12,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
@@ -93,6 +93,7 @@ describe('autoShare across pages', () => {
 
     const picked = await autoShare(...sharingStores(root), {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       dryRun: true,
       tenantId: 'default',
       stats,
@@ -109,6 +110,7 @@ describe('autoShare across pages', () => {
 
     const picked = await autoShare(...sharingStores(root), {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       minScore: 0.3,
       dryRun: true,
       tenantId: 'default',
@@ -122,12 +124,12 @@ describe('autoShare across pages', () => {
     seedGlobal();
     const stores = sharingStores(root);
 
-    const shared = await autoShare(...stores, { embed: TEST_RUN, tenantId: 'default' });
+    const shared = await autoShare(...stores, { embed: TEST_RUN, detached: TEST_DETACHED, tenantId: 'default' });
 
     const local = new Map(loadAllEntries(root, 'default').map((e) => [e.id, e.content]));
     expect(shared.map((e) => e.content)).toEqual(at(ids, 3, 500, 1050).map((id) => local.get(id)));
     const global = loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
     expect(global).toEqual(expect.arrayContaining(shared.map((e) => e.content)));
-    expect(await autoShare(...stores, { embed: TEST_RUN, tenantId: 'default' })).toEqual([]);
+    expect(await autoShare(...stores, { embed: TEST_RUN, detached: TEST_DETACHED, tenantId: 'default' })).toEqual([]);
   });
 });

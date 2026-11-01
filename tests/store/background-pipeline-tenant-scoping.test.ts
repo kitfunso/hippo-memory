@@ -25,7 +25,7 @@ import { folderStore, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -277,6 +277,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // dryRun returns the candidate list without writing
     const candidates = await autoShare(...sharingStores(hippoRoot), {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       tenantId: 'tenant-a',
       minScore: 0,
       dryRun: true,
@@ -422,13 +423,16 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
     seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-    expect(await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { embed: TEST_RUN })).toBe(0);
+    expect(
+      await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
+    ).toBe(0);
 
     // Under v39 the seeded rows carry the seed store's own project origin, so the default sync gates them above; this case's
     // original guarantee - the global read is host-wide across TENANTS - still holds once the origin gate is explicitly
     // lifted: both tenants' rows copy.
     const copied = await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       includeCrossProject: true,
     });
     expect(copied).toBe(2);

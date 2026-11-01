@@ -50,6 +50,8 @@ import {
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
+import type { DetachedWork } from '../../domain/search/detached-work.js';
+import { DetachedSet } from '../../base/util/detached-set.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
  * parses an unchanged config.json once. */
@@ -175,6 +177,13 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
   return runStoreRequest((session) => asCommand(session, run), 'cli', cliRuntime());
 }
 
+/** Where a verb hands work it does not wait on, such as an embed: the command's runtime, which
+ * settles it before the command ends. Outside a command no runtime closes under it, so it runs on
+ * unowned, as before. */
+export function cliDetached(): DetachedWork {
+  return cliRuntime() ?? new DetachedSet();
+}
+
 /** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
  * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
 export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: string };
@@ -223,6 +232,7 @@ export function cliApiContext(
     config,
     callers,
     infra,
+    detached: cliRuntime(),
   };
 }
 
@@ -263,6 +273,8 @@ export function cliStdioHost(): McpHost<CliStore> {
   const hostTenantId = envTenant();
   const shared = createCallerState();
   const tools = allMcpTools();
+  // The command's runtime under `hippo mcp`; a host built outside a command keeps its own.
+  const detached = cliRuntime() ?? new DetachedSet();
   // The rings span the loop; each folder keeps an auto-sleep and its latch, as a write's context
   // names no folder, and each frame counts on its own store.
   const byRoot = new Map<string, Pick<AutoSleepHost, 'run' | 'latch'>>();
@@ -294,6 +306,7 @@ export function cliStdioHost(): McpHost<CliStore> {
         callers: callersOn(hippoRoot, store),
         infra,
         signal,
+        detached,
       };
     };
   // Frames interleave, so each takes a session of its own and hands it to every store its context
@@ -301,5 +314,6 @@ export function cliStdioHost(): McpHost<CliStore> {
   return {
     runFrame: (signal, run) =>
       runStoreRequest((session) => run(contextIn(session, signal)), 'cli', cliRuntime()),
+    settle: (withinMs) => detached.settle(withinMs),
   };
 }

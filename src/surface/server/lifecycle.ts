@@ -25,8 +25,11 @@ export function setKeepAliveTimeouts(server: Server): void {
 
 export const DEFAULT_SHUTDOWN_DRAIN_MS = 5000;
 
-// Past the request drain, a stop only waits for each store thread to end its statement and close:
-// seconds at most, so longer means a thread that will not end.
+/** How long a stop waits for work a request handed off, such as an embed, before the stores close. */
+export const DETACHED_SETTLE_MS = 5000;
+
+// Past the request drain, a stop waits up to DETACHED_SETTLE_MS for handed-off work, then for each
+// store thread to end its statement and close: seconds at most, so longer means a stuck thread.
 const STORE_CLOSE_GRACE_MS = 10_000;
 
 /** How long a signal or crash shutdown may run before the process is ended without it. */
