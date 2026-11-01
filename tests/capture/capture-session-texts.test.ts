@@ -237,16 +237,18 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored]);
   });
 
-  it('is blocked by a row an old capture stored with its closing bold marker lost', async () => {
-    const stored = '**Never deploy before tests';
-    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
-    expect(await captureSessionTexts(ctxFor(root), req([`${stored}.**`]))).toEqual({
-      captured: 0,
-      skipped: 1,
-      rejected: 0,
-    });
-    expect(contents(root)).toEqual([stored]);
-  });
+  it.each(['**Never deploy before tests', 'Always run **npm test before deploying'])(
+    'is blocked by a row an old capture stored with its closing bold marker lost: %s',
+    async (stored) => {
+      writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+      expect(await captureSessionTexts(ctxFor(root), req([`${stored}.**`]))).toEqual({
+        captured: 0,
+        skipped: 1,
+        rejected: 0,
+      });
+      expect(contents(root)).toEqual([stored]);
+    },
+  );
 
   it('reads a held row without pinned, as an external store adapter returns it, as unpinned', () => {
     const external: HeldText = { content: '** Never backfill them', source: 'capture', originProject: 'acme-web' };

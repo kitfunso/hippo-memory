@@ -40,6 +40,7 @@ const CATEGORIES = [
   ['preference', PREFERENCE_PATTERNS],
 ] as const;
 const MAX_CHARS = 500;
+const QUOTE = /['"]/;
 const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
 const LABEL = /^(?:decision|rule|error|bug|gotcha|important|critical|remember|plan):/i;
 const SENTENCE_END = /[.!?]["')\]]*$/;
@@ -103,28 +104,44 @@ function continues(line: string, previous: string | undefined): boolean {
 
 type LineCleaner = (line: string) => string;
 
-/** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so each
- * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
-export function withoutBold(line: string): string {
-  const cuts: number[] = [];
+interface BoldMarks {
+  /** Offsets of each opener and closer that pair up. */
+  readonly paired: number[];
+  /** Offsets of each `**` that can open or close a span but has no partner. */
+  readonly loose: number[];
+}
+
+function boldMarks(line: string): BoldMarks {
+  const paired: number[] = [];
+  const loose: number[] = [];
   const openers: number[] = [];
   // Blanked code spans keep every offset, so the markers found here are cut from the source.
   for (const marker of strongMarkers(blankCodeSpans(line, '`'))) {
     if (marker.inWord) continue;
     const opener = marker.close ? openers.pop() : undefined;
-    if (opener !== undefined) cuts.push(opener, marker.index);
+    if (opener !== undefined) paired.push(opener, marker.index);
     else if (marker.open) openers.push(marker.index);
+    else if (marker.close) loose.push(marker.index);
   }
-  cuts.sort((a, b) => a - b);
-  return cuts.reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
+  return { paired, loose: [...loose, ...openers] };
 }
 
-/** `text` without a leading `**` that opens a span nothing closes, as an old capture stored it. */
-export function withoutOrphanOpener(text: string): string {
-  const [first, ...later] = strongMarkers(blankCodeSpans(text, '`'));
-  if (first === undefined || !first.open || text.slice(0, first.index).trim() !== '') return text;
-  if (later.some((marker) => marker.close)) return text;
-  return text.slice(0, first.index) + text.slice(first.index + 2);
+function withoutMarkers(line: string, offsets: readonly number[]): string {
+  return [...offsets]
+    .sort((a, b) => a - b)
+    .reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
+}
+
+/** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so each
+ * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
+export function withoutBold(line: string): string {
+  return withoutMarkers(line, boldMarks(line).paired);
+}
+
+/** `line` without each `**` that could open or close a span but has no partner, as an old capture
+ * stored a line whose closer it lost. */
+export function withoutUnpairedBold(line: string): string {
+  return withoutMarkers(line, boldMarks(line).loose);
 }
 
 function proseBlocks(text: string, clean: LineCleaner): string[] {
@@ -150,15 +167,41 @@ function proseBlocks(text: string, clean: LineCleaner): string[] {
   return blocks;
 }
 
+/** The `(...)` and `[...]` spans of masked text as [open, close] offsets; a bracket between quotes is text. */
+function bracketSpans(hidden: string): [number, number][] {
+  const spans: [number, number][] = [];
+  const open: number[] = [];
+  for (let at = 0; at < hidden.length; at++) {
+    const char = hidden[at];
+    const quoted = QUOTE.test(hidden[at - 1] ?? '') && QUOTE.test(hidden[at + 1] ?? '');
+    if (!'()[]'.includes(char) || quoted) continue;
+    const last = open.at(-1);
+    if (char === '(' || char === '[') open.push(at);
+    else if (last !== undefined && hidden[last] === (char === ')' ? '(' : '[')) {
+      open.pop();
+      spans.push([last, at]);
+    }
+  }
+  return spans;
+}
+
 function completeSentences(text: string): string[] {
   // Masking keeps offsets, so each sentence is cut from the unchanged source.
   const hidden = masked(text);
+  // The segmenter splits inside "(see the docs. Then ...)"; a span over the cap is dropped anyway.
+  const spans = bracketSpans(hidden)
+    .filter(([open, close]) => close - open <= 2 * MAX_CHARS)
+    .sort((a, b) => a[0] - b[0]);
   const sentences: string[] = [];
   let start = 0;
+  let next = 0;
+  let reach = -1;
   for (const { index } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(hidden)) {
-    // The segmenter splits inside "(see the docs. Then ...)"; a span over the cap is dropped anyway.
-    const joined = hidden.slice(start, index);
-    if (index > start && !(joined.length <= 2 * MAX_CHARS && insideBrackets(joined))) {
+    while (next < spans.length && spans[next][0] < index) {
+      reach = Math.max(reach, spans[next][1]);
+      next++;
+    }
+    if (index > start && reach < index) {
       sentences.push(text.slice(start, index).trim());
       start = index;
     }

@@ -57,7 +57,7 @@ function withoutEmphasis(line: string): string {
     </doc-claim>
   </doc-claim>
   <doc-claim>
-    <p>The quality gate rejects text that starts inside bold or brackets.</p>
+    <p>Capture fixes the cut at the extractor, and repair alone runs the cut checks.</p>
     <doc-code caption="Measured 1 Nov on every live automatic row of the global store: 14,365 rows. Each flagged row was read and labelled by hand.">
 <script type="text/plain">
 check                    rule  pref  error  other   cut?   false flags
@@ -70,11 +70,11 @@ decision, spec, compaction, shared, consolidation:   0 flagged
 </script>
     </doc-code>
     <doc-claim>
-      <p>Two new checks return the certain defect sentence-fragment.</p>
-      <doc-code caption="Sketch, src/base/memory/memory-quality.ts isDanglingAssertion(): code spans are blanked first; only the first marker counts.">
+      <p>Two checks find a stored text that starts inside bold or brackets; repair reads it as the certain defect sentence-fragment.</p>
+      <doc-code caption="Sketch, src/base/memory/memory-quality.ts startsInsideCut(): code spans are blanked first; only the first marker counts.">
 <script type="text/plain">
 // Text that opens inside a bold span or an aside was cut from the middle of a sentence.
-if (opensInsideBold(blanked) || opensInsideAside(blanked)) return true;
+return opensInsideBold(blanked) || opensInsideAside(blanked);
 
 opensInsideBold:  the first "**" (not between word chars, not next to "/" or "*")
                   has a non-space before it and a space, mark or end after it
@@ -82,20 +82,20 @@ opensInsideAside: a ")" attached to a word comes before any "(";
                   "1)", "a)", "ii)" list markers and ":)" do not count
 </script>
       </doc-code>
-      <doc-claim at="src/base/memory/memory-quality.ts:129">
-        <p><b>memory-quality.ts:129</b> · isDanglingAssertion()</p>
-        <doc-code src="src/base/memory/memory-quality.ts" lines="129-145" hl="131-132"></doc-code>
+      <doc-claim at="src/base/memory/memory-quality.ts:202">
+        <p><b>memory-quality.ts:202</b> · startsInsideCut()</p>
+        <doc-code src="src/base/memory/memory-quality.ts" lines="199-204" hl="203"></doc-code>
       </doc-claim>
     </doc-claim>
     <doc-claim>
-      <p>Every gate consumer gets the checks, and none loses a whole row.</p>
+      <p>Only repair and the audit run the cut checks, and none loses a whole row.</p>
       <doc-calls title="who calls the gate" caption="Bundles are judged by part, so one cut part never sets a bundle aside.">
 <script type="text/plain">
-~ assessAutomaticMemory()       @ src/base/memory/memory-quality.ts:221   -- capture, compaction admission
-  certainDefect()               @ src/domain/learn/extract.ts:145          -- LLM facts: a cut fact is dropped
-  certainDefect()               @ src/domain/consolidate/dag-summary.ts:50 -- a cut summary is dropped
-  automaticDefect()             @ src/base/memory/memory-audit.ts:195      -- repair: set-aside
-  isWorthSurfacing()            @ src/base/memory/memory-quality.ts:339    -- recent context hides the 76
+~ assessAutomaticMemory()       @ src/base/memory/memory-quality.ts:298   -- capture, compaction admission: no cut checks
+  certainDefect()               @ src/domain/learn/extract.ts:145          -- LLM facts: no cut checks
+  certainDefect()               @ src/domain/consolidate/dag-summary.ts:50 -- summaries: no cut checks
+  storedDefect()                @ src/base/memory/memory-audit.ts:192      -- repair: set-aside
+  storedDefect()                @ src/base/memory/memory-quality.ts:389    -- the audit warns about the same rows
 </script>
       </doc-calls>
     </doc-claim>

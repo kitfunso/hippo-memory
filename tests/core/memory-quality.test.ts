@@ -7,6 +7,7 @@ import {
   isReusable,
   isWorthSurfacing,
   startsInsideCut,
+  storedDefect,
 } from '../../src/base/memory/memory-quality.js';
 import { auditMemory, previewDefect, repairDefect } from '../../src/base/memory/memory-audit.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -284,6 +285,21 @@ describe('automatic provenance', () => {
     expect(isWorthSurfacing(allCut)).toBe(false);
     expect(auditMemory(lastPartCut)).toBeNull();
     expect(auditMemory(allCut)?.severity).toBe('warning');
+  });
+
+  it('lets a start inside a cut outrank an uncertain reason, for repair and the audit', () => {
+    const text = 'okay) it is so';
+    expect(assessAutomaticMemory(text).reason).toBe('too-vague');
+    expect(storedDefect(text)).toBe('sentence-fragment');
+    expect(repairDefect(captured(text), new Map())).toEqual({ reason: 'sentence-fragment', disposition: 'set-aside' });
+  });
+
+  it('audit warns about a captured row that starts inside a cut, but not about a typed row', () => {
+    expect(auditMemory(captured('** Never backfill them'))).toMatchObject({
+      severity: 'warning',
+      reason: 'automatic memory defect: sentence-fragment',
+    });
+    expect(auditMemory(make('** Never backfill them'))).toBeNull();
   });
 
   it('audit warns about automatic defects on automatic rows only', () => {

@@ -329,6 +329,13 @@ export function certainDefect(content: string): AutomaticMemoryDefect | null {
   return isCertainReason(reason) ? reason : null;
 }
 
+/** The defect repair and the audit find in a stored text: admission's, but a start inside a bold span
+ * or an aside outranks an uncertain reason. */
+export function storedDefect(text: string): AutomaticMemoryDefect | null {
+  const { reason } = assessAutomaticMemory(text);
+  return !isCertainReason(reason) && startsInsideCut(text.trim()) ? 'sentence-fragment' : reason;
+}
+
 // Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by
 // design, so they are not judged.
 const AUTOMATIC_SOURCES = new Set(['capture', 'git-learn', 'git', 'consolidation']);
@@ -382,9 +389,7 @@ function hasCertainDefect(entry: Pick<MemoryEntry, 'content'>): boolean {
 export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null {
   if (!isAutomaticEntry(entry)) return null;
   const parts = bundleParts(entry);
-  const reasons = (parts.length > 0 ? parts : [entry.content.trim()]).map(
-    (text) => assessAutomaticMemory(text).reason,
-  );
+  const reasons = (parts.length > 0 ? parts : [entry.content.trim()]).map(storedDefect);
   return reasons.every((reason) => reason !== null) ? (reasons[0] ?? null) : null;
 }
 

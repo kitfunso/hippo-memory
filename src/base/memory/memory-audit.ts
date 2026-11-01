@@ -2,7 +2,6 @@
 import { canAutoDelete, isKeptForGood } from './keep-rules.js';
 import type { MemoryEntry } from './entry.js';
 import {
-  assessAutomaticMemory,
   automaticDefect,
   BUNDLE_HEADER,
   isAutomaticEntry,
@@ -12,7 +11,7 @@ import {
   isShortAndUnspecific,
   MIN_MEMORY_CHARS,
   MIN_SUBSTANTIVE_WORDS,
-  startsInsideCut,
+  storedDefect,
   substantiveWordCount,
   type AutomaticMemoryDefect,
 } from './memory-quality.js';
@@ -179,12 +178,6 @@ function fromAutomaticParents(
       return parent !== undefined && isAutomaticEntry(parent);
     })
   );
-}
-
-/** The defect repair finds in a stored text: admission's, else a start inside a bold span or aside. */
-function storedDefect(text: string): AutomaticMemoryDefect | null {
-  const { reason } = assessAutomaticMemory(text);
-  return reason ?? (startsInsideCut(text.trim()) ? 'sentence-fragment' : null);
 }
 
 /** The defect quality repair finds in `entry`, or null; `parents` holds whichever of its parents

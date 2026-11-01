@@ -13,7 +13,7 @@ import {
   extractFromTexts,
   textsAsOnceStored,
   withoutBold,
-  withoutOrphanOpener,
+  withoutUnpairedBold,
   type ExtractedItem,
 } from './extract.js';
 import {
@@ -171,10 +171,10 @@ export function heldKeysOf(rows: readonly HeldText[]): Set<string> {
   const pinned = Array.from(storedTextKeys(rows.filter((row) => row.pinned)), (held) =>
     held.replace(BARE_LEADING_MARKER, ''),
   );
-  // An old capture stored "**X" with the closer lost; that row passes the gate and still holds "X".
+  // An old capture stored a line with its closing "**" lost; that row passes the gate and still holds the text.
   for (const form of [...Array.from(keys), ...pinned]) {
     keys.add(duplicateKey(withoutBold(form)));
-    keys.add(duplicateKey(withoutOrphanOpener(withoutBold(form))));
+    keys.add(duplicateKey(withoutUnpairedBold(withoutBold(form))));
   }
   return keys;
 }

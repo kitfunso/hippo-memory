@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractFromTexts } from '../../src/surface/capture/extract.js';
+import { extractFromTexts, withoutUnpairedBold } from '../../src/surface/capture/extract.js';
 import { startsInsideCut } from '../../src/base/memory/memory-quality.js';
 
 const contents = (text: string) => extractFromTexts([text]).map((item) => item.content);
@@ -27,9 +27,45 @@ describe('capture reads markdown the way it renders', () => {
     expect(contents(longAside)).toEqual(['Never deploy on Fridays because the on-call rota is thin']);
   });
 
+  it('keeps the segmenter split when the open bracket gets no closer within the cap', () => {
+    const farCloser = `Note (${'x'.repeat(1100)}. Never deploy on Fridays because the rota is thin. Skip it) ok.`;
+    expect(contents(farCloser)).toContain('Never deploy on Fridays because the rota is thin');
+  });
+
+  it.each([
+    [
+      'I was sad :( about it. Never push to main. Always run tests first.',
+      ['Never push to main', 'Always run tests first'],
+    ],
+    ['Use :( as the sad face. Never deploy on Fridays.', ['Never deploy on Fridays']],
+    [
+      "The parser expected '('. Never bypass validation for API requests.",
+      ['Never bypass validation for API requests'],
+    ],
+    [
+      "The parser expected '('. Never bypass validation for API requests, per item 2) below.",
+      ['Never bypass validation for API requests, per item 2) below'],
+    ],
+    [
+      'Never use (foo as a name. Always run the linter before you push.',
+      ['Never use (foo as a name', 'Always run the linter before you push'],
+    ],
+  ])('splits sentences as usual around a bracket that never closes: %s', (text, expected) => {
+    expect(contents(text)).toEqual(expected);
+  });
+
   it('splits the sentences of a long unclosed aside in one pass', () => {
     const hostile = `Never skip the check (${'see the docs. '.repeat(40_000)}`;
     expect(contents(hostile)).toEqual([]);
+  });
+
+  it('removes only the markers withoutBold leaves unpaired', () => {
+    expect(withoutUnpairedBold('Always run **npm test before deploying')).toBe('Always run npm test before deploying');
+    expect(withoutUnpairedBold('**Never deploy before tests')).toBe('Never deploy before tests');
+    expect(withoutUnpairedBold('Always ignore cache** files')).toBe('Always ignore cache files');
+    for (const same of ['Never compute 2**10 by hand', 'Always lint **/*.ts first', '** Never backfill them']) {
+      expect(withoutUnpairedBold(same)).toBe(same);
+    }
   });
 
   it('pairs a closer with the nearest opener and keeps code spans whole', () => {
