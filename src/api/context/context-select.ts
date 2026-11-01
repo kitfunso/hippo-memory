@@ -264,7 +264,12 @@ function promptCandidateItems(
     for (const e of entries) {
       if (seenCandidateIds.has(e.id)) continue;
       seenCandidateIds.add(e.id);
-      candidateItems.push({ id: e.id, tokens: memoryTokens(e.content, prompt), entry: e, isGlobal });
+      candidateItems.push({
+        id: e.id,
+        tokens: memoryTokens(e.content, prompt),
+        entry: e,
+        isGlobal,
+      });
     }
   }
   return candidateItems;

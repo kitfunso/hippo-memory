@@ -125,7 +125,10 @@ export function rarestFtsQuery(
   };
   const { words, cjk } = partitionCjkTerms(terms);
   if (cjkDocCount === undefined) {
-    return spreadCjkTerms([...rarestPromptTerms(words, termCount, maxTerms), ...cjk], maxTerms).join(' ');
+    return spreadCjkTerms(
+      [...rarestPromptTerms(words, termCount, maxTerms), ...cjk],
+      maxTerms,
+    ).join(' ');
   }
   const counts = new Map([
     ...words.map((t) => [t, termCount(t)] as const),

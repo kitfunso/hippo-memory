@@ -188,7 +188,10 @@ describe('contextGet prompt recall (api-level)', () => {
   });
 
   it('clears the default gate for a long Chinese note from a three-letter prompt', async () => {
-    const relevant = seed(local, '上线前在预发布环境执行数据库迁移脚本确认全部服务健康检查通过后再切换生产流量并通知值班同事');
+    const relevant = seed(
+      local,
+      '上线前在预发布环境执行数据库迁移脚本确认全部服务健康检查通过后再切换生产流量并通知值班同事',
+    );
 
     const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt: '数据库' });
 

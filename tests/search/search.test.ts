@@ -1,13 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
-import {
-  cjkIndexTerms,
-  partitionCjkTerms,
-  textOverlap,
-  tokenize,
-  tokenizeMin,
-} from '../../src/base/util/tokenize.js';
+import { cjkIndexTerms, partitionCjkTerms, textOverlap, tokenize, tokenizeMin } from '../../src/base/util/tokenize.js';
 import { markRetrieved } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
