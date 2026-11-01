@@ -48,7 +48,7 @@ import { sqliteImportStores } from '../../src/store/sqlite/maintenance/agent-imp
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'Prefers short replies with the command first.';
@@ -256,7 +256,9 @@ describe('agent memory sync: routing and sharing', () => {
     await dormantRestore(ctxFor(w.global), goneId);
     plainRow(w.global, CONTROL, '');
 
-    expect(await syncGlobalToLocal(...sharingStores(w.local, w.global), { embed: TEST_RUN })).toBe(1);
+    expect(
+      await syncGlobalToLocal(...sharingStores(w.local, w.global), { embed: TEST_RUN, detached: TEST_DETACHED }),
+    ).toBe(1);
     expect(agentRows(w.local)).toEqual([]);
     expect(loadAllEntries(w.local, 'default').map((e) => e.content)).toEqual([CONTROL]);
   });
@@ -276,6 +278,7 @@ describe('agent memory sync: routing and sharing', () => {
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
     const shared = await autoShare(...sharingStores(w.local), {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       tenantId: ALL_TENANTS,
       minScore: 0,
       stats,

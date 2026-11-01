@@ -52,17 +52,20 @@ export const publishedDefaultStore: (
   rules?: StoreRules,
 ) => HippoStore & StoreGroups = sqliteStoreWith;
 
-/** Runs `fn` on a store runtime of its own, disposed when `fn` settles, or by its exit hook if
- * the process exits first. */
+/** Runs `fn` on a store runtime of its own, disposed with the work `fn` detached on it once `fn`
+ * settles, or closed by its exit hook if the process exits first. */
 export async function withStoreRuntime<T>(fn: (runtime: StoreRuntime) => Promise<T>): Promise<T> {
   const runtime = new StoreRuntime();
-  const onExit = (): void => runtime.dispose();
+  const onExit = (): void => runtime.closeNow();
   process.once('exit', onExit);
   try {
     return await fn(runtime);
   } finally {
-    process.off('exit', onExit);
-    runtime.dispose();
+    try {
+      await runtime.dispose();
+    } finally {
+      process.off('exit', onExit);
+    }
   }
 }
 
@@ -77,9 +80,9 @@ export function defaultServerRuntime(
   process.once('exit', onExit);
   return {
     ...runtime,
-    close: async () => {
+    close: async (settleWithinMs) => {
       process.off('exit', onExit);
-      await runtime.close();
+      await runtime.close(settleWithinMs);
     },
   };
 }

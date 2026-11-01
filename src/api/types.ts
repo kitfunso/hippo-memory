@@ -23,6 +23,7 @@ import type { FailureNotices } from '../base/util/failure-notices.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
 import type { StrengthModel } from '../base/memory/strength.js';
 import type { EmbedderFor } from '../base/ports/embedder.js';
+import type { DetachedWork } from '../domain/search/detached-work.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -99,6 +100,9 @@ export interface Context {
    * for. Set by a server or stdio root; the deadline itself rides in the store, whose worker
    * calls wait on it. */
   readonly signal?: AbortSignal | undefined;
+  /** Where the root keeps work a call starts and does not wait on, such as an embed, and settles it
+   * before closing its stores. Unset, the call waits for that work itself before it returns. */
+  readonly detached?: DetachedWork | undefined;
 }
 
 /** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion

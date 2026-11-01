@@ -101,6 +101,7 @@ function mcpContextFor(
     reach: ctx.reach,
     callers: ctx.callers,
     infra: ctx.infra,
+    detached: ctx.detached,
   };
   if (project !== undefined) mcpCtx.project = project;
   return mcpCtx;

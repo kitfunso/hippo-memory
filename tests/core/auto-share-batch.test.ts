@@ -13,7 +13,7 @@ import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { removeDir } from '../_helpers/remove-dir.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 const TOPICS = ['powershell', 'sqlite', 'docker', 'cron', 'rsync', 'ssh'];
 
@@ -46,7 +46,7 @@ describe('autoShare batching', () => {
       );
     }
     const { result, statements } = await recordStatementsAsync(() =>
-      autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS }),
+      autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, detached: TEST_DETACHED, tenantId: ALL_TENANTS }),
     );
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(
       expect.arrayContaining(result.map((e) => e.content)),

@@ -256,6 +256,7 @@ function endStore(ctx: ContextWith<'sessions'>): ContextWith<'sessions'> | null 
     store: global.store,
     config: global.config,
     infra: ctx.infra,
+    detached: ctx.detached,
   };
 }
 
