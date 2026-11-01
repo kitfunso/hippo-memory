@@ -103,7 +103,7 @@
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.78.0",
-    "@types/node": "^22.16.0",
+    "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.0.3",
     "dependency-cruiser": "^18.7.0",
     "oxfmt": "0.73.0",
