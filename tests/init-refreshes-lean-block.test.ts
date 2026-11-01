@@ -124,7 +124,7 @@ hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 \`\`\`
 `.trim();
 
-// The Claude Code block 2.2.0 wrote, which asked for a remember on every failure.
+// The previous Claude Code block, which asked for a remember on every failure.
 const CLAUDE_CURRENT = `
 ## Project Memory (Hippo)
 
