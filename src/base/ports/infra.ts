@@ -5,6 +5,7 @@ import type { EmbedderFor } from './embedder.js';
 import type { Llm } from './llm.js';
 import type { RerankerLookup } from './reranker.js';
 import type { ReadApiCalls } from '../session/transcript-calls.js';
+import type { RankAblation } from '../memory/eval-switches.js';
 import type { StrengthModel } from '../memory/strength.js';
 import type { FailureNotices } from '../util/failure-notices.js';
 
@@ -21,6 +22,9 @@ export interface InfraPorts {
   /** Reads the model calls of a session's transcript for its re-read count; absent, the count
    * is skipped. */
   readonly transcriptCalls?: ReadApiCalls;
+  /** What the root scores and ranks by, before the config's loss-aversion ratio. */
+  readonly strength: StrengthModel;
+  readonly rank: RankAblation;
   /** The time every api and domain step reads: the root's wall clock, or the fixed instant an
    * eval set. */
   readonly clock: Clock;

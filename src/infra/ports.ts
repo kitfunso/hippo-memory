@@ -5,6 +5,7 @@ import type { Llm } from '../base/ports/llm.js';
 import type { RerankerLookup } from '../base/ports/reranker.js';
 import { envAnthropicApiKey, envFakeNowMs } from '../base/util/env.js';
 import { evalClock } from './eval-switches.js';
+import { PRODUCTION_SWITCHES } from '../base/memory/eval-switches.js';
 import { anthropicLlm } from './anthropic-llm.js';
 import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { createHost, type Host } from '../host/host.js';
@@ -27,8 +28,8 @@ interface RootKept {
   readonly failureNotices: FailureNotices;
 }
 
-/** The real ports over what the root keeps; the machine, the model and the clock read the
- * environment as each Context is built, and the machine walks projects through the root's `host`. */
+/** The real ports over what the root keeps, scoring by production; the machine, the model and the
+ * clock read the environment as each Context is built, and the machine walks the root's `host`. */
 function realInfra({ reranker, failureNotices }: RootKept, host: Host): InfraPorts {
   return {
     machine: currentMachine(host),
@@ -36,6 +37,7 @@ function realInfra({ reranker, failureNotices }: RootKept, host: Host): InfraPor
     embedderFor: (embeddings, opts) => resolveEmbeddingProvider(embeddings, opts),
     reranker,
     transcriptCalls: readApiCalls,
+    ...PRODUCTION_SWITCHES,
     clock: evalClock(),
     failureNotices,
   };

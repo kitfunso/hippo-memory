@@ -28,9 +28,9 @@ export interface EmbedWith {
   readonly failureNotices: FailureNotices;
 }
 
-/** The root's eval switches and clock, which score and stamp the rows a share or sync writes, and
+/** The root's strength model and clock, which score and stamp the rows a share or sync writes, and
  * the failures its embeds already warned about. */
-export type EmbedRun = Pick<InfraPorts, 'clock' | 'failureNotices'>;
+export type EmbedRun = Pick<InfraPorts, 'strength' | 'clock' | 'failureNotices'>;
 
 /** The store's own index when its tier keeps one, else its vector groups. */
 export function folderEmbedTarget(

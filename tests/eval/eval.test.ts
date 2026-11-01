@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { mrr, recallAtK, ndcgAtK, runEval, bootstrapCorpus, compareSummaries } from '../../src/domain/eval/eval.js';
-import { NO_RANK_ABLATION } from '../../src/base/memory/eval-switches.js';
+import { PRODUCTION_SWITCHES } from '../../src/base/memory/eval-switches.js';
 import type { EvalSummary } from '../../src/domain/eval/eval.js';
 import { createMemory } from '../../src/entry/memory.js';
-import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
-
-const PRODUCTION_SWITCHES = { strength: PRODUCTION_STRENGTH, rank: NO_RANK_ABLATION };
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,8 @@ import type { Context, EntryContext, EntryInfraPorts } from '../api/types.js';
 import { withCoreEnrichment, type EnrichedFields } from '../api/hippo-db-context.js';
 import { createHost } from '../host/host.js';
 import { rootInfra } from '../infra/ports.js';
+import { evalSwitches } from '../infra/eval-switches.js';
+import { PRODUCTION_SWITCHES } from '../base/memory/eval-switches.js';
 
 /** The published entries' Host, which their reach probes and project walks share for the
  * process's life. */
@@ -15,15 +17,25 @@ export const entryHost = createHost();
  * caller's ports. */
 const entryNotices = new FailureNotices();
 
-/** The published entries' infra source, built on first use. */
-export const entryInfra = rootInfra(entryHost, entryNotices);
+const entryRoot = rootInfra(entryHost, entryNotices);
+
+/** The published entries' ports, built on first use and scoring by the switches a frozen eval
+ * set, read as each Context is built. */
+export function entryInfra(): InfraPorts {
+  return { ...entryRoot(), ...evalSwitches() };
+}
 
 /** `ctx` with the real ports when its builder set none, as EntryContext documents, and its
  * store's local tier as the core paths read it when the builder set no `enrich`. */
 export function withEntryInfra<C extends EntryFields>(ctx: C): C & { readonly infra: InfraPorts } {
   const { infra } = ctx;
-  const notices = infra && { ...infra, failureNotices: infra.failureNotices ?? entryNotices };
-  return { ...withCoreEnrichment(ctx), infra: notices ?? entryInfra() };
+  const given = infra && {
+    ...infra,
+    failureNotices: infra.failureNotices ?? entryNotices,
+    strength: infra.strength ?? PRODUCTION_SWITCHES.strength,
+    rank: infra.rank ?? PRODUCTION_SWITCHES.rank,
+  };
+  return { ...withCoreEnrichment(ctx), infra: given ?? entryInfra() };
 }
 
 interface EntryFields extends EnrichedFields {

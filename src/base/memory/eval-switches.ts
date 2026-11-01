@@ -1,6 +1,6 @@
-// What a ranking runs under as plain values: the strength model and the rank switches. An eval root
-// reads them (src/infra/eval-switches.ts) and hands them down, so no code path reads an env var
-// to rank.
+// What a ranking runs under as plain values: the strength model and the rank switches. A root hands
+// them down, so no code path reads an env var to rank; only the package entries' root and
+// `hippo eval` build them from the environment (src/infra/eval-switches.ts).
 import type { RuntimeSettings } from '../config/config.js';
 import { PRODUCTION_STRENGTH, withLossAversion, type StrengthModel } from './strength.js';
 
@@ -24,6 +24,12 @@ export interface EvalSwitches {
   readonly strength: StrengthModel;
   readonly rank: RankAblation;
 }
+
+/** Production: the production strength model and every rank boost on. */
+export const PRODUCTION_SWITCHES: EvalSwitches = Object.freeze({
+  strength: PRODUCTION_STRENGTH,
+  rank: NO_RANK_ABLATION,
+});
 
 /** The model a ranking scores strength by: the switches' model with the
  * root's HIPPO_LOSS_AVERSION_RATIO. */
