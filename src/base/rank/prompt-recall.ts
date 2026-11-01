@@ -108,7 +108,8 @@ export function ftsTermParts(term: string): string[] {
 
 /** The rarest terms as a space-joined FTS query, given each part's document count; a term counts as its rarest part, an
  *  upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. A CJK term counts
- *  by `cjkDocCount`, a trigram index's count, in the same pick; without one, CJK terms take `spreadCjkTerms` slots. */
+ *  by `cjkDocCount`, a trigram index's count, in the same pick, and a run under 3 letters that counts 0 follows the
+ *  pick; without one, CJK terms take `spreadCjkTerms` slots. */
 export function rarestFtsQuery(
   terms: readonly string[],
   docCount: (part: string) => number,
@@ -127,7 +128,10 @@ export function rarestFtsQuery(
     ...words.map((t) => [t, termCount(t)] as const),
     ...cjk.map((t) => [t, cjkDocCount(t)] as const),
   ]);
-  return rarestPromptTerms(counts.keys(), (t) => counts.get(t) ?? 0, maxTerms).join(' ');
+  const ranked = rarestPromptTerms(counts.keys(), (t) => counts.get(t) ?? 0, maxTerms);
+  // A run under 3 letters can sit in a row with no trigram that shows it, so a 0 cannot drop it.
+  const unproven = [...new Set(cjk)].filter((t) => counts.get(t) === 0 && [...t].length < 3);
+  return [...ranked, ...unproven].slice(0, maxTerms).join(' ');
 }
 
 /** Up to `maxTerms` of `terms` when no index counts their CJK terms: those keep half the slots, at even

@@ -253,6 +253,18 @@ describe('rarestFtsQuery', () => {
     expect(cjkAsked.sort()).toEqual(['据库连', '数据库', '连接池'].sort());
   });
 
+  it('with a CJK count, keeps a zero-count CJK run under 3 letters after the counted terms, within the cap', () => {
+    const counts = new Map([
+      ['postgres', 2],
+      ['数据库', 1],
+    ]);
+    const count = (t: string): number => counts.get(t) ?? 0;
+    expect(rarestFtsQuery(['接池', 'postgres', '数据库', '池', '从未见'], count, 8, count)).toBe(
+      '数据库 postgres 接池 池',
+    );
+    expect(rarestFtsQuery(['接池', 'postgres', '数据库'], count, 2, count)).toBe('数据库 postgres');
+  });
+
   it('is the empty query when no term is indexed', () => {
     expect(rarestFtsQuery(['nothing', 'indexed'], () => 0)).toBe('');
     expect(rarestFtsQuery([], () => 1)).toBe('');

@@ -178,6 +178,15 @@ describe('contextGet prompt recall (api-level)', () => {
     expect(ids(result)).toEqual([relevant.id]);
   });
 
+  it('recalls a memory from a two-letter Chinese prompt that only ends the memory', async () => {
+    enablePromptRecall(local, { promptRecallThreshold: 0.01 });
+    const relevant = seed(local, '生产数据库必须使用连接池');
+
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt: '接池' });
+
+    expect(ids(result)).toEqual([relevant.id]);
+  });
+
   it('is on by default: no config swaps the newest memory for the matching one', async () => {
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy', {
       created: '2026-01-01T00:00:00.000Z',

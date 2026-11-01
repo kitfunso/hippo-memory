@@ -441,6 +441,7 @@ function wordDocCounts(db: DatabaseSyncLike, words: readonly string[]): Map<stri
 /** Rows holding each CJK term by the trigram index: a trigram's own count, and for a shorter run
  * the summed counts of the trigrams it opens, a rarity estimate, not an exact row count. */
 function trigramDocCounts(db: DatabaseSyncLike, cjk: readonly string[]): Map<string, number> {
+  // SHORTCUT: prefix seeks only, as a suffix count scans the whole vocabulary; a 0 keeps a short run.
   if (cjk.length === 0) return new Map();
   // CROSS JOIN keeps the term list outside, so each term is one range seek into the vocabulary.
   const rows = cachedStatement(

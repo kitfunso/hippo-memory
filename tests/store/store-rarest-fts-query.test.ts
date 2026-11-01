@@ -101,11 +101,21 @@ describe('pickRarestFtsQuery', () => {
     }
   });
 
-  it('counts a CJK run shorter than a trigram by the trigrams it opens', () => {
+  it('counts a CJK run shorter than a trigram by the trigrams it opens, and keeps one that counts 0 last', () => {
     writeEntry(root, createMemory('배포 전에 캐시를 비워야 한다'));
     const db = openHippoDb(root);
     try {
-      expect(pickRarestFtsQuery(db, ['캐시', '없음'], 8)).toBe('캐시');
+      expect(pickRarestFtsQuery(db, ['없음', '캐시'], 8)).toBe('캐시 없음');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('keeps a two-letter CJK term that only ends a row, which no trigram opens', () => {
+    writeEntry(root, createMemory('生产数据库必须使用连接池'));
+    const db = openHippoDb(root);
+    try {
+      expect(pickRarestFtsQuery(db, ['接池'], 8)).toBe('接池');
     } finally {
       closeHippoDb(db);
     }
