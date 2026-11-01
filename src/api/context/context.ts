@@ -29,7 +29,7 @@ import {
   openBlockBudget,
 } from './context-plan.js';
 import { ambientAdmission, loadPools } from './context-pools.js';
-import { type TaskSections, loadTaskSections } from './context-task-state.js';
+import { type TaskSections, loadTaskSections, pointerModes } from './context-task-state.js';
 
 /** Tokens a context block may use when the caller sets no budget; the hook command and the CLI
  * default match it. */
@@ -102,6 +102,7 @@ function contextResult(
     tokens,
     activeSnapshot: sections.shownSnapshot ?? undefined,
     sessionHandoff: sections.shownHandoff ?? undefined,
+    ...pointerModes(sections),
     recentEvents: sections.shownEvents.length > 0 ? sections.shownEvents : undefined,
     ambientState: recorded.ambientState,
   };

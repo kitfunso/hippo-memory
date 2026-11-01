@@ -81,6 +81,11 @@ describe('hippo recall --continuity', () => {
     expect(r.stdout).toContain('Active Task Snapshot');
     expect(r.stdout).toContain('Session Handoff');
     expect(r.stdout).toContain('Recent Session');
+    // recall prints its own sections whole whoever saved them; only hippo context points.
+    expect(r.stdout).toContain('Plan reviewed twice. Implementation underway.');
+    expect(r.stdout).toContain('Mid-task handoff.');
+    expect(r.stdout).not.toContain('hippo session latest');
+    expect(r.stdout).not.toContain('hippo handoff latest');
     // Snapshot heading comes BEFORE the "Found N memories" line.
     expect(r.stdout.indexOf('Active Task Snapshot')).toBeLessThan(r.stdout.indexOf('Found'));
   });
@@ -119,6 +124,8 @@ describe('hippo recall --continuity', () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('Active Task Snapshot');
     expect(r.stdout).toContain('Session Handoff');
+    expect(r.stdout).toContain('Mid-task handoff.');
+    expect(r.stdout).not.toContain('hippo handoff latest');
     expect(r.stdout).toContain('(no memories matched');
     expect(r.stdout).not.toContain('No memories found for:');
   });

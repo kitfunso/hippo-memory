@@ -44,11 +44,13 @@ npm run smoke:openclaw-install
 <!-- hippo:start -->
 ## Project Memory (Hippo)
 
-At the start of every task, run:
+When Hippo's prompt hook is installed, it injects pinned rules and the
+memories that match each prompt, so never load them yourself. If no hippo
+memory block has appeared in this session, run this at the start of a task
+and read the output before writing any code:
 ```bash
 hippo context --auto --budget 1500
 ```
-Read the output before writing any code.
 
 On errors or unexpected behaviour, record it right then, while you work,
 never as a closing step:

@@ -54,7 +54,7 @@ describe('Z0 CLI and blind mode', () => {
       const file = h.role === 'source' ? path.join(repo, h.file) : path.join(dir, h.file);
       expect(h.sha256).toBe(createHash('sha256').update(fs.readFileSync(file)).digest('hex'));
     }
-    expect(report.hashes.map((h: { role: string }) => h.role).filter((r: string) => r === 'source')).toHaveLength(8);
+    expect(report.hashes.map((h: { role: string }) => h.role).filter((r: string) => r === 'source')).toHaveLength(10);
     fs.writeFileSync(path.join(dir, 'z0-blind-key.json'), JSON.stringify({ codes: { A0: 'K1', A1: 'K2' } }));
     expect(run()).toMatchObject({ code: 1, stderr: expect.stringMatching(/another arm set/) });
   });
@@ -110,7 +110,13 @@ describe('Z0 CLI and blind mode', () => {
     expect(out.stdout).toContain('not analysed: the run is abandoned (prereg 114)');
     expect(runCli([...ARGS, '--drop-list', 'drop.json', '--unblind'], dir)).toMatchObject({ code: 2, stderr: expect.stringMatching(/abandoned/) });
     const rn = runCli([...ARGS, '--iterations', '300'], workspace(generate({ arms: RN_ARMS, repos: 2 })));
+    // Repositories are fixed and the family is the unit, so two repositories no longer starve G2 of df: the t carries a fractional Satterthwaite df.
     expect(rn.stdout).toMatch(/^status: valid\ndesign not fully run: X1, X2, X3, X4, set X not planned$/m);
+    expect(rn.stdout).toMatch(/^G2 pass: Claude Code half pass, violation -[\d.]+ \[-[\d.]+, -[\d.]+\] t\(\d+\.\d\), bootstrap \[-[\d.]+, -[\d.]+\]/m);
+    // A failed G2 still reads invalid, with the design note directly under the status line.
+    const weak = runCli([...ARGS, '--iterations', '300'], workspace(generate({ arms: RN_ARMS, repos: 2, knobs: { A4: { fail: 0.6 } } })));
+    expect(weak.stdout).toMatch(/^status: invalid\ndesign not fully run: X1, X2, X3, X4, set X not planned$/m);
+    expect(weak.stdout).toMatch(/^G2 fail: Claude Code half fail, violation -?[\d.]+ \[-?[\d.]+, -?[\d.]+\] t\(\d+(\.\d)?\)/m);
   });
 
   it('36: a planned set with no records is abandoned data, never "not planned"', () => {

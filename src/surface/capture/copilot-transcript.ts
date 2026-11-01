@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { copilotHomeDir } from '../hooks-install/rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
+import { SESSION_ID_RE } from '../../base/util/session-id.js';
 
 /** The envelope fields a Copilot event-log line is read by; any may be absent. */
 export interface CopilotEventLine {
@@ -26,10 +27,6 @@ export interface CopilotTurn {
   role: 'user' | 'assistant';
   text: string;
 }
-
-// A session id becomes a folder name, so anything beyond word characters and hyphens could climb
-// out of session-state.
-export const SESSION_ID_RE = /^[\w-]+$/;
 
 // user.message sources that mark text hippo did not get from the human: a hidden skill injection or
 // another agent's prompt.

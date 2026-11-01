@@ -28,6 +28,16 @@ const commands = (event: string, matcher?: string): string[] =>
     .flatMap((g) => g.hooks.map((h) => h.command));
 
 describe('Claude Code plugin hook manifest', () => {
+  it('delivers memories through the per-prompt hook alone, with no context call at session start', () => {
+    expect(commands('SessionStart').filter((c) => c.startsWith('hippo context'))).toEqual([]);
+    expect(commands('SessionStart').some((c) => c.startsWith('hippo last-sleep'))).toBe(true);
+    expect(
+      commands('UserPromptSubmit').some((c) =>
+        c.startsWith('hippo context --pinned-only --include-recent 5 --format additional-context'),
+      ),
+    ).toBe(true);
+  });
+
   it('saves a checkpoint before compaction with no matcher, so manual and automatic compaction both fire', () => {
     const groups = manifest.hooks.PreCompact ?? [];
     expect(

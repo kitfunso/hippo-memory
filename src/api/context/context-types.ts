@@ -7,6 +7,9 @@ import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
 import type { AmbientState } from '../../base/memory/ambient.js';
 import type { ProjectRef } from '../../base/scope/project-identity.js';
 
+/** How another session's task snapshot and handoff print: whole, or as a continuity pointer. */
+export type ContinuityMode = 'full' | 'pointer';
+
 /**
  * Options for `contextGet`: a budget-bounded bundle of recalled memories, active task snapshot,
  * handoff and recent events. Rendering opts (`format`, `framing`, `rendered`) and host-side opts
@@ -51,6 +54,9 @@ export interface ContextOptions {
   /** Raw hook-payload prompt; only the pinned-only branch reads it, gated on
    * `pinnedInject.promptRecall`. */
   prompt?: string;
+  /** Default 'full'; under 'pointer' the caller's own session, a shared store and an unsafe id
+   * still print whole. */
+  continuity?: ContinuityMode;
   /** What the budget pays for, from the caller that renders the block. Absent = the memory text
    * alone. */
   cost?: ContextCost;
@@ -73,8 +79,8 @@ export interface ContextCost {
     can: { cross: boolean; promptRecall: boolean; ambient: boolean },
   ) => number;
   /** Tokens of the sections printed ahead of the memories, each as printed. */
-  snapshot: (s: TaskSnapshot) => number;
-  handoff: (h: SessionHandoff) => number;
+  snapshot: (s: TaskSnapshot, mode: ContinuityMode) => number;
+  handoff: (h: SessionHandoff, mode: ContinuityMode) => number;
   trail: (events: SessionEvent[]) => number;
 }
 
@@ -102,6 +108,9 @@ export interface ContextResult {
   tokens: number;
   activeSnapshot?: TaskSnapshot | null;
   sessionHandoff?: SessionHandoff | null;
+  /** Set only when the snapshot or the handoff prints as the pointer. */
+  snapshotMode?: ContinuityMode;
+  handoffMode?: ContinuityMode;
   recentEvents?: SessionEvent[];
   /** The ambient landscape summary over every live row the read may see in the local and global
    * stores, not just the rows loaded. Present only when ambient config is on, the caller is not

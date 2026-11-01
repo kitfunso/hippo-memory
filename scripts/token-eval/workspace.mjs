@@ -98,7 +98,7 @@ function assertInstructionSet(workDir, commit) {
   if (extra.length || missing.length) throw new Error(`instruction files in ${workDir} differ from base ${commit}: extra [${extra.join(', ')}], missing [${missing.join(', ')}]`);
 }
 
-const WORK_CONFIG = [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf'], ['core.longpaths', 'true']];
+export const WORK_CONFIG = [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf'], ['core.longpaths', 'true']];
 const SLEEP = new Int32Array(new SharedArrayBuffer(4));
 const LOCKED = new Set(['EPERM', 'EBUSY', 'ENOTEMPTY']);
 const GONE = new Set(['ENOENT', 'ENOTDIR']);

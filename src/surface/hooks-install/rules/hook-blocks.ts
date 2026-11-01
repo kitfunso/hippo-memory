@@ -25,10 +25,24 @@ const PI_FOOTER =
   'For full integration, copy the hippo-memory Pi extension to `~/.pi/agent/extensions/hippo-memory/`.';
 const CODEX_CAPTURE = `When Hippo's Codex wrapper is installed, session-end capture runs automatically.
 If the wrapper is not installed, capture a brief summary manually:`;
+// Codex runs hippo's prompt hook, which already injects pinned rules and matching memories.
+const HOOKED_INTRO = `When Hippo's prompt hook is installed, it injects pinned rules and the
+memories that match each prompt, so never load them yourself. If no hippo
+memory block has appeared in this session, run this at the start of a task
+and read the output before writing any code:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\``;
+
+const contextIntro = (noun: 'task' | 'session'): string => `At the start of every ${noun}, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.`;
 
 function agentsBlock(
   noun: 'task' | 'session',
-  opts: { recall?: boolean; capture?: string; footer?: string } = {},
+  opts: { intro?: string; recall?: boolean; capture?: string; footer?: string } = {},
 ): string {
   const recall = opts.recall
     ? `
@@ -43,11 +57,7 @@ hippo recall "<what's going wrong>" --budget 2000
   return `
 ## Project Memory (Hippo)
 
-At the start of every ${noun}, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
+${opts.intro ?? contextIntro(noun)}
 
 On errors or unexpected behaviour, record it right then, while you work,
 never as a closing step:
@@ -76,29 +86,21 @@ export const HOOKS: HookTable = {
     content: `
 ## Project Memory (Hippo)
 
-Pinned rules and recent writes auto-inject at every prompt via the installed
-UserPromptSubmit hook; never re-run that part manually. At the START of a
-task (not per prompt), additionally load task-specific context: git-aware
-recall over the full store that per-prompt injection does not cover. Also
-run it if the hook is not installed:
+The installed UserPromptSubmit hook injects pinned rules and the memories
+that match each prompt, so never load them yourself. If no hippo memory
+block has appeared in this session, run this at the start of a task:
 \`\`\`bash
 hippo context --auto --budget 1500
 \`\`\`
 
-When you find out why something failed, record it right then, while you
-work, never as a closing step:
-\`\`\`bash
-hippo remember "<what went wrong and why>" --error
-\`\`\`
-
 The installed hooks store failed tool calls and capture the session when it
-ends, so there is nothing to run before you finish.
+ends, so there is nothing to record or run by hand.
 `.trim(),
   },
   codex: {
     file: 'AGENTS.md',
     description: 'OpenAI Codex',
-    content: agentsBlock('task', { capture: CODEX_CAPTURE }),
+    content: agentsBlock('task', { intro: HOOKED_INTRO, capture: CODEX_CAPTURE }),
   },
   cursor: { file: 'AGENTS.md', description: 'Cursor', content: agentsBlock('task') },
   openclaw: { file: 'AGENTS.md', description: 'OpenClaw', content: agentsBlock('session') },
@@ -117,6 +119,9 @@ ends, so there is nothing to run before you finish.
 // sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited.
 // Add the old hash when a block changes.
 const SHIPPED_HOOK_HASHES = new Map([
+  ['c80e760208aed70f6094757736b9a2f496ba5c30d88bc2a7ae3e128b403dcc6b', 'claude-code'],
+  ['75937be6b7fdc2b87bcb08b7fec56757808075db129d99eff3e9f769f80a7781', 'claude-code'],
+  ['f1e5815a4b7205c43e2db792215df1943e7853635a1e0f4561b150a41b756451', 'codex'],
   ['c04e48f2896a4fee9ae98f8f832e2d26a3910269df3beb5bcd6baee3cd9db68e', 'claude-code'],
   ['e6b12bd8983c032e5ca8e95a97aeff4178a5a05026d10acad5b2e1b25d5656dd', 'claude-code'],
   ['4c64e11d3e5be68fa547c9248d7553feb645a02f7cf13ba02f7275e1854baf44', 'claude-code'],

@@ -4,10 +4,11 @@ title = "hippo-memory gitleaks config"
 useDefault = true
 
 # Each entry names one test file and the one rule that fires on its fake fixture.
+# Paths match any tests/ subfolder and split parts: the master push scan reads every branch, where these files moved.
 
 [[allowlists]]
 description = "capture-session test: 32-char placeholder token"
-paths = ['''^tests/capture/capture-session-texts\.test\.ts$''']
+paths = ['''^tests/(?:[\w-]+/)*capture-session-texts[\w.-]*\.test\.ts$''']
 targetRules = ["generic-api-key"]
 
 [[allowlists]]
@@ -17,30 +18,35 @@ targetRules = ["generic-api-key"]
 
 [[allowlists]]
 description = "share-scrub test: AWS documentation example key and a synthetic JWT"
-paths = ['''^tests/util/share-scrub\.test\.ts$''']
+paths = ['''^tests/(?:[\w-]+/)*share-scrub[\w.-]*\.test\.ts$''']
 targetRules = ["generic-api-key", "jwt"]
 
 [[allowlists]]
 description = "dormant-memories test: fake api_key value that the scrubber must flag"
-paths = ['''^tests/store/dormant-memories\.test\.ts$''']
+paths = ['''^tests/(?:[\w-]+/)*dormant-memories[\w.-]*\.test\.ts$''']
 targetRules = ["generic-api-key"]
 
 [[allowlists]]
 description = "agent-memories-sync test: synthetic JWT in a note body"
-paths = ['''^tests/agent-memories/agent-memories-sync-edges\.process\.test\.ts$''']
+paths = ['''^tests/(?:[\w-]+/)*agent-memories-sync-edges[\w.-]*\.test\.ts$''']
 targetRules = ["jwt"]
 
 [[allowlists]]
 description = "pre-compact e2e test: dummy RSA private key header with no key body"
-paths = ['''^tests/core/pre-compact-e2e-regressions\.process\.test\.ts$''']
+paths = ['''^tests/(?:[\w-]+/)*pre-compact-e2e[\w.-]*\.test\.ts$''']
 targetRules = ["private-key"]
 
 [[allowlists]]
 description = "secret-detect test: made-up provider tokens fed to the detector"
-paths = ['''^tests/util/secret-detect\.test\.ts$''']
+paths = ['''^tests/(?:[\w-]+/)*secret-detect[\w.-]*\.test\.ts$''']
 targetRules = ["generic-api-key", "stripe-access-token"]
 
 [[allowlists]]
 description = "server-hardening test: made-up Slack signing secret"
-paths = ['''^tests/server/server-hardening\.server\.test\.ts$''']
+paths = ['''^tests/(?:[\w-]+/)*(?:v039-)?server-hardening[\w.-]*\.test\.ts$''']
+targetRules = ["generic-api-key"]
+
+[[allowlists]]
+description = "stored-source test: made-up token and password in import strings it must scrub"
+paths = ['''^tests/(?:[\w-]+/)*stored-source[\w.-]*\.test\.ts$''']
 targetRules = ["generic-api-key"]

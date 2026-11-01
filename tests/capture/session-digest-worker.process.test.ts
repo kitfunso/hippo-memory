@@ -243,8 +243,10 @@ describe('a folder with only the global store', () => {
 });
 
 describe('context prints the handoff or the digest, never both', () => {
-  const context = async (format: 'additional-context' | 'json'): Promise<string> => {
-    const result = await hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], '');
+  // No session id means an unknown caller, who gets the handoff as a pointer; JSON stays whole.
+  const context = async (format: 'additional-context' | 'json', sessionId?: string): Promise<string> => {
+    const input = sessionId === undefined ? '' : JSON.stringify({ session_id: sessionId });
+    const result = await hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], input);
     expect(result.status).toBe(0);
     return result.stdout;
   };
@@ -257,11 +259,22 @@ describe('context prints the handoff or the digest, never both', () => {
       sessionDigestId('default', 'S1'),
     ]);
     const text = await context('additional-context');
-    expect(text).toContain('## Session Handoff');
+    expect(text).toContain('run `hippo handoff latest --session=S1`');
     expect(text).not.toContain('Changed:');
+    expect(text).not.toContain('upload timeout');
     const json = JSON.parse(await context('json'));
     expect(json.sessionHandoff.sessionId).toBe('S1');
+    expect(json.sessionHandoff.summary).toContain('upload timeout');
     expect(json.memories.map((m: { id: string }) => m.id)).not.toContain(sessionDigestId('default', 'S1'));
+  });
+
+  it('prints the whole handoff to the session that left it, and still not its digest', async () => {
+    await claudeWorker('S1', claudeTranscript('s1'));
+    const text = JSON.parse(await context('additional-context', 'S1')).hookSpecificOutput.additionalContext;
+    expect(text).toContain('- Session: S1');
+    expect(text).toContain('upload timeout');
+    expect(text).not.toContain('hippo handoff latest');
+    expect(text).not.toContain('Changed:');
   });
 
   it("shows an earlier session's digest under a later session's handoff", async () => {

@@ -9,17 +9,20 @@ import { tokenPurse } from '../../base/util/token-text.js';
 import { projectNames } from '../../base/scope/project-identity.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { ContextPlan } from './context-plan.js';
-import type { ContextOptions } from './context-types.js';
+import type { ContextOptions, ContextResult, ContinuityMode } from './context-types.js';
 import { type Context, ownerOrSubject } from '../types.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
+import { isPointerSafeId } from '../../base/util/session-id.js';
 
 /** The task-state sections printed ahead of the memories, and the budget left once they are
  * paid. */
 export interface TaskSections {
   activeSnapshot: TaskSnapshot | null;
   shownSnapshot: TaskSnapshot | null;
+  snapshotMode: ContinuityMode;
   shownHandoff: SessionHandoff | null;
+  handoffMode: ContinuityMode;
   shownEvents: SessionEvent[];
   left: number;
 }
@@ -79,25 +82,25 @@ export async function loadTaskSections(
 ): Promise<TaskSections> {
   const { exactScope, ownScope, cost } = plan;
   const { pays, left } = tokenPurse(startLeft);
-  const rowScope = (r: { scope?: string | null } | null | undefined): string | null =>
-    r?.scope ?? null;
-  const raw = await loadRawTaskState(ctx, opts, plan);
   // The same envelope rule ambientAdmitEntry applies to memory rows.
-  const activeSnapshot =
-    raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope)
-      ? raw.snapshot
-      : null;
-  const sessionHandoff =
-    raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope)
-      ? raw.handoff
-      : null;
-  const recentSessionEvents = raw.events.filter((e) =>
-    passesScopeFilterForRecall(rowScope(e), exactScope, ownScope),
-  );
+  const admits = (r: { scope?: string | null }): boolean =>
+    passesScopeFilterForRecall(r.scope ?? null, exactScope, ownScope);
+  const raw = await loadRawTaskState(ctx, opts, plan);
+  const activeSnapshot = raw.snapshot && admits(raw.snapshot) ? raw.snapshot : null;
+  const sessionHandoff = raw.handoff && admits(raw.handoff) ? raw.handoff : null;
+  const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.sessionId, 'pointer');
+  const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId, 'full');
   const shownSnapshot =
-    activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
+    activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot, snapshotMode)))
+      ? activeSnapshot
+      : null;
   const shownHandoff =
-    sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
+    sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff, handoffMode)))
+      ? sessionHandoff
+      : null;
+  // The pointer's command prints the snapshot session's events, so they drop only when that pointer is shown.
+  const recentSessionEvents =
+    shownSnapshot !== null && snapshotMode === 'pointer' ? [] : raw.events.filter(admits);
   const shownEvents =
     recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents)))
       ? recentSessionEvents
@@ -108,5 +111,33 @@ export async function loadTaskSections(
       Number(sessionHandoff !== shownHandoff) +
       Number(recentSessionEvents.length !== shownEvents.length),
   );
-  return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left: left() };
+  return {
+    activeSnapshot,
+    shownSnapshot,
+    snapshotMode,
+    shownHandoff,
+    handoffMode,
+    shownEvents,
+    left: left(),
+  };
+}
+
+// The command must return this reader's row, so own, shared-store, unsafe-id print whole; no id: `hippo snapshot show`.
+function continuityModeFor(
+  opts: ContextOptions,
+  plan: ContextPlan,
+  sessionId: string | null | undefined,
+  noIdMode: ContinuityMode,
+): ContinuityMode {
+  if (opts.continuity !== 'pointer' || plan.sharedStore) return 'full';
+  if (!sessionId) return noIdMode;
+  return sessionId === opts.currentSessionId || !isPointerSafeId(sessionId) ? 'full' : 'pointer';
+}
+
+/** The mode is left out of a full print, so every reader's result reads as before. */
+export function pointerModes(s: TaskSections): Pick<ContextResult, 'snapshotMode' | 'handoffMode'> {
+  const modes: Pick<ContextResult, 'snapshotMode' | 'handoffMode'> = {};
+  if (s.shownSnapshot && s.snapshotMode === 'pointer') modes.snapshotMode = 'pointer';
+  if (s.shownHandoff && s.handoffMode === 'pointer') modes.handoffMode = 'pointer';
+  return modes;
 }

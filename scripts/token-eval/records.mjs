@@ -2,7 +2,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const LIMIT_RE = /usage limit|hit your (usage )?limit|limit reached|rate_limit_error|overloaded_error/i;
+// Any "hit your ... limit": Claude Code says usage, session or weekly, and a weekly one voided a calibration run when it went unread.
+const LIMIT_RE = /usage limit|hit your (?:[\w-]+ )*limit|limit reached|rate_limit_error|overloaded_error/i;
 
 /** A plan usage limit or an overload: not a task failure, so the session is rerun. */
 export function isUsageLimit(result, output) {
@@ -135,7 +136,7 @@ function* fileLines(items) {
   }
 }
 
-/** tool_use and tool_result blocks across transcript files as `{file, block}`, each tool_use id once. */
+/** tool_use and tool_result blocks across transcript files as `{file, block, cwd}`, each tool_use id once; cwd is the line's own, when it has one. */
 function* fileBlocks(files) {
   const seen = new Set();
   for (const { file, o } of fileLines(files)) {
@@ -146,7 +147,7 @@ function* fileBlocks(files) {
       const key = id === undefined ? null : `${block.type}:${id}`;
       if (key && seen.has(key)) continue;
       if (key) seen.add(key);
-      yield { file, block };
+      yield { file, block, cwd: o.cwd };
     }
   }
 }
@@ -155,9 +156,9 @@ function* toolBlocks(files) {
   for (const { block } of fileBlocks(files)) yield block;
 }
 
-/** Every tool call as `{file, name, input}`. */
+/** Every tool call as `{file, name, input, cwd}`: Claude Code's shell keeps its cwd between calls, and each transcript line records where it stood. */
 export function toolInputs(files) {
-  return [...fileBlocks(files)].filter(({ block }) => block.type === 'tool_use').map(({ file, block }) => ({ file, name: block.name, input: block.input ?? {} }));
+  return [...fileBlocks(files)].filter(({ block }) => block.type === 'tool_use').map(({ file, block, cwd }) => ({ file, name: block.name, input: block.input ?? {}, cwd }));
 }
 
 const blockText = (content) => (Array.isArray(content) ? content.map((c) => c.text ?? '').join('\n') : String(content ?? ''));
@@ -199,7 +200,7 @@ export function errorRepeated(text, seenErrors) {
   return false;
 }
 
-/** Every Bash and PowerShell command in the transcripts, file by file in order: what a checker reads through Z0_COMMANDS. */
+/** Every Bash and PowerShell command in the transcripts, file by file in order: what a checker reads through CHECK_COMMANDS. */
 export function commandLog(files) {
   const commands = [];
   for (const block of toolBlocks(files)) {

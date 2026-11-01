@@ -30,7 +30,7 @@ describe('set X end to end (test 6)', () => {
         expect([a.tool, a.invalid, a.void, a.correctionTurns, a.acceptancePassed, a.model], task).toEqual(['codex', null, null, 0, true, 'gpt-fake']);
         expect(a.lessons[0], task).toMatchObject({ first, final: first });
         expect(a.usage, task).toEqual({ firstSession: { inputTokens: 500, cacheWriteTokens: 0, cacheReadTokens: 1500, outputTokens: 120 }, extra: ZERO });
-        expect(a, task).toMatchObject({ costUsd: null, turns: 2, turnsSource: 'rollout', codexAuth: 'copied-file', codexVersion: 'codex-cli 0.153.4-fake', codexMemories: true, codexHookTrust: 'none' });
+        expect(a, task).toMatchObject({ costUsd: null, turns: 2, turnsSource: 'rollout', codexAuth: 'copied-file', codexVersion: 'codex-cli 0.153.4-fake', codexMemories: false, codexHookTrust: 'none' });
         expect(a.codexMemoryWait, task).toEqual({ ms: 0, timedOut: false });
       }
     }
