@@ -9,7 +9,7 @@ import {
   ERROR_TAG,
   EXTRACTED_TAG,
 } from '../../base/memory/entry.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import {
   AGENT_MEMORY_SOURCE_PREFIX,
   AGENT_MEMORY_TAGS,
@@ -22,14 +22,14 @@ import {
   folderEmbedTarget,
   type EmbedRun,
 } from '../search/embed-memories.js';
-import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
+import type { ConfiguredFolder } from '../../base/ports/embedder.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
-import type { DetachedWork } from '../search/detached-work.js';
+import type { DetachedWork } from '../search/embed-memories.js';
 import type { SharingStore } from './text-keys.js';
 import type { EntrySignals } from '../../base/records/sharing.js';
 import type { PageRequest } from '../../base/records/reports.js';

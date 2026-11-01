@@ -5,7 +5,7 @@ import {
   EmotionalValence,
   createMemory,
 } from '../../base/memory/entry.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import {

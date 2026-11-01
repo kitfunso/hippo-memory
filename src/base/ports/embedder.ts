@@ -1,6 +1,6 @@
 // The embedder port: domain hands texts to the provider a root gives it;
 // src/infra/embedding-provider.ts builds the real ones.
-import type { EmbeddingsConfig } from '../config/config.js';
+import type { EmbeddingsConfig, HippoConfig } from '../config/config.js';
 
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
@@ -45,3 +45,11 @@ export type EmbedderFor = (
   embeddings: EmbeddingsConfig,
   opts?: EmbedderOptions,
 ) => EmbeddingProvider;
+
+/** A store with the config its root loaded and the root's embedder, so a write into it embeds
+ * with the provider that config names. */
+export interface ConfiguredFolder<S> {
+  readonly store: S;
+  readonly config: HippoConfig;
+  readonly embedderFor: EmbedderFor;
+}

@@ -3,7 +3,7 @@
 // what is stored stays `observed` until outcome feedback confirms it. Every failure, stored or not,
 // goes to the failure log.
 import type { InfraPorts } from '../../base/ports/infra.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import { createMemory, ERROR_TAG } from '../../base/memory/entry.js';
 import {
   failureHash,

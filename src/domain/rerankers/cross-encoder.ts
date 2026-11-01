@@ -1,8 +1,13 @@
 import { createOutageWarning } from './outage-warning.js';
-import type { RerankerFn, RerankResult, RerankerOptions } from '../../base/ports/reranker.js';
+import type {
+  RerankerFn,
+  RerankResult,
+  RerankerOptions,
+  CrossEncoderFn,
+  CrossEncoderLoad,
+} from '../../base/ports/reranker.js';
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
-import type { CrossEncoderFn, CrossEncoderLoad } from '../../base/ports/cross-encoder.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
 const DEFAULT_CROSS_ENCODER_TOP_K = 50;

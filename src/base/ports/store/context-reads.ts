@@ -1,7 +1,7 @@
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { AmbientTallies } from '../../memory/ambient.js';
 import type { AmbientAdmission, AmbientRefusalReason } from '../../scope/read-admission.js';
-import type { MethodEffects } from './effects.js';
+import type { MethodEffects } from './types.js';
 
 export type { AmbientAdmission, AmbientRefusalReason };
 

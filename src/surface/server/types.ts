@@ -15,7 +15,7 @@ import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
-import type { DetachedWork } from '../../domain/search/detached-work.js';
+import type { DetachedWork } from '../../domain/search/embed-memories.js';
 import type { ConnectorStore } from '../connectors/ingest.js';
 
 export interface ServerHandle {

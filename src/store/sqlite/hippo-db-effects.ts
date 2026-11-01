@@ -1,6 +1,6 @@
 // What each method of hippo.db's local tier does to the store, which places it on a worker.
 
-import type { MethodEffects } from '../../base/ports/store/effects.js';
+import type { MethodEffects } from '../../base/ports/store/types.js';
 import type { AgentImport } from '../../base/records/agent-import.js';
 import type { Captures, CompactionHooks, Compactions } from '../../base/records/capture.js';
 import type { Cards } from '../../base/records/cards.js';

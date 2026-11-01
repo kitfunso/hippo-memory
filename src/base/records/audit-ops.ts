@@ -70,3 +70,6 @@ export const AUDIT_OPS = [
 ] as const;
 
 export type AuditOp = (typeof AUDIT_OPS)[number];
+
+/** The audit actor for work a local command runs; HTTP and MCP callers pass their own. */
+export const CLI_ACTOR = 'cli';

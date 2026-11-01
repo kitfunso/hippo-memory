@@ -2,7 +2,7 @@
 import type { JsonValue } from '../../util/json.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { TenantId } from '../../util/tenant.js';
-import type { MethodEffects } from './effects.js';
+import type { MethodEffects } from './types.js';
 
 export interface KeyRevoke {
   readonly tenantId: string;

@@ -58,7 +58,7 @@ import { CONNECTOR_WRITES_EFFECTS, CONNECTOR_EVENTS_EFFECTS } from './hippo-db-e
 import { AUDIT_MAINTENANCE_EFFECTS } from './hippo-db-effects.js';
 import { sqliteAuditMaintenance } from './audit/audit-maintenance.js';
 import type { HippoDbRepos } from '../../base/ports/hippo-db.js';
-import type { MethodEffects } from '../../base/ports/store/effects.js';
+import type { MethodEffects } from '../../base/ports/store/types.js';
 import { SESSIONS_EFFECTS } from './hippo-db-effects.js';
 import { sqliteQuarantine } from './connectors/quarantine.js';
 import { sqliteStats } from './entries/index-and-stats.js';

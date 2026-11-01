@@ -1,5 +1,5 @@
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
+import { MAX_ENTITY_NAME_LEN } from '../../base/records/graph.js';
 import { extractGraph, type ExtractResult } from '../../domain/graph/extract.js';
 import { buildGraphModel, type GraphModel } from '../../domain/graph/view.js';
 import { requireHostAdmin, type Context } from '../types.js';

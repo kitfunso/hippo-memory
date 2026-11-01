@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in
-// surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
+// surface/cli/flags.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import * as fs from 'node:fs';
@@ -26,8 +26,8 @@ import {
   flagKind,
   isKnownFlag,
   undeclaredFlags,
+  COMMANDS,
 } from './surface/cli/flags.js';
-import { COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
 import { cliCommand, type CliCommand } from './surface/cli/api-context.js';

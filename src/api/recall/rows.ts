@@ -15,7 +15,7 @@ import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContinuityBlock } from '../../base/ports/store.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { Context } from '../types.js';
-import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
+import { CONTINUITY_EVENT_LIMIT } from '../context/context-task-state.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 

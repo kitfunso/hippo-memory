@@ -1,7 +1,7 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
 import type { ContextReach, GlobalInReach } from '../../api/types.js';
-import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
+import type { ConfiguredFolder, EmbedderFor } from '../../base/ports/embedder.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
@@ -27,7 +27,7 @@ import {
   type StoreRuntime,
   type RequestStores,
 } from '../open-store.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import {
   envClefSettings,
   envLossAversionRatio,
@@ -35,13 +35,12 @@ import {
   envTenant,
 } from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
-import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { createCallerState, type AutoSleepHost, type CallerState } from '../../api/callers.js';
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
 import { contextReach, coreEnrichment, globalEnrichment } from '../../api/hippo-db-context.js';
-import type { DetachedWork } from '../../domain/search/detached-work.js';
+import type { DetachedWork } from '../../domain/search/embed-memories.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
  * parses an unchanged config.json once. */

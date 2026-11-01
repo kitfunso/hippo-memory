@@ -1,6 +1,6 @@
 // Work an api call starts and does not wait on goes to the keeper its root set on the Context.
 import { DetachedSet } from '../base/util/detached-set.js';
-import type { DetachedWork } from '../domain/search/detached-work.js';
+import type { DetachedWork } from '../domain/search/embed-memories.js';
 import type { Context } from './types.js';
 
 /** Runs `start` with the root's keeper of detached work; a context with none gets one of the

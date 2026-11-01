@@ -1,15 +1,17 @@
 // Embeds memories into the vector index: picks the adapter for a target and runs embedAll and embedMemoryInto on it.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
-import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
-import type { EmbedderFor, EmbeddingProvider } from '../../base/ports/embedder.js';
+import type {
+  ConfiguredFolder,
+  EmbedderFor,
+  EmbeddingProvider,
+} from '../../base/ports/embedder.js';
 import type { EmbeddingsConfig } from '../../base/config/config.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { FailureNotices } from '../../base/util/failure-notices.js';
 import { warnEmbedFailureOnce } from './embed-failures.js';
 import { type IndexRows, type IndexEmbedTarget, indexAdapter } from './embed-index-target.js';
 import { type StoreEmbedTarget, storeAdapter } from './embed-store-target.js';
-import type { DetachedWork } from './detached-work.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { EmbeddingIndex } from '../../base/records/embedding-index.js';
 
@@ -130,4 +132,10 @@ export async function embedAll(
     return 0;
   }
   return adapterFor(on).all(provider);
+}
+
+/** Where a write hands an embed it does not wait on: the root that owns the stores settles it
+ * before closing them. */
+export interface DetachedWork {
+  detach(work: Promise<unknown>): void;
 }

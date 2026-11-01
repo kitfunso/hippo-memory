@@ -5,7 +5,7 @@ import { CONTEXT_READS_EFFECTS } from './context-reads.js';
 import { ENTRY_WRITES_EFFECTS } from './entry-writes.js';
 import { KEY_WRITES_EFFECTS } from './keys.js';
 import { VECTORS_EFFECTS, VECTOR_WRITES_EFFECTS } from './vectors.js';
-import type { MethodEffects } from './effects.js';
+import type { MethodEffects } from './types.js';
 import type { BaseMethods, CoreGroups } from '../store.js';
 
 /** What each base method does to the store; every adapter honours it. */

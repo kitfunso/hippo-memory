@@ -12,7 +12,7 @@ import type { StoreFiles } from '../runtime/open.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { placeholders } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { CLI_ACTOR } from '../../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET
  * NULL); tests/store/dormant-memories.test.ts pins it to the schema. */

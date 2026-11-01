@@ -9,7 +9,7 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../host/config-file.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { log } from '../../base/util/log.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import type { EntryWrites } from '../../base/ports/store/entry-writes.js';
 import type { Rejections } from '../../base/records/rejections.js';
 import type { Sharing } from '../../base/records/sharing.js';

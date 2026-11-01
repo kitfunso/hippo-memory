@@ -11,7 +11,7 @@ import { overlapPartners } from './overlap-index.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import { applyRebuild, settleFreshSummary } from './summary-settle.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { Consolidation } from '../../base/records/consolidation.js';

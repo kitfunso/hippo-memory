@@ -2,7 +2,7 @@
  *  policies, customer_notes, project_briefs). Writes go through the sqlite/graph/graph-writes.ts consolidated-source
  *  guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
-import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
+import { MAX_ENTITY_NAME_LEN } from '../../base/records/graph.js';
 import type {
   DesiredEntity,
   DesiredGraph,

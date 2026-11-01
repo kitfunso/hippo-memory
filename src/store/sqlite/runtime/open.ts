@@ -24,7 +24,7 @@ import { deserializeEntry } from '../../../base/memory/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from '../entries/entry-row.js';
 import { layerDir } from '../folder-files/mirrors.js';
 import { isJsonObject, type JsonValue } from '../../../base/util/json.js';
-import { CLI_ACTOR } from '../../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
 import { createHost, type Host } from '../../../host/host.js';
 import { META_KEY } from '../../../db/meta.js';
 import { handleNow, handleStamp } from './handle-clock.js';

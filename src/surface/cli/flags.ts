@@ -1,7 +1,12 @@
-// Each flag's kind, read from the verb table's flags: parseArgs needs a flag's kind before the
-// verb's module loads.
+// Every CLI verb, one row each, and each flag's kind read from those rows: dispatch, help and the help
+// listing's order read the table, and parseArgs needs a flag's kind before the verb's module loads.
 
-import { COMMANDS } from './verbs.js';
+import { MEMORY_VERBS } from './verbs/memory.js';
+import { HEALTH_VERBS } from './verbs/health.js';
+import { SESSION_VERBS } from './verbs/sessions.js';
+import { OBJECT_VERBS } from './verbs/objects.js';
+
+export const COMMANDS = { ...MEMORY_VERBS, ...HEALTH_VERBS, ...SESSION_VERBS, ...OBJECT_VERBS };
 
 // A value on a switch is refused, as `--fix=false` reads as on under Boolean() and `--pin=true` as
 // off under === true.

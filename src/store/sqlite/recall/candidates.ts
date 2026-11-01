@@ -44,7 +44,9 @@ import type {
 } from '../../../base/ports/store/context-reads.js';
 import type { SourceTally } from '../../../base/records/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../../../base/records/reports.js';
-import { SCHEMA_FIT_WINDOW_ROWS } from '../../rules/windows.js';
+
+/** How many of a tenant's newest rows schemaFit reads; older rows no longer move the fit. */
+const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
 type StatusInputs = StrengthInputs & ConfidenceInputs & { readonly layer: Layer };
 

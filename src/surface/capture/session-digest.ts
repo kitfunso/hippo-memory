@@ -6,7 +6,7 @@ import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import { adminActor } from '../../api/types.js';
 import {
   writeSessionDigest,

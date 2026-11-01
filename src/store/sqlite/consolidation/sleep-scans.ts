@@ -1,6 +1,6 @@
 // The scans sleep runs over every memory: object-backed rows and duplicate candidates.
 
-import { CURRENT_DISTILLED } from '../../../db/sql-predicates.js';
+import { CURRENT_DISTILLED } from '../../../db/sql.js';
 import { duplicateHash } from '../../../base/util/same-text.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from '../runtime/rows.js';

@@ -6,7 +6,7 @@ import { isFtsAvailable, withWriteScope } from '../../../db/index.js';
 import { appendAuditEvents } from '../audit/audit.js';
 import { reportAuditWriteFailure } from '../../../base/records/audit-report.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { CLI_ACTOR } from '../../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 

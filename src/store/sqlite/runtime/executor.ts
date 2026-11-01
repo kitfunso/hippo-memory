@@ -12,7 +12,6 @@ import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { requestScopes } from '../../../base/util/request-scope.js';
 import { decodeError } from './error-codec.js';
 import { portError } from './port-errors.js';
-import { workerCounts } from './executor-counts.js';
 import { markAllTenants } from './tenant-wire.js';
 import type { StoreRuntime } from '../../../db/store-runtime.js';
 import {
@@ -23,6 +22,17 @@ import {
   STORE_SETUP_OP,
   type WorkerInit,
 } from './worker-ops.js';
+
+/** What the store workers refused, timed out and replaced since the process started, counted on the
+ * server thread across every executor; /health reports them beside the audit failure count. */
+export const workerCounts = {
+  /** Calls refused because a thread's queue was full. */
+  queueRefusals: 0,
+  /** Calls whose request deadline passed, waiting or running. */
+  jobsExpired: 0,
+  /** Threads stopped at a deadline and replaced. */
+  workersReplaced: 0,
+};
 
 // Resolved from the package root, so a server run from TypeScript source starts the same
 // built file.

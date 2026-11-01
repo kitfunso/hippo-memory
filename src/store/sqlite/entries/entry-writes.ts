@@ -18,7 +18,7 @@ import { stampOriginProject, upsertEntryRow } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror } from '../folder-files/mirrors.js';
 import type { StoreFiles, StoreModel } from '../runtime/open.js';
 import { bindHandleClock } from '../runtime/handle-clock.js';
-import { CLI_ACTOR } from '../../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../../base/records/audit-ops.js';
 import type { StrengthenOptions } from '../../../base/ports/store/recall-writes.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 

@@ -46,9 +46,14 @@ import {
   saveActiveTaskSnapshot,
 } from './task-snapshots.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { RECENT_MIRROR_EVENTS, TRACE_EVENT_ROWS } from '../../rules/windows.js';
 import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../../../base/util/limits.js';
 import { handleNow, handleStamp } from '../runtime/handle-clock.js';
+
+/** Events of one completed session a sleep reads to render its trace, the newest kept. */
+const TRACE_EVENT_ROWS = 1000;
+
+/** Newest session events the recent-session mirror file holds after each append. */
+const RECENT_MIRROR_EVENTS = 20;
 
 /** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
 function clearActiveTaskSnapshot(

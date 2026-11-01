@@ -1,6 +1,6 @@
 import type { ScopeReader } from '../../scope/recall-scope.js';
 import type { MemoryEntry } from '../../memory/entry.js';
-import type { MethodEffects } from './effects.js';
+import type { MethodEffects } from './types.js';
 
 export interface EntryWrite {
   readonly entry: MemoryEntry;

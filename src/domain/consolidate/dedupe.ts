@@ -11,7 +11,7 @@ import { canAutoDelete } from '../../base/memory/keep-rules.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { CLI_ACTOR } from '../../base/records/audit-ops.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { AuditMaintenance } from '../../base/records/audit-maintenance.js';
 import type { Consolidation } from '../../base/records/consolidation.js';

@@ -5,7 +5,15 @@ import { tokenize } from '../../base/util/tokenize.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
-import { DEFAULT_EMBEDDING_WEIGHT } from '../../base/rank/recall-defaults.js';
+import {
+  DEFAULT_EMBEDDING_WEIGHT,
+  DEFAULT_MMR_LAMBDA,
+  DEFAULT_RECALL_BUDGET,
+  rankNow,
+  type RankTime,
+  type ResultCost,
+  type SearchResult,
+} from '../../base/rank/search-types.js';
 import type { RerankerFn, RerankerOptions } from '../../base/ports/reranker.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
@@ -22,14 +30,6 @@ import { fuseRanks, type FusionInput, type GraphStreamOptions } from './fusion.j
 import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
-import {
-  DEFAULT_MMR_LAMBDA,
-  DEFAULT_RECALL_BUDGET,
-  rankNow,
-  type RankTime,
-  type ResultCost,
-  type SearchResult,
-} from '../../base/rank/search-types.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { GraphWalk } from '../graph/recall.js';
 

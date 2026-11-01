@@ -3,9 +3,8 @@
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { RecallScopeFilter } from '../../scope/recall-scope.js';
 import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';
-import type { OriginFilter } from './types.js';
+import type { OriginFilter, MethodEffects } from './types.js';
 import type { TenantId } from '../../util/tenant.js';
-import type { MethodEffects } from './effects.js';
 
 export type { EmbeddingIndexState, RecallScopeFilter };
 

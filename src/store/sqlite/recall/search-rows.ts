@@ -30,7 +30,10 @@ import {
 } from '../../../base/ports/store/vectors.js';
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 import { tenantAnd } from '../runtime/tenant.js';
-import { LIKE_WINDOW_ROWS } from '../../rules/windows.js';
+
+/** Newest admitted rows LIKE tests for a term under 3 characters, which no trigram lookup can
+ * answer. */
+const LIKE_WINDOW_ROWS = 2000;
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
  * in recall-scope.ts is its JS twin. */

@@ -3,8 +3,7 @@
 // the holder.
 import { createHost, type Host } from '../../../host/host.js';
 import type { HippoStore, StoreReach } from '../../../base/ports/store.js';
-import { createSqliteExecutor, type ExecutorOptions } from './executor.js';
-import { workerCounts } from './executor-counts.js';
+import { createSqliteExecutor, type ExecutorOptions, workerCounts } from './executor.js';
 import { isHippoDbStore } from './hippo-db-stores.js';
 import { createStoreHolder, type StoreHolder } from './held-connection.js';
 import { inSqliteSession, sqliteReach } from '../store.js';

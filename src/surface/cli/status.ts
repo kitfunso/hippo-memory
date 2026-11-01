@@ -10,7 +10,7 @@ import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-repeats.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/hippo-db/token-reports.js';
