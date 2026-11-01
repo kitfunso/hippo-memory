@@ -1,7 +1,7 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for
 // promptHookContext (a remote hook route's call). promptHookContext copies the CLI's contextGet
-// flags (surface/cli/context.ts) bar `continuity`: the CLI points for text formats; this prints
-// whole unless its caller opts in. Parity: tests/store/prompt-hook-context.process.test.ts.
+// flags (surface/cli/context.ts) bar `continuity` and `ownHandoffOnly`, both opt-in here. Parity:
+// tests/store/prompt-hook-context.process.test.ts.
 import type { Context } from './types.js';
 import type {
   ContextOptions,
@@ -353,6 +353,8 @@ export interface PromptHookOptions {
   readonly sharedStore?: true;
   /** Default 'full': a pointer names a command that cannot reach this store, so the caller opts in. */
   readonly continuity?: ContinuityMode;
+  /** Default off, so the published default keeps another session's handoff; the caller opts in as the CLI hook does. */
+  readonly ownHandoffOnly?: true;
 }
 
 /** The caps on a hook caller's session id and project names, so a caller other than an HTTP
@@ -425,7 +427,7 @@ export async function buildPromptHookContext(
 function hookContextOptions(
   req: PromptHookRequest,
   now: Date,
-  { sharedStore, continuity }: PromptHookOptions,
+  { sharedStore, continuity, ownHandoffOnly }: PromptHookOptions,
 ): ContextOptions {
   const prompt = req.payload?.prompt;
   return {
@@ -439,5 +441,6 @@ function hookContextOptions(
     cost: contextCost('additional-context', HOOK_FRAMING, now),
     sharedStore,
     continuity: continuity ?? 'full',
+    ownHandoffOnly,
   };
 }

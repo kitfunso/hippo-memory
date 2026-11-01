@@ -1,11 +1,12 @@
 // Another session's task snapshot and handoff reach the text readers as a pointer to the command that prints them;
 // the caller's own session, a shared store, JSON and the remote hook route (unless it opts in) get them whole.
+// The per-prompt hook text leaves another session's handoff out; `hippo context` and `hippo handoff latest` print it.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'node:path';
 import { contextGet } from '../../src/api/index.js';
 import type { ContextOptions } from '../../src/api/context/context-types.js';
 import { contextCost, handoffSectionText, snapshotSectionText } from '../../src/api/context/context-render.js';
-import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
+import { buildPromptHookContext, type PromptHookOptions } from '../../src/api/prompt-hook.js';
 import type { DeliveryObserver } from '../../src/api/delivery/delivery-recorder.js';
 import { sessionDigestId, SESSION_DIGEST_TAG } from '../../src/base/session/session-digest-row.js';
 import { Layer } from '../../src/base/memory/entry.js';
@@ -134,10 +135,14 @@ describe('task state in a project store', () => {
     return r.stdout;
   }
 
-  const hookText = async (sessionId?: string): Promise<string> => additionalContext(await cli(HOOK_FLAGS, sessionId));
+  const hookText = async (sessionId?: string): Promise<string> => {
+    const stdout = await cli(HOOK_FLAGS, sessionId);
+    // The hook prints nothing when no block is left to send.
+    return stdout === '' ? '' : additionalContext(stdout);
+  };
   const markdown = (sessionId?: string): Promise<string> => cli({ budget: '1500' }, sessionId);
 
-  const remote = async (sessionId: string, opts?: { continuity: 'pointer' }): Promise<string> =>
+  const remote = async (sessionId: string, opts?: PromptHookOptions): Promise<string> =>
     additionalContext((await buildPromptHookContext(apiCtx(store), { sessionId, project: PROJECT }, opts)).stdout);
 
   const hookOpts = (budget: number, continuity?: ContextOptions['continuity'], sessionId = 'now'): ContextOptions => ({
@@ -152,7 +157,6 @@ describe('task state in a project store', () => {
   describe("another session's handoff", () => {
     it.each([
       ['buildPromptHookContext with continuity: pointer', () => remote('now', { continuity: 'pointer' })],
-      ['the CLI hook format', () => hookText('now')],
       ['hippo context markdown', () => markdown('now')],
     ])('prints the pointer from %s, and no summary text', async (_name, read) => {
       const handoff = saveHandoff('earlier');
@@ -161,6 +165,90 @@ describe('task state in a project store', () => {
       expect(text).not.toContain(HANDOFF_SUMMARY);
       expect(text).not.toContain(NEXT_ACTION);
       expect(text).not.toContain('- Session: earlier');
+    });
+
+    it('is left out of the CLI hook text, pointer and summary alike, while the same session snapshot still prints', async () => {
+      const snapshot = saveSnapshot('earlier');
+      saveHandoff('earlier');
+      const text = await hookText('now');
+      expect(text).toContain(snapshotPointer(snapshot));
+      expect(text).not.toContain('Session Handoff');
+      expect(text).not.toContain('hippo handoff latest');
+      expect(text).not.toContain(HANDOFF_SUMMARY);
+      expect(text).not.toContain(NEXT_ACTION);
+    });
+
+    it("counts a handoff the option leaves out as neither shown nor dropped, so the sections report is the snapshot's alone", async () => {
+      saveSnapshot('earlier');
+      saveHandoff('earlier');
+      const spy = sectionsSpy();
+      const result = await contextGet(apiCtx(store), {
+        ...hookOpts(1500, 'pointer'),
+        ownHandoffOnly: true,
+        deliveryObserver: spy.obs,
+      });
+      expect(result.sessionHandoff).toBeUndefined();
+      expect(result.handoffMode).toBeUndefined();
+      expect(spy.calls).toEqual([[1, 0]]);
+    });
+
+    it('is printed by the hook text to the session that left it', async () => {
+      saveHandoff('own');
+      const text = await hookText('own');
+      expect(text).toContain('- Session: own');
+      expect(text).toContain(HANDOFF_SUMMARY);
+      expect(text).toContain(NEXT_ACTION);
+      expect(text).not.toContain('hippo handoff latest');
+    });
+
+    it('is left out of the hook text for a caller with no session id, though the pointer readers name it', async () => {
+      const handoff = saveHandoff('earlier');
+      expect(await hookText()).toBe('');
+      expect(await markdown()).toContain(handoffPointer(handoff));
+    });
+
+    it("a newer handoff from another session hides the caller's own (known limit, decision 2026-11-01)", async () => {
+      // No fresh snapshot, so the read returns the newest handoff of any session; row id breaks a same-millisecond tie.
+      const own = saveHandoff('own', { summary: 'Unfinished: the caller left this one first' });
+      const newer = saveHandoff('earlier', { summary: 'Unfinished: a parallel session left this one later' });
+      const text = await hookText('own');
+      expect(text).not.toContain('Session Handoff');
+      expect(text).not.toContain(own.summary);
+      expect(text).not.toContain(newer.summary);
+      const full = await markdown('own');
+      expect(full).toContain(handoffPointer(newer));
+      expect(full).not.toContain(own.summary);
+    });
+
+    it('is still printed as a pointer by `--pinned-only --format copilot`, the one injection Copilot gets', async () => {
+      const handoff = saveHandoff('earlier');
+      const text = additionalContext(
+        await cli({ 'pinned-only': true, 'include-recent': '5', format: 'copilot' }, 'now'),
+      );
+      expect(text).toContain(handoffPointer(handoff));
+      expect(text).not.toContain(HANDOFF_SUMMARY);
+    });
+
+    it('is still returned whole by `--pinned-only --format json`', async () => {
+      saveHandoff('earlier');
+      const out = await cli({ 'pinned-only': true, 'include-recent': '5', format: 'json' }, 'now');
+      // SAFETY: --format json prints the context JSON whose handoff section is a SessionHandoff.
+      const json = JSON.parse(out) as { sessionHandoff: SessionHandoff };
+      expect(json.sessionHandoff.sessionId).toBe('earlier');
+      expect(json.sessionHandoff.summary).toBe(HANDOFF_SUMMARY);
+    });
+
+    it('is printed by buildPromptHookContext unless its caller opts in, and then matches the CLI hook text', async () => {
+      const snapshot = saveSnapshot('earlier');
+      const handoff = saveHandoff('earlier');
+      // The CLI first: a buildPromptHookContext call books a ledger row that would make the CLI skip the same block.
+      const cliText = await hookText('now');
+      expect(cliText).toContain(snapshotPointer(snapshot));
+      expect(cliText).not.toContain('Session Handoff');
+      expect(await remote('now', { continuity: 'pointer', ownHandoffOnly: true })).toBe(cliText);
+
+      expect(await remote('now', { continuity: 'pointer' })).toContain(handoffPointer(handoff));
+      expect(await remote('now')).toContain(HANDOFF_SUMMARY);
     });
 
     it('prints a pointer short enough to be worth sending', () => {
@@ -173,7 +261,7 @@ describe('task state in a project store', () => {
       ['empty, so no command can name the row', ''],
     ])('prints the whole handoff, and no command, when its session id is %s', async (_name, id) => {
       saveHandoff(id);
-      const text = await hookText('now');
+      const text = await markdown('now');
       expect(text).toContain(`- Session: ${id}`);
       expect(text).toContain(HANDOFF_SUMMARY);
       expect(text).toContain(NEXT_ACTION);
@@ -181,11 +269,13 @@ describe('task state in a project store', () => {
       const result = await contextGet(apiCtx(store), hookOpts(1500, 'pointer'));
       expect(result.sessionHandoff?.summary).toBe(HANDOFF_SUMMARY);
       expect(result.handoffMode).toBeUndefined();
+      // Another session's handoff stays out of the hook text whatever its id.
+      expect(await hookText('now')).not.toContain(HANDOFF_SUMMARY);
     });
 
     it('names a normal session id with letters, digits, hyphens and underscores', async () => {
       const handoff = saveHandoff('sess-1_x');
-      expect(await hookText('now')).toContain(handoffPointer(handoff));
+      expect(await markdown('now')).toContain(handoffPointer(handoff));
     });
   });
 
@@ -328,14 +418,18 @@ describe('task state in a project store', () => {
       const snapshot = saveSnapshot('earlier');
       const handoff = saveHandoff('earlier');
       await logEvent('earlier');
-      for (const text of [await hookText(), await markdown()]) {
+      const hook = await hookText();
+      const md = await markdown();
+      for (const text of [hook, md]) {
         expect(text).toContain(snapshotPointer(snapshot));
-        expect(text).toContain(handoffPointer(handoff));
         expect(text).not.toContain('Another session');
         expect(text).not.toContain(HANDOFF_SUMMARY);
         expect(text).not.toContain(SNAPSHOT_SUMMARY);
         expect(text).not.toContain(TRAIL_EVENT);
       }
+      expect(md).toContain(handoffPointer(handoff));
+      // No session id means no handoff is the caller's own, so the hook leaves them all out.
+      expect(hook).not.toContain('Session Handoff');
     });
 
     it('treats an empty session id as unknown, even for a snapshot with an empty id', async () => {
@@ -348,7 +442,7 @@ describe('task state in a project store', () => {
   it('prints both pointers when one session left a fresh snapshot and a handoff', async () => {
     const snapshot = saveSnapshot('earlier');
     const handoff = saveHandoff('earlier');
-    const text = await hookText('now');
+    const text = await markdown('now');
     expect(text).toContain(snapshotPointer(snapshot));
     expect(text).toContain(handoffPointer(handoff));
     expect(text.indexOf('## Active Task Snapshot')).toBeLessThan(text.indexOf('## Session Handoff'));
@@ -441,9 +535,14 @@ describe('task state in a project store', () => {
       );
       const handoff = saveHandoff('earlier', { evidence: { derivedFrom: 'transcript' } });
       const text = await hookText('now');
-      expect(text).toContain(handoffPointer(handoff));
+      expect(text).not.toContain('Session Handoff');
       expect(text).not.toContain('upload timeout');
       expect(text).toContain('queue worker');
+
+      // The pointer readers still print the handoff in place of the digest.
+      const pointer = await markdown('now');
+      expect(pointer).toContain(handoffPointer(handoff));
+      expect(pointer).not.toContain('upload timeout');
     });
   });
 
@@ -464,7 +563,7 @@ describe('task state in a project store', () => {
       const snapshot = saveSnapshot('earlier');
       saveHandoff('earlier');
       await logEvent('earlier');
-      const text = await hookText('now');
+      const text = await markdown('now');
 
       const session = await runPrinted(text, 'session');
       expect(session.printed).toBe('session latest --id=earlier');
@@ -483,7 +582,7 @@ describe('task state in a project store', () => {
       const snapshot = saveSnapshot('--help');
       const handoff = saveHandoff('--help');
       await logEvent('--help');
-      const text = await hookText('now');
+      const text = await markdown('now');
       expect(text).toContain(snapshotPointer(snapshot));
       expect(text).toContain(handoffPointer(handoff));
       expect(text).toContain('`hippo session latest --id=--help`');
@@ -507,8 +606,9 @@ describe('task state in a project store', () => {
       const whole = await contextGet(apiCtx(store), hookOpts(1500, 'full'));
       expect(whole.sessionHandoff?.summary).toBe(unfinished.summary);
 
-      const text = await hookText('now');
+      const text = await markdown('now');
       expect(text).toContain(handoffPointer(unfinished));
+      expect(await hookText('now')).not.toContain(unfinished.summary);
       const latest = await runPrinted(text, 'handoff');
       expect(latest.stdout).toContain(unfinished.summary);
       expect(latest.stdout).not.toContain('Finished: the queue worker shipped');
@@ -524,7 +624,8 @@ describe('task state on a shared store', () => {
     home = makeRoot('continuity-pointer-shared', { config: { sharedStore: true } });
   });
 
-  it('keeps the full text under continuity: pointer, because it follows its owner and a local command cannot reach it', async () => {
+  /** Bob's snapshot and handoff, both left by session sb1. */
+  function seedBob() {
     saveActiveTaskSnapshot(
       home,
       'default',
@@ -537,7 +638,11 @@ describe('task state on a shared store', () => {
       { version: 1, sessionId: 'sb1', summary: HANDOFF_SUMMARY, nextAction: NEXT_ACTION },
       KEY,
     );
-    const ctx = apiCtx(home, 'default', { subject: 'api_key:hk_bob', role: 'member', owner: 'bob' });
+    return apiCtx(home, 'default', { subject: 'api_key:hk_bob', role: 'member', owner: 'bob' });
+  }
+
+  it('keeps the full text under continuity: pointer, because it follows its owner and a local command cannot reach it', async () => {
+    const ctx = seedBob();
 
     const result = await contextGet(ctx, {
       pinnedOnly: true,
@@ -556,5 +661,31 @@ describe('task state on a shared store', () => {
     );
     expect(hook).toContain(SNAPSHOT_SUMMARY);
     expect(hook).not.toContain('hippo session latest');
+  });
+
+  it("drops another session's handoff under ownHandoffOnly, so the owner resumes it with `hippo context`, and keeps the snapshot", async () => {
+    const ctx = seedBob();
+    const opts: ContextOptions = {
+      pinnedOnly: true,
+      budget: 1500,
+      currentProject: PROJECT,
+      cost: contextCost('additional-context', 'observe', new Date()),
+      continuity: 'pointer',
+      ownHandoffOnly: true,
+    };
+
+    const other = await contextGet(ctx, { ...opts, currentSessionId: 'sb2' });
+    expect(other.activeSnapshot?.summary).toBe(SNAPSHOT_SUMMARY);
+    expect(other.sessionHandoff).toBeUndefined();
+    const own = await contextGet(ctx, { ...opts, currentSessionId: 'sb1' });
+    expect(own.sessionHandoff?.summary).toBe(HANDOFF_SUMMARY);
+
+    const options: PromptHookOptions = { continuity: 'pointer', ownHandoffOnly: true };
+    const hook = additionalContext(
+      (await buildPromptHookContext(ctx, { sessionId: 'sb2', project: PROJECT }, options)).stdout,
+    );
+    expect(hook).toContain(SNAPSHOT_SUMMARY);
+    expect(hook).not.toContain(HANDOFF_SUMMARY);
+    expect(hook).not.toContain('hippo handoff latest');
   });
 });

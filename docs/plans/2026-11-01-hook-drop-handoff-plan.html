@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Hook Handoff Drop Plan</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+<header>
+  <h1>Other Session Handoffs Leave the Hippo Hook</h1>
+  <doc-changes new="3" changed="12"></doc-changes>
+  <details class="thread"><summary>Why · 2 requests</summary>
+    <doc-quote via="prompt" from="Keith">go on 1,2,3 and then /dev-framework-rl to improve hippo-memory so that it will costs less</doc-quote>
+    <doc-quote via="question" from="Keith">Drop from hook (Recommended)</doc-quote>
+  </details>
+</header>
+<main>
+<doc-plan>
+  <doc-claim>
+    <p>The Claude Code hook no longer prints the handoff of another session.</p>
+    <doc-mock frame="terminal" title="hook text, store holds the previous task's handoff" w="480"><template><span class="dim">$ before (2.3.0)</span>
+## Session Handoff
+
+<span class="r">- Session e96f7882-... left a handoff at
+  03:30 UTC. If this task continues it, run
+  `hippo handoff latest --session=e96f7882-...`.</span>
+
+## Project Memory (2 entries, 174 tokens)
+...
+<span class="dim">$ after</span>
+## Project Memory (2 entries, 174 tokens)
+...</template></doc-mock>
+    <doc-claim>
+      <p>A new option keeps only the caller's own handoff.</p>
+      <doc-code caption="Sketch, src/api/context.ts loadTaskSections(): the option drops another session's eligible handoff before the purse pays for it.">
+<script type="text/plain">
+  const eligible = raw.handoff
+    && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope)
+    ? raw.handoff : null;
+  // The hook keeps its own handoff; another session's waits for hippo context.
+  const omitted = opts.ownHandoffOnly && eligible
+    && eligible.sessionId !== opts.currentSessionId ? eligible : null;
+  const sessionHandoff = omitted ? null : eligible;
+</script>
+      </doc-code>
+      <doc-claim at="src/api/context.ts:414">
+        <p><b>context.ts:414</b> · loadTaskSections() handoff choice</p>
+        <doc-code src="src/api/context.ts" lines="409-421" hl="414-421"></doc-code>
+      </doc-claim>
+      <doc-claim at="src/api/context-types.ts:59">
+        <p><b>context-types.ts:59</b> · ContextOpts gains ownHandoffOnly</p>
+        <doc-code src="src/api/context-types.ts" lines="55-60" hl="59"></doc-code>
+      </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>The omitted handoff still hides its session's digest memory.</p>
+      <doc-code src="src/api/context.ts" lines="466-476" hl="467" caption="ambientAdmission() gets shownHandoff ?? omittedHandoff; a handoff that the budget drops keeps today's digest swap."></doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>Only the hook text format sets the option.</p>
+      <doc-calls title="who sets ownHandoffOnly" caption="JSON, the HTTP route and MCP keep today's handoff.">
+<script type="text/plain">
+~ hippo context --pinned-only --format additional-context   @ src/cli/context.ts:234   -- sets ownHandoffOnly
+~ promptHookContext()                                        @ src/api/prompt-hook.ts:381   -- new opt, default off, published default kept
+  hippo context --pinned-only --format json                  @ src/cli/context.ts:234   -- unchanged
+  HTTP context route, pinned_only                            @ src/api/recall/request.ts:190   -- unchanged
+</script>
+      </doc-calls>
+      <doc-ask id="copilot">
+        <p>Does the Copilot sessionStart hook drop the handoff too?</p>
+        <label><input type="radio" name="copilot" value="keep" checked> No, Copilot keeps the pointer <small>sessionStart is its only injection</small></label>
+        <label><input type="radio" name="copilot" value="drop"> Yes, one rule for both hooks <small>Copilot then never sees a handoff</small></label>
+      </doc-ask>
+    </doc-claim>
+    <doc-claim>
+      <p>A shared store drops another session's handoff from the hook too.</p>
+      <doc-code src="tests/continuity-pointer.test.ts" lines="480-490" caption="Today a shared store prints the owner's handoff in full on each hook call."></doc-code>
+      <doc-ask id="shared">
+        <p>Does a shared store keep the owner's handoff in the hook?</p>
+        <label><input type="radio" name="shared" value="drop" checked> No, one rule for every store <small>the owner runs hippo context to resume</small></label>
+        <label><input type="radio" name="shared" value="keep"> Yes, keep it for a shared store <small>keeps team resume and its full-text cost</small></label>
+      </doc-ask>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>The hook still prints its own session's handoff, with one limit.</p>
+    <doc-code src="src/api/context.ts" lines="390-395" hl="394" caption="With no fresh snapshot the read returns the newest unfinished handoff of any session, so a newer one from another session hides the own one."></doc-code>
+    <doc-claim>
+      <p>Another session's snapshot pointer stays in the hook.</p>
+      <doc-code src="src/api/context.ts" lines="416-419" hl="416,418"></doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>hippo context and hippo handoff latest still show another session's handoff.</p>
+    <doc-code src="src/cli/context.ts" lines="227-234" hl="234" caption="The markdown and JSON formats do not set the option."></doc-code>
+    <doc-claim>
+      <p>Every pointer test keeps running on the markdown path.</p>
+      <doc-code src="tests/continuity-pointer.test.ts" lines="117-120" hl="119" caption="The helper keeps pinnedOnly; handoff cases run without ownHandoffOnly, and new cases set it."></doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The hook tests that read a handoff change their expectation.</p>
+      <doc-code src="tests/session-digest-worker.test.ts" lines="207-220" caption="Also context-store-path-parity.test.ts:129-175, context-task-state-owner.test.ts:87-90, db-continuity-tables-self-heal.test.ts:312, prompt-hook-context.test.ts and the golden output, where the hook format runs."></doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>A decision record replaces the hook part of the pointer decision.</p>
+    <doc-code src="docs/decisions/2026-10-29-continuity-pointers.md" lines="33-35" caption="Its own reconsider condition holds: Z0 Amendment 9 still reads above 1.10."></doc-code>
+    <doc-claim>
+      <p>The record names the purse, ledger and resume effects.</p>
+      <doc-code src="src/api/context.ts" lines="422-434" hl="428-433" caption="The freed budget can admit one more memory, and obs.sections counts the omitted handoff as neither shown nor dropped."></doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The README and the changelog say where the handoff went.</p>
+      <doc-code src="README.md" lines="251-264" hl="262-264"></doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim aux="scope">
+    <p>Not changing: snapshots, MCP, JSON, the HTTP route and the agent blocks.</p>
+    <ul>
+      <li>Another session's snapshot pointer and trail stay in the hook. Z0 showed no snapshot in 252 injections.</li>
+      <li>MCP <code>hippo_recall</code>, <code>--format json</code>, the HTTP route and <code>hippo handoff latest</code> keep the handoff.</li>
+      <li>The published default of <code>promptHookContext()</code> stays; a caller opts in.</li>
+      <li>The Claude Code and Codex blocks keep their words.</li>
+      <li>A cost claim needs a Z0 rerun, which is a separate decision for Keith.</li>
+    </ul>
+  </doc-claim>
+</doc-plan>
+</main>
+</body></html>

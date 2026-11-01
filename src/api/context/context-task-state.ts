@@ -22,6 +22,9 @@ export interface TaskSections {
   shownSnapshot: TaskSnapshot | null;
   snapshotMode: ContinuityMode;
   shownHandoff: SessionHandoff | null;
+  /** An eligible handoff the caller asked to leave out, kept so its transcript-digest row stays
+   * hidden. */
+  omittedHandoff: SessionHandoff | null;
   handoffMode: ContinuityMode;
   shownEvents: SessionEvent[];
   left: number;
@@ -87,7 +90,8 @@ export async function loadTaskSections(
     passesScopeFilterForRecall(r.scope ?? null, exactScope, ownScope);
   const raw = await loadRawTaskState(ctx, opts, plan);
   const activeSnapshot = raw.snapshot && admits(raw.snapshot) ? raw.snapshot : null;
-  const sessionHandoff = raw.handoff && admits(raw.handoff) ? raw.handoff : null;
+  const eligibleHandoff = raw.handoff && admits(raw.handoff) ? raw.handoff : null;
+  const { sessionHandoff, omittedHandoff } = splitHandoff(opts, eligibleHandoff);
   const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.sessionId, 'pointer');
   const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId, 'full');
   const shownSnapshot =
@@ -116,10 +120,24 @@ export async function loadTaskSections(
     shownSnapshot,
     snapshotMode,
     shownHandoff,
+    omittedHandoff,
     handoffMode,
     shownEvents,
     left: left(),
   };
+}
+
+// The hook leaves out another session's handoff; it is neither shown nor dropped for budget, so the
+// section counts skip it.
+function splitHandoff(
+  opts: ContextOptions,
+  eligible: SessionHandoff | null,
+): { sessionHandoff: SessionHandoff | null; omittedHandoff: SessionHandoff | null } {
+  const own = Boolean(opts.currentSessionId) && eligible?.sessionId === opts.currentSessionId;
+  const omit = opts.ownHandoffOnly && eligible && !own;
+  return omit
+    ? { sessionHandoff: null, omittedHandoff: eligible }
+    : { sessionHandoff: eligible, omittedHandoff: null };
 }
 
 // The command must return this reader's row, so own, shared-store, unsafe-id print whole; no id: `hippo snapshot show`.

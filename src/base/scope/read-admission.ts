@@ -21,8 +21,8 @@ export interface AmbientAdmission {
   readonly ownScope?: string;
   /** The reader's session, whose own compaction items are left out. */
   readonly ownSessionId?: string;
-  /** The session of a shown transcript handoff, whole or as a pointer: it stands for the closing
-   * message its digest rows hold, and the pointer's command prints it. */
+  /** The session of a shown or omitted transcript handoff: it stands for the closing message its
+   * digest rows hold, so that session's digest stays out. */
   readonly handoffSessionId?: string;
 }
 

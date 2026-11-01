@@ -243,8 +243,8 @@ describe('a folder with only the global store', () => {
 });
 
 describe('context prints the handoff or the digest, never both', () => {
-  // No session id means an unknown caller, who gets the handoff as a pointer; JSON stays whole.
-  const context = async (format: 'additional-context' | 'json', sessionId?: string): Promise<string> => {
+  // No session id means an unknown caller: the hook text leaves every handoff out, markdown points to it, JSON stays whole.
+  const context = async (format: 'additional-context' | 'markdown' | 'json', sessionId?: string): Promise<string> => {
     const input = sessionId === undefined ? '' : JSON.stringify({ session_id: sessionId });
     const result = await hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], input);
     expect(result.status).toBe(0);
@@ -259,9 +259,13 @@ describe('context prints the handoff or the digest, never both', () => {
       sessionDigestId('default', 'S1'),
     ]);
     const text = await context('additional-context');
-    expect(text).toContain('run `hippo handoff latest --session=S1`');
+    expect(text).not.toContain('hippo handoff latest');
     expect(text).not.toContain('Changed:');
     expect(text).not.toContain('upload timeout');
+    const pointer = await context('markdown');
+    expect(pointer).toContain('run `hippo handoff latest --session=S1`');
+    expect(pointer).not.toContain('Changed:');
+    expect(pointer).not.toContain('upload timeout');
     const json = JSON.parse(await context('json'));
     expect(json.sessionHandoff.sessionId).toBe('S1');
     expect(json.sessionHandoff.summary).toContain('upload timeout');

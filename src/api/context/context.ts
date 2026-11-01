@@ -57,7 +57,7 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
 
   const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
-  const admission = ambientAdmission(opts, plan, sections.shownHandoff);
+  const admission = ambientAdmission(opts, plan, sections.shownHandoff ?? sections.omittedHandoff);
   const recallRequest = promptRecallRequest(opts, plan);
   const pools = await loadPools(ctx, { plan, admission, recallRequest, left: sections.left });
   const noSections =

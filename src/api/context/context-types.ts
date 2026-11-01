@@ -57,6 +57,9 @@ export interface ContextOptions {
   /** Default 'full'; under 'pointer' the caller's own session, a shared store and an unsafe id
    * still print whole. */
   continuity?: ContinuityMode;
+  /** The hook shows only its own session's handoff; another one waits for `hippo context` or
+   * `handoff latest`. */
+  ownHandoffOnly?: boolean;
   /** What the budget pays for, from the caller that renders the block. Absent = the memory text
    * alone. */
   cost?: ContextCost;
