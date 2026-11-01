@@ -154,6 +154,14 @@ describe('automatic assertion quality', () => {
     'Step1) deploys to staging',
     'Never compute 2**-1 by hand',
     'Always use 2**(n + 1) for the buffer size',
+    'Use "**" for bold markup in the docs',
+    "Python uses '**' for powers in every module",
+    'Use “**” for bold markup in the docs',
+    'Always prefix logs with (**"WARN"**) in production',
+    'Never copy (**.env**) into the repository',
+    'Always use (**:memory:**) for isolated tests',
+    'Always show "**—" as the placeholder in tables',
+    'Mark the step as done.**— then run **the tests** after it',
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
   });

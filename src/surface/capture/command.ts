@@ -158,8 +158,8 @@ async function captureFromCli(
 
 const BARE_LEADING_MARKER = /^\*\*\s+/;
 
-/** The keys of the held rows, each also as capture now writes it, without its bold pairs. A pinned
- * "** X" survives repair, so it also holds "X"; an unpinned one is set aside, so "X" is stored. */
+/** Held keys, each also without its bold pairs. A pinned "** X" survives repair, so it holds "X". An unpinned
+ * one is set aside unless an object names it (a captured rule is never raw or trusted); that twin is fine. */
 export function heldKeysOf(rows: readonly HeldText[]): Set<string> {
   const keys = storedTextKeys(rows);
   const pinned = Array.from(storedTextKeys(rows.filter((row) => row.pinned)), (held) =>

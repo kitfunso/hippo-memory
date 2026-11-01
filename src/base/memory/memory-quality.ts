@@ -137,15 +137,24 @@ const ROMAN_NUMERAL = /^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/
 const ROMAN_MARKER_START = /[(,;]/;
 const ROMAN_AFTER_WORD = /(?:^|[^A-Za-z])(?:option|step|item)\s+$/i;
 const BOLD_CLOSE_NEXT = /[\s.,;:!?)\]"'’”—–]/;
+const SENTENCE_MARK = /[.!?;:,]/;
+const DASH_OR_SPACE = /[\s—–]/;
 const CLOSING_QUOTE = /['"’”]/;
 const QUOTE_MARK = /['"‘’“”]/;
 
-// A "**" that only closes, or a bare one opening the text, shows the text began inside a bold span.
+// A "**" that only closes, a dual-role one after a sentence mark with no closer, or a bare one
+// opening the text shows the text began inside a bold span.
 function opensInsideBold(text: string): boolean {
-  const first = strongMarkers(blankCodeSpans(text, '`'))[0];
+  const [first, ...later] = strongMarkers(blankCodeSpans(text, '`'));
   if (first === undefined) return false;
   // "2**-1" and "2**(n + 1)" are exponents: a real closer is followed by a space, a mark or the end.
-  if (first.close && BOLD_CLOSE_NEXT.test(text[first.index + 2] ?? ' ')) return true;
+  const next = text[first.index + 2] ?? ' ';
+  if (first.close && !first.open) return BOLD_CLOSE_NEXT.test(next);
+  // A quoted "**", "(**.env**)" and "foo**bar**" can open too: only "done.**— then" with no closer is a cut.
+  if (first.close) {
+    const closerFollows = later.some((marker) => marker.close);
+    return SENTENCE_MARK.test(text[first.index - 1]) && DASH_OR_SPACE.test(next) && !closerFollows;
+  }
   return text.slice(0, first.index).trim() === '' && /^\s/.test(text.slice(first.index + 2));
 }
 
