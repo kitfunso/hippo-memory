@@ -38,6 +38,19 @@ export function tokenize(text: string): string[] {
   return tokenizeMin(text, 2);
 }
 
+/** `tokenize` for the text a query is matched against: each letter of a longer CJK run is added,
+ * so a one-letter query, which `tokenize` keeps whole, matches inside a run, while a longer query,
+ * all bigrams, does not match single letters. */
+export function indexTokenize(text: string): string[] {
+  const tokens = tokenize(text);
+  if (!HAS_CJK.test(text)) return tokens;
+  const letters = (text.match(CJK_RUN) ?? []).flatMap((run) => {
+    const runLetters = [...run];
+    return runLetters.length > 1 ? runLetters : [];
+  });
+  return [...tokens, ...letters];
+}
+
 /** `tokenize` with words shorter than `minLength` dropped; CJK tokens, never longer than 2, are
  * kept. */
 export function tokenizeMin(text: string, minLength: number): string[] {

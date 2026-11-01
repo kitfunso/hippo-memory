@@ -11,6 +11,7 @@ import { type HippoConfig } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { contextGet } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -106,6 +107,35 @@ describe('contextGet prompt recall (api-level)', () => {
 
     expect(ids(result)).toEqual([relevant.id]);
   });
+
+  it('recalls a Chinese memory older than the 2,000 newest rows, through the trigram index', async () => {
+    enablePromptRecall(local);
+    const relevant = seed(local, '数据库连接池的大小必须设置为二十', { created: '2026-01-01T00:00:00.000Z' });
+    // A newer row sharing one character pair keeps the LIKE window non-empty, so no fallback reads old rows.
+    seed(local, '连接测试', { created: '2026-06-02T00:00:00.000Z' });
+    const db = openHippoDb(local);
+    try {
+      db.exec('BEGIN');
+      for (let i = 0; i < 2100; i++) {
+        writeEntryDbOnly(db, {
+          ...createMemory(`deploy note ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+          originProject: PROJECT,
+          created: '2026-06-01T00:00:00.000Z',
+        });
+      }
+      db.exec('COMMIT');
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const result = await contextGet(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: '数据库连接池应该多大',
+    });
+
+    expect(ids(result)).toContain(relevant.id);
+  }, 30_000);
 
   it('is on by default: no config swaps the newest memory for the matching one', async () => {
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy', {

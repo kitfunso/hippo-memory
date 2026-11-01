@@ -90,6 +90,20 @@ describe('CJK remember then recall, through the CLI', () => {
   });
 });
 
+describe('a one-letter CJK query, through the CLI', () => {
+  it('finds the memory holding the letter inside a longer word', async () => {
+    const home = makeRoot('cjk-cli-one', { init: false });
+    vi.stubEnv('HIPPO_HOME', join(home, 'global-hippo'));
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    await hippo(home, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    await hippo(home, 'remember', '연결 풀은 이십으로 설정한다');
+    await hippo(home, 'remember', '배포 전에 스크립트를 실행한다');
+    const out = await hippo(home, 'recall', '풀');
+    expect(out).toContain('연결 풀은 이십으로 설정한다');
+    expect(out).not.toContain('배포 전에 스크립트를 실행한다');
+  });
+});
+
 describe('CJK conflicts', () => {
   it('two memories that disagree about the same Chinese words are a conflict', async () => {
     const now = new Date('2026-10-01T00:00:00.000Z');

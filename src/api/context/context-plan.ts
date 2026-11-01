@@ -15,7 +15,7 @@ import {
   projectNames,
 } from '../../base/scope/project-identity.js';
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
-import { promptTokens } from '../../base/rank/prompt-recall.js';
+import { promptSearchTerms } from '../../base/rank/prompt-recall.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import { finiteOr } from '../../domain/context/select-policy.js';
 import { type Context, type ContextReach, type GlobalInReach, strengthOf } from '../types.js';
@@ -207,9 +207,7 @@ export function promptRecallRequest(
 ): AmbientRecallRequest | undefined {
   const { pinnedInject } = plan.config;
   const promptRecallTerms =
-    plan.promptRecallPending && pinnedInject.enabled
-      ? Array.from(promptTokens(opts.prompt ?? ''))
-      : [];
+    plan.promptRecallPending && pinnedInject.enabled ? promptSearchTerms(opts.prompt ?? '') : [];
   return promptRecallTerms.length > 0
     ? {
         terms: promptRecallTerms,

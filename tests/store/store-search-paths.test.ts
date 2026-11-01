@@ -198,6 +198,16 @@ describe('loadSearchEntries paths', () => {
     expect(results.map((e) => e.content).sort()).toEqual(['postgres tuning notes', '连接池在部署后泄漏'].sort());
   });
 
+  it('a long CJK query stays under the SQL expression depth limit and still finds its rows', () => {
+    const han = Array.from({ length: 1000 }, (_, i) => String.fromCodePoint(0x4e00 + i)).join('');
+    const cjkRow = `${han.slice(0, 6)} 的说明`;
+    writeEntry(root, makeRaw('postgres tuning notes'));
+    writeEntry(root, makeRaw(cjkRow));
+    writeEntry(root, makeRaw('alpha beta'));
+    const results = loadSearchEntries(root, `postgres ${han}`, 200, 'default');
+    expect(results.map((e) => e.content).sort()).toEqual([cjkRow, 'postgres tuning notes'].sort());
+  });
+
   it('CJK substring path: a Chinese row older than the 2,000 newest is found through the trigram index', () => {
     const db = openHippoDb(root);
     try {

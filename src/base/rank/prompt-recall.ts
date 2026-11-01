@@ -1,5 +1,5 @@
 /** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
-import { hasCjk, tokenizeMin } from '../util/tokenize.js';
+import { cjkGrams, hasCjk, tokenizeMin } from '../util/tokenize.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
 export type PromptRecallMetric = 'jaccard' | 'cosine';
@@ -25,6 +25,15 @@ export function contentTokens(text: string): Set<string> {
 
 export function promptTokens(prompt: string): Set<string> {
   return contentTokens(prompt.slice(0, PROMPT_RECALL_MAX_CHARS));
+}
+
+/** The terms a store searches for the prompt: its tokens, with each CJK run as its letter
+ * trigrams, which the trigram index can look up across the store, in place of bigrams, which it
+ * cannot. */
+export function promptSearchTerms(prompt: string): string[] {
+  const text = prompt.slice(0, PROMPT_RECALL_MAX_CHARS);
+  const words = [...contentTokens(text)].filter((t) => !hasCjk(t));
+  return [...words, ...new Set(cjkGrams(text, 3))];
 }
 
 export interface OverlapScore {

@@ -284,13 +284,9 @@ function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment 
 /** LIKE over the newest admitted rows: the bound is what keeps a short term from reading the
  * whole store. */
 function windowArm(terms: readonly string[], p: SearchPredicates, limit: number): SqlFragment {
-  const where = terms
-    .map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`)
-    .join(' OR ');
-  const likes = terms.flatMap((term) => {
-    const like = `%${escapeLike(term)}%`;
-    return [like, like];
-  });
+  // One JSON array, not an OR per term: a long CJK query has 1,000s of terms, past SQLite's
+  // expression depth.
+  const likes = JSON.stringify(terms.map((term) => `%${escapeLike(term)}%`));
   // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own
   // order needs no sort.
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
@@ -298,8 +294,9 @@ function windowArm(terms: readonly string[], p: SearchPredicates, limit: number)
     sql:
       `SELECT * FROM (SELECT ${MEMORY_SELECT_COLUMNS}, updated_at ` +
       `FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias} ` +
-      `ORDER BY ${newestFirst} LIMIT ?) WHERE (${where})`,
-    params: [...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...likes],
+      `ORDER BY ${newestFirst} LIMIT ?) WHERE EXISTS (SELECT 1 FROM json_each(?) j WHERE ` +
+      `LOWER(content) LIKE j.value ESCAPE '\\' OR LOWER(tags_json) LIKE j.value ESCAPE '\\')`,
+    params: [...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), likes],
   };
 }
 

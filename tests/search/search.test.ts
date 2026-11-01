@@ -38,6 +38,12 @@ describe('BM25 search', () => {
     expect(results.map((r) => r.entry.id)).toEqual(expect.arrayContaining([tipsModel!.id, cacheCheck!.id]));
   });
 
+  it('scores a one-letter CJK query against the same letter inside a longer run', () => {
+    const pool = createMemory('연결 풀은 이십으로 설정한다');
+    const results = rankBm25('풀', [pool, createMemory('배포 전에 스크립트를 실행한다')], { now: evalNow() });
+    expect(results.map((r) => r.entry.id)).toEqual([pool.id]);
+  });
+
   it('returns empty results for a query with no matching tokens', () => {
     const entries = makeEntries();
     const results = rankBm25('xyzzy qwerty foobar', entries, { now: evalNow() });
