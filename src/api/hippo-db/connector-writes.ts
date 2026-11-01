@@ -12,6 +12,7 @@ import {
 } from '../memories/remember.js';
 import { archiveOf, type ArchiveRawResult } from '../memories/promote.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
+import { RejectedValueError } from '../../base/errors/api-errors.js';
 
 /** A connector's write of content an agent doesn't control. */
 export interface ConnectorRememberOptions extends RememberOptions {
@@ -48,6 +49,40 @@ export async function rememberUntrusted(
   if (written.outcome === 'written') await countRemembered(ctx, 1);
   await autoSleepAfterWrite(ctx);
   return rememberResult(ctx, prepared, written);
+}
+
+/** What one connector event became; `logged` means the pre-check found it logged before, so
+ * neither the transform nor the write ran. */
+export type EventIngest =
+  | { readonly status: 'logged'; readonly memoryId: string | null }
+  | { readonly status: 'ingested'; readonly memoryId: string }
+  | { readonly status: 'skipped' | 'skipped_duplicate'; readonly memoryId: string | null };
+
+/** Stores what `build` returns once per event key. The pre-check only spares the transform: the
+ * write logs the key again in its own transaction, which holds when two workers race. An empty
+ * body (null) and a tombstoned value are logged with no memory, so a redelivery acks. */
+export async function rememberOncePerEvent(
+  ctx: HippoDbContext,
+  event: ConnectorEvent,
+  build: () => RememberOptions | null,
+): Promise<EventIngest> {
+  const events = ctx.store.hippoDb.connectorEvents;
+  const logged = await events.eventRecord(event);
+  if (logged.seen) return { status: 'logged', memoryId: logged.memoryId };
+  const opts = build();
+  try {
+    if (opts) {
+      const result = await rememberUntrusted(ctx, { ...opts, event });
+      // Another worker logged this key between the pre-check and the write; its memory stands.
+      if (!result.duplicate) return { status: 'ingested', memoryId: result.id };
+      return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
+    }
+  } catch (e) {
+    // A tombstone refusal is permanent, so a DLQ retry would hit it forever.
+    if (!(e instanceof RejectedValueError)) throw e;
+  }
+  await events.markEventSeen(event);
+  return { status: 'skipped', memoryId: null };
 }
 
 /** rawArchive for a connector's delete: the store logs `event` in the archive's own transaction,

@@ -3,14 +3,20 @@
 import { requireHostAdmin } from './types.js';
 import type { HippoDbContext } from './hippo-db-context.js';
 import type { HippoDbTier } from '../base/ports/hippo-db.js';
+import type { HippoStore } from '../base/ports/store.js';
 
 /** A store holds every tenant, so only the host admin creates one. */
 export async function initMemoryStore(ctx: HippoDbContext): Promise<void> {
   requireHostAdmin(ctx, 'Creating a store');
-  await ensureStoreFiles(ctx);
+  await ensureStoreFiles(ctx.store);
 }
 
-/** For a write that may come before any `hippo init`: a global capture, a zero-install MCP run. */
-export function ensureStoreFiles(folder: { readonly store: HippoDbTier }): Promise<void> {
-  return folder.store.hippoDb.folderFiles.ensure();
+/** For a write that may come before any `hippo init` (a global capture, a zero-install MCP run):
+ * creates the folder of a store that keeps one; false for an absent store or one that keeps none. */
+export async function ensureStoreFiles(
+  store: HippoStore | HippoDbTier | undefined,
+): Promise<boolean> {
+  if (store === undefined || !('hippoDb' in store) || store.hippoDb === undefined) return false;
+  await store.hippoDb.folderFiles.ensure();
+  return true;
 }

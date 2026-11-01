@@ -3,43 +3,39 @@
 import type {
   BackfillStream,
   ConnectorEvent,
-  ConnectorEventRecord,
   DeliveryClaim,
   EventMarked,
 } from '../../base/records/connectors.js';
+import { errorFields, log } from '../../base/util/log.js';
 import type { HippoDbContext } from '../hippo-db-context.js';
+import { rawArchiveForEvent } from './connector-writes.js';
 
 /** A webhook holds a delivery before it has routed it to a tenant. */
 export type DeliveryContext = Pick<HippoDbContext, 'store'>;
 
-/** The fast path only: the write logs the key again in its own transaction, which is what holds
- * when two workers race. */
-export function connectorEventRecord(
-  ctx: HippoDbContext,
-  event: ConnectorEvent,
-): Promise<ConnectorEventRecord> {
-  return ctx.store.hippoDb.connectorEvents.eventRecord(event);
+export interface RowDeletion {
+  readonly status: 'archived' | 'not_found' | 'duplicate';
+  readonly memoryId: string | null;
 }
 
-/** Logged with no memory, so a redelivery acks instead of running again. */
-export function markConnectorEventSeen(
-  ctx: HippoDbContext,
-  event: ConnectorEvent,
-): Promise<EventMarked> {
-  return ctx.store.hippoDb.connectorEvents.markEventSeen(event);
-}
-
-/** A delete event's log row, and while it is unlogged the raw row the caller's tenant holds for
- * `artifactRef`; never another tenant's row that shares the ref. */
-export function deletionTarget(
+/** Archives the raw row the caller's tenant holds for `artifactRef`, never another tenant's row
+ * that shares the ref, and logs `event` in the archive's own transaction. A logged event answers
+ * duplicate; a delete with no row is logged too, so its retry answers duplicate. */
+export async function archiveRowForEvent(
   ctx: HippoDbContext,
   event: ConnectorEvent,
   artifactRef: string,
-): Promise<ConnectorEventRecord> {
-  return ctx.store.hippoDb.connectorEvents.eventRecord(event, {
-    artifactRef,
-    tenantId: ctx.tenantId,
-  });
+  reason: string,
+): Promise<RowDeletion> {
+  const events = ctx.store.hippoDb.connectorEvents;
+  const target = await events.eventRecord(event, { artifactRef, tenantId: ctx.tenantId });
+  if (target.seen) return { status: 'duplicate', memoryId: null };
+  if (!target.memoryId) {
+    await events.markEventSeen(event);
+    return { status: 'not_found', memoryId: null };
+  }
+  await rawArchiveForEvent(ctx, target.memoryId, reason, event);
+  return { status: 'archived', memoryId: target.memoryId };
 }
 
 /** One transaction archives every raw row of the artifact in the caller's tenant, under its
@@ -73,16 +69,25 @@ export function saveBackfillCursor(
   );
 }
 
-/** False when a hold on the key has not run out: the delivery is a replay. */
-export function holdDelivery(ctx: DeliveryContext, claim: DeliveryClaim): Promise<boolean> {
-  return ctx.store.hippoDb.connectorEvents.claimDelivery(claim);
-}
-
-/** For a delivery that failed and stored nothing, so the sender's retry gets through. */
-export function releaseDelivery(
+/** Runs `route` once per delivery key: false, without running it, while an earlier hold on the
+ * key has not run out. A route that throws stored nothing, so its hold is freed for the retry. */
+export async function routeOncePerDelivery(
   ctx: DeliveryContext,
-  connector: DeliveryClaim['connector'],
-  key: string,
-): Promise<void> {
-  return ctx.store.hippoDb.connectorEvents.releaseDelivery(connector, key);
+  claim: DeliveryClaim,
+  route: () => Promise<void>,
+): Promise<boolean> {
+  const events = ctx.store.hippoDb.connectorEvents;
+  if (!(await events.claimDelivery(claim))) return false;
+  try {
+    await route();
+  } catch (err) {
+    await events.releaseDelivery(claim.connector, claim.key).catch((releaseErr) => {
+      log.warn(
+        `${claim.connector} webhook: could not free the replay hold of a failed delivery`,
+        errorFields(releaseErr),
+      );
+    });
+    throw err;
+  }
+  return true;
 }

@@ -5,9 +5,9 @@
 
 import type { RememberOptions } from '../../../api/index.js';
 import type { ConnectorEvent } from '../../../base/records/connectors.js';
-import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
+import type { ConnectorContext, IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
-import { connectorEventRecord } from '../../../api/hippo-db/connector-events.js';
+import { rememberOncePerEvent } from '../../../api/hippo-db/connector-writes.js';
 import {
   issueEventToRememberOpts,
   issueCommentEventToRememberOpts,
@@ -95,12 +95,7 @@ export async function ingestEvent(
     eventName: input.event.eventName,
   };
 
-  // Fast path: pre-check. Avoids running the transform / opening a write tx for the common
-  // already-seen case (GitHub auto-retries with the same body).
-  const seen = await connectorEventRecord(ctx, event);
-  if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
-
-  // An empty body is logged too, so a retry returns 'duplicate' instead of re-running
-  // the transform.
-  return rememberWithEventLog(ctx, event, transformEvent(input.event));
+  const done = await rememberOncePerEvent(ctx, event, () => transformEvent(input.event));
+  // GitHub auto-retries with the same body; any logged event, an empty body's too, is a duplicate.
+  return done.status === 'logged' ? { status: 'duplicate', memoryId: done.memoryId } : done;
 }

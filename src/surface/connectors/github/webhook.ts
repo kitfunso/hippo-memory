@@ -23,7 +23,7 @@ import {
 } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../../../api/dead-letters.js';
-import { holdDelivery, releaseDelivery } from '../../../api/hippo-db/connector-events.js';
+import { routeOncePerDelivery } from '../../../api/hippo-db/connector-events.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenant } from '../tenant-route.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
@@ -38,7 +38,6 @@ import {
 } from '../../http/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
 import { connectorContext, type ConnectorContext, type WebhookPorts } from '../ingest.js';
-import { errorFields, log } from '../../../base/util/log.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ
  * replay alike. */
@@ -103,10 +102,14 @@ export async function handleGitHubEventsWebhook(
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go to the DLQ and a human
   // can replay later. The delivery id header is unsigned, so a captured body resent under a fresh
   // id must still hit the same hold.
-  const replayKey = sigStr;
-  await claimOrRefuse(ports, replayKey);
-  try {
-    await routeSignedDelivery({
+  const claim = {
+    connector: 'github',
+    key: sigStr,
+    nowMs: Date.now(),
+    ttlMs: REPLAY_HOLD_MS,
+  } as const;
+  const routed = await routeOncePerDelivery(ports, claim, () =>
+    routeSignedDelivery({
       hippoRoot: opts.hippoRoot,
       ...ports,
       res,
@@ -114,13 +117,9 @@ export async function handleGitHubEventsWebhook(
       eventName,
       deliveryId,
       signature: sigStr,
-    });
-  } catch (err) {
-    // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must
-    // get through.
-    await freeHold(ports, replayKey);
-    throw err;
-  }
+    }),
+  );
+  if (!routed) throw new HttpError(409, 'duplicate X-GitHub-Delivery');
 }
 
 function refuseUnconfigured(request: WebhookRequest): void {
@@ -151,22 +150,6 @@ function readGitHubHeaders(req: WebhookRequest['req']): GitHubHeaders {
 // idempotency key for good, so the signature hold must not run out first: a century outlives any
 // store, and the sweep never reaches it.
 const REPLAY_HOLD_MS = 36_500 * DAY_MS;
-
-async function claimOrRefuse(ports: WebhookPorts, key: string): Promise<void> {
-  const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
-  if (!(await holdDelivery(ports, claim))) {
-    throw new HttpError(409, 'duplicate X-GitHub-Delivery');
-  }
-}
-
-async function freeHold(ports: WebhookPorts, key: string): Promise<void> {
-  await releaseDelivery(ports, 'github', key).catch((err) => {
-    log.warn(
-      'github webhook: could not free the replay hold of a failed delivery',
-      errorFields(err),
-    );
-  });
-}
 
 const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
   'issues',

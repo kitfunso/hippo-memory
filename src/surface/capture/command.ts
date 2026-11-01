@@ -103,7 +103,7 @@ function writeLogBanner(logFile: string): boolean {
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   if (options.global) {
-    await ensureStoreFiles(target);
+    await ensureStoreFiles(target.store);
   } else if (!isInitialized(target.root)) {
     console.error(
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
