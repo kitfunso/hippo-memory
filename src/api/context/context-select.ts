@@ -7,7 +7,7 @@ import { compareScoredResults } from '../../base/rank/compare.js';
 import { scopeMatch } from '../../base/rank/active-scope.js';
 import { scopeBoostFor } from '../../domain/search/boosts.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { promptTokens, contentTokens, gatePromptRecall } from '../../base/rank/prompt-recall.js';
+import { promptTokens, memoryTokens, gatePromptRecall } from '../../base/rank/prompt-recall.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
 import type { ContextOptions, ContextResultEntry } from './context-types.js';
 import {
@@ -261,7 +261,7 @@ function promptCandidateItems(
     for (const e of entries) {
       if (seenCandidateIds.has(e.id)) continue;
       seenCandidateIds.add(e.id);
-      candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal });
+      candidateItems.push({ id: e.id, tokens: memoryTokens(e.content), entry: e, isGlobal });
     }
   }
   return candidateItems;

@@ -1,5 +1,5 @@
 /** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
-import { cjkIndexTerms, partitionCjkTerms, tokenizeMin } from '../util/tokenize.js';
+import { cjkIndexTerms, indexTokenize, partitionCjkTerms, tokenizeMin } from '../util/tokenize.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
 export type PromptRecallMetric = 'jaccard' | 'cosine';
@@ -16,15 +16,21 @@ const PROMPT_RECALL_MAX_CHARS = 4000;
 
 /** Distinct content tokens: longer than 2 chars or CJK, not a stop word. */
 export function contentTokens(text: string): Set<string> {
-  const out = new Set<string>();
-  for (const t of tokenizeMin(text, 3)) {
-    if (!MEMORY_QUALITY_STOPWORDS.has(t)) out.add(t);
-  }
-  return out;
+  return withoutStopwords(tokenizeMin(text, 3));
 }
 
 export function promptTokens(prompt: string): Set<string> {
   return contentTokens(prompt.slice(0, PROMPT_RECALL_MAX_CHARS));
+}
+
+/** `contentTokens` of a memory a prompt is matched against: each letter of a longer CJK run is
+ * added, so a one-letter prompt word matches inside a run, as `hippo recall` matches it. */
+export function memoryTokens(content: string): Set<string> {
+  return withoutStopwords(indexTokenize(content, 3));
+}
+
+function withoutStopwords(tokens: readonly string[]): Set<string> {
+  return new Set(tokens.filter((t) => !MEMORY_QUALITY_STOPWORDS.has(t)));
 }
 
 /** The terms a store searches for the prompt: its tokens, with each CJK run as its letter

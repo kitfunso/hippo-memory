@@ -168,6 +168,16 @@ describe('contextGet prompt recall (api-level)', () => {
     expect(ids(result)).toContain(relevant.id);
   });
 
+  it('recalls a memory holding a one-letter Korean prompt word inside a longer word', async () => {
+    enablePromptRecall(local, { promptRecallThreshold: 0.01 });
+    const relevant = seed(local, '연결 풀은 이십으로 설정한다');
+    seed(local, '배포 전에 스크립트를 실행한다');
+
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt: '풀' });
+
+    expect(ids(result)).toEqual([relevant.id]);
+  });
+
   it('is on by default: no config swaps the newest memory for the matching one', async () => {
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy', {
       created: '2026-01-01T00:00:00.000Z',

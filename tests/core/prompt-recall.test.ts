@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   contentTokens,
+  memoryTokens,
   promptTokens,
   scoreOverlap,
   gatePromptRecall,
@@ -129,6 +130,18 @@ describe('gatePromptRecall', () => {
     const g = gate({ threshold: 0, minShared: 2, maxItems: 5 });
     const out = gatePromptRecall(p, items, g);
     expect(out.map((r) => r.item.id)).toEqual(['aaa', 'zzz']);
+  });
+});
+
+describe('memoryTokens', () => {
+  it('adds each letter of a longer CJK run, so a one-letter prompt word matches inside it', () => {
+    const memory = '연결 풀은 이십으로 설정한다';
+    expect(scoreOverlap(promptTokens('풀'), contentTokens(memory), 'jaccard').shared).toBe(0);
+    expect(scoreOverlap(promptTokens('풀'), memoryTokens(memory), 'jaccard').shared).toBe(1);
+  });
+
+  it('keeps the length floor and stop words of contentTokens for other words', () => {
+    expect([...memoryTokens('the db cache')]).toEqual(['cache']);
   });
 });
 
