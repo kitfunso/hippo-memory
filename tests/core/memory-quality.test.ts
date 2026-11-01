@@ -45,9 +45,21 @@ describe('automatic assertion quality', () => {
     ['increment iOS build number to 79', 'release-activity'],
     ['deployed build 78 to TestFlight', 'release-activity'],
     ['release v1.63.1', 'release-activity'],
+    ['never closed.** The run ends by sending to Telegram', 'sentence-fragment'],
+    ['Skip the stores.** Ship it as the web app', 'sentence-fragment'],
+    ['finished), which strongly suggests the plugin is the client', 'sentence-fragment'],
+    ['a model launches)', 'sentence-fragment'],
+    ['must score a signal-week feature row") so a real staleness bug can never ship', 'sentence-fragment'],
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: false, reason });
     expect(isContentWorthStoring(content)).toBe(false);
+  });
+
+  it.each([
+    'never closed.** The run ends by sending to Telegram',
+    'finished), which strongly suggests the plugin is the client',
+  ])('counts a text cut inside bold or an aside as a certain defect: %s', (content) => {
+    expect(certainDefect(content)).toBe('sentence-fragment');
   });
 
   // At this length the old regexes, which rescanned to the end from every start, ran past the test timeout.
@@ -104,6 +116,16 @@ describe('automatic assertion quality', () => {
     '[info] never deploy on Fridays',
     '{ retries: 3 } is the default retry policy',
     '[1, 2, 3] are the allowed retry counts',
+    '**Never `haiku`** for review scoring',
+    'Two options: a) rebuild, b) restore from backup',
+    "Tool 'browser' failed: missing ) after argument list",
+    'fixed it :) and moved on to the cache',
+    'it works ;) once the cache is warm',
+    "the parser expected ')' after the list",
+    'Never compute 2**10 by hand',
+    'Never pass **kwargs to the store writer',
+    'Always lint **/*.ts before a push',
+    'Never edit `__init__.py` by hand',
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
   });

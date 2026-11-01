@@ -269,7 +269,11 @@ describe('hippo sleep (built CLI, no server)', () => {
       { ...SLEPT, auditDeletedCount: 2, ambientTotal: 4, dryRun: false },
       { ...SLEPT, auditDeletedCount: 0, ambientTotal: 4, dryRun: false },
     ]);
-    expect(s.counters()).toMatchObject({ project_repair_auto: '1', quality_repair_auto: '1' });
+    expect(s.counters()).toMatchObject({
+      project_repair_auto: '1',
+      quality_repair_auto: '1',
+      quality_repair_gate: '2',
+    });
   });
 
   it('--dry-run counts the errors and removes nothing', async () => {

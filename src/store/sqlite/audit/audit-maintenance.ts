@@ -37,7 +37,8 @@ import { answered, bound, skipEmpty } from '../runtime/bound.js';
 import type { AuditMaintenance } from '../../../base/ports/store.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
-import { getMeta, pragmaUserVersion, setMeta, META_KEY } from '../../../db/meta.js';
+import { getMeta, getMetaNumber, pragmaUserVersion, setMeta, META_KEY } from '../../../db/meta.js';
+import { QUALITY_GATE_VERSION } from '../../../base/memory/memory-quality.js';
 
 // Quality repair's issue list: which rows are defects and which of those a protection keeps.
 
@@ -114,7 +115,8 @@ interface RepairRun {
   readonly tenantId: string;
   readonly protect: RepairProtection;
   readonly apply?: boolean;
-  readonly doneKey?: string;
+  /** Meta rows the apply writes with its moves, so the done mark commits with them. */
+  readonly doneWrites?: readonly (readonly [key: string, value: string])[];
 }
 
 /** Each parent the rows name, read by id: the live row, else its dormant snapshot. */
@@ -317,7 +319,7 @@ function applyPlan(
       if (setAsideIssue(db, rows.get(issue.id)!, issue.reason, move)) appliedIds.push(issue.id);
       else warnings.push(`Kept ${issue.id}: the store's delete guard protects it.`);
     }
-    if (run.doneKey) setMeta(db, run.doneKey, '1');
+    for (const [key, value] of run.doneWrites ?? []) setMeta(db, key, value);
     return { ...plan, issues, appliedIds, backup, warnings };
   });
 }
@@ -348,7 +350,13 @@ function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): Qual
   return { ...result, warnings };
 }
 
-/** Applies the repair once per store, so stores that predate the quality gate are cleaned on
+// The old key stays '1' so a binary from before the gate version keeps skipping the repair.
+const DONE_WRITES = [
+  [META_KEY.qualityRepairAuto, '1'],
+  [META_KEY.qualityRepairGate, String(QUALITY_GATE_VERSION)],
+] as const;
+
+/** Applies the repair once per gate version, so stores that predate a quality check are cleaned on
  * upgrade with no command; null once done. `db` is opened writable without running migrations. */
 function repairQualityOnce(
   db: DatabaseSyncLike,
@@ -356,16 +364,13 @@ function repairQualityOnce(
   tenantId: string,
   protect: RepairProtection,
 ): QualityRepairResult | null {
-  if (getMeta(db, META_KEY.qualityRepairAuto) === '1') return null;
+  if (getMetaNumber(db, META_KEY.qualityRepairGate) >= QUALITY_GATE_VERSION) return null;
   // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
-  const result = repairOn(db, files, {
-    tenantId,
-    protect,
-    apply: true,
-    doneKey: META_KEY.qualityRepairAuto,
-  });
+  const result = repairOn(db, files, { tenantId, protect, apply: true, doneWrites: DONE_WRITES });
   // An unsupported schema changed nothing, so the next run tries again once a migration has run.
-  if (result.supported && result.backup === null) setMeta(db, META_KEY.qualityRepairAuto, '1');
+  if (result.supported && result.backup === null) {
+    for (const [key, value] of DONE_WRITES) setMeta(db, key, value);
+  }
   return result;
 }
 

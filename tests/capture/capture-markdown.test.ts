@@ -9,6 +9,22 @@ describe('capture reads markdown the way it renders', () => {
     expect(contents(`\`\`\`npm test\`\`\` runs the unit suite.\n${TAG_RULE}`)).toEqual([TAG_RULE.slice(0, -1)]);
   });
 
+  it('drops the markers of a bold label, so the rule after it is stored whole', () => {
+    expect(contents('- **Volume data.** Never backfill them.')).toEqual(['Never backfill them']);
+  });
+
+  it('keeps globs, kwargs, exponents and dunder names as written', () => {
+    for (const rule of [
+      'Always lint **/*.ts and src/** first',
+      'Never pass **kwargs to the store writer',
+      'Never compute 2**10 by hand',
+      'Never edit __init__.py',
+      'Never import `__init__.py` from tests',
+    ]) {
+      expect(contents(`${rule}.`), rule).toEqual([rule]);
+    }
+  });
+
   it('closes a fence only with a bare run of the same character at least as long', () => {
     const hidden = 'Never push from the VM because it has no tests.';
     for (const text of [

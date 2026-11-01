@@ -100,6 +100,28 @@ function continues(line: string, previous: string | undefined): boolean {
   return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
 }
 
+/** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so paired
+ * markers go; a glob, `2**10` or `**kwargs` has no partner. */
+function withoutBold(line: string): string {
+  // masked() keeps offsets, so markers found there are cut from the source and code spans stay whole.
+  const flat = masked(line);
+  const cuts: number[] = [];
+  let open = -1;
+  for (const { index } of flat.matchAll(/\*\*/g)) {
+    const before = flat[index - 1] ?? ' ';
+    const after = flat[index + 2] ?? ' ';
+    if (/\w/.test(before) && /\w/.test(after)) continue;
+    if ('/*'.includes(before) || '/*'.includes(after)) continue;
+    if (open < 0) {
+      if (!/\s/.test(after)) open = index;
+    } else if (!/\s/.test(before)) {
+      cuts.push(open, index);
+      open = -1;
+    }
+  }
+  return cuts.reduceRight((rest, at) => rest.slice(0, at) + rest.slice(at + 2), line);
+}
+
 function proseBlocks(text: string): string[] {
   const blocks: string[] = [];
   let pending: string[] = [];
@@ -115,7 +137,7 @@ function proseBlocks(text: string): string[] {
     }
     const bullet = trimmed.match(BULLET);
     if (bullet || !continues(trimmed, pending.at(-1))) flush();
-    pending.push(bullet?.[1] ?? trimmed);
+    pending.push(withoutBold(bullet?.[1] ?? trimmed));
   }
   flush();
   return blocks;

@@ -17,6 +17,9 @@ export type AutomaticMemoryDefect =
   | 'too-vague'
   | 'no-specificity';
 
+/** Bump when a certain defect is added, so the next daily run or sleep cleans each store once more. */
+export const QUALITY_GATE_VERSION = 2;
+
 /** Text shorter than this holds no fact worth keeping. */
 export const MIN_MEMORY_CHARS = 10;
 /** Text shorter than this must name a path, number, name or code to be kept. */
@@ -126,7 +129,56 @@ function isBareCondition(bare: string): boolean {
   return !/[,;]|\bthen\b/i.test(bare) && !RULE_WORD.test(bare) && bare.split(/\s+/).length <= 6;
 }
 
+const WORD_CHAR = /[A-Za-z0-9_]/;
+const BOLD_CLOSE_MARK = /[.,;:!?)\]"'’]/;
+const BOLD_OPEN_MARK = /[(["'‘]/;
+const ASIDE_PLAIN_MARK = /[\s:;]/;
+const QUOTE_MARK = /['"‘’“”]/;
+
+/** Same length, so a backtick span never counts as a marker and offsets stay put. */
+function blankInlineCode(text: string): string {
+  return text.replace(/(`+)[^`]*?\1/g, (span) => 'x'.repeat(span.length));
+}
+
+// A first "**" that closes a span means the text began inside it: "never closed.** The run ends".
+function opensInsideBold(text: string): boolean {
+  for (const { index } of text.matchAll(/\*\*/g)) {
+    const before = text[index - 1] ?? ' ';
+    const after = text[index + 2] ?? ' ';
+    // "2**10", "**/*.ts" and "src/**" are not bold markers.
+    if (WORD_CHAR.test(before) && WORD_CHAR.test(after)) continue;
+    if ('/*'.includes(before) || '/*'.includes(after)) continue;
+    const closes = !/\s/.test(before) && (/\s/.test(after) || BOLD_CLOSE_MARK.test(after));
+    const opens = (/\s/.test(before) || BOLD_OPEN_MARK.test(before)) && !/\s/.test(after);
+    return closes && !opens;
+  }
+  return false;
+}
+
+/** "1)", "a)" and "ii)" mark list items; ":)", ";)" and a quoted ")" close no aside. */
+function closesNoAside(text: string, close: number): boolean {
+  const before = text[close - 1] ?? ' ';
+  if (ASIDE_PLAIN_MARK.test(before)) return true;
+  // A quote on both sides quotes the mark ("expected ')'"); a quote before it only ends a phrase.
+  if (QUOTE_MARK.test(before) && QUOTE_MARK.test(text[close + 1] ?? ' ')) return true;
+  let start = close;
+  while (start > 0 && close - start < 4 && /[A-Za-z0-9]/.test(text[start - 1])) start--;
+  const length = close - start;
+  return length >= 1 && length <= 3 && (start === 0 || /[\s(,;:]/.test(text[start - 1]));
+}
+
+// A ")" before any "(" closes an aside the text began inside: "finished), which suggests ...".
+function opensInsideAside(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '(') return false;
+    if (text[i] === ')' && !closesNoAside(text, i)) return true;
+  }
+  return false;
+}
+
 function isDanglingAssertion(text: string): boolean {
+  const code = blankInlineCode(text);
+  if (opensInsideBold(code) || opensInsideAside(code)) return true;
   const bare = bareText(text);
   // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
   if (/^(?:to|and|for)\s/.test(bare) && bare.length < FRAGMENT_MAX_CHARS) return true;

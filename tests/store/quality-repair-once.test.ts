@@ -5,7 +5,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PROTECTED_ROWS as protect } from '../../src/base/memory/memory-audit.js';
 import { DatabaseSync } from '../../src/db/sqlite.js';
-import { getMeta } from '../../src/db/meta.js';
+import { getMeta, setMeta } from '../../src/db/meta.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -21,6 +21,8 @@ import { initTestStore } from '../_helpers/store-template.js';
 
 const CUT = 'Found local migration files to be';
 const DOUBTFUL = 'When CI fails we retry once';
+const BOLD_CUT = 'Skip the stores.** Ship it as the web app';
+const ASIDE_CUT = 'finished), which strongly suggests the plugin is the client';
 
 function seed(store: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = {
@@ -35,10 +37,18 @@ const ids = (store: string) =>
     .map((entry) => entry.id)
     .sort();
 const repairQualityOnce = (files: StoreFiles, tenantId: string) => repairStoreOnce(files, tenantId, protect);
-function flag(store: string): string {
+function flag(store: string, key = 'quality_repair_gate'): string {
   const db = new DatabaseSync(join(store, 'hippo.db'));
   try {
-    return getMeta(db, 'quality_repair_auto');
+    return getMeta(db, key);
+  } finally {
+    db.close();
+  }
+}
+function markOldGate(store: string): void {
+  const db = new DatabaseSync(join(store, 'hippo.db'));
+  try {
+    setMeta(db, 'quality_repair_auto', '1');
   } finally {
     db.close();
   }
@@ -57,7 +67,8 @@ describe('repairQualityOnce', () => {
     expect(first?.appliedIds).toEqual([bad.id]);
     expect(existsSync(first!.backup!)).toBe(true);
     expect(ids(root)).toEqual([person.id]);
-    expect(flag(root)).toBe('1');
+    expect(flag(root)).toBe('2');
+    expect(flag(root, 'quality_repair_auto')).toBe('1');
 
     const later = seed(root, CUT);
     expect(await repairQualityOnce(storeFilesOf(root), 'default')).toBeNull();
@@ -88,7 +99,24 @@ describe('repairQualityOnce', () => {
     );
     expect(await repairQualityOnce(storeFilesOf(root), 'default')).toMatchObject({ appliedIds: [], backup: null });
     expect(existsSync(join(root, 'backups'))).toBe(false);
-    expect(flag(root)).toBe('1');
+    expect(flag(root)).toBe('2');
+    expect(flag(root, 'quality_repair_auto')).toBe('1');
+  });
+
+  it('runs once more on a store only an older gate marked, and keeps a pinned cut row', async () => {
+    const cut = seed(root, BOLD_CUT);
+    const pinned = seed(root, ASIDE_CUT, { pinned: true });
+    markOldGate(root);
+    expect(flag(root)).toBe('');
+
+    const again = await repairQualityOnce(storeFilesOf(root), 'default');
+    expect(again?.appliedIds).toEqual([cut.id]);
+    expect(ids(root)).toEqual([pinned.id]);
+    expect(flag(root)).toBe('2');
+    expect(flag(root, 'quality_repair_auto')).toBe('1');
+
+    seed(root, BOLD_CUT);
+    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toBeNull();
   });
 
   // The failed repair waits out the 5 s lock wait on the held write lock, which is the default test limit.
@@ -170,7 +198,7 @@ describe('the upgrade runs the repair once', () => {
     expect(first.stdout).toContain(
       'Checked old automatic memories once after the upgrade: 2 look doubtful and were kept; hippo audit repair lists them.',
     );
-    expect(flag(local)).toBe('1');
+    expect(flag(local)).toBe('2');
   });
 
   it('a failed repair warns, lets the sleep finish and runs again at the next sleep', async () => {
