@@ -233,6 +233,7 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
     into: Context,
     turns: readonly Turn[] | undefined,
     originProject: ProjectRef | undefined,
+    fromStart: boolean,
   ) => Promise<boolean>;
   digest: (scan: Scan | null, key: string, log: LineLog) => Promise<void>;
   workingState: (log: LineLog) => ReturnType<SessionClose['workingState']>;
@@ -306,7 +307,10 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
   scan: Scan | null,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
-  const capture = async (turns: readonly Turn[] | undefined): Promise<boolean> => {
+  const capture = async (
+    turns: readonly Turn[] | undefined,
+    fromStart = true,
+  ): Promise<boolean> => {
     // With no transcript of its own, capture would read this as a manual run and scan every
     // project.
     if (!w.transcriptPath) {
@@ -314,7 +318,7 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
       return false;
     }
     // In the global store, rows would otherwise read as user-global and show up in every project.
-    return w.capture(into, turns, hasOwnStore(ctx) ? undefined : w.currentProject());
+    return w.capture(into, turns, hasOwnStore(ctx) ? undefined : w.currentProject(), fromStart);
   };
   if (w.mode !== 'turn') {
     await capture(scan?.turns);
@@ -329,7 +333,9 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
     w.log('skip capture: no new turns since the last reply');
     return;
   }
-  if (await capture(fresh)) w.cursor.save(w.sessionId, w.transcriptPath, scan.turns);
+  // A slice that starts after the first turn holds only replies to the agent.
+  const fromStart = fresh.length === scan.turns.length;
+  if (await capture(fresh, fromStart)) w.cursor.save(w.sessionId, w.transcriptPath, scan.turns);
 }
 
 /** Books re-reads, sleeps, captures, digests and closes one ended session of the folder `ctx`

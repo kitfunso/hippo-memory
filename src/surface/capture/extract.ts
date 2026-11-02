@@ -4,7 +4,7 @@ import {
   asideCloseOffset,
   QUOTE_MARK,
 } from '../../base/memory/memory-quality.js';
-import { ERROR_TAG } from '../../base/memory/entry.js';
+import { ERROR_TAG, USER_RULE_TAG } from '../../base/memory/entry.js';
 import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
 export interface ExtractedItem {
@@ -340,8 +340,25 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
     }));
 }
 
+// A reply to the agent's work states how the person wants it done, rule word or not.
+const ANY_STATEMENT = [/\S/];
+// A kept reply names code or limits a choice; a thanks or a pasted test count does neither.
+const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
+const LIMIT_CUE =
+  /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
+
+/** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word. */
+function followUpRule(sentence: string): ExtractedItem | null {
+  const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
+  if (!item) return null;
+  const words = item.content.split(/\s+/).length;
+  const kept =
+    (words >= 2 && CODE_CUE.test(item.content)) || (words >= 4 && LIMIT_CUE.test(item.content));
+  return kept ? { ...item, tags: [...item.tags, 'follow-up', USER_RULE_TAG] } : null;
+}
+
 // The items of the spec bullets first, then those of each prose block.
-function extractSourced(text: string, cuts: Cutter): Sourced[] {
+function extractSourced(text: string, cuts: Cutter, followUp = false): Sourced[] {
   const prose = proseOnly(text);
   const found = extractSpecSections(prose, cuts);
   for (const block of proseBlocks(prose, cuts)) {
@@ -350,13 +367,13 @@ function extractSourced(text: string, cuts: Cutter): Sourced[] {
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
       if (cutByAside(sentence, at)) continue;
-      for (const [category, patterns] of CATEGORIES) {
-        const item = extractFromPatterns(sentence, patterns, category);
-        if (item) {
-          const [from, to] = block.sourceOf(at, at + sentence.length);
-          found.push({ item, from, to });
-          break;
-        }
+      const item =
+        CATEGORIES.map(([category, patterns]) =>
+          extractFromPatterns(sentence, patterns, category),
+        ).find((hit) => hit !== null) ?? (followUp ? followUpRule(sentence) : null);
+      if (item) {
+        const [from, to] = block.sourceOf(at, at + sentence.length);
+        found.push({ item, from, to });
       }
     }
   }
@@ -364,12 +381,17 @@ function extractSourced(text: string, cuts: Cutter): Sourced[] {
 }
 
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
- *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`. */
-export function extractFromTexts(texts: readonly string[], userTexts = 0): ExtractedItem[] {
+ *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`.
+ *  From `firstFollowUp` on, those words answer the agent's work, so a statement in them can be the person's rule. */
+export function extractFromTexts(
+  texts: readonly string[],
+  userTexts = 0,
+  firstFollowUp = userTexts,
+): ExtractedItem[] {
   const seen = new Set<string>();
   return texts
     .flatMap((text, i) =>
-      extractSourced(text, boldPairs).map(({ item }) =>
+      extractSourced(text, boldPairs, i >= firstFollowUp && i < userTexts).map(({ item }) =>
         i < userTexts ? { ...item, fromUser: true } : item,
       ),
     )
