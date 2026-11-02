@@ -121,10 +121,12 @@ describe('capture reads markdown the way it renders', () => {
       '## Plan',
       '- **Should we deploy on Fridays?**',
       '- **Move the cache to Redis.**',
-      'should we keep the old cache?',
+      'Should we keep the old cache?',
     ].join('\n');
     expect(extractFromTexts([text]).map((item) => item.content)).toEqual(['Move the cache to Redis.']);
-    expect(boldTwins([text], (value) => value)).toEqual([]);
+    expect(boldTwins([text], (value) => value)).toEqual([
+      { old: '**Move the cache to Redis.**', clean: 'Move the cache to Redis.' },
+    ]);
   });
 
   it('pairs nothing when both readings give the same text, or no text holds a "**"', () => {
@@ -148,8 +150,17 @@ describe('capture reads markdown the way it renders', () => {
     expect(() => scanWithinWatchdog((line) => boldTwins([line], (value) => value), text, 2_000)).not.toThrow();
   }, 20_000);
 
-  // The first two lists are what base 3.1.0 gives; base cut the capital-letter lines at the bold label.
+  // Each list is what base 3.1.0 gives: a span that wraps onto a capital letter splits the rule.
   it.each([
+    [
+      'Never open `a\nbc` here.\nAlways run the tests.',
+      [
+        ['rule', 'Never open `a bc` here'],
+        ['rule', 'Always run the tests'],
+      ],
+    ],
+    ['Never run `npm\ntest` on the VM.', [['rule', 'Never run `npm test` on the VM']]],
+    ['Never run `npm\nTest` on the VM.', [['rule', 'Never run `npm']]],
     [
       'Never change `**Warning.**\ncontinued text\nend` in the help text.',
       [['rule', 'Never change `**Warning.** continued text end` in the help text']],
@@ -162,24 +173,48 @@ describe('capture reads markdown the way it renders', () => {
       ],
     ],
     [
-      'Never change `**Warning.**\nContinued text\nend` in the help text.',
-      [['rule', 'Never change `**Warning.** Continued text end` in the help text']],
+      'Always clear `npm`s cache first\n`build` output must never be committed.',
+      [
+        ['rule', 'Always clear `npm`s cache first'],
+        ['rule', '`build` output must never be committed'],
+      ],
     ],
+    [
+      'Always clear `foo`bar cache first\n`build` output must never be committed.',
+      [
+        ['rule', 'Always clear `foo`bar cache first'],
+        ['rule', '`build` output must never be committed'],
+      ],
+    ],
+    [
+      'Always clear `npm`s cache first.\n`build` output must never be committed.',
+      [
+        ['rule', 'Always clear `npm`s cache first'],
+        ['rule', '`build` output must never be committed'],
+      ],
+    ],
+    [
+      '## Plan\n- Always clear `npm`s cache first\n`build` output must never be committed.',
+      [
+        ['spec', 'Always clear `npm`s cache first'],
+        ['rule', '`build` output must never be committed'],
+      ],
+    ],
+  ])('joins a line by the 3.1.0 rule, so a closing backtick before a letter splits nothing: %j', (text, expected) => {
+    expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
+  });
+
+  // 3.1.0 cut these at the label too and kept its `**`; capture cuts the pair, the span has no closer.
+  it.each([
+    ['Never change `**Warning.**\nContinued text\nend` in the help text.', [['rule', 'Never change `Warning']]],
     [
       '## Plan\n- Never change `**Warning.**\nContinued text\nend` in the help text.',
       [
-        ['spec', 'Never change `**Warning.** Continued text end` in the help text.'],
-        ['rule', 'Never change `**Warning.** Continued text end` in the help text'],
+        ['spec', 'Never change `Warning.'],
+        ['rule', 'Never change `Warning'],
       ],
     ],
-    [
-      'Never open `a\nbc` here.\nAlways run the tests.',
-      [
-        ['rule', 'Never open `a bc` here'],
-        ['rule', 'Always run the tests'],
-      ],
-    ],
-  ])('keeps the next line attached while a code span is open: %j', (text, expected) => {
+  ])('cuts the bold pair of a code span that wraps onto a capital letter: %j', (text, expected) => {
     expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
   });
 
@@ -283,7 +318,7 @@ describe('capture reads markdown the way it renders', () => {
         ['preference', 'We can`t skip the linter'],
       ],
     ],
-  ])('joins a line break only inside a matched code span: %j', (text, expected) => {
+  ])('joins a line by the 3.1.0 rule, so a stray backtick or apostrophe splits nothing: %j', (text, expected) => {
     expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
   });
 
@@ -293,9 +328,10 @@ describe('capture reads markdown the way it renders', () => {
     expect(items.map((item) => item.content)).toEqual(['Never use a lone ` in names', 'Always run lint before push']);
   });
 
-  it('reads 20,000 lines below a stray backtick before the watchdog fires', () => {
-    // The lines join into one block, so the time is the line scan; a rescan per line takes far longer.
-    const text = `Never use a lone \`\n${'line of the build log\n'.repeat(20_000)}`;
+  it('reads 1,500 backtick runs with no closer before the watchdog fires', () => {
+    // Every run has its own length, so none closes; a rescan of the rest per run takes seconds.
+    const runs = Array.from({ length: 1_500 }, (_, i) => '`'.repeat(i + 1));
+    const text = `Never use a lone ${runs.join(' plain ')}`;
     expect(() => scanWithinWatchdog((value) => extractFromTexts([value]), text, 2_000)).not.toThrow();
     expect(() => scanWithinWatchdog((value) => boldTwins([`**${value}`], (v) => v), text, 2_000)).not.toThrow();
   }, 20_000);
@@ -325,15 +361,18 @@ describe('capture reads markdown the way it renders', () => {
     ).toEqual(['Cache. Move the cache to Redis so restarts keep warm entries']);
   });
 
-  it('ends a spec bullet at a bold label that closes its sentence, as a prose line does', () => {
+  it('joins a lowercase line to the bold label above it, as 3.1.0 does, and a capital line starts a new one', () => {
     const question = ['## Plan', '- **Move the cache to Redis.**', 'should we keep the old cache?'].join('\n');
-    expect(extractFromTexts([question]).map((item) => [item.category, item.content])).toEqual([
-      ['spec', 'Move the cache to Redis.'],
-    ]);
+    expect(extractFromTexts([question])).toEqual([]);
     const rule = ['## Plan', '- **Deploy note.**', 'never push to master on Friday.'].join('\n');
     expect(extractFromTexts([rule]).map((item) => [item.category, item.content])).toEqual([
+      ['spec', 'Deploy note. never push to master on Friday.'],
+      ['rule', 'Deploy note. never push to master on Friday'],
+    ]);
+    const capital = ['## Plan', '- **Deploy note.**', 'Never push to master on Friday.'].join('\n');
+    expect(extractFromTexts([capital]).map((item) => [item.category, item.content])).toEqual([
       ['spec', 'Deploy note.'],
-      ['rule', 'never push to master on Friday'],
+      ['rule', 'Never push to master on Friday'],
     ]);
   });
 

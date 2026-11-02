@@ -335,7 +335,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
       '## Plan',
       '- **Should we deploy on Fridays?**',
       '- **Move the cache to Redis.**',
-      'should we keep the old cache?',
+      'Should we keep the old cache?',
     ].join('\n');
     await runCapture(captureTarget(root), {
       tenantId: 'default',
@@ -432,7 +432,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
     ).toEqual(['Never contact [email] without approval', 'Never push to main on Fridays']);
   });
 
-  it('capture pins the duplicate a store holding a base row that joined two rules keeps', async () => {
+  it('capture adds no row beside a base row that joined a bold label to the line below it', async () => {
     const stored = 'Never edit **the config.** always run the linter first';
     const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
     writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
@@ -443,7 +443,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
       dryRun: false,
       global: false,
     });
-    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, 'Never edit the config']);
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored]);
   });
 
   it.each([

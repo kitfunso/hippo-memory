@@ -152,34 +152,6 @@ function countUpTo(values: readonly number[], limit: number): number {
   return low;
 }
 
-// A backtick between two letters is an apostrophe ("can`t"), not the edge of a code span.
-const APOSTROPHE = /(?<=\p{L})`(?=\p{L})/gu;
-
-// Per line: whether the line break above it lies inside a code span. A span ends at a blank line,
-// heading or bullet, and a backtick run with no closer is plain text.
-function insideCodeSpan(lines: readonly string[]): boolean[] {
-  const inside: boolean[] = lines.map(() => false);
-  let first = 0;
-  const settle = (end: number): void => {
-    const paragraph = lines.slice(first, end).join('\n').replace(APOSTROPHE, "'");
-    const blanked = blankCodeSpans(paragraph);
-    let at = 0;
-    for (let i = first; i < end; i++) {
-      if (i > first) inside[i] = blanked[at - 1] !== '\n';
-      at += lines[i].length + 1;
-    }
-  };
-  lines.forEach((line, i) => {
-    const trimmed = line.trim();
-    const bullet = BULLET.test(trimmed);
-    if (trimmed && !/^#+\s/.test(trimmed) && !bullet) return;
-    settle(i);
-    first = bullet ? i : i + 1;
-  });
-  settle(lines.length);
-  return inside;
-}
-
 /** A line of text and where it starts in the prose. */
 interface Piece {
   text: string;
@@ -219,15 +191,13 @@ function blockOf(pieces: readonly Piece[], cuts: Cutter): Block {
 function proseBlocks(prose: string, cuts: Cutter): Block[] {
   const blocks: Block[] = [];
   let pending: Piece[] = [];
-  // Cut once the lines are joined, as a spec bullet is, so a span that wraps a line stays whole.
+  // Cut once the lines are joined, as a spec bullet is, so a bold pair that wraps a line goes whole.
   const flush = (): void => {
     if (pending.length > 0) blocks.push(blockOf(pending, cuts));
     pending = [];
   };
-  const lines = prose.split('\n');
-  const inside = insideCodeSpan(lines);
   let offset = 0;
-  for (const [i, line] of lines.entries()) {
+  for (const line of prose.split('\n')) {
     const trimmed = line.trim();
     const end = offset + line.trimEnd().length;
     offset += line.length + 1;
@@ -236,9 +206,7 @@ function proseBlocks(prose: string, cuts: Cutter): Block[] {
       continue;
     }
     const bullet = trimmed.match(BULLET);
-    const previous = pending.at(-1)?.text;
-    const joined = inside[i] || continues(trimmed, previous && cutOut(previous, cuts(previous)));
-    if (bullet || !joined) flush();
+    if (bullet || !continues(trimmed, pending.at(-1)?.text)) flush();
     const text = bullet?.[1] ?? trimmed;
     pending.push({ text, at: end - text.length });
   }
@@ -321,10 +289,8 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
   const bullets: Array<Piece & { to: number }> = [];
   let inSpecSection = false;
   let open = false;
-  const lines = prose.split('\n');
-  const inside = insideCodeSpan(lines);
   let offset = 0;
-  for (const [i, line] of lines.entries()) {
+  for (const line of prose.split('\n')) {
     const trimmed = line.trim();
     const end = offset + line.trimEnd().length;
     offset += line.length + 1;
@@ -341,9 +307,7 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
       open &&
       !bullet &&
       trimmed !== '' &&
-      (/^\s/.test(line) ||
-        inside[i] ||
-        continues(trimmed, last && cutOut(last.text, cuts(last.text))));
+      (/^\s/.test(line) || continues(trimmed, last?.text));
     if (inSpecSection && bullet) {
       const text = bullet[1].trim();
       bullets.push({ text, at: end - text.length, to: end });
@@ -353,7 +317,7 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
     }
     open = inSpecSection && (bullet !== null || wrapped);
   }
-  // Cut once the lines are joined, so a code span or a pair that wraps a line keeps its text.
+  // Cut once the lines are joined, so a pair that wraps a line goes whole.
   return bullets
     .map(({ text, at, to }) => ({ content: cutOut(text, cuts(text)), from: at, to }))
     .filter(({ content }) => content.length <= MAX_CHARS && !content.endsWith('?'))

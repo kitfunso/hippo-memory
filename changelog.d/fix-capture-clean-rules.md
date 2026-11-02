@@ -6,6 +6,7 @@
 ### Known limitations
 
 - Repair misses some cuts, and a missed cut stays stored as before. Four shapes pass. One is a text cut inside a code span, where the first backtick closes the span. One is a cut word of 3 letters or fewer before `)`. One is a `**` cut that a later bold pair follows. One is a cut right after a word, for example `sleep** (when`. On the global store measured for this fix, 65 of 76 cut rows are set aside. Eight misses are cuts right after a word. One miss is the code-span case. Two misses are merged rows with no automatic parent, which `hippo audit repair` lists for review.
+- A code span that wraps onto a line that starts with a capital letter can split the rule, as in 3.1.0.
 - Capture skips only the sentence that starts inside a cut aside. The text before the cut stays as 3.1.0 stored it, for example `Always run the check (see the docs`.
 - Capture skips a whole rule that follows a cut aside directly, as in `main) Never push on Friday`. The skip removes it with the cut.
 - An unclosed `(` earlier in a block can make capture skip a later rule that holds a quoted `)`.

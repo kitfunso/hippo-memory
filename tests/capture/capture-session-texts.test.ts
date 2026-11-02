@@ -281,7 +281,7 @@ describe('captureSessionTexts', () => {
       '## Plan',
       '- **Should we deploy on Fridays?**',
       '- **Move the cache to Redis.**',
-      'should we keep the old cache?',
+      'Should we keep the old cache?',
     ].join('\n');
     expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
     expect(contents(root)).toEqual([stored, 'Move the cache to Redis.']);
@@ -329,12 +329,12 @@ describe('captureSessionTexts', () => {
     expect(contents(root).sort()).toEqual(['Never contact [email] without approval', 'Never push to main on Fridays']);
   });
 
-  it('pins the duplicate a store holding a base row that joined two rules keeps', async () => {
+  it('adds no row beside a base row that joined a bold label to the line below it', async () => {
     const stored = 'Never edit **the config.** always run the linter first';
     writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
     const text = ['Never edit **the config.**', 'always run the linter first.'].join('\n');
-    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 1, rejected: 0 });
-    expect(contents(root)).toEqual([stored, 'Never edit the config']);
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored]);
   });
 
   it('masks an address that bold removal rebuilds from a split one', async () => {

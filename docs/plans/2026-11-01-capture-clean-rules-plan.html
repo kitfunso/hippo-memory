@@ -177,6 +177,7 @@ compare the new set-aside ids with every id in $SP/cap-flagged3.tsv
       <li>Changed after review: the 19 stored rows that start with "** " also go dormant. A new capture of the same line stores a clean copy. So each old row is a duplicate with a stray marker. <code>hippo dormant restore &lt;id&gt;</code> brings one back.</li>
       <li>A held row blocks the clean text of a new capture only through a twin: the old capture, which kept every bold marker, and the new one give items from overlapping lines. Each old item pairs with one new item, whatever its category: the same category first, then the larger overlap. So <code>f(**kwargs)</code> and <code>f(kwargs)</code> stay separate rules.</li>
       <li>The text before a cut aside, such as "Always run the check (see the docs", is stored as 3.1.0 stored it.</li>
+      <li>Lines join as in 3.1.0. A code span that wraps onto a line that starts with a capital letter can split the rule.</li>
       <li>The other stored lowercase fragments (approximately 100) stay for a later fix with a labelled sample.</li>
       <li>Chat stored as a rule is a separate fix in the rule patterns.</li>
       <li>No cost claim and no Z0 rerun in this episode.</li>

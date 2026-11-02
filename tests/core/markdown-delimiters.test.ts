@@ -7,6 +7,8 @@ describe('blankCodeSpans', () => {
     ['a ``b`c`` d', 'a xxxxxxx d'],
     ['a ```b``c``` d', 'a xxxxxxxxxx d'],
     ['a `b `` c`', 'a xxxxxxxx'],
+    ['a ``b `c` d', 'a ``b xxx d'],
+    ['a \\`b` c`', 'a \\`bxxxx'],
   ])('closes a span at the next run of exactly its length: %s', (text, blanked) => {
     expect(blankCodeSpans(text)).toBe(blanked);
   });

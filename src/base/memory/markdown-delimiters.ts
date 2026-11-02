@@ -3,26 +3,29 @@
 const PUNCTUATION = /[\p{P}\p{S}]/u;
 const WORD = /[\p{L}\p{N}_]/u;
 
-/** The index after the next run of exactly `length` backticks from `from`, or -1. */
-function closingRunEnd(text: string, from: number, length: number): number {
-  let i = from;
-  while (i < text.length) {
-    if (text[i] !== '`') {
-      i++;
-      continue;
-    }
-    let end = i;
-    while (text[end] === '`') end++;
-    if (end - i === length) return end;
-    i = end;
+/** Every maximal backtick run of `text` as [start, end), grouped by its length, in text order. */
+function runsByLength(text: string): Map<number, Array<[number, number]>> {
+  const byLength = new Map<number, Array<[number, number]>>();
+  for (const { 0: run, index } of text.matchAll(/`+/g)) {
+    const same = byLength.get(run.length) ?? [];
+    same.push([index, index + run.length]);
+    byLength.set(run.length, same);
   }
-  return -1;
+  return byLength;
 }
 
 /** `text` with each code span replaced by `fill`, same length; an opener with no closer is text. */
 export function blankCodeSpans(text: string, fill = 'x'): string {
-  // A length with no closer after one opener has none after a later opener either.
-  const closerless = new Set<number>();
+  const byLength = runsByLength(text);
+  // Openers only move forward, so each length keeps a cursor that never goes back.
+  const cursor = new Map<number, number>();
+  const closerEnd = (length: number, from: number): number => {
+    const same = byLength.get(length) ?? [];
+    let k = cursor.get(length) ?? 0;
+    while (k < same.length && same[k][0] < from) k++;
+    cursor.set(length, k);
+    return k < same.length ? same[k][1] : -1;
+  };
   let out = '';
   let copied = 0;
   let at = 0;
@@ -37,9 +40,8 @@ export function blankCodeSpans(text: string, fill = 'x'): string {
     }
     let end = at;
     while (text[end] === '`') end++;
-    const close = closerless.has(end - at) ? -1 : closingRunEnd(text, end, end - at);
+    const close = closerEnd(end - at, end);
     if (close < 0) {
-      closerless.add(end - at);
       at = end;
       continue;
     }
