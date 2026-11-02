@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   contentTokens,
+  memoryTokens,
   promptTokens,
   scoreOverlap,
   gatePromptRecall,
@@ -30,6 +31,10 @@ describe('contentTokens / promptTokens', () => {
   it('drops stop words and tokens of length <= 2', () => {
     const toks = contentTokens('the api is a sql and or up to'); // "up"/"to"/"an" are length <= 2 or stop words; "db" itself is length 2 so excluded too
     expect([...toks]).toEqual(['api', 'sql']);
+  });
+
+  it('keeps CJK bigrams, which are shorter than the length floor', () => {
+    expect([...contentTokens('the 数据库 api')]).toEqual(['数据', '据库', 'api']);
   });
 
   it('keeps a token that ends exactly at the cut', () => {
@@ -128,6 +133,29 @@ describe('gatePromptRecall', () => {
   });
 });
 
+describe('memoryTokens', () => {
+  it('adds a one-letter CJK prompt word the memory holds inside a longer run, and no other letter', () => {
+    const memory = '연결 풀은 이십으로 설정한다';
+    const p = promptTokens('풀');
+    expect(scoreOverlap(p, contentTokens(memory), 'jaccard').shared).toBe(0);
+    expect(scoreOverlap(p, memoryTokens(memory, p), 'jaccard').shared).toBe(1);
+    expect([...memoryTokens(memory, p)].filter((t) => [...t].length === 1)).toEqual(['풀']);
+    expect(memoryTokens('배포 전에 캐시를 비운다', p).has('풀')).toBe(false);
+  });
+
+  it('scores a multi-letter CJK prompt as contentTokens does, so a long note still clears the 0.04 gate', () => {
+    const note = '上线前在预发布环境执行数据库迁移脚本确认全部服务健康检查通过后再切换生产流量并通知值班同事';
+    const p = promptTokens('数据库');
+    const before = scoreOverlap(p, contentTokens(note), 'jaccard');
+    expect(scoreOverlap(p, memoryTokens(note, p), 'jaccard')).toEqual(before);
+    expect(before.score).toBeGreaterThanOrEqual(0.04);
+  });
+
+  it('keeps the length floor and stop words of contentTokens for other words', () => {
+    expect([...memoryTokens('the db cache', new Set())]).toEqual(['cache']);
+  });
+});
+
 describe('rarestPromptTerms', () => {
   it('picks the lowest-doc-count terms first, ties by term asc', () => {
     const counts = new Map([
@@ -190,6 +218,62 @@ describe('rarestFtsQuery', () => {
     const terms = Array.from({ length: 20 }, (_, i) => `t${String(i).padStart(2, '0')}`).reverse();
     expect(rarestFtsQuery(terms, () => 1).split(' ')).toEqual(terms.slice().sort().slice(0, RAREST_TERM_COUNT));
     expect(rarestFtsQuery(terms, () => 1, 2)).toBe('t00 t01');
+  });
+
+  it('without a CJK count, never asks the word index about a CJK term and gives CJK terms the slots words leave', () => {
+    const counts = new Map([['postgres', 3]]);
+    const asked: string[] = [];
+    const docCount = (part: string): number => {
+      asked.push(part);
+      return counts.get(part) ?? 0;
+    };
+    expect(rarestFtsQuery(['数据', 'postgres', '据库', 'never'], docCount, 2)).toBe('postgres 数据');
+    expect(asked.sort()).toEqual(['never', 'postgres']);
+  });
+
+  it('without a CJK count, keeps half the slots for CJK terms at even steps, however many words count', () => {
+    const words = Array.from({ length: 10 }, (_, i) => `w${i}`);
+    const cjk = ['甲乙丙', '乙丙丁', '丙丁戊', '丁戊己', '戊己庚', '己庚辛', '庚辛壬'];
+    expect(rarestFtsQuery([...words, ...cjk], () => 1, 8)).toBe('w0 w1 w2 w3 甲乙丙 丙丁戊 戊己庚 庚辛壬');
+  });
+
+  it('with a CJK count, ranks CJK and word terms in one rarest-first pick and drops a zero-count CJK term', () => {
+    const wordCounts = new Map([
+      ['postgres', 5],
+      ['deploy', 2],
+    ]);
+    const cjkCounts = new Map([
+      ['数据库', 1],
+      ['据库连', 0],
+      ['连接池', 3],
+    ]);
+    const asked: string[] = [];
+    const cjkAsked: string[] = [];
+    const counter = (log: string[], counts: Map<string, number>) => (term: string) => {
+      log.push(term);
+      return counts.get(term) ?? 0;
+    };
+    const out = rarestFtsQuery(
+      ['postgres', 'deploy', '数据库', '据库连', '连接池'],
+      counter(asked, wordCounts),
+      3,
+      counter(cjkAsked, cjkCounts),
+    );
+    expect(out).toBe('数据库 deploy 连接池');
+    expect(asked.sort()).toEqual(['deploy', 'postgres']);
+    expect(cjkAsked.sort()).toEqual(['据库连', '数据库', '连接池'].sort());
+  });
+
+  it('with a CJK count, keeps a zero-count CJK run under 3 letters after the counted terms, within the cap', () => {
+    const counts = new Map([
+      ['postgres', 2],
+      ['数据库', 1],
+    ]);
+    const count = (t: string): number => counts.get(t) ?? 0;
+    expect(rarestFtsQuery(['接池', 'postgres', '数据库', '池', '从未见'], count, 8, count)).toBe(
+      '数据库 postgres 接池 池',
+    );
+    expect(rarestFtsQuery(['接池', 'postgres', '数据库'], count, 2, count)).toBe('数据库 postgres');
   });
 
   it('is the empty query when no term is indexed', () => {

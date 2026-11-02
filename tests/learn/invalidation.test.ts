@@ -78,6 +78,21 @@ describe('invalidateMatching', () => {
     expect(updated!.halfLifeDays).toBeLessThan(mem.halfLifeDays);
   });
 
+  it('weakens a memory whose Chinese words match the target, and not one that shares none', async () => {
+    const mem = createMemory('旧的数据库驱动在高负载下会丢失连接');
+    const other = createMemory('部署前必须先运行迁移脚本');
+    writeEntry(hippoRoot, mem);
+    writeEntry(hippoRoot, other);
+
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
+      { from: '数据库驱动', to: null, type: 'deprecation' },
+      'default',
+    );
+
+    expect(result.targets).toEqual([mem.id]);
+  });
+
   it('does not touch unrelated memories', async () => {
     const mem = createMemory('Database connection pool max is 20', {
       tags: ['database'],

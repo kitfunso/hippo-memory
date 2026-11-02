@@ -7,6 +7,7 @@ import {
 import { blankCodeSpans, strongMarkers } from './markdown-delimiters.js';
 import { heldTexts } from '../util/same-text.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
+import { CJK_SCRIPTS } from '../util/tokenize.js';
 
 export type AutomaticMemoryDefect =
   | 'too-short'
@@ -37,12 +38,13 @@ export interface AutomaticMemoryAssessment {
   readonly reason: AutomaticMemoryDefect | null;
 }
 
-const CJK_LETTERS = /(?=\p{L})(?:\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana})/gu;
+// Without ー, which alone says nothing, and the Han script's radicals, which are not letters.
+const CJK_LETTER = new RegExp(String.raw`(?=\p{L})[${CJK_SCRIPTS}]`, 'gu');
 const CHAT_ACRONYMS = /^(?:TODO|FYI|LGTM|IIRC|IMO|IMHO|FWIW|TBD|BTW|ASAP|AFAIK|WIP|NB|PS)$/;
 
 /** Counts spaced words plus CJK letters without lowering mixed-script counts. */
 export function substantiveWordCount(text: string): number {
-  const cjkLetterCount = (text.match(CJK_LETTERS) ?? []).length;
+  const cjkLetterCount = (text.match(CJK_LETTER) ?? []).length;
   const spacedCount = text
     .toLowerCase()
     .split(/\s+/)

@@ -8,6 +8,7 @@ import {
   isWorthSurfacing,
   startsInsideCut,
   storedDefect,
+  substantiveWordCount,
 } from '../../src/base/memory/memory-quality.js';
 import { auditMemory, previewDefect, repairDefect } from '../../src/base/memory/memory-audit.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -209,6 +210,14 @@ describe('automatic assertion quality', () => {
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
     expect(startsInsideCut(content)).toBe(false);
+  });
+
+  it('counts Hangul letters as substantive, as it counts Han and kana', () => {
+    // Two-syllable words fall under the spaced-word length floor, so only the letter count keeps it.
+    const korean = '배포 전에 캐시 비워';
+    expect(substantiveWordCount(korean)).toBe(4);
+    expect(assessAutomaticMemory(korean)).toEqual({ accepted: true, reason: null });
+    expect(isContentWorthStoring(korean)).toBe(true);
   });
 
   it('only flags an ending that can close a whole sentence', () => {

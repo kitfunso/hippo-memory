@@ -47,6 +47,7 @@ const SESSION_CLI = { 'session-id': SESSION };
 const CASES: ReadonlyArray<readonly [string, SnapshotCase]> = [
   ['one word', { query: 'deploy', cli: { why: true } }],
   ['many words', { query: 'deploy rollout to the new staging cluster' }],
+  // The cli file moved in #1135: accented letters now stay inside the word, so `caf` no longer ranks café first.
   ['part word', { query: 'caf' }],
   ['no terms', { query: '!!' }],
   ['no match', { query: 'zebra' }],

@@ -19,13 +19,16 @@ afterEach(() => {
 });
 
 describe('prepared statement reuse', () => {
-  it('creates the rarest-term vocabulary table once per handle', () => {
+  it('creates each rarest-term vocabulary table once per handle', () => {
     const { statements } = recordStatements(() => {
       pickRarestFtsQuery(db, ['alpha', 'beta']);
-      pickRarestFtsQuery(db, ['alpha', 'gamma']);
+      pickRarestFtsQuery(db, ['alpha', '数据库']);
       pickRarestFtsQuery(db, ['delta']);
     });
-    expect(statements.filter((sql) => sql.includes('CREATE VIRTUAL TABLE'))).toHaveLength(1);
+    const creates = statements.filter((sql) => sql.includes('CREATE VIRTUAL TABLE'));
+    expect(creates.filter((sql) => sql.includes('z1_rarest_vocab'))).toHaveLength(1);
+    expect(creates.filter((sql) => sql.includes('z1_trigram_vocab'))).toHaveLength(1);
+    expect(creates).toHaveLength(2);
   });
 
   it('prepares the multi-row memory UPDATE once for repeated chunks of one size', () => {

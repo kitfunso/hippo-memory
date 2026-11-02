@@ -1,5 +1,5 @@
 /** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
-import { tokenize } from '../util/tokenize.js';
+import { cjkIndexTerms, hasCjk, partitionCjkTerms, tokenizeMin } from '../util/tokenize.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
 export type PromptRecallMetric = 'jaccard' | 'cosine';
@@ -14,17 +14,34 @@ export interface PromptRecallGate {
 // Latency bound, not tuned: fixed in the prereg regardless of gate config.
 const PROMPT_RECALL_MAX_CHARS = 4000;
 
-/** Distinct content tokens: longer than 2 chars, not a stop word. */
+/** Distinct content tokens: longer than 2 chars or CJK, not a stop word. */
 export function contentTokens(text: string): Set<string> {
   const out = new Set<string>();
-  for (const t of tokenize(text)) {
-    if (t.length > 2 && !MEMORY_QUALITY_STOPWORDS.has(t)) out.add(t);
+  for (const t of tokenizeMin(text, 3)) {
+    if (!MEMORY_QUALITY_STOPWORDS.has(t)) out.add(t);
   }
   return out;
 }
 
 export function promptTokens(prompt: string): Set<string> {
   return contentTokens(prompt.slice(0, PROMPT_RECALL_MAX_CHARS));
+}
+
+/** `contentTokens` of a memory, plus each one-letter CJK token of `prompt` it holds inside a run, so
+ * that letter matches as `hippo recall` matches it while the memory's other letters stay out of the
+ * overlap's denominator. */
+export function memoryTokens(content: string, prompt: ReadonlySet<string>): Set<string> {
+  const out = contentTokens(content);
+  for (const t of prompt) if ([...t].length === 1 && hasCjk(t) && content.includes(t)) out.add(t);
+  return out;
+}
+
+/** The terms a store searches for the prompt: its tokens, with each CJK run as its letter
+ * trigrams, which the trigram index can look up across the store, in place of bigrams, which it
+ * cannot. */
+export function promptSearchTerms(prompt: string): string[] {
+  const text = prompt.slice(0, PROMPT_RECALL_MAX_CHARS);
+  return [...partitionCjkTerms(contentTokens(text)).words, ...cjkIndexTerms(text)];
 }
 
 export interface OverlapScore {
@@ -93,15 +110,43 @@ export function ftsTermParts(term: string): string[] {
 }
 
 /** The rarest terms as a space-joined FTS query, given each part's document count; a term counts as its rarest part, an
- *  upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. */
+ *  upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. A CJK term counts
+ *  by `cjkDocCount`, a trigram index's count, in the same pick, and a run under 3 letters that counts 0 follows the
+ *  pick; without one, CJK terms take `spreadCjkTerms` slots. */
 export function rarestFtsQuery(
   terms: readonly string[],
   docCount: (part: string) => number,
   maxTerms = RAREST_TERM_COUNT,
+  cjkDocCount?: (term: string) => number,
 ): string {
   const termCount = (t: string): number => {
     const parts = ftsTermParts(t);
     return parts.length === 0 ? 0 : Math.min(...parts.map(docCount));
   };
-  return rarestPromptTerms(terms, termCount, maxTerms).join(' ');
+  const { words, cjk } = partitionCjkTerms(terms);
+  if (cjkDocCount === undefined) {
+    return spreadCjkTerms(
+      [...rarestPromptTerms(words, termCount, maxTerms), ...cjk],
+      maxTerms,
+    ).join(' ');
+  }
+  const counts = new Map([
+    ...words.map((t) => [t, termCount(t)] as const),
+    ...cjk.map((t) => [t, cjkDocCount(t)] as const),
+  ]);
+  const ranked = rarestPromptTerms(counts.keys(), (t) => counts.get(t) ?? 0, maxTerms);
+  // A run under 3 letters can sit in a row with no trigram that shows it, so a 0 cannot drop it.
+  const unproven = [...new Set(cjk)].filter((t) => counts.get(t) === 0 && [...t].length < 3);
+  return [...ranked, ...unproven].slice(0, maxTerms).join(' ');
+}
+
+/** Up to `maxTerms` of `terms` when no index counts their CJK terms: those keep half the slots, at even
+ *  steps through the prompt, so neither a long run of words nor the prompt's opening letters starve them. */
+export function spreadCjkTerms(terms: readonly string[], maxTerms: number): string[] {
+  // SHORTCUT: even steps, not rarest first; a store with a trigram index ranks CJK terms by its counts.
+  const { words, cjk } = partitionCjkTerms(terms);
+  const cjkSlots = Math.min(cjk.length, Math.max(Math.ceil(maxTerms / 2), maxTerms - words.length));
+  const step = cjkSlots > 1 ? (cjk.length - 1) / (cjkSlots - 1) : 0;
+  const kept = new Set(Array.from({ length: cjkSlots }, (_, i) => Math.round(i * step)));
+  return [...words.slice(0, maxTerms - cjkSlots), ...cjk.filter((_, k) => kept.has(k))];
 }

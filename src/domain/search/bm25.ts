@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { tokenize } from '../../base/util/tokenize.js';
+import { indexTokenize } from '../../base/util/tokenize.js';
 
 /** Tokenized BM25 corpus; build it once with `buildCorpus` and reuse it across queries on the
  * same entry set. */
@@ -19,7 +19,7 @@ export function entryText(entry: MemoryEntry): string {
 }
 
 export function buildCorpus(texts: string[]): BM25Corpus {
-  const docs = texts.map(tokenize);
+  const docs = texts.map((text) => indexTokenize(text));
   const N = docs.length;
   const df = new Map<string, number>();
 
@@ -63,7 +63,7 @@ export function bm25Score(corpus: BM25Corpus, docIdx: number, queryTerms: string
 
 /** Query terms that appear in the entry's indexed text, in query order. */
 export function matchedQueryTerms(queryTerms: Iterable<string>, entry: MemoryEntry): string[] {
-  const docTerms = new Set(tokenize(entryText(entry)));
+  const docTerms = new Set(indexTokenize(entryText(entry)));
   const matched: string[] = [];
   for (const t of queryTerms) if (docTerms.has(t)) matched.push(t);
   return matched;

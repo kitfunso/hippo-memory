@@ -4,7 +4,7 @@ import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from '../errors/api-errors.js';
 import { randomUUID } from 'node:crypto';
 import { isJsonString } from '../util/json.js';
-import { tokenize } from '../util/tokenize.js';
+import { tokenizeMin } from '../util/tokenize.js';
 import { ID_SUFFIX_CHARS } from '../util/token-text.js';
 import {
   calculateStrength,
@@ -349,7 +349,7 @@ const TAG_OVERLAP_SCALE = 2;
 const CONTENT_ENOUGH_MIN_MATCHES = 5;
 
 function significantTokens(text: string): Set<string> {
-  return new Set(tokenize(text).filter((t) => t.length > FILLER_TOKEN_MAX_LENGTH));
+  return new Set(tokenizeMin(text, FILLER_TOKEN_MAX_LENGTH + 1));
 }
 
 /** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */
