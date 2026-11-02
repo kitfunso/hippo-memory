@@ -28,7 +28,7 @@ import {
   promptRecallRequest,
   openBlockBudget,
 } from './context-plan.js';
-import { ambientAdmission, loadPools } from './context-pools.js';
+import { ambientAdmission, loadPools, userRuleReserve } from './context-pools.js';
 import { type TaskSections, loadTaskSections, pointerModes } from './context-task-state.js';
 
 /** Tokens a context block may use when the caller sets no budget; the hook command and the CLI
@@ -64,11 +64,12 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
     !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
   if (nothingToInject(plan, pools, noSections)) return { entries: [], tokens: 0 };
 
+  const left = Math.max(0, sections.left - userRuleReserve(plan, pools));
   const picked = plan.pinnedOnly
-    ? selectPinned({ opts, plan, left: sections.left, pools, admission })
+    ? selectPinned({ opts, plan, left, pools, admission })
     : plan.query === NO_QUERY
-      ? selectStrongest(plan, sections.left, pools)
-      : await selectBySearch(ctx, { plan, left: sections.left, pools, admission });
+      ? selectStrongest(plan, left, pools)
+      : await selectBySearch(ctx, { plan, left, pools, admission });
   if (picked === null) return { entries: [], tokens: 0 };
 
   const { items, tokens } = finalizeSelection(picked, plan);

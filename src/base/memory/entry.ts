@@ -109,6 +109,15 @@ export const EXTRACTED_TAG = 'extracted';
 export const COMPACTION_MEMORY_TAG = 'compaction-memory';
 export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 
+/** Tag on a rule the person stated, which only capture may set. */
+export const USER_RULE_TAG = 'from-user';
+
+/** `tags` without the user-rule tag, for every tag a person types: a typed tag must not make a row
+ * print as the person's own rule. */
+export function withoutUserTag(tags: readonly string[]): string[] {
+  return tags.filter((t) => t !== USER_RULE_TAG);
+}
+
 /** A memory counts as high schema fit strictly above this. */
 export const HIGH_SCHEMA_FIT = 0.7;
 const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
@@ -289,7 +298,7 @@ export function createSuccessor(
 ): MemoryEntry {
   const fields: CreateMemoryOptions = {
     layer: opts.layer ?? old.layer,
-    tags: opts.tags ?? [...old.tags],
+    tags: withoutUserTag(opts.tags ?? old.tags),
     pinned: opts.pinned ?? old.pinned,
     source: old.source,
     confidence: 'verified',

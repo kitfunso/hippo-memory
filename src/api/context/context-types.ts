@@ -71,15 +71,18 @@ export interface ContextOptions {
 
 /** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */
 export interface ContextCost {
-  /** Tokens of one entry as printed. */
+  /** Tokens of one entry as printed; `userRule` marks a row that prints as the person's own rule. */
   entry: (
-    item: Pick<ContextResultEntry, 'entry' | 'isGlobal' | 'promptRecall' | 'origin' | 'category'>,
+    item: Pick<
+      ContextResultEntry,
+      'entry' | 'isGlobal' | 'promptRecall' | 'origin' | 'category'
+    > & { userRule?: boolean },
   ) => number;
   /** Tokens of the headers and footer the block can print at this budget, reserved before any
-   * entry. */
+   * entry. `userRule` is true only when the view holds a user rule. */
   fixed: (
     budget: number,
-    can: { cross: boolean; promptRecall: boolean; ambient: boolean },
+    can: { cross: boolean; promptRecall: boolean; ambient: boolean; userRule: boolean },
   ) => number;
   /** Tokens of the sections printed ahead of the memories, each as printed. */
   snapshot: (s: TaskSnapshot, mode: ContinuityMode) => number;
