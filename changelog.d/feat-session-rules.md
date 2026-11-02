@@ -6,4 +6,5 @@
 
 ### Changed
 
+- **Every rule capture pins from your words is now your rule.** A rule such as "Never commit directly to `main`" that capture pins from a user turn also gets the `from-user` tag. So it prints under `## Rules from the user` and at session start, in the first turn as in a reply. Rows stored before this release keep their tags.
 - **Capture skips the user lines Claude Code writes for `!` shell commands and task notices.** `<bash-input>`, `<bash-stdout>`, `<bash-stderr>` and `<task-notification>` lines are no longer read as your words.

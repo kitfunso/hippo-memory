@@ -4,7 +4,7 @@ import {
   asideCloseOffset,
   QUOTE_MARK,
 } from '../../base/memory/memory-quality.js';
-import { ERROR_TAG, USER_RULE_TAG } from '../../base/memory/entry.js';
+import { ERROR_TAG } from '../../base/memory/entry.js';
 import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
 export interface ExtractedItem {
@@ -354,7 +354,7 @@ function followUpRule(sentence: string): ExtractedItem | null {
   const words = item.content.split(/\s+/).length;
   const kept =
     (words >= 2 && CODE_CUE.test(item.content)) || (words >= 4 && LIMIT_CUE.test(item.content));
-  return kept ? { ...item, tags: [...item.tags, 'follow-up', USER_RULE_TAG] } : null;
+  return kept ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
 }
 
 // The items of the spec bullets first, then those of each prose block.

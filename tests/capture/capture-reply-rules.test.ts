@@ -54,6 +54,13 @@ describe('capture keeps the rules a person gives in reply', () => {
     ]);
   });
 
+  it('a reply the rule patterns catch is a user rule too', async () => {
+    await capture([user(REQUEST), done, user('No: Never commit directly to `main`. Please fix it.')]);
+    expect(rows().map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)])).toEqual([
+      ['No: Never commit directly to `main`', true, true],
+    ]);
+  });
+
   it('a session with only its request captures nothing', async () => {
     await capture([user(REQUEST), done]);
     expect(rows()).toEqual([]);

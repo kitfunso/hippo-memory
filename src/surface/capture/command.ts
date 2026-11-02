@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { createMemory, Layer, USER_RULE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { isCertainReason, storedDefect } from '../../base/memory/memory-quality.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
@@ -429,15 +429,16 @@ function captureEntry(
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in
   // 'default'. A rule the person stated is pinned, so it injects even when a later prompt shares
   // none of its words. SHORTCUT: every stated rule pins; cap or age these pins if a store's pins
-  // outgrow the hook budget.
+  // outgrow the hook budget. The from-user tag marks the same pin as the person's rule for the hooks.
+  const stated = item.fromUser === true && item.category === 'rule';
   const created = createMemory(
     item.content,
     {
       layer: Layer.Episodic,
-      tags: item.tags,
+      tags: stated ? [...item.tags, USER_RULE_TAG] : item.tags,
       source: 'capture',
       confidence: 'observed',
-      pinned: item.fromUser === true && item.category === 'rule',
+      pinned: stated,
       tenantId: options.tenantId,
       sourceSessionId: options.sessionId,
       baseHalfLifeDays,
