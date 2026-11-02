@@ -188,10 +188,18 @@ describe('what is not a user rule', () => {
   });
 
   it.each<[string, Partial<MemoryEntry>, Partial<UserRuleViewer>]>([
-    ['a global view', {}, { isGlobal: true }],
+    ['a project-store row capture wrote, with no origin', { originProject: null }, {}],
+    ['a global-store row stamped with this project', {}, { isGlobal: true }],
+  ])('is true for %s', (_name, row, viewing) => {
+    expect(isUserRule(ruleRow(row), { ...viewer, ...viewing })).toBe(true);
+  });
+
+  it.each<[string, Partial<MemoryEntry>, Partial<UserRuleViewer>]>([
+    ['a global-store row from another project', { originProject: 'other' }, { isGlobal: true }],
+    ['a global-store row with no origin', { originProject: null }, { isGlobal: true }],
+    ['a global-store row, for a viewer with no project', {}, { isGlobal: true, originProject: null }],
     ['another project', { originProject: 'other' }, {}],
     ['a user-global row', { originProject: '' }, {}],
-    ['a row with no origin, for a viewer with none', { originProject: null }, { originProject: null }],
     ['another tenant', { tenantId: 'acme' }, {}],
     ['a superseded row', { supersededBy: 'mem_next' }, {}],
     ['a verified row', { confidence: 'verified' }, {}],
