@@ -79,18 +79,27 @@ describe('capture keeps the rules a person gives in reply', () => {
     ]);
   });
 
-  it('pins no praise or pasted output that names code, and keeps a thanks that limits a choice', async () => {
+  it('pins no praise or pasted output that names code, and keeps a thanks that goes on to direct', async () => {
     await capture([
       user(REQUEST),
       done,
       user('Thanks, `src/cache.ts` looks good.'),
       done,
+      user('Great work on `fetchJson()`.'),
+      done,
       user('src/cache.ts:42 expected 1 to equal 2'),
       done,
       user('Thanks, but run `pnpm test:unit`, not the bare `pnpm test`.'),
+      done,
+      user('Thanks, keep using `pnpm` for all installs.'),
+      done,
+      user('Use the existing helper in `src/cache.ts:42` rather than duplicating it.'),
     ]);
-    expect(rows().map((e) => [e.content, e.pinned])).toEqual([
+    const stored = rows().sort((a, b) => a.content.localeCompare(b.content));
+    expect(stored.map((e) => [e.content, e.pinned])).toEqual([
       ['Thanks, but run `pnpm test:unit`, not the bare `pnpm test`', true],
+      ['Thanks, keep using `pnpm` for all installs', true],
+      ['Use the existing helper in `src/cache.ts:42` rather than duplicating it', true],
     ]);
   });
 

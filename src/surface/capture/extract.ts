@@ -346,12 +346,19 @@ const ANY_STATEMENT = [/\S/];
 const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
 const LIMIT_CUE =
   /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
-// Praise names code too ("Thanks, `src/cache.ts` looks good"); with no limit in it, it orders nothing.
-const PRAISE_CUE =
-  /^(?:thanks|thank you|ok(?:ay)?|great|nice|perfect|cool|lgtm)\b|\blooks (?:good|great|fine|right)\b/i;
-// Pasted test or stack output: a file:line, an assertion message, an error line.
+// Praise names code too ("Thanks, `src/cache.ts` looks good"); a thanks that goes on to direct is kept.
+const ACK_LEAD = /^(?:thanks|thank you|ok(?:ay)?|great|nice|perfect|cool|lgtm)\b[\s,.!:-]*/i;
+const PRAISE_CUE = /\b(?:looks|look|works|worked) (?:good|great|fine|right|now)\b/i;
+// Pasted test or stack output opens on a file:line or an error word, or states an assertion.
 const LOG_CUE =
-  /\w\.[A-Za-z]+:\d+|\bexpected\b.+\bto (?:be|equal|have)\b|^(?:\w*Error|FAIL|Traceback)\b/;
+  /^\S*\w\.[A-Za-z]+:\d+|^(?:\w*Error|FAIL|Traceback)\b|\bexpected\b.+\bto (?:be|equal|have)\b/;
+
+/** A thanks, or a thanks with 3 words or fewer after it, or a "looks good". */
+function isPraise(content: string): boolean {
+  const lead = ACK_LEAD.exec(content);
+  const rest = lead ? content.slice(lead[0].length).split(/\s+/).filter(Boolean) : null;
+  return PRAISE_CUE.test(content) || (rest !== null && rest.length <= 3);
+}
 
 /** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word. */
 function followUpRule(sentence: string): ExtractedItem | null {
@@ -359,7 +366,7 @@ function followUpRule(sentence: string): ExtractedItem | null {
   if (!item) return null;
   const { content } = item;
   const limits = LIMIT_CUE.test(content);
-  if (LOG_CUE.test(content) || (PRAISE_CUE.test(content) && !limits)) return null;
+  if (LOG_CUE.test(content) || (isPraise(content) && !limits)) return null;
   const words = content.split(/\s+/).length;
   const kept = (words >= 2 && CODE_CUE.test(content)) || (words >= 4 && limits);
   return kept ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
