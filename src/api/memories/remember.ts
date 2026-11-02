@@ -19,6 +19,7 @@ import {
   type MemoryEntry,
   type MemoryKind,
   type TraceOutcome,
+  withoutUserTag,
 } from '../../base/memory/entry.js';
 import { computeSalience, type SalienceResult } from '../../base/memory/salience.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
@@ -165,7 +166,7 @@ function prepareRemember(
     : { flagged: false, reason: null };
   const flagged =
     !untrusted && memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
-  const tags = trustTagged(opts.tags, untrusted, flagged);
+  const tags = trustTagged(opts.tags && withoutUserTag(opts.tags), untrusted, flagged);
   const local = opts.local ?? {};
   const created = createMemory(
     vetted.content,

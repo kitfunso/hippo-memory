@@ -3,6 +3,8 @@
 import {
   HIPPO_SLEEP_MARKER,
   HIPPO_LAST_SLEEP_MARKER,
+  HIPPO_SESSION_RULES_MARKER,
+  HIPPO_SESSION_RULES_COMMAND,
   HIPPO_CAPTURE_MARKER,
   HIPPO_SESSION_END_MARKER,
   HIPPO_PINNED_INJECT_MARKER,
@@ -124,7 +126,10 @@ function appendHookIfMissing(
  * included; uninstall removes only handlers that run one. */
 const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['SessionEnd', [HIPPO_SESSION_END_MARKER, HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER]],
-  ['SessionStart', [HIPPO_LAST_SLEEP_MARKER, HIPPO_COMPACT_RESUME_MARKER]],
+  [
+    'SessionStart',
+    [HIPPO_LAST_SLEEP_MARKER, HIPPO_SESSION_RULES_MARKER, HIPPO_COMPACT_RESUME_MARKER],
+  ],
   ['UserPromptSubmit', [HIPPO_PINNED_INJECT_MARKER]],
   ['PreCompact', [HIPPO_PRE_COMPACT_MARKER]],
   ['PostCompact', [HIPPO_POST_COMPACT_MARKER]],
@@ -151,6 +156,14 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
     HIPPO_LAST_SLEEP_MARKER,
     claudeCommandGroup(`hippo last-sleep --path "${logFile}"`, HOOK_SHORT_TIMEOUT_SECONDS),
   );
+  // No matcher: a resumed or cleared session and a compaction lose the rules too, so every source
+  // sends them again.
+  const installedSessionRules = appendHookIfMissing(
+    hooks,
+    'SessionStart',
+    HIPPO_SESSION_RULES_MARKER,
+    claudeCommandGroup(HIPPO_SESSION_RULES_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS),
+  );
 
   // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn, so pinned memories stay
   // in context; the fresh write tail makes lessons saved earlier in the session visible on the next
@@ -165,6 +178,7 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
   return {
     installedSessionEnd,
     installedSessionStart,
+    installedSessionRules,
     migratedPinnedInjectRecent,
     installedUserPromptSubmit,
   };
@@ -226,6 +240,7 @@ export function planClaudeCodeHooks(
   const {
     installedSessionEnd,
     installedSessionStart,
+    installedSessionRules,
     migratedPinnedInjectRecent,
     installedUserPromptSubmit,
   } = appendSessionHooks(hooks, logFile);
@@ -238,6 +253,7 @@ export function planClaudeCodeHooks(
     settingsPath,
     installedSessionEnd,
     installedSessionStart,
+    installedSessionRules,
     installedUserPromptSubmit,
     installedPreCompact,
     installedCompactResume,

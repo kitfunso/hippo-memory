@@ -222,6 +222,22 @@ export function contextBlockLines(
   ];
 }
 
+export const USER_RULES_HEADING = '## Rules from the user';
+
+// The person's reply lead ("No:", "Yes, keep doing that:") reads as an answer, not as an order.
+const CORRECTION_LEAD = /^(?:No|Yes, keep doing that):\s*/;
+
+/** The person's own rule as a plain instruction: no confidence, date or tags to read it as an old
+ * note. */
+export function userRuleLine(e: MemoryEntry): string {
+  return `- ${shownContent({ ...e, content: e.content.replace(CORRECTION_LEAD, '') })}`;
+}
+
+/** The section that opens a block; no rules print nothing, and the blank line closes it. */
+export function userRuleLines(entries: readonly MemoryEntry[]): string[] {
+  return entries.length === 0 ? [] : [USER_RULES_HEADING, ...entries.map(userRuleLine), ''];
+}
+
 export function crossProjectHeading(entries: number): string {
   return `\n## Other-project memory (explicitly requested, ${entries} entries)\n`;
 }
@@ -357,18 +373,21 @@ export function contextCost(
   return {
     entry: (item) =>
       price(
-        item.category === 'cross-project' && !(hook && item.promptRecall)
-          ? crossProjectLine(item)
-          : contextLine({
-              item: { entry: item.entry, isGlobal: item.isGlobal ?? false },
-              framing,
-              showStrength: !hook,
-              now,
-              strengthPct: FULL_STRENGTH_PCT,
-            }),
+        item.userRule
+          ? userRuleLine(item.entry)
+          : item.category === 'cross-project' && !(hook && item.promptRecall)
+            ? crossProjectLine(item)
+            : contextLine({
+                item: { entry: item.entry, isGlobal: item.isGlobal ?? false },
+                framing,
+                showStrength: !hook,
+                now,
+                strengthPct: FULL_STRENGTH_PCT,
+              }),
       ),
     fixed: (budget, can) =>
       price(contextHeading('Project Memory', budget, budget)) +
+      (can.userRule ? price(`${USER_RULES_HEADING}\n`) : 0) +
       (can.cross ? price(crossProjectHeading(budget)) : 0) +
       (hook && can.promptRecall
         ? price(contextHeading('Prompt-Relevant Memory', budget, budget))

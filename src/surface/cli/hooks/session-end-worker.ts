@@ -92,10 +92,11 @@ function runSessionEndWork({
     },
     currentProject: () => ctx.infra.machine.projectIdentity(workingFolder(ctx)),
     // The run writes to this folder's own store, else to the global one in its reach.
-    capture: async (into, turns, originProject) => {
+    capture: async (into, turns, originProject, fromStart) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;
       if (root === undefined) return false;
-      return captureEndedSession(root, { tenantId, flags, transcriptPath, turns, originProject });
+      const ended = { tenantId, flags, transcriptPath, turns, originProject, fromStart };
+      return captureEndedSession(root, ended);
     },
     digest: (scan, key, log) =>
       recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
@@ -126,12 +127,13 @@ interface EndedCapture {
   readonly transcriptPath: string | undefined;
   readonly turns: readonly SessionTurn[] | undefined;
   readonly originProject: ProjectRef | undefined;
+  readonly fromStart: boolean;
 }
 
 /** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 async function captureEndedSession(
   store: string,
-  { tenantId, flags, transcriptPath, turns, originProject }: EndedCapture,
+  { tenantId, flags, transcriptPath, turns, originProject, fromStart }: EndedCapture,
 ): Promise<boolean> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   try {
@@ -144,6 +146,7 @@ async function captureEndedSession(
       tenantId,
       originProject,
       sessionTurns: turns,
+      fromStart,
     });
     return true;
   } catch (err) {

@@ -1,0 +1,2 @@
+  session-rules            SessionStart hook: send every rule you stated to this project as Claude Code
+                           session context, from the project store and the global one

@@ -201,6 +201,19 @@ export async function loadPools(
   return { local, global };
 }
 
+/** The tokens of the user-rule heading: nothing unless a loaded row prints under it. SHORTCUT: paid
+ * when the pool holds a user rule, even if the ranking then leaves it out; one heading of slack. */
+export function userRuleReserve(plan: ContextPlan, pools: ContextPools): number {
+  const { cost } = plan;
+  const held =
+    pools.local.entries.some((e) => plan.isUserRule(e, plan.primaryIsGlobal)) ||
+    pools.global.entries.some((e) => plan.isUserRule(e, true));
+  if (!cost || !held) return 0;
+  // The headings are priced apart, so the two totals differ by the user-rule heading alone.
+  const can = { cross: false, promptRecall: false, ambient: false };
+  return cost.fixed(0, { ...can, userRule: true }) - cost.fixed(0, { ...can, userRule: false });
+}
+
 // With prompt recall on, eligibility reports a row the quality floor drops.
 function refusalReporter(
   plan: ContextPlan,

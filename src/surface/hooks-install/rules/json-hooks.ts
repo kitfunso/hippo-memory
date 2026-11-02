@@ -35,6 +35,8 @@ export interface InstallResult {
   settingsPath: string;
   installedSessionEnd: boolean;
   installedSessionStart: boolean;
+  /** SessionStart -> `hippo session-rules` (sends the rules you stated). */
+  installedSessionRules: boolean;
   installedUserPromptSubmit: boolean;
   installedPreCompact: boolean;
   installedCompactResume: boolean;

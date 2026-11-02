@@ -133,6 +133,9 @@ function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): vo
   if (result.installedSessionStart) {
     console.log(`Installed hippo last-sleep SessionStart hook in ${result.target} settings`);
   }
+  if (result.installedSessionRules) {
+    console.log(`Installed hippo session-rules SessionStart hook in ${result.target} settings`);
+  }
   if (result.installedUserPromptSubmit) {
     console.log(`Installed hippo pinned-inject UserPromptSubmit hook in ${result.target} settings`);
   }

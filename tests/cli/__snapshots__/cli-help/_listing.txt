@@ -52,6 +52,7 @@ export
 capture
 setup
 last-sleep
+session-rules
 session-end
 __session-end-worker, no block
 pre-compact

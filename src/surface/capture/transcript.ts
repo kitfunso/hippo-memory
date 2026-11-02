@@ -19,12 +19,17 @@ const RECENT_ASSISTANT_TURNS = 10;
  * user messages and the final assistant text chunk, without thinking, tool_use and tool_result
  * noise. Exported for tests. */
 
-/** Leading markers of the command lines Claude Code writes with type 'user'. */
+/** Leading markers of the lines Claude Code writes with type 'user' that no person typed: commands,
+ * `!` shell input and output, task notices. */
 const CLAUDE_CODE_COMMAND_PREFIXES = [
   '<local-command-',
   '<command-name>',
   '<command-message>',
   '<command-args>',
+  '<bash-input>',
+  '<bash-stdout>',
+  '<bash-stderr>',
+  '<task-notification>',
 ];
 
 /**

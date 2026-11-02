@@ -87,6 +87,7 @@ describe('first-party hook command lines', () => {
       'recall',
       'remember',
       'session-end',
+      'session-rules',
     ]);
   });
 });
@@ -129,6 +130,7 @@ describe('installJsonHooks(claude-code) settings shape', () => {
         "installedPostCompact": true,
         "installedPreCompact": true,
         "installedSessionEnd": true,
+        "installedSessionRules": true,
         "installedSessionStart": true,
         "installedUserPromptSubmit": false,
         "invalidJson": false,
@@ -182,6 +184,15 @@ describe('installJsonHooks(claude-code) settings shape', () => {
                 {
                   "type": "command",
                   "command": "hippo last-sleep --path \\"~/.hippo/logs/claude-code-sleep.log\\"",
+                  "timeout": 5
+                }
+              ]
+            },
+            {
+              "hooks": [
+                {
+                  "type": "command",
+                  "command": "hippo session-rules",
                   "timeout": 5
                 }
               ]
@@ -271,6 +282,15 @@ describe('installJsonHooks(claude-code) settings shape', () => {
                 {
                   "type": "command",
                   "command": "hippo last-sleep --path \\"~/.hippo/logs/claude-code-sleep.log\\"",
+                  "timeout": 5
+                }
+              ]
+            },
+            {
+              "hooks": [
+                {
+                  "type": "command",
+                  "command": "hippo session-rules",
                   "timeout": 5
                 }
               ]

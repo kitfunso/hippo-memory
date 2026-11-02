@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { createMemory, Layer, USER_RULE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { isCertainReason, storedDefect } from '../../base/memory/memory-quality.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
@@ -34,6 +34,9 @@ export interface CaptureOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   sessionTurns?: readonly SessionTurn[];
+  /** False when `sessionTurns` is a later slice of the session (a turn capture), so its first user
+   * turn answers the agent. */
+  fromStart?: boolean;
   /** Tee stdout/stderr to this log file while capture runs, so SessionEnd output (lost in TUI teardown) shows via
    *  `hippo last-sleep`.
    *  Appends, because `hippo sleep` writes the same file first. */
@@ -116,7 +119,7 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 
   const read = readCaptureTexts(options);
   if (read === null) return;
-  const { texts, userTexts } = read;
+  const { texts, userTexts, firstFollowUp } = read;
 
   if (texts.every((text) => text.trim().length === 0)) {
     console.log('No text to capture from.');
@@ -127,7 +130,7 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
   // pass could not see (AGENTS.md: no secrets in memories).
   const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
   const scrubbed = texts.map(scrub);
-  const extracted = scrubbedItems(extractFromTexts(scrubbed, userTexts), scrub);
+  const extracted = scrubbedItems(extractFromTexts(scrubbed, userTexts, firstFollowUp), scrub);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
@@ -230,7 +233,14 @@ function printCaptureTally(
 /** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a
  *  last-session capture has nothing.
  *  Only a session says who spoke, so a piped or file capture counts no user texts. */
-function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts: number } | null {
+/** Session texts: user turns before `firstFollowUp` are the request, the rest answer the agent. */
+interface CaptureTexts {
+  readonly texts: string[];
+  readonly userTexts: number;
+  readonly firstFollowUp?: number;
+}
+
+function readCaptureTexts(options: CaptureOptions): CaptureTexts | null {
   switch (options.source) {
     case 'stdin': {
       try {
@@ -260,7 +270,7 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
   }
 }
 
-function readSessionTexts(options: CaptureOptions): { texts: string[]; userTexts: number } | null {
+function readSessionTexts(options: CaptureOptions): CaptureTexts | null {
   let turns = options.sessionTurns;
   if (!turns) {
     const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, {
@@ -277,7 +287,10 @@ function readSessionTexts(options: CaptureOptions): { texts: string[]; userTexts
     console.log('Transcript had no user/assistant messages to summarise.');
     return null;
   }
-  return { texts: [...users, ...assistants], userTexts: users.length };
+  // The first user turn is the request; a tail that cut it off, or a later slice, holds only replies.
+  const allUsers = turns.filter((t) => t.role === 'user').length;
+  const opener = options.fromStart !== false && users.length === allUsers ? 1 : 0;
+  return { texts: [...users, ...assistants], userTexts: users.length, firstFollowUp: opener };
 }
 
 export interface CaptureTally {
@@ -416,15 +429,16 @@ function captureEntry(
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in
   // 'default'. A rule the person stated is pinned, so it injects even when a later prompt shares
   // none of its words. SHORTCUT: every stated rule pins; cap or age these pins if a store's pins
-  // outgrow the hook budget.
+  // outgrow the hook budget. The from-user tag marks the same pin as the person's rule for the hooks.
+  const stated = item.fromUser === true && item.category === 'rule';
   const created = createMemory(
     item.content,
     {
       layer: Layer.Episodic,
-      tags: item.tags,
+      tags: stated ? [...item.tags, USER_RULE_TAG] : item.tags,
       source: 'capture',
       confidence: 'observed',
-      pinned: item.fromUser === true && item.category === 'rule',
+      pinned: stated,
       tenantId: options.tenantId,
       sourceSessionId: options.sessionId,
       baseHalfLifeDays,

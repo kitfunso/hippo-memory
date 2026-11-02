@@ -191,6 +191,7 @@ export type {
   ContinuityMode,
 } from './context/context-types.js';
 export { DEFAULT_CONTEXT_BUDGET, contextGet } from './context/context.js';
+export { userRulesGet, type UserRulesOptions } from './context/user-rules-get.js';
 export { NO_QUERY } from './context/context-plan.js';
 export { contextProjectFor, type ProjectFacts } from './context/context-project.js';
 export { failureSummary, recordTokens, tokenSummary } from './tokens.js';

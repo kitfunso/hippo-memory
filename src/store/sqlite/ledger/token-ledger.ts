@@ -34,6 +34,7 @@ const TOKEN_SURFACES: readonly TokenSurface[] = [
   'hook',
   'hook_recall',
   'compact_resume',
+  'session_start',
   'context',
   'recall',
   'mcp_recall',
@@ -45,7 +46,12 @@ const TOKEN_SURFACES: readonly TokenSurface[] = [
 
 /** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its
  * parent's, as both carry one session id. */
-const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
+const REREAD_SURFACES: readonly TokenSurface[] = [
+  'hook',
+  'hook_recall',
+  'compact_resume',
+  'session_start',
+];
 
 /** Rows older than this are pruned on write. */
 const TOKEN_LEDGER_RETENTION_DAYS = 90;
