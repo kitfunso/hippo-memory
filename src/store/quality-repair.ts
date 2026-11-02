@@ -3,12 +3,14 @@ import { withBackup } from '../db/backup.js';
 import { withTrialScope, withWriteScope } from '../db/busy.js';
 import { withUnmigratedDb } from '../db/open.js';
 import type { DatabaseSyncLike } from '../db/sqlite.js';
-import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
+import { getMeta, getMetaNumber, pragmaUserVersion, setMeta } from '../db/meta.js';
 import { tableColumns } from '../db/tables.js';
 import { assertBinaryCompatible } from '../db/migrate.js';
 import { insertDormantRow, listDormantSnapshots } from './dormant.js';
 import { calculateStrength, canAutoDelete, type MemoryEntry } from '../core/memory.js';
-import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from '../core/memory-quality.js';
+import {
+  BUNDLE_HEADER, isAutomaticEntry, isCertainReason, QUALITY_GATE_VERSION, storedDefect, type AutomaticMemoryDefect,
+} from '../core/memory-quality.js';
 import { heldTexts } from '../util/same-text.js';
 import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from './delete-and-batch.js';
 import { selectAllEntries, selectPreviewRows } from './entry-reads.js';
@@ -87,12 +89,12 @@ function contentIssue(entry: MemoryEntry, rows: ReadonlyMap<string, MemoryEntry>
   if (structured(entry) || !isAutomaticEntry(entry)) return null;
   // Only a bundle header marks parts; a refined row keeps its lead line, so it is judged whole.
   if (!BUNDLE_HEADER.test(entry.content)) {
-    const { reason } = assessAutomaticMemory(entry.content);
+    const reason = storedDefect(entry.content);
     return reason === null ? null : { reason, disposition: isCertainReason(reason) ? 'set-aside' : 'review' };
   }
   const texts = heldTexts({ ...entry, source: 'consolidation' });
   if (texts.length === 0) return { reason: 'derived bundle has no safely parsed constituents', disposition: 'review' };
-  const reasons = texts.map((text) => assessAutomaticMemory(text).reason).filter((reason): reason is AutomaticMemoryDefect => reason !== null);
+  const reasons = texts.map(storedDefect).filter((reason): reason is AutomaticMemoryDefect => reason !== null);
   if (reasons.length === 0) return null;
   const certain = reasons.length === texts.length && reasons.every(isCertainReason) && fromAutomaticParents(entry, rows);
   return { reason: `derived constituents: ${[...new Set(reasons)].join('; ')}`, disposition: certain ? 'set-aside' : 'review' };
@@ -122,7 +124,7 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
     const tags = parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' });
     const provenance = { ...row, source: row.source ?? '', confidence: row.confidence ?? 'observed', dag_level: row.dag_level ?? 0, tags };
     if (!isAutomaticEntry(provenance)) return [];
-    const { reason } = assessAutomaticMemory(row.content);
+    const reason = storedDefect(row.content);
     return reason === null ? [] : [{ id: row.id, reason, disposition: 'review', protection: 'unsupported schema; no changes permitted' }];
   });
   return { total: rows.length, issues };
@@ -151,7 +153,10 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
   return true;
 }
 
-function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup: string, doneKey?: string): QualityRepairResult {
+/** Meta rows the apply writes with its moves, so the done mark commits with them. */
+type DoneWrites = readonly (readonly [key: string, value: string])[];
+
+function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup: string, doneWrites?: DoneWrites): QualityRepairResult {
   return withWriteScope(db, 'quality_repair_apply', () => {
     const result = initialResult(db, root, tenantId);
     if (!result.supported) throw new Error(`Quality repair capability changed: ${result.blockers.join('; ')}`);
@@ -164,16 +169,16 @@ function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup:
       if (setAsideIssue(db, entries.get(issue.id)!, issue.reason, now, backup)) appliedIds.push(issue.id);
       else warnings.push(`Kept ${issue.id}: the store's delete guard protects it.`);
     }
-    if (doneKey) setMeta(db, doneKey, '1');
+    for (const [key, value] of doneWrites ?? []) setMeta(db, key, value);
     return { ...result, appliedIds, backup, warnings };
   });
 }
 
-function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; apply?: boolean; doneKey?: string }): QualityRepairResult {
+function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; apply?: boolean; doneWrites?: DoneWrites }): QualityRepairResult {
   const initial = withTrialScope(db, 'quality_repair_plan', () => initialResult(db, root, opts.tenantId));
   if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) return initial;
   db.exec('PRAGMA foreign_keys = ON');
-  const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, root, opts.tenantId, backup, opts.doneKey));
+  const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, root, opts.tenantId, backup, opts.doneWrites));
   const warnings = [...result.warnings];
   for (const id of result.appliedIds) {
     if (purgeMirrorBestEffort(root, id, false, 'quality repair')) continue;
@@ -188,15 +193,21 @@ export function repairAutomaticMemories(root: string, opts: { tenantId: string; 
 }
 
 const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
+const GATE_META_KEY = 'quality_repair_gate';
+// The old key stays '1' so a binary from before the gate version keeps skipping the repair.
+const DONE_WRITES = [
+  [AUTO_REPAIR_META_KEY, '1'],
+  [GATE_META_KEY, String(QUALITY_GATE_VERSION)],
+] as const;
 
-/** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command; null once done. */
+/** Applies the repair once per gate version, so stores that predate a quality check are cleaned on upgrade with no command; null once done. */
 export function repairQualityOnce(root: string, tenantId: string): QualityRepairResult | null {
   return withUnmigratedDb(root, false, (db) => {
-    if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
+    if (getMetaNumber(db, GATE_META_KEY) >= QUALITY_GATE_VERSION) return null;
     // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
-    const result = repairOn(db, root, { tenantId, apply: true, doneKey: AUTO_REPAIR_META_KEY });
+    const result = repairOn(db, root, { tenantId, apply: true, doneWrites: DONE_WRITES });
     // An unsupported schema changed nothing, so the next run tries again once a migration has run.
-    if (result.supported && result.backup === null) setMeta(db, AUTO_REPAIR_META_KEY, '1');
+    if (result.supported && result.backup === null) for (const [key, value] of DONE_WRITES) setMeta(db, key, value);
     return result;
   });
 }

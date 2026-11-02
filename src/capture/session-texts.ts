@@ -3,11 +3,11 @@ import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../core/project-identity.js';
-import { longestWord, storedTextKeys } from '../util/same-text.js';
+import { longestWord } from '../util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
-import { captureExtractedItems, type CaptureTally } from './command.js';
-import { extractFromTexts } from './extract.js';
+import { captureExtractedItems, heldKeysOf, scrubbedItems, type CaptureTally } from './command.js';
+import { boldTwins, extractFromTexts } from './extract.js';
 
 const MAX_TEXTS = 30;
 const MAX_TEXT_BYTES = 32 * 1024;
@@ -38,17 +38,22 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
  *  Synchronous from the dedup read to the last write, so no other write lands between them. No console output and no process.exit. */
 export function captureSessionTexts(ctx: Context, req: SessionCaptureRequest): SessionCaptureResult {
   assertSessionCapture(req);
-  const extracted = extractFromTexts(req.texts.map(scrubForSharing));
+  const scrubbed = req.texts.map(scrubForSharing);
+  // Scrubbed again after extraction: bold removal can rebuild an address or key.
+  const extracted = scrubbedItems(extractFromTexts(scrubbed), scrubForSharing);
   // The newest items win, since the end of a session states where it landed.
   const items = extracted.slice(-MAX_ITEMS);
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows block a copy, other projects' rows do not.
-  const held = loadTextsHoldingWords(ctx.hippoRoot, ctx.tenantId, items.map((i) => longestWord(i.content)), projectNames(req.project));
+  const twins = boldTwins(scrubbed, scrubForSharing);
+  const held = loadTextsHoldingWords(
+    ctx.hippoRoot, ctx.tenantId, [...items.map((i) => i.content), ...twins.map((twin) => twin.old)].map(longestWord), projectNames(req.project),
+  );
   const tally = captureExtractedItems(
     ctx.hippoRoot,
     { dryRun: false, tenantId: ctx.tenantId, originProject: req.project, sessionId: req.sessionId, actor: ctx.actor.subject, lean: true },
     items,
-    storedTextKeys(held),
+    heldKeysOf(held, twins),
   );
   return { ...tally, skipped: tally.skipped + extracted.length - items.length };
 }

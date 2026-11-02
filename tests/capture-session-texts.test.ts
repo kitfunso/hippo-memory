@@ -7,7 +7,9 @@ import type { Context } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { extractFromTexts } from '../src/capture/extract.js';
+import { heldKeysOf } from '../src/capture/command.js';
 import { captureSessionTexts, type SessionCaptureRequest } from '../src/capture/session-texts.js';
+import type { HeldText } from '../src/store/candidates.js';
 import { collectSessionTurns, sessionTail } from '../src/capture/transcript.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { deriveOriginProject } from '../src/core/project-identity.js';
@@ -160,6 +162,160 @@ describe('captureSessionTexts', () => {
     expect(captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 2, skipped: 1, rejected: 0 });
     expect(captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 0, skipped: 3, rejected: 0 });
     expect(contents(root)).toEqual([...ITEMS].sort());
+  });
+
+  it('is blocked by a row stored with the bold markers capture once kept', () => {
+    const stored = 'Always run **npm test** first';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    expect(captureSessionTexts(ctxFor(root), req([`${stored}.`]))).toEqual({
+      captured: 0,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(contents(root)).toEqual([stored]);
+  });
+
+  it('stores the clean rule beside an unpinned "** " row, which repair sets aside', () => {
+    const stored = '** Never backfill them';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    const text = '- **Volume data.** Never backfill them.';
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Never backfill them']);
+  });
+
+  it('is blocked by a pinned row that kept the bare "** " the old label split left', () => {
+    const stored = '** Never backfill them';
+    writeEntry(root, { ...createMemory(stored, { pinned: true }), origin_project: 'acme-web' });
+    const text = '- **Volume data.** Never backfill them.';
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored]);
+  });
+
+  it.each(['**Never deploy before tests', 'Always run **npm test before deploying'])(
+    'is blocked by a row an old capture stored with its closing bold marker lost: %s',
+    (stored) => {
+      writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+      expect(captureSessionTexts(ctxFor(root), req([`${stored}.**`]))).toEqual({
+        captured: 0,
+        skipped: 1,
+        rejected: 0,
+      });
+      expect(contents(root)).toEqual([stored]);
+    },
+  );
+
+  it('stores a rule that differs from a held one only by "**" marks no lost closer explains', () => {
+    const stored = 'Never call f(**kwargs) or g(**options) without validation';
+    const twin = 'Never call f(kwargs) or g(options) without validation';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    expect(captureSessionTexts(ctxFor(root), req([`${stored}.`, `${twin}.`]))).toEqual({
+      captured: 1,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(contents(root)).toEqual([stored, twin]);
+  });
+
+  it('stores the twin of a held rule whose own text has no bold pair', () => {
+    const stored = 'Never call f(**kwargs) without validation';
+    const twin = 'Never call f(kwargs) without validation';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    expect(captureSessionTexts(ctxFor(root), req([stored, `${twin}.`]))).toEqual({
+      captured: 1,
+      skipped: 1,
+      rejected: 0,
+    });
+    expect(contents(root)).toEqual([stored, twin]);
+  });
+
+  it('stores the Redis rule beside a held bold question whose bullet it follows', () => {
+    const stored = '**Should we deploy on Fridays?**';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    const text = [
+      '## Plan',
+      '- **Should we deploy on Fridays?**',
+      '- **Move the cache to Redis.**',
+      'Should we keep the old cache?',
+    ].join('\n');
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Move the cache to Redis.']);
+  });
+
+  it('adds no row for a held rule whose bold label an old capture kept', () => {
+    const stored = '**Rule:** Always run tests before committing';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    const text = '- **Rule:** Always run tests before committing.';
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored]);
+  });
+
+  it('adds only the second rule when a held row kept the bold opener of the first', () => {
+    const stored = '**Always run tests';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    const text = '**Always run tests. Never push to master.**';
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Never push to master']);
+  });
+
+  it('adds no row beside a pinned rule whose bold label the old capture kept as a rule', () => {
+    const stored = '**Decision:** We will always use SQLite for offline storage';
+    writeEntry(root, { ...createMemory(stored, { pinned: true }), origin_project: 'acme-web' });
+    const text = '- **Decision:** We will always use SQLite for offline storage.';
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored]);
+  });
+
+  it('pairs a held spec bullet with its spec twin, not with the rule from the same lines', () => {
+    const stored = '**Rule:** Always run tests before committing.';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    const text = ['## Plan', '- **Rule:** Always run tests before committing.'].join('\n');
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Always run tests before committing']);
+  });
+
+  it('stores the rule that precedes 50 addresses masked to one item', () => {
+    const addresses = Array.from(
+      { length: 50 },
+      (_, i) => `Never contact **reviewer${i}**@example.invalid without approval.`,
+    );
+    const text = ['Never push to main on Fridays.', ...addresses].join('\n');
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 2, skipped: 0, rejected: 0 });
+    expect(contents(root).sort()).toEqual(['Never contact [email] without approval', 'Never push to main on Fridays']);
+  });
+
+  it('adds no row beside a base row that joined a bold label to the line below it', () => {
+    const stored = 'Never edit **the config.** always run the linter first';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    const text = ['Never edit **the config.**', 'always run the linter first.'].join('\n');
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored]);
+  });
+
+  it('stores the rule after a held bold rule that a glued full stop ends', () => {
+    const stored = 'Never deploy **production**';
+    writeEntry(root, { ...createMemory(stored), origin_project: 'acme-web' });
+    const text = 'Never deploy **production**.Always deploy staging.';
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 1, rejected: 0 });
+    expect(contents(root).sort()).toEqual(['Always deploy staging', stored]);
+  });
+
+  it('masks an address that bold removal rebuilds from a split one', () => {
+    const text = 'Never contact **reviewer**@example.invalid without approval.';
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
+    expect(contents(root)).toEqual(['Never contact [email] without approval']);
+  });
+
+  it('redacts a secret that bold removal rebuilds from a split one', () => {
+    const text = 'Never commit **api_key**=9f8e7d6c5b4a3210ffff to the repo.';
+    expect(captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });
+    expect(contents(root)).toEqual(['Never commit [REDACTED] to the repo']);
+  });
+
+  it('reads a held row without pinned, as an external store adapter returns it, as unpinned', () => {
+    const external: HeldText = { content: '** Never backfill them', source: 'capture', origin_project: 'acme-web' };
+    const twins = [{ old: external.content, clean: 'Never backfill them' }];
+    expect(heldKeysOf([external], twins).has('Never backfill them')).toBe(false);
+    expect(heldKeysOf([{ ...external, pinned: true }], twins).has('Never backfill them')).toBe(true);
   });
 
   it('is blocked by the caller project and user-global copies, never by another project', () => {

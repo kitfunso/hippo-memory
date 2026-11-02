@@ -179,7 +179,8 @@ export function loadContextCandidates(hippoRoot: string, tenantId: string, filte
   }, openStore);
 }
 
-export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
+/** A stored text the capture dedup reads; `pinned` is optional so an adapter that omits it still fits. */
+export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'> & Partial<Pick<MemoryEntry, 'pinned'>>;
 
 // No owner: for session capture, a personal or connector-private row must never stop a team copy being written.
 const TEAM_VISIBLE = scopeAdmitSql('');
@@ -201,12 +202,12 @@ export function loadTextsHoldingWords(
     // Chunked so one statement stays far under SQLite's bound-parameter limit.
     for (let i = 0; i < unique.length; i += 200) {
       const chunk = unique.slice(i, i + 200);
-      // SAFETY: rows' shape matches the three columns named in the SELECT below.
+      // SAFETY: rows' shape matches the four columns named in the SELECT below.
       const rows = db.prepare(
-        `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) ' +
+        `SELECT content, source, origin_project, pinned FROM memories WHERE ${tenantWhere}${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) ' +
           '> 0').join(' OR ')})`,
-      ).all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
-      for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
+      ).all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null; pinned: number }>;
+      for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project, pinned: row.pinned === 1 });
     }
     return out;
   }, openStore);

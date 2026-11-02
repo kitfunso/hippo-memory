@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -180,6 +180,241 @@ describe('automatic quality does not govern manual or trusted import storage', (
     for (const entry of manual) writeEntry(root, entry);
     const recent = await getContext(ctx, { pinnedOnly: true, includeRecent: 10, currentProject: 'project' });
     expect(recent.entries.map(({ entry }) => entry.content).sort()).toEqual([...texts].sort());
+  });
+
+  it('capture stores no copy of a line a row holds with its bold markers', () => {
+    const stored = 'Always run **npm test** first';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: `${stored}.` }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored]);
+  });
+
+  it('capture stores the clean rule beside an unpinned row with a bare leading "** "', () => {
+    const stored = '** Never backfill them';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '- **Volume data.** Never backfill them.' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(
+      loadAllEntries(root)
+        .map((entry) => entry.content)
+        .sort(),
+    ).toEqual([stored, 'Never backfill them']);
+  });
+
+  it('capture stores no copy of a rule a pinned row holds with a bare leading "** "', () => {
+    const stored = '** Never backfill them';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic, pinned: true }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '- **Volume data.** Never backfill them.' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored]);
+  });
+
+  it.each(['**Never deploy before tests', 'Always run **npm test before deploying'])(
+    'capture stores no copy of a rule an old capture stored with its closing bold marker lost: %s',
+    (stored) => {
+      const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+      writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+      cmdCapture(root, {
+        source: 'last-session',
+        sessionTurns: [{ role: 'user', text: `${stored}.**` }],
+        dryRun: false,
+        global: false,
+      });
+      expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored]);
+    },
+  );
+
+  it('capture stores a rule that differs from a held one only by "**" marks no lost closer explains', () => {
+    const stored = 'Never call f(**kwargs) or g(**options) without validation';
+    const twin = 'Never call f(kwargs) or g(options) without validation';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [
+        { role: 'user', text: `${stored}.` },
+        { role: 'user', text: `${twin}.` },
+      ],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored, twin]);
+  });
+
+  it('capture stores the twin of a held rule whose own text has no bold pair', () => {
+    const stored = 'Never call f(**kwargs) without validation';
+    const twin = 'Never call f(kwargs) without validation';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [
+        { role: 'user', text: stored },
+        { role: 'user', text: `${twin}.` },
+      ],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored, twin]);
+  });
+
+  it('capture stores the Redis rule beside a held bold question whose bullet it follows', () => {
+    const stored = '**Should we deploy on Fridays?**';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    const text = [
+      '## Plan',
+      '- **Should we deploy on Fridays?**',
+      '- **Move the cache to Redis.**',
+      'Should we keep the old cache?',
+    ].join('\n');
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored, 'Move the cache to Redis.']);
+  });
+
+  it('capture adds no row for a held rule whose bold label an old capture kept', () => {
+    const stored = '**Rule:** Always run tests before committing';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '- **Rule:** Always run tests before committing.' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored]);
+  });
+
+  it('capture adds only the second rule when a held row kept the bold opener of the first', () => {
+    const stored = '**Always run tests';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '**Always run tests. Never push to master.**' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored, 'Never push to master']);
+  });
+
+  it('capture adds no row beside a pinned rule whose bold label the old capture kept as a rule', () => {
+    const stored = '**Decision:** We will always use SQLite for offline storage';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic, pinned: true }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '- **Decision:** We will always use SQLite for offline storage.' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored]);
+  });
+
+  it('capture pairs a held spec bullet with its spec twin, not with the rule from the same lines', () => {
+    const stored = '**Rule:** Always run tests before committing.';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: ['## Plan', '- **Rule:** Always run tests before committing.'].join('\n') }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([
+      stored,
+      'Always run tests before committing',
+    ]);
+  });
+
+  it('capture counts and stores one item for 50 addresses masked alike, beside the rule before them', () => {
+    const addresses = Array.from(
+      { length: 50 },
+      (_, i) => `Never contact **reviewer${i}**@example.invalid without approval.`,
+    );
+    const text = ['Never push to main on Fridays.', ...addresses].join('\n');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    const run = (dryRun: boolean) =>
+      cmdCapture(root, {
+        source: 'last-session',
+        sessionTurns: [{ role: 'user', text }],
+        dryRun,
+        global: false,
+      });
+    run(true);
+    expect(log.mock.calls.flat().join('\n')).toContain('[dry-run] Captured 2 items');
+    run(false);
+    expect(
+      loadAllEntries(root)
+        .map((entry) => entry.content)
+        .sort(),
+    ).toEqual(['Never contact [email] without approval', 'Never push to main on Fridays']);
+  });
+
+  it('capture adds no row beside a base row that joined a bold label to the line below it', () => {
+    const stored = 'Never edit **the config.** always run the linter first';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: ['Never edit **the config.**', 'always run the linter first.'].join('\n') }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([stored]);
+  });
+
+  it('capture stores the rule after a held bold rule that a glued full stop ends', () => {
+    const stored = 'Never deploy **production**';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: 'Never deploy **production**.Always deploy staging.' }],
+      dryRun: false,
+      global: false,
+    });
+    const kept = loadAllEntries(root).map((entry) => entry.content);
+    expect(kept.sort()).toEqual(['Always deploy staging', stored]);
+  });
+
+  it.each([
+    [
+      'an address',
+      'Never contact **reviewer**@example.invalid without approval.',
+      'Never contact [email] without approval',
+    ],
+    ['a secret', 'Never commit **api_key**=9f8e7d6c5b4a3210ffff to the repo.', 'Never commit [REDACTED] to the repo'],
+  ])('capture masks %s that bold removal rebuilds from a split one', (_kind, text, expected) => {
+    cmdCapture(root, {
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual([expected]);
   });
 
   it('session capture stores a rule from the turn after one that left a fence open', () => {

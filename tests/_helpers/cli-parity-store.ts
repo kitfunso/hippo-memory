@@ -21,7 +21,7 @@ const DROPPED_ENV = [
 const VOLATILE_COLUMNS = ['created', 'last_retrieved', 'valid_from', 'updated_at'];
 const STRENGTH_DECIMALS = 6;
 // Counters and one-time repair marks a verb leaves in `meta`; the schema version and the like stay out, as they change with every migration.
-const META_KEYS = ['total_remembered', 'total_forgotten', 'project_repair_auto', 'quality_repair_auto'];
+const META_KEYS = ['total_remembered', 'total_forgotten', 'project_repair_auto', 'quality_repair_auto', 'quality_repair_gate'];
 const AUDIT_COLUMNS = 'tenant_id, actor, op, target_id, metadata_json';
 
 const bases: string[] = [];

@@ -2,9 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
+import { isCertainReason, storedDefect } from '../core/memory-quality.js';
 import { writeCapturedItems } from '../store/capture-write.js';
 import { embedMemory } from '../search/embed-memories.js';
-import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
+import { EVERY_SCOPE, loadTextsHoldingWords, type HeldText } from '../store/candidates.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { withRejectionProbe } from '../store/rejection-probe.js';
@@ -12,7 +13,7 @@ import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
 import { errorMessage, log } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
-import { extractFromTexts, type ExtractedItem } from './extract.js';
+import { boldTwins, extractFromTexts, type BoldTwin, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 
 export interface CaptureOptions {
@@ -106,15 +107,17 @@ function cmdCaptureCore(
     return;
   }
 
-  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in memories).
-  const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))), userTexts, firstFollowUp);
+  // Scrub the texts and again each item: bold removal can rebuild an address or key the first pass could not see (AGENTS.md: no secrets in memories).
+  const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
+  const scrubbed = texts.map(scrub);
+  const extracted = scrubbedItems(extractFromTexts(scrubbed, userTexts, firstFollowUp), scrub);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
     return;
   }
 
-  const keys = storedKeysInView(targetRoot, options, extracted);
+  const keys = storedKeysInView(targetRoot, options, extracted, boldTwins(scrubbed, scrub));
 
   const writeOpts: CaptureWriteOptions = {
     dryRun: options.dryRun,
@@ -125,16 +128,44 @@ function cmdCaptureCore(
   printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, keys));
 }
 
+/** The items with `scrub` applied to each text, as a path stores them; scrubbing can make two items one, and the first stays. */
+export function scrubbedItems(items: readonly ExtractedItem[], scrub: (text: string) => string): ExtractedItem[] {
+  const seen = new Set<string>();
+  return items
+    .map((item) => ({ ...item, content: scrub(item.content) }))
+    .filter((item) => {
+      const key = duplicateKey(item.content);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+/** Held keys, each twin's clean text too when a held row has its old text and repair keeps that row: a pinned row, or one whose text is no certain defect. */
+export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
+  const keys = storedTextKeys(rows);
+  const pinned = storedTextKeys(rows.filter((row) => row.pinned));
+  const clean = twins
+    .filter(({ old }) => (isCertainReason(storedDefect(old)) ? pinned : keys).has(duplicateKey(old)))
+    .map((twin) => duplicateKey(twin.clean));
+  for (const key of clean) keys.add(key);
+  return keys;
+}
+
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not stop its own copy.
 // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
-function storedKeysInView(targetRoot: string, options: CaptureOptions, extracted: readonly ExtractedItem[]): Set<string> {
+function storedKeysInView(
+  targetRoot: string, options: CaptureOptions, extracted: readonly ExtractedItem[], twins: readonly BoldTwin[],
+): Set<string> {
+  // The lookup also asks for the lines as capture once stored them, with their bold markers.
+  const texts = [...extracted.map((item) => item.content), ...twins.map((twin) => twin.old)];
   const stored = loadTextsHoldingWords(
-    targetRoot, options.global ? undefined : options.tenantId, extracted.map((item) => longestWord(item.content)), undefined, EVERY_SCOPE,
+    targetRoot, options.global ? undefined : options.tenantId, texts.map(longestWord), undefined, EVERY_SCOPE,
   );
   const origin = options.originProject;
-  return storedTextKeys(origin === undefined
+  return heldKeysOf(origin === undefined
     ? stored
-    : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'));
+    : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'), twins);
 }
 
 function printCaptureTally(options: CaptureOptions, { captured, skipped, rejected }: CaptureTally): void {

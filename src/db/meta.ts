@@ -46,6 +46,11 @@ export function getMeta(db: DatabaseSyncLike, key: string, fallback = ''): strin
   return row?.value ?? fallback;
 }
 
+/** A counter stored as text; a missing or unreadable value counts as 0. */
+export function getMetaNumber(db: DatabaseSyncLike, key: string): number {
+  return Number(getMeta(db, key, '0')) || 0;
+}
+
 export function setMeta(db: DatabaseSyncLike, key: string, value: string): void {
   db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, value);
 }

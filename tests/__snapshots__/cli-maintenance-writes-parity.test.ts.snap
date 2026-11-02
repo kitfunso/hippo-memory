@@ -70,6 +70,10 @@ exports[`__session-end-worker re-read count (built CLI, no server) > a store tha
    "value": "1"
   },
   {
+   "key": "quality_repair_gate",
+   "value": "2"
+  },
+  {
    "key": "total_forgotten",
    "value": "0"
   },
@@ -172,6 +176,10 @@ exports[`__session-end-worker re-read count (built CLI, no server) > books the p
   {
    "key": "quality_repair_auto",
    "value": "1"
+  },
+  {
+   "key": "quality_repair_gate",
+   "value": "2"
   },
   {
    "key": "total_forgotten",
@@ -2838,6 +2846,10 @@ exports[`hippo sleep (built CLI, no server) > removes audit errors on a store wi
   {
    "key": "quality_repair_auto",
    "value": "1"
+  },
+  {
+   "key": "quality_repair_gate",
+   "value": "2"
   },
   {
    "key": "total_forgotten",
