@@ -36,6 +36,10 @@ Evidence and scripts: `~/.claude/dev-framework/trajectories/01M6E0GK8G0CH195Y4K9
     - Scored, per repository: 18 x 13 x $0.33 = about $77 at base seeds, about $184 at the cap. At 16 to 30 repositories: $1,240 to $2,320 at base seeds, up to $5,520 at the cap.
     - Before the tag: dev rounds and probes as in round 2 (657 sessions, about $220), plus the A0 probe, leak probe and screen at about 12 sessions per candidate family for about twice the kept families (128 to 240 candidates): $510 to $950.
     - Range: about $2,000 at 16 repositories and base seeds, up to about $6,700 at 30 repositories with every capped arm at 9 seeds. The sizer's design sets the number the founder approves.
+    - **Sizer design (2 Nov 2026, `z0/r3` at 6a9d30101, A9 records and `drop-list-h4a9.json`, item 9 flags with `--repos 12,16,20,25,30,40 --effects 0.15 --max-families-per-repo 4 --max-families 160`):** 40 repositories, 2 families each (80 set R families), 240 set N tasks, mean H1 seeds 3.2. H1 power 0.94 at the point spreads and 0.87 at the bounds; H4 power 0.99. Scored: 8,854 sessions, about $2,410; at the 9-seed cap, 20,003 sessions, about $5,490. No smaller size passes at the bounds: 30 repositories reads 0.77, 20 reads 0.77. The first-apply spread is about twice the all-applies spread (family 0.054 against 0.029), so the same sizer on the all-applies unit picks 20 repositories for about $1,270.
+    - Before the tag: dev rounds about $220, plus about 160 candidate families at 12 sessions each, about $630.
+    - **Design total: about $3,260 at the expected seeds, about $6,340 if every capped arm reaches 9 seeds.**
+    - The sizer prefers more repositories over more families per repository, because the family spread dominates. Item 6's 4-family target is kept as a cap, not a floor.
     The embedded teach form is cut from this round (see Limits).
 
 ## Order
@@ -66,8 +70,10 @@ Prereg 247-255 and the dev-round log, plus every arm's repeat rate on first appl
 - **Teach stays one scripted turn.** The embedded form (a rule inside a later request about other work) is cut. It needs harness changes this round does not make: the key-phrase refusal (`runs.mjs:69`), the scheduler's leak block, the teach position for `tasksSinceTeach`, and A4's update. Leak study c4d04db1 found that hippo's capture missed rules taught in later turns. A later round can test that form after those changes.
 - **No lessons across repositories.** A family stays in one sequence and one repository (`lessons.mjs:81`), so this round does not test hippo's global store.
 - **4-family spreads are assumed from 2-family data** until the wave-1 seed rule reads the real spread.
+- **The level check fails today.** At the sizer's design, the excluded coding's false-win share is 0.0301 at the bounds and 0.0275 at the point spreads, against a 0.0272 ceiling. The all-applies unit also fails (0.0287), so this comes from the analyzer's test on thin repositories, not from the new unit. `held: false` stops the freeze. A dev-round fix to the test or the design must make it hold before the tag.
+- **40 fresh repositories** is more than batch 2 may hold. If batch 2 and batch 3 give fewer, the sizer re-runs at the count reached, and the founder decides between a smaller run below 0.8 power and a stop.
 
 ## Decisions for the founder
 
-- **Budget:** about $2,000 to $6,700. The sizer gives the exact figure, and no scored session runs before your yes on it.
+- **Budget:** about $3,260 at the sizer's design (40 repositories, 2 families each), with a ceiling of about $6,340 if every capped arm needs 9 seeds. No scored session runs before your yes on it.
 - **Follow-up capture in A2:** on, which tests PR #1138 and prices its Sonnet calls into the cost, or off, which tests the default install.
