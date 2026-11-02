@@ -4,7 +4,8 @@ import { USER_RULE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 
 export { USER_RULE_TAG };
 
-/** Who reads the block: the origin is the project id capture stamps its rows with. */
+/** Who reads the block, and where the row lives: the origin is the project id capture stamps on rows
+ * it writes to the global store. */
 export interface UserRuleViewer {
   readonly tenantId: string;
   readonly originProject: string | null;
@@ -12,16 +13,18 @@ export interface UserRuleViewer {
 }
 
 export function isUserRule(e: MemoryEntry, viewer: UserRuleViewer): boolean {
-  // A viewer with no project owns no rules: a legacy row's null origin must not match it.
-  if (viewer.isGlobal || viewer.originProject === null) return false;
-  return (
+  const own =
     e.pinned &&
     e.source === 'capture' &&
     e.confidence === 'observed' &&
     e.tags.includes(USER_RULE_TAG) &&
     e.supersededBy === null &&
     e.scope === null &&
-    e.tenantId === viewer.tenantId &&
-    (e.originProject ?? null) === viewer.originProject
-  );
+    e.tenantId === viewer.tenantId;
+  if (!own) return false;
+  // A project store's rows are that project's; capture leaves their origin unset (session-end.ts).
+  const origin = e.originProject ?? null;
+  if (!viewer.isGlobal) return origin === null || origin === viewer.originProject;
+  // A global row is a rule only in the project capture stamped on it; a null origin matches none.
+  return viewer.originProject !== null && e.originProject === viewer.originProject;
 }
