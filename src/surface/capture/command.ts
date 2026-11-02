@@ -7,10 +7,11 @@ import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.j
 import type { HippoConfig } from '../../base/config/config.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
 import { isInitialized } from '../../host/project-identity.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import { errorMessage, log, errorFields, type LineLog } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { boldTwins, extractFromTexts, type BoldTwin, type ExtractedItem } from './extract.js';
+import { followUpRules, withFollowUpRules } from './follow-up.js';
 import {
   type SessionTurn,
   collectSessionTurns,
@@ -20,6 +21,7 @@ import {
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
 import type { HeldText } from '../../base/ports/store/types.js';
 import type { StoreGroups } from '../../base/ports/store.js';
+import type { Llm } from '../../base/ports/llm.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
 
@@ -58,6 +60,8 @@ export interface CaptureTarget {
   readonly store: Pick<StoreGroups, 'captures' | 'folderFiles' | 'rejections'>;
   /** Embeds each captured row, off the capture's path. */
   readonly embed: (entry: MemoryEntry) => void;
+  /** Picks the rules in the person's follow-up turns; without it capture reads word patterns only. */
+  readonly llm?: Llm;
 }
 
 export async function runCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
@@ -116,7 +120,7 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 
   const read = readCaptureTexts(options);
   if (read === null) return;
-  const { texts, userTexts } = read;
+  const { texts, userTexts, followUps } = read;
 
   if (texts.every((text) => text.trim().length === 0)) {
     console.log('No text to capture from.');
@@ -127,7 +131,9 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
   // pass could not see (AGENTS.md: no secrets in memories).
   const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
   const scrubbed = texts.map(scrub);
-  const extracted = scrubbedItems(extractFromTexts(scrubbed, userTexts), scrub);
+  const rules = target.llm ? await followUpRules(followUps, target.llm, warnLine) : [];
+  const items = withFollowUpRules(extractFromTexts(scrubbed, userTexts), rules, scrub);
+  const extracted = scrubbedItems(items, scrub);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
@@ -138,6 +144,8 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 
   printCaptureTally(options, await captureFromCli(target, options, extracted, keys));
 }
+
+const warnLine: LineLog = (line, opts) => log.warn(line, opts?.fields);
 
 async function captureFromCli(
   { store, config, embed }: CaptureTarget,
@@ -227,14 +235,21 @@ function printCaptureTally(
   );
 }
 
+/** A capture's raw texts, the person's first, and the person's turns after the session's first. */
+interface CaptureTexts {
+  readonly texts: string[];
+  readonly userTexts: number;
+  readonly followUps: string[];
+}
+
 /** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a
  *  last-session capture has nothing.
  *  Only a session says who spoke, so a piped or file capture counts no user texts. */
-function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts: number } | null {
+function readCaptureTexts(options: CaptureOptions): CaptureTexts | null {
   switch (options.source) {
     case 'stdin': {
       try {
-        return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0 };
+        return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0, followUps: [] };
       } catch (err) {
         log.warn(`reading stdin failed: ${errorMessage(err)}`, errorFields(err));
         console.error('No input on stdin. Pipe text in or use --file <path>.');
@@ -253,14 +268,14 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
         process.exitCode = 1;
         return null;
       }
-      return { texts: [fs.readFileSync(options.filePath, 'utf8')], userTexts: 0 };
+      return { texts: [fs.readFileSync(options.filePath, 'utf8')], userTexts: 0, followUps: [] };
     }
     case 'last-session':
       return readSessionTexts(options);
   }
 }
 
-function readSessionTexts(options: CaptureOptions): { texts: string[]; userTexts: number } | null {
+function readSessionTexts(options: CaptureOptions): CaptureTexts | null {
   let turns = options.sessionTurns;
   if (!turns) {
     const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, {
@@ -277,7 +292,11 @@ function readSessionTexts(options: CaptureOptions): { texts: string[]; userTexts
     console.log('Transcript had no user/assistant messages to summarise.');
     return null;
   }
-  return { texts: [...users, ...assistants], userTexts: users.length };
+  const followUps = turns
+    .filter((turn) => turn.role === 'user')
+    .map((turn) => turn.text)
+    .slice(1);
+  return { texts: [...users, ...assistants], userTexts: users.length, followUps };
 }
 
 export interface CaptureTally {

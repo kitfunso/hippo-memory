@@ -276,18 +276,43 @@ function extractFromPatterns(
     ),
   );
   if (!keyed) return null;
-  const content = sentence
-    .replace(
-      new RegExp(
-        String.raw`^(?:decision|plan|rule|important|critical|remember|error|bug|gotcha|watch out|careful|warning|` +
-          String.raw`caveat|trap|don't forget|easy to miss):\s*`,
-        'i',
-      ),
-      '',
-    )
+  const content = statedText(sentence);
+  return content.length <= MAX_CHARS ? { content, category, tags: [category, 'captured'] } : null;
+}
+
+const LEAD_LABEL = new RegExp(
+  String.raw`^(?:decision|plan|rule|important|critical|remember|error|bug|gotcha|watch out|careful|warning|` +
+    String.raw`caveat|trap|don't forget|easy to miss):\s*`,
+  'i',
+);
+
+/** A sentence as capture stores it: its lead label and closing marks trimmed. */
+function statedText(sentence: string): string {
+  return sentence
+    .replace(LEAD_LABEL, '')
     .replace(/[.!?\s]+$/, '')
     .trim();
-  return content.length <= MAX_CHARS ? { content, category, tags: [category, 'captured'] } : null;
+}
+
+/** The size bound and the quality gate every stored item meets. */
+function admitted(content: string): boolean {
+  return content.length <= MAX_CHARS && assessAutomaticMemory(content).accepted;
+}
+
+function withoutBold(line: string): string {
+  return cutOut(line, boldPairs(line));
+}
+
+/** Picked sentences of one turn through the gates a pattern sentence meets, or null; one sentence
+ * gives its pattern item's text, so held rows and bold twins match it. */
+export function pickedText(sentences: readonly string[]): string | null {
+  const kept = sentences
+    .filter((sentence) => proseOnly(sentence) === sentence)
+    .map((sentence) => sentence.match(BULLET)?.[1] ?? sentence)
+    .filter((sentence) => !withoutBold(sentence).endsWith('?'));
+  if (kept.length === 0) return null;
+  const content = statedText(withoutBold(kept.join(' ')));
+  return admitted(content) ? content : null;
 }
 
 /** An item and the range of the prose it came from. */
@@ -375,7 +400,7 @@ export function extractFromTexts(texts: readonly string[], userTexts = 0): Extra
     )
     .filter((item) => {
       const key = duplicateKey(item.content);
-      if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;
+      if (seen.has(key) || !admitted(item.content)) return false;
       seen.add(key);
       return true;
     });
