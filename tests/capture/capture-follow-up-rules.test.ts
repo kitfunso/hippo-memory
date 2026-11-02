@@ -230,6 +230,20 @@ describe('capture stores the follow-up rules a model picks', () => {
     expect(model.prompts[0]).not.toContain('staging');
   });
 
+  it('keeps an indented line that continues a paragraph, so a rule keeps its condition', async () => {
+    const model = picking('[{"i": 0, "s": [0, 1]}]');
+    await capture(
+      session('Deploy this project directly to production\n    only after the staging checks pass.'),
+      model,
+    );
+    expect(model.prompts[0]).toContain('only after the staging checks pass');
+    expect(
+      rows()
+        .filter((row) => row.tags.includes('follow-up'))
+        .map((row) => row.content),
+    ).toEqual([expect.stringContaining('only after the staging checks pass')]);
+  });
+
   it('sends no sentence that the turn size limit cuts', async () => {
     const model = picking('[{"i": 0, "s": [0]}]');
     const filler = 'Please keep this change small and focused on the one bug. '.repeat(17);

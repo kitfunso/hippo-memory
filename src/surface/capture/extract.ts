@@ -63,7 +63,7 @@ const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s
 
 /** CommonMark fences: a backtick run with a backtick after it is inline code, and only a bare
  * run as long closes. */
-function proseOnly(text: string): string {
+export function proseOnly(text: string): string {
   let fence: string | null = null;
   let afterProse = false;
   return text
