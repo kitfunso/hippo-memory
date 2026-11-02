@@ -1,6 +1,11 @@
 import { duplicateKey } from '../../base/util/same-text.js';
-import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
+import {
+  assessAutomaticMemory,
+  asideCloseOffset,
+  QUOTE_MARK,
+} from '../../base/memory/memory-quality.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
+import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
 export interface ExtractedItem {
   content: string;
@@ -100,33 +105,158 @@ function continues(line: string, previous: string | undefined): boolean {
   return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
 }
 
-function proseBlocks(text: string): string[] {
-  const blocks: string[] = [];
-  let pending: string[] = [];
+/** The sorted offsets of the `**` markers a reading of a line removes. */
+type Cutter = (line: string) => number[];
+
+/** What capture read before it removed bold markers. */
+const keepAll: Cutter = () => [];
+
+/** Offsets of each `**` that pairs with the nearest opener before it. */
+function pairedBold(line: string): number[] {
+  const paired: number[] = [];
+  const openers: number[] = [];
+  // Blanked code spans keep every offset, so the markers found here are cut from the source.
+  for (const marker of strongMarkers(blankCodeSpans(line, '`'))) {
+    if (marker.inWord) continue;
+    const opener = marker.close ? openers.pop() : undefined;
+    if (opener !== undefined) paired.push(opener, marker.index);
+    else if (marker.open) openers.push(marker.index);
+  }
+  return paired;
+}
+
+/** The segmenter splits after "**Label.**" and leaves the closing `**` on the next rule, so each
+ * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
+const boldPairs: Cutter = (line) => pairedBold(line).sort((a, b) => a - b);
+
+/** `line` without the two characters at each of the sorted `cuts`, built in one pass. */
+function cutOut(line: string, cuts: readonly number[]): string {
+  let out = '';
+  let kept = 0;
+  for (const at of cuts) {
+    out += line.slice(kept, at);
+    kept = at + 2;
+  }
+  return out + line.slice(kept);
+}
+
+/** How many of the sorted `values` are at most `limit`. */
+function countUpTo(values: readonly number[], limit: number): number {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (values[middle] <= limit) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+/** A line of text and where it starts in the prose. */
+interface Piece {
+  text: string;
+  at: number;
+}
+
+/** The text of a prose block with its markers cut, where each sentence of it starts, and where a
+ * range of it came from. */
+interface Block {
+  readonly text: string;
+  readonly sentenceStarts: readonly number[];
+  sourceOf(from: number, to: number): [number, number];
+}
+
+function blockOf(pieces: readonly Piece[], cuts: Cutter): Block {
+  const raw = pieces.map((piece) => piece.text).join(' ');
+  const cutAt = cuts(raw);
+  // The sentences are those 3.1.0 split from the uncut text, so a removed `**` merges none: ICU
+  // breaks "**.Always" but not "n.Always". Masking keeps offsets.
+  const cutEnds = cutAt.map((at) => at + 2);
+  const sentenceStarts = [
+    ...new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(raw)),
+  ].map(({ index }) => index - 2 * countUpTo(cutEnds, index));
+  // Where each cut sits in the cut text, and where each piece starts in the raw text.
+  const shifted = cutAt.map((at, k) => at - 2 * k);
+  const starts: number[] = [];
+  let sum = 0;
+  for (const piece of pieces) {
+    starts.push(sum);
+    sum += piece.text.length + 1;
+  }
+  const toProse = (rawIndex: number): number => {
+    const k = Math.max(0, countUpTo(starts, rawIndex) - 1);
+    return pieces[k].at + Math.min(rawIndex - starts[k], pieces[k].text.length);
+  };
+  return {
+    text: cutOut(raw, cutAt),
+    sentenceStarts,
+    sourceOf: (from, to) => [
+      toProse(from + 2 * countUpTo(shifted, from)),
+      toProse(to + 2 * countUpTo(shifted, to - 1)),
+    ],
+  };
+}
+
+function proseBlocks(prose: string, cuts: Cutter): Block[] {
+  const blocks: Block[] = [];
+  let pending: Piece[] = [];
+  // Cut once the lines are joined, as a spec bullet is, so a bold pair that wraps a line goes whole.
   const flush = (): void => {
-    if (pending.length > 0) blocks.push(pending.join(' '));
+    if (pending.length > 0) blocks.push(blockOf(pending, cuts));
     pending = [];
   };
-  for (const line of text.split('\n')) {
+  let offset = 0;
+  for (const line of prose.split('\n')) {
     const trimmed = line.trim();
+    const end = offset + line.trimEnd().length;
+    offset += line.length + 1;
     if (!trimmed || /^#+\s/.test(trimmed)) {
       flush();
       continue;
     }
     const bullet = trimmed.match(BULLET);
-    if (bullet || !continues(trimmed, pending.at(-1))) flush();
-    pending.push(bullet?.[1] ?? trimmed);
+    if (bullet || !continues(trimmed, pending.at(-1)?.text)) flush();
+    const text = bullet?.[1] ?? trimmed;
+    pending.push({ text, at: end - text.length });
   }
   flush();
   return blocks;
 }
 
-function completeSentences(text: string): string[] {
-  // Masking keeps offsets, so each sentence is cut from the unchanged source.
-  const segments = new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(text));
-  return [...segments].map(({ index, segment }) =>
-    text.slice(index, index + segment.length).trim(),
-  );
+/** Each sentence of a block, trimmed, with where it starts in the block text. */
+function completeSentences({
+  text,
+  sentenceStarts,
+}: Block): Array<{ sentence: string; at: number }> {
+  return sentenceStarts.map((start, k) => {
+    const piece = text.slice(start, sentenceStarts[k + 1] ?? text.length);
+    return { sentence: piece.trim(), at: start + piece.length - piece.trimStart().length };
+  });
+}
+
+// A "(" after ":" or ";" is an emoticon, and one with a quote mark on both sides is quoted text.
+function opensAside(text: string, at: number): boolean {
+  const before = text[at - 1] ?? '';
+  const quoted = QUOTE_MARK.test(before) && QUOTE_MARK.test(text[at + 1] ?? '');
+  return text[at] === '(' && !/[:;]/.test(before) && !quoted;
+}
+
+// A sentence starts inside a cut aside: an unclosed "(" before it, an aside-closing ")" in it, and
+// a word after that ")".
+function asideCutter(block: string): (sentence: string, at: number) => boolean {
+  const blanked = blankCodeSpans(block);
+  let depth = 0;
+  let seen = 0;
+  return (sentence, at) => {
+    while (seen < at) {
+      if (opensAside(blanked, seen)) depth++;
+      else if (blanked[seen] === ')') depth = Math.max(0, depth - 1);
+      seen++;
+    }
+    if (depth === 0) return false;
+    const close = asideCloseOffset(sentence);
+    return close >= 0 && /[\p{L}\p{N}]/u.test(sentence.slice(close + 1));
+  };
 }
 
 function insideBrackets(lead: string): boolean {
@@ -160,12 +290,22 @@ function extractFromPatterns(
   return content.length <= MAX_CHARS ? { content, category, tags: [category, 'captured'] } : null;
 }
 
-function extractSpecSections(text: string): ExtractedItem[] {
-  const bullets: string[] = [];
+/** An item and the range of the prose it came from. */
+interface Sourced {
+  readonly item: ExtractedItem;
+  readonly from: number;
+  readonly to: number;
+}
+
+function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
+  const bullets: Array<Piece & { to: number }> = [];
   let inSpecSection = false;
   let open = false;
-  for (const line of text.split('\n')) {
+  let offset = 0;
+  for (const line of prose.split('\n')) {
     const trimmed = line.trim();
+    const end = offset + line.trimEnd().length;
+    offset += line.length + 1;
     if (SPEC_HEADING_PATTERNS.some((pattern) => pattern.test(trimmed))) {
       inSpecSection = true;
       open = false;
@@ -173,38 +313,54 @@ function extractSpecSections(text: string): ExtractedItem[] {
     }
     if (/^#+\s/.test(trimmed) || /^[A-Z][a-z]+:$/.test(trimmed)) inSpecSection = false;
     const bullet = trimmed.match(BULLET);
+    const last = bullets.at(-1);
     const wrapped: boolean =
       inSpecSection &&
       open &&
       !bullet &&
       trimmed !== '' &&
-      (/^\s/.test(line) || continues(trimmed, bullets.at(-1)));
-    if (inSpecSection && bullet) bullets.push(bullet[1].trim());
-    else if (wrapped) bullets[bullets.length - 1] += ` ${trimmed}`;
+      (/^\s/.test(line) || continues(trimmed, last?.text));
+    if (inSpecSection && bullet) {
+      const text = bullet[1].trim();
+      bullets.push({ text, at: end - text.length, to: end });
+    } else if (wrapped && last) {
+      last.text += ` ${trimmed}`;
+      last.to = end;
+    }
     open = inSpecSection && (bullet !== null || wrapped);
   }
+  // Cut once the lines are joined, so a pair that wraps a line goes whole.
   return bullets
-    .filter((content) => content.length <= MAX_CHARS && !content.endsWith('?'))
-    .map((content) => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
+    .map(({ text, at, to }) => ({ content: cutOut(text, cuts(text)), from: at, to }))
+    .filter(({ content }) => content.length <= MAX_CHARS && !content.endsWith('?'))
+    .map(({ content, from, to }) => ({
+      item: { content, category: 'spec', tags: ['spec', 'captured'] },
+      from,
+      to,
+    }));
 }
 
-function extractOne(text: string): ExtractedItem[] {
+// The items of the spec bullets first, then those of each prose block.
+function extractSourced(text: string, cuts: Cutter): Sourced[] {
   const prose = proseOnly(text);
-  const items = extractSpecSections(prose);
-  for (const block of proseBlocks(prose)) {
-    for (const sentence of completeSentences(block)) {
+  const found = extractSpecSections(prose, cuts);
+  for (const block of proseBlocks(prose, cuts)) {
+    const cutByAside = asideCutter(block.text);
+    for (const { sentence, at } of completeSentences(block)) {
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
+      if (cutByAside(sentence, at)) continue;
       for (const [category, patterns] of CATEGORIES) {
         const item = extractFromPatterns(sentence, patterns, category);
         if (item) {
-          items.push(item);
+          const [from, to] = block.sourceOf(at, at + sentence.length);
+          found.push({ item, from, to });
           break;
         }
       }
     }
   }
-  return items;
+  return found;
 }
 
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
@@ -213,7 +369,9 @@ export function extractFromTexts(texts: readonly string[], userTexts = 0): Extra
   const seen = new Set<string>();
   return texts
     .flatMap((text, i) =>
-      extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item)),
+      extractSourced(text, boldPairs).map(({ item }) =>
+        i < userTexts ? { ...item, fromUser: true } : item,
+      ),
     )
     .filter((item) => {
       const key = duplicateKey(item.content);
@@ -221,4 +379,70 @@ export function extractFromTexts(texts: readonly string[], userTexts = 0): Extra
       seen.add(key);
       return true;
     });
+}
+
+/** A text an older capture, which kept every bold marker, stored for a line, and what capture
+ * extracts from that line now. */
+export interface BoldTwin {
+  readonly old: string;
+  readonly clean: string;
+}
+
+/** The items of one kind, in text order and so sorted by where they end. */
+interface Track {
+  readonly items: readonly Sourced[];
+  readonly ends: readonly number[];
+}
+
+function trackOf(items: readonly Sourced[]): Track {
+  return { items, ends: items.map(({ to }) => to) };
+}
+
+/** The items of `track` whose range overlaps [from, to). */
+function overlapping(track: Track, from: number, to: number): Sourced[] {
+  const found: Sourced[] = [];
+  for (
+    let k = countUpTo(track.ends, from);
+    k < track.items.length && track.items[k].from < to;
+    k++
+  ) {
+    found.push(track.items[k]);
+  }
+  return found;
+}
+
+/** Whether each range covers the other, but for markers, spaces and sentence marks at the edges. */
+function sameSpan(prose: string, a: Sourced, b: Sourced): boolean {
+  const gap = (x: number, y: number): string => prose.slice(Math.min(x, y), Math.max(x, y));
+  return /^[\s*.!?]*$/.test(gap(a.from, b.from)) && /^[\s*.!?]*$/.test(gap(a.to, b.to));
+}
+
+/** The twins of `texts`: each old item pairs, one to one, with the new item of the same span, the
+ * same category first and then the larger overlap; a pair whose texts differ. A new item that
+ * holds more or less than the old one is no twin, or a held row would block a rule it lacks. */
+export function boldTwins(texts: readonly string[], scrub: (text: string) => string): BoldTwin[] {
+  const twins: BoldTwin[] = [];
+  for (const text of texts.filter((t) => t.includes('**'))) {
+    const prose = proseOnly(text);
+    const fresh = extractSourced(text, boldPairs);
+    // Spec bullets and prose sentences overlap each other, so each kind keeps its own order.
+    const tracks = [trackOf(fresh.filter(({ item }) => item.category === 'spec'))];
+    tracks.push(trackOf(fresh.filter(({ item }) => item.category !== 'spec')));
+    const taken = new Set<Sourced>();
+    for (const sourced of extractSourced(text, keepAll)) {
+      const { item: old, from, to } = sourced;
+      const size = (found: Sourced): number => Math.min(found.to, to) - Math.max(found.from, from);
+      const same = (found: Sourced): number => Number(found.item.category === old.category);
+      const [match] = tracks
+        .flatMap((track) => overlapping(track, from, to))
+        .filter((found) => !taken.has(found) && sameSpan(prose, found, sourced))
+        .sort((a, b) => same(b) - same(a) || size(b) - size(a));
+      if (match === undefined) continue;
+      taken.add(match);
+      if (old.content !== match.item.content) {
+        twins.push({ old: old.content, clean: scrub(match.item.content) });
+      }
+    }
+  }
+  return twins;
 }

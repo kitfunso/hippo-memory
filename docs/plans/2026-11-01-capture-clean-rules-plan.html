@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Capture Clean Rules Plan</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+<header>
+  <h1>Clean Captured Rules in Hippo</h1>
+  <doc-changes new="2" changed="9"></doc-changes>
+  <details class="thread"><summary>Why · 2 requests</summary>
+    <doc-quote via="prompt" from="Keith">go on 1,2,3 and then /dev-framework-rl to improve hippo-memory so that it will costs less</doc-quote>
+    <doc-quote via="prompt" from="Keith">Go</doc-quote>
+  </details>
+</header>
+<main>
+<doc-plan>
+  <doc-claim>
+    <p>Capture stops a split bold label from making a broken rule.</p>
+    <doc-mock frame="terminal" title="agent text: a bold label, then a rule" w="500"><template><span class="dim">text</span>
+- **Volume data.** Never backfill them.
+
+<span class="dim">stored today (3.0.0)</span>
+<span class="r">"** Never backfill them"</span>
+
+<span class="dim">stored after</span>
+"Never backfill them"</template></doc-mock>
+    <doc-claim>
+      <p>The extractor removes paired bold markers outside code. It splits sentences where 3.1.0 did, on the text with its markers, so a removed marker never merges two sentences.</p>
+      <doc-code caption="Sketch, src/surface/capture/extract.ts: only a marker pair at word edges goes; code spans, globs, exponents and kwargs keep every character.">
+<script type="text/plain">
+// The sentence segmenter splits after "." inside "**Label.**" and leaves "**" on the next rule.
+function withoutEmphasis(line: string): string {
+  // masked() blanks code spans with the same length, so offsets found there cut the source.
+  const pairs = [...masked(line).matchAll(/(?<![\w*])(\*\*|__)(?=\S)(.+?)(?<=\S)\1(?![\w*])/g)];
+  ...remove the two markers of each pair from `line`, last pair first
+}
+  pending.push(withoutEmphasis(bullet?.[1] ?? trimmed));
+</script>
+      </doc-code>
+      <doc-claim at="src/surface/capture/extract.ts:152">
+        <p><b>extract.ts:152</b> · proseBlocks() line push</p>
+        <doc-code src="src/surface/capture/extract.ts" lines="135-156" hl="140,152"></doc-code>
+      </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>Capture splits sentences as 3.1.0 does and skips the one sentence that starts inside an aside the split cut.</p>
+      <doc-code caption="Sketch, src/surface/capture/extract.ts asideCutter(): a sentence is skipped only when all three hold.">
+<script type="text/plain">
+(a) the block text before the sentence, code spans blanked, has an unclosed "(";
+    a "(" right after ":" or ";" is an emoticon and does not count
+(b) the sentence has a ")" before any "(" that closes an aside (asideCloseOffset, shared with repair)
+(c) the sentence has a letter or digit after that ")"
+
+"Always run the check (see the docs. Then always run it again) before you merge."
+  -> stores "Always run the check (see the docs"; skips "Then always run it again) before you merge"
+"Never use (foo as a name. Always run the linter before you push."  -> both sentences, as 3.1.0
+"Note (see below. Never skip step a) before deploying."             -> "Never skip step a) before deploying"
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>Text with code, globs or kwargs keeps its markers.</p>
+      <doc-code caption="Sketch of the new capture tests in tests/capture/capture-markdown.test.ts; each must store the text unchanged.">
+<script type="text/plain">
+"Never import `__init__.py` from tests."      -> "Never import `__init__.py` from tests"
+"Always lint **/*.ts before a push."          -> unchanged, no pair at word edges
+"Never pass **kwargs to the store writer."    -> unchanged
+"Never compute 2**10 by hand."                -> unchanged
+"- **Volume data.** Never backfill them."     -> "Never backfill them"
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>Capture fixes the cut at the extractor, and repair alone runs the cut checks.</p>
+    <doc-code caption="Measured 1 Nov on every live automatic row of the global store: 14,365 rows. Each flagged row was read and labelled by hand.">
+<script type="text/plain">
+check                    rule  pref  error  other   cut?   false flags
+first ** is a closer       33     4      1      0   38/38            0
+first ) before any (       17     1      1      0   19/19            0
+bare leading "** "         13     0      6      0   19/19            0
+total set aside            63     5      8      0   76               0
+pinned among the 76                                  0
+decision, spec, compaction, shared, consolidation:   0 flagged
+</script>
+    </doc-code>
+    <doc-claim>
+      <p>Two checks find a stored text that starts inside bold or brackets; repair reads it as the certain defect sentence-fragment.</p>
+      <doc-code caption="Sketch, src/base/memory/memory-quality.ts startsInsideCut(): code spans are blanked first; only the first marker counts.">
+<script type="text/plain">
+// Text that opens inside a bold span or an aside was cut from the middle of a sentence.
+return opensInsideBold(blanked) || asideCloseOffset(blanked) >= 0;
+
+opensInsideBold:  the first "**" (not between word chars, not next to "/" or "*")
+                  has a non-space before it and a space, mark or end after it
+asideCloseOffset: a ")" attached to a word comes before any "(" or "[";
+                  "1)", "a)", "ii)" list markers and ":)" do not count
+</script>
+      </doc-code>
+      <doc-claim at="src/base/memory/memory-quality.ts:204">
+        <p><b>memory-quality.ts:204</b> · startsInsideCut()</p>
+        <doc-code src="src/base/memory/memory-quality.ts" lines="202-206" hl="205"></doc-code>
+      </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>Only repair and the audit run the cut checks, and none loses a whole row.</p>
+      <doc-calls title="who calls the gate" caption="Bundles are judged by part, so one cut part never sets a bundle aside.">
+<script type="text/plain">
+~ assessAutomaticMemory()       @ src/base/memory/memory-quality.ts:300   -- capture, compaction admission: no cut checks
+  certainDefect()               @ src/domain/learn/extract.ts:145          -- LLM facts: no cut checks
+  certainDefect()               @ src/domain/consolidate/dag-summary.ts:50 -- summaries: no cut checks
+  storedDefect()                @ src/base/memory/memory-audit.ts:192      -- repair: set-aside
+  storedDefect()                @ src/base/memory/memory-quality.ts:394    -- the audit warns about the same rows
+</script>
+      </doc-calls>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>The next daily run or sleep sets the stored cut rows aside once.</p>
+    <doc-code src="src/store/sqlite/audit/audit-maintenance.ts" lines="351-366" hl="359,366" caption="Today the run happens once per store; Keith's store already holds quality_repair_auto = '1', so a new check never cleans it."></doc-code>
+    <doc-claim>
+      <p>A new meta key holds the gate version, and a newer gate runs again.</p>
+      <doc-code caption="Sketch: a new key, so an older hippo binary still reads '1' on the old key and never runs repair again.">
+<script type="text/plain">
+/** Bump when a certain defect is added, so the daily run cleans each store once more. */
+export const QUALITY_GATE_VERSION = 2;
+// meta.ts: qualityRepairGate: 'quality_repair_gate'
+if (Number(getMeta(db, META_KEY.qualityRepairGate) ?? 0) >= QUALITY_GATE_VERSION) return null;
+...
+// applyPlan (line 320) and repairQualityOnce (line 366) both write the version through doneKey.
+setMeta(db, META_KEY.qualityRepairGate, String(QUALITY_GATE_VERSION));
+setMeta(db, META_KEY.qualityRepairAuto, '1');
+</script>
+      </doc-code>
+      <doc-claim at="src/store/sqlite/audit/audit-maintenance.ts:320">
+        <p><b>audit-maintenance.ts:320</b> · applyPlan() doneKey write</p>
+        <doc-code src="src/store/sqlite/audit/audit-maintenance.ts" lines="310-322" hl="320"></doc-code>
+      </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>Pinned rows, raw receipts and trusted notes stay.</p>
+      <doc-code src="src/base/memory/memory-audit.ts" lines="128-145" hl="142" caption="PROTECTED_ROWS does not change. None of the 76 rows is pinned."></doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim>
+    <p>Tests on a real store prove each check and the second repair run.</p>
+    <doc-code caption="Sketch of the test list; all tests use a real SQLite store, with no mocks.">
+<script type="text/plain">
+tests/core/memory-quality.test.ts          rejects "never closed.** The run ends ..." and
+                                           "finished), which strongly suggests ..."; keeps
+                                           "**Never `haiku`** ...", "Two options: a) X, b) Y",
+                                           "missing ) after argument", "fixed it :)", "2**10"
+tests/capture/*.test.ts                    every case passes unchanged, plus the new
+                                           markdown cases in claim 1.2
+tests/store/quality-repair-once.test.ts    old key '1', no new key: runs once, sets a cut aside,
+                                           keeps a pinned cut, writes gate 2; a third run is null
+                                           (also update lines 60, 91, 173)
+tests/cli-maintenance-writes.process.test.ts:272   reads the new key
+</script>
+    </doc-code>
+    <doc-claim>
+      <p>A copy of the global store shows the preview list.</p>
+      <doc-code caption="Manual check: the repair preview on a copy must list the 76 rows by id, and no other new row; the real store stays untouched.">
+<script type="text/plain">
+cp ~/.hippo/hippo.db $SP/store-copy/hippo.db
+HIPPO_HOME=$SP/store-copy node dist/cli.js audit repair        # preview only
+compare the new set-aside ids with every id in $SP/cap-flagged3.tsv
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+  <doc-claim aux="scope">
+    <p>Not changing: cut-start words, protection and recall.</p>
+    <ul>
+      <li>No lowercase cut-start check. Capture strips labels such as "Decision:", so a lowercase start is often a whole statement, and user text is not marked.</li>
+      <li>Changed after review: the 19 stored rows that start with "** " also go dormant. A new capture of the same line stores a clean copy. So each old row is a duplicate with a stray marker. <code>hippo dormant restore &lt;id&gt;</code> brings one back.</li>
+      <li>A held row blocks the clean text of a new capture only through a twin: the old capture, which kept every bold marker, and the new one give items from overlapping lines. Each old item pairs with one new item, whatever its category: the same category first, then the larger overlap. So <code>f(**kwargs)</code> and <code>f(kwargs)</code> stay separate rules.</li>
+      <li>The text before a cut aside, such as "Always run the check (see the docs", is stored as 3.1.0 stored it.</li>
+      <li>Lines join as in 3.1.0. A code span that wraps onto a line that starts with a capital letter can split the rule.</li>
+      <li>The other stored lowercase fragments (approximately 100) stay for a later fix with a labelled sample.</li>
+      <li>Chat stored as a rule is a separate fix in the rule patterns.</li>
+      <li>No cost claim and no Z0 rerun in this episode.</li>
+    </ul>
+  </doc-claim>
+</doc-plan>
+</main>
+</body></html>

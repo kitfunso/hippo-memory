@@ -6,9 +6,11 @@ import {
   isContentWorthStoring,
   isReusable,
   isWorthSurfacing,
+  startsInsideCut,
+  storedDefect,
   substantiveWordCount,
 } from '../../src/base/memory/memory-quality.js';
-import { auditMemory } from '../../src/base/memory/memory-audit.js';
+import { auditMemory, previewDefect, repairDefect } from '../../src/base/memory/memory-audit.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { CreateMemoryOptions } from '../../src/base/memory/entry.js';
@@ -49,6 +51,61 @@ describe('automatic assertion quality', () => {
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: false, reason });
     expect(isContentWorthStoring(content)).toBe(false);
+  });
+
+  // A text the old capture segmenter cut: admission accepts it now, so only repair looks for the start.
+  it.each([
+    'never closed.** The run ends by sending to Telegram',
+    'Skip the stores.** Ship it as the web app',
+    'finished), which strongly suggests the plugin is the client',
+    'a model launches)',
+    '** Never backfill them',
+    '** Ship it as the web app',
+    '`git add -A`) before the commit',
+    'falls back to discovery")',
+    'must score a signal-week feature row") so a real staleness bug can never ship',
+    'never lets a weight go below zero.) The mix is 0.345 CatBoost',
+    'was mild) so the deploy went through on the retry',
+    'it is vivid) in the logs',
+    'Deploy is done.** — then run the tests',
+    'Deploy is done.**— then run the tests',
+    'Deploy is done.**– then run the tests',
+  ])('repair sets aside a captured row that starts inside a bold span or an aside: %s', (content) => {
+    expect(startsInsideCut(content)).toBe(true);
+    const row = captured(content);
+    expect(repairDefect(row, new Map())).toEqual({ reason: 'sentence-fragment', disposition: 'set-aside' });
+    expect(previewDefect(row)).toBe('sentence-fragment');
+  });
+
+  it.each([
+    'finished), which strongly suggests the plugin is the client',
+    '** Never backfill them',
+    'Deploy is done.**— then run the tests',
+  ])('does not refuse a text that starts inside a cut at admission: %s', (content) => {
+    expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
+  });
+
+  // Repair reads only the text, so it may set these valid rows aside; admission stores them.
+  it.each(['Always ignore cache_** files when deploying', 'Never use the suffix "test)" for generated filenames'])(
+    'admits a rule the repair check would misread: %s',
+    (content) => {
+      expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
+    },
+  );
+
+  // A cut right after a word or bracket looks like "2** (n + 1)" or "cache** files": repair keeps it stored.
+  it.each([
+    'sleep** (when plugged in)',
+    'sleep** (when plugged in) the job runs',
+    'the hook entirely** — run the check first',
+    'close and volume** (11 volume columns) in the feed',
+    'skip the `data/optuna.db`**',
+    'Always compute (n + 1)** 2 for the buffer size',
+    'Never use x[0]** 2 in hot loops',
+  ])('repair does not set aside a text with a "**" right after a word or bracket: %s', (content) => {
+    expect(startsInsideCut(content)).toBe(false);
+    expect(repairDefect(captured(content), new Map())?.disposition).not.toBe('set-aside');
+    expect(assessAutomaticMemory(content).accepted).toBe(true);
   });
 
   // At this length the old regexes, which rescanned to the end from every start, ran past the test timeout.
@@ -105,8 +162,54 @@ describe('automatic assertion quality', () => {
     '[info] never deploy on Fridays',
     '{ retries: 3 } is the default retry policy',
     '[1, 2, 3] are the allowed retry counts',
+    '**Never `haiku`** for review scoring',
+    'Two options: a) rebuild, b) restore from backup',
+    "Tool 'browser' failed: missing ) after argument list",
+    'fixed it :) and moved on to the cache',
+    'it works ;) once the cache is warm',
+    "the parser expected ')' after the list",
+    'Never compute 2**10 by hand',
+    'Never pass **kwargs to the store writer',
+    'Always lint **/*.ts before a push',
+    'Never edit `__init__.py` by hand',
+    'Always parse ``foo)`bar`` as a single code span',
+    'Never change foo**bar** without review',
+    'Use the Hippo**Memory** API for every recall call',
+    'Indices are in [0, length) for every slice call',
+    'Never use [^)] to match closing delimiters',
+    'Always match \\) as a literal parenthesis',
+    'it works :-) once the cache is warm',
+    'Option viii) is the default for the store',
+    'Option xviii) must pass before deploying',
+    'Option VIII) is the default for the store',
+    '(xviii) runs last',
+    'step 1.) deploys to staging',
+    'Keep 100%) coverage on the parser',
+    'Ranges run 1-10) in the table',
+    'Step1) deploys to staging',
+    'Never compute 2**-1 by hand',
+    'Never compute 2** -1 by hand',
+    'Always ignore cache** files when deploying',
+    'Always allocate 2** (n + 1) bytes for the cache',
+    'Never compute 2** .5 by hand',
+    'Always compute (n + 1)** 2 for the buffer size',
+    'Never use x[0]** 2 in hot loops',
+    'the hook entirely**" he said, so run it first',
+    'Never edit **/etc/hosts**.',
+    'Always use **/usr/bin/python** (the system interpreter).',
+    'Never commit **/*.env files',
+    'Always use 2**(n + 1) for the buffer size',
+    'Use "**" for bold markup in the docs',
+    "Python uses '**' for powers in every module",
+    'Use “**” for bold markup in the docs',
+    'Always prefix logs with (**"WARN"**) in production',
+    'Never copy (**.env**) into the repository',
+    'Always use (**:memory:**) for isolated tests',
+    'Always show "**—" as the placeholder in tables',
+    'Mark the step as done.**— then run **the tests** after it',
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
+    expect(startsInsideCut(content)).toBe(false);
   });
 
   it('counts Hangul letters as substantive, as it counts Han and kana', () => {
@@ -191,6 +294,21 @@ describe('automatic provenance', () => {
     expect(isWorthSurfacing(allCut)).toBe(false);
     expect(auditMemory(lastPartCut)).toBeNull();
     expect(auditMemory(allCut)?.severity).toBe('warning');
+  });
+
+  it('lets a start inside a cut outrank an uncertain reason, for repair and the audit', () => {
+    const text = 'okay) it is so';
+    expect(assessAutomaticMemory(text).reason).toBe('too-vague');
+    expect(storedDefect(text)).toBe('sentence-fragment');
+    expect(repairDefect(captured(text), new Map())).toEqual({ reason: 'sentence-fragment', disposition: 'set-aside' });
+  });
+
+  it('audit warns about a captured row that starts inside a cut, but not about a typed row', () => {
+    expect(auditMemory(captured('** Never backfill them'))).toMatchObject({
+      severity: 'warning',
+      reason: 'automatic memory defect: sentence-fragment',
+    });
+    expect(auditMemory(make('** Never backfill them'))).toBeNull();
   });
 
   it('audit warns about automatic defects on automatic rows only', () => {
