@@ -101,6 +101,7 @@ describe('a hooks value hippo cannot merge into', () => {
       invalidJson: true,
       installedSessionEnd: false,
       installedSessionStart: false,
+      installedSessionRules: false,
       installedUserPromptSubmit: false,
       installedPreCompact: false,
       installedCompactResume: false,

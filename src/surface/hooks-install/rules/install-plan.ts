@@ -17,6 +17,7 @@ export function nothingInstalled(target: JsonHookTarget, settingsPath: string): 
     settingsPath,
     installedSessionEnd: false,
     installedSessionStart: false,
+    installedSessionRules: false,
     installedUserPromptSubmit: false,
     installedPreCompact: false,
     installedCompactResume: false,

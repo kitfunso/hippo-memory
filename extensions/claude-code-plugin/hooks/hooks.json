@@ -11,6 +11,15 @@
         ]
       },
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hippo session-rules 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "compact",
         "hooks": [
           {

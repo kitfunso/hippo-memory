@@ -34,6 +34,7 @@ const TOKEN_SURFACES: readonly TokenSurface[] = [
   'hook',
   'hook_recall',
   'compact_resume',
+  'session_start',
   'context',
   'recall',
   'mcp_recall',

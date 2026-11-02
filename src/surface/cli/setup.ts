@@ -128,6 +128,7 @@ function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   const bits: string[] = [];
   if (result.installedSessionEnd) bits.push('SessionEnd (session-end)');
   if (result.installedSessionStart) bits.push('SessionStart');
+  if (result.installedSessionRules) bits.push('SessionStart (session-rules)');
   if (result.installedUserPromptSubmit) bits.push('UserPromptSubmit (pinned-inject)');
   if (result.installedPreCompact) bits.push('PreCompact (pre-compact)');
   if (result.installedCompactResume) bits.push('SessionStart(compact) (compact-resume)');

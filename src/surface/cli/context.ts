@@ -224,14 +224,14 @@ async function renderContextView(view: ContextView, format: string, query: strin
   }
 }
 
-interface ContextSession {
+export interface ContextSession {
   readonly currentSessionId: string | undefined;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
   readonly prompt: string | undefined;
 }
 
-function resolveContextSession(stdinText: string | undefined): ContextSession {
+export function resolveContextSession(stdinText: string | undefined): ContextSession {
   // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then
   // hostSessionId(); absent both, api.contextGet applies the pure freshness bound.
   const payload = readHookPayload(stdinText);
