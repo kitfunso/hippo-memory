@@ -144,12 +144,20 @@ interface Components {
   readonly dfE: number;
 }
 
+// Var(est) = family x sigma_a^2 + seed x sigma_b^2 + noise x sigma_e^2, exact for the cells present.
+interface Weights {
+  readonly family: number;
+  readonly seed: number;
+  readonly noise: number;
+}
+
 // `ms` is null for a repository too thin to fit: its mean enters the estimate, and the pooled components give its variance.
 interface RepoFit {
   readonly est: number;
   readonly k: number;
   readonly s: number;
   readonly n: number;
+  readonly w: Weights;
   readonly ms: Components | null;
 }
 
@@ -241,25 +249,65 @@ function isConnected(t: Table): boolean {
   return new Set(parent.map((_, i) => root(i))).size === 1;
 }
 
+/** sigma_e^2 weight of the additive fit's mu, [(X'X)^-1]_00 under effect coding; 1 / n only when the table is complete. */
+function meanNoiseWeight(t: Table): number {
+  const p = t.k + t.s - 1;
+  const a = Array.from({ length: p }, (_, i) => Array.from({ length: p + 1 }, (_, j) => (j === p && i === 0 ? 1 : 0)));
+  const code = (level: number, size: number, offset: number, x: number[]) => {
+    for (let j = 0; j < size - 1; j++) x[offset + j] = level === size - 1 ? -1 : level === j ? 1 : 0;
+  };
+  for (const c of t.cells) {
+    const x = Array.from({ length: p }, () => 0);
+    x[0] = 1;
+    code(c.f, t.k, 1, x);
+    code(c.s, t.s, t.k, x);
+    for (let i = 0; i < p; i++) for (let j = 0; j < p; j++) a[i]![j]! += x[i]! * x[j]!;
+  }
+  // Gauss-Jordan on the positive definite X'X (a fitted table is connected), so no pivoting is needed.
+  for (let i = 0; i < p; i++) {
+    const row = a[i]!;
+    const pivot = row[i]!;
+    for (let j = i; j <= p; j++) row[j]! /= pivot;
+    for (let r = 0; r < p; r++) {
+      if (r === i) continue;
+      const factor = a[r]![i]!;
+      for (let j = i; j <= p; j++) a[r]![j]! -= factor * row[j]!;
+    }
+  }
+  return a[0]![p]!;
+}
+
+// A thin repository's estimate is its plain cell mean, so each family and seed weighs by its share of the cells.
+function plainWeights(t: Table): Weights {
+  const shares = (size: number, level: (c: Cell) => number) => {
+    const count = Array.from({ length: size }, () => 0);
+    for (const c of t.cells) count[level(c)]!++;
+    return sum(count.map((x) => (x / t.cells.length) ** 2));
+  };
+  return { family: shares(t.k, (c) => c.f), seed: shares(t.s, (c) => c.s), noise: 1 / t.cells.length };
+}
+
 function fitRepo(repo: string, units: readonly FamilyUnit[]): RepoFit {
   const t = tableOf(units);
   const n = t.cells.length;
   const dfE = n - t.k - t.s + 1;
   const base = { k: t.k, s: t.s, n };
-  if (t.k < 2 || t.s < 2 || dfE < 1 || !isConnected(t)) return { ...base, est: sum(t.cells.map((c) => c.y)) / n, ms: null };
+  if (t.k < 2 || t.s < 2 || dfE < 1 || !isConnected(t)) return { ...base, est: sum(t.cells.map((c) => c.y)) / n, w: plainWeights(t), ms: null };
   const { mu, rss } = additiveFit(repo, t);
+  // mu carries the unweighted mean of the family and seed effects present, whatever cells are missing.
+  const w = { family: 1 / t.k, seed: 1 / t.s, noise: meanNoiseWeight(t) };
   const [dfF, dfQ] = [t.k - 1, t.s - 1];
   // Clamped: both reduced fits nest the additive one, so a negative difference is float noise.
   const ssF = Math.max(0, rssAbout(t.cells, t.s, (c) => c.s) - rss);
   const ssQ = Math.max(0, rssAbout(t.cells, t.k, (c) => c.f) - rss);
-  return { ...base, est: mu, ms: { F: ssF / dfF, Q: ssQ / dfQ, E: rss / dfE, dfF, dfQ, dfE } };
+  return { ...base, est: mu, w, ms: { F: ssF / dfF, Q: ssQ / dfQ, E: rss / dfE, dfF, dfQ, dfE } };
 }
 
 const weighted = (rs: readonly Fitted[], value: (r: Fitted) => number, df: (r: Fitted) => number): number =>
   sum(rs.map((r) => value(r) * df(r))) / sum(rs.map(df));
 
-/** Mean squares pooled over the fitted repositories of a family-by-seed fit, weighted by df, with the mean seeds per family
- *  (`sBar`) and families per seed (`kBar`) that turn them into variance components; `repos` lists every repository. */
+/** Mean squares pooled over the fitted repositories of a family-by-seed fit, weighted by df, with the multipliers of the family
+ *  (`sBar`) and seed (`kBar`) spreads in E[F] and E[Q] that turn them into variance components; `repos` lists every repository. */
 export interface PooledComponents {
   readonly repos: readonly { readonly k: number; readonly s: number; readonly n: number }[];
   readonly F: number;
@@ -282,8 +330,9 @@ function poolMeanSquares(fitted: readonly Fitted[]): Pooled {
     dfF: sum(fitted.map((r) => r.ms.dfF)),
     dfQ: sum(fitted.map((r) => r.ms.dfQ)),
     dfE: sum(fitted.map((r) => r.ms.dfE)),
-    sBar: weighted(fitted, (r) => r.n / r.k, (r) => r.ms.dfF),
-    kBar: weighted(fitted, (r) => r.n / r.s, (r) => r.ms.dfQ),
+    // E[F] = E + sBar sigma_a^2 with sBar = sum(n - s) / sum(k - 1) for one-unit cells (Henderson III); n / k only when complete.
+    sBar: sum(fitted.map((r) => r.n - r.s)) / sum(fitted.map((r) => r.ms.dfF)),
+    kBar: sum(fitted.map((r) => r.n - r.k)) / sum(fitted.map((r) => r.ms.dfQ)),
   };
 }
 
@@ -314,11 +363,11 @@ function varianceOf(repos: readonly RepoFit[], fitted: readonly Fitted[]): Varia
   const useQ = Q > E;
   let [cF, cQ, cE] = [0, 0, 0];
   for (const r of repos) {
-    const family = 1 / (sBar * r.k);
+    const family = r.w.family / sBar;
     cF += family;
-    cE += 1 / r.n - family;
+    cE += r.w.noise - family;
     if (useQ) {
-      const seed = 1 / (kBar * r.s);
+      const seed = r.w.seed / kBar;
       cQ += seed;
       cE -= seed;
     }

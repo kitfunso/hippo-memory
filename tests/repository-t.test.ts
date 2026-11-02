@@ -148,6 +148,41 @@ describe('fixedRepositoryT', () => {
     expect(Number.isFinite(r.p)).toBe(true);
   });
 
+  it('one missing cell: the variance takes the fit mean noise weight and the unbalanced multipliers, not 1 / n and n / k', () => {
+    const present = unitsOf('A', GRID_A).filter((u) => !(u.family === 'f2' && u.seed === 3));
+    const other = unitsOf('B', GRID_B);
+    const base = fixedRepositoryT([...present, ...other]);
+    // The fit's mean is linear in the cells, so nudging each cell reads its weight: 2 x the change, as G is 2.
+    const weights = present.map((_, i) => {
+      const nudged = present.map((u, j) => (i === j ? { ...u, value: u.value + 1 } : u));
+      return 2 * (fixedRepositoryT([...nudged, ...other]).estimate - base.estimate);
+    });
+    const noiseA = weights.reduce((sum, w) => sum + w * w, 0);
+    expect(noiseA).toBeGreaterThan(1 / 8 + 1e-3);
+    const p = pooledComponents([...present, ...other])!;
+    // Henderson III with one unit per cell: sBar = sum(n - s) / sum(k - 1) and kBar = sum(n - k) / sum(s - 1), (5 + 6) / 4 each.
+    expect([p.sBar, p.kBar]).toEqual([expect.closeTo(11 / 4, 12), expect.closeTo(11 / 4, 12)]);
+    expect(p.Q).toBeGreaterThan(p.E);
+    const [cF, cQ] = [(2 / 3) / p.sBar, (2 / 3) / p.kBar];
+    const cE = noiseA + 1 / 9 - cF - cQ;
+    const parts: readonly (readonly [number, number])[] = [[(cF * p.F) / 4, p.dfF], [(cQ * p.Q) / 4, p.dfQ], [(cE * p.E) / 4, p.dfE]];
+    const v = parts.reduce((sum, [x]) => sum + x, 0);
+    expect(base.se! ** 2).toBeCloseTo(v, 10);
+    expect(base.df).toBeCloseTo(v ** 2 / parts.reduce((sum, [x, d]) => sum + x ** 2 / d, 0), 8);
+  });
+
+  it('a thin repository weighs each family and seed by its share of the cells', () => {
+    // Repository T: f0 in seeds 1 and 2, f1 in seed 1 only (n 3, dfE 0), so family shares (2/3, 1/3) and seed shares (2/3, 1/3).
+    const thin: FamilyUnit[] = [{ repo: 'T', family: 'f0', seed: 1, value: 1 }, { repo: 'T', family: 'f0', seed: 2, value: 2 }, { repo: 'T', family: 'f1', seed: 1, value: 4 }];
+    const p = pooledComponents(unitsOf('A', GRID_A))!;
+    expect(p.Q).toBeGreaterThan(p.E);
+    const r = fixedRepositoryT([...unitsOf('A', GRID_A), ...thin]);
+    const share = 4 / 9 + 1 / 9;
+    const [cF, cQ] = [(1 / 3 + share) / p.sBar, (1 / 3 + share) / p.kBar];
+    const cE = 1 / 9 + 1 / 3 - cF - cQ;
+    expect(r.se! ** 2).toBeCloseTo((cF * p.F + cQ * p.Q + cE * p.E) / 4, 12);
+  });
+
   it('a repository is fitted from one residual df on: n - k - s + 1 = 1 fits, 0 falls back to the mean of its cells', () => {
     const thin: Grid = [[1.0, 1.6, 0.9], [2.2, 2.1, 2.9]];
     const keep = (miss: readonly (readonly [string, number])[]): FamilyUnit[] =>
