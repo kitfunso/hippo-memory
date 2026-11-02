@@ -3,6 +3,7 @@
 Date: 2026-10-29
 Status: accepted
 Links: PR #1103; plan `docs/plans/2026-10-28-token-diet-plan.html`; `changelog.d/feat-token-diet.md`; `tests/continuity-pointer.test.ts`
+Superseded in part: the hook no longer prints another session's handoff; see `docs/decisions/2026-11-01-hook-drops-other-session-handoff.md`.
 
 ## Context
 The Z0 round 2 eval failed its cost gate (H4): on tasks with no lesson, hippo cost 1.119 times the arm without it [1.065, 1.175], over the 1.10 limit. Hippo's injected text was the cost this change could cut.
