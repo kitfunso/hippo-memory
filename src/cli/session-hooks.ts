@@ -219,8 +219,7 @@ async function sessionEndWork(
   flushRereadLog();
   const digestLog = (message: string): void => appendSessionEndCloseLog(closeLogFile, message);
   const scan = transcriptPath ? readSessionScan(transcriptPath, digestLog) : null;
-  const capture = (turns: readonly SessionTurn[] | undefined, fromStart = true): boolean =>
-    captureEndedSession(hippoRoot, tenantId, store, flags, transcriptPath, turns, fromStart);
+  const capture = (turns: readonly SessionTurn[] | undefined): boolean => captureEndedSession(hippoRoot, tenantId, store, flags, transcriptPath, turns);
   if (mode === 'turn') captureNewTurns(transcriptPath, closeSessionId, scan, capture, digestLog);
   else capture(scan?.turns);
   recordSessionDigest(hippoRoot, scan, {
@@ -291,7 +290,7 @@ function captureNewTurns(
   transcriptPath: string | undefined,
   sessionId: string | null,
   scan: ReturnType<typeof readSessionScan>,
-  capture: (turns: readonly SessionTurn[], fromStart: boolean) => boolean,
+  capture: (turns: readonly SessionTurn[]) => boolean,
   log: (message: string) => void,
 ): void {
   if (!transcriptPath || !sessionId || !scan) {
@@ -303,7 +302,7 @@ function captureNewTurns(
     log('skip capture: no new turns since the last reply');
     return;
   }
-  if (capture(fresh, fresh.length === scan.turns.length)) saveTurnPosition(sessionId, transcriptPath, scan.turns, log);
+  if (capture(fresh)) saveTurnPosition(sessionId, transcriptPath, scan.turns, log);
 }
 
 /** True when capture ran to the end, so a turn close may move its cursor past these turns. */
@@ -314,7 +313,6 @@ function captureEndedSession(
   flags: CliFlags,
   transcriptPath: string | undefined,
   turns: readonly SessionTurn[] | undefined,
-  fromStart: boolean,
 ): boolean {
   try {
     const logFile = stringFlag(flags, 'log-file');
@@ -333,7 +331,6 @@ function captureEndedSession(
       // In the global store, rows would otherwise read as user-global and show up in every project.
       originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
       sessionTurns: turns,
-      fromStart,
     });
     return true;
   } catch (err) {

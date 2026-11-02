@@ -304,22 +304,8 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
     }));
 }
 
-// A reply to the agent's work states how the person wants it done, rule word or not; "Thanks, looks good" says nothing to keep.
-const ANY_STATEMENT = [/\S/];
-// A kept reply names code or limits a choice; "Now do the same" and a pasted test count do neither, so digits are no cue.
-// Naming code is enough in two words ("`pnpm` for installs."); a limiting word needs four, so "Not that." stays out.
-const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
-const LIMIT_CUE = /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
-
-function followUpRule(sentence: string): ExtractedItem | null {
-  const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
-  const words = item ? item.content.split(/\s+/).length : 0;
-  if (!item || !((words >= 2 && CODE_CUE.test(item.content)) || (words >= 4 && LIMIT_CUE.test(item.content)))) return null;
-  return { ...item, tags: [...item.tags, 'follow-up'] };
-}
-
 // The items of the spec bullets first, then those of each prose block.
-function extractSourced(text: string, cuts: Cutter, followUp: boolean): Sourced[] {
+function extractSourced(text: string, cuts: Cutter): Sourced[] {
   const prose = proseOnly(text);
   const found = extractSpecSections(prose, cuts);
   for (const block of proseBlocks(prose, cuts)) {
@@ -328,11 +314,13 @@ function extractSourced(text: string, cuts: Cutter, followUp: boolean): Sourced[
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
       if (cutByAside(sentence, at)) continue;
-      const item = CATEGORIES.map(([category, patterns]) => extractFromPatterns(sentence, patterns, category)).find((hit) => hit !== null)
-        ?? (followUp ? followUpRule(sentence) : null);
-      if (item) {
-        const [from, to] = block.sourceOf(at, at + sentence.length);
-        found.push({ item, from, to });
+      for (const [category, patterns] of CATEGORIES) {
+        const item = extractFromPatterns(sentence, patterns, category);
+        if (item) {
+          const [from, to] = block.sourceOf(at, at + sentence.length);
+          found.push({ item, from, to });
+          break;
+        }
       }
     }
   }
@@ -340,17 +328,19 @@ function extractSourced(text: string, cuts: Cutter, followUp: boolean): Sourced[
 }
 
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
- *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`.
- *  From `firstFollowUp` on, those words answer the agent's work, so each statement in them is the person's rule. */
-export function extractFromTexts(texts: readonly string[], userTexts = 0, firstFollowUp = userTexts): ExtractedItem[] {
+ *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`. */
+export function extractFromTexts(texts: readonly string[], userTexts = 0): ExtractedItem[] {
   const seen = new Set<string>();
-  const extracted = texts.flatMap((text, i) => extractSourced(text, boldPairs, i >= firstFollowUp && i < userTexts).map(({ item }) => (i < userTexts ? { ...item, fromUser: true } : item)));
-  return extracted.filter((item) => {
-    const key = duplicateKey(item.content);
-    if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;
-    seen.add(key);
-    return true;
-  });
+  return texts
+    .flatMap((text, i) =>
+      extractSourced(text, boldPairs).map(({ item }) => (i < userTexts ? { ...item, fromUser: true } : item)),
+    )
+    .filter((item) => {
+      const key = duplicateKey(item.content);
+      if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 export function extractFromText(text: string): ExtractedItem[] {
@@ -400,12 +390,12 @@ export function boldTwins(texts: readonly string[], scrub: (text: string) => str
   const twins: BoldTwin[] = [];
   for (const text of texts.filter((t) => t.includes('**'))) {
     const prose = proseOnly(text);
-    const fresh = extractSourced(text, boldPairs, false);
+    const fresh = extractSourced(text, boldPairs);
     // Spec bullets and prose sentences overlap each other, so each kind keeps its own order.
     const tracks = [trackOf(fresh.filter(({ item }) => item.category === 'spec'))];
     tracks.push(trackOf(fresh.filter(({ item }) => item.category !== 'spec')));
     const taken = new Set<Sourced>();
-    for (const sourced of extractSourced(text, keepAll, false)) {
+    for (const sourced of extractSourced(text, keepAll)) {
       const { item: old, from, to } = sourced;
       const size = (found: Sourced): number => Math.min(found.to, to) - Math.max(found.from, from);
       const same = (found: Sourced): number => Number(found.item.category === old.category);
