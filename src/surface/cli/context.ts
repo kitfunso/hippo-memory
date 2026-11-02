@@ -19,6 +19,7 @@ import {
   contextCost,
   crossProjectLines,
   settleTokens,
+  userRuleLines,
 } from '../../api/context/context-render.js';
 import {
   additionalContextOutput,
@@ -26,8 +27,10 @@ import {
   type HookEnvelope,
   hasContextData,
   sessionStartEnvelope,
+  splitUserRules,
   toRenderItems,
 } from '../../api/prompt-hook.js';
+import { projectId } from '../../base/scope/project-identity.js';
 import { flushDeliveryRecorder, startDeliveryRecorder, takeDelivery } from '../../api/ledger-db.js';
 import {
   type CliFlags,
@@ -169,14 +172,16 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
   const now = ctx.infra.clock();
   const input: ContextOptsInput = { query, budget, pinnedOnly, format, framing, session, rec, now };
 
-  const result = await api.contextGet(ctx, buildContextOpts(flags, input, ctx));
+  const opts = buildContextOpts(flags, input, ctx);
+  const result = await api.contextGet(ctx, opts);
   if (!hasContextData(result)) {
     rec?.delivered({ state: 'empty' });
     return;
   }
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
-  await renderContextView(contextView(ctx, input, result, envelope), format, query);
+  const view = contextView(ctx, input, result, envelope, projectId(opts.currentProject));
+  await renderContextView(view, format, query);
 }
 
 function contextView(
@@ -184,10 +189,12 @@ function contextView(
   input: ContextOptsInput,
   result: api.ContextResult,
   envelope: HookEnvelope | undefined,
+  originProject: string,
 ): ContextView {
   return {
     config: ctx.config,
     tenantId: ctx.tenantId,
+    originProject,
     ledgerSessionId: input.session.ledgerSessionId,
     payloadSessionId: input.session.payloadSessionId,
     pinnedOnly: input.pinnedOnly,
@@ -333,16 +340,15 @@ async function renderContextJson(view: ContextView, query: string): Promise<void
  * ledger does. */
 async function renderContextMarkdown(view: ContextView): Promise<void> {
   const { result, rec, framing } = view;
+  const { userRules, others } = splitUserRules(view);
   // Cross-project inclusions get their own section so they never masquerade as project memory.
-  const renderItems = toRenderItems(result.entries.filter((r) => r.category !== 'cross-project'));
-  const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
+  const renderItems = toRenderItems(others.filter((r) => r.category !== 'cross-project'));
+  const crossEntries = others.filter((r) => r.category === 'cross-project');
   const text = settleTokens((t) => {
-    const lines = continuityTexts(
-      result.activeSnapshot,
-      result.sessionHandoff,
-      result.recentEvents,
-      result,
-    );
+    const lines = [
+      ...userRuleLines(userRules),
+      ...continuityTexts(result.activeSnapshot, result.sessionHandoff, result.recentEvents, result),
+    ];
     if (renderItems.length > 0) {
       lines.push(
         ...contextBlockLines(renderItems, t, framing, { now: view.now, strength: view.strength }),
@@ -356,7 +362,7 @@ async function renderContextMarkdown(view: ContextView): Promise<void> {
   rec?.delivered(
     text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' },
   );
-  await bookContextInject(view, renderItems.length, estimateTokens(text));
+  await bookContextInject(view, userRules.length + renderItems.length, estimateTokens(text));
 }
 
 export async function handleContext({

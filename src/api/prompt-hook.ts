@@ -22,7 +22,9 @@ import {
   sessionTrailText,
   settleTokens,
   snapshotSectionText,
+  userRuleLines,
 } from './context/context-render.js';
+import { isUserRule } from './context/user-rule.js';
 import type { DeliveryRecorder } from './delivery/delivery-recorder.js';
 import { MAX_ID_LEN } from '../base/util/limits.js';
 import { isJsonString, type JsonValue } from '../base/util/json.js';
@@ -48,6 +50,8 @@ import { DEFAULT_CONTEXT_BUDGET } from './context/context.js';
 export interface ContextView {
   readonly config: HippoConfig;
   readonly tenantId: string;
+  /** The project id capture stamps its rows with; a user rule belongs to this project alone. */
+  readonly originProject: string;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
   readonly pinnedOnly: boolean;
@@ -123,12 +127,14 @@ export async function additionalContextOutput(view: ContextView): Promise<string
 
 function renderStaticBlock(
   view: ContextView,
+  userRules: MemoryEntry[],
   staticItems: RenderItem[],
   staticCrossEntries: ContextResultEntry[],
 ): string {
   const { result, framing } = view;
   return settleTokens((t) =>
     [
+      ...userRuleLines(userRules),
       ...(result.activeSnapshot
         ? [snapshotSectionText(result.activeSnapshot, result.snapshotMode ?? 'full')]
         : []),
@@ -164,40 +170,63 @@ function renderRecallBlock(
 }
 
 interface RenderedBlocks {
+  readonly userRules: MemoryEntry[];
   readonly staticItems: RenderItem[];
   readonly recallItems: RenderItem[];
   readonly staticBlock: string;
   readonly recallBlock: string;
 }
 
+/** The rows that print as the person's own rules, and the rest: a rule prints once, in its own
+ * section. */
+export interface UserRuleSplit {
+  readonly userRules: MemoryEntry[];
+  readonly others: ContextResultEntry[];
+}
+
+export function splitUserRules(
+  view: Pick<ContextView, 'tenantId' | 'originProject' | 'result'>,
+): UserRuleSplit {
+  const isRule = (r: ContextResultEntry): boolean =>
+    isUserRule(r.entry, {
+      tenantId: view.tenantId,
+      originProject: view.originProject,
+      isGlobal: r.isGlobal ?? false,
+    });
+  return {
+    userRules: view.result.entries.filter(isRule).map((r) => r.entry),
+    others: view.result.entries.filter((r) => !isRule(r)),
+  };
+}
+
 function renderBlocks(view: ContextView): RenderedBlocks {
-  const { result, framing } = view;
-  const staticEntries = result.entries.filter(
-    (r) => r.category !== 'cross-project' && !r.promptRecall,
-  );
-  const staticCrossEntries = result.entries.filter(
+  const { framing } = view;
+  const { userRules, others } = splitUserRules(view);
+  const staticEntries = others.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
+  const staticCrossEntries = others.filter(
     (r) => r.category === 'cross-project' && !r.promptRecall,
   );
   const staticItems = toRenderItems(staticEntries);
-  const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
+  const recallItems = toRenderItems(others.filter((r) => r.promptRecall));
   return {
+    userRules,
     staticItems,
     recallItems,
-    staticBlock: renderStaticBlock(view, staticItems, staticCrossEntries),
+    staticBlock: renderStaticBlock(view, userRules, staticItems, staticCrossEntries),
     recallBlock: renderRecallBlock(recallItems, framing, view.now),
   };
 }
 
 async function renderAdditionalContext(view: ContextView): Promise<RenderedContext> {
   const { rec } = view;
-  const { staticItems, recallItems, staticBlock, recallBlock } = renderBlocks(view);
+  const { userRules, staticItems, recallItems, staticBlock, recallBlock } = renderBlocks(view);
   if (!staticBlock.trim() && !recallBlock.trim()) {
     rec?.delivered({ state: 'empty' });
     return NOTHING_RENDERED;
   }
 
   const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
-  const staticCount = staticItems.length;
+  const staticCount = userRules.length + staticItems.length;
   const sendStatic =
     staticBlock.trim().length > 0 &&
     !(await skipUnchangedStatic({ view, surface, staticBlock, recallBlock, staticCount }));
@@ -408,6 +437,7 @@ export async function buildPromptHookContext(
     ? await renderAdditionalContext({
         config: ctx.config,
         tenantId: ctx.tenantId,
+        originProject: req.project.name,
         ledgerSessionId,
         payloadSessionId: ledgerSessionId,
         pinnedOnly: true,

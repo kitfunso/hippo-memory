@@ -17,6 +17,7 @@ import {
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
 import { promptSearchTerms } from '../../base/rank/prompt-recall.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
+import { isUserRule } from './user-rule.js';
 import { finiteOr } from '../../domain/context/select-policy.js';
 import { type Context, type ContextReach, type GlobalInReach, strengthOf } from '../types.js';
 import type { AmbientRecallRequest } from '../../base/ports/store/context-reads.js';
@@ -53,6 +54,8 @@ export interface ContextPlan {
   promptRecallPending: boolean;
   cost: ContextCost | undefined;
   price: (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean) => number;
+  /** Whether a row prints as the person's own rule for this caller. */
+  isUserRule: (entry: MemoryEntry, isGlobal: boolean) => boolean;
   obs: DeliveryObserver | undefined;
   /** The instant the whole read scores strength at, by the model its Context runs under. */
   now: Date;
@@ -110,6 +113,7 @@ export function globalSource(ctx: Context): ContextSource {
 function entryPricer(
   cost: ContextOptions['cost'],
   currentProject: ContextPlan['currentProject'],
+  userRule: ContextPlan['isUserRule'],
 ): ContextPlan['price'] {
   return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number =>
     cost
@@ -119,6 +123,7 @@ function entryPricer(
           promptRecall,
           origin: entry.originProject ?? null,
           category: classifyOriginProject(entry.originProject, currentProject),
+          userRule: userRule(entry, isGlobal),
         })
       : estimateTokens(entry.content);
 }
@@ -173,7 +178,10 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
   const promptRecallPending =
     pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
   const cost = opts.cost;
-  const price = entryPricer(cost, currentProject);
+  const originProject = projectId(currentProject);
+  const userRule: ContextPlan['isUserRule'] = (entry, isGlobal) =>
+    isUserRule(entry, { tenantId: ctx.tenantId, originProject, isGlobal });
+  const price = entryPricer(cost, currentProject, userRule);
   return {
     local,
     pinnedOnly,
@@ -194,6 +202,7 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
     promptRecallPending,
     cost,
     price,
+    isUserRule: userRule,
     obs: opts.deliveryObserver,
     now: ctx.infra.clock(),
     strength: strengthOf(ctx),
@@ -242,6 +251,8 @@ export function openBlockBudget(plan: ContextPlan, opts: ContextOptions, budget:
             cross: plan.includeCrossProject,
             promptRecall: promptRecallPending,
             ambient: !pinnedOnly && config.ambient.enabled,
+            // Unknown until the rows load; userRuleReserve pays it then.
+            userRule: false,
           }),
       )
     : blockBudget;
