@@ -351,10 +351,15 @@ const LIMIT_CUE =
 const ACK_LEAD = /^(?:thanks|thank you|ok(?:ay)?|great|nice|perfect|cool|lgtm)\b[\s,.!:-]*/i;
 const NOT_A_DIRECTIVE = /^(?:for|on|to|so|the|a|an|this|that|it|its|you|your|i|we|all|really)\b/i;
 const APPROVAL = /^(?:\S+\s+){0,3}(?:looks?|works?|worked)\s+(?:good|great|fine|right|now)\b/i;
-// Pasted output opens on a file:line, an arrow, a stack frame or an error word, or holds a
-// file:line:col or an assertion message.
-const LOG_CUE =
-  /^(?:-->|#\d+\s)|^\S*\w\.[A-Za-z]+:\d+|\w\.[A-Za-z]+:\d+:\d+|^(?:\w*Error|error(?:\[\w+\])?:|warning:|FAIL|Traceback)|\bexpected\b.+\bto (?:be|equal|have)\b/;
+// Pasted output opens on a file:line, a stack frame or an error word, or holds a file:line:col
+// (a compiler arrow line) or an assertion message.
+const LOG_CUE = new RegExp(
+  [
+    String.raw`^#\d+\s|^\S*\w\.[A-Za-z]+:\d+|\w\.[A-Za-z]+:\d+:\d+`,
+    String.raw`^(?:\w*Error|error(?:\[\w+\])?:|warning:|FAIL|Traceback)`,
+    String.raw`\bexpected\b.+\bto (?:be|equal|have)\b`,
+  ].join('|'),
+);
 
 /** A thanks with no directive after it, or a short "X looks good". */
 function isPraise(content: string): boolean {
