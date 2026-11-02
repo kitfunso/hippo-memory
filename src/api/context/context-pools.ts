@@ -205,9 +205,10 @@ export async function loadPools(
  * when the pool holds a user rule, even if the ranking then leaves it out; one heading of slack. */
 export function userRuleReserve(plan: ContextPlan, pools: ContextPools): number {
   const { cost } = plan;
-  if (!cost || !pools.local.entries.some((e) => plan.isUserRule(e, plan.primaryIsGlobal))) {
-    return 0;
-  }
+  const held =
+    pools.local.entries.some((e) => plan.isUserRule(e, plan.primaryIsGlobal)) ||
+    pools.global.entries.some((e) => plan.isUserRule(e, true));
+  if (!cost || !held) return 0;
   // The headings are priced apart, so the two totals differ by the user-rule heading alone.
   const can = { cross: false, promptRecall: false, ambient: false };
   return cost.fixed(0, { ...can, userRule: true }) - cost.fixed(0, { ...can, userRule: false });

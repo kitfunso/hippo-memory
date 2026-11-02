@@ -30,7 +30,7 @@ import {
   splitUserRules,
   toRenderItems,
 } from '../../api/prompt-hook.js';
-import { projectId } from '../../base/scope/project-identity.js';
+import type { ProjectRef } from '../../base/scope/project-identity.js';
 import { flushDeliveryRecorder, startDeliveryRecorder, takeDelivery } from '../../api/ledger-db.js';
 import {
   type CliFlags,
@@ -180,7 +180,7 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
   }
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
-  const view = contextView(ctx, input, result, envelope, projectId(opts.currentProject));
+  const view = contextView(ctx, input, result, envelope, opts.currentProject);
   await renderContextView(view, format, query);
 }
 
@@ -189,12 +189,12 @@ function contextView(
   input: ContextOptsInput,
   result: api.ContextResult,
   envelope: HookEnvelope | undefined,
-  originProject: string,
+  project: ProjectRef,
 ): ContextView {
   return {
     config: ctx.config,
     tenantId: ctx.tenantId,
-    originProject,
+    project,
     ledgerSessionId: input.session.ledgerSessionId,
     payloadSessionId: input.session.payloadSessionId,
     pinnedOnly: input.pinnedOnly,

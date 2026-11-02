@@ -178,9 +178,8 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
   const promptRecallPending =
     pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
   const cost = opts.cost;
-  const originProject = projectId(currentProject);
   const userRule: ContextPlan['isUserRule'] = (entry, isGlobal) =>
-    isUserRule(entry, { tenantId: ctx.tenantId, originProject, isGlobal });
+    isUserRule(entry, { tenantId: ctx.tenantId, project: currentProject, isGlobal });
   const price = entryPricer(cost, currentProject, userRule);
   return {
     local,

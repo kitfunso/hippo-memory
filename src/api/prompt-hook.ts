@@ -39,7 +39,11 @@ import {
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../base/session/pilot-arm.js';
-import { assertCallerProject, MAX_PROJECT_ALIASES } from '../base/scope/project-identity.js';
+import {
+  assertCallerProject,
+  MAX_PROJECT_ALIASES,
+  type ProjectRef,
+} from '../base/scope/project-identity.js';
 import { shouldSkipUnchanged } from '../base/session/skip-unchanged.js';
 import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
@@ -50,8 +54,9 @@ import { DEFAULT_CONTEXT_BUDGET } from './context/context.js';
 export interface ContextView {
   readonly config: HippoConfig;
   readonly tenantId: string;
-  /** The project id capture stamps its rows with; a user rule belongs to this project alone. */
-  readonly originProject: string;
+  /** The reader's project, with every name capture may have stamped its rows with; a user rule
+   * belongs to this project alone. */
+  readonly project: ProjectRef;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
   readonly pinnedOnly: boolean;
@@ -185,12 +190,12 @@ export interface UserRuleSplit {
 }
 
 export function splitUserRules(
-  view: Pick<ContextView, 'tenantId' | 'originProject' | 'result'>,
+  view: Pick<ContextView, 'tenantId' | 'project' | 'result'>,
 ): UserRuleSplit {
   const isRule = (r: ContextResultEntry): boolean =>
     isUserRule(r.entry, {
       tenantId: view.tenantId,
-      originProject: view.originProject,
+      project: view.project,
       isGlobal: r.isGlobal ?? false,
     });
   return {
@@ -437,7 +442,7 @@ export async function buildPromptHookContext(
     ? await renderAdditionalContext({
         config: ctx.config,
         tenantId: ctx.tenantId,
-        originProject: req.project.name,
+        project: req.project,
         ledgerSessionId,
         payloadSessionId: ledgerSessionId,
         pinnedOnly: true,

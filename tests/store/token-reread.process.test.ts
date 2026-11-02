@@ -226,6 +226,7 @@ describe('recordRereads', () => {
       { at: minute(7), compactions: 1 },
     ];
     const before = withDb(root, (db) => {
+      book(db, 'session_start', 'inject', minute(0.2), 30);
       book(db, 'hook', 'inject', minute(0.5), 100);
       book(db, 'hook_recall', 'inject', minute(0.5), 40);
       book(db, 'hook', 'skip', minute(1.5), 100);
@@ -240,17 +241,19 @@ describe('recordRereads', () => {
     expect(before).toEqual({ hash: 'h1', skipsSince: 1 });
 
     for (let pass = 0; pass < 2; pass++) {
-      expect(recordRereads(root, 'default', SESSION, calls)).toBe(430);
+      expect(recordRereads(root, 'default', SESSION, calls)).toBe(490);
     }
     expect(ledgerRows(root, `event = 'reread'`)).toEqual([
       { tenant_id: 'default', session_id: SESSION, surface: 'compact_resume', items: 1, tokens: 50 },
       { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 3, tokens: 300 },
       { tenant_id: 'default', session_id: SESSION, surface: 'hook_recall', items: 2, tokens: 80 },
+      { tenant_id: 'default', session_id: SESSION, surface: 'session_start', items: 2, tokens: 60 },
     ]);
     expect(rereadStamps(root)).toEqual([
       ['compact_resume', iso(minute(7))],
       ['hook', iso(minute(7))],
       ['hook_recall', iso(minute(3))],
+      ['session_start', iso(minute(3))],
     ]);
     withDb(root, (db) => {
       expect(lastSentState(db, 'default', SESSION, 'hook')).toEqual(before);

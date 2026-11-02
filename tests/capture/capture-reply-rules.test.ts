@@ -61,6 +61,39 @@ describe('capture keeps the rules a person gives in reply', () => {
     ]);
   });
 
+  it('a reply the preference patterns catch is a user rule when it names code or limits a choice', async () => {
+    await capture([
+      user(REQUEST),
+      done,
+      user('Use `pnpm` instead of `npm`.'),
+      done,
+      user('Avoid edits to `generated.ts`.'),
+      done,
+      user('I prefer small commits that each do one thing.'),
+    ]);
+    const stored = rows().sort((a, b) => a.content.localeCompare(b.content));
+    expect(stored.map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)])).toEqual([
+      ['Avoid edits to `generated.ts`', true, true],
+      ['I prefer small commits that each do one thing', false, false],
+      ['Use `pnpm` instead of `npm`', true, true],
+    ]);
+  });
+
+  it('pins no praise or pasted output that names code, and keeps a thanks that limits a choice', async () => {
+    await capture([
+      user(REQUEST),
+      done,
+      user('Thanks, `src/cache.ts` looks good.'),
+      done,
+      user('src/cache.ts:42 expected 1 to equal 2'),
+      done,
+      user('Thanks, but run `pnpm test:unit`, not the bare `pnpm test`.'),
+    ]);
+    expect(rows().map((e) => [e.content, e.pinned])).toEqual([
+      ['Thanks, but run `pnpm test:unit`, not the bare `pnpm test`', true],
+    ]);
+  });
+
   it('a session with only its request captures nothing', async () => {
     await capture([user(REQUEST), done]);
     expect(rows()).toEqual([]);

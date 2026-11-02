@@ -346,15 +346,33 @@ const ANY_STATEMENT = [/\S/];
 const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
 const LIMIT_CUE =
   /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
+// Praise names code too ("Thanks, `src/cache.ts` looks good"); with no limit in it, it orders nothing.
+const PRAISE_CUE =
+  /^(?:thanks|thank you|ok(?:ay)?|great|nice|perfect|cool|lgtm)\b|\blooks (?:good|great|fine|right)\b/i;
+// Pasted test or stack output: a file:line, an assertion message, an error line.
+const LOG_CUE =
+  /\w\.[A-Za-z]+:\d+|\bexpected\b.+\bto (?:be|equal|have)\b|^(?:\w*Error|FAIL|Traceback)\b/;
 
 /** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word. */
 function followUpRule(sentence: string): ExtractedItem | null {
   const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
   if (!item) return null;
-  const words = item.content.split(/\s+/).length;
-  const kept =
-    (words >= 2 && CODE_CUE.test(item.content)) || (words >= 4 && LIMIT_CUE.test(item.content));
+  const { content } = item;
+  const limits = LIMIT_CUE.test(content);
+  if (LOG_CUE.test(content) || (PRAISE_CUE.test(content) && !limits)) return null;
+  const words = content.split(/\s+/).length;
+  const kept = (words >= 2 && CODE_CUE.test(content)) || (words >= 4 && limits);
   return kept ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
+}
+
+/** What a sentence holds; in a reply a preference that names code or limits a choice is a rule. */
+function sentenceItem(sentence: string, followUp: boolean): ExtractedItem | null {
+  const hit =
+    CATEGORIES.map(([category, patterns]) =>
+      extractFromPatterns(sentence, patterns, category),
+    ).find((found) => found !== null) ?? null;
+  if (!followUp || (hit !== null && hit.category !== 'preference')) return hit;
+  return followUpRule(sentence) ?? hit;
 }
 
 // The items of the spec bullets first, then those of each prose block.
@@ -367,10 +385,7 @@ function extractSourced(text: string, cuts: Cutter, followUp = false): Sourced[]
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
       if (cutByAside(sentence, at)) continue;
-      const item =
-        CATEGORIES.map(([category, patterns]) =>
-          extractFromPatterns(sentence, patterns, category),
-        ).find((hit) => hit !== null) ?? (followUp ? followUpRule(sentence) : null);
+      const item = sentenceItem(sentence, followUp);
       if (item) {
         const [from, to] = block.sourceOf(at, at + sentence.length);
         found.push({ item, from, to });

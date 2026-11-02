@@ -1,14 +1,15 @@
 // Which rows print as the person's own rules: only capture sets the tag, so a row nobody typed
 // cannot pass for one.
 import { USER_RULE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
+import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
 
 export { USER_RULE_TAG };
 
-/** Who reads the block, and where the row lives: the origin is the project id capture stamps on rows
- * it writes to the global store. */
+/** Who reads the block, and where the row lives: a row's origin is the project id capture stamped,
+ * so it can be any name the project had; '' is no project. */
 export interface UserRuleViewer {
   readonly tenantId: string;
-  readonly originProject: string | null;
+  readonly project: ProjectRef;
   readonly isGlobal: boolean;
 }
 
@@ -24,7 +25,8 @@ export function isUserRule(e: MemoryEntry, viewer: UserRuleViewer): boolean {
   if (!own) return false;
   // A project store's rows are that project's; capture leaves their origin unset (session-end.ts).
   const origin = e.originProject ?? null;
-  if (!viewer.isGlobal) return origin === null || origin === viewer.originProject;
+  const names = projectId(viewer.project) === '' ? [] : projectNames(viewer.project);
+  if (!viewer.isGlobal) return origin === null || names.includes(origin);
   // A global row is a rule only in the project capture stamped on it; a null origin matches none.
-  return viewer.originProject !== null && e.originProject === viewer.originProject;
+  return origin !== null && names.includes(origin);
 }

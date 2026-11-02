@@ -15,6 +15,8 @@ import {
   userRuleLine,
 } from '../../src/api/context/context-render.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
+import { planContext, sourceOf } from '../../src/api/context/context-plan.js';
+import { userRuleReserve } from '../../src/api/context/context-pools.js';
 import { isUserRule, USER_RULE_TAG, type UserRuleViewer } from '../../src/api/context/user-rule.js';
 import { withoutUserTag, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { handleContext } from '../../src/surface/cli/context.js';
@@ -175,6 +177,15 @@ describe("the budget pays for a user rule's heading", () => {
     expect(await smallestBudgetShowing(row.id)).toBe(smallestBudgetFor(entryTokens, heading));
   });
 
+  it('reserves the heading for a user rule the global store holds', () => {
+    const c = ctx();
+    const plan = planContext(c, { pinnedOnly: true, currentProject: PROJECT, cost: cost() }, sourceOf(c.store));
+    const heading = cost().fixed(0, { ...CAN, userRule: true }) - cost().fixed(0, { ...CAN, userRule: false });
+    const pools = { local: { entries: [noteRow()] }, global: { entries: [ruleRow()] } };
+    expect(heading).toBeGreaterThan(0);
+    expect(userRuleReserve(plan, pools)).toBe(heading);
+  });
+
   it('reserves nothing for a pool with no user rule', async () => {
     const row = noteRow();
     writeEntry(store, row);
@@ -184,7 +195,7 @@ describe("the budget pays for a user rule's heading", () => {
 });
 
 describe('what is not a user rule', () => {
-  const viewer: UserRuleViewer = { tenantId: 'default', originProject: 'p', isGlobal: false };
+  const viewer: UserRuleViewer = { tenantId: 'default', project: 'p', isGlobal: false };
 
   it('is true for the row capture writes, for a viewer in that project', () => {
     expect(isUserRule(ruleRow(), viewer)).toBe(true);
@@ -193,6 +204,11 @@ describe('what is not a user rule', () => {
   it.each<[string, Partial<MemoryEntry>, Partial<UserRuleViewer>]>([
     ['a project-store row capture wrote, with no origin', { originProject: null }, {}],
     ['a global-store row stamped with this project', {}, { isGlobal: true }],
+    [
+      "a row stamped with the project's older name",
+      { originProject: 'old-p' },
+      { project: { name: 'p', legacyName: 'old-p', aliases: [] } },
+    ],
   ])('is true for %s', (_name, row, viewing) => {
     expect(isUserRule(ruleRow(row), { ...viewer, ...viewing })).toBe(true);
   });
@@ -200,7 +216,7 @@ describe('what is not a user rule', () => {
   it.each<[string, Partial<MemoryEntry>, Partial<UserRuleViewer>]>([
     ['a global-store row from another project', { originProject: 'other' }, { isGlobal: true }],
     ['a global-store row with no origin', { originProject: null }, { isGlobal: true }],
-    ['a global-store row, for a viewer with no project', {}, { isGlobal: true, originProject: null }],
+    ['a global-store row, for a viewer with no project', {}, { isGlobal: true, project: '' }],
     ['another project', { originProject: 'other' }, {}],
     ['a user-global row', { originProject: '' }, {}],
     ['another tenant', { tenantId: 'acme' }, {}],
