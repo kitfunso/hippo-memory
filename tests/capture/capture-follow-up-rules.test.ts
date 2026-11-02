@@ -286,4 +286,17 @@ describe('capture stores the follow-up rules a model picks', () => {
     );
     expect(model.prompts).toHaveLength(1);
   });
+
+  it('prints the billed tokens of a call that found nothing, so a harness can price it', async () => {
+    const lines = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(log, 'warn').mockImplementation(() => {});
+    const usage = { inputTokens: 812, outputTokens: 37 };
+    await capture(
+      session(TEACH_TURNS[0].turn),
+      fakeModel(() => ({ ok: false, failure: { kind: 'empty' }, usage })),
+    );
+    expect(lines.mock.calls.map(([line]) => String(line))).toContain(
+      'follow-up rules: model=claude-sonnet-5-5 input_tokens=812 output_tokens=37',
+    );
+  });
 });

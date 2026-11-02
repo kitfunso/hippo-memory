@@ -5,6 +5,7 @@ import {
   llmFailureFields,
   type Llm,
   type LlmReply,
+  type LlmUsage,
 } from '../../base/ports/llm.js';
 import { isJsonObject, tryParseJson, type JsonValue } from '../../base/util/json.js';
 import { errorFields, errorMessage, type LineLog } from '../../base/util/log.js';
@@ -125,7 +126,12 @@ function rulesOf(turns: readonly (readonly string[])[], picks: readonly Pick[]):
     });
 }
 
-async function ask(llm: Llm, prompt: string, log: LineLog): Promise<string | null> {
+interface Asked {
+  readonly text: string | null;
+  readonly usage: LlmUsage | undefined;
+}
+
+async function ask(llm: Llm, prompt: string, log: LineLog): Promise<Asked> {
   const signal = AbortSignal.timeout(CALL_MS);
   let reply: LlmReply;
   try {
@@ -135,14 +141,20 @@ async function ask(llm: Llm, prompt: string, log: LineLog): Promise<string | nul
     log(`follow-up rules skipped: the model call threw: ${errorMessage(err)}`, {
       fields: errorFields(err),
     });
-    return null;
+    return { text: null, usage: undefined };
   }
-  if (reply.ok) return reply.text;
+  if (reply.ok) return { text: reply.text, usage: reply.usage };
   const cause = signal.aborted
     ? `the model call passed ${CALL_MS / 1000} s`
     : describeLlmFailure(reply.failure);
   log(`follow-up rules skipped: ${cause}`, { fields: llmFailureFields(reply.failure) });
-  return null;
+  return { text: null, usage: reply.usage };
+}
+
+export interface FollowUpRules {
+  readonly rules: ExtractedItem[];
+  /** What the model call was billed; undefined when no call ran or the reply named none. */
+  readonly usage: LlmUsage | undefined;
 }
 
 /** The rules the model finds in the person's turns after the session's first, the last 20 of
@@ -151,17 +163,22 @@ export async function followUpRules(
   turns: readonly string[],
   llm: Llm,
   log: LineLog,
-): Promise<ExtractedItem[]> {
+): Promise<FollowUpRules> {
   const messages = turns.slice(-FOLLOW_UP_TURNS).map(sentencesOf);
-  if (messages.every((sentences) => sentences.length === 0)) return [];
-  const text = await ask(llm, promptOf(messages), log);
-  if (text === null) return [];
+  if (messages.every((sentences) => sentences.length === 0)) return { rules: [], usage: undefined };
+  const { text, usage } = await ask(llm, promptOf(messages), log);
+  if (text === null) return { rules: [], usage };
   const read = readPicks(text);
   if ('problem' in read) {
     log(`follow-up rules skipped: ${read.problem}`);
-    return [];
+    return { rules: [], usage };
   }
-  return rulesOf(messages, read.picks);
+  return { rules: rulesOf(messages, read.picks), usage };
+}
+
+/** One line per model call, in key=value form, so a harness can price it from the capture log. */
+export function usageLine(usage: LlmUsage): string {
+  return `follow-up rules: model=${MODEL} input_tokens=${usage.inputTokens} output_tokens=${usage.outputTokens}`;
 }
 
 /** The pattern items but each one a rule holds, then the rules; both read after `scrub`, so the

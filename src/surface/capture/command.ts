@@ -11,7 +11,7 @@ import { errorMessage, log, errorFields, type LineLog } from '../../base/util/lo
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { boldTwins, extractFromTexts, type BoldTwin, type ExtractedItem } from './extract.js';
-import { followUpRules, withFollowUpRules } from './follow-up.js';
+import { followUpRules, usageLine, withFollowUpRules } from './follow-up.js';
 import {
   type SessionTurn,
   collectSessionTurns,
@@ -133,7 +133,9 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
   const scrubbed = texts.map(scrub);
   // A global capture with no project would pin its rules into every project.
   const llm = options.global && options.originProject === undefined ? undefined : target.llm;
-  const rules = llm ? await followUpRules(followUps, llm, warnLine) : [];
+  const followUp = llm ? await followUpRules(followUps, llm, warnLine) : undefined;
+  if (followUp?.usage) console.log(usageLine(followUp.usage));
+  const rules = followUp?.rules ?? [];
   const items = withFollowUpRules(extractFromTexts(scrubbed, userTexts), rules, scrub);
   const extracted = scrubbedItems(items, scrub);
 

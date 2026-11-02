@@ -50,7 +50,10 @@ beforeEach(() => {
   ];
   fs.writeFileSync(transcript, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
   modelCalls = 0;
-  const reply = { content: [{ type: 'text', text: '[{"i": 0, "s": [0]}]' }] };
+  const reply = {
+    content: [{ type: 'text', text: '[{"i": 0, "s": [0]}]' }],
+    usage: { input_tokens: 812, output_tokens: 37 },
+  };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL | Request) => {
@@ -72,6 +75,10 @@ describe('capture.followUpRules', () => {
     expect((await sessionEnd([])).status).toBe(0);
     expect(modelCalls).toBe(1);
     expect(contents()).toEqual([RULE_SENTENCE]);
+    // A harness prices the call from this line in the session-end log.
+    expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain(
+      'follow-up rules: model=claude-sonnet-5-5 input_tokens=812 output_tokens=37',
+    );
   });
 
   it('hippo capture --last-session takes the same path in a project store', async () => {
