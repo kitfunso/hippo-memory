@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.2.0 - 2026-11-02
+
+### Added
+
+- **Capture stores the rules you give in reply to the agent.** A sentence in a later user turn is stored as your pinned rule, tagged `follow-up` and `from-user`, when it names code (a backtick, a path, a flag, a call) or limits a choice ("not", "only", "instead", "before") in 4 words or more. It needs no rule word such as "never" or "always", and no model call. A preference you give in reply, such as "Use `pnpm` instead of `npm`", is kept the same way. The opening request of a session is not a rule. Thanks, praise, questions and pasted test or stack output stay out, even when they name a file. A capture after each reply (`--turn`) reads a later slice of the session as replies.
+- **Claude Code gets your rules again at session start.** `hippo hook install claude-code` and the plugin now add a `SessionStart` hook that runs `hippo session-rules`. It prints every rule you stated to the current project, from the project store and the global store, oldest first, as session context. In a replay, agents followed these rules in 16 of 16 sessions with this hook and in 0 of 16 with the per-prompt hook alone. The hook prints nothing when there is no rule, in a pilot holdout session, or when `pinnedInject.enabled` is off, and it needs no `hippo init`. Run `hippo hook install claude-code` again to add it.
+- **A rule prints without the reply lead you typed.** `No:` and `Yes, keep doing that:` are cut from the front of a line under `## Rules from the user`, in the per-prompt hook, `hippo context` and `hippo session-rules`. The stored row is unchanged.
+- **The prompt hook and `hippo context` print the rules you stated first, as plain instructions.** A row that capture marked as your own rule now prints under `## Rules from the user`, ahead of the task snapshot and the memories, as `- <the rule>`. It has no confidence tag, no "Previously observed" date, no tags and no strength, so it no longer reads as an old note. It prints once, not again under Project Memory or Prompt-Relevant Memory. Every other row prints as before, and a block with no such rule is byte for byte the block 3.1.1 prints. The token budget pays for the new heading only when the block holds such a rule. JSON output is unchanged.
+- **A row counts as your rule only for the project and tenant that captured it.** It must be pinned, come from capture, carry the `from-user` tag, have confidence `observed` and no scope, and not be superseded. A global view, another project or tenant, and a legacy row with no project print as before.
+
+### Changed
+
+- **Every rule capture pins from your words is now your rule.** A rule such as "Never commit directly to `main`" that capture pins from a user turn also gets the `from-user` tag. So it prints under `## Rules from the user` and at session start, in the first turn as in a reply. Rows stored before this release keep their tags.
+- **A user rule matches every name of its project.** A rule captured under the project's older name or an alias still prints as your rule after the project gains a remote or a `.hippo-project.json`. The budget also pays for the rules heading when only the global store holds your rules.
+- **`hippo tokens` counts re-reads of the session-start block**, as it does for the per-prompt and compact-resume blocks.
+- **Capture skips the user lines Claude Code writes for `!` shell commands and task notices.** `<bash-input>`, `<bash-stdout>`, `<bash-stderr>` and `<task-notification>` lines are no longer read as your words.
+- **A tag you type can no longer set `from-user`.** `hippo remember`, `hippo supersede`, `hippo trace`, `hippo import`, the MCP `hippo_remember` tool and the HTTP write drop that tag, so only capture can mark a row as your rule. A supersede of such a row drops the tag from the new row, which is already set to `verified`. `hippo pin` changes no tags.
+
+### Known limitations
+
+- Capture reads a reply one sentence at a time. A sentence of a correction that holds no code and no limiting word is not stored, even when the sentence before it is.
+- Reply capture tells a rule from praise or pasted output by the shape of the words, not by their meaning. Some phrasings will be stored when they are not rules, and some rules will be missed. A model-based capture, opt-in, is the planned fix.
+- Rows stored before this release keep their tags. A rule that 3.1.1 pinned does not print at session start until capture stores it again.
+
 ## 3.1.1 - 2026-11-02
 
 ### Fixed
