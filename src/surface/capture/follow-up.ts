@@ -14,7 +14,10 @@ import { scrubForSharing } from './share-scrub.js';
 
 const FOLLOW_UP_TURNS = 20;
 const TURN_CHARS = 1000;
-const MAX_TOKENS = 1024;
+// The prompt was measured on this model; the adapter's default picked task orders as rules (gate 2).
+const MODEL = 'claude-sonnet-5-5';
+// Adaptive thinking spends from the same cap as the reply.
+const MAX_TOKENS = 4096;
 // One attempt: the session-end cursor moves only when capture returns, so a hung call must not hold it.
 const CALL_MS = 20_000;
 
@@ -117,7 +120,7 @@ async function ask(llm: Llm, prompt: string, log: LineLog): Promise<string | nul
   const signal = AbortSignal.timeout(CALL_MS);
   let reply: LlmReply;
   try {
-    reply = await llm.send({ maxTokens: MAX_TOKENS, prompt, signal });
+    reply = await llm.send({ model: MODEL, maxTokens: MAX_TOKENS, prompt, signal });
   } catch (err) {
     // The port never throws, but capture must outlive an adapter that does.
     log(`follow-up rules skipped: the model call threw: ${errorMessage(err)}`, {
