@@ -304,8 +304,56 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
     }));
 }
 
+// A reply to the agent's work states how the person wants it done, rule word or not.
+const ANY_STATEMENT = [/\S/];
+// A kept reply names code or limits a choice; a thanks or a pasted test count does neither.
+const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
+const LIMIT_CUE =
+  /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
+// Praise names code too ("Thanks, `src/cache.ts` looks good"); a thanks that goes on to direct is kept.
+// SHORTCUT: word shapes, not meaning; the opt-in model capture is the upgrade path.
+const ACK_LEAD = /^(?:thanks|thank you|ok(?:ay)?|great|nice|perfect|cool|lgtm)\b[\s,.!:-]*/i;
+const NOT_A_DIRECTIVE = /^(?:for|on|to|so|the|a|an|this|that|it|its|you|your|i|we|all|really)\b/i;
+const APPROVAL = /^(?:\S+\s+){0,3}(?:looks?|works?|worked)\s+(?:good|great|fine|right|now)\b/i;
+// Pasted output opens on a file:line, a stack frame or an error word, or holds a file:line:col (a compiler arrow line) or an assertion message.
+const LOG_CUE = new RegExp(
+  [
+    String.raw`^#\d+\s|^\S*\w\.[A-Za-z]+:\d+|\w\.[A-Za-z]+:\d+:\d+`,
+    String.raw`^(?:\w*Error|error(?:\[\w+\])?:|warning:|FAIL|Traceback)`,
+    String.raw`\bexpected\b.+\bto (?:be|equal|have)\b`,
+  ].join('|'),
+);
+
+/** A thanks with no directive after it, or a short "X looks good". */
+function isPraise(content: string): boolean {
+  const lead = ACK_LEAD.exec(content);
+  const rest = lead ? content.slice(lead[0].length) : content;
+  if (APPROVAL.test(rest)) return true;
+  if (!lead) return false;
+  return rest.split(/\s+/).filter(Boolean).length <= 3 || NOT_A_DIRECTIVE.test(rest);
+}
+
+/** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word. */
+function followUpRule(sentence: string): ExtractedItem | null {
+  const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
+  if (!item) return null;
+  const { content } = item;
+  const limits = LIMIT_CUE.test(content);
+  if (LOG_CUE.test(content) || (isPraise(content) && !limits)) return null;
+  const words = content.split(/\s+/).length;
+  const kept = (words >= 2 && CODE_CUE.test(content)) || (words >= 4 && limits);
+  return kept ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
+}
+
+/** What a sentence holds; in a reply a preference that names code or limits a choice is a rule. */
+function sentenceItem(sentence: string, followUp: boolean): ExtractedItem | null {
+  const hit = CATEGORIES.map(([category, patterns]) => extractFromPatterns(sentence, patterns, category)).find((found) => found !== null) ?? null;
+  if (!followUp || (hit !== null && hit.category !== 'preference')) return hit;
+  return followUpRule(sentence) ?? hit;
+}
+
 // The items of the spec bullets first, then those of each prose block.
-function extractSourced(text: string, cuts: Cutter): Sourced[] {
+function extractSourced(text: string, cuts: Cutter, followUp = false): Sourced[] {
   const prose = proseOnly(text);
   const found = extractSpecSections(prose, cuts);
   for (const block of proseBlocks(prose, cuts)) {
@@ -314,13 +362,10 @@ function extractSourced(text: string, cuts: Cutter): Sourced[] {
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
       if (cutByAside(sentence, at)) continue;
-      for (const [category, patterns] of CATEGORIES) {
-        const item = extractFromPatterns(sentence, patterns, category);
-        if (item) {
-          const [from, to] = block.sourceOf(at, at + sentence.length);
-          found.push({ item, from, to });
-          break;
-        }
+      const item = sentenceItem(sentence, followUp);
+      if (item) {
+        const [from, to] = block.sourceOf(at, at + sentence.length);
+        found.push({ item, from, to });
       }
     }
   }
@@ -328,12 +373,13 @@ function extractSourced(text: string, cuts: Cutter): Sourced[] {
 }
 
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
- *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`. */
-export function extractFromTexts(texts: readonly string[], userTexts = 0): ExtractedItem[] {
+ *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`.
+ *  From `firstFollowUp` on, those words answer the agent's work, so a statement in them can be the person's rule. */
+export function extractFromTexts(texts: readonly string[], userTexts = 0, firstFollowUp = userTexts): ExtractedItem[] {
   const seen = new Set<string>();
   return texts
     .flatMap((text, i) =>
-      extractSourced(text, boldPairs).map(({ item }) => (i < userTexts ? { ...item, fromUser: true } : item)),
+      extractSourced(text, boldPairs, i >= firstFollowUp && i < userTexts).map(({ item }) => (i < userTexts ? { ...item, fromUser: true } : item)),
     )
     .filter((item) => {
       const key = duplicateKey(item.content);

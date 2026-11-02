@@ -29,6 +29,7 @@ export * from './auth.js';
 export * from './audit.js';
 export * from './context-types.js';
 export * from './context.js';
+export { userRulesGet, type UserRulesOptions } from './user-rules-get.js';
 export * from './tokens.js';
 export * from './dormant.js';
 export * from './quarantine.js';

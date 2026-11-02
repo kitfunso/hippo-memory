@@ -64,6 +64,8 @@ export interface ContextPlan {
   promptRecallPending: boolean;
   cost: ContextCost | undefined;
   price: (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean) => number;
+  /** Whether a row prints as the person's own rule for this caller. */
+  isUserRule: (entry: MemoryEntry, isGlobal: boolean) => boolean;
   obs: DeliveryObserver | undefined;
 }
 

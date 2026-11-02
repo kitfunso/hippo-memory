@@ -221,7 +221,7 @@ export const SESSION_VERBS = {
     flags: { switches: ['all', 'dry-run', 'no-learn', 'no-schedule'] },
     usage: [`
   setup                    One-shot: detect installed AI tools and install their hooks:
-                           claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
+                           claude-code gets 8 hooks in $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default), opencode a plugin, codex 2 hooks in
                            its hooks.json plus a launcher wrapper, copilot 4 hooks, the
                            MCP server and an instructions block under $COPILOT_HOME
@@ -239,6 +239,12 @@ export const SESSION_VERBS = {
   last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing`],
+  }),
+  'session-rules': verb(() => import('../session-rules.js'), 'handleSessionRules', {
+    flags: {},
+    usage: [`
+  session-rules            SessionStart hook: send every rule you stated to this project as Claude Code
+                           session context, from the project store and the global one`],
   }),
   'session-end': verb(() => import('../session-hooks.js'), 'handleSessionEnd', {
     // Its sleep step reads --dry-run, but the capture after it writes for real.
@@ -301,7 +307,7 @@ export const SESSION_VERBS = {
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi)
-                           claude-code adds 7 hooks to $CLAUDE_CONFIG_DIR/settings.json
+                           claude-code adds 8 hooks to $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default); opencode installs a plugin; codex
                            adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
                            wraps the detected launcher in place; copilot writes

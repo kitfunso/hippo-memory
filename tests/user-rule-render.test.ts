@@ -1,0 +1,345 @@
+// A rule the person stated prints first and plain, as an order; only capture's tag makes a row one, so a typed tag, a
+// pin or a supersede cannot forge it, and a block with no such rule is the block it always was.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { adminActor, getContext, remember, supersede, type Context } from '../src/api/index.js';
+import {
+  contextBlockLines,
+  contextCost,
+  contextHeading,
+  crossProjectHeading,
+  printedTokens,
+  settleTokens,
+  userRuleLine,
+} from '../src/api/context-render.js';
+import { promptHookContext } from '../src/api/prompt-hook.js';
+import { planContext, sourceOf } from '../src/api/context.js';
+import { isUserRule, userRuleReserve, USER_RULE_TAG, type UserRuleViewer } from '../src/api/user-rule.js';
+import type { ContextPools } from '../src/api/context-select.js';
+import { withoutUserTag, type MemoryEntry } from '../src/core/memory.js';
+import { resolveProjectIdentity } from '../src/core/project-identity.js';
+import { handleContext } from '../src/cli/context.js';
+import type { CliFlags } from '../src/cli/flag-values.js';
+import { storeFor } from '../src/store/index.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { withHookStdin } from './_helpers/hook-stdin.js';
+import { runInProcess } from './_helpers/run-in-process.js';
+
+const PROJECT = { name: 'p', legacyName: 'p' };
+const RULE =
+  "No: Clean build: `./mvnw clean package -DskipTests --batch-mode`, because the project's maintainers require it.";
+// The block drops the reply lead the person typed, which reads as an answer and not an order.
+const SHOWN = RULE.replace(/^No: /, '');
+const NOTE = 'Deploys go through the staging queue before the production queue';
+const HEADING = '## Rules from the user';
+
+/** The row capture writes for a rule the person stated. */
+function ruleRow(over: Partial<MemoryEntry> = {}): MemoryEntry {
+  const row = createMemory(RULE, {
+    source: 'capture',
+    confidence: 'observed',
+    pinned: true,
+    tags: ['rule', 'captured', USER_RULE_TAG],
+  });
+  return { ...row, origin_project: 'p', ...over };
+}
+
+/** A pinned row an agent or a person saved by hand. */
+function noteRow(over: Partial<MemoryEntry> = {}): MemoryEntry {
+  return { ...createMemory(NOTE, { pinned: true }), origin_project: 'p', ...over };
+}
+
+function additionalContext(stdout: string): string {
+  // SAFETY: the hook's stdout is the UserPromptSubmit reply hookReply builds.
+  return (JSON.parse(stdout) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput
+    .additionalContext;
+}
+
+let tmp: string;
+let store: string;
+
+beforeEach(() => {
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-user-rule-render-'));
+  store = path.join(tmp, 'proj', '.hippo');
+  const global = path.join(tmp, 'global');
+  fs.mkdirSync(store, { recursive: true });
+  fs.mkdirSync(global, { recursive: true });
+  initStore(store);
+  initStore(global);
+  vi.stubEnv('HIPPO_HOME', global);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+const ctx = (): Context => ({ hippoRoot: store, tenantId: 'default', actor: adminActor('user-rule-test') });
+
+async function hookText(sessionId = 's1'): Promise<string> {
+  const payload = { session_id: sessionId };
+  const { stdout } = await promptHookContext(ctx(), { sessionId, project: PROJECT, payload });
+  return stdout === '' ? '' : additionalContext(stdout);
+}
+
+describe("a rule the person stated, in the hook's block", () => {
+  it('prints under its own first heading as a plain bullet, before the snapshot and the memories, and nowhere else', async () => {
+    writeEntry(store, ruleRow());
+    writeEntry(store, noteRow());
+    saveActiveTaskSnapshot(store, 'default', {
+      task: 'ship the release',
+      summary: 'build is green',
+      next_step: 'tag it',
+      session_id: 's1',
+    });
+
+    const text = await hookText();
+
+    expect(text.startsWith(`${HEADING}\n- ${SHOWN}\n\n`)).toBe(true);
+    expect(text.split(SHOWN)).toHaveLength(2);
+    expect(text).not.toMatch(/Previously observed[^\n]*mvnw/);
+    expect(text).not.toContain('captured, from-user');
+    expect(text.indexOf(HEADING)).toBeLessThan(text.indexOf('## Active Task Snapshot'));
+    expect(text.indexOf('## Active Task Snapshot')).toBeLessThan(text.indexOf('## Project Memory'));
+    expect(text).toContain(`- **[verified] ${NOTE}**`);
+  });
+
+  it('counts the memories heading without it', async () => {
+    writeEntry(store, ruleRow());
+    writeEntry(store, noteRow());
+    expect(await hookText()).toContain('## Project Memory (1 entries,');
+  });
+
+  it('leaves a block with no such rule exactly as the legacy renderer prints it', async () => {
+    const note = noteRow();
+    writeEntry(store, note);
+    const stored = readEntry(store, note.id)!;
+
+    const expected = settleTokens((t) =>
+      contextBlockLines([{ entry: stored, isGlobal: false }], t, 'observe', { showStrength: false }).join('\n'),
+    );
+
+    expect(await hookText()).toBe(expected);
+  });
+
+  it('prices no heading when the view holds no user rule', () => {
+    const cost = contextCost('additional-context', 'observe');
+    const can = { cross: true, promptRecall: true, ambient: false };
+    // The fixed price master computes: the memory headings alone.
+    const legacy =
+      printedTokens(contextHeading('Project Memory', 1500, 1500)) +
+      printedTokens(crossProjectHeading(1500)) +
+      printedTokens(contextHeading('Prompt-Relevant Memory', 1500, 1500));
+    expect(cost.fixed(1500, { ...can, userRule: false })).toBe(legacy);
+    expect(cost.fixed(1500, { ...can, userRule: true })).toBeGreaterThan(legacy);
+  });
+});
+
+describe("the budget pays for a user rule's heading", () => {
+  const CAN = { cross: false, promptRecall: false, ambient: false };
+  const cost = () => contextCost('additional-context', 'observe');
+
+  /** The smallest budget at which the hook read returns `id`. */
+  async function smallestBudgetShowing(id: string): Promise<number> {
+    for (let budget = 1; budget <= 400; budget++) {
+      const result = await getContext(ctx(), {
+        pinnedOnly: true,
+        budget,
+        currentProject: PROJECT,
+        cost: cost(),
+      });
+      if (result.entries.some((r) => r.entry.id === id)) return budget;
+    }
+    throw new Error('the row never fit in 400 tokens');
+  }
+
+  /** The first budget whose room after `fixedAt` holds `entryTokens`. */
+  function smallestBudgetFor(entryTokens: number, extra: (budget: number) => number): number {
+    for (let budget = 1; ; budget++) {
+      if (budget - cost().fixed(budget, { ...CAN, userRule: false }) - extra(budget) >= entryTokens) return budget;
+    }
+  }
+
+  it('reserves the heading once a user rule is in the pool', async () => {
+    const row = ruleRow();
+    writeEntry(store, row);
+    const heading = (budget: number) =>
+      cost().fixed(budget, { ...CAN, userRule: true }) - cost().fixed(budget, { ...CAN, userRule: false });
+    expect(heading(100)).toBeGreaterThan(0);
+
+    const entryTokens = cost().entry({ entry: row, isGlobal: false, userRule: true });
+    expect(await smallestBudgetShowing(row.id)).toBe(smallestBudgetFor(entryTokens, heading));
+  });
+
+  it('reserves the heading for a user rule the global store holds', () => {
+    const c = ctx();
+    const plan = planContext(c, { pinnedOnly: true, currentProject: PROJECT, cost: cost() }, sourceOf(storeFor(c)));
+    const heading = cost().fixed(0, { ...CAN, userRule: true }) - cost().fixed(0, { ...CAN, userRule: false });
+    const pools: ContextPools = { local: { entries: [noteRow()] }, global: { entries: [ruleRow()] } };
+    expect(heading).toBeGreaterThan(0);
+    expect(userRuleReserve(plan, pools)).toBe(heading);
+  });
+
+  it('reserves nothing for a pool with no user rule', async () => {
+    const row = noteRow();
+    writeEntry(store, row);
+    const entryTokens = cost().entry({ entry: row, isGlobal: false });
+    expect(await smallestBudgetShowing(row.id)).toBe(smallestBudgetFor(entryTokens, () => 0));
+  });
+});
+
+describe('what is not a user rule', () => {
+  const viewer: UserRuleViewer = { tenantId: 'default', project: 'p', isGlobal: false };
+
+  it('is true for the row capture writes, for a viewer in that project', () => {
+    expect(isUserRule(ruleRow(), viewer)).toBe(true);
+  });
+
+  it.each<[string, Partial<MemoryEntry>, Partial<UserRuleViewer>]>([
+    ['a project-store row capture wrote, with no origin', { origin_project: null }, {}],
+    ['a global-store row stamped with this project', {}, { isGlobal: true }],
+    [
+      "a row stamped with the project's older name",
+      { origin_project: 'old-p' },
+      { project: { name: 'p', legacyName: 'old-p', aliases: [] } },
+    ],
+  ])('is true for %s', (_name, row, viewing) => {
+    expect(isUserRule(ruleRow(row), { ...viewer, ...viewing })).toBe(true);
+  });
+
+  it.each<[string, Partial<MemoryEntry>, Partial<UserRuleViewer>]>([
+    ['a global-store row from another project', { origin_project: 'other' }, { isGlobal: true }],
+    ['a global-store row with no origin', { origin_project: null }, { isGlobal: true }],
+    ['a global-store row, for a viewer with no project', {}, { isGlobal: true, project: '' }],
+    ['another project', { origin_project: 'other' }, {}],
+    ['a user-global row', { origin_project: '' }, {}],
+    ['another tenant', { tenantId: 'acme' }, {}],
+    ['a superseded row', { superseded_by: 'mem_next' }, {}],
+    ['a verified row', { confidence: 'verified' }, {}],
+    ['an inferred row', { confidence: 'inferred' }, {}],
+    ['a row without the tag', { tags: ['rule', 'captured'] }, {}],
+    ['an unpinned row', { pinned: false }, {}],
+    ['a row typed in by hand', { source: 'cli' }, {}],
+    ['a scoped row', { scope: 'team:eng' }, {}],
+  ])('is false for %s', (_name, row, viewing) => {
+    expect(isUserRule(ruleRow(row), { ...viewer, ...viewing })).toBe(false);
+  });
+
+  it('keeps the legacy frame on a pinned agent capture row without the tag', async () => {
+    writeEntry(store, ruleRow({ tags: ['rule', 'captured'] }));
+    const text = await hookText();
+    expect(text).not.toContain(HEADING);
+    expect(text).toMatch(/- \*\*\[observed\] Previously observed \(\d{4}-\d{2}-\d{2}\): No: Clean build/);
+  });
+
+  it('keeps the legacy frame on a row in another project, which the hook admits only for its own', async () => {
+    writeEntry(store, ruleRow({ origin_project: 'other' }));
+    expect(await hookText()).not.toContain(HEADING);
+  });
+});
+
+describe('a typed tag cannot make a user rule', () => {
+  it('strips the tag from remember, whatever else the write asks for', async () => {
+    const written = await remember(ctx(), {
+      content: RULE,
+      project: PROJECT,
+      tags: [USER_RULE_TAG, 'rule'],
+      local: { pinned: true, confidence: 'observed', source: 'capture' },
+    });
+    expect(readEntry(store, written.id)!.tags).toEqual(['rule']);
+    expect(await hookText()).not.toContain(HEADING);
+  });
+
+  it('strips the tag from a supersede of a user rule, typed or inherited', async () => {
+    const row = ruleRow();
+    writeEntry(store, row);
+
+    const typed = await supersede(ctx(), row.id, `${RULE} Always.`, { tags: [USER_RULE_TAG], pinned: true });
+    const inherited = await supersede(ctx(), typed.newId, `${RULE} Always, and in CI.`);
+
+    for (const id of [typed.newId, inherited.newId]) {
+      const successor = readEntry(store, id)!;
+      expect(successor.tags).not.toContain(USER_RULE_TAG);
+      expect(successor.confidence).toBe('verified');
+    }
+    expect(await hookText()).not.toContain(HEADING);
+  });
+
+  it('strips the tag from a list and keeps the rest in order', () => {
+    expect(withoutUserTag(['a', USER_RULE_TAG, 'b'])).toEqual(['a', 'b']);
+    expect(withoutUserTag(['a'])).toEqual(['a']);
+  });
+});
+
+describe('`hippo context` run in a project', () => {
+  // The command reads its project from the process folder, so the rows are filed under that one.
+  const HERE = resolveProjectIdentity(process.cwd()).name;
+  let flagsRoot: string;
+
+  beforeEach(() => {
+    flagsRoot = path.join(tmp, 'cli', '.hippo');
+    fs.mkdirSync(flagsRoot, { recursive: true });
+    initStore(flagsRoot);
+    vi.stubEnv('HIPPO_TENANT', '');
+    vi.stubEnv('HIPPO_SESSION_ID', '');
+    vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
+  });
+
+  async function cli(flags: CliFlags): Promise<string> {
+    const stdin = JSON.stringify({ session_id: 's1' });
+    const r = await runInProcess(() =>
+      withHookStdin(stdin, () => handleContext({ hippoRoot: flagsRoot, tenantId: 'default', args: [], flags })),
+    );
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  }
+
+  it('prints the rule first and plain in the markdown, with the other memories under their own heading', async () => {
+    writeEntry(flagsRoot, ruleRow({ origin_project: HERE }));
+    writeEntry(flagsRoot, noteRow({ origin_project: HERE }));
+    const out = await cli({ budget: '1500' });
+    expect(out.startsWith(`${HEADING}\n- ${SHOWN}\n\n`)).toBe(true);
+    expect(out.split(SHOWN)).toHaveLength(2);
+    expect(out).toContain('## Project Memory (1 entries,');
+  });
+
+  it('prints it first and plain in the hook format too', async () => {
+    writeEntry(flagsRoot, ruleRow({ origin_project: HERE }));
+    const out = additionalContext(
+      await cli({ 'pinned-only': true, 'include-recent': '5', format: 'additional-context' }),
+    );
+    expect(out.startsWith(`${HEADING}\n- ${SHOWN}\n`)).toBe(true);
+    expect(out).not.toContain('Previously observed');
+  });
+
+  it('keeps a row in another project out of the section', async () => {
+    writeEntry(flagsRoot, ruleRow({ origin_project: `${HERE}-other` }));
+    expect(await cli({ budget: '1500' })).not.toContain(HEADING);
+  });
+
+  it('leaves the JSON as it was, tags and all', async () => {
+    writeEntry(flagsRoot, ruleRow({ origin_project: HERE }));
+    // SAFETY: --format json prints the context JSON, whose memories carry their tags.
+    const json = JSON.parse(await cli({ format: 'json' })) as { memories: Array<{ tags: string[]; content: string }> };
+    expect(json.memories).toHaveLength(1);
+    expect(json.memories[0]!.tags).toContain(USER_RULE_TAG);
+  });
+});
+
+describe('the reply lead the person typed before the rule', () => {
+  it.each([
+    ['"No:"', 'No: Clean build first.', 'Clean build first.'],
+    ['"Yes, keep doing that:" and the spaces after it', 'Yes, keep doing that:   Run the linter.', 'Run the linter.'],
+    ['no lead', 'Never edit CHANGELOG.md by hand.', 'Never edit CHANGELOG.md by hand.'],
+    ['a "No" that opens the rule itself', 'No force pushes to main.', 'No force pushes to main.'],
+    ['a lead inside the rule', 'Say No: never.', 'Say No: never.'],
+  ])('cuts %s', (_name, content, shown) => {
+    expect(userRuleLine(ruleRow({ content }))).toBe(`- ${shown}`);
+  });
+});

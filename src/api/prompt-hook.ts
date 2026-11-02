@@ -5,8 +5,9 @@ import { getContext, type Context, type ContextResult, type ContextResultEntry, 
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import {
-  contextBlockLines, contextCost, crossProjectLines, handoffSectionText, sessionTrailText, settleTokens, snapshotSectionText,
+  contextBlockLines, contextCost, crossProjectLines, handoffSectionText, sessionTrailText, settleTokens, snapshotSectionText, userRuleLines,
 } from './context-render.js';
+import { isUserRule } from './user-rule.js';
 import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../store/delivery-recorder.js';
 import type { HookRuntime } from '../core/capture-contract.js';
 import * as path from 'path';
@@ -17,7 +18,7 @@ import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../store/pilot-arm.js';
-import { assertCallerProject, isGlobalStoreRoot, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
+import { assertCallerProject, isGlobalStoreRoot, MAX_PROJECT_ALIASES, type ProjectRef } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
 import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
 import { shouldSkipUnchanged, type TokenSurface, type TokenUse } from '../store/token-ledger.js';
@@ -71,6 +72,8 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: Deli
 export interface ContextView {
   readonly hippoRoot: string;
   readonly tenantId: string;
+  /** The reader's project, with every name capture may have stamped its rows with; a user rule belongs to this project alone. */
+  readonly project: ProjectRef;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
   readonly pinnedOnly: boolean;
@@ -128,14 +131,31 @@ export function additionalContextOutput(view: ContextView): string {
   return renderAdditionalContext(view).stdout;
 }
 
+/** The rows that print as the person's own rules, and the rest: a rule prints once, in its own section. */
+export interface UserRuleSplit {
+  readonly userRules: MemoryEntry[];
+  readonly others: ContextResultEntry[];
+}
+
+export function splitUserRules(view: Pick<ContextView, 'tenantId' | 'project' | 'result'>): UserRuleSplit {
+  const isRule = (r: ContextResultEntry): boolean =>
+    isUserRule(r.entry, { tenantId: view.tenantId, project: view.project, isGlobal: r.isGlobal ?? false });
+  return {
+    userRules: view.result.entries.filter(isRule).map((r) => r.entry),
+    others: view.result.entries.filter((r) => !isRule(r)),
+  };
+}
+
 function renderAdditionalContext(view: ContextView): RenderedContext {
   const { result, rec, framing } = view;
-  const staticEntries = result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
-  const staticCrossEntries = result.entries.filter((r) => r.category === 'cross-project' && !r.promptRecall);
+  const { userRules, others } = splitUserRules(view);
+  const staticEntries = others.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
+  const staticCrossEntries = others.filter((r) => r.category === 'cross-project' && !r.promptRecall);
   const staticItems = toRenderItems(staticEntries);
-  const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
+  const recallItems = toRenderItems(others.filter((r) => r.promptRecall));
 
   const staticBlock = settleTokens((t) => [
+    ...userRuleLines(userRules),
     ...(result.activeSnapshot ? [snapshotSectionText(result.activeSnapshot, result.snapshotMode ?? 'full')] : []),
     ...(result.sessionHandoff ? [handoffSectionText(result.sessionHandoff, result.handoffMode ?? 'full')] : []),
     ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
@@ -152,7 +172,8 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
   }
 
   const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
-  const sendStatic = staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
+  const staticCount = userRules.length + staticItems.length;
+  const sendStatic = staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticCount);
 
   const finalStatic = sendStatic ? staticBlock : '';
   const additionalContext = finalStatic && recallBlock
@@ -173,7 +194,7 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
     staticReused,
   });
   if (finalStatic || recallBlock) {
-    recordAdditionalContextRows(view, surface, { text: finalStatic, items: staticItems.length }, { text: recallBlock, items: recallItems.length });
+    recordAdditionalContextRows(view, surface, { text: finalStatic, items: staticCount }, { text: recallBlock, items: recallItems.length });
   }
   return { stdout, staticHash: finalStatic ? blockHash(finalStatic) : null };
 }
@@ -305,7 +326,7 @@ export async function promptHookContext(
   });
   const rendered = hasContextData(result)
     ? renderAdditionalContext({
-        hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId: ledgerSessionId,
+        hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, project: req.project, ledgerSessionId, payloadSessionId: ledgerSessionId,
         pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, sharedStore, printedHash: req.printedHash ?? null,
       })
     : NOTHING_RENDERED;

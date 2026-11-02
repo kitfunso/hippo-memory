@@ -1,0 +1,213 @@
+// A person's reply to the agent's work is their rule even with no rule word; the session's opening request is not.
+// Real SQLite stores in tmp dirs, no mocks.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { cmdCapture } from '../src/capture/command.js';
+import { extractFromTexts } from '../src/capture/extract.js';
+import { collectSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
+import { USER_RULE_TAG } from '../src/core/memory.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+
+const REQUEST = 'Add a retry with backoff to fetchJson in src/net.ts.';
+const REPLY =
+  'Run the tests with `pnpm test:unit`, not the bare `pnpm test`: the bare one also starts the browser suite.';
+const SHORT = 'Thanks, looks good.';
+
+describe('capture keeps the rules a person gives in reply', () => {
+  let scratch: string;
+  let root: string;
+
+  const capture = (turns: SessionTurn[], fromStart?: boolean) =>
+    cmdCapture(root, {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: turns,
+      fromStart,
+      dryRun: false,
+      global: false,
+    });
+  const rows = () => loadAllEntries(root, 'default');
+  const user = (text: string): SessionTurn => ({ role: 'user', text });
+  const done: SessionTurn = { role: 'assistant', text: 'Added the retry and its test.' };
+
+  beforeEach(() => {
+    scratch = mkdtempSync(join(tmpdir(), 'hippo-reply-rules-'));
+    root = join(scratch, 'project', '.hippo');
+    initStore(root);
+    const global = join(scratch, 'global');
+    initStore(global);
+    vi.stubEnv('HIPPO_HOME', global);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  it('pins a reply with no rule word as a user rule, and leaves the request and a thanks out', () => {
+    capture([user(REQUEST), done, user(REPLY), done, user(SHORT)]);
+    expect(rows().map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)])).toEqual([
+      [expect.stringContaining('pnpm test:unit'), true, true],
+    ]);
+  });
+
+  it('a reply the rule patterns catch is a user rule too', () => {
+    capture([user(REQUEST), done, user('No: Never commit directly to `main`. Please fix it.')]);
+    expect(rows().map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)])).toEqual([
+      ['No: Never commit directly to `main`', true, true],
+    ]);
+  });
+
+  it('a reply the preference patterns catch is a user rule when it names code or limits a choice', () => {
+    capture([
+      user(REQUEST),
+      done,
+      user('Use `pnpm` instead of `npm`.'),
+      done,
+      user('Avoid edits to `generated.ts`.'),
+      done,
+      user('I prefer small commits that each do one thing.'),
+    ]);
+    const stored = rows().sort((a, b) => a.content.localeCompare(b.content));
+    expect(stored.map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)])).toEqual([
+      ['Avoid edits to `generated.ts`', true, true],
+      ['I prefer small commits that each do one thing', false, false],
+      ['Use `pnpm` instead of `npm`', true, true],
+    ]);
+  });
+
+  it('pins no praise or pasted output that names code, and keeps a thanks that goes on to direct', () => {
+    capture([
+      user(REQUEST),
+      done,
+      user('Thanks, `src/cache.ts` looks good.'),
+      done,
+      user('Great work on `fetchJson()`.'),
+      done,
+      user('src/cache.ts:42 expected 1 to equal 2'),
+      done,
+      user('Thanks, but run `pnpm test:unit`, not the bare `pnpm test`.'),
+      done,
+      user('Thanks, keep using `pnpm` for all installs.'),
+      done,
+      user('Use the existing helper in `src/cache.ts:42` rather than duplicating it.'),
+    ]);
+    const stored = rows().sort((a, b) => a.content.localeCompare(b.content));
+    expect(stored.map((e) => [e.content, e.pinned])).toEqual([
+      ['Thanks, but run `pnpm test:unit`, not the bare `pnpm test`', true],
+      ['Thanks, keep using `pnpm` for all installs', true],
+      ['Use the existing helper in `src/cache.ts:42` rather than duplicating it', true],
+    ]);
+  });
+
+  it('a session with only its request captures nothing', () => {
+    capture([user(REQUEST), done]);
+    expect(rows()).toEqual([]);
+  });
+
+  it('pins no reply that names no code and limits no choice', () => {
+    const noise = [
+      'Thanks, that looks good to me.',
+      'Now do the same for the other file.',
+      'Tests 3 failed | 120 passed (123)',
+    ];
+    capture([user(REQUEST), ...noise.flatMap((n) => [done, user(n)]), done, user(REPLY)]);
+    expect(rows().map((e) => e.content)).toEqual([expect.stringContaining('pnpm test:unit')]);
+  });
+
+  it('pins a short reply that names code, and leaves a short limit with no code out', () => {
+    capture([user(REQUEST), done, user('`pnpm` for installs.'), done, user('Not that.')]);
+    expect(rows().map((e) => [e.content, e.pinned])).toEqual([['`pnpm` for installs', true]]);
+  });
+
+  const replies = (n: number) =>
+    Array.from({ length: n }, (_, i) => user(`Name the helper file net-${i}.ts in the same folder as the caller.`));
+
+  it('a tail that cut off the request reads its first user turn as a reply', () => {
+    capture([user(REQUEST), ...replies(20)]);
+    expect(rows().filter((e) => e.pinned)).toHaveLength(20);
+  });
+
+  it('a tail of exactly 20 user turns still holds the request, so the request stays out', () => {
+    capture([user(REQUEST), ...replies(19)]);
+    const contents = rows().map((e) => e.content);
+    expect(contents).toHaveLength(19);
+    expect(contents.some((c) => c.includes('fetchJson'))).toBe(false);
+  });
+
+  it('a later turn slice reads its first user turn as a reply; a slice from the start does not', () => {
+    capture([done, user(REPLY)], false);
+    expect(rows().map((e) => [e.content, e.pinned])).toEqual([[expect.stringContaining('pnpm test:unit'), true]]);
+    rmSync(root, { recursive: true, force: true });
+    initStore(root);
+    capture([user(REPLY), done]);
+    expect(rows()).toEqual([]);
+  });
+
+  it('a reply the patterns already place keeps their category; the agent never gets the reply rule', () => {
+    const items = extractFromTexts(["Let's go with SQLite for the cache.", REPLY, REPLY], 2, 1);
+    expect(items.map((i) => [i.category, i.fromUser])).toEqual([
+      ['decision', true],
+      ['rule', true],
+    ]);
+    expect(extractFromTexts([REQUEST, REPLY], 0, 0)).toEqual([]);
+    const agent = 'Run the suite with `pnpm test:e2e` before the merge.';
+    expect(extractFromTexts([REPLY, agent], 1, 0).map((i) => [i.content, i.fromUser])).toEqual([
+      [expect.stringContaining('pnpm test:unit'), true],
+    ]);
+  });
+});
+
+describe('which replies capture reads as a rule', () => {
+  const ruleFromReply = (reply: string): boolean =>
+    extractFromTexts([REQUEST, reply], 2, 1).some((i) => i.tags.includes('follow-up'));
+
+  it.each([
+    'Thanks, keep using `pnpm` for all installs.',
+    'Thanks, but run `pnpm test:unit`, not the bare `pnpm test`.',
+    'Use the existing helper in `src/cache.ts:42` rather than duplicating it.',
+    'Keep button styles in `shared.css` so all dialogs look right.',
+    'Use `pnpm` instead of `npm`.',
+    'Avoid edits to `generated.ts`.',
+    REPLY,
+  ])('keeps %s', (reply) => {
+    expect(ruleFromReply(reply)).toBe(true);
+  });
+
+  it.each([
+    'Thanks, `src/cache.ts` looks good.',
+    'Thanks for the great work on `src/cache.ts`.',
+    'Great work on `fetchJson()`.',
+    '`src/cache.ts` works now.',
+    'src/cache.ts:42 expected 1 to equal 2',
+    '--> src/cache.rs:42:3',
+    '#0 fetchJson () at src/cache.cpp:42',
+    'TypeError: fetchJson is not a function',
+    'Tests 3 failed | 120 passed (123)',
+  ])('drops %s', (reply) => {
+    expect(ruleFromReply(reply)).toBe(false);
+  });
+});
+
+describe('the transcript reader keeps only what a person typed', () => {
+  it('drops the user lines Claude Code writes for ! shell commands and task notices', () => {
+    const userLine = (content: string) => ({ type: 'user', message: { role: 'user', content } });
+    const lines = [
+      userLine(REQUEST),
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Added the retry.' }] },
+      },
+      userLine('<bash-input>pnpm test</bash-input>'),
+      userLine('<bash-stdout>Tests 3 failed | 120 passed (123)</bash-stdout>'),
+      userLine('<bash-stderr>Error: the browser suite did not start</bash-stderr>'),
+      userLine('<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>'),
+      userLine(REPLY),
+    ];
+    const turns = collectSessionTurns(lines.map((l) => JSON.stringify(l)).join('\n'));
+    expect(turns.filter((t) => t.role === 'user').map((t) => t.text)).toEqual([REQUEST, REPLY]);
+  });
+});

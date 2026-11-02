@@ -3,6 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { isInitialized } from '../core/project-identity.js';
+import { withoutUserTag } from '../core/memory.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { embedCoverage, embedMissingMemories } from '../api/embeddings.js';
 import { captureError, runWatched } from '../learn/autolearn.js';
@@ -145,11 +146,11 @@ function warnRedacted(count: number | undefined): void {
 export function handleImport({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
-  const extraTags: string[] = Array.isArray(flags['tag'])
+  const extraTags: string[] = withoutUserTag(Array.isArray(flags['tag'])
     ? flags['tag']
     : flags['tag']
       ? [String(flags['tag'])]
-      : [];
+      : []);
 
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 

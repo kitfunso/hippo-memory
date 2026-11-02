@@ -16,6 +16,8 @@ export interface ToolDetection {
 
 export const HIPPO_SLEEP_MARKER = 'hippo sleep';
 export const HIPPO_LAST_SLEEP_MARKER = 'hippo last-sleep';
+export const HIPPO_SESSION_RULES_MARKER = 'hippo session-rules';
+export const HIPPO_SESSION_RULES_COMMAND = 'hippo session-rules';
 export const HIPPO_CAPTURE_MARKER = 'hippo capture --last-session';
 export const HIPPO_SESSION_END_MARKER = 'hippo session-end';
 export const HIPPO_PINNED_INJECT_MARKER = 'hippo context --pinned-only';

@@ -13,7 +13,7 @@ import { DEFAULT_CONTEXT_BUDGET } from '../api/context.js';
 import { cliApiContext } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
 import {
-  contextBlockLines, contextCost, crossProjectLines, handoffSectionText, settleTokens, snapshotSectionText,
+  contextBlockLines, contextCost, crossProjectLines, handoffSectionText, settleTokens, snapshotSectionText, userRuleLines,
 } from '../api/context-render.js';
 import {
   additionalContextOutput,
@@ -22,8 +22,10 @@ import {
   hasContextData,
   startDeliveryRecorder,
   sessionStartEnvelope,
+  splitUserRules,
   toRenderItems,
 } from '../api/prompt-hook.js';
+import { resolveProjectIdentity } from '../core/project-identity.js';
 import { type CliFlags, parseLimitFlag, parseCountFlag, parseBudgetFlag, type CommandContext, flagIsTrue } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { printSessionEvents, captureConsole } from './print.js';
@@ -103,7 +105,9 @@ async function renderContext(
   const ctx = cliApiContext(hippoRoot, resolvedTenant);
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');
-  const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
+  // The project the render checks user rules against is the one getContext reads for.
+  const currentProject = resolveProjectIdentity(process.cwd());
+  const opts: api.ContextOpts = { ...buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec }), currentProject };
 
   const result = await api.getContext(ctx, opts);
   if (!hasContextData(result)) {
@@ -112,7 +116,9 @@ async function renderContext(
   }
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
-  const view: ContextView = { hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result, envelope };
+  const view: ContextView = {
+    hippoRoot, tenantId: ctx.tenantId, project: currentProject, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result, envelope,
+  };
   renderContextView(view, format, query);
 }
 
@@ -132,14 +138,14 @@ function renderContextView(view: ContextView, format: string, query: string): vo
   }
 }
 
-interface ContextSession {
+export interface ContextSession {
   readonly currentSessionId: string | undefined;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
   readonly prompt: string | undefined;
 }
 
-function resolveContextSession(stdinText: string | undefined): ContextSession {
+export function resolveContextSession(stdinText: string | undefined): ContextSession {
   // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then hostSessionId();
   // absent both, api.getContext applies the pure freshness bound.
   const payload = readHookPayload(stdinText);
@@ -223,10 +229,12 @@ function renderContextJson(view: ContextView, query: string): void {
 /** The default format; the header figure counts the whole block, sections included, as the ledger does. */
 function renderContextMarkdown(view: ContextView): void {
   const { result, rec, framing } = view;
+  const { userRules, others } = splitUserRules(view);
   // Cross-project inclusions get their own section so they never masquerade as project memory.
-  const renderItems = toRenderItems(result.entries.filter((r) => r.category !== 'cross-project'));
-  const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
+  const renderItems = toRenderItems(others.filter((r) => r.category !== 'cross-project'));
+  const crossEntries = others.filter((r) => r.category === 'cross-project');
   const text = settleTokens((t) => captureConsole(() => {
+    for (const line of userRuleLines(userRules)) console.log(line);
     if (result.activeSnapshot) {
       console.log(snapshotSectionText(result.activeSnapshot, result.snapshotMode ?? 'full'));
     }
@@ -247,7 +255,7 @@ function renderContextMarkdown(view: ContextView): void {
   bookLedgerTurn(view.hippoRoot, {
     uses: [{
       tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
-      event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
+      event: 'inject', items: userRules.length + renderItems.length, tokens: estimateTokens(text),
     }],
     delivery: (write) => flushDeliveryRecorder(rec, write),
   });

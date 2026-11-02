@@ -20,8 +20,9 @@ const commands = (event: string, matcher?: string): string[] =>
   (manifest.hooks[event] ?? []).filter((g) => matcher === undefined || g.matcher === matcher).flatMap((g) => g.hooks.map((h) => h.command));
 
 describe('Claude Code plugin hook manifest', () => {
-  it('delivers memories through the per-prompt hook alone, with no context call at session start', () => {
+  it('delivers memories through the per-prompt hook, and only the user rules at session start', () => {
     expect(commands('SessionStart').filter((c) => c.startsWith('hippo context'))).toEqual([]);
+    expect(commands('SessionStart').some((c) => c.startsWith('hippo session-rules'))).toBe(true);
     expect(commands('SessionStart').some((c) => c.startsWith('hippo last-sleep'))).toBe(true);
     expect(commands('UserPromptSubmit').some((c) => c.startsWith('hippo context --pinned-only --include-recent 5 --format additional-context'))).toBe(true);
   });

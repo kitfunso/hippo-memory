@@ -348,6 +348,14 @@ export const DEFAULT_HALF_LIFE_DAYS = 365;
 export const COMPACTION_MEMORY_TAG = 'compaction-memory';
 export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 
+/** Tag on a rule the person stated, which only capture may set. */
+export const USER_RULE_TAG = 'from-user';
+
+/** `tags` without the user-rule tag, for every tag a person types: a typed tag must not make a row print as the person's own rule. */
+export function withoutUserTag(tags: readonly string[]): string[] {
+  return tags.filter((t) => t !== USER_RULE_TAG);
+}
+
 /** An imported agent memory is kept for good: the agent's note file is its record. It needs both its tool's tag and a source with that tool's prefix,
  *  since merge copies source tags onto rows whose source is 'consolidation'. */
 export interface KeepPair {
@@ -458,7 +466,7 @@ export function createSuccessor(
 ): MemoryEntry {
   const next = createMemory(content, {
     layer: opts.layer ?? old.layer,
-    tags: opts.tags ?? [...old.tags],
+    tags: withoutUserTag(opts.tags ?? old.tags),
     pinned: opts.pinned ?? old.pinned,
     source: old.source,
     confidence: 'verified',

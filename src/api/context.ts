@@ -45,6 +45,7 @@ import type { ContextOpts, ContextResult, ContextResultEntry, ContinuityMode } f
 import { andThen, onStore } from './on-store.js';
 import { strengthenOf } from './recall-record.js';
 import { type Context, ownerOrSubject } from './types.js';
+import { isUserRule, userRuleReserve } from './user-rule.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -92,7 +93,7 @@ interface RecentRequest {
 }
 
 /** A store's base search and context reads; a store without the group throws StoreNotPortedError. */
-function sourceOf(store: HippoStore): ContextSource {
+export function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: requireGroup(store, 'contextReads') };
 }
 
@@ -174,11 +175,12 @@ export async function getContext(
     return { entries: [], tokens: 0 };
   }
 
+  const left = Math.max(0, sections.left - userRuleReserve(plan, pools));
   const picked = plan.pinnedOnly
-    ? selectPinned(opts, plan, sections.left, pools, admission)
+    ? selectPinned(opts, plan, left, pools, admission)
     : plan.query === '*'
-      ? selectStrongest(plan, sections.left, pools)
-      : await selectBySearch(ctx, plan, sections.left, pools, admission);
+      ? selectStrongest(plan, left, pools)
+      : await selectBySearch(ctx, plan, left, pools, admission);
   if (picked === null) {
     return { entries: [], tokens: 0 };
   }
@@ -223,13 +225,18 @@ function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
 }
 
 /** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
-function entryPricer(cost: ContextOpts['cost'], currentProject: ContextPlan['currentProject']): ContextPlan['price'] {
+function entryPricer(
+  cost: ContextOpts['cost'], currentProject: ContextPlan['currentProject'], userRule: ContextPlan['isUserRule'],
+): ContextPlan['price'] {
   return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
-    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject) })
+    ? cost.entry({
+        entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject),
+        userRule: userRule(entry, isGlobal),
+      })
     : estimateTokens(entry.content);
 }
 
-function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
+export function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
   const pinnedOnly = opts.pinnedOnly === true;
   const { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts, local);
   const query = (opts.q ?? '').trim() || '*';
@@ -249,7 +256,8 @@ function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): Con
   const promptRecallPending = pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
 
   const cost = opts.cost;
-  const price = entryPricer(cost, currentProject);
+  const userRule: ContextPlan['isUserRule'] = (entry, isGlobal) => isUserRule(entry, { tenantId: ctx.tenantId, project: currentProject, isGlobal });
+  const price = entryPricer(cost, currentProject, userRule);
   return {
     local,
     other,
@@ -273,6 +281,7 @@ function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): Con
     promptRecallPending,
     cost,
     price,
+    isUserRule: userRule,
     obs: opts.deliveryObserver,
   };
 }
@@ -300,6 +309,8 @@ function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): 
         cross: plan.includeCrossProject,
         promptRecall: promptRecallPending,
         ambient: !pinnedOnly && config.ambient.enabled,
+        // Unknown until the rows load; userRuleReserve pays it then.
+        userRule: false,
       }))
     : blockBudget;
 }
@@ -394,7 +405,7 @@ function contextResult(recorded: RecordedRetrieval, tokens: number, s: TaskSecti
   };
 }
 
-function ambientAdmission(
+export function ambientAdmission(
   opts: ContextOpts, plan: ContextPlan, digestHandoff: SessionHandoff | null,
 ): ContextAdmission {
   const transcriptHandoffSession =
@@ -423,7 +434,7 @@ function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
   return plan.originProject && { names: plan.originProject, userGlobal: true };
 }
 
-async function loadPools(
+export async function loadPools(
   ctx: Context,
   plan: ContextPlan,
   admission: ContextAdmission,

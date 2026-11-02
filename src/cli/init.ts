@@ -304,6 +304,9 @@ function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
   if (result.installedSessionStart) {
     console.log(`   Auto-installed hippo last-sleep SessionStart hook in ${hook} settings`);
   }
+  if (result.installedSessionRules) {
+    console.log(`   Auto-installed hippo session-rules SessionStart hook in ${hook} settings`);
+  }
   if (result.installedUserPromptSubmit) {
     console.log(`   Auto-installed hippo pinned-inject UserPromptSubmit hook in ${hook} settings`);
   }

@@ -53,11 +53,9 @@ describe('JSON hook installer', () => {
 
       const settings = JSON.parse(fs.readFileSync(result.settingsPath, 'utf8'));
       expect(settings.hooks.SessionEnd).toHaveLength(1);
-      // SessionStart now carries two entries: the un-matched last-sleep
-      // entry (index 0, asserted below) and the matcher:'compact'
-      // compact-resume entry — see the dedicated PreCompact/compact-resume
-      // test for that second entry's shape.
-      expect(settings.hooks.SessionStart).toHaveLength(2);
+      // SessionStart carries three entries: the un-matched last-sleep entry (index 0, asserted below), the
+      // un-matched session-rules entry and the matcher:'compact' compact-resume entry.
+      expect(settings.hooks.SessionStart).toHaveLength(3);
 
       const sessionEndCmd = settings.hooks.SessionEnd[0].hooks[0].command;
       const sessionStartCmd = settings.hooks.SessionStart[0].hooks[0].command;
@@ -87,9 +85,9 @@ describe('JSON hook installer', () => {
       expect(preCompactCmd).toContain('hippo pre-compact --log-file');
       expect(preCompactCmd).toContain(defaultPreCompactLogPath());
 
-      // SessionStart now carries two entries: the pre-existing un-matched
-      // last-sleep entry and the new matcher:'compact' compact-resume entry.
-      expect(settings.hooks.SessionStart).toHaveLength(2);
+      // SessionStart carries the un-matched last-sleep and session-rules entries and the
+      // matcher:'compact' compact-resume entry.
+      expect(settings.hooks.SessionStart).toHaveLength(3);
       const compactEntry = settings.hooks.SessionStart.find(
         (e: { hooks: Array<{ command: string }> }) => e.hooks[0].command.includes('hippo compact-resume'),
       );
@@ -108,12 +106,13 @@ describe('JSON hook installer', () => {
 
       expect(second.installedSessionEnd).toBe(false);
       expect(second.installedSessionStart).toBe(false);
+      expect(second.installedSessionRules).toBe(false);
       expect(second.installedPreCompact).toBe(false);
       expect(second.installedCompactResume).toBe(false);
 
       const settings = JSON.parse(fs.readFileSync(second.settingsPath, 'utf8'));
       expect(settings.hooks.SessionEnd).toHaveLength(1);
-      expect(settings.hooks.SessionStart).toHaveLength(2);
+      expect(settings.hooks.SessionStart).toHaveLength(3);
       expect(settings.hooks.PreCompact).toHaveLength(1);
     });
 
@@ -298,7 +297,7 @@ describe('JSON hook installer', () => {
       // and compact-resume (matcher: 'compact') coexisting, unmodified, in
       // the same SessionStart array before uninstall runs.
       const before = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      expect(before.hooks.SessionStart).toHaveLength(2);
+      expect(before.hooks.SessionStart).toHaveLength(3);
       const lastSleepBefore = before.hooks.SessionStart.find(
         (e: { matcher?: string }) => e.matcher === undefined,
       );
@@ -383,6 +382,7 @@ describe('JSON hook installer', () => {
       ['SessionEnd', 'echo bye; hippo sleep-report-of-mine'],
       ['SessionEnd', 'myhippo session-end --log-file x'],
       ['SessionStart', 'hippo last-sleeper'],
+      ['SessionStart', 'hippo session-rules-report'],
       ['UserPromptSubmit', 'hippo context --pinned-only-report'],
       ['PreCompact', 'hippo pre-compact2'],
     ])("keeps a user's %s command that only contains a hippo command name: %s", (event, command) => {

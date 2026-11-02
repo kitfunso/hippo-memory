@@ -8,6 +8,8 @@ import {
   type JsonHookTarget,
   HIPPO_SLEEP_MARKER,
   HIPPO_LAST_SLEEP_MARKER,
+  HIPPO_SESSION_RULES_MARKER,
+  HIPPO_SESSION_RULES_COMMAND,
   HIPPO_CAPTURE_MARKER,
   HIPPO_SESSION_END_MARKER,
   HIPPO_PINNED_INJECT_MARKER,
@@ -37,6 +39,8 @@ export interface InstallResult {
   settingsPath: string;
   installedSessionEnd: boolean;
   installedSessionStart: boolean;
+  /** SessionStart -> `hippo session-rules` (sends the rules you stated). */
+  installedSessionRules: boolean;
   installedUserPromptSubmit: boolean;
   installedPreCompact: boolean;
   installedCompactResume: boolean;
@@ -164,6 +168,7 @@ function nothingInstalled(target: JsonHookTarget, settingsPath: string): Install
     settingsPath,
     installedSessionEnd: false,
     installedSessionStart: false,
+    installedSessionRules: false,
     installedUserPromptSubmit: false,
     installedPreCompact: false,
     installedCompactResume: false,
@@ -319,7 +324,7 @@ function appendHookIfMissing(hooks: ClaudeHooks, event: string, marker: string, 
 /** Every command hippo has written to Claude Code's settings per event, the legacy forms included; uninstall removes only handlers that run one. */
 const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['SessionEnd', [HIPPO_SESSION_END_MARKER, HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER]],
-  ['SessionStart', [HIPPO_LAST_SLEEP_MARKER, HIPPO_COMPACT_RESUME_MARKER]],
+  ['SessionStart', [HIPPO_LAST_SLEEP_MARKER, HIPPO_SESSION_RULES_MARKER, HIPPO_COMPACT_RESUME_MARKER]],
   ['UserPromptSubmit', [HIPPO_PINNED_INJECT_MARKER]],
   ['PreCompact', [HIPPO_PRE_COMPACT_MARKER]],
   ['PostCompact', [HIPPO_POST_COMPACT_MARKER]],
@@ -335,13 +340,16 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
     claudeCommandGroup(`hippo session-end --log-file "${logFile}"`, 5));
   const installedSessionStart = appendHookIfMissing(hooks, 'SessionStart', HIPPO_LAST_SLEEP_MARKER,
     claudeCommandGroup(`hippo last-sleep --path "${logFile}"`, 5));
+  // No matcher: a resumed or cleared session and a compaction lose the rules too, so every source sends them again.
+  const installedSessionRules = appendHookIfMissing(hooks, 'SessionStart', HIPPO_SESSION_RULES_MARKER,
+    claudeCommandGroup(HIPPO_SESSION_RULES_COMMAND, 5));
 
   // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn, so pinned memories stay in context; the fresh write tail
   // makes lessons saved earlier in the session visible on the next prompt even before they are pinned.
   const migratedPinnedInjectRecent = migratePinnedInjectRecentCommands(hooks.UserPromptSubmit);
   const installedUserPromptSubmit = appendHookIfMissing(hooks, 'UserPromptSubmit', HIPPO_PINNED_INJECT_MARKER,
     claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, 5));
-  return { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit };
+  return { installedSessionEnd, installedSessionStart, installedSessionRules, migratedPinnedInjectRecent, installedUserPromptSubmit };
 }
 
 function appendCompactionHooks(hooks: ClaudeHooks) {
@@ -369,7 +377,7 @@ function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logF
   const hooks = merge as ClaudeHooks;
   const migration = migrateLegacyClaudeHooks(hooks);
 
-  const { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit } =
+  const { installedSessionEnd, installedSessionStart, installedSessionRules, migratedPinnedInjectRecent, installedUserPromptSubmit } =
     appendSessionHooks(hooks, logFile);
   const { installedPreCompact, installedCompactResume, installedPostCompact } = appendCompactionHooks(hooks);
 
@@ -383,6 +391,7 @@ function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logF
     settingsPath,
     installedSessionEnd,
     installedSessionStart,
+    installedSessionRules,
     installedUserPromptSubmit,
     installedPreCompact,
     installedCompactResume,

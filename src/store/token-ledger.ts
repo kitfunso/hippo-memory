@@ -12,12 +12,13 @@ import {
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
-/** Where a block was sent: `hook`/`hook_recall` (per-prompt hook), `compact_resume`, `context`/`recall` (CLI), `mcp_*`, `http_*`,
+/** Where a block was sent: `hook`/`hook_recall` (per-prompt hook), `compact_resume`, `session_start`, `context`/`recall` (CLI), `mcp_*`, `http_*`,
  * and `pilot` (session pilot arm row, src/api/pilot-arm.ts; not a send, so in no surface list). */
 export type TokenSurface =
   | 'hook'
   | 'hook_recall'
   | 'compact_resume'
+  | 'session_start'
   | 'context'
   | 'recall'
   | 'mcp_recall'
@@ -29,12 +30,12 @@ export type TokenSurface =
 
 /** All surfaces, in report order. */
 export const TOKEN_SURFACES: readonly TokenSurface[] = [
-  'hook', 'hook_recall', 'compact_resume', 'context', 'recall', 'mcp_recall', 'mcp_context',
+  'hook', 'hook_recall', 'compact_resume', 'session_start', 'context', 'recall', 'mcp_recall', 'mcp_context',
   'http_recall', 'http_context', 'http_assemble',
 ];
 
 /** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry one session id. */
-export const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
+export const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume', 'session_start'];
 
 /** What happened to a block: `inject` (sent), `skip` (identical to the last injected block), `reset` (host compacted, next must send), `reread` (tokens
  * later calls read again, booked at session end), `arm` (pilot assignment; `block_hash` is `hippo` or `holdout`, `items` the holdout rate in bp). */

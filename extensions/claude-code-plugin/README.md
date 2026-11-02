@@ -48,6 +48,10 @@ The per-prompt hook injects pinned rules and matching memories, so the plugin no
 
 The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5 --format additional-context`, so pinned memories stay in context through long sessions, with up to 5 memories that share words with the prompt. Set `{"pinnedInject":{"promptRecall":false}}` in `.hippo/config.json` for the five newest writes instead.
 
+### Your rules at session start
+
+The `SessionStart` hook runs `hippo session-rules`, which prints the rules you stated to this project as session context and nothing else. It prints nothing when there are none.
+
 ### Auto-capture errors
 
 The `PostToolUseFailure` hook runs `hippo capture-error`, which reads the failure Claude Code sends on stdin and saves the tool name and error (first 200 characters) as an error memory (2x half-life), marked `observed` because nobody verified it. Routine failures are skipped: interrupts, permissions you declined, "permission denied" errors from the system, searches that found nothing, and `grep`/`find`/`diff`-style commands exiting 1. A failure already captured is not stored twice. Every failure, stored or skipped, is also logged for `hippo failures`: the session, the tool and hashes of the error, never its text. A hash is not anonymous, since anyone who guesses an error's text can check it against the hash. The log keeps 90 days. `hippo hook install claude-code` installs the same hook, so both install routes behave alike.

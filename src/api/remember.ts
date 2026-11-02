@@ -4,7 +4,9 @@ import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../store/port.js';
 import { detectInstruction } from './instruction-detect.js';
 import { quarantineScopeFor } from '../trust/quarantine.js';
-import { createMemory, type ConfidenceLevel, type Layer, type MemoryEntry, type MemoryKind, type TraceOutcome } from '../core/memory.js';
+import {
+  createMemory, withoutUserTag, type ConfidenceLevel, type Layer, type MemoryEntry, type MemoryKind, type TraceOutcome,
+} from '../core/memory.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { assertCallerProject } from '../core/project-identity.js';
@@ -100,7 +102,7 @@ function prepareRemember(ctx: Context, opts: RememberOpts): PreparedRemember {
     scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
     owner: opts.owner ?? null,
     artifact_ref: opts.artifactRef ?? null,
-    tags: opts.tags,
+    tags: opts.tags && withoutUserTag(opts.tags),
     tenantId: ctx.tenantId,
     baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
