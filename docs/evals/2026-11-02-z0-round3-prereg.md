@@ -75,5 +75,5 @@ Prereg 247-255 and the dev-round log, plus every arm's repeat rate on first appl
 
 ## Decisions for the founder
 
-- **Budget:** about $3,260 at the sizer's design (40 repositories, 2 families each), with a ceiling of about $6,340 if every capped arm needs 9 seeds. No scored session runs before your yes on it.
-- **Follow-up capture in A2:** on, which tests PR #1138 and prices its Sonnet calls into the cost, or off, which tests the default install.
+- **Budget:** about $3,260 at the sizer's design (40 repositories, 2 families each), with a ceiling of about $6,340 if every capped arm needs 9 seeds. **Answered 2 Nov 2026 (founder: "use the subs"):** every session runs on the subscription tokens `Z0_SUB_TOKEN` and `Z0_SUB_TOKEN_2`, through `CLAUDE_CODE_OAUTH_TOKEN` in-process, with no Console key. The dollar figures stay as list-price usage for the cost hypotheses; the subscriptions' weekly limits set the calendar, and the runner waits out each limit.
+- **Follow-up capture in A2:** **answered 2 Nov 2026 (founder delegated the pick): off.** Teach is one scripted turn this round, so follow-up capture has little to catch, and its model calls need an API key outside the subscriptions. A2 runs the default install. Item 5's key route and usage pricing do not apply, `Z0_HIPPO_MODEL_KEY` is never set, and G1 still fails on any `ANTHROPIC_API_KEY` in `envKeys`.
