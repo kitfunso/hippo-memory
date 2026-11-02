@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.1.1 - 2026-11-02
+
+### Fixed
+
+- **Capture no longer stores a rule cut inside a bold label or an aside.** Capture now removes bold pairs and splits sentences where 3.1.0 did, and skips a sentence that starts inside an aside the split cut. A line such as `- **Volume data.** Never backfill them.` now stores "Never backfill them", not "** Never backfill them". Capture removes only real `**` pairs, read by the CommonMark rules, so `**kwargs`, `2**10`, `**/*.ts` and code spans keep their text. A line whose bold markers capture used to keep is not stored a second time. A rule that starts with a bold keyword, such as `**Never** deploy it.`, is now stored; 3.1.0 skipped it.
+- **Capture masks emails and secrets in the text it stores.** It scrubs each item again after it removes bold markers, so `**reviewer**@example.invalid` is stored as `[email]`. Rows that 3.1.0 already stored keep their text.
+- **The next daily run or `hippo sleep` sets the cut rows you already have aside once.** This includes stored rows that start with `** `. The run takes a backup first, keeps pinned rows, and prints the "N look doubtful and were kept" notice once more. `hippo audit repair` lists those rows. Bring one back with `hippo dormant restore <id>`.
+- **Recall finds Chinese, Japanese and Korean memories.** The word splitter kept only ASCII letters, so a query such as `hippo recall "数据库连接池"` had no words and printed "No memories found", even with embeddings on. Text in those scripts now splits into overlapping two-letter pieces, which match the same way in a query and in a memory. A CJK query reads the substring indexes, not the word index, which holds a whole CJK run as one token, so a mixed English and Chinese query finds rows holding either word. The prompt hook, conflict check, schema fit and `hippo invalidate` read CJK words the same way.
+- **The prompt hook no longer drops the Chinese part of a mixed prompt.** It searches with the 8 rarest terms of the prompt, and it could only count English words, so a prompt with 8 or more known English words sent no Chinese at all, and a long Chinese prompt sent only its first few letters. The trigram index now counts each Chinese, Japanese or Korean piece, and both kinds compete in one rarest-first pick. `rarestFtsQuery` takes an optional fourth argument with those counts; without it, CJK pieces keep half the slots, spread through the prompt.
+- **Recall finds Russian, Greek, Arabic, Hebrew and Hindi memories.** The same word splitter turned every letter outside A to Z into a space, so `hippo recall "сервер"` found nothing. Words in every script now stay whole, and so does an accented word such as `café`. One side effect: a part-word query such as `caf` no longer ranks `café` first, because `caf` is no longer a word inside it.
+
+### Known limitations
+
+- Repair misses some cuts, and a missed cut stays stored as before. Four shapes pass. One is a text cut inside a code span, where the first backtick closes the span. One is a cut word of 3 letters or fewer before `)`. One is a `**` cut that a later bold pair follows. One is a cut right after a word, for example `sleep** (when`. On the global store measured for this fix, 65 of 76 cut rows are set aside. Eight misses are cuts right after a word. One miss is the code-span case. Two misses are merged rows with no automatic parent, which `hippo audit repair` lists for review.
+- A code span that wraps onto a line that starts with a capital letter can split the rule, as in 3.1.0.
+- Capture skips only the sentence that starts inside a cut aside. The text before the cut stays as 3.1.0 stored it, for example `Always run the check (see the docs`.
+- Capture skips a whole rule that follows a cut aside directly, as in `main) Never push on Friday`. The skip removes it with the cut.
+- An unclosed `(` earlier in a block can make capture skip a later rule that holds a quoted `)`.
+- Capture reads `**` by the Markdown rules. Two power operators in one line, such as `(n + 1)**2 and 2**-1`, read as a bold pair and lose their `**`.
+- Capture no longer refuses a text that arrives already cut, such as `done.** then always run the tests`. It stores that text as 3.1.0 did. Only the one-time repair sets such rows aside.
+- Repair reads only the text of a row, and it judges automatic rows from every source. A rare valid row can be set aside, for example one that starts with `** is the power operator` or one with `first)` in a list. On the global store measured for this fix, it set aside no valid row. Bring one back with `hippo dormant restore <id>`.
+- Capture keeps a bold pair between two letters, as in Chinese or Japanese text with no spaces, such as `部署**生产环境**`. 3.1.0 kept it too.
+- The upgrade notice counts only the rows it moved or listed for review. A pinned cut row stays, and the notice does not name it. `hippo audit repair` shows it.
+
 ## 3.1.0 - 2026-11-01
 
 ### Changed
