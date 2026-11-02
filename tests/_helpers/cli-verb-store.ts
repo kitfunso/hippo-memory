@@ -40,7 +40,13 @@ const DROPPED_ENV = [
   'PATH',
 ];
 // Counters and one-time repair marks a verb leaves in `meta`; the schema version and the like stay out, as they change with every migration.
-const META_KEYS = ['total_remembered', 'total_forgotten', 'project_repair_auto', 'quality_repair_auto'];
+const META_KEYS = [
+  'total_remembered',
+  'total_forgotten',
+  'project_repair_auto',
+  'quality_repair_auto',
+  'quality_repair_gate',
+];
 
 const bases: string[] = [];
 afterAll(() => {

@@ -4,6 +4,7 @@ import {
   DAG_LEVEL,
   type MemoryEntry,
 } from './entry.js';
+import { blankCodeSpans, strongMarkers } from './markdown-delimiters.js';
 import { heldTexts } from '../util/same-text.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 import { CJK_SCRIPTS } from '../util/tokenize.js';
@@ -17,6 +18,9 @@ export type AutomaticMemoryDefect =
   | 'raw-output'
   | 'too-vague'
   | 'no-specificity';
+
+/** Bump when a certain defect is added, so the next daily run or sleep cleans each store once more. */
+export const QUALITY_GATE_VERSION = 2;
 
 /** Text shorter than this holds no fact worth keeping. */
 export const MIN_MEMORY_CHARS = 10;
@@ -126,6 +130,81 @@ const POSSIBLE_CUT_ENDING = new RegExp(
 /** A short leading condition with no rule word, comma or "then": "If the build fails". */
 function isBareCondition(bare: string): boolean {
   return !/[,;]|\bthen\b/i.test(bare) && !RULE_WORD.test(bare) && bare.split(/\s+/).length <= 6;
+}
+
+// A blanked code span reads as a letter that is no roman numeral, so it is never a list marker.
+const CODE_AS_LETTER = 'q';
+const LIST_MARKER_START = /[\s(,;:]/;
+const ROMAN_NUMERAL = /^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/i;
+const ROMAN_MARKER_START = /[(,;]/;
+const ROMAN_AFTER_WORD = /(?:^|[^A-Za-z])(?:option|step|item)\s+$/i;
+const BOLD_CLOSE_NEXT = /[\s.,;:!?)\]"'’”—–]/;
+const SENTENCE_MARK = /[.!?;:,]/;
+const WORD_CODE_OR_CLOSER = /[\p{L}\p{N}`)\]]/u;
+const DASH_OR_SPACE = /[\s—–]/;
+const CLOSING_QUOTE = /['"’”]/;
+export const QUOTE_MARK = /['"‘’“”]/;
+
+// A "**" that only closes (not after a word), a dual-role one after a sentence mark with no closer,
+// or a bare one opening the text shows the text began inside a bold span.
+function opensInsideBold(text: string): boolean {
+  const [first, ...later] = strongMarkers(blankCodeSpans(text, '`'));
+  if (first === undefined) return false;
+  const next = text[first.index + 2] ?? ' ';
+  if (first.close && !first.open) {
+    // After a word, code span or closing bracket, "2** (n + 1)" and "(n + 1)** 2" are too often literal to be certain.
+    if (WORD_CODE_OR_CLOSER.test(text[first.index - 1] ?? '')) return false;
+    return BOLD_CLOSE_NEXT.test(next);
+  }
+  // A quoted "**", "(**.env**)" and "foo**bar**" can open too: only "done.**— then" with no closer is a cut.
+  if (first.close) {
+    const closerFollows = later.some((marker) => marker.close);
+    return SENTENCE_MARK.test(text[first.index - 1]) && DASH_OR_SPACE.test(next) && !closerFollows;
+  }
+  return text.slice(0, first.index).trim() === '' && /^\s/.test(text.slice(first.index + 2));
+}
+
+/** "1)", "a)" and "ii)" mark list items; so does a longer valid roman numeral in a label place. */
+function isListMarker(text: string, close: number): boolean {
+  let start = close;
+  while (start > 0 && /[A-Za-z0-9]/.test(text[start - 1])) start--;
+  const token = text.slice(start, close);
+  const before = text[start - 1] ?? '';
+  if (token.length <= 3) return start === 0 || LIST_MARKER_START.test(before);
+  if (!ROMAN_NUMERAL.test(token)) return false;
+  return (
+    start === 0 ||
+    ROMAN_MARKER_START.test(before) ||
+    ROMAN_AFTER_WORD.test(text.slice(Math.max(0, start - 12), start))
+  );
+}
+
+// A ")" after a letter, a closing quote or "letter." closes an aside; a quoted ")" does not.
+function closesAside(text: string, i: number): boolean {
+  const before = text[i - 1] ?? '';
+  if (/[A-Za-z]/.test(before)) return !isListMarker(text, i);
+  if (CLOSING_QUOTE.test(before)) return !QUOTE_MARK.test(text[i + 1] ?? '');
+  return before === '.' && /[A-Za-z]/.test(text[i - 2] ?? '');
+}
+
+/** The offset of the ")" that closes an aside the text began inside, or -1: a ")" before any "(" or
+ * open "[". Code spans do not count. */
+export function asideCloseOffset(text: string): number {
+  const blanked = blankCodeSpans(text, CODE_AS_LETTER);
+  let brackets = 0;
+  for (let i = 0; i < blanked.length; i++) {
+    if (blanked[i] === '(') return -1;
+    if (blanked[i] === '[') brackets++;
+    else if (blanked[i] === ']') brackets = Math.max(0, brackets - 1);
+    else if (blanked[i] === ')' && brackets === 0 && closesAside(blanked, i)) return i;
+  }
+  return -1;
+}
+
+/** Whether `text` starts inside a bold span or an aside, as rows the old capture segmenter cut do.
+ * Repair reads this; admission does not, since capture drops a sentence the split cut out of an aside. */
+export function startsInsideCut(text: string): boolean {
+  return opensInsideBold(text) || asideCloseOffset(text) >= 0;
 }
 
 function isDanglingAssertion(text: string): boolean {
@@ -254,6 +333,13 @@ export function certainDefect(content: string): AutomaticMemoryDefect | null {
   return isCertainReason(reason) ? reason : null;
 }
 
+/** The defect repair and the audit find in a stored text: admission's, but a start inside a bold span
+ * or an aside outranks an uncertain reason. */
+export function storedDefect(text: string): AutomaticMemoryDefect | null {
+  const { reason } = assessAutomaticMemory(text);
+  return !isCertainReason(reason) && startsInsideCut(text.trim()) ? 'sentence-fragment' : reason;
+}
+
 // Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by
 // design, so they are not judged.
 const AUTOMATIC_SOURCES = new Set(['capture', 'git-learn', 'git', 'consolidation']);
@@ -307,9 +393,7 @@ function hasCertainDefect(entry: Pick<MemoryEntry, 'content'>): boolean {
 export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null {
   if (!isAutomaticEntry(entry)) return null;
   const parts = bundleParts(entry);
-  const reasons = (parts.length > 0 ? parts : [entry.content.trim()]).map(
-    (text) => assessAutomaticMemory(text).reason,
-  );
+  const reasons = (parts.length > 0 ? parts : [entry.content.trim()]).map(storedDefect);
   return reasons.every((reason) => reason !== null) ? (reasons[0] ?? null) : null;
 }
 

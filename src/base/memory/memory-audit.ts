@@ -2,7 +2,6 @@
 import { canAutoDelete, isKeptForGood } from './keep-rules.js';
 import type { MemoryEntry } from './entry.js';
 import {
-  assessAutomaticMemory,
   automaticDefect,
   BUNDLE_HEADER,
   isAutomaticEntry,
@@ -12,6 +11,7 @@ import {
   isShortAndUnspecific,
   MIN_MEMORY_CHARS,
   MIN_SUBSTANTIVE_WORDS,
+  storedDefect,
   substantiveWordCount,
   type AutomaticMemoryDefect,
 } from './memory-quality.js';
@@ -189,7 +189,7 @@ export function repairDefect(
   if (structured(entry) || !isAutomaticEntry(entry)) return null;
   // Only a bundle header marks parts; a refined row keeps its lead line, so it is judged whole.
   if (!BUNDLE_HEADER.test(entry.content)) {
-    const { reason } = assessAutomaticMemory(entry.content);
+    const reason = storedDefect(entry.content);
     return reason === null
       ? null
       : { reason, disposition: isCertainReason(reason) ? 'set-aside' : 'review' };
@@ -199,7 +199,7 @@ export function repairDefect(
     return { reason: 'derived bundle has no safely parsed constituents', disposition: 'review' };
   }
   const reasons = texts
-    .map((text) => assessAutomaticMemory(text).reason)
+    .map(storedDefect)
     .filter((reason): reason is AutomaticMemoryDefect => reason !== null);
   if (reasons.length === 0) return null;
   const certain =
@@ -217,5 +217,5 @@ export function repairDefect(
 export function previewDefect(
   row: Parameters<typeof isAutomaticEntry>[0],
 ): AutomaticMemoryDefect | null {
-  return isAutomaticEntry(row) ? assessAutomaticMemory(row.content).reason : null;
+  return isAutomaticEntry(row) ? storedDefect(row.content) : null;
 }

@@ -459,6 +459,7 @@ export function listTextsHolding(
       content: row.content,
       source: row.source,
       originProject: row.origin_project,
+      pinned: row.pinned === 1,
     });
   }
   return [...byId.values()];

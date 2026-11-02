@@ -27,6 +27,7 @@ export const META_KEY = {
   sleepCount: 'sleep_count',
   legacyBootstrapCompleted: 'legacy_bootstrap_completed',
   qualityRepairAuto: 'quality_repair_auto',
+  qualityRepairGate: 'quality_repair_gate',
   projectRepairAuto: 'project_repair_auto',
 } as const;
 
