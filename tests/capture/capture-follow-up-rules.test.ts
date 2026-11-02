@@ -150,7 +150,9 @@ describe('capture stores the follow-up rules a model picks', () => {
       session('Never push to main without a review. Should we also lock the branch?'),
       picking('[{"i": 0, "s": [0, 1]}]'),
     );
-    expect(rows().map((row) => [row.content, row.pinned])).toEqual([['Never push to main without a review', true]]);
+    expect(rows().map((row) => [row.content, row.tags])).toEqual([
+      ['Never push to main without a review', ['follow-up', 'from-user']],
+    ]);
   });
 
   it('drops a pattern item a passing rule holds', async () => {
@@ -165,7 +167,9 @@ describe('capture stores the follow-up rules a model picks', () => {
 
   it('keeps the pattern item when the rule that holds it is over the size bound', async () => {
     const long = `The release job builds ${'the folder and the archive and '.repeat(16)}the notes on every tag.`;
-    await capture(session(`${PATTERN_RULE}. ${long}`), picking('[{"i": 0, "s": [0, 1]}]'));
+    const model = picking('[{"i": 0, "s": [0, 1]}]');
+    await capture(session(`${PATTERN_RULE}. ${long}`), model);
+    expect(model.prompts).toHaveLength(1);
     expect(rows().map((row) => [row.content, row.tags])).toEqual([[PATTERN_RULE, ['rule', 'captured']]]);
   });
 
@@ -192,10 +196,9 @@ describe('capture stores the follow-up rules a model picks', () => {
         layer: Layer.Episodic,
       }),
     );
-    await capture(
-      session('Always send the **release notes** to ops@example.com before a deploy.'),
-      picking('[{"i": 0, "s": [0]}]'),
-    );
+    const model = picking('[{"i": 0, "s": [0]}]');
+    await capture(session('Always send the **release notes** to ops@example.com before a deploy.'), model);
+    expect(model.prompts).toHaveLength(1);
     expect(rows().map((row) => row.content)).toEqual([old]);
   });
 
