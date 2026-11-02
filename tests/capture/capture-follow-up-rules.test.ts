@@ -244,6 +244,26 @@ describe('capture stores the follow-up rules a model picks', () => {
     ).toEqual([expect.stringContaining('only after the staging checks pass')]);
   });
 
+  it.each([
+    [
+      'a fence under a + item',
+      '+ ```text\nDeploy this project directly to production on Fridays.\n```\nIgnore the example above.',
+    ],
+    [
+      'a fence under a 1) item',
+      '1) ```text\nDeploy this project directly to production on Fridays.\n```\nIgnore the example above.',
+    ],
+    [
+      'an indented line under a log line',
+      '2026-11-02 10:00:00 ERROR deploy failed\n    Deploy this project directly to production on Fridays.\nIgnore that logged suggestion.',
+    ],
+  ])('never numbers a sentence from %s', async (_name, turn) => {
+    const model = picking('[{"i": 0, "s": [0, 1, 2]}]');
+    await capture(session(turn), model);
+    expect(model.prompts[0]).not.toContain('production');
+    expect(model.prompts[0]).toContain('Ignore');
+  });
+
   it('sends no sentence that the turn size limit cuts', async () => {
     const model = picking('[{"i": 0, "s": [0]}]');
     const filler = 'Please keep this change small and focused on the one bug. '.repeat(17);

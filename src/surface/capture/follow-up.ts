@@ -52,9 +52,8 @@ function isLogLine(line: string): boolean {
 
 /** One turn's numbered sentences, split as the study split them, after the scrub for sharing. */
 function sentencesOf(turn: string): string[] {
-  // proseOnly drops fences and indented code, but keeps an indented line that continues a paragraph.
-  const lines = proseOnly(turn.replace(PASTED_BLOCK, ' ')).split('\n');
-  const text = scrubForSharing(lines.filter((line) => !isLogLine(line)).join('\n'));
+  // One pass, so a dropped log line also ends the paragraph its indented continuation would join.
+  const text = scrubForSharing(proseOnly(turn.replace(PASTED_BLOCK, ' '), isLogLine));
   const sentences = text
     .split(SENTENCE_BREAK)
     .map((piece) => piece.trim())

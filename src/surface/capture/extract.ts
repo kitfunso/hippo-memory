@@ -55,15 +55,16 @@ const SPEC_HEADING_PATTERNS = [
   ),
   /^(?:features?|requirements?|specs?|specifications?|plan|design|tasks?|implementation)(?:\s*:|$)/i,
 ];
-// A list item may open a fence on its own line: "- ```".
-const FENCE_OPEN = /^(?:(?:[-*]|\d+\.)\s+)?(`{3,}|~{3,})(.*)$/;
+// A list item may open a fence on its own line: "- ```", "+ ```" or "1) ```" (CommonMark markers).
+const FENCE_OPEN = /^(?:(?:[-*+]|\d+[.)])\s+)?(`{3,}|~{3,})(.*)$/;
+const INDENTED_CODE = /^(?: {4}|\t)(?!\s*(?:[-*+]|\d+[.)])\s)/;
 const FENCE_CLOSE = /^(`{3,}|~{3,})\s*$/;
 // Inline code and abbreviation dots never end a sentence; "etc." does when a capital follows.
 const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s+[a-z])/g;
 
 /** CommonMark fences: a backtick run with a backtick after it is inline code, and only a bare
- * run as long closes. */
-export function proseOnly(text: string): string {
+ * run as long closes. A line `isNoise` drops also ends the paragraph above it. */
+export function proseOnly(text: string, isNoise: (line: string) => boolean = () => false): string {
   let fence: string | null = null;
   let afterProse = false;
   return text
@@ -85,7 +86,7 @@ export function proseOnly(text: string): string {
       // Quotes, table rows and indented code are not the speaker's own; indented code cannot
       // interrupt a paragraph or list item.
       const dropped =
-        /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
+        isNoise(line) || /^\s*[>|]/.test(line) || (!afterProse && INDENTED_CODE.test(line));
       afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
       return dropped ? '' : line;
     })
