@@ -394,12 +394,13 @@ export interface CreateMemoryOptions {
   tenantId?: string;
 }
 
-/** Create a new memory entry with defaults. Untyped JavaScript callers that omit the options get the compiled default half-life. */
-export function createMemory(content: string, options: CreateMemoryOptions): MemoryEntry;
-export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
+/** Create a new memory entry with defaults. Untyped JavaScript callers that omit the options get the compiled default half-life.
+ *  `now` stamps `created`; a writer of many rows passes one so they share it. */
+export function createMemory(content: string, options: CreateMemoryOptions, now?: Date): MemoryEntry;
+export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}, now?: Date): MemoryEntry {
   assertValidMemoryInput(content, options);
 
-  const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
+  const at = (now ?? evalNow()).toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
   const emotional_valence = options.emotional_valence ?? inferValence(tags);
@@ -409,8 +410,8 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
 
   const entry: MemoryEntry = {
     id: generateId(layer === Layer.Semantic ? 'sem' : 'mem'),
-    created: now,
-    last_retrieved: now,
+    created: at,
+    last_retrieved: at,
     retrieval_count: 0,
     strength: 1.0,
     half_life_days,
@@ -430,7 +431,7 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
     starred: false,
     trace_outcome: options.trace_outcome ?? null,
     source_session_id: options.source_session_id ?? null,
-    valid_from: options.valid_from ?? now,
+    valid_from: options.valid_from ?? at,
     superseded_by: null,
     extracted_from: options.extracted_from ?? null,
     dag_level: options.dag_level ?? 0,

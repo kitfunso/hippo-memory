@@ -147,6 +147,13 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(rows()).toEqual([]);
   });
 
+  it('stamps every row of one capture call with one created time', () => {
+    capture([user(REQUEST), done, user('Use `pnpm test` for the check, not npm. Run it from backend-node/ only.')]);
+    const stored = rows();
+    expect(stored).toHaveLength(2);
+    expect(new Set(stored.map((e) => e.created)).size).toBe(1);
+  });
+
   it('a reply the patterns already place keeps their category; the agent never gets the reply rule', () => {
     const items = extractFromTexts(["Let's go with SQLite for the cache.", REPLY, REPLY], 2, 1);
     expect(items.map((i) => [i.category, i.fromUser])).toEqual([

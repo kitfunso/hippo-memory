@@ -6,6 +6,7 @@ import { assertCallerProject, projectNames } from '../core/project-identity.js';
 import { longestWord } from '../util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
+import { evalNow } from '../core/ablation.js';
 import { captureExtractedItems, heldKeysOf, scrubbedItems, type CaptureTally } from './command.js';
 import { boldTwins, extractFromTexts } from './extract.js';
 
@@ -51,7 +52,7 @@ export function captureSessionTexts(ctx: Context, req: SessionCaptureRequest): S
   );
   const tally = captureExtractedItems(
     ctx.hippoRoot,
-    { dryRun: false, tenantId: ctx.tenantId, originProject: req.project, sessionId: req.sessionId, actor: ctx.actor.subject, lean: true },
+    { dryRun: false, tenantId: ctx.tenantId, originProject: req.project, sessionId: req.sessionId, actor: ctx.actor.subject, lean: true, now: evalNow() },
     items,
     heldKeysOf(held, twins),
   );

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, USER_RULE_TAG, type MemoryEntry } from '../core/memory.js';
+import { evalNow } from '../core/ablation.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { isCertainReason, storedDefect } from '../core/memory-quality.js';
 import { writeCapturedItems } from '../store/capture-write.js';
@@ -124,6 +125,7 @@ function cmdCaptureCore(
     tenantId: useGlobal ? undefined : options.tenantId,
     originProject: options.originProject,
     lean: false,
+    now: evalNow(),
   };
   printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, keys));
 }
@@ -247,6 +249,8 @@ export interface CaptureWriteOptions {
   readonly actor?: string;
   /** No stats and no embedding, since embedding runs a model in a server process. */
   readonly lean: boolean;
+  /** Stamps `created` on every row of the call, so one capture's rows share a time. */
+  readonly now: Date;
 }
 
 export function captureExtractedItems(
@@ -306,6 +310,6 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
     tenantId: options.tenantId,
     source_session_id: options.sessionId,
     baseHalfLifeDays,
-  });
+  }, options.now);
   return options.originProject === undefined ? created : { ...created, origin_project: projectId(options.originProject) };
 }
