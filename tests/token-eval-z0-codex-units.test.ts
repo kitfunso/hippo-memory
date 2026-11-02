@@ -117,13 +117,13 @@ describe('X arm settings and env (test 3)', () => {
 
   it('strips OpenAI keys in every arm and puts bin/ first for X2 only', () => {
     const out = tmp('z0-xenv-');
-    const base = { PATH: `/usr/bin${delimiter}/bin`, OPENAI_API_KEY: 'k1', openai_org_id: 'o1', KEEP_ME: 'k' };
+    const base = { PATH: `/usr/bin${delimiter}/bin`, OPENAI_API_KEY: 'k1', openai_org_id: 'o1', JAVA_HOME: 'k' };
     for (const arm of ['A1', 'X1', 'X2', 'X3', 'X4']) {
       const dirs = runDirs(out, 'seqX', arm, 1);
       const env = armEnv(arm, dirs, base);
       expect(env, arm).not.toHaveProperty('OPENAI_API_KEY');
       expect(env, arm).not.toHaveProperty('openai_org_id');
-      expect(env.KEEP_ME).toBe('k');
+      expect(env.JAVA_HOME).toBe('k');
       expect(env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, arm).toBe('0');
       expect((env.PATH ?? '').split(delimiter)[0] === dirs.bin, arm).toBe(arm === 'X2');
     }

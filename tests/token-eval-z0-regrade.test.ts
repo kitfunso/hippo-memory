@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkerIdentity } from '../scripts/token-eval/checker-identity.mjs';
 import { CHECKS, cleanup, tmp } from './fixtures/z0-harness.js';
-import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type RawSpec, type Shared } from './fixtures/z0-regrade.js';
+import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, REGRADE_ONLY_KEY, rowFor, rowsOf, sharedRun, TOKEN, type RawSpec, type Shared } from './fixtures/z0-regrade.js';
 
 const savedToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
 let shared: Shared;
@@ -71,12 +71,12 @@ describe('z0-regrade regrade and grading', () => {
 
   it('na against a saved pass flips the main lesson, and a key only the regrade has is a warning by name (3, R27)', async () => {
     const c = copyOut(shared);
-    const r = await regrade(c, ['--cell', keyOf('a1'), '--cell', keyOf('a4')], { Z0_TOGGLE: 'regrade', Z0_TOGGLE_TO: '3' });
+    const r = await regrade(c, ['--cell', keyOf('a1'), '--cell', keyOf('a4')], { Z0_TOGGLE: 'regrade', Z0_TOGGLE_TO: '3', [REGRADE_ONLY_KEY]: 'x' });
     expect(r).toMatchObject({ code: 0 });
     expect(rowFor(c.out, 'a1').checks[0]).toMatchObject({ saved: 'pass', regraded: 'na', flip: true, reason: 'verdict' });
     // The stale lesson is compared as pass-ness (reading 6): na is not a pass.
     expect(rowFor(c.out, 'a4').checks[2]).toMatchObject({ which: 'stale', saved: true, regraded: false, flip: true });
-    expect(rowFor(c.out, 'a1').extraEnvKeys).toEqual(['Z0_TOGGLE_TO']);
+    expect(rowFor(c.out, 'a1').extraEnvKeys).toEqual([REGRADE_ONLY_KEY]);
   }, 300_000);
 
   it('a checker crash is a flip with reason checker-error, never an error row; a post-fix pass records the new checker (4)', async () => {
@@ -198,10 +198,10 @@ describe('z0-regrade regrade and grading', () => {
 
   it('a test command that flips counts in acceptanceFlips and drops no lesson (11)', async () => {
     const c = copyOut(shared);
-    expect(await regrade(c, [], { Z0_TOGGLE_TEST: 'regrade' })).toMatchObject({ code: 0 });
+    expect(await regrade(c, [], { Z0_TOGGLE_TEST: 'regrade', [REGRADE_ONLY_KEY]: 'x' })).toMatchObject({ code: 0 });
     expect(rowFor(c.out, 'a1').acceptance).toEqual({ saved: true, regraded: false, flip: true, reason: 'verdict' });
     expect(await grading(c.out)).toMatchObject({ code: 0 });
-    expect(readGrading(c.out)).toMatchObject({ flippedLessons: [], acceptanceFlips: 1, g5: { extraEnvKeys: ['Z0_TOGGLE_TEST'] } });
+    expect(readGrading(c.out)).toMatchObject({ flippedLessons: [], acceptanceFlips: 1, g5: { extraEnvKeys: [REGRADE_ONLY_KEY] } });
   }, 300_000);
 
   it('a resumed teach re-runs its final check; an apply that passed first is checked once (12)', async () => {

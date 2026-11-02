@@ -7,7 +7,10 @@ import { validateTasks } from '../../scripts/token-eval/ab-run.mjs';
 import { CHECKS, apply, isolate, lesson, makeRepo, plain, run, teach, tmp, type FamilyDef, type FixtureRepo, type TaskDef } from './z0-harness.js';
 
 export const TOKEN = 'z0-dummy-oauth-token';
-export const PASS_ENV = ['Z0_TOGGLE', 'Z0_ENV_DUMP_DIR'];
+// The toggles are --pass-env names set to inert values for the run, since armEnv drops any other name; a regrade then flips them.
+export const PASS_ENV = ['Z0_TOGGLE', 'Z0_ENV_DUMP_DIR', 'Z0_TOGGLE_TO', 'Z0_TOGGLE_TEST', 'Z0_TOGGLE_BREAK_GIT'];
+/** An allowlisted name the run leaves unset, so a regrade that sets it has "a key only the regrade has" (R27). */
+export const REGRADE_ONLY_KEY = 'HEX_HOME';
 const script = (name: string) => join(CHECKS, name);
 const CLI = fileURLToPath(new URL('../../scripts/token-eval/z0-regrade.mjs', import.meta.url));
 const fam = (id: string, lessons: FamilyDef['lessons']): FamilyDef => ({ id, sequence: 'seqF', lessonSource: 'maintainer', lessons, screen: { id: `${id}-screen`, baseRef: 'x', fixRef: 'x', prompt: 'screen', test: 'node test.js', testFiles: [] } });
@@ -35,7 +38,8 @@ export async function sharedRun(name: string): Promise<Shared> {
   const { out } = isolate(name);
   const r = makeRepo();
   const dumps = tmp('z0-rg-dumps-');
-  Object.assign(process.env, { Z0_TOGGLE: 'run', Z0_ENV_DUMP_DIR: dumps, CLAUDE_CODE_OAUTH_TOKEN: TOKEN });
+  delete process.env[REGRADE_ONLY_KEY];
+  Object.assign(process.env, { Z0_TOGGLE: 'run', Z0_TOGGLE_TO: '1', Z0_TOGGLE_TEST: 'run', Z0_TOGGLE_BREAK_GIT: '0', Z0_ENV_DUMP_DIR: dumps, CLAUDE_CODE_OAUTH_TOKEN: TOKEN });
   const raw = regradeSpec(r);
   await run(validateTasks(structuredClone(raw), CHECKS), ['A0'], out, { passEnv: PASS_ENV });
   return { out, raw, dumps, r };

@@ -1,18 +1,28 @@
 /** Z0 analyzer, part 4 of 6: validity gates G1-G5 (prereg 154-166). Each returns `pass` plus the numbers it read.
  * A failed gate makes the run invalid; a half or gate whose arms were not planned is "not run" (reading 11). */
 
+import { envAllowSet } from './arms.mjs';
 import { CODINGS, NOT_RUN, bothCodings, codexApply, firstApplyR } from './z0-hypotheses.mjs';
 
 export const OPERATOR_CANARY = 'operator-canary';
 const EPS = 1e-9;
 
-/** G1 (reading 3): an operator canary invalidates the run; other voids drop sessions, with per-arm shares printed. */
+/** G1 (reading 3): an operator canary, an `envKeys` name outside the arm env allowlist, or ANTHROPIC_API_KEY invalidates the run; other voids drop sessions, with per-arm shares printed. */
 export function g1(records, counts) {
   // Prereg 161: a canary anywhere fails the run, so one an apply's resume saw counts though it never sets that cell's void.
   const seen = (r) => r.void === OPERATOR_CANARY || (r.resumeVoidHits ?? []).some((h) => h.reason === OPERATOR_CANARY);
   const canaries = records.filter(seen).length;
+  const allowed = envAllowSet();
+  const outside = new Map();
+  let anthropicApiKeyRecords = 0;
+  for (const r of records) {
+    const names = new Set((Array.isArray(r.envKeys) ? r.envKeys : []).map((k) => k.toUpperCase()));
+    for (const name of names) if (!allowed.has(name)) outside.set(name, (outside.get(name) ?? 0) + 1);
+    if (names.has('ANTHROPIC_API_KEY')) anthropicApiKeyRecords += 1;
+  }
+  const envKeysOutside = Object.fromEntries([...outside].sort(([a], [b]) => (a < b ? -1 : 1)));
   const perArm = Object.fromEntries(Object.entries(counts).map(([arm, c]) => [arm, { voids: c.voids, share: c.planned === 0 ? 0 : c.voids / c.planned }]));
-  return { pass: canaries === 0, operatorCanaries: canaries, perArm };
+  return { pass: canaries === 0 && outside.size === 0 && anthropicApiKeyRecords === 0, operatorCanaries: canaries, envKeysOutside, anthropicApiKeyRecords, perArm };
 }
 
 /** One G2 half: under both codings, estimate at most -0.30 and the CI's high below zero (reading 5).

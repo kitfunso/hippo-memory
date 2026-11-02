@@ -73,7 +73,8 @@ function toolDir(names: string[]): string {
 }
 
 const PARENT = {
-  KEEP_ME: 'k',
+  JAVA_HOME: 'k',
+  DROP_ME: 'd',
   anthropic_api_key: 'secret-lower',
   ANTHROPIC_BASE_URL: 'http://proxy.local',
   CLAUDE_CODE_USE_BEDROCK: '1',
@@ -101,7 +102,8 @@ describe('armEnv and childEnv', () => {
     expect(ARMS).toEqual(['A0', 'A1', 'A2', 'A4', 'A5', 'X1', 'X2', 'X3', 'X4']);
     for (const arm of ARMS) {
       const env = armEnv(arm, { ...run, seed: 2 }, base);
-      expect(env.KEEP_ME).toBe('k');
+      expect(env.JAVA_HOME).toBe('k');
+      expect(env, arm).not.toHaveProperty('DROP_ME');
       for (const k of ['anthropic_api_key', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'AWS_BEARER_TOKEN_BEDROCK', 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', 'CLAUDECODE', 'claude_code_subagent_model', 'HIPPO_SESSION_ID', 'NoDefaultCurrentDirectoryInExePath']) {
         expect(env, `${arm} ${k}`).not.toHaveProperty(k);
       }

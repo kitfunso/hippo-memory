@@ -15,7 +15,7 @@ const AUTHOR_BIN = `import * as fs from 'node:fs';
 const prompt = fs.readFileSync(0, 'utf8');
 await fetch(process.env.ANTHROPIC_BASE_URL + '/v1/messages', { method: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }) });
 const keys = ['HIPPO_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'CODEX_HOME', 'EVAL_SEED', 'ANTHROPIC_BASE_URL', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'TEMP', 'TMP', 'TMPDIR'];
-fs.writeFileSync(process.env.AUTHOR_DUMP, JSON.stringify({ cwd: process.cwd(), argv: process.argv.slice(2), env: Object.fromEntries(keys.map((k) => [k, process.env[k] ?? null])), hasToken: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN) }));
+fs.writeFileSync(__DUMP__, JSON.stringify({ cwd: process.cwd(), argv: process.argv.slice(2), env: Object.fromEntries(keys.map((k) => [k, process.env[k] ?? null])), hasToken: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN) }));
 console.log(JSON.stringify({ type: 'result', result: prompt.includes('ECHO') ? prompt : 'done' }));
 `;
 
@@ -38,13 +38,13 @@ async function upstream() {
 async function author(prompt: string) {
   const root = tmp('author-');
   const bin = join(root, 'author-bin.mjs');
-  writeFileSync(bin, AUTHOR_BIN);
+  const dump = join(root, 'dump.json');
+  writeFileSync(bin, AUTHOR_BIN.replace('__DUMP__', JSON.stringify(dump)));
   const work = join(root, 'work');
   const out = join(root, 'out');
-  const dump = join(root, 'dump.json');
   const up = await upstream();
   try {
-    const baseEnv = { ...process.env, HIPPO_HOME: join(root, 'stray-home'), CODEX_HOME: join(root, 'stray-codex'), CLAUDE_CODE_OAUTH_TOKEN: 'x', AUTHOR_DUMP: dump };
+    const baseEnv = { ...process.env, HIPPO_HOME: join(root, 'stray-home'), CODEX_HOME: join(root, 'stray-codex'), CLAUDE_CODE_OAUTH_TOKEN: 'x' };
     const verdict = await runAuthor({ work, prompt, out, claudeBin: `"${process.execPath}" "${bin}"`, forbid: SENTINEL, baseEnv, upstream: up.url, timeoutMs: 30_000 });
     return { verdict, work, out, dump: JSON.parse(readFileSync(dump, 'utf8')), bodies: up.bodies };
   } finally {

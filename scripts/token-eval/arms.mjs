@@ -1,7 +1,7 @@
 // Z0 arms (docs/evals/2026-09-29-z0-built-in-memory-prereg.md, "Arms"): settings, environment, PATH and the hippo shims.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { HIPPO_JS, STRIP_ENV, pathKey } from './exec.mjs';
+import { HIPPO_JS, pathKey } from './exec.mjs';
 
 export const X_ARMS = ['X1', 'X2', 'X3', 'X4'];
 export const ARMS = ['A0', 'A1', 'A2', 'A4', 'A5', ...X_ARMS];
@@ -15,14 +15,35 @@ export const armSet = (arm) => (X_ARMS.includes(arm) ? 'X' : 'RN');
 export const TOKEN_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
 
 const CAPTURE_EVENTS = ['SessionEnd', 'PreCompact', 'PostCompact', 'PostToolUseFailure'];
-// OPENAI_: an operator API key would turn a plan-login Codex session into a paid one.
-const STRIP_PREFIXES = ['ANTHROPIC_', 'CLAUDE_', 'AWS_', 'CODEX_', 'HIPPO_', 'OPENAI_'];
-const STRIP_EXACT = new Set(['CLAUDECODE', ...STRIP_ENV].map((k) => k.toUpperCase()));
 const LAUNCHERS = ['hippo', 'hippo.cmd', 'hippo.ps1', 'hippo.exe', 'hippo.bat'];
 const REQUIRED_TOOLS = ['node', 'npm', 'npx', 'git'];
 const SHAM_COMMANDS = ['remember', 'capture', 'learn', 'outcome'];
 // The keys armEnv sets itself: a --pass-env copy would silently override the arm (and a second PATH key on Windows).
 const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
+// Round 3 prereg item 5a: system names the agent and shells need, as round 2's records carried them. Left out on purpose: provider, CLAUDE_*, AWS_*, CODEX_*, HIPPO_*, OPENAI_*
+// and ANTHROPIC_* names, parent session ids (a child would log under the parent's id), and NoDefaultCurrentDirectoryInExePath (cmd.exe then misses a checkout's gradlew.bat).
+const SYSTEM_ENV = [
+  'PATHEXT', 'SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP', 'USERPROFILE', 'HOME', 'HOMEDRIVE', 'HOMEPATH', 'APPDATA', 'LOCALAPPDATA',
+  'PROGRAMDATA', 'ALLUSERSPROFILE', 'PUBLIC', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'DriverData',
+  'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_IDENTIFIER', 'PROCESSOR_LEVEL', 'PROCESSOR_REVISION', 'OS', 'USERNAME', 'USERDOMAIN', 'USERDOMAIN_ROAMINGPROFILE',
+  'COMPUTERNAME', 'LOGONSERVER', 'SESSIONNAME', 'PSModulePath', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TMPDIR', 'USER', 'LOGNAME', 'SHELL', 'TZ',
+  // Keep git from opening an editor or a prompt that no one answers.
+  'GIT_EDITOR', 'GIT_TERMINAL_PROMPT', 'GCM_INTERACTIVE',
+  // A path, not a secret; listed so the README's --pass-env route does not fail G1.
+  'CLAUDE_CODE_GIT_BASH_PATH',
+];
+// The union over every toolchain in C:/eval-authors/s3x-env.ps1 (round 3's repositories are not picked yet), plus COREPACK_ENABLE_AUTO_PIN, which stops corepack editing package.json.
+const TOOLCHAIN_ENV = [
+  'CI', 'COREPACK_ENABLE_STRICT', 'COREPACK_ENABLE_AUTO_PIN', 'npm_config_manage_package_manager_versions', 'JAVA_HOME', 'GRADLE_USER_HOME', 'MAVEN_ARGS', 'JULIA_DEPOT_PATH', 'JULIA_PKG_PRECOMPILE_AUTO',
+  'GEM_HOME', 'GEM_PATH', 'BUNDLE_PATH', 'RI_DEVKIT', 'MAKE', 'RUSTUP_HOME', 'CARGO_HOME', 'CARGO_BUILD_JOBS', 'CARGO_TARGET_DIR', 'MIX_HOME', 'HEX_HOME', 'MIX_ENV',
+  'GOROOT', 'GOPATH', 'GOCACHE', 'GOTOOLCHAIN', 'DOTNET_ROOT', 'DOTNET_CLI_HOME', 'NUGET_PACKAGES', 'DOTNET_ROLL_FORWARD', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_NOLOGO',
+  'VIRTUAL_ENV', 'PYTHONUTF8', 'PYTHONIOENCODING',
+];
+/** The only names a session's env may start from; matching is case-insensitive, as on Windows. */
+export const ENV_ALLOWLIST = Object.freeze([...RUNNER_KEYS, ...SYSTEM_ENV, ...TOOLCHAIN_ENV]);
+// Any allowlisted name that looks like this stops armEnv, so a secret cannot ride in on a list edit.
+export const SECRET_SHAPED = /TOKEN|SECRET|PASSW|API_KEY|_KEY$|DSN|CREDENTIAL|ACCOUNT_ID/i;
+export const envAllowSet = (list = ENV_ALLOWLIST) => new Set(list.map((name) => name.toUpperCase()));
 
 /** The `--settings` file for an arm; `hippoSettings` is what hippo's installer writes for Claude Code. */
 export function armSettings(arm, hippoSettings) {
@@ -37,27 +58,24 @@ export function armSettings(arm, hippoSettings) {
   throw new Error(`unknown arm ${arm}; known: ${ARMS.join(', ')}`);
 }
 
-function stripped(key) {
-  const k = key.toUpperCase();
-  return STRIP_EXACT.has(k) || STRIP_PREFIXES.some((p) => k.startsWith(p));
-}
-
 function getKey(env, name) {
   const key = Object.keys(env).find((k) => k.toUpperCase() === name.toUpperCase());
   return key === undefined ? undefined : env[key];
 }
 
-/** A session's environment: the parent's minus every provider, Claude, Codex and hippo key, plus the run's own homes and PATH.
+/** A session's environment: only the parent's allowlisted names, plus the run's own homes and PATH and any --pass-env name.
  * @param {string} arm
  * @param {any} dirs
  * @param {Record<string, string | undefined>} baseEnv
- * @param {{passEnv?: string[]}} [options]
+ * @param {{passEnv?: string[], allowlist?: readonly string[]}} [options] `allowlist` is for tests
  * @returns {Record<string, string | undefined>} */
-export function armEnv(arm, dirs, baseEnv, { passEnv = [] } = {}) {
+export function armEnv(arm, dirs, baseEnv, { passEnv = [], allowlist = ENV_ALLOWLIST } = {}) {
   if (!ARMS.includes(arm)) throw new Error(`unknown arm ${arm}; known: ${ARMS.join(', ')}`);
   const reserved = passEnv.find((name) => RUNNER_KEYS.includes(name.toUpperCase()));
   if (reserved !== undefined) throw new Error(`--pass-env ${reserved}: the runner sets ${reserved.toUpperCase()} itself per arm, so it cannot be passed through`);
-  const env = Object.fromEntries(Object.entries(baseEnv).filter(([k]) => !stripped(k)));
+  const allowed = envAllowSet(allowlist);
+  // The runner's own keys are set below, so a base copy under another case would leave two keys.
+  const env = Object.fromEntries(Object.entries(baseEnv).filter(([k]) => allowed.has(k.toUpperCase()) && !RUNNER_KEYS.includes(k.toUpperCase())));
   const token = getKey(baseEnv, TOKEN_KEY);
   if (token !== undefined) env[TOKEN_KEY] = token;
   env.CLAUDE_CONFIG_DIR = dirs.claudeConfig;
@@ -74,6 +92,8 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [] } = {}) {
   const key = pathKey(baseEnv);
   const cleaned = cleanPath(baseEnv[key] ?? '', { env: baseEnv }).value;
   env[key] = HIPPO_ARMS.has(arm) ? `${dirs.bin}${path.delimiter}${cleaned}` : cleaned;
+  const secret = Object.keys(env).find((k) => k.toUpperCase() !== TOKEN_KEY && SECRET_SHAPED.test(k));
+  if (secret !== undefined) throw new Error(`armEnv: ${secret} looks like a secret and would reach the session; remove it from ENV_ALLOWLIST in scripts/token-eval/arms.mjs (or from --pass-env)`);
   return env;
 }
 

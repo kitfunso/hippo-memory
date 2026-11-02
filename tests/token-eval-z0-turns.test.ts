@@ -13,6 +13,7 @@ import { stubBaseCommit, STUB_CLAUDE_MD } from '../scripts/token-eval/workspace.
 import { runScreen } from '../scripts/token-eval/screen.mjs';
 import { loadHippo } from '../scripts/token-eval/runs.mjs';
 import { hippoBuild } from '../scripts/token-eval/pins.mjs';
+import { fixtureEnv } from './fixtures/z0-harness.js';
 import { validateCorpus, type Z0Record, type Z0PlanCell } from './fixtures/z0-contract.js';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
@@ -96,7 +97,7 @@ const spec = (r: FixtureRepo, families: FamilyDef[], tasks: TaskDef[]): Spec => 
 const reversal = (l1: Partial<LessonDef> = {}, l2: Partial<LessonDef> = {}) => family('f1', [lesson('f1-l1', 'Write the lesson file', l1), lesson('f1-l2', 'Write the lesson file twice', { supersedes: 'f1-l1', ...l2 })]);
 
 async function run(s: ReturnType<typeof spec>, arms: string[], out: string, extra: RunExtra = {}) {
-  return runAll({ spec: s, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, ...extra });
+  return runAll({ spec: s, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, passEnv: fixtureEnv(), ...extra });
 }
 const readRecords = (out: string): Z0Record[] => readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const readPlan = (out: string): Z0PlanCell[] => JSON.parse(readFileSync(join(out, 'plan.json'), 'utf8'));

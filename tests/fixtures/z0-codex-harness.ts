@@ -9,7 +9,7 @@ import { runDirs, freshRunDirs } from '../../scripts/token-eval/homes.mjs';
 import { armEnv } from '../../scripts/token-eval/arms.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
-import { tmp, isolate, readRecords, CHECKS, CLAUDE, family, lesson, teach, apply } from './z0-harness.js';
+import { tmp, isolate, readRecords, fixtureEnv, CHECKS, CLAUDE, family, lesson, teach, apply } from './z0-harness.js';
 import type { FixtureRepo, FamilyDef, TaskDef, RunExtra, RunRecord } from './z0-harness.js';
 
 export const FAKE_CODEX = resolve(__dirname, 'fake-codex.mjs');
@@ -63,7 +63,7 @@ export function codexRun(ctx: CodexCtx, out: string, arm = 'X1', seed = 1) {
   const dirs = runDirs(out, 'seqX', arm, seed);
   freshRunDirs(dirs);
   execFileSync('git', ['init', '-q'], { cwd: dirs.work });
-  const env = armEnv(arm, dirs, { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'zq-claude-token-0000' });
+  const env = armEnv(arm, dirs, { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'zq-claude-token-0000' }, { passEnv: fixtureEnv() });
   const rawDir = join(out, 'raw', 'seqX', arm, `seed${seed}`);
   mkdirSync(rawDir, { recursive: true });
   const run = { s: { id: 'seqX' }, arm, seed, dirs, env, rawDir, codexLauncher: '' };
@@ -108,7 +108,7 @@ export const xLimit = (runs = 1) => runs * 480_000;
 export async function xRun(s: ReturnType<typeof xSpec>, arms: string[], out: string, op: Operator, extra: RunExtra & CodexOpts = {}) {
   return runAll({
     spec: s, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {},
-    codexBin: op.launcher, codexAuth: op.authFile, codexModel: 'gpt-fake', codexMemoryWait: 'none', ...extra,
+    codexBin: op.launcher, codexAuth: op.authFile, codexModel: 'gpt-fake', codexMemoryWait: 'none', passEnv: fixtureEnv(), ...extra,
   });
 }
 

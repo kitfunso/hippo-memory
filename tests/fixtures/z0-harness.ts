@@ -11,7 +11,10 @@ export const FAKE = resolve(__dirname, 'fake-claude.mjs');
 export const CLAUDE = `"${process.execPath}" "${FAKE}"`;
 export const CHECKS = resolve(__dirname, 'z0-checks');
 const PATH_KEY = pathKey(process.env);
-const ENV_KEYS = ['HOME', 'USERPROFILE', 'APPDATA', 'HIPPO_HOME', PATH_KEY, 'FAKE_CLAUDE_LOG', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS', 'FAKE_WT_DIR', 'Z0_ANCESTOR_STOP', 'GIT_CONFIG_GLOBAL', 'Z0_ENV_DUMP_DIR', 'Z0_TOGGLE', 'Z0_TOGGLE_TO', 'CODEX_HOME', 'FAKE_CODEX_LOG', 'FAKE_CODEX_STATE', 'FAKE_CODEX_INTERNAL_SOURCE'];
+// The fakes' and checkers' control vars; armEnv drops every name off its allowlist, so a run passes them as --pass-env.
+const FIXTURE_VARS = ['FAKE_CLAUDE_LOG', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS', 'FAKE_WT_DIR', 'FAKE_CODEX_LOG', 'FAKE_CODEX_STATE', 'FAKE_CODEX_INTERNAL_SOURCE', 'GIT_CONFIG_GLOBAL',
+  'Z0_ENV_DUMP_DIR', 'Z0_TOGGLE', 'Z0_TOGGLE_TO', 'Z0_TOGGLE_TEST', 'Z0_TOGGLE_BREAK_GIT'];
+const ENV_KEYS = ['HOME', 'USERPROFILE', 'APPDATA', 'HIPPO_HOME', PATH_KEY, ...FIXTURE_VARS, 'Z0_ANCESTOR_STOP', 'HEX_HOME', 'CODEX_HOME'];
 const savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 const savedCwd = process.cwd();
 const dirs: string[] = [];
@@ -106,8 +109,10 @@ export function oneLesson(r: FixtureRepo, prompts: Record<string, string> = {}, 
 }
 
 export interface RunExtra { model?: string | null; passEnv?: string[]; limitWaitMs?: number; limitMaxWaits?: number; sessionTimeoutMs?: number; canaries?: string[]; log?: (m: string) => void }
+/** The control vars a test has set, as --pass-env names. */
+export const fixtureEnv = (): string[] => FIXTURE_VARS.filter((k) => process.env[k] !== undefined);
 export async function run(s: ReturnType<typeof spec>, arms: string[], out: string, extra: RunExtra = {}) {
-  return runAll({ spec: s, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, ...extra });
+  return runAll({ spec: s, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, passEnv: fixtureEnv(), ...extra });
 }
 
 const jsonl = <T>(f: string): T[] => (existsSync(f) ? readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);

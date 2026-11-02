@@ -11,6 +11,7 @@ import { usageFromResult, isUsageLimit, transcriptWork } from '../scripts/token-
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
 import { SEED_CAP } from '../scripts/token-eval/z0-records.mjs';
 import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
+import { fixtureEnv } from './fixtures/z0-harness.js';
 import { validateCorpus, validateRecord } from './fixtures/z0-contract.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 
@@ -114,7 +115,7 @@ function decoyHippo() {
 type RunOpts = Parameters<typeof runAll>[0];
 
 async function run(spec: RunOpts['spec'], arms: string[], out: string, extra: Partial<RunOpts> = {}) {
-  return runAll({ spec, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, ...extra });
+  return runAll({ spec, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, passEnv: fixtureEnv(), ...extra });
 }
 
 describe('Z0 runner plan and reads', () => {

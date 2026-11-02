@@ -161,12 +161,18 @@ const est = (e) => {
 };
 const pairText = (p) => (isString(p) ? p : `violation ${est(p.violation)} (${p.violation.units} units); excluded ${est(p.excluded)} (${p.excluded.units} units)`);
 
+/** The G1 env conditions, printed only when one fails (names uppercase, with the records that held each). */
+const envText = (g1) => {
+  const outside = Object.entries(g1.envKeysOutside).map(([name, n]) => `${name} in ${n}`).join(', ');
+  return `${outside ? `; env names outside the allowlist: ${outside}` : ''}${g1.anthropicApiKeyRecords ? `; ${g1.anthropicApiKeyRecords} records hold ANTHROPIC_API_KEY` : ''}`;
+};
+
 function gateLines(r) {
   const g = r.gates;
   const half = (h) => (h.status === NOT_RUN ? `not run${h.required ? ' but required' : ''}` : `${h.status}, ${pairText(h)}`);
   const worst = Object.values(g.G4.perArm).reduce((m, a) => Math.max(m, a.share), 0);
   return [
-    `G1 ${g.G1.pass ? 'pass' : 'fail'}: ${g.G1.operatorCanaries} operator canaries; void share ${Object.entries(g.G1.perArm).map(([k, v]) => `${k} ${pct(v.share)}`).join(', ')}`,
+    `G1 ${g.G1.pass ? 'pass' : 'fail'}: ${g.G1.operatorCanaries} operator canaries${envText(g.G1)}; void share ${Object.entries(g.G1.perArm).map(([k, v]) => `${k} ${pct(v.share)}`).join(', ')}`,
     `G2 ${g.G2.pass ? 'pass' : 'fail'}: Claude Code half ${half(g.G2.claudeCode)}; Codex half ${half(g.G2.codex)}`,
     `G3 ${g.G3.pass ? 'pass' : 'fail'}: ${g.G3.leaked} of ${g.G3.plannedRuns} planned (sequence, seed)s leaked`,
     `G4 ${g.G4.pass ? 'pass' : 'fail'}: worst invalid-or-missing share ${pct(worst)}, gap ${(100 * g.G4.gap).toFixed(1)} points`,
