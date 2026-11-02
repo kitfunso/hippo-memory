@@ -1,0 +1,73 @@
+# Z0 round 3: the family's first apply, on fresh families. Pre-registration (draft)
+
+Status: draft, 2 Nov 2026. Not frozen. No scored session runs before the founder's yes on the budget (item 10).
+Base: `2026-09-29-z0-built-in-memory-prereg.md` and `2026-10-18-z0-round2-prereg.md`, with all their amendments. Everything not changed below carries over.
+
+## Why a round 3
+
+Round 2 (`2026-11-01-z0-round2-result.md`) read H1 inconclusive: -0.089 [-0.185, 0.007], adjusted p 0.132 and 0.098 (`C:/z0-runs/scored/h4-analysis/a9b/a9b-16.txt`). Under prereg 132, any helpful estimate with adjusted p below 0.05 is a win; an estimate of 15 points or more is a full win, and less is a small win. Round 2's design cannot give a full win, and its power for a small win was low:
+
+- **All applies leave little room.** Pooled over raw records (no pairing, no drop list), the first-check repeat rate on set R applies is A0 133 of 143, A1 32 of 213, A2 5 of 209, A4 4 of 144, A5 18 of 205. A2 is at A4's level. A1's rate is near 15 points, so the unit-level H1 estimate cannot reach the minimum with any margin.
+- **Later applies hide the effect.** A1 fails 23 of 96 first applies, 6 of 93 second applies and 3 of 24 third applies (pooled as above). After a correction, built-in memory also keeps the rule. The frozen analyzer's own first-apply line, at the unit level H1 uses, reads -0.182 [-0.316, -0.048] (78 units), and -0.193 [-0.334, -0.052] under the other coding (`a9b-16.txt:38`).
+- **H3 has no verdict.** Base Amendment 1 (prereg 297, approved 2026-10-15) took H3 out of the primary family: no feasible size gave it 80% power. On A9 the cost-sum ratios A2/A1 are teach 1.041, first apply 0.831, later applies 0.90, set N 1.055 (A5 sham 1.018). Removing all of hippo's injected text moves the pooled ratio from 1.00 to about 0.985.
+
+Evidence and scripts: `~/.claude/dev-framework/trajectories/01M6E0GK8G0CH195Y4K92T6BXT/` (`diagnosis.md`, `h1room.py`, `split.py`, `scen.py`, `setn-diff.md`). These facts came from A9, so round 3 never counts A9. Every scored family in round 3 is new.
+
+## What changes
+
+1. **The unit for H1 is the family's first apply.** One shared predicate, `firstApplyR = (r) => r.set === 'R' && r.applyIndex === 1`, replaces `inSets('R')` at every site that reads repeat mistakes on set R:
+   - H1 (`z0-hypotheses.mjs:200`) and attribution, A2 against A5 (`:206`);
+   - the seed rule's H1 (`z0-seed-rule.mjs:105`) and the sizer's H1 calibration (`z0-size.mjs:140`), so seeds are sized on the first-apply spread;
+   - G2's Claude Code half, A4 against A0 (`z0-gates.mjs:33`), so the positive control tests the same unit.
+   `applyIndex` counts applies per family (`lessons.mjs:263`), so a reversal lesson's apply is never a first apply and stays out of H1. The secondary readings of set R repeat mistakes also switch to `firstApplyR`: maintainer-only H1 (`z0-hypotheses.mjs:364`), the carry-union sensitivity (`:374`), `overlapCorrelation` (`:248`), A1 against A0, A4 against A1 and `bySinceTeach`. One new secondary line keeps `inSets('R')` and reports H1 over all applies, where `firstApply` sits now (`:368`). Every other H1 rule carries over: two codings of not-applicable, the 15-point minimum, the tie band of plus or minus 15 points, the unit as a family on one seed, Holm over H1 and H2 with H2 not run.
+2. **One run tree, cut from the A9 tree.** The runner, the analyzer and the hippo build sit in one tree, as in round 2 item 2. Round 3's tree is a new branch `z0/r3` cut from `8bea03fbd` (branch `z0/h4-diet`), the tree that ran A9. That commit holds tag `z0-r2-freeze`, the runner fixes `4d3132e4` and `f556d9974`, and the six analyzer files at the hashes in `docs/evals/z0-r2-freeze/analyzer.sha256`. The runner runs the hippo in its own tree (`exec.mjs:9`, `HIPPO_JS` is the tree's `bin/hippo.js`; the run's wrapper at `arms.mjs:101-103`). Line numbers in items 1, 2 and 5 are on `8bea03fbd`. The item 1 change goes on `z0/r3`, and `docs/evals/z0-r3-freeze/analyzer.sha256` lists its files at their paths on that branch. `dist/` is not tracked at `8bea03fbd`, so the hash file takes its `dist` lines from the clean-checkout rebuild the freeze check makes.
+3. **H3 and H4 do not change.** H3 is computed and reported without a verdict, as Amendment 1 sets. H4 still bounds set N cost at 1.10 and the resolve difference. This round cannot give an H3 win. Putting H3 back in the family would need a size that Amendment 1 found out of reach, and it would take alpha from H1.
+4. **The hippo build under test.** The hippo changes made on master since the A9 build are ported onto `z0/r3` as named commits, each with its PR's own tests ported and passing on `z0/r3`: #1126 (the hook drops another session's handoff), #1134 (capture stores no cut rule) and #1138 (follow-up rules and user rules printed first) once it merges. #1138 replaces the unreleased follow-up capture `88c47f67d` that the A9 build already carried. A dev-round change kept under round 2 item 3 is ported the same way. If #1138 has not merged by the freeze, the record says it is out. The A9 tree uses the old source layout, and none of the files #1134 or #1138 change exist there, so each port is a rewrite. Before the freeze, a behavioural equivalence test feeds the same fixtures to master's build and to `z0/r3`: teach-session transcripts into capture, and a fixed store into the prompt hook. It requires the same stored items and the same hook text, or lists each difference in the record. The result names the A2 build as a backport of those PRs. If a port cannot pass this test, the runner and analyzer files move onto master instead, by an amendment to this file before the freeze. The freeze is one tag on `z0/r3` with its dist hash and a pins file. The freeze check rebuilds `dist` from that tag in a clean checkout and requires its hash to equal the run tree's.
+   **The teach-template ban** runs over `git diff z0-r2-freeze <z0-r3 tag> -- src/`, the same files as round 2 item 4. Each match is listed in the record. It passes only when every match is a code comment, or a string that reaches neither hook output nor a capture prompt, and the record names the line and the reason. **The paraphrase check** (`C:/z0-runs/dev/capture-probe.mjs`, reworded forms, as in round 2 item 3) runs on the tagged build, because #1134 and #1138 change capture.
+5. **Model calls made by hippo count.** If A2 runs with `capture.followUpRules: 'model'` (decision below), the key reaches hippo only. The runner passes `Z0_HIPPO_MODEL_KEY` to the A2 run only, a name no Claude Code process reads, and the run's `bin/hippo` wrapper (`arms.mjs:101`) exports `ANTHROPIC_API_KEY` from it for the hippo process alone. `armEnv` keeps stripping `ANTHROPIC_*` from the arm env (`arms.mjs:19`), so the Claude Code credential stays `CLAUDE_CODE_OAUTH_TOKEN` in every arm. G1 also fails if any record's `envKeys` holds `ANTHROPIC_API_KEY`. Each call's input and output tokens are priced at the called model's published per-token prices (Sonnet 5.5 for #1138), read from Anthropic's price page on the freeze day and written into the pins file. The build writes one usage line per call, `follow-up rules: model=<id> input_tokens=N output_tokens=M`, into the session-end worker's log file (PR #1138 head `af619b869`; a call with an empty reply also logs and counts), and that cost joins the task's `costUsd`. The session-end worker runs after the session, so the usage line and any stored rule must land before the next position's snapshot. With the setting off, no model call runs and nothing is added.
+5a. **The arm environment is an allowlist.** On A9, every one of the 2,704 records' `envKeys` holds operator secret names that no task needs (for example `GITHUB_PERSONAL_ACCESS_TOKEN`, `SUPABASE_DB_DSN`, `GOOGLE_API_KEY`, `TWOCHAIN_API_KEY`). Before the freeze, `armEnv` passes only a named allowlist (system paths, the toolchain variables a repository's tests need, `CLAUDE_CODE_OAUTH_TOKEN`) plus the A2-only hippo key. G1 fails if any record's `envKeys` holds a name outside that list.
+6. **More families per repository.** The target is 4 kept families per sequence (round 2: about 2), so more lessons compete in each memory. A repository with 2 or 3 kept families still runs, unbalanced; one with fewer than 2 is dropped. The sizer gets `--max-families` set to 4 times the repository target. The first apply still needs at least 2 tasks after its teach (`lessons.mjs:173`). Calibration uses A9's 2-family sequences, and that assumes the spreads carry over to 4-family sequences. More seeds cannot shrink a family-level spread (base Amendment 2, item 6), so the seed rule alone is not a guard for power. After wave 1, the sizer reads H1's power at the observed spread with the real per-repository family counts and 9 seeds. This read is blind: it uses the spreads only, at the 15-point minimum effect, through the blinded path, and nobody sees an arm difference. If it is below 0.8, the run stops after wave 1 and the founder decides between more repositories and a stop. Wave 1 alone gives no H1 claim, and its sessions count to the budget.
+7. **Repositories.** Fresh repositories only. An unspent candidate is one in shortlist batch 2 that was never cloned, gated, authored, screened or probed in any round. If batch 2 runs short, batch 3 is screened by the same brief. The round 3 tuner reads no rule text from them before the tag, and the record says so with the list of names read.
+8. **Dev rounds.** As round 2 item 3, on dev families only. One named candidate: a smaller per-prompt hook text on prompts where no stored rule matches, aimed at the teach and set N cost.
+9. **Sizing.** `z0-size.mjs --runs <A9 records> --plan <round 3 plan cells> --prices <price table> --max-families <4 x repositories> --on-miss cap`, with H1 calibrated on `firstApplyR`. The seed rule carries over. A re-size at the count of repositories reached (round 2 item 8) uses the real per-repository family counts.
+10. **Budget.** Estimate from A9 ($0.33 mean `costUsd` per task record across arms, $928.55 over 2,704 records):
+    - Per sequence and seed: 4 families x (1 teach + 2 applies) + about 6 set N tasks = 18 positions.
+    - Records per position: A0 2, A1 3, A2 3, A4 2, A5 3 = 13 at base seeds; 31 when A1, A2 and A5 reach the 9-seed cap.
+    - Scored, per repository: 18 x 13 x $0.33 = about $77 at base seeds, about $184 at the cap. At 16 to 30 repositories: $1,240 to $2,320 at base seeds, up to $5,520 at the cap.
+    - Before the tag: dev rounds and probes as in round 2 (657 sessions, about $220), plus the A0 probe, leak probe and screen at about 12 sessions per candidate family for about twice the kept families (128 to 240 candidates): $510 to $950.
+    - Range: about $2,000 at 16 repositories and base seeds, up to about $6,700 at 30 repositories with every capped arm at 9 seeds. The sizer's design sets the number the founder approves.
+    The embedded teach form is cut from this round (see Limits).
+
+## Order
+
+The `z0/r3` analyzer change and its hash, then dev rounds, then the freeze, then this file fixed, then authoring, the A0 probe, the leak probe and the screen, then sizing and the budget yes, then the scored run, then the blind analysis and the unblind.
+
+## Stages and their checks
+
+| Stage | Check that closes it |
+|---|---|
+| Analyzer change | G1 gains the `envKeys` conditions of items 5 and 5a; on the A9 records the new G1 conditions are reported, and no record holds `ANTHROPIC_API_KEY`. On the A9 records and drop list, the new H1 and attribution estimates equal the old analyzer's first-apply estimates to printed precision; G2 reads A4 against A0 on first applies; the new all-applies secondary line equals the old H1 line; every line that does not read set R repeat mistakes prints exactly as in `a9b-16.txt`, except the analyzer source hash block. |
+| Sizer and seed rule | `z0-size.mjs` runs with the flags in item 9; `sizes.json` is hashed into the record; power at the bounds is at least 0.8 for H1 and H4; the seed rule's level check holds on the calibration. |
+| Ported hippo changes | Each port's PR tests pass on `z0/r3`; `npm run build` passes; the behavioural equivalence test in item 4 passes or lists each difference. |
+| Arm environment | A smoke session in each arm records `envKeys` inside the item 5a allowlist; the A2-only key is absent from A0, A1, A4 and A5. |
+| Model-call pricing (only if the setting is on) | A smoke A2 teach session on a dev family, whose rule comes in a later turn, makes at least one hippo model call and stores a `from-user` rule; one usage line exists per call; the record's cost includes it at the pinned prices; the rule and the usage line exist before the next position starts; no record's `envKeys` holds `ANTHROPIC_API_KEY`. |
+| Freeze | One tag on `z0/r3`; `dist` rebuilt from the tag in a clean checkout has the run tree's hash; the pins file is written; every teach-template ban match is listed and passes item 4's rule; the paraphrase check passes. |
+| Authoring and screen | Each kept family passes the A0 probe, the leak probe and the screen as in round 2 items 6 and 7. |
+| Scored run | G1 to G5 pass; hook voids under 5% of positions. |
+
+## What gets published, whatever the result
+
+Prereg 247-255 and the dev-round log, plus every arm's repeat rate on first applies and on later applies, and H3 with its split.
+
+## Limits, stated now
+
+- **No H3 verdict.** The cost result is reported, not tested. A full H3 win is not expected: on A9 the teach and set N cost exceed the first-apply saving.
+- **The unit was picked after seeing A9.** Fresh families, and an analyzer frozen before any scored session, are the guard. A9 is never counted for round 3.
+- **Teach stays one scripted turn.** The embedded form (a rule inside a later request about other work) is cut. It needs harness changes this round does not make: the key-phrase refusal (`runs.mjs:69`), the scheduler's leak block, the teach position for `tasksSinceTeach`, and A4's update. Leak study c4d04db1 found that hippo's capture missed rules taught in later turns. A later round can test that form after those changes.
+- **No lessons across repositories.** A family stays in one sequence and one repository (`lessons.mjs:81`), so this round does not test hippo's global store.
+- **4-family spreads are assumed from 2-family data** until the wave-1 seed rule reads the real spread.
+
+## Decisions for the founder
+
+- **Budget:** about $2,000 to $6,700. The sizer gives the exact figure, and no scored session runs before your yes on it.
+- **Follow-up capture in A2:** on, which tests PR #1138 and prices its Sonnet calls into the cost, or off, which tests the default install.
