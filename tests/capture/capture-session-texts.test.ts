@@ -303,6 +303,40 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored, 'Never push to master']);
   });
 
+  it('adds no row beside a pinned rule whose bold label the old capture kept as a rule', async () => {
+    const stored = '**Decision:** We will always use SQLite for offline storage';
+    writeEntry(root, { ...createMemory(stored, { pinned: true }), originProject: 'acme-web' });
+    const text = '- **Decision:** We will always use SQLite for offline storage.';
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 0, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored]);
+  });
+
+  it('pairs a held spec bullet with its spec twin, not with the rule from the same lines', async () => {
+    const stored = '**Rule:** Always run tests before committing.';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    const text = ['## Plan', '- **Rule:** Always run tests before committing.'].join('\n');
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Always run tests before committing']);
+  });
+
+  it('stores the rule that precedes 50 addresses masked to one item', async () => {
+    const addresses = Array.from(
+      { length: 50 },
+      (_, i) => `Never contact **reviewer${i}**@example.invalid without approval.`,
+    );
+    const text = ['Never push to main on Fridays.', ...addresses].join('\n');
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 2, skipped: 0, rejected: 0 });
+    expect(contents(root).sort()).toEqual(['Never contact [email] without approval', 'Never push to main on Fridays']);
+  });
+
+  it('pins the duplicate a store holding a base row that joined two rules keeps', async () => {
+    const stored = 'Never edit **the config.** always run the linter first';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    const text = ['Never edit **the config.**', 'always run the linter first.'].join('\n');
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 1, rejected: 0 });
+    expect(contents(root)).toEqual([stored, 'Never edit the config']);
+  });
+
   it('masks an address that bold removal rebuilds from a split one', async () => {
     const text = 'Never contact **reviewer**@example.invalid without approval.';
     expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });

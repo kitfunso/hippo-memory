@@ -158,12 +158,21 @@ async function captureFromCli(
   return previewCapture({ store, config }, writeOpts, extracted, keys);
 }
 
-/** The items with `scrub` applied to each text, as a path stores them. */
+/** The items with `scrub` applied to each text, as a path stores them; scrubbing can make two
+ * items one, and the first stays. */
 export function scrubbedItems(
   items: readonly ExtractedItem[],
   scrub: (text: string) => string,
 ): ExtractedItem[] {
-  return items.map((item) => ({ ...item, content: scrub(item.content) }));
+  const seen = new Set<string>();
+  return items
+    .map((item) => ({ ...item, content: scrub(item.content) }))
+    .filter((item) => {
+      const key = duplicateKey(item.content);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 /** Held keys, each twin's clean text too when a held row has its old text and repair keeps that

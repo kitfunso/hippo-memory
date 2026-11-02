@@ -96,8 +96,24 @@ describe('capture reads markdown the way it renders', () => {
       'Always run tests before committing',
     ],
     ['**Always run tests. Never push to master.**', '**Always run tests', 'Always run tests'],
+    [
+      '- **Decision:** We will always use SQLite for offline storage.',
+      '**Decision:** We will always use SQLite for offline storage',
+      'We will always use SQLite for offline storage',
+    ],
   ])('pairs what an old capture stored for %s with what capture stores now', (text, old, clean) => {
     expect(boldTwins([text], (value) => value)).toEqual([{ old, clean }]);
+  });
+
+  it('pairs a spec bullet with its spec twin and the prose rule with its prose twin', () => {
+    const twins = boldTwins(['## Plan\n- **Rule:** Always run tests before committing.'], (value) => value);
+    expect(twins).toEqual(
+      expect.arrayContaining([
+        { old: '**Rule:** Always run tests before committing.', clean: 'Rule: Always run tests before committing.' },
+        { old: '**Rule:** Always run tests before committing', clean: 'Always run tests before committing' },
+      ]),
+    );
+    expect(twins).toHaveLength(2);
   });
 
   it('pairs by the lines an item came from, so a dropped question pairs with nothing', () => {
@@ -125,12 +141,12 @@ describe('capture reads markdown the way it renders', () => {
     expect(twin).toEqual({ old: 'Never contact **reviewer**@example.invalid without approval', clean: '[scrubbed]' });
   });
 
-  it('removes the pairs of a line with 100,000 bold words before the watchdog fires', () => {
-    // A slice per marker is quadratic here: seconds at 25,000 pairs, minutes at 100,000.
-    const text = `Always ${'**word** '.repeat(100_000)}.`;
-    expect(() => scanWithinWatchdog((line) => extractFromTexts([line]), text, 5_000)).not.toThrow();
-    expect(() => scanWithinWatchdog((line) => boldTwins([line], (value) => value), text, 5_000)).not.toThrow();
-  }, 30_000);
+  it('removes the pairs of a line with 50,000 bold words before the watchdog fires', () => {
+    // Linear takes tens of milliseconds; a slice per marker takes seconds, well past the deadline.
+    const text = `Always ${'**word** '.repeat(50_000)}.`;
+    expect(() => scanWithinWatchdog((line) => extractFromTexts([line]), text, 2_000)).not.toThrow();
+    expect(() => scanWithinWatchdog((line) => boldTwins([line], (value) => value), text, 2_000)).not.toThrow();
+  }, 20_000);
 
   // The first two lists are what base 3.1.0 gives; base cut the capital-letter lines at the bold label.
   it.each([
@@ -253,6 +269,20 @@ describe('capture reads markdown the way it renders', () => {
         ['rule', 'Always run tests first'],
       ],
     ],
+    [
+      'Don`t push to main on Friday\nAlways run tests first\nWe can`t skip the linter.',
+      [
+        ['rule', 'Always run tests first'],
+        ['preference', 'We can`t skip the linter'],
+      ],
+    ],
+    [
+      'Don`t push to main on Friday\nAlways run tests first.\nWe can`t skip the linter.',
+      [
+        ['rule', 'Always run tests first'],
+        ['preference', 'We can`t skip the linter'],
+      ],
+    ],
   ])('joins a line break only inside a matched code span: %j', (text, expected) => {
     expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
   });
@@ -263,11 +293,12 @@ describe('capture reads markdown the way it renders', () => {
     expect(items.map((item) => item.content)).toEqual(['Never use a lone ` in names', 'Always run lint before push']);
   });
 
-  it('reads 100,000 lines below a stray backtick before the watchdog fires', () => {
-    const text = `Never use a lone \`\n${'Line of the build log.\n'.repeat(100_000)}`;
-    expect(() => scanWithinWatchdog((value) => extractFromTexts([value]), text, 5_000)).not.toThrow();
-    expect(() => scanWithinWatchdog((value) => boldTwins([`**${value}`], (v) => v), text, 5_000)).not.toThrow();
-  }, 30_000);
+  it('reads 20,000 lines below a stray backtick before the watchdog fires', () => {
+    // The lines join into one block, so the time is the line scan; a rescan per line takes far longer.
+    const text = `Never use a lone \`\n${'line of the build log\n'.repeat(20_000)}`;
+    expect(() => scanWithinWatchdog((value) => extractFromTexts([value]), text, 2_000)).not.toThrow();
+    expect(() => scanWithinWatchdog((value) => boldTwins([`**${value}`], (v) => v), text, 2_000)).not.toThrow();
+  }, 20_000);
 
   it('pairs a closer with the nearest opener and keeps code spans whole', () => {
     expect(contents('Never pass **kwargs to **the** store writer.')).toEqual([

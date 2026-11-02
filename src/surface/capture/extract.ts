@@ -152,13 +152,17 @@ function countUpTo(values: readonly number[], limit: number): number {
   return low;
 }
 
+// A backtick between two letters is an apostrophe ("can`t"), not the edge of a code span.
+const APOSTROPHE = /(?<=\p{L})`(?=\p{L})/gu;
+
 // Per line: whether the line break above it lies inside a code span. A span ends at a blank line,
 // heading or bullet, and a backtick run with no closer is plain text.
 function insideCodeSpan(lines: readonly string[]): boolean[] {
   const inside: boolean[] = lines.map(() => false);
   let first = 0;
   const settle = (end: number): void => {
-    const blanked = blankCodeSpans(lines.slice(first, end).join('\n'));
+    const paragraph = lines.slice(first, end).join('\n').replace(APOSTROPHE, "'");
+    const blanked = blankCodeSpans(paragraph);
     let at = 0;
     for (let i = first; i < end; i++) {
       if (i > first) inside[i] = blanked[at - 1] !== '\n';
@@ -411,24 +415,50 @@ export interface BoldTwin {
   readonly clean: string;
 }
 
-/** The twins of `texts`: an old and a new item of one category pair, one to one, when the lines
- * they came from overlap, and a pair whose texts differ is a twin. */
+/** The items of one kind, in text order and so sorted by where they end. */
+interface Track {
+  readonly items: readonly Sourced[];
+  readonly ends: readonly number[];
+}
+
+function trackOf(items: readonly Sourced[]): Track {
+  return { items, ends: items.map(({ to }) => to) };
+}
+
+/** The items of `track` whose range overlaps [from, to). */
+function overlapping(track: Track, from: number, to: number): Sourced[] {
+  const found: Sourced[] = [];
+  for (
+    let k = countUpTo(track.ends, from);
+    k < track.items.length && track.items[k].from < to;
+    k++
+  ) {
+    found.push(track.items[k]);
+  }
+  return found;
+}
+
+/** The twins of `texts`: each old item pairs, one to one, with the new item whose lines overlap
+ * its own, the same category first and then the larger overlap; a pair whose texts differ. */
 export function boldTwins(texts: readonly string[], scrub: (text: string) => string): BoldTwin[] {
   const twins: BoldTwin[] = [];
   for (const text of texts.filter((t) => t.includes('**'))) {
-    const before = extractSourced(text, keepAll);
-    const after = extractSourced(text, boldPairs);
-    for (const category of new Set(before.map(({ item }) => item.category))) {
-      const fresh = after.filter(({ item }) => item.category === category);
-      let next = 0;
-      // Both lists run in text order, so one sweep pairs them.
-      for (const { item: old, from, to } of before.filter(
-        ({ item }) => item.category === category,
-      )) {
-        while (next < fresh.length && fresh[next].to <= from) next++;
-        if (next >= fresh.length || fresh[next].from >= to) continue;
-        const clean = fresh[next++].item.content;
-        if (old.content !== clean) twins.push({ old: old.content, clean: scrub(clean) });
+    const fresh = extractSourced(text, boldPairs);
+    // Spec bullets and prose sentences overlap each other, so each kind keeps its own order.
+    const tracks = [trackOf(fresh.filter(({ item }) => item.category === 'spec'))];
+    tracks.push(trackOf(fresh.filter(({ item }) => item.category !== 'spec')));
+    const taken = new Set<Sourced>();
+    for (const { item: old, from, to } of extractSourced(text, keepAll)) {
+      const size = (found: Sourced): number => Math.min(found.to, to) - Math.max(found.from, from);
+      const same = (found: Sourced): number => Number(found.item.category === old.category);
+      const [match] = tracks
+        .flatMap((track) => overlapping(track, from, to))
+        .filter((found) => !taken.has(found))
+        .sort((a, b) => same(b) - same(a) || size(b) - size(a));
+      if (match === undefined) continue;
+      taken.add(match);
+      if (old.content !== match.item.content) {
+        twins.push({ old: old.content, clean: scrub(match.item.content) });
       }
     }
   }

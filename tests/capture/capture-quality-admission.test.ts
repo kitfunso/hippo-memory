@@ -1,5 +1,5 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { join } from 'node:path';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
@@ -373,6 +373,77 @@ describe('automatic quality does not govern manual or trusted import storage', (
       global: false,
     });
     expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, 'Never push to master']);
+  });
+
+  it('capture adds no row beside a pinned rule whose bold label the old capture kept as a rule', async () => {
+    const stored = '**Decision:** We will always use SQLite for offline storage';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic, pinned: true }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: '- **Decision:** We will always use SQLite for offline storage.' }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored]);
+  });
+
+  it('capture pairs a held spec bullet with its spec twin, not with the rule from the same lines', async () => {
+    const stored = '**Rule:** Always run tests before committing.';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: ['## Plan', '- **Rule:** Always run tests before committing.'].join('\n') }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([
+      stored,
+      'Always run tests before committing',
+    ]);
+  });
+
+  it('capture counts and stores one item for 50 addresses masked alike, beside the rule before them', async () => {
+    const addresses = Array.from(
+      { length: 50 },
+      (_, i) => `Never contact **reviewer${i}**@example.invalid without approval.`,
+    );
+    const text = ['Never push to main on Fridays.', ...addresses].join('\n');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    const run = (dryRun: boolean) =>
+      runCapture(captureTarget(root), {
+        tenantId: 'default',
+        source: 'last-session',
+        sessionTurns: [{ role: 'user', text }],
+        dryRun,
+        global: false,
+      });
+    await run(true);
+    expect(log.mock.calls.flat().join('\n')).toContain('[dry-run] Captured 2 items');
+    await run(false);
+    expect(
+      loadAllEntries(root, 'default')
+        .map((entry) => entry.content)
+        .sort(),
+    ).toEqual(['Never contact [email] without approval', 'Never push to main on Fridays']);
+  });
+
+  it('capture pins the duplicate a store holding a base row that joined two rules keeps', async () => {
+    const stored = 'Never edit **the config.** always run the linter first';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: ['Never edit **the config.**', 'always run the linter first.'].join('\n') }],
+      dryRun: false,
+      global: false,
+    });
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, 'Never edit the config']);
   });
 
   it.each([
