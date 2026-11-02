@@ -337,6 +337,14 @@ describe('captureSessionTexts', () => {
     expect(contents(root)).toEqual([stored]);
   });
 
+  it('stores the rule after a held bold rule that a glued full stop ends', async () => {
+    const stored = 'Never deploy **production**';
+    writeEntry(root, { ...createMemory(stored), originProject: 'acme-web' });
+    const text = 'Never deploy **production**.Always deploy staging.';
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 1, rejected: 0 });
+    expect(contents(root).sort()).toEqual(['Always deploy staging', stored]);
+  });
+
   it('masks an address that bold removal rebuilds from a split one', async () => {
     const text = 'Never contact **reviewer**@example.invalid without approval.';
     expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 1, skipped: 0, rejected: 0 });

@@ -1,6 +1,6 @@
 ### Fixed
 
-- **Capture no longer stores a rule cut inside a bold label or an aside.** Capture now removes bold pairs before it splits sentences, and skips a sentence that starts inside an aside the split cut. A line such as `- **Volume data.** Never backfill them.` now stores "Never backfill them", not "** Never backfill them". Capture removes only real `**` pairs, read by the CommonMark rules, so `**kwargs`, `2**10`, `**/*.ts` and code spans keep their text. A line whose bold markers capture used to keep is not stored a second time.
+- **Capture no longer stores a rule cut inside a bold label or an aside.** Capture now removes bold pairs and splits sentences where 3.1.0 did, and skips a sentence that starts inside an aside the split cut. A line such as `- **Volume data.** Never backfill them.` now stores "Never backfill them", not "** Never backfill them". Capture removes only real `**` pairs, read by the CommonMark rules, so `**kwargs`, `2**10`, `**/*.ts` and code spans keep their text. A line whose bold markers capture used to keep is not stored a second time.
 - **The next daily run or `hippo sleep` sets the cut rows you already have aside once.** This includes stored rows that start with `** `. The run takes a backup first, keeps pinned rows, and prints the "N look doubtful and were kept" notice once more. `hippo audit repair` lists those rows. Bring one back with `hippo dormant restore <id>`.
 
 ### Known limitations

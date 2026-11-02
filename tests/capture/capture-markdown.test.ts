@@ -129,6 +129,49 @@ describe('capture reads markdown the way it renders', () => {
     ]);
   });
 
+  // Each list is what base 3.1.0 gives but for the removed `**`: a cut beside a sentence end merges nothing.
+  it.each([
+    [
+      'Never deploy **production**.Always deploy staging.',
+      [
+        ['rule', 'Never deploy production'],
+        ['rule', 'Always deploy staging'],
+      ],
+    ],
+    [
+      'Never deploy **production**!Always deploy staging.',
+      [
+        ['rule', 'Never deploy production'],
+        ['rule', 'Always deploy staging'],
+      ],
+    ],
+    ['Use **npm**.Never use yarn.', [['rule', 'Never use yarn']]],
+    [
+      '**Always run tests**.Never skip lint.',
+      [
+        ['rule', 'Always run tests'],
+        ['rule', 'Never skip lint'],
+      ],
+    ],
+    [
+      '## Plan\n- Never deploy **production**.Always deploy staging.',
+      [
+        ['spec', 'Never deploy production.Always deploy staging.'],
+        ['rule', 'Never deploy production'],
+        ['rule', 'Always deploy staging'],
+      ],
+    ],
+  ])('keeps the sentence boundary 3.1.0 saw beside a removed bold marker: %j', (text, expected) => {
+    expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
+  });
+
+  it('pairs the old item with the new item of its own sentence, so the sentence after it has no twin', () => {
+    const text = 'Never deploy **production**.Always deploy staging.';
+    expect(boldTwins([text], (value) => value)).toEqual([
+      { old: 'Never deploy **production**', clean: 'Never deploy production' },
+    ]);
+  });
+
   it('pairs nothing when both readings give the same text, or no text holds a "**"', () => {
     for (const text of ['Never call f(**kwargs) without validation.', 'Never push to main.']) {
       expect(
@@ -214,9 +257,12 @@ describe('capture reads markdown the way it renders', () => {
         ['rule', 'Never change `Warning'],
       ],
     ],
-  ])('cuts the bold pair of a code span that wraps onto a capital letter: %j', (text, expected) => {
-    expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
-  });
+  ])(
+    'pins the 3.1.0 split (a known limitation) of a code span that wrapped onto a capital letter: %j',
+    (text, expected) => {
+      expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
+    },
+  );
 
   // Each list is what base 3.1.0 gives: a backtick run with no closer is plain text, so it joins nothing.
   it.each([

@@ -446,6 +446,21 @@ describe('automatic quality does not govern manual or trusted import storage', (
     expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored]);
   });
 
+  it('capture stores the rule after a held bold rule that a glued full stop ends', async () => {
+    const stored = 'Never deploy **production**';
+    const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed' } as const;
+    writeEntry(root, createMemory(stored, { ...options, layer: Layer.Episodic }));
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [{ role: 'user', text: 'Never deploy **production**.Always deploy staging.' }],
+      dryRun: false,
+      global: false,
+    });
+    const kept = loadAllEntries(root, 'default').map((entry) => entry.content);
+    expect(kept.sort()).toEqual(['Always deploy staging', stored]);
+  });
+
   it.each([
     [
       'an address',

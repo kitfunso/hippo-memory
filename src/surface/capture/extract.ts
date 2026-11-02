@@ -158,15 +158,23 @@ interface Piece {
   at: number;
 }
 
-/** The text of a prose block with its markers cut, and where a range of it came from. */
+/** The text of a prose block with its markers cut, where each sentence of it starts, and where a
+ * range of it came from. */
 interface Block {
   readonly text: string;
+  readonly sentenceStarts: readonly number[];
   sourceOf(from: number, to: number): [number, number];
 }
 
 function blockOf(pieces: readonly Piece[], cuts: Cutter): Block {
   const raw = pieces.map((piece) => piece.text).join(' ');
   const cutAt = cuts(raw);
+  // The sentences are those 3.1.0 split from the uncut text, so a removed `**` merges none: ICU
+  // breaks "**.Always" but not "n.Always". Masking keeps offsets.
+  const cutEnds = cutAt.map((at) => at + 2);
+  const sentenceStarts = [
+    ...new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(raw)),
+  ].map(({ index }) => index - 2 * countUpTo(cutEnds, index));
   // Where each cut sits in the cut text, and where each piece starts in the raw text.
   const shifted = cutAt.map((at, k) => at - 2 * k);
   const starts: number[] = [];
@@ -181,6 +189,7 @@ function blockOf(pieces: readonly Piece[], cuts: Cutter): Block {
   };
   return {
     text: cutOut(raw, cutAt),
+    sentenceStarts,
     sourceOf: (from, to) => [
       toProse(from + 2 * countUpTo(shifted, from)),
       toProse(to + 2 * countUpTo(shifted, to - 1)),
@@ -214,12 +223,15 @@ function proseBlocks(prose: string, cuts: Cutter): Block[] {
   return blocks;
 }
 
-function completeSentences(text: string): string[] {
-  // Masking keeps offsets, so each sentence is cut from the unchanged source.
-  const segments = new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(text));
-  return [...segments].map(({ index, segment }) =>
-    text.slice(index, index + segment.length).trim(),
-  );
+/** Each sentence of a block, trimmed, with where it starts in the block text. */
+function completeSentences({
+  text,
+  sentenceStarts,
+}: Block): Array<{ sentence: string; at: number }> {
+  return sentenceStarts.map((start, k) => {
+    const piece = text.slice(start, sentenceStarts[k + 1] ?? text.length);
+    return { sentence: piece.trim(), at: start + piece.length - piece.trimStart().length };
+  });
 }
 
 // A "(" after ":" or ";" is an emoticon, and one with a quote mark on both sides is quoted text.
@@ -334,10 +346,7 @@ function extractSourced(text: string, cuts: Cutter): Sourced[] {
   const found = extractSpecSections(prose, cuts);
   for (const block of proseBlocks(prose, cuts)) {
     const cutByAside = asideCutter(block.text);
-    let cursor = 0;
-    for (const sentence of completeSentences(block.text)) {
-      const at = Math.max(block.text.indexOf(sentence, cursor), cursor);
-      cursor = at + sentence.length;
+    for (const { sentence, at } of completeSentences(block)) {
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
       if (cutByAside(sentence, at)) continue;
@@ -402,22 +411,31 @@ function overlapping(track: Track, from: number, to: number): Sourced[] {
   return found;
 }
 
-/** The twins of `texts`: each old item pairs, one to one, with the new item whose lines overlap
- * its own, the same category first and then the larger overlap; a pair whose texts differ. */
+/** Whether each range covers the other, but for markers, spaces and sentence marks at the edges. */
+function sameSpan(prose: string, a: Sourced, b: Sourced): boolean {
+  const gap = (x: number, y: number): string => prose.slice(Math.min(x, y), Math.max(x, y));
+  return /^[\s*.!?]*$/.test(gap(a.from, b.from)) && /^[\s*.!?]*$/.test(gap(a.to, b.to));
+}
+
+/** The twins of `texts`: each old item pairs, one to one, with the new item of the same span, the
+ * same category first and then the larger overlap; a pair whose texts differ. A new item that
+ * holds more or less than the old one is no twin, or a held row would block a rule it lacks. */
 export function boldTwins(texts: readonly string[], scrub: (text: string) => string): BoldTwin[] {
   const twins: BoldTwin[] = [];
   for (const text of texts.filter((t) => t.includes('**'))) {
+    const prose = proseOnly(text);
     const fresh = extractSourced(text, boldPairs);
     // Spec bullets and prose sentences overlap each other, so each kind keeps its own order.
     const tracks = [trackOf(fresh.filter(({ item }) => item.category === 'spec'))];
     tracks.push(trackOf(fresh.filter(({ item }) => item.category !== 'spec')));
     const taken = new Set<Sourced>();
-    for (const { item: old, from, to } of extractSourced(text, keepAll)) {
+    for (const sourced of extractSourced(text, keepAll)) {
+      const { item: old, from, to } = sourced;
       const size = (found: Sourced): number => Math.min(found.to, to) - Math.max(found.from, from);
       const same = (found: Sourced): number => Number(found.item.category === old.category);
       const [match] = tracks
         .flatMap((track) => overlapping(track, from, to))
-        .filter((found) => !taken.has(found))
+        .filter((found) => !taken.has(found) && sameSpan(prose, found, sourced))
         .sort((a, b) => same(b) - same(a) || size(b) - size(a));
       if (match === undefined) continue;
       taken.add(match);

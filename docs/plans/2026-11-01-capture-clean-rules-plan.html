@@ -26,7 +26,7 @@
 <span class="dim">stored after</span>
 "Never backfill them"</template></doc-mock>
     <doc-claim>
-      <p>The extractor removes paired bold markers outside code before it splits sentences.</p>
+      <p>The extractor removes paired bold markers outside code. It splits sentences where 3.1.0 did, on the text with its markers, so a removed marker never merges two sentences.</p>
       <doc-code caption="Sketch, src/surface/capture/extract.ts: only a marker pair at word edges goes; code spans, globs, exponents and kwargs keep every character.">
 <script type="text/plain">
 // The sentence segmenter splits after "." inside "**Label.**" and leaves "**" on the next rule.
