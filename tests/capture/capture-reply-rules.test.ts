@@ -161,6 +161,37 @@ describe('capture keeps the rules a person gives in reply', () => {
   });
 });
 
+describe('which replies capture reads as a rule', () => {
+  const ruleFromReply = (reply: string): boolean =>
+    extractFromTexts([REQUEST, reply], 2, 1).some((i) => i.tags.includes('follow-up'));
+
+  it.each([
+    'Thanks, keep using `pnpm` for all installs.',
+    'Thanks, but run `pnpm test:unit`, not the bare `pnpm test`.',
+    'Use the existing helper in `src/cache.ts:42` rather than duplicating it.',
+    'Keep button styles in `shared.css` so all dialogs look right.',
+    'Use `pnpm` instead of `npm`.',
+    'Avoid edits to `generated.ts`.',
+    REPLY,
+  ])('keeps %s', (reply) => {
+    expect(ruleFromReply(reply)).toBe(true);
+  });
+
+  it.each([
+    'Thanks, `src/cache.ts` looks good.',
+    'Thanks for the great work on `src/cache.ts`.',
+    'Great work on `fetchJson()`.',
+    '`src/cache.ts` works now.',
+    'src/cache.ts:42 expected 1 to equal 2',
+    '--> src/cache.rs:42:3',
+    '#0 fetchJson () at src/cache.cpp:42',
+    'TypeError: fetchJson is not a function',
+    'Tests 3 failed | 120 passed (123)',
+  ])('drops %s', (reply) => {
+    expect(ruleFromReply(reply)).toBe(false);
+  });
+});
+
 describe('the transcript reader keeps only what a person typed', () => {
   it('drops the user lines Claude Code writes for ! shell commands and task notices', () => {
     const userLine = (content: string) => ({ type: 'user', message: { role: 'user', content } });

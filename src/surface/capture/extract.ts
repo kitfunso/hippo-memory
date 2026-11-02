@@ -347,17 +347,22 @@ const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Z
 const LIMIT_CUE =
   /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
 // Praise names code too ("Thanks, `src/cache.ts` looks good"); a thanks that goes on to direct is kept.
+// SHORTCUT: word shapes, not meaning; the opt-in model capture is the upgrade path.
 const ACK_LEAD = /^(?:thanks|thank you|ok(?:ay)?|great|nice|perfect|cool|lgtm)\b[\s,.!:-]*/i;
-const PRAISE_CUE = /\b(?:looks|look|works|worked) (?:good|great|fine|right|now)\b/i;
-// Pasted test or stack output opens on a file:line or an error word, or states an assertion.
+const NOT_A_DIRECTIVE = /^(?:for|on|to|so|the|a|an|this|that|it|its|you|your|i|we|all|really)\b/i;
+const APPROVAL = /^(?:\S+\s+){0,3}(?:looks?|works?|worked)\s+(?:good|great|fine|right|now)\b/i;
+// Pasted output opens on a file:line, an arrow, a stack frame or an error word, or holds a
+// file:line:col or an assertion message.
 const LOG_CUE =
-  /^\S*\w\.[A-Za-z]+:\d+|^(?:\w*Error|FAIL|Traceback)\b|\bexpected\b.+\bto (?:be|equal|have)\b/;
+  /^(?:-->|#\d+\s)|^\S*\w\.[A-Za-z]+:\d+|\w\.[A-Za-z]+:\d+:\d+|^(?:\w*Error|error(?:\[\w+\])?:|warning:|FAIL|Traceback)|\bexpected\b.+\bto (?:be|equal|have)\b/;
 
-/** A thanks, or a thanks with 3 words or fewer after it, or a "looks good". */
+/** A thanks with no directive after it, or a short "X looks good". */
 function isPraise(content: string): boolean {
   const lead = ACK_LEAD.exec(content);
-  const rest = lead ? content.slice(lead[0].length).split(/\s+/).filter(Boolean) : null;
-  return PRAISE_CUE.test(content) || (rest !== null && rest.length <= 3);
+  const rest = lead ? content.slice(lead[0].length) : content;
+  if (APPROVAL.test(rest)) return true;
+  if (!lead) return false;
+  return rest.split(/\s+/).filter(Boolean).length <= 3 || NOT_A_DIRECTIVE.test(rest);
 }
 
 /** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word. */
