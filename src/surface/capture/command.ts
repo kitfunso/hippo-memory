@@ -131,7 +131,9 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
   // pass could not see (AGENTS.md: no secrets in memories).
   const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
   const scrubbed = texts.map(scrub);
-  const rules = target.llm ? await followUpRules(followUps, target.llm, warnLine) : [];
+  // A global capture with no project would pin its rules into every project.
+  const llm = options.global && options.originProject === undefined ? undefined : target.llm;
+  const rules = llm ? await followUpRules(followUps, llm, warnLine) : [];
   const items = withFollowUpRules(extractFromTexts(scrubbed, userTexts), rules, scrub);
   const extracted = scrubbedItems(items, scrub);
 

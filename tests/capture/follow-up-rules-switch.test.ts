@@ -17,9 +17,9 @@ let globalRoot: string;
 let transcript: string;
 let modelCalls: number;
 
-function writeConfig(followUpRules: string): void {
+function writeConfig(followUpRules: string, root = globalRoot): void {
   const config = { capture: { followUpRules }, embeddings: { enabled: false } };
-  fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify(config));
+  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify(config));
 }
 
 function envWith(key: string | null): NodeJS.ProcessEnv {
@@ -74,15 +74,24 @@ describe('capture.followUpRules', () => {
     expect(contents()).toEqual([RULE_SENTENCE]);
   });
 
-  it('hippo capture --last-session takes the same path', async () => {
-    writeConfig('model');
-    const result = await runCliAs(['capture', '--last-session', '--transcript', transcript, '--global'], {
+  it('hippo capture --last-session takes the same path in a project store', async () => {
+    const projectRoot = path.join(cwd, '.hippo');
+    initTestStore(projectRoot);
+    writeConfig('model', projectRoot);
+    const result = await runCliAs(['capture', '--last-session', '--transcript', transcript], {
       cwd,
       env: envWith('test-key'),
     });
     expect(result.status).toBe(0);
     expect(modelCalls).toBe(1);
-    expect(contents()).toEqual([RULE_SENTENCE]);
+    expect(loadAllEntries(projectRoot, 'default').map((entry) => entry.content)).toEqual([RULE_SENTENCE]);
+  });
+
+  it('hippo capture --global names no project, so it never asks the model', async () => {
+    writeConfig('model');
+    const args = ['capture', '--last-session', '--transcript', transcript, '--global'];
+    expect((await runCliAs(args, { cwd, env: envWith('test-key') })).status).toBe(0);
+    expect(modelCalls).toBe(0);
   });
 
   it('a per-reply capture never asks the model', async () => {
@@ -97,9 +106,11 @@ describe('capture.followUpRules', () => {
     expect(modelCalls).toBe(0);
   });
 
-  it('no key never asks the model', async () => {
+  it('no key never asks the model, and says why', async () => {
     writeConfig('model');
-    expect((await sessionEnd([], null)).status).toBe(0);
+    const result = await sessionEnd([], null);
+    expect(result.status).toBe(0);
     expect(modelCalls).toBe(0);
+    expect(result.stderr).toContain('ANTHROPIC_API_KEY is not set');
   });
 });

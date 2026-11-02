@@ -11,6 +11,7 @@ import { errorFields, errorMessage, type LineLog } from '../../base/util/log.js'
 import { duplicateKey } from '../../base/util/same-text.js';
 import { pickedText, type ExtractedItem } from './extract.js';
 import { scrubForSharing } from './share-scrub.js';
+import { detectInstruction } from '../../api/instruction-detect.js';
 
 const FOLLOW_UP_TURNS = 20;
 const TURN_CHARS = 1000;
@@ -38,27 +39,39 @@ const FROZEN_PROMPT = [
 
 // Pasted and fenced text is not the person's own; an unclosed block runs to the end.
 const QUOTED_BLOCK =
-  /<pasted_content\b[^>]*>[\s\S]*?(?:<\/pasted_content>|$)|```[\s\S]*?(?:```|$)/g;
+  /<pasted_content\b[^>]*>[\s\S]*?(?:<\/pasted_content>|$)|```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g;
+const INDENTED_CODE = /^(?: {4}|\t)/;
 const LOG_LEAD =
   /^(?:\d{4}-\d\d-\d\d|\[\d|at [\w$.<>]+ ?\(|(?:[A-Za-z]:)?[^\s:]*[/\\.][^\s:]*:\d+|\$ |> )/;
 const SENTENCE_BREAK = /(?<=[.!?])\s+|\n+/;
 
-/** A line of program output, not prose: few letters, or the lead of a log, trace or prompt line. */
+/** A line of program output or indented code, not prose: few letters, an indent, or the lead of a
+ * log, trace or prompt line. */
 function isLogLine(line: string): boolean {
   const marks = line.replace(/\s/g, '');
   const letters = marks.match(/\p{L}/gu)?.length ?? 0;
-  return letters < 0.4 * marks.length || LOG_LEAD.test(line.trimStart());
+  return (
+    letters < 0.4 * marks.length || INDENTED_CODE.test(line) || LOG_LEAD.test(line.trimStart())
+  );
 }
 
 /** One turn's numbered sentences, split as the study split them, after the scrub for sharing. */
 function sentencesOf(turn: string): string[] {
   const lines = turn.replace(QUOTED_BLOCK, ' ').split('\n');
   const text = scrubForSharing(lines.filter((line) => !isLogLine(line)).join('\n'));
-  return text
-    .slice(0, TURN_CHARS)
+  const sentences = text
     .split(SENTENCE_BREAK)
     .map((piece) => piece.trim())
     .filter((piece) => piece.length >= 3);
+  // Whole sentences only: a sentence the limit cuts could lose its condition and still read as a rule.
+  const whole: string[] = [];
+  let used = 0;
+  for (const sentence of sentences) {
+    used += sentence.length + 1;
+    if (used > TURN_CHARS + 1) break;
+    whole.push(sentence);
+  }
+  return whole;
 }
 
 function promptOf(turns: readonly (readonly string[])[]): string {
@@ -111,7 +124,8 @@ function rulesOf(turns: readonly (readonly string[])[], picks: readonly Pick[]):
     .flatMap((i) => {
       const ids = [...(chosen.get(i) ?? [])].sort((a, b) => a - b);
       const content = pickedText(ids.map((j) => turns[i][j]));
-      if (content === null) return [];
+      // It prints as the person's order, so text shaped like an injected instruction never becomes one.
+      if (content === null || detectInstruction(content).flagged) return [];
       return [{ content, category: 'rule', tags: ['follow-up', 'from-user'], fromUser: true }];
     });
 }

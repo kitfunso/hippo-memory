@@ -172,6 +172,15 @@ describe("the budget pays for a user rule's heading", () => {
     expect(await smallestBudgetShowing(row.id)).toBe(smallestBudgetFor(entryTokens, heading));
   });
 
+  it('reserves the heading for a user rule the global store holds', async () => {
+    const row = ruleRow();
+    writeEntry(process.env.HIPPO_HOME ?? '', row);
+    const heading = (budget: number) =>
+      cost().fixed(budget, { ...CAN, userRule: true }) - cost().fixed(budget, { ...CAN, userRule: false });
+    const entryTokens = cost().entry({ entry: row, isGlobal: true, userRule: true });
+    expect(await smallestBudgetShowing(row.id)).toBe(smallestBudgetFor(entryTokens, heading));
+  });
+
   it('reserves nothing for a pool with no user rule', async () => {
     const row = noteRow();
     writeEntry(store, row);
