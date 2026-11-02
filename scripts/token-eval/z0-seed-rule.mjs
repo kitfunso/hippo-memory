@@ -11,7 +11,7 @@ import { pooledComponents } from '../../dist/eval/repository-t.js';
 import { loadInputs } from './z0-analyze.mjs';
 import { inputHashes, sha256 } from './z0-blind.mjs';
 import { abandonedRuns, filterRecords } from './z0-filters.mjs';
-import { CODINGS, codexApply, inSets, repeatMistakeUnits, taskUnits, withoutRuns } from './z0-hypotheses.mjs';
+import { CODINGS, codexApply, firstApplyR, inSets, repeatMistakeUnits, taskUnits, withoutRuns } from './z0-hypotheses.mjs';
 import { validateCorpus, isString } from './z0-records.mjs';
 import { calibrate } from './z0-size.mjs';
 import { SEEDS, SEED_CAP, TARGET_Z, harmSizer, seedsNeeded } from './z0-size-sim.mjs';
@@ -102,7 +102,7 @@ export function seedRule(records, planCells, prices, opts) {
   const filtered = filterRecords(withoutRuns(records, abandoned), withoutRuns(planCells, abandoned), { dropList: opts.dropList ?? null });
   if (filtered.scored.some((r) => r.seed > SEEDS)) throw new Error(`the rule reads wave 1 only: a scored record has a seed above ${SEEDS}`);
   const hasX = ['X2', 'X3'].every((a) => filtered.arms.includes(a));
-  const perHypothesis = { H1: repeatSeeds('H1', filtered.scored, ['A2', 'A1'], inSets('R'), opts) };
+  const perHypothesis = { H1: repeatSeeds('H1', filtered.scored, ['A2', 'A1'], firstApplyR, opts) };
   if (hasX) perHypothesis.H2 = repeatSeeds('H2', filtered.scored, ['X2', 'X3'], codexApply, opts);
   perHypothesis.H4 = harmSeeds(filtered, prices, opts);
   const short = Object.entries(perHypothesis).filter(([, n]) => n === null).map(([h]) => `${h} needs more than ${opts.cap} seeds`);

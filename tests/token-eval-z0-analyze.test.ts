@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { addUsage, holmAdjust, priceUsage, verdict } from '../dist/eval/eval-stats.js';
 import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus, validateRecord } from '../scripts/token-eval/z0-records.mjs';
 import { filterRecords, pairTasks } from '../scripts/token-eval/z0-filters.mjs';
-import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, bothCodings, codexApply, computeHypotheses, harmT, holmVerdicts, inSets, repeatMistake, repeatT, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
+import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, armRate, bothCodings, codexApply, computeHypotheses, firstApplyR, harmT, holmVerdicts, inSets, repeatMistake, repeatT, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
 import { g3, g4, g5 } from '../scripts/token-eval/z0-gates.mjs';
 import { analyzeZ0, buildReport, renderText } from '../scripts/token-eval/z0-analyze.mjs';
 import { ARMS, GRADING, PRICES, at, crash, generate, jsonl, planOf, type GenOpts, type Generated, type Z0Record, type PlanCell } from './fixtures/z0-gen.js';
@@ -298,7 +298,7 @@ describe('Z0 filters', () => {
 describe('Z0 hypotheses', () => {
   it('2, 3, 4: H1 win, a coding split, and a loss under one coding', () => {
     expect(winHyp().verdicts.H1.final).toEqual({ verdict: 'win', reachesMinimum: true });
-    const split = hyp({ knobs: { A2: { na: 0.4, fail: 0.1 } } }).verdicts.H1;
+    const split = hyp({ knobs: { A2: { na: 0.4, fail: 0.04 } } }).verdicts.H1;
     expect([split.violation.verdict === 'win', split.excluded.verdict, split.final.verdict]).toEqual([false, 'win', 'inconclusive']);
     const loss = hyp({ knobs: { A1: { fail: 0.2 }, A2: { na: 0.6, fail: 0.08 } } });
     expect([loss.verdicts.H1.violation.verdict, loss.verdicts.H1.excluded.verdict === 'loss', loss.verdicts.H1.final.verdict]).toEqual(['loss', false, 'loss']);
@@ -452,8 +452,8 @@ describe('Z0 hypotheses', () => {
     const a = analyze(g);
     const h = real(a.hypotheses);
     const rep = real(a.reported);
-    expect(h.H1.violation.estimate).toBeGreaterThan(0);
-    expect(rep.firstApply.H1.violation.estimate).toBe(0);
+    expect(h.H1.violation.estimate).toBe(0);
+    expect(rep.allApplies.H1.violation.estimate).toBeGreaterThan(0);
     expect([h.H1.violation.units, rep.maintainerOnly.H1.violation.units, rep.sensitivity.H1.violation.units]).toEqual([72, 54, 68]);
     expect(rep.sensitivity.carryUnionRuns).toBe(1);
     const rates = rep.ratesBySinceTeach['2-4'];
@@ -466,6 +466,18 @@ describe('Z0 hypotheses', () => {
     for (const r of g.records) byPos.set(`${r.sequence}#${r.seed}@${r.position}`, [...(byPos.get(`${r.sequence}#${r.seed}@${r.position}`) ?? []), slotOf(r)]);
     for (const s of byPos.values()) expect([...s].sort((a, b) => a - b)).toEqual(s.map((_, i) => i + 1));
     expect(rep.rotation.length).toBeGreaterThan(0);
+  });
+
+  it('H1 unit: an A1 that fails only on the second apply shows no failures under firstApplyR', () => {
+    const g = fresh();
+    for (const r of g.records) {
+      if (r.kind === 'apply' && r.set === 'R' && (r.arm === 'A1' || r.arm === 'A2')) r.lessons[0]!.first = r.arm === 'A1' && r.applyIndex === 2 ? 'fail' : 'pass';
+    }
+    const s = scoredOf(g);
+    expect(armRate(s, 'A1', 'violation', firstApplyR, STAT).estimate).toBe(0);
+    expect(repeatMistake(s, 'A2', 'A1', 'violation', STAT, firstApplyR).estimate).toBe(0);
+    expect(armRate(s, 'A1', 'violation', inSets('R'), STAT).estimate).toBeGreaterThan(0);
+    expect(repeatMistake(s, 'A2', 'A1', 'violation', STAT, inSets('R')).estimate).toBeLessThan(0);
   });
 });
 
@@ -482,7 +494,7 @@ describe('Z0 gates', () => {
     const g = analyze(resumeOnly);
     expect([real(g.gates).failed, real(g.gates).G1.operatorCanaries]).toEqual([['G1'], 1]);
     expect(analyze(generate({ knobs: { A4: { fail: 0.6 } } }))).toMatchObject({ gates: { failed: ['G2'] }, hypotheses: null });
-    const oneCoding = gatesOf(generate({ knobs: { A4: { na: 0.5, fail: 0.05 } } })).G2.claudeCode;
+    const oneCoding = gatesOf(generate({ knobs: { A4: { na: 0.4, fail: 0.02 } } })).G2.claudeCode;
     expect([oneCoding.violation.estimate > -0.3, oneCoding.excluded.estimate <= -0.3, oneCoding.pass]).toEqual([true, true, false]);
     const noX = blind(generate({ arms: RN_ARMS }));
     expect([real(noX.gates).pass, real(noX.gates).G2.codex.status, hypOf(noX).verdicts.H2.final.verdict]).toEqual([true, NOT_RUN, NOT_RUN]);

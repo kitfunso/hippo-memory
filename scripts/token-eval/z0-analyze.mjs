@@ -208,7 +208,7 @@ function reportedLines(rep) {
   for (const k of ['A1vA0', 'A4vA1', 'X2vX1']) lines.push(`  ${k}: ${pairText(rep[k])}`);
   for (const [arm, a] of Object.entries(rep.perArm)) lines.push(`  ${arm}: ${a.tasks} tasks, resolve ${est(a.resolveRate)}, cost per resolved ${est(a.costPerResolved)}, stale-follow ${est(a.staleFollow)}`);
   lines.push(`  maintainer only: H1 ${pairText(rep.maintainerOnly.H1)}; H2 ${pairText(rep.maintainerOnly.H2)}; H3 ${est(rep.maintainerOnly.H3)}`);
-  lines.push(`  first apply only: H1 ${pairText(rep.firstApply.H1)}`);
+  lines.push(`  all applies: H1 ${pairText(rep.allApplies.H1)}`);
   const rate = (e) => (isString(e) ? e : f3(e.estimate));
   for (const [bucket, p] of Object.entries(rep.bySinceTeach)) {
     const seeds = (r) => (r.seeds.length === 0 ? '' : ` (seeds ${r.seeds.join(',')})`);

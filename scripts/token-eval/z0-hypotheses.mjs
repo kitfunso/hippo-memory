@@ -25,6 +25,8 @@ export const A5_NOT_RUN = 'A5 not run';
 export const sum = (xs) => xs.reduce((s, x) => s + x, 0);
 export const mean = (xs) => sum(xs) / xs.length;
 export const inSets = (...sets) => (r) => sets.includes(r.set);
+// The H1 unit (round 3): a family's first apply in set R, before any re-teaching can differ between arms.
+export const firstApplyR = (r) => r.set === 'R' && r.applyIndex === 1;
 export const codexApply = (r) => r.set === 'X' && r.tool === 'codex';
 export const maintainer = (r) => r.lessonSource !== 'template';
 export const byCoding = (fn) => Object.fromEntries(CODINGS.map((c) => [c, fn(c)]));
@@ -197,13 +199,13 @@ const plannedArms = (filtered) => {
 export function computeHypotheses(filtered, prices, opts) {
   const s = filtered.scored;
   const runs = plannedArms(filtered);
-  const h1 = runs('A1', 'A2') ? bothCodings(s, 'A2', 'A1', opts, inSets('R')) : null;
+  const h1 = runs('A1', 'A2') ? bothCodings(s, 'A2', 'A1', opts, firstApplyR) : null;
   const h2 = runs('X2', 'X3') ? bothCodings(s, 'X2', 'X3', opts, codexApply) : null;
   const units = runs('A1', 'A2') ? taskUnits(s, 'A2', 'A1', prices['claude-code'], inSets('R', 'N')) : null;
   const h3 = units && ratioT(units, 'cost', opts);
   const h4 = harmGateOf(units, filtered.sets.includes('N'), opts);
   const verdicts = holmVerdicts(byCoding((c) => ({ H1: h1?.[c] ?? null, H2: h2?.[c] ?? null })));
-  const attribution = h1 ? attributionOf(verdicts.H1.final.verdict, runs('A5') ? bothCodings(s, 'A2', 'A5', opts, inSets('R')) : null) : NOT_RUN;
+  const attribution = h1 ? attributionOf(verdicts.H1.final.verdict, runs('A5') ? bothCodings(s, 'A2', 'A5', opts, firstApplyR) : null) : NOT_RUN;
   const h3Block = h3 && {
     ...h3,
     firstSession: ratioT(units, 'first', opts),
@@ -245,7 +247,7 @@ function overlapCorrelation(s, opts, coding) {
     if ((r.arm === 'A2' || r.arm === 'A1') && r.set === 'R' && r.wordOverlap !== undefined) overlap.set(r.familyId, [...(overlap.get(r.familyId) ?? []), r.wordOverlap]);
   }
   const fams = new Map();
-  for (const u of repeatMistakeUnits(s, 'A2', 'A1', coding, inSets('R')).units) {
+  for (const u of repeatMistakeUnits(s, 'A2', 'A1', coding, firstApplyR).units) {
     if (overlap.has(u.family)) fams.set(u.family, { repo: u.repo, family: u.family, diffs: [...(fams.get(u.family)?.diffs ?? []), u.value] });
   }
   const units = [...fams.values()].map((f) => ({ repo: f.repo, family: f.family, diff: mean(f.diffs), overlap: mean(overlap.get(f.family)) }));
@@ -353,25 +355,24 @@ export function computeReported(records, filtered, prices, opts) {
   const runs = plannedArms(filtered);
   const pair = (rs, t, c, keep) => (runs(t, c) ? bothCodings(rs, t, c, opts, keep) : NOT_RUN);
   const h3 = (rs, keep) => (runs('A1', 'A2') ? ratioT(taskUnits(rs, 'A2', 'A1', prices['claude-code'], keep), 'cost', opts) : NOT_RUN);
-  const setR = inSets('R');
   const noUnion = withoutRuns(s, filtered.carryUnion);
   return {
-    A1vA0: pair(s, 'A1', 'A0', setR),
-    A4vA1: pair(s, 'A4', 'A1', setR),
+    A1vA0: pair(s, 'A1', 'A0', firstApplyR),
+    A4vA1: pair(s, 'A4', 'A1', firstApplyR),
     X2vX1: pair(s, 'X2', 'X1', codexApply),
     perArm: perArm(s, filtered.arms, prices, opts),
     maintainerOnly: {
-      H1: pair(s, 'A2', 'A1', (r) => setR(r) && maintainer(r)),
+      H1: pair(s, 'A2', 'A1', (r) => firstApplyR(r) && maintainer(r)),
       H2: pair(s, 'X2', 'X3', (r) => codexApply(r) && maintainer(r)),
       H3: h3(s, (r) => inSets('R', 'N')(r) && maintainer(r)),
     },
-    firstApply: { H1: pair(s, 'A2', 'A1', (r) => setR(r) && r.applyIndex === 1) },
-    bySinceTeach: Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => [name, pair(s, 'A2', 'A1', (r) => setR(r) && inBucket(r))])),
+    allApplies: { H1: pair(s, 'A2', 'A1', inSets('R')) },
+    bySinceTeach: Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => [name, pair(s, 'A2', 'A1', (r) => r.set === 'R' && inBucket(r))])),
     ratesBySinceTeach: ratesBySinceTeach(s, filtered.arms, opts),
     wordOverlap: runs('A1', 'A2') ? byCoding((c) => overlapCorrelation(s, opts, c)) : NOT_RUN,
     sensitivity: {
       carryUnionRuns: filtered.carryUnion.size,
-      H1: pair(noUnion, 'A2', 'A1', setR),
+      H1: pair(noUnion, 'A2', 'A1', firstApplyR),
       H3: h3(noUnion, inSets('R', 'N')),
       retryVoidedPositions: filtered.retryVoided.positions,
     },

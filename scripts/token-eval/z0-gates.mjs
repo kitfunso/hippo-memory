@@ -1,7 +1,7 @@
 /** Z0 analyzer, part 4 of 6: validity gates G1-G5 (prereg 154-166). Each returns `pass` plus the numbers it read.
  * A failed gate makes the run invalid; a half or gate whose arms were not planned is "not run" (reading 11). */
 
-import { CODINGS, NOT_RUN, bothCodings, codexApply, inSets } from './z0-hypotheses.mjs';
+import { CODINGS, NOT_RUN, bothCodings, codexApply, firstApplyR } from './z0-hypotheses.mjs';
 
 export const OPERATOR_CANARY = 'operator-canary';
 const EPS = 1e-9;
@@ -30,7 +30,7 @@ export function g2(filtered, opts) {
   const planned = new Set(filtered.arms);
   const ccNeeded = planned.has('A1') && planned.has('A2');
   const codexNeeded = planned.has('X2') && planned.has('X3');
-  const claudeCode = g2Half(filtered, 'A4', 'A0', inSets('R'), ccNeeded, opts);
+  const claudeCode = g2Half(filtered, 'A4', 'A0', firstApplyR, ccNeeded, opts);
   const codex = g2Half(filtered, 'X4', 'X1', codexApply, codexNeeded, opts);
   return { pass: claudeCode.pass && codex.pass, claudeCode, codex };
 }

@@ -11,7 +11,7 @@ import { addUsage, priceUsage } from '../../dist/eval/eval-stats.js';
 import { loadInputs } from './z0-analyze.mjs';
 import { inputHashes, sha256 } from './z0-blind.mjs';
 import { abandonedRuns, filterRecords } from './z0-filters.mjs';
-import { CODINGS, byCoding, codexApply, inSets, mean, repeatMistakeUnits, sum, taskUnits, withoutRuns } from './z0-hypotheses.mjs';
+import { CODINGS, byCoding, codexApply, firstApplyR, inSets, mean, repeatMistakeUnits, sum, taskUnits, withoutRuns } from './z0-hypotheses.mjs';
 import { TWO_SEED_ARMS, isString, validateCorpus } from './z0-records.mjs';
 import { SEEDS, clopperPearsonUpper, confirmSize, harmSizer, levelCheck, repeatSizer, smallestPassing, spreadComponents } from './z0-size-sim.mjs';
 
@@ -137,7 +137,7 @@ export function calibrate(filtered, prices, bound) {
   const planned = (...arms) => arms.every((a) => filtered.arms.includes(a));
   const notPlanned = (arms) => ({ reason: `${arms} not in the calibration plan` });
   return {
-    H1: planned('A1', 'A2') ? repeatCalibration(s, 'A2', 'A1', inSets('R'), bound) : notPlanned('A1, A2'),
+    H1: planned('A1', 'A2') ? repeatCalibration(s, 'A2', 'A1', firstApplyR, bound) : notPlanned('A1, A2'),
     H2: planned('X2', 'X3') ? repeatCalibration(s, 'X2', 'X3', codexApply, bound) : notPlanned('X2, X3'),
     H4: planned('A1', 'A2') ? harmCalibration(taskUnits(s, 'A2', 'A1', prices['claude-code'], inSets('N')), bound) : notPlanned('A1, A2'),
   };
