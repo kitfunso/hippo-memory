@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory, Layer, USER_RULE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
-import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey, ruleReplaces, storedTextKeys } from '../../base/util/same-text.js';
 import { isCertainReason, storedDefect } from '../../base/memory/memory-quality.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -181,18 +181,29 @@ export function scrubbedItems(
  * row: a pinned row, or one whose text is no certain defect. */
 export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
   const keys = storedTextKeys(rows);
+  for (const key of twinKeys(rows, twins)) keys.add(key);
+  return keys;
+}
+
+/** The held keys that also stop a stated rule: every copy but one the store's write replaces,
+ * which holds the rule's exact text, so a bold twin still stops it. */
+export function ruleHeldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
+  const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row)));
+  for (const key of twinKeys(rows, twins)) keys.add(key);
+  return keys;
+}
+
+function twinKeys(rows: readonly HeldText[], twins: readonly BoldTwin[]): string[] {
+  const keys = storedTextKeys(rows);
   const pinned = storedTextKeys(rows.filter((row) => row.pinned));
-  const clean = twins
+  return twins
     .filter(({ old }) =>
       (isCertainReason(storedDefect(old)) ? pinned : keys).has(duplicateKey(old)),
     )
     .map((twin) => duplicateKey(twin.clean));
-  for (const key of clean) keys.add(key);
-  return keys;
 }
 
-/** The held keys, and those that also stop a stated rule: only a pinned row's, since the store
- * writes the rule over an unpinned copy. */
+/** The held keys, and those that also stop a stated rule. */
 interface HeldKeys {
   readonly keys: Set<string>;
   readonly ruleKeys: ReadonlySet<string>;
@@ -210,8 +221,7 @@ async function storedKeysInView(
   // The lookup matches stored text exactly, so it also asks for the lines as capture once stored them.
   const texts = [...extracted.map((item) => item.content), ...twins.map((twin) => twin.old)];
   const rows = await store.captures.textsHolding(tenantId, texts, filter);
-  const pinned = rows.filter((row) => row.pinned);
-  return { keys: heldKeysOf(rows, twins), ruleKeys: heldKeysOf(pinned, twins) };
+  return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins) };
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its

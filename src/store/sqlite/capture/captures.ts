@@ -3,7 +3,12 @@
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { USER_RULE_TAG, type MemoryEntry } from '../../../base/memory/entry.js';
 import type { HeldText } from '../../../base/ports/store/types.js';
-import { duplicateKey, heldTextKeys, storedTextKeys } from '../../../base/util/same-text.js';
+import {
+  duplicateKey,
+  heldTextKeys,
+  ruleReplaces,
+  storedTextKeys,
+} from '../../../base/util/same-text.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import { supersedeInTx, writeEntryMirrors } from '../entries/entry-writes.js';
 import { stampOriginProject } from '../entries/entry-row.js';
@@ -32,18 +37,11 @@ function heldRows(
   return listTextsHolding(db, { tenantId: dedup.tenantId, texts, project: dedup.project, admit });
 }
 
-/** The ids of the unpinned capture rows of the rule's own project that hold its text: the rule
- * replaces them. */
+/** The ids of the held copies of the rule's text that the rule replaces. */
 function copiesTheRuleReplaces(rows: readonly HeldText[], rule: MemoryEntry): string[] {
   const key = duplicateKey(rule.content);
   return rows.flatMap(({ id, ...row }) =>
-    id !== undefined &&
-    !row.pinned &&
-    row.source === 'capture' &&
-    row.originProject === rule.originProject &&
-    heldTextKeys(row).includes(key)
-      ? [id]
-      : [],
+    id !== undefined && ruleReplaces(row) && heldTextKeys(row).includes(key) ? [id] : [],
   );
 }
 
@@ -61,8 +59,8 @@ function writeCapturedEntries(
   const outcomes = withWriteScope(db, 'capture_write', () => {
     const rows = heldRows(db, entries, opts.dedup);
     const held = storedTextKeys(rows);
-    // A stated rule gives way only to a pinned copy; an unpinned one would hide it from the hooks.
-    const ruleHeld = storedTextKeys(rows.filter((row) => row.pinned));
+    // A stated rule replaces an unpinned capture copy, which would hide it from the hooks.
+    const ruleHeld = storedTextKeys(rows.filter((row) => !ruleReplaces(row)));
     return entries.map((entry): CapturedOutcome => {
       const rule = entry.tags.includes(USER_RULE_TAG);
       if ((rule ? ruleHeld : held).has(duplicateKey(entry.content))) return 'skipped';

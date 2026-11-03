@@ -306,7 +306,13 @@ describe('automatic quality does not govern manual or trusted import storage', (
       dryRun: false,
       global: false,
     });
-    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, twin]);
+    // The stated rule replaces the held unpinned copy of its text; the twin is stored beside it.
+    const live = loadAllEntries(root, 'default').filter((entry) => entry.supersededBy === null);
+    const pairs = live.map((entry) => [entry.content, entry.pinned]);
+    expect(pairs.sort()).toEqual([
+      [stored, true],
+      [twin, true],
+    ].sort());
   });
 
   it('capture stores the twin of a held rule whose own text has no bold pair', async () => {
@@ -324,7 +330,13 @@ describe('automatic quality does not govern manual or trusted import storage', (
       dryRun: false,
       global: false,
     });
-    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([stored, twin]);
+    // The stated rule replaces the held unpinned copy of its text; the twin is stored beside it.
+    const live = loadAllEntries(root, 'default').filter((entry) => entry.supersededBy === null);
+    const pairs = live.map((entry) => [entry.content, entry.pinned]);
+    expect(pairs.sort()).toEqual([
+      [stored, true],
+      [twin, true],
+    ].sort());
   });
 
   it('capture stores the Redis rule beside a held bold question whose bullet it follows', async () => {

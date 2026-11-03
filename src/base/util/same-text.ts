@@ -48,6 +48,12 @@ export function heldTexts(entry: Text): string[] {
     .map((t) => t.replace(/\n {2}/g, '\n'));
 }
 
+/** Whether a stated rule replaces this held copy rather than giving way to it: an unpinned
+ * capture row of a named project. A pinned, typed or no-project copy stops the rule. */
+export function ruleReplaces(row: Text & { originProject?: string | null }): boolean {
+  return row.pinned !== true && row.source === 'capture' && Boolean(row.originProject);
+}
+
 /** Keys of every text a row holds word for word: its own, plus each source text inside a
  * sleep-merged row. */
 export function heldTextKeys(entry: Text): string[] {
