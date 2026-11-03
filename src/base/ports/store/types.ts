@@ -137,9 +137,9 @@ export interface AuditEvent {
   metadata: JsonObject;
 }
 
-/** A stored text the capture dedup reads; `pinned` is optional so an adapter that omits it still fits. */
+/** A stored text the capture dedup reads; `pinned` and `tags` are optional so an adapter that omits them still fits. */
 export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject'> &
-  Partial<Pick<MemoryEntry, 'pinned' | 'id' | 'supersededBy'>> & { confidence?: string };
+  Partial<Pick<MemoryEntry, 'pinned' | 'tags' | 'id' | 'supersededBy'>> & { confidence?: string };
 
 /** One project name, or every name a project's rows carry. */
 export type OriginFilter = string | readonly string[];

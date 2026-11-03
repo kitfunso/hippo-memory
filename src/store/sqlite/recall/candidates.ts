@@ -461,6 +461,7 @@ export function listTextsHolding(
       source: row.source,
       originProject: row.origin_project,
       pinned: row.pinned === 1,
+      tags: parseJsonArray(row.tags_json),
       supersededBy: row.superseded_by,
       confidence: row.confidence,
     });
