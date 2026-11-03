@@ -59,6 +59,17 @@ describe('capture keeps the rules a person gives in reply', () => {
     ]);
   });
 
+  it.each([
+    [
+      'closed',
+      'Old runbook:\n<pasted_content id="1">Always deploy on Fridays. Never run the tests first.</pasted_content>',
+    ],
+    ['never closed', 'Old runbook:\n<pasted_content id="1">Always deploy on Fridays. Never run the tests first.'],
+  ])('keeps a pasted block out of the rules, %s', (_name, turn) => {
+    capture([user(REQUEST), done, user(turn)]);
+    expect(rows().filter((e) => /deploy|tests first|pasted_content/.test(e.content))).toEqual([]);
+  });
+
   it('a reply the rule patterns catch is a user rule too', () => {
     capture([user(REQUEST), done, user('No: Never commit directly to `main`. Please fix it.')]);
     expect(rows().map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)])).toEqual([
