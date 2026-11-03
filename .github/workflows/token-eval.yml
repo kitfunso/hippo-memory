@@ -76,6 +76,6 @@ jobs:
           "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
           "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - name: Vitest
-        # Bash on Windows too, so the `--` reaches npm; four workers there, as in ci.yml's suite job.
+        # Bash on Windows too, so the `--` reaches npm.
         shell: bash
-        run: npm run test:eval -- ${{ matrix.part.args }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
+        run: npm run test:eval -- ${{ matrix.part.args }}

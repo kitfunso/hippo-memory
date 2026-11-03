@@ -305,8 +305,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Vitest
-        # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
-        run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
+        run: npx vitest run --shard=${{ matrix.shard }}
         env:
           HIPPO_REQUIRE_SYMLINKS: '1'
           # On Windows a store write-and-close cycle costs 69 ms in runner.temp (D:) against 175 ms in the default TEMP (C:).
