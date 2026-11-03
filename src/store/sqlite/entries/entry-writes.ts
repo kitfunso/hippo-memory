@@ -482,8 +482,9 @@ export function supersedeInTx(
       'RETURNING dag_parent_id',
   ).get(newId, id, tenantId) as { dag_parent_id: string | null } | undefined;
   if (!won) return false;
-  if (won.dag_parent_id)
+  if (won.dag_parent_id) {
     markSummaryDirtyInTx(db, { summaryId: won.dag_parent_id, tenantId, actor });
+  }
   appendAuditEvents(db, [{ tenantId, actor, op: 'supersede', targetId: id, metadata: { newId } }]);
   return true;
 }
