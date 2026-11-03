@@ -160,6 +160,11 @@ export interface HippoConfig {
   vectorGraph: {
     maxVectors: number;
   };
+  /** Session capture. `followUpRules: 'model'` sends the person's scrubbed turns after the first to
+   * Anthropic (ANTHROPIC_API_KEY), which picks the sentences that state a lasting rule. Default 'off'. */
+  capture: {
+    followUpRules: 'off' | 'model';
+  };
   /** What the composition root read from the environment for this command or request;
    * config.json never sets it. */
   runtime?: RuntimeSettings;
@@ -304,6 +309,9 @@ export const DEFAULT_CONFIG: HippoConfig = {
   // About 400 MB of worker heap at the measured 1.6 to 2.3 KB a 384-dim vector.
   vectorGraph: {
     maxVectors: 200_000,
+  },
+  capture: {
+    followUpRules: 'off',
   },
 };
 

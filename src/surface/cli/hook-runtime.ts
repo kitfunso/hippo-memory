@@ -10,6 +10,8 @@ import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { cliDetached, cliFolder, cliInfra, cliLedgerReach, cliSyncOptions } from './api-context.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
 import type { CaptureTarget } from '../capture/command.js';
+import type { WorkerMode } from '../capture/session-worker.js';
+import { anthropicLlmFromEnv } from '../../infra/ports.js';
 import {
   hookPayloadSessionId,
   hookPayloadString,
@@ -192,14 +194,23 @@ export async function inPilotHoldout(
   return (await sessionPilotArm(tenantId, sessionId, opts.write, { reach })) === 'holdout';
 }
 
-/** What capture writes into for a store folder: its port, its config and what embeds the new
- * rows. */
-export function captureTarget(root: string): CaptureTarget {
+/** What capture writes into for a store folder: its port, its config, what embeds the new rows,
+ * and the model a whole capture asks for follow-up rules when the folder's config turns it on. */
+export function captureTarget(root: string, mode: WorkerMode): CaptureTarget {
   const folder = cliFolder(root);
+  // A per-reply capture sees only the turns since the last reply, and would pay for a call per reply.
+  const askModel = mode === 'full' && folder.config.capture.followUpRules === 'model';
+  const llm = askModel ? anthropicLlmFromEnv() : undefined;
+  if (askModel && llm === undefined) {
+    log.warn(
+      'capture.followUpRules is "model" but ANTHROPIC_API_KEY is not set; follow-up rules skipped',
+    );
+  }
   return {
     root,
     store: folder.store,
     config: folder.config,
     embed: detachedEmbedder(folder, cliInfra(), cliDetached()),
+    llm,
   };
 }

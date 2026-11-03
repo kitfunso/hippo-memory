@@ -127,7 +127,7 @@ async function captureCodexRollout(
     sessionTurns: scan?.turns,
   };
   try {
-    await runCapture(captureTarget(store), captureOpts);
+    await runCapture(captureTarget(store, 'full'), captureOpts);
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: capture', err);
   }

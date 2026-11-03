@@ -23,7 +23,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
       : { text: undefined, timedOut: false };
 
   const useGlobal = boolFlag(flags, 'global');
-  await runCapture(captureTarget(useGlobal ? hippoHomeDir() : hippoRoot), {
+  await runCapture(captureTarget(useGlobal ? hippoHomeDir() : hippoRoot, 'full'), {
     source: captureSource,
     filePath: captureFile,
     transcriptPath,

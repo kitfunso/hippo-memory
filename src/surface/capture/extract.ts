@@ -80,8 +80,9 @@ const SPEC_HEADING_PATTERNS = [
   ),
   /^(?:features?|requirements?|specs?|specifications?|plan|design|tasks?|implementation)(?:\s*:|$)/i,
 ];
-// A list item may open a fence on its own line: "- ```".
-const FENCE_OPEN = /^(?:(?:[-*]|\d+\.)\s+)?(`{3,}|~{3,})(.*)$/;
+// A list item may open a fence on its own line: "- ```", "+ ```" or "1) ```" (CommonMark markers).
+const FENCE_OPEN = /^(?:(?:[-*+]|\d+[.)])\s+)?(`{3,}|~{3,})(.*)$/;
+const INDENTED_CODE = /^(?: {4}|\t)(?!\s*(?:[-*+]|\d+[.)])\s)/;
 const FENCE_CLOSE = /^(`{3,}|~{3,})\s*$/;
 // Inline code and abbreviation dots never end a sentence; "etc." does when a capital follows.
 const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s+[a-z])/g;
@@ -89,11 +90,16 @@ const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s
 // Pasted text is not the speaker's own; an unclosed block runs to the end.
 const PASTED_BLOCK = /<pasted_content\b[^>]*>[\s\S]*?(?:<\/pasted_content>|$)/g;
 
+/** Whether a line is program output, not the speaker's words. */
+export type NoiseCheck = (line: string, continuesProse: boolean) => boolean;
+
 /** CommonMark fences: a backtick run with a backtick after it is inline code, and only a bare
- * run as long closes. */
-function proseOnly(text: string): string {
+ * run as long closes. A line `isNoise` drops also ends the paragraph above it; it is told when
+ * the line continues the prose above, so it can keep a condition with few letters. */
+export function proseOnly(text: string, isNoise: NoiseCheck = () => false): string {
   let fence: string | null = null;
   let afterProse = false;
+  let previous: string | undefined;
   return text
     .replace(PASTED_BLOCK, '\n')
     .split('\n')
@@ -114,8 +120,11 @@ function proseOnly(text: string): string {
       // Quotes, table rows and indented code are not the speaker's own; indented code cannot
       // interrupt a paragraph or list item.
       const dropped =
-        /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
+        isNoise(line, continues(trimmed, afterProse ? previous : undefined)) ||
+        /^\s*[>|]/.test(line) ||
+        (!afterProse && INDENTED_CODE.test(line));
       afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
+      previous = trimmed.trimEnd();
       return dropped ? '' : line;
     })
     .join('\n');
@@ -305,18 +314,42 @@ function extractFromPatterns(
     ),
   );
   if (!keyed) return null;
-  const content = sentence
-    .replace(
-      new RegExp(
-        String.raw`^(?:decision|plan|rule|important|critical|remember|error|bug|gotcha|watch out|careful|warning|` +
-          String.raw`caveat|trap|don't forget|easy to miss):\s*`,
-        'i',
-      ),
-      '',
-    )
+  const content = statedText(sentence);
+  return content.length <= MAX_CHARS ? { content, category, tags: [category, 'captured'] } : null;
+}
+
+const LEAD_LABEL = new RegExp(
+  String.raw`^(?:decision|plan|rule|important|critical|remember|error|bug|gotcha|watch out|careful|warning|` +
+    String.raw`caveat|trap|don't forget|easy to miss):\s*`,
+  'i',
+);
+
+/** A sentence as capture stores it: its lead label and closing marks trimmed. */
+export function statedText(sentence: string): string {
+  return sentence
+    .replace(LEAD_LABEL, '')
     .replace(/[.!?\s]+$/, '')
     .trim();
-  return content.length <= MAX_CHARS ? { content, category, tags: [category, 'captured'] } : null;
+}
+
+/** The sentences a pattern reads in `text`: wrapped lines joined, bold cut, and none that starts
+ * inside a cut aside. */
+export function statedSentences(text: string, isNoise?: NoiseCheck): string[] {
+  return proseBlocks(proseOnly(text, isNoise), boldPairs).flatMap((block) => {
+    const cutByAside = asideCutter(block.text);
+    return completeSentences(block)
+      .filter(({ sentence, at }) => !cutByAside(sentence, at))
+      .map(({ sentence }) => sentence);
+  });
+}
+
+/** Picked sentences of one turn through the gates a pattern sentence meets, or null; one sentence
+ * gives its pattern item's text, so held rows and bold twins match it. */
+export function pickedText(sentences: readonly string[]): string | null {
+  const kept = sentences.filter((sentence) => !sentence.endsWith('?'));
+  if (kept.length === 0) return null;
+  const content = statedText(kept.join(' '));
+  return content.length <= MAX_CHARS && assessAutomaticMemory(content).accepted ? content : null;
 }
 
 /** An item and the range of the prose it came from. */

@@ -110,6 +110,11 @@ const CASES: KeyCase[] = [
     bad: 200_000,
     badField: { name: 'maxVectors', value: 'many', reads: 200_000 },
   },
+  {
+    ...block('capture', { followUpRules: 'model' }),
+    bad: 'model',
+    badField: { name: 'followUpRules', value: 'gpt', reads: 'off' },
+  },
 ];
 
 interface Loaded {
@@ -136,7 +141,7 @@ describe('every top-level config key is checked', () => {
 
   it('has a case for each key loadConfig reads', () => {
     expect(CASES.map((c) => c.key).sort()).toEqual(Object.keys(DEFAULT_CONFIG).sort());
-    expect(CASES).toHaveLength(31);
+    expect(CASES).toHaveLength(32);
   });
 
   describe.each(CASES)('$key', (c) => {

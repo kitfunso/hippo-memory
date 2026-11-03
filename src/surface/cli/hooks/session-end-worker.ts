@@ -95,7 +95,7 @@ function runSessionEndWork({
     capture: async (into, turns, originProject, fromStart) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;
       if (root === undefined) return false;
-      const ended = { tenantId, flags, transcriptPath, turns, originProject, fromStart };
+      const ended = { tenantId, flags, transcriptPath, turns, originProject, fromStart, mode };
       return captureEndedSession(root, ended);
     },
     digest: (scan, key, log) =>
@@ -128,16 +128,18 @@ interface EndedCapture {
   readonly turns: readonly SessionTurn[] | undefined;
   readonly originProject: ProjectRef | undefined;
   readonly fromStart: boolean;
+  /** The run's mode, not the flag: a worker also runs the requests other workers queued. */
+  readonly mode: WorkerMode;
 }
 
 /** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 async function captureEndedSession(
   store: string,
-  { tenantId, flags, transcriptPath, turns, originProject, fromStart }: EndedCapture,
+  { tenantId, flags, transcriptPath, turns, originProject, fromStart, mode }: EndedCapture,
 ): Promise<boolean> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   try {
-    await runCapture(captureTarget(store), {
+    await runCapture(captureTarget(store, mode), {
       source: 'last-session',
       transcriptPath,
       logFile,

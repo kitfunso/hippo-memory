@@ -19,7 +19,15 @@ export type LlmFailure =
   | { kind: 'unreadable'; message: string; cause?: unknown }
   | { kind: 'empty' };
 
-export type LlmReply = { ok: true; text: string } | { ok: false; failure: LlmFailure };
+/** What the provider billed for one call; an empty reply is billed too. */
+export interface LlmUsage {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+}
+
+export type LlmReply = ({ ok: true; text: string } | { ok: false; failure: LlmFailure }) & {
+  readonly usage?: LlmUsage;
+};
 
 /** One user prompt in, the reply's first text block or a typed failure out. Never throws. */
 export interface Llm {
