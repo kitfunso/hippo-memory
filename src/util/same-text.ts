@@ -22,16 +22,6 @@ export function heldTexts(entry: Text): string[] {
   return `\n${body}`.split('\n- ').slice(1).map((t) => t.replace(/\n {2}/g, '\n'));
 }
 
-/** Whether a stated rule replaces this held copy rather than giving way to it: a live, unpinned, observed capture row of one of `ruleProject`, the names of the rule's project.
- * A superseded, pinned, typed, verified, no-project or other-project copy stops the rule, so a replayed transcript revives nothing and no project loses its row. */
-export function ruleReplaces(
-  row: Text & Partial<Pick<MemoryEntry, 'origin_project' | 'superseded_by'>> & { confidence?: string },
-  ruleProject: readonly string[],
-): boolean {
-  return row.pinned !== true && row.source === 'capture' && Boolean(row.origin_project)
-    && ruleProject.includes(row.origin_project ?? '') && row.superseded_by == null && row.confidence === 'observed';
-}
-
 /** Keys of every text a row holds word for word: its own, plus each source text inside a sleep-merged row. */
 export function heldTextKeys(entry: Text): string[] {
   return [duplicateKey(entry.content), ...heldTexts(entry).map(duplicateKey)];
