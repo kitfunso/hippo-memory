@@ -59,7 +59,10 @@ describe('capture keeps the rules a person gives in reply', () => {
   });
 
   it.each([
-    ['closed', 'Old runbook:\n<pasted_content id="1">Always deploy on Fridays. Never run the tests first.</pasted_content>'],
+    [
+      'closed',
+      'Old runbook:\n<pasted_content id="1">Always deploy on Fridays. Never run the tests first.</pasted_content>',
+    ],
     ['never closed', 'Old runbook:\n<pasted_content id="1">Always deploy on Fridays. Never run the tests first.'],
   ])('keeps a pasted block out of the rules, %s', async (_name, turn) => {
     await capture([user(REQUEST), done, user(turn)]);
