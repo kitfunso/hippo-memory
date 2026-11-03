@@ -456,10 +456,13 @@ export function listTextsHolding(
   const byId = new Map<string, HeldText>();
   for (const row of rowsHoldingTexts(db, { tenantId, filter }, texts)) {
     byId.set(row.id, {
+      id: row.id,
       content: row.content,
       source: row.source,
       originProject: row.origin_project,
       pinned: row.pinned === 1,
+      supersededBy: row.superseded_by,
+      confidence: row.confidence,
     });
   }
   return [...byId.values()];
