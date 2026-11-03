@@ -10,7 +10,13 @@ import {
 import { isJsonObject, tryParseJson, type JsonValue } from '../../base/util/json.js';
 import { errorFields, errorMessage, type LineLog } from '../../base/util/log.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import { pickedText, statedSentences, statedText, type ExtractedItem } from './extract.js';
+import {
+  leftOpen,
+  pickedText,
+  statedSentences,
+  statedText,
+  type ExtractedItem,
+} from './extract.js';
 import { scrubForSharing } from './share-scrub.js';
 import { detectInstruction } from '../../api/instruction-detect.js';
 
@@ -64,6 +70,10 @@ function sentencesOf(turn: string): string[] {
     if (used > TURN_CHARS + 1) break;
     whole.push(sentence);
   }
+  const last = whole.at(-1);
+  const cut = sentences[whole.length];
+  // A sentence with no stop may read on in the one the limit cut, so it could lose a condition too.
+  if (last !== undefined && cut !== undefined && leftOpen(last, cut)) whole.pop();
   return whole;
 }
 

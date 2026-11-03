@@ -71,6 +71,7 @@ const CATEGORIES = [
 const MAX_CHARS = 500;
 const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
 const LABEL = /^(?:decision|rule|error|bug|gotcha|important|critical|remember|plan):/i;
+const CONTINUED_LEAD = /^(?:[a-z]|\((?!\w{1,2}\)))/;
 const SENTENCE_END = /[.!?]["')\]]*$/;
 const SPEC_HEADING_PATTERNS = [
   new RegExp(
@@ -140,14 +141,15 @@ function masked(text: string): string {
   return text.replace(NO_BREAK, (span) => 'x'.repeat(span.length));
 }
 
-/** The line above has not ended its sentence; "e.g." at a line end has not. */
-function leftOpen(previous: string, line: string): boolean {
-  return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
+/** The text above has not ended its sentence; "e.g." at its end has not. */
+export function leftOpen(previous: string, next: string): boolean {
+  return !SENTENCE_END.test(masked(`${previous} ${next}`).slice(0, previous.length));
 }
 
-/** A lowercase line continues the line above only when that line left its sentence open. */
+/** A lowercase or bracketed line, but not an enumerator like "(1)", continues the line above
+ * only when that line left its sentence open. */
 function continues(line: string, previous: string | undefined): boolean {
-  if (previous === undefined || !/^[a-z]/.test(line) || LABEL.test(line)) return false;
+  if (previous === undefined || !CONTINUED_LEAD.test(line) || LABEL.test(line)) return false;
   return leftOpen(previous, line);
 }
 

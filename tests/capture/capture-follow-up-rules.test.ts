@@ -135,12 +135,20 @@ describe('capture stores the follow-up rules a model picks', () => {
 
   it('keeps a bracketed numeric condition under a sentence that has not ended', async () => {
     const turn = 'For this project, deployments go to production\n(only if p95 < 200 && 5xx < 0.01).';
-    const model = picking('[{"i": 0, "s": [0, 1]}]');
+    const model = picking('[{"i": 0, "s": [0]}]');
     await capture(session(turn), model);
-    expect(model.prompts[0]).toContain('(only if p95 < 200');
+    expect(model.prompts[0]).toContain('production (only if p95 < 200');
     expect(rows().map((row) => row.content)).toEqual([
       'For this project, deployments go to production (only if p95 < 200 && 5xx < 0.01)',
     ]);
+  });
+
+  it('drops a sentence with no stop when the size limit cut what came after it', async () => {
+    const filler = 'This sentence describes recent work. '.repeat(26);
+    const model = picking('[]');
+    await capture(session(`${filler}For this project, deploy to production\nOnly if p95 < 200.`), model);
+    expect(model.prompts[0]).toContain('recent work.');
+    expect(model.prompts[0]).not.toContain('deploy to production');
   });
 
   it('still drops program output under a line that ends in a colon or a full stop', async () => {

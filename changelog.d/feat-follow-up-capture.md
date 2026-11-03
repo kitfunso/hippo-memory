@@ -6,4 +6,5 @@
 
 - A picked sentence that holds a home path is stored with the path masked, so it can sit beside the pattern rule that kept the path.
 - A pasted log line outside a paste block can reach the model if it has no log lead, such as `Error: ...` in plain text. The model decides whether it states a rule, because `Warning: never push to main` is also how a person writes one.
+- A condition on its own line that starts with a capital, such as "Only if p95 < 200.", is a separate sentence. If the model picks the sentence above it and not the condition, the rule is stored without the condition.
 - A rule picked from two or more sentences holds more than any older row of one of them, so it is stored beside that row.
