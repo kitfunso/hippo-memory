@@ -201,16 +201,15 @@ export function captureTarget(root: string, mode: WorkerMode): CaptureTarget {
   // A per-reply capture sees only the turns since the last reply, and would pay for a call per reply.
   const askModel = mode === 'full' && folder.config.capture.followUpRules === 'model';
   const llm = askModel ? anthropicLlmFromEnv() : undefined;
-  if (askModel && llm === undefined) {
-    log.warn(
-      'capture.followUpRules is "model" but ANTHROPIC_API_KEY is not set; follow-up rules skipped',
-    );
-  }
   return {
     root,
     store: folder.store,
     config: folder.config,
     embed: detachedEmbedder(folder, cliInfra(), cliDetached()),
     llm,
+    llmMissing:
+      askModel && llm === undefined
+        ? 'capture.followUpRules is "model" but ANTHROPIC_API_KEY is not set; follow-up rules skipped'
+        : undefined,
   };
 }

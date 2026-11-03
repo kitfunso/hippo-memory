@@ -121,5 +121,7 @@ describe('capture.followUpRules', () => {
     expect(result.status).toBe(0);
     expect(modelCalls).toBe(0);
     expect(result.stderr).toContain('ANTHROPIC_API_KEY is not set');
+    // A real session-end worker has no stderr to read, so the capture log must say it.
+    expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain('ANTHROPIC_API_KEY is not set');
   });
 });
