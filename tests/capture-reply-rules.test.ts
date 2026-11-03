@@ -8,8 +8,10 @@ import { cmdCapture } from '../src/capture/command.js';
 import { extractFromTexts } from '../src/capture/extract.js';
 import { collectSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
 import { USER_RULE_TAG } from '../src/core/memory.js';
+import { supersede } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { ctxFor } from './_helpers/agent-memories-world.js';
 
 const REQUEST = 'Add a retry with backoff to fetchJson in src/net.ts.';
 const REPLY =
@@ -152,6 +154,57 @@ describe('capture keeps the rules a person gives in reply', () => {
     const stored = rows();
     expect(stored).toHaveLength(2);
     expect(new Set(stored.map((e) => e.created)).size).toBe(1);
+  });
+
+  const PREF = 'Use `pnpm` instead of `npm`.';
+  const live = () =>
+    rows()
+      .filter((e) => e.superseded_by === null)
+      .map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)]);
+
+  it('a reply that repeats the opening preference stores the rule, not the plain preference', () => {
+    capture([user(PREF), done, user(PREF)]);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+  });
+
+  it('a later turn capture that repeats a stored preference replaces that row with the rule', () => {
+    capture([user(PREF), done]);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', false, false]]);
+    capture([user(PREF), done], false);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+    const [rule] = rows().filter((e) => e.pinned);
+    expect(
+      rows()
+        .filter((e) => !e.pinned)
+        .map((e) => e.superseded_by),
+    ).toEqual([rule.id]);
+  });
+
+  it('a replayed reply revives no preference that was already superseded', () => {
+    capture([user(PREF), done]);
+    const [old] = rows();
+    supersede(ctxFor(root), old.id, 'Use `pnpm` for every install.');
+    capture([user(PREF), done], false);
+    expect(live()).toEqual([['Use `pnpm` for every install.', false, false]]);
+  });
+
+  it('a reply never replaces a correction made with hippo supersede', () => {
+    const fixed = 'Use `pnpm` instead of `npm` for installs';
+    capture([user(PREF), done]);
+    const [old] = rows();
+    supersede(ctxFor(root), old.id, fixed);
+    capture([user(`${fixed}.`), done], false);
+    expect(
+      rows()
+        .filter((e) => e.superseded_by === null)
+        .map((e) => [e.content, e.confidence]),
+    ).toEqual([[fixed, 'verified']]);
+  });
+
+  it('a rule repeated in a later turn capture stays one row', () => {
+    capture([done, user(PREF)], false);
+    capture([done, user(PREF)], false);
+    expect(rows().map((e) => [e.content, e.pinned])).toEqual([['Use `pnpm` instead of `npm`', true]]);
   });
 
   it('a reply the patterns already place keeps their category; the agent never gets the reply rule', () => {

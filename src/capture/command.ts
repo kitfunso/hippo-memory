@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, USER_RULE_TAG, type MemoryEntry } from '../core/memory.js';
 import { evalNow } from '../core/ablation.js';
-import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
+import { duplicateKey, heldTextKeys, longestWord, ruleReplaces, storedTextKeys } from '../util/same-text.js';
 import { isCertainReason, storedDefect } from '../core/memory-quality.js';
 import { writeCapturedItems } from '../store/capture-write.js';
 import { embedMemory } from '../search/embed-memories.js';
@@ -14,7 +14,7 @@ import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
 import { errorMessage, log } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
-import { boldTwins, extractFromTexts, type BoldTwin, type ExtractedItem } from './extract.js';
+import { boldTwins, extractFromTexts, isStatedRule, oncePerText, type BoldTwin, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 
 export interface CaptureOptions {
@@ -118,7 +118,7 @@ function cmdCaptureCore(
     return;
   }
 
-  const keys = storedKeysInView(targetRoot, options, extracted, boldTwins(scrubbed, scrub));
+  const held = storedKeysInView(targetRoot, options, extracted, boldTwins(scrubbed, scrub));
 
   const writeOpts: CaptureWriteOptions = {
     dryRun: options.dryRun,
@@ -127,47 +127,56 @@ function cmdCaptureCore(
     lean: false,
     now: evalNow(),
   };
-  printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, keys));
+  printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, held.keys, held.ruleKeys, held.rows));
 }
 
-/** The items with `scrub` applied to each text, as a path stores them; scrubbing can make two items one, and the first stays. */
+/** The items with `scrub` applied to each text, as a path stores them; scrubbing can make two items one, and the first stays unless a later one is the person's rule. */
 export function scrubbedItems(items: readonly ExtractedItem[], scrub: (text: string) => string): ExtractedItem[] {
-  const seen = new Set<string>();
-  return items
-    .map((item) => ({ ...item, content: scrub(item.content) }))
-    .filter((item) => {
-      const key = duplicateKey(item.content);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  return oncePerText(items.map((item) => ({ ...item, content: scrub(item.content) })));
 }
 
 /** Held keys, each twin's clean text too when a held row has its old text and repair keeps that row: a pinned row, or one whose text is no certain defect. */
 export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
   const keys = storedTextKeys(rows);
+  for (const key of twinKeys(rows, twins)) keys.add(key);
+  return keys;
+}
+
+/** The held keys that also stop a stated rule: every copy but one the store's write replaces, which holds the rule's exact text, so a bold twin still stops it. */
+export function ruleHeldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
+  const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row)));
+  for (const key of twinKeys(rows, twins)) keys.add(key);
+  return keys;
+}
+
+function twinKeys(rows: readonly HeldText[], twins: readonly BoldTwin[]): string[] {
+  const keys = storedTextKeys(rows);
   const pinned = storedTextKeys(rows.filter((row) => row.pinned));
-  const clean = twins
+  return twins
     .filter(({ old }) => (isCertainReason(storedDefect(old)) ? pinned : keys).has(duplicateKey(old)))
     .map((twin) => duplicateKey(twin.clean));
-  for (const key of clean) keys.add(key);
-  return keys;
+}
+
+/** The held keys, those that also stop a stated rule, and the rows they came from, whose ids the rule's write replaces. */
+interface Held {
+  readonly keys: Set<string>;
+  readonly ruleKeys: ReadonlySet<string>;
+  readonly rows: readonly HeldText[];
 }
 
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not stop its own copy.
 // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
 function storedKeysInView(
   targetRoot: string, options: CaptureOptions, extracted: readonly ExtractedItem[], twins: readonly BoldTwin[],
-): Set<string> {
+): Held {
   // The lookup also asks for the lines as capture once stored them, with their bold markers.
   const texts = [...extracted.map((item) => item.content), ...twins.map((twin) => twin.old)];
   const stored = loadTextsHoldingWords(
     targetRoot, options.global ? undefined : options.tenantId, texts.map(longestWord), undefined, EVERY_SCOPE,
   );
   const origin = options.originProject;
-  return heldKeysOf(origin === undefined
-    ? stored
-    : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'), twins);
+  const rows = origin === undefined ? stored : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project');
+  return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins), rows };
 }
 
 function printCaptureTally(options: CaptureOptions, { captured, skipped, rejected }: CaptureTally): void {
@@ -253,11 +262,24 @@ export interface CaptureWriteOptions {
   readonly now: Date;
 }
 
+/** Whether a held text stops `item`: any copy stops a note, only a `ruleKeys` copy a stated rule. */
+function heldCheck(keys: ReadonlySet<string>, ruleKeys: ReadonlySet<string>): (item: ExtractedItem, key: string) => boolean {
+  return (item, key) => (isStatedRule(item) ? ruleKeys : keys).has(key);
+}
+
+/** The ids of the held copies a stated rule replaces: the rows `ruleReplaces` passes that hold its text. */
+function copiesTheRuleReplaces(rows: readonly HeldText[], content: string): string[] {
+  const key = duplicateKey(content);
+  return rows.flatMap(({ id, ...row }) => (id !== undefined && ruleReplaces(row) && heldTextKeys(row).includes(key) ? [id] : []));
+}
+
 export function captureExtractedItems(
   targetRoot: string,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
+  ruleKeys: ReadonlySet<string> = keys,
+  rows: readonly HeldText[] = [],
 ): CaptureTally {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
@@ -265,18 +287,24 @@ export function captureExtractedItems(
   if (!options.dryRun) {
     const outcomes = writeCapturedItems(
       targetRoot,
-      extracted.map((item) => ({ content: item.content, makeEntry: () => captureEntry(item, options, baseHalfLifeDays) })),
+      extracted.map((item) => ({
+        content: item.content,
+        makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
+        rule: isStatedRule(item),
+        replaces: isStatedRule(item) ? copiesTheRuleReplaces(rows, item.content) : undefined,
+      })),
       keys,
-      { actor: options.actor, lean: options.lean, onCaptured: options.lean ? undefined : (entry) => void embedMemory(targetRoot, entry) },
+      { actor: options.actor, lean: options.lean, onCaptured: options.lean ? undefined : (entry) => void embedMemory(targetRoot, entry), ruleKeys },
     );
     for (const outcome of outcomes) tally[outcome]++;
     return tally;
   }
   // Dry run probes the same checkRejectionGuard the real write uses, on a read-only handle,
   // so a tombstoned item previews as rejected rather than captured.
+  const held = heldCheck(keys, ruleKeys);
   return withRejectionProbe(targetRoot, (wouldReject) => {
     for (const item of extracted) {
-      if (keys.has(duplicateKey(item.content))) {
+      if (held(item, duplicateKey(item.content))) {
         tally.skipped++;
         console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
         continue;
@@ -300,7 +328,7 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
   // A rule the person stated is pinned, so it injects even when a later prompt shares none of its words.
   // SHORTCUT: every stated rule pins; cap or age these pins if a store's pins outgrow the hook budget. The from-user tag marks the same pin as the
   // person's rule for the hooks.
-  const stated = item.fromUser === true && item.category === 'rule';
+  const stated = isStatedRule(item);
   const created = createMemory(item.content, {
     layer: Layer.Episodic,
     tags: stated ? [...item.tags, USER_RULE_TAG] : item.tags,

@@ -4,6 +4,7 @@ import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { errorMessage, log } from '../util/log.js';
+import { appendAuditEvent } from './audit.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
@@ -261,4 +262,17 @@ export function supersedeEntryAt(db: DatabaseSyncLike, tenantId: string, id: str
   const result = db.prepare(`UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`)
     .run(newId, id, tenantId);
   return Number(result.changes ?? 0) !== 0;
+}
+
+/** Marks `id` superseded by `newId` in the caller's transaction, with the supersede audit row and its summary parent's dirty mark; false when the row is gone or another writer got there first. */
+export function supersedeInTx(
+  db: DatabaseSyncLike, { tenantId, id, newId, actor }: { tenantId: string; id: string; newId: string; actor: string },
+): boolean {
+  // SAFETY: RETURNING names one column, dag_parent_id; no row means another writer got there first.
+  const won = db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING dag_parent_id')
+    .get(newId, id, tenantId) as { dag_parent_id: string | null } | undefined;
+  if (!won) return false;
+  if (won.dag_parent_id) markSummaryDirtyInTx(db, won.dag_parent_id, tenantId, actor);
+  appendAuditEvent(db, { tenantId, actor, op: 'supersede', targetId: id, metadata: { newId } });
+  return true;
 }
