@@ -91,11 +91,11 @@ const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s
 const PASTED_BLOCK = /<pasted_content\b[^>]*>[\s\S]*?(?:<\/pasted_content>|$)/g;
 
 /** Whether a line is program output, not the speaker's words. */
-export type NoiseCheck = (line: string, continuesProse: boolean) => boolean;
+export type NoiseCheck = (line: string, sentenceOpen: boolean) => boolean;
 
 /** CommonMark fences: a backtick run with a backtick after it is inline code, and only a bare
  * run as long closes. A line `isNoise` drops also ends the paragraph above it; it is told when
- * the line continues the prose above, so it can keep a condition with few letters. */
+ * the prose above left its sentence open, so it can keep a condition with few letters. */
 export function proseOnly(text: string, isNoise: NoiseCheck = () => false): string {
   let fence: string | null = null;
   let afterProse = false;
@@ -119,8 +119,14 @@ export function proseOnly(text: string, isNoise: NoiseCheck = () => false): stri
       }
       // Quotes, table rows and indented code are not the speaker's own; indented code cannot
       // interrupt a paragraph or list item.
+      // A colon introduces what follows, so output shown after one stays noise.
+      const sentenceOpen =
+        afterProse &&
+        previous !== undefined &&
+        !previous.endsWith(':') &&
+        leftOpen(previous, trimmed);
       const dropped =
-        isNoise(line, continues(trimmed, afterProse ? previous : undefined)) ||
+        isNoise(line, sentenceOpen) ||
         /^\s*[>|]/.test(line) ||
         (!afterProse && INDENTED_CODE.test(line));
       afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
@@ -134,13 +140,15 @@ function masked(text: string): string {
   return text.replace(NO_BREAK, (span) => 'x'.repeat(span.length));
 }
 
-/**
- * A lowercase line continues the line above only when that line has not ended its sentence; "e.g."
- * at a line end has not.
- */
+/** The line above has not ended its sentence; "e.g." at a line end has not. */
+function leftOpen(previous: string, line: string): boolean {
+  return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
+}
+
+/** A lowercase line continues the line above only when that line left its sentence open. */
 function continues(line: string, previous: string | undefined): boolean {
   if (previous === undefined || !/^[a-z]/.test(line) || LABEL.test(line)) return false;
-  return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
+  return leftOpen(previous, line);
 }
 
 /** The sorted offsets of the `**` markers a reading of a line removes. */

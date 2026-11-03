@@ -42,12 +42,12 @@ const LOG_LEAD =
   /^(?:\d{4}-\d\d-\d\d|\[\d|at [\w$.<>]+ ?\(|(?:[A-Za-z]:)?[^\s:]*[/\\.][^\s:]*:\d+|\$ |> )/;
 
 /** A line of program output, not prose: the lead of a log, trace or prompt line, or few letters
- * unless it continues the prose above, as a numeric condition does. */
-function isLogLine(line: string, continuesProse: boolean): boolean {
+ * unless the sentence above is still open, as before a numeric condition. */
+function isLogLine(line: string, sentenceOpen: boolean): boolean {
   if (LOG_LEAD.test(line.trimStart())) return true;
   const marks = line.replace(/\s/g, '');
   const letters = marks.match(/\p{L}/gu)?.length ?? 0;
-  return !continuesProse && letters < 0.4 * marks.length;
+  return !sentenceOpen && letters < 0.4 * marks.length;
 }
 
 /** One turn's numbered sentences, as a pattern reads them, scrubbed for sharing. */
