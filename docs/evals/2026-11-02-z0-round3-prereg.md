@@ -54,6 +54,13 @@ Evidence and scripts: `~/.claude/dev-framework/trajectories/01M6E0GK8G0CH195Y4K9
 
 The `z0/r3` analyzer change and its hash, then dev rounds, then the freeze, then this file fixed, then authoring, the A0 probe, the leak probe and the screen, then sizing and the budget yes, then the scored run, then the blind analysis and the unblind.
 
+**Amendment A (3 Nov 2026, founder: "go"): authoring runs beside the dev rounds.** Inventory and family sessions for new and returning repositories start before the freeze. The A0 probe, the leak probe and the screen still wait for the freeze, because they run the arms. The reasons:
+- Authors never see the hippo build. Their sessions run `z0-author.mjs` on a repository snapshot with the rule files removed, and their briefs reject any hippo, Z0 or token-eval term (`r3-fill.mjs:84`).
+- Dev rounds read dev families only (item 8), and the round 3 tuner reads no rule text from either source before the tag (item 7). So no authored family can reach a dev-round choice.
+- The guard is a hash lock. `C:/eval-authors/r3-author-files.sha256` lists every file an author session or its brief depends on: `z0-author.mjs`, `arms.mjs`, `exec.mjs`, `proxy.mjs` and `eval-snapshot.mjs` in `hippo-wt-z0s4` (head `45b57c6b5`), `snapshot-build.mjs`, `scan-lock.mjs`, `r3-fill.mjs`, `r2-inventory-template.md`, `s3x-family-template.md`, `s3x-launch.ps1`, `s3x-env.ps1` and `s3x-queue.ps1`. The freeze check re-hashes them. If one differs, every family authored before the change is void and is authored again.
+- `r3-fill.mjs` is `r2-fill.mjs` with `r3-` session folders, `r3-repos.json`, and git long paths for the snapshot builder. It still requires each snapshot commit to equal the gated one.
+- The A9 records and the dev rounds give authors nothing: authors get only the repository notes in `r3-repos.json`, written from the gate specs and logs.
+
 ## Stages and their checks
 
 | Stage | Check that closes it |
