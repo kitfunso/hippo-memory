@@ -10,8 +10,8 @@ import { EVERY_SCOPE, loadTextsHoldingWords, type HeldText } from '../store/cand
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { withRejectionProbe } from '../store/rejection-probe.js';
-import { loadConfig } from '../core/config.js';
-import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
+import { isSharedStore, loadConfig } from '../core/config.js';
+import { classifyOriginProject, projectId, projectNames, resolveProjectIdentity, type ProjectRef, isInitialized } from '../core/project-identity.js';
 import { errorMessage, log } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
 import { boldTwins, extractFromTexts, isStatedRule, oncePerText, type BoldTwin, type ExtractedItem } from './extract.js';
@@ -118,7 +118,8 @@ function cmdCaptureCore(
     return;
   }
 
-  const held = storedKeysInView(targetRoot, options, extracted, boldTwins(scrubbed, scrub));
+  const ruleProject = ruleProjectNames(targetRoot, options.originProject);
+  const held = storedKeysInView(targetRoot, options, ruleProject, extracted, boldTwins(scrubbed, scrub));
 
   const writeOpts: CaptureWriteOptions = {
     dryRun: options.dryRun,
@@ -127,7 +128,7 @@ function cmdCaptureCore(
     lean: false,
     now: evalNow(),
   };
-  printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, held.keys, held.ruleKeys, held.rows));
+  printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, held.keys, held.ruleKeys, held.rows, ruleProject));
 }
 
 /** The items with `scrub` applied to each text, as a path stores them; scrubbing can make two items one, and the first stays unless a later one is the person's rule. */
@@ -142,9 +143,9 @@ export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]
   return keys;
 }
 
-/** The held keys that also stop a stated rule: every copy but one the store's write replaces, which holds the rule's exact text, so a bold twin still stops it. */
-export function ruleHeldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
-  const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row)));
+/** The held keys that also stop a stated rule written for `ruleProject` (its names): every copy but one the store's write replaces, which holds the rule's exact text, so a bold twin still stops it. */
+export function ruleHeldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[], ruleProject: readonly string[]): Set<string> {
+  const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row, ruleProject)));
   for (const key of twinKeys(rows, twins)) keys.add(key);
   return keys;
 }
@@ -167,7 +168,7 @@ interface Held {
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not stop its own copy.
 // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
 function storedKeysInView(
-  targetRoot: string, options: CaptureOptions, extracted: readonly ExtractedItem[], twins: readonly BoldTwin[],
+  targetRoot: string, options: CaptureOptions, ruleProject: readonly string[], extracted: readonly ExtractedItem[], twins: readonly BoldTwin[],
 ): Held {
   // The lookup also asks for the lines as capture once stored them, with their bold markers.
   const texts = [...extracted.map((item) => item.content), ...twins.map((twin) => twin.old)];
@@ -176,7 +177,16 @@ function storedKeysInView(
   );
   const origin = options.originProject;
   const rows = origin === undefined ? stored : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project');
-  return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins), rows };
+  return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins, ruleProject), rows };
+}
+
+/** The names of the project a stated rule is written for, resolved once per capture: the project named, else the one the store stamps on a row that names none (the store folder's);
+ * none for a shared or user-global store, whose rows no project context shows. */
+function ruleProjectNames(targetRoot: string, origin: ProjectRef | undefined): readonly string[] {
+  if (origin !== undefined) return projectId(origin) === '' ? [] : projectNames(origin);
+  if (isSharedStore(targetRoot)) return [];
+  const project = resolveProjectIdentity(path.dirname(path.resolve(targetRoot)));
+  return projectId(project) === '' ? [] : projectNames(project);
 }
 
 function printCaptureTally(options: CaptureOptions, { captured, skipped, rejected }: CaptureTally): void {
@@ -267,10 +277,10 @@ function heldCheck(keys: ReadonlySet<string>, ruleKeys: ReadonlySet<string>): (i
   return (item, key) => (isStatedRule(item) ? ruleKeys : keys).has(key);
 }
 
-/** The ids of the held copies a stated rule replaces: the rows `ruleReplaces` passes that hold its text. */
-function copiesTheRuleReplaces(rows: readonly HeldText[], content: string): string[] {
+/** The ids of the held copies a stated rule replaces: the rows of `ruleProject` that `ruleReplaces` passes and that hold its text. */
+function copiesTheRuleReplaces(rows: readonly HeldText[], content: string, ruleProject: readonly string[]): string[] {
   const key = duplicateKey(content);
-  return rows.flatMap(({ id, ...row }) => (id !== undefined && ruleReplaces(row) && heldTextKeys(row).includes(key) ? [id] : []));
+  return rows.flatMap(({ id, ...row }) => (id !== undefined && ruleReplaces(row, ruleProject) && heldTextKeys(row).includes(key) ? [id] : []));
 }
 
 export function captureExtractedItems(
@@ -280,6 +290,7 @@ export function captureExtractedItems(
   keys: Set<string>,
   ruleKeys: ReadonlySet<string> = keys,
   rows: readonly HeldText[] = [],
+  ruleProject: readonly string[] = [],
 ): CaptureTally {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
@@ -291,7 +302,7 @@ export function captureExtractedItems(
         content: item.content,
         makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
         rule: isStatedRule(item),
-        replaces: isStatedRule(item) ? copiesTheRuleReplaces(rows, item.content) : undefined,
+        replaces: isStatedRule(item) ? copiesTheRuleReplaces(rows, item.content, ruleProject) : undefined,
       })),
       keys,
       { actor: options.actor, lean: options.lean, onCaptured: options.lean ? undefined : (entry) => void embedMemory(targetRoot, entry), ruleKeys },

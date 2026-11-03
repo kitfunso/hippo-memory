@@ -1,7 +1,7 @@
 // A person's reply to the agent's work is their rule even with no rule word; the session's opening request is not.
 // Real SQLite stores in tmp dirs, no mocks.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
@@ -9,9 +9,12 @@ import { extractFromTexts } from '../src/capture/extract.js';
 import { collectSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
 import { USER_RULE_TAG } from '../src/core/memory.js';
 import { supersede } from '../src/api/index.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { ctxFor } from './_helpers/agent-memories-world.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 const REQUEST = 'Add a retry with backoff to fetchJson in src/net.ts.';
 const REPLY =
@@ -199,6 +202,98 @@ describe('capture keeps the rules a person gives in reply', () => {
         .filter((e) => e.superseded_by === null)
         .map((e) => [e.content, e.confidence]),
     ).toEqual([[fixed, 'verified']]);
+  });
+
+  const shareRoot = () => writeFileSync(join(root, 'config.json'), JSON.stringify({ sharedStore: true }));
+
+  // A shared store stamps a capture with no project as no project, which no project context shows.
+  const sharedCapture = (originProject?: { name: string; legacyName: string; aliases?: string[] }) =>
+    cmdCapture(root, {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [user(PREF), done],
+      fromStart: false,
+      dryRun: false,
+      global: false,
+      originProject,
+    });
+
+  // The opening request stores the plain preference, so a later reply is the rule.
+  const sharedRequest = (originProject: { name: string; legacyName: string }) =>
+    cmdCapture(root, {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [user(PREF), done],
+      dryRun: false,
+      global: false,
+      originProject,
+    });
+
+  it('in a shared store, a rule with no project never replaces a project row', () => {
+    shareRoot();
+    sharedRequest({ name: 'acme-web', legacyName: 'acme-web' });
+    sharedCapture();
+    expect(rows().map((e) => [e.origin_project, e.pinned, e.superseded_by])).toEqual([['acme-web', false, null]]);
+  });
+
+  it('in a shared store, a rule replaces the row its project stored under an older name', () => {
+    shareRoot();
+    sharedRequest({ name: 'acme-web-old', legacyName: 'acme-web-old' });
+    sharedCapture({ name: 'acme-web', legacyName: 'acme-web', aliases: ['acme-web-old'] });
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+    expect(
+      rows()
+        .filter((e) => e.superseded_by === null)
+        .map((e) => e.origin_project),
+    ).toEqual(['acme-web']);
+  });
+
+  it('in a shared store, a rule never replaces a row of another project', () => {
+    shareRoot();
+    sharedRequest({ name: 'billing', legacyName: 'billing' });
+    sharedCapture({ name: 'acme-web', legacyName: 'acme-web' });
+    expect(
+      rows()
+        .filter((e) => e.superseded_by === null)
+        .map((e) => [e.origin_project, e.pinned])
+        .sort(),
+    ).toEqual([
+      ['acme-web', true],
+      ['billing', false],
+    ]);
+  });
+
+  it('a rule replaces the row its store stamped under the folder name before the project got an id', () => {
+    writeFileSync(join(scratch, 'project', '.hippo-project.json'), JSON.stringify({ id: 'acme-web' }));
+    clearProjectIdentityCache(); // the process-wide cache may hold this folder's name from before the marker; a CLI process starts empty
+    writeEntry(root, {
+      ...createMemory(PREF.slice(0, -1), { source: 'capture', confidence: 'observed' }),
+      origin_project: 'project',
+    });
+    capture([done, user(PREF)], false);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+    expect(
+      rows()
+        .filter((e) => e.superseded_by === null)
+        .map((e) => e.origin_project),
+    ).toEqual(['acme-web']);
+  });
+
+  it('in a shared store, a dry run with no project previews a skip, as the write does', () => {
+    shareRoot();
+    sharedRequest({ name: 'acme-web', legacyName: 'acme-web' });
+    const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
+    cmdCapture(root, {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [user(PREF), done],
+      fromStart: false,
+      dryRun: true,
+      global: false,
+    });
+    const lines = printed.mock.calls.map((call) => String(call[0]));
+    printed.mockRestore();
+    expect(lines.filter((line) => line.includes('pnpm'))).toEqual([expect.stringContaining('[skip]')]);
   });
 
   it('a rule repeated in a later turn capture stays one row', () => {
