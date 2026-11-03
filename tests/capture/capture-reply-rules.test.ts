@@ -7,6 +7,8 @@ import { runCapture } from '../../src/surface/capture/command.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
 import { USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import { supersede } from '../../src/api/memories/promote.js';
+import { ctxFor } from '../_helpers/query-count-seeds.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -165,6 +167,25 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
     const [rule] = rows().filter((e) => e.pinned);
     expect(rows().filter((e) => !e.pinned).map((e) => e.supersededBy)).toEqual([rule.id]);
+  });
+
+  it('a replayed reply revives no preference that was already superseded', async () => {
+    await capture([user(PREF), done]);
+    const [old] = rows();
+    await supersede(ctxFor(root), old.id, 'Use `pnpm` for every install.');
+    await capture([user(PREF), done], false);
+    expect(live()).toEqual([['Use `pnpm` for every install.', false, false]]);
+  });
+
+  it('a reply never replaces a correction made with hippo supersede', async () => {
+    const fixed = 'Use `pnpm` instead of `npm` for installs';
+    await capture([user(PREF), done]);
+    const [old] = rows();
+    await supersede(ctxFor(root), old.id, fixed);
+    await capture([user(`${fixed}.`), done], false);
+    expect(rows().filter((e) => e.supersededBy === null).map((e) => [e.content, e.confidence])).toEqual([
+      [fixed, 'verified'],
+    ]);
   });
 
   it('a rule repeated in a later turn capture stays one row', async () => {
