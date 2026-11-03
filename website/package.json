@@ -11,7 +11,7 @@
     "deploy": "npm run build && wrangler pages deploy dist --project-name hippo-memory --branch main"
   },
   "dependencies": {
-    "@astrojs/preact": "^5.1.4",
+    "@astrojs/preact": "^6.1.1",
     "@astrojs/sitemap": "^3.7.4",
     "@fontsource/geist": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
