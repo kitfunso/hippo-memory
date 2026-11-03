@@ -32,9 +32,9 @@ const SYSTEM_ENV = [
   // A path, not a secret; listed so the README's --pass-env route does not fail G1.
   'CLAUDE_CODE_GIT_BASH_PATH',
 ];
-// The union over every toolchain in C:/eval-authors/s3x-env.ps1 (round 3's repositories are not picked yet), plus COREPACK_ENABLE_AUTO_PIN, which stops corepack editing package.json.
+// The union over every toolchain in C:/eval-authors/s3x-env.ps1, which now covers the Android builds of round 3's batch 5, plus COREPACK_ENABLE_AUTO_PIN, which stops corepack editing package.json.
 const TOOLCHAIN_ENV = [
-  'CI', 'COREPACK_ENABLE_STRICT', 'COREPACK_ENABLE_AUTO_PIN', 'npm_config_manage_package_manager_versions', 'JAVA_HOME', 'GRADLE_USER_HOME', 'MAVEN_ARGS', 'JULIA_DEPOT_PATH', 'JULIA_PKG_PRECOMPILE_AUTO',
+  'CI', 'COREPACK_ENABLE_STRICT', 'COREPACK_ENABLE_AUTO_PIN', 'npm_config_manage_package_manager_versions', 'JAVA_HOME', 'GRADLE_USER_HOME', 'MAVEN_ARGS', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'JULIA_DEPOT_PATH', 'JULIA_PKG_PRECOMPILE_AUTO',
   'GEM_HOME', 'GEM_PATH', 'BUNDLE_PATH', 'RI_DEVKIT', 'MAKE', 'RUSTUP_HOME', 'CARGO_HOME', 'CARGO_BUILD_JOBS', 'CARGO_TARGET_DIR', 'MIX_HOME', 'HEX_HOME', 'MIX_ENV',
   'GOROOT', 'GOPATH', 'GOCACHE', 'GOTOOLCHAIN', 'DOTNET_ROOT', 'DOTNET_CLI_HOME', 'NUGET_PACKAGES', 'DOTNET_ROLL_FORWARD', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_NOLOGO',
   'VIRTUAL_ENV', 'PYTHONUTF8', 'PYTHONIOENCODING',
