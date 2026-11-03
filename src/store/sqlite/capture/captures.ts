@@ -3,12 +3,8 @@
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { USER_RULE_TAG, type MemoryEntry } from '../../../base/memory/entry.js';
 import type { HeldText } from '../../../base/ports/store/types.js';
-import {
-  duplicateKey,
-  heldTextKeys,
-  ruleReplaces,
-  storedTextKeys,
-} from '../../../base/util/same-text.js';
+import { duplicateKey, heldTextKeys, storedTextKeys } from '../../../base/util/same-text.js';
+import { ruleReplaces } from '../../../base/memory/rule-replaces.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import { supersedeInTx, writeEntryMirrors } from '../entries/entry-writes.js';
 import { stampOriginProject } from '../entries/entry-row.js';
@@ -71,8 +67,8 @@ function writeCapturedEntries(
     const held = storedTextKeys(rows);
     return entries.map((entry): CapturedOutcome => {
       const stamped = stampOriginProject(files, entry);
-      // A stated rule replaces an unpinned capture copy of its own project, which would hide it
-      // from the hooks.
+      // A stated rule replaces an unpinned or untagged-pin capture copy of its own project, which
+      // would hide it from the hooks.
       const project = entry.tags.includes(USER_RULE_TAG)
         ? ruleProjectNames(stamped, opts.dedup)
         : null;

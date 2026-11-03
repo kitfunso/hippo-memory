@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory, Layer, USER_RULE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
-import { duplicateKey, ruleReplaces, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import { ruleReplaces } from '../../base/memory/rule-replaces.js';
 import { isCertainReason, storedDefect } from '../../base/memory/memory-quality.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';

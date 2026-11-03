@@ -50,6 +50,7 @@ export type CopyDbRow = {
   source: string;
   origin_project: string | null;
   pinned: number;
+  tags_json: string | null;
   superseded_by: string | null;
   confidence: string;
 };
@@ -71,7 +72,7 @@ function copyChunk(
   const bares = JSON.stringify([...new Set(texts.map(bareText))]);
   return cachedStatement(
     db,
-    `SELECT id, tenant_id, content, source, origin_project, pinned, superseded_by, confidence ` +
+    `SELECT id, tenant_id, content, source, origin_project, pinned, tags_json, superseded_by, confidence ` +
       `FROM memories ` +
       `WHERE ${phrases ? IN_PHRASE_HITS : '1'}` +
       `${tenant.sql}${read.filter.sql} AND ${MAY_HOLD_COPY_SQL}`,

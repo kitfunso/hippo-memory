@@ -285,6 +285,58 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(lines.filter((line) => line.includes('pnpm'))).toEqual([expect.stringContaining('[skip]')]);
   });
 
+  // A rule pinned by a release before the from-user tag existed: pinned, but not marked as the person's.
+  const seedPinnedCopy = (originProject: string, tags: string[] = []) =>
+    writeEntry(root, {
+      ...createMemory(PREF.slice(0, -1), { source: 'capture', confidence: 'observed', pinned: true, tags }),
+      originProject,
+    });
+  const state = () =>
+    rows().map((e) => [e.originProject, e.pinned, e.tags.includes(USER_RULE_TAG), e.supersededBy === null]);
+  const preview = async (): Promise<string[]> => {
+    const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [done, user(PREF)],
+      fromStart: false,
+      dryRun: true,
+      global: false,
+    });
+    const lines = printed.mock.calls.map((call) => String(call[0]));
+    printed.mockRestore();
+    return lines.filter((line) => line.includes('pnpm'));
+  };
+
+  it('a rule replaces a pinned copy of its project that has no from-user tag', async () => {
+    seedPinnedCopy('project');
+    const [old] = rows();
+    await capture([done, user(PREF)], false);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+    expect(rows().find((e) => e.id === old.id)?.supersededBy).toBe(rows().find((e) => e.id !== old.id)?.id);
+  });
+
+  it('a pinned copy that already carries the from-user tag still stops the rule', async () => {
+    seedPinnedCopy('project', [USER_RULE_TAG]);
+    await capture([done, user(PREF)], false);
+    expect(state()).toEqual([['project', true, true, true]]);
+  });
+
+  it('a rule never replaces a pinned copy of another project', async () => {
+    seedPinnedCopy('billing');
+    await capture([done, user(PREF)], false);
+    expect(state()).toEqual([['billing', true, false, true]]);
+  });
+
+  it('a dry run previews a pinned untagged copy as replaced, as the write does, then as held', async () => {
+    seedPinnedCopy('project');
+    expect(await preview()).toEqual([expect.stringContaining('[capture]')]);
+    expect(state()).toEqual([['project', true, false, true]]);
+    await capture([done, user(PREF)], false);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+    expect(await preview()).toEqual([expect.stringContaining('[skip]')]);
+  });
+
   it('a rule repeated in a later turn capture stays one row', async () => {
     await capture([done, user(PREF)], false);
     await capture([done, user(PREF)], false);
