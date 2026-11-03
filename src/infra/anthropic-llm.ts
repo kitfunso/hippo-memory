@@ -18,9 +18,11 @@ const DEFAULT_MODEL = 'claude-sonnet-4-6';
 const ERROR_SNIPPET_CHARS = 256;
 const UTF8_MAX_BYTES_PER_CHAR = 4;
 
-/** The first content block's text, trimmed; empty when the reply has no such block. */
+/** The first text block's text, trimmed; empty when the reply has no such block. A thinking
+ * model puts its thinking block first. */
 function firstText(reply: { [key: string]: JsonValue }): string {
-  const first = Array.isArray(reply.content) ? reply.content[0] : undefined;
+  const blocks = Array.isArray(reply.content) ? reply.content : [];
+  const first = blocks.find((block) => isJsonObject(block) && isJsonString(block.text));
   const text = isJsonObject(first) ? first.text : undefined;
   return isJsonString(text) ? text.trim() : '';
 }
