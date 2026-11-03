@@ -166,7 +166,11 @@ describe('capture keeps the rules a person gives in reply', () => {
     await capture([user(PREF), done], false);
     expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
     const [rule] = rows().filter((e) => e.pinned);
-    expect(rows().filter((e) => !e.pinned).map((e) => e.supersededBy)).toEqual([rule.id]);
+    expect(
+      rows()
+        .filter((e) => !e.pinned)
+        .map((e) => e.supersededBy),
+    ).toEqual([rule.id]);
   });
 
   it('a replayed reply revives no preference that was already superseded', async () => {
@@ -183,9 +187,11 @@ describe('capture keeps the rules a person gives in reply', () => {
     const [old] = rows();
     await supersede(ctxFor(root), old.id, fixed);
     await capture([user(`${fixed}.`), done], false);
-    expect(rows().filter((e) => e.supersededBy === null).map((e) => [e.content, e.confidence])).toEqual([
-      [fixed, 'verified'],
-    ]);
+    expect(
+      rows()
+        .filter((e) => e.supersededBy === null)
+        .map((e) => [e.content, e.confidence]),
+    ).toEqual([[fixed, 'verified']]);
   });
 
   it('a rule repeated in a later turn capture stays one row', async () => {

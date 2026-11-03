@@ -52,7 +52,8 @@ export function heldTexts(entry: Text): string[] {
  * observed capture row of a named project. A superseded, pinned, typed, verified or no-project
  * copy stops the rule, so a replayed transcript revives nothing and no correction is overwritten. */
 export function ruleReplaces(
-  row: Text & Partial<Pick<MemoryEntry, 'originProject' | 'supersededBy'>> & { confidence?: string },
+  row: Text &
+    Partial<Pick<MemoryEntry, 'originProject' | 'supersededBy'>> & { confidence?: string },
 ): boolean {
   return (
     row.pinned !== true &&
