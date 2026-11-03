@@ -120,8 +120,13 @@ describe('capture.followUpRules', () => {
     const result = await sessionEnd([], null);
     expect(result.status).toBe(0);
     expect(modelCalls).toBe(0);
-    expect(result.stderr).toContain('ANTHROPIC_API_KEY is not set');
     // A real session-end worker has no stderr to read, so the capture log must say it.
     expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain('ANTHROPIC_API_KEY is not set');
+    const projectRoot = path.join(cwd, '.hippo');
+    initTestStore(projectRoot);
+    writeConfig('model', projectRoot);
+    const args = ['capture', '--last-session', '--transcript', transcript];
+    const manual = await runCliAs(args, { cwd, env: envWith(null) });
+    expect(manual.stderr).toContain('ANTHROPIC_API_KEY is not set');
   });
 });

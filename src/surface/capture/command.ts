@@ -167,12 +167,12 @@ async function modelRules(
   { ruleProject = [] }: CaptureDedup,
   followUps: readonly string[],
 ): Promise<readonly FollowUpRule[]> {
-  // A rule with no project to belong to would pin into every project.
-  if (ruleProject.length === 0) return [];
   if (!llm) {
     if (llmMissing) warnLine(llmMissing);
     return [];
   }
+  // A rule with no project to belong to would pin into every project.
+  if (ruleProject.length === 0) return [];
   const { rules, usage } = await followUpRules(followUps, llm, warnLine);
   if (usage) console.log(usageLine(usage));
   return rules;
