@@ -37,11 +37,23 @@ function heldRows(
   return listTextsHolding(db, { tenantId: dedup.tenantId, texts, project: dedup.project, admit });
 }
 
-/** The ids of the held copies of the rule's text that the rule replaces. */
-function copiesTheRuleReplaces(rows: readonly HeldText[], rule: MemoryEntry): string[] {
+/** The names of the project a stamped rule belongs to: the capture's names when its stamp is one,
+ * else the stamp alone; none for a shared-store or user-global stamp. */
+function ruleProjectNames(rule: MemoryEntry, dedup: CaptureDedup): readonly string[] {
+  const origin = rule.originProject;
+  if (!origin) return [];
+  return dedup.project?.includes(origin) ? dedup.project : [origin];
+}
+
+/** The ids of the held copies of the stamped rule's text that the rule replaces. */
+function copiesTheRuleReplaces(
+  rows: readonly HeldText[],
+  rule: MemoryEntry,
+  project: readonly string[],
+): string[] {
   const key = duplicateKey(rule.content);
   return rows.flatMap(({ id, ...row }) =>
-    id !== undefined && ruleReplaces(row) && heldTextKeys(row).includes(key) ? [id] : [],
+    id !== undefined && ruleReplaces(row, project) && heldTextKeys(row).includes(key) ? [id] : [],
   );
 }
 
@@ -59,18 +71,21 @@ function writeCapturedEntries(
   const outcomes = withWriteScope(db, 'capture_write', () => {
     const rows = heldRows(db, entries, opts.dedup);
     const held = storedTextKeys(rows);
-    // A stated rule replaces an unpinned capture copy, which would hide it from the hooks.
-    const ruleHeld = storedTextKeys(rows.filter((row) => !ruleReplaces(row)));
     return entries.map((entry): CapturedOutcome => {
-      const rule = entry.tags.includes(USER_RULE_TAG);
-      if ((rule ? ruleHeld : held).has(duplicateKey(entry.content))) return 'skipped';
-      // One rejected entry must not abort the rest of this capture's entries.
       const stamped = stampOriginProject(files, entry);
+      // A stated rule replaces an unpinned capture copy of its own project, which would hide it
+      // from the hooks.
+      const project = entry.tags.includes(USER_RULE_TAG)
+        ? ruleProjectNames(stamped, opts.dedup)
+        : null;
+      const stops = project ? storedTextKeys(rows.filter((r) => !ruleReplaces(r, project))) : held;
+      if (stops.has(duplicateKey(entry.content))) return 'skipped';
+      // One rejected entry must not abort the rest of this capture's entries.
       const outcome = gatedWrite(db, files, stamped, { actor: opts.actor });
       if (outcome === 'skipped:rejected') return 'rejected';
       if (outcome !== 'written') return 'skipped';
-      if (rule) {
-        for (const id of copiesTheRuleReplaces(rows, stamped)) {
+      if (project) {
+        for (const id of copiesTheRuleReplaces(rows, stamped, project)) {
           supersedeInTx(db, { tenantId: stamped.tenantId, id, newId: stamped.id, actor });
         }
       }

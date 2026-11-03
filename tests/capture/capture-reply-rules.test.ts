@@ -13,6 +13,7 @@ import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { shareRoot } from '../_helpers/share-root.js';
 
 const REQUEST = 'Add a retry with backoff to fetchJson in src/net.ts.';
 const REPLY =
@@ -192,6 +193,63 @@ describe('capture keeps the rules a person gives in reply', () => {
         .filter((e) => e.supersededBy === null)
         .map((e) => [e.content, e.confidence]),
     ).toEqual([[fixed, 'verified']]);
+  });
+
+  // A shared store stamps a capture with no project as no project, which no project context shows.
+  const sharedCapture = (originProject?: { name: string; legacyName: string; aliases?: string[] }) =>
+    runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [user(PREF), done],
+      fromStart: false,
+      dryRun: false,
+      global: false,
+      originProject,
+    });
+
+  // The opening request stores the plain preference, so a later reply is the rule.
+  const sharedRequest = (originProject: { name: string; legacyName: string }) =>
+    runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [user(PREF), done],
+      dryRun: false,
+      global: false,
+      originProject,
+    });
+
+  it('in a shared store, a rule with no project never replaces a project row', async () => {
+    shareRoot(root);
+    await sharedRequest({ name: 'acme-web', legacyName: 'acme-web' });
+    await sharedCapture();
+    expect(rows().map((e) => [e.originProject, e.pinned, e.supersededBy])).toEqual([['acme-web', false, null]]);
+  });
+
+  it('in a shared store, a rule replaces the row its project stored under an older name', async () => {
+    shareRoot(root);
+    await sharedRequest({ name: 'acme-web-old', legacyName: 'acme-web-old' });
+    await sharedCapture({ name: 'acme-web', legacyName: 'acme-web', aliases: ['acme-web-old'] });
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+    expect(
+      rows()
+        .filter((e) => e.supersededBy === null)
+        .map((e) => e.originProject),
+    ).toEqual(['acme-web']);
+  });
+
+  it('in a shared store, a rule never replaces a row of another project', async () => {
+    shareRoot(root);
+    await sharedRequest({ name: 'billing', legacyName: 'billing' });
+    await sharedCapture({ name: 'acme-web', legacyName: 'acme-web' });
+    expect(
+      rows()
+        .filter((e) => e.supersededBy === null)
+        .map((e) => [e.originProject, e.pinned])
+        .sort(),
+    ).toEqual([
+      ['acme-web', true],
+      ['billing', false],
+    ]);
   });
 
   it('a rule repeated in a later turn capture stays one row', async () => {

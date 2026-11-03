@@ -185,10 +185,15 @@ export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]
   return keys;
 }
 
-/** The held keys that also stop a stated rule: every copy but one the store's write replaces,
- * which holds the rule's exact text, so a bold twin still stops it. */
-export function ruleHeldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
-  const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row)));
+/** The held keys that also stop a stated rule captured under `project` (its names, unknown when
+ * the store stamps it): every copy but one the store's write may replace, which holds the rule's
+ * exact text, so a bold twin still stops it. The write decides again on the stamped project. */
+export function ruleHeldKeysOf(
+  rows: readonly HeldText[],
+  twins: readonly BoldTwin[],
+  project: readonly string[] | undefined,
+): Set<string> {
+  const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row, project)));
   for (const key of twinKeys(rows, twins)) keys.add(key);
   return keys;
 }
@@ -221,7 +226,7 @@ async function storedKeysInView(
   // The lookup matches stored text exactly, so it also asks for the lines as capture once stored them.
   const texts = [...extracted.map((item) => item.content), ...twins.map((twin) => twin.old)];
   const rows = await store.captures.textsHolding(tenantId, texts, filter);
-  return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins) };
+  return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins, filter.project) };
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its
