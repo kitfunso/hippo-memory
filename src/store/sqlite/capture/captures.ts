@@ -37,12 +37,10 @@ function heldRows(
   return listTextsHolding(db, { tenantId: dedup.tenantId, texts, project: dedup.project, admit });
 }
 
-/** The names of the project a stamped rule belongs to: the capture's names when its stamp is one,
- * else the stamp alone; none for a shared-store or user-global stamp. */
+/** The caller's rule project names when the stamped rule carries one of them, else none. */
 function ruleProjectNames(rule: MemoryEntry, dedup: CaptureDedup): readonly string[] {
   const origin = rule.originProject;
-  if (!origin) return [];
-  return dedup.project?.includes(origin) ? dedup.project : [origin];
+  return origin && dedup.ruleProject?.includes(origin) ? dedup.ruleProject : [];
 }
 
 /** The ids of the held copies of the stamped rule's text that the rule replaces. */

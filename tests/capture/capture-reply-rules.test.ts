@@ -1,17 +1,18 @@
 // A person's reply to the agent's work is their rule even with no rule word; the session's opening request is not.
 // Real SQLite stores in tmp dirs, no mocks.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
 import { USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { supersede } from '../../src/api/memories/promote.js';
 import { ctxFor } from '../_helpers/query-count-seeds.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { shareRoot } from '../_helpers/share-root.js';
 
@@ -250,6 +251,38 @@ describe('capture keeps the rules a person gives in reply', () => {
       ['acme-web', true],
       ['billing', false],
     ]);
+  });
+
+  it('a rule replaces the row its store stamped under the folder name before the project got an id', async () => {
+    writeFileSync(join(scratch, 'project', '.hippo-project.json'), JSON.stringify({ id: 'acme-web' }));
+    writeEntry(root, {
+      ...createMemory(PREF.slice(0, -1), { source: 'capture', confidence: 'observed' }),
+      originProject: 'project',
+    });
+    await capture([done, user(PREF)], false);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+    expect(
+      rows()
+        .filter((e) => e.supersededBy === null)
+        .map((e) => e.originProject),
+    ).toEqual(['acme-web']);
+  });
+
+  it('in a shared store, a dry run with no project previews a skip, as the write does', async () => {
+    shareRoot(root);
+    await sharedRequest({ name: 'acme-web', legacyName: 'acme-web' });
+    const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await runCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: [user(PREF), done],
+      fromStart: false,
+      dryRun: true,
+      global: false,
+    });
+    const lines = printed.mock.calls.map((call) => String(call[0]));
+    printed.mockRestore();
+    expect(lines.filter((line) => line.includes('pnpm'))).toEqual([expect.stringContaining('[skip]')]);
   });
 
   it('a rule repeated in a later turn capture stays one row', async () => {

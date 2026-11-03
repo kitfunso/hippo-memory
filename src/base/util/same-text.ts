@@ -49,19 +49,19 @@ export function heldTexts(entry: Text): string[] {
 }
 
 /** Whether a stated rule replaces this held copy rather than giving way to it: a live, unpinned,
- * observed capture row of a named project, one of `ruleProject` (the rule's project names) when
- * known. A superseded, pinned, typed, verified, no-project or other-project copy stops the rule,
- * so a replayed transcript revives nothing and no project loses its row. */
+ * observed capture row of one of `ruleProject`, the names of the rule's project. A superseded,
+ * pinned, typed, verified, no-project or other-project copy stops the rule, so a replayed
+ * transcript revives nothing and no project loses its row. */
 export function ruleReplaces(
   row: Text &
     Partial<Pick<MemoryEntry, 'originProject' | 'supersededBy'>> & { confidence?: string },
-  ruleProject: readonly string[] | undefined,
+  ruleProject: readonly string[],
 ): boolean {
   return (
     row.pinned !== true &&
     row.source === 'capture' &&
     Boolean(row.originProject) &&
-    (ruleProject === undefined || ruleProject.includes(row.originProject ?? '')) &&
+    ruleProject.includes(row.originProject ?? '') &&
     row.supersededBy == null &&
     row.confidence === 'observed'
   );
