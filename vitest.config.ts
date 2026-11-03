@@ -1,5 +1,5 @@
 import { mkdtempSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { availableParallelism, homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configDefaults, defineConfig } from 'vitest/config';
 import { ENV_SCRUBBED_IN_TESTS } from './scripts/lib/test-env-scrub.mjs';
@@ -140,7 +140,8 @@ export default defineConfig({
       ...Object.fromEntries(SCRUBBED_ENV_KEYS.map((k) => [k, ''])),
     },
     // About a fifth of the files spawn git/hippo/nested-vitest children, so one fork per core oversubscribes a big box (CHANGELOG 1.38.3).
-    maxWorkers: 6,
+    // Never more workers than cores: six on a three-core runner starve store-heavy files until one hits its timeout.
+    maxWorkers: Math.min(6, availableParallelism()),
     coverage: {
       // CLI output checks run in process through runCliAs, so plain v8 sees that code without following spawned children.
       // Children run dist, and autoAttachSubprocess mapped none of their lines back to src, so they stay outside the line gate.
