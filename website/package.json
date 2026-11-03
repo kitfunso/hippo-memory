@@ -16,11 +16,11 @@
     "@fontsource/geist": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
-    "astro": "^7.4.2",
+    "astro": "^7.4.4",
     "preact": "^10.29.2",
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
-    "wrangler": "^4.147.0"
+    "wrangler": "^4.155.0"
   }
 }
