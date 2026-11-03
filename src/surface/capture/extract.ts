@@ -86,12 +86,16 @@ const FENCE_CLOSE = /^(`{3,}|~{3,})\s*$/;
 // Inline code and abbreviation dots never end a sentence; "etc." does when a capital follows.
 const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s+[a-z])/g;
 
+// Pasted text is not the speaker's own; an unclosed block runs to the end.
+const PASTED_BLOCK = /<pasted_content\b[^>]*>[\s\S]*?(?:<\/pasted_content>|$)/g;
+
 /** CommonMark fences: a backtick run with a backtick after it is inline code, and only a bare
  * run as long closes. */
 function proseOnly(text: string): string {
   let fence: string | null = null;
   let afterProse = false;
   return text
+    .replace(PASTED_BLOCK, '\n')
     .split('\n')
     .map((line) => {
       const trimmed = line.trimStart();
