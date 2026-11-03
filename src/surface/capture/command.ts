@@ -8,7 +8,7 @@ import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.j
 import type { HippoConfig } from '../../base/config/config.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
 import { isInitialized } from '../../host/project-identity.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import { errorMessage, log, errorFields, type LineLog } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import {
@@ -19,6 +19,7 @@ import {
   type BoldTwin,
   type ExtractedItem,
 } from './extract.js';
+import { followUpRules, usageLine, withFollowUpRules, type FollowUpRule } from './follow-up.js';
 import {
   type SessionTurn,
   collectSessionTurns,
@@ -28,6 +29,7 @@ import {
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
 import type { HeldText } from '../../base/ports/store/types.js';
 import type { StoreGroups } from '../../base/ports/store.js';
+import type { Llm } from '../../base/ports/llm.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
 
@@ -69,6 +71,10 @@ export interface CaptureTarget {
   readonly store: Pick<StoreGroups, 'captures' | 'folderFiles' | 'rejections'>;
   /** Embeds each captured row, off the capture's path. */
   readonly embed: (entry: MemoryEntry) => void;
+  /** Picks the rules in the person's follow-up turns; without it capture reads word patterns only. */
+  readonly llm?: Llm;
+  /** Why no `llm` came when the config asked for one; printed inside the capture's log. */
+  readonly llmMissing?: string;
 }
 
 export async function runCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
@@ -127,7 +133,7 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 
   const read = readCaptureTexts(options);
   if (read === null) return;
-  const { texts, userTexts, firstFollowUp } = read;
+  const { texts, userTexts, firstFollowUp, followUps } = read;
 
   if (texts.every((text) => text.trim().length === 0)) {
     console.log('No text to capture from.');
@@ -138,17 +144,38 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
   // pass could not see (AGENTS.md: no secrets in memories).
   const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
   const scrubbed = texts.map(scrub);
-  const extracted = scrubbedItems(extractFromTexts(scrubbed, userTexts, firstFollowUp), scrub);
+  const dedup = await captureDedup(target.store.folderFiles, options);
+  const rules = await modelRules(target, dedup, followUps);
+  const patterned = extractFromTexts(scrubbed, userTexts, firstFollowUp);
+  const extracted = scrubbedItems(withFollowUpRules(patterned, rules, scrub), scrub);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
     return;
   }
 
-  const dedup = await captureDedup(target.store.folderFiles, options);
   const held = await storedKeysInView(target.store, dedup, extracted, boldTwins(scrubbed, scrub));
 
   printCaptureTally(options, await captureFromCli(target, options, dedup, extracted, held));
+}
+
+const warnLine: LineLog = (line, opts) => log.warn(line, opts?.fields);
+
+/** The rules the model finds in the person's later turns, when the target has one. */
+async function modelRules(
+  { llm, llmMissing }: CaptureTarget,
+  { ruleProject = [] }: CaptureDedup,
+  followUps: readonly string[],
+): Promise<readonly FollowUpRule[]> {
+  if (!llm) {
+    if (llmMissing) warnLine(llmMissing);
+    return [];
+  }
+  // A rule with no project to belong to would pin into every project.
+  if (ruleProject.length === 0) return [];
+  const { rules, usage } = await followUpRules(followUps, llm, warnLine);
+  if (usage) console.log(usageLine(usage));
+  return rules;
 }
 
 async function captureFromCli(
@@ -269,21 +296,23 @@ function printCaptureTally(
   );
 }
 
-/** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a
- *  last-session capture has nothing.
- *  Only a session says who spoke, so a piped or file capture counts no user texts. */
-/** Session texts: user turns before `firstFollowUp` are the request, the rest answer the agent. */
+/** A capture's raw texts, the person's first: user turns before `firstFollowUp` are the request,
+ * the rest answer the agent. `followUps` holds those later turns whole, for the model. */
 interface CaptureTexts {
   readonly texts: string[];
   readonly userTexts: number;
   readonly firstFollowUp?: number;
+  readonly followUps: string[];
 }
 
+/** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a
+ *  last-session capture has nothing.
+ *  Only a session says who spoke, so a piped or file capture counts no user texts. */
 function readCaptureTexts(options: CaptureOptions): CaptureTexts | null {
   switch (options.source) {
     case 'stdin': {
       try {
-        return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0 };
+        return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0, followUps: [] };
       } catch (err) {
         log.warn(`reading stdin failed: ${errorMessage(err)}`, errorFields(err));
         console.error('No input on stdin. Pipe text in or use --file <path>.');
@@ -302,7 +331,7 @@ function readCaptureTexts(options: CaptureOptions): CaptureTexts | null {
         process.exitCode = 1;
         return null;
       }
-      return { texts: [fs.readFileSync(options.filePath, 'utf8')], userTexts: 0 };
+      return { texts: [fs.readFileSync(options.filePath, 'utf8')], userTexts: 0, followUps: [] };
     }
     case 'last-session':
       return readSessionTexts(options);
@@ -327,9 +356,14 @@ function readSessionTexts(options: CaptureOptions): CaptureTexts | null {
     return null;
   }
   // The first user turn is the request; a tail that cut it off, or a later slice, holds only replies.
-  const allUsers = turns.filter((t) => t.role === 'user').length;
-  const opener = options.fromStart !== false && users.length === allUsers ? 1 : 0;
-  return { texts: [...users, ...assistants], userTexts: users.length, firstFollowUp: opener };
+  const userTurns = turns.filter((t) => t.role === 'user').map((t) => t.text);
+  const opener = options.fromStart !== false && users.length === userTurns.length ? 1 : 0;
+  return {
+    texts: [...users, ...assistants],
+    userTexts: users.length,
+    firstFollowUp: opener,
+    followUps: userTurns.slice(opener),
+  };
 }
 
 export interface CaptureTally {

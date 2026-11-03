@@ -198,6 +198,12 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
       maxVectors: read('maxVectors', count(D.vectorGraph.maxVectors)),
     })),
   ),
+  configKey(
+    'capture',
+    block('an object like {"followUpRules": "model"}', D.capture, (read) => ({
+      followUpRules: read('followUpRules', choice(D.capture.followUpRules, 'off', 'model')),
+    })),
+  ),
 ];
 
 /** The config a parsed config.json gives: each key it sets over the defaults;

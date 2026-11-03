@@ -1,7 +1,7 @@
 // The Anthropic Messages adapter behind the Llm port: one user prompt in, the reply text or a typed
 // failure out.
 
-import type { Llm, LlmReply, LlmRequest } from '../base/ports/llm.js';
+import type { Llm, LlmReply, LlmRequest, LlmUsage } from '../base/ports/llm.js';
 import { envLlmTimeoutMs } from '../base/util/env.js';
 
 import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, llmTotalMs } from './http-retry.js';
@@ -25,6 +25,15 @@ function firstText(reply: { [key: string]: JsonValue }): string {
   const first = blocks.find((block) => isJsonObject(block) && isJsonString(block.text));
   const text = isJsonObject(first) ? first.text : undefined;
   return isJsonString(text) ? text.trim() : '';
+}
+
+/** The reply's billed tokens, or undefined when its usage block is missing or malformed. */
+function usageOf(reply: { [key: string]: JsonValue }): LlmUsage | undefined {
+  const usage = reply.usage;
+  if (!isJsonObject(usage)) return undefined;
+  const { input_tokens: inputTokens, output_tokens: outputTokens } = usage;
+  if (!Number.isInteger(inputTokens) || !Number.isInteger(outputTokens)) return undefined;
+  return { inputTokens: Number(inputTokens), outputTokens: Number(outputTokens) };
 }
 
 export interface AnthropicConnection {
@@ -83,7 +92,10 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
       };
     }
     const text = firstText(data);
-    return text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
+    const usage = usageOf(data);
+    const reply: LlmReply =
+      text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
+    return usage === undefined ? reply : { ...reply, usage };
   } catch (err) {
     return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err), cause: err } };
   }
