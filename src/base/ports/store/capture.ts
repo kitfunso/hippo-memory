@@ -53,6 +53,9 @@ export interface CaptureDedup {
   readonly tenantId: TenantId;
   readonly project?: readonly string[];
   readonly everyScope?: boolean;
+  /** The names of the project a stated rule is written for: a held copy of one of them gives way
+   * to the rule. None replaces nothing. */
+  readonly ruleProject?: readonly string[];
 }
 
 // The local compaction hooks' record work, as data: the spool and the transcript a replay reads
