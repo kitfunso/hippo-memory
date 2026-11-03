@@ -15,6 +15,31 @@ export interface ExtractedItem {
   fromUser?: boolean;
 }
 
+/** A rule the person stated: capture pins it and tags it as theirs. */
+export function isStatedRule(item: ExtractedItem): boolean {
+  return item.fromUser === true && item.category === 'rule';
+}
+
+/** Each text once, where its first copy stood; a later copy that is the person's rule replaces a
+ *  first copy that is not, so a preference restated in a reply keeps its rule status. */
+export function oncePerText(
+  items: readonly ExtractedItem[],
+  admit: (item: ExtractedItem) => boolean = () => true,
+): ExtractedItem[] {
+  const kept: ExtractedItem[] = [];
+  const slot = new Map<string, number>();
+  for (const item of items) {
+    const key = duplicateKey(item.content);
+    const at = slot.get(key);
+    if (at === undefined) {
+      if (admit(item)) slot.set(key, kept.push(item) - 1);
+    } else if (isStatedRule(item) && !isStatedRule(kept[at]) && admit(item)) {
+      kept[at] = item;
+    }
+  }
+  return kept;
+}
+
 const DECISION_PATTERNS = [
   /\b(?:we(?:'ve| have)?|i(?:'ve| have)?|let's)\s+decid(?:ed|e)\b/i,
   /\b(?:let's|we(?:'ll| will| should)?)\s+(?:go with|do|use|try|build|implement|switch to)\b/i,
@@ -413,26 +438,20 @@ function extractSourced(text: string, cuts: Cutter, followUp = false): Sourced[]
 }
 
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
- *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`.
+ *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`,
+ *  and a copy that is their rule wins over one that is not.
  *  From `firstFollowUp` on, those words answer the agent's work, so a statement in them can be the person's rule. */
 export function extractFromTexts(
   texts: readonly string[],
   userTexts = 0,
   firstFollowUp = userTexts,
 ): ExtractedItem[] {
-  const seen = new Set<string>();
-  return texts
-    .flatMap((text, i) =>
-      extractSourced(text, boldPairs, i >= firstFollowUp && i < userTexts).map(({ item }) =>
-        i < userTexts ? { ...item, fromUser: true } : item,
-      ),
-    )
-    .filter((item) => {
-      const key = duplicateKey(item.content);
-      if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;
-      seen.add(key);
-      return true;
-    });
+  const items = texts.flatMap((text, i) =>
+    extractSourced(text, boldPairs, i >= firstFollowUp && i < userTexts).map(({ item }) =>
+      i < userTexts ? { ...item, fromUser: true } : item,
+    ),
+  );
+  return oncePerText(items, (item) => assessAutomaticMemory(item.content).accepted);
 }
 
 /** A text an older capture, which kept every bold marker, stored for a line, and what capture

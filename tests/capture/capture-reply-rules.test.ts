@@ -147,6 +147,32 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(rows()).toEqual([]);
   });
 
+  const PREF = 'Use `pnpm` instead of `npm`.';
+  const live = () =>
+    rows()
+      .filter((e) => e.supersededBy === null)
+      .map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)]);
+
+  it('a reply that repeats the opening preference stores the rule, not the plain preference', async () => {
+    await capture([user(PREF), done, user(PREF)]);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+  });
+
+  it('a later turn capture that repeats a stored preference replaces that row with the rule', async () => {
+    await capture([user(PREF), done]);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', false, false]]);
+    await capture([user(PREF), done], false);
+    expect(live()).toEqual([['Use `pnpm` instead of `npm`', true, true]]);
+    const [rule] = rows().filter((e) => e.pinned);
+    expect(rows().filter((e) => !e.pinned).map((e) => e.supersededBy)).toEqual([rule.id]);
+  });
+
+  it('a rule repeated in a later turn capture stays one row', async () => {
+    await capture([done, user(PREF)], false);
+    await capture([done, user(PREF)], false);
+    expect(rows().map((e) => [e.content, e.pinned])).toEqual([['Use `pnpm` instead of `npm`', true]]);
+  });
+
   it('a reply the patterns already place keeps their category; the agent never gets the reply rule', () => {
     const items = extractFromTexts(["Let's go with SQLite for the cache.", REPLY, REPLY], 2, 1);
     expect(items.map((i) => [i.category, i.fromUser])).toEqual([
