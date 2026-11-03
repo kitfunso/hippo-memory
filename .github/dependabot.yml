@@ -1,5 +1,6 @@
 # Workflow actions are pinned to commit SHAs; this keeps the pins and their version comments current.
-# npm: one grouped pull request a week per package directory for minor and patch releases; a major comes alone. Nothing merges itself.
+# npm: one grouped pull request a week per package directory for minor and patch releases; a major comes alone, except vitest
+# and its plugins, which move as one. Nothing merges itself.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -14,7 +15,14 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    # @types/node follows the engines floor (>=22.16.0); a newer major types APIs the floor lacks.
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
+      # vitest pins its @vitest/* plugins to its own exact version, so they move together.
+      vitest-root:
+        patterns: ['vitest', '@vitest/*']
       npm-root:
         patterns: ['*']
         update-types: [minor, patch]
@@ -24,6 +32,8 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     groups:
+      vitest-ui:
+        patterns: ['vitest', '@vitest/*']
       npm-ui:
         patterns: ['*']
         update-types: [minor, patch]
