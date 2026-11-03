@@ -10,11 +10,13 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         // react in its own chunk so the app chunk caches across releases.
-        manualChunks: {
-          react: ["react", "react-dom"],
+        codeSplitting: {
+          groups: [
+            { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+          ],
         },
       },
     },
