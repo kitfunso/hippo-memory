@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.1 - 2026-11-03
+
+### Fixed
+
+- **A preference you repeat in a reply is now stored as your rule.** When the opening request said "Use `pnpm` instead of `npm`" and a later reply said it again, capture kept the plain preference from the request, so the rule never printed at session start. In one capture the rule copy now wins. In a later `--turn` capture the rule replaces the stored preference row, which is marked superseded. Only a live, unpinned, `observed` capture row of a named project is replaced. A pinned or superseded row, a row you typed or corrected with `hippo supersede`, a row with no project, or an older copy that kept its `**` marks still stops a second copy.
+- **A rule replaces a stored preference only in that preference's own project.** In a shared store, a capture with no project stamps its rule with no project, and that rule could supersede a named project's preference, so the project lost the row from its context. Capture now works out the project a rule is written for once: the project you name, or else the store folder's project with its older names. A shared or user-global store gives none. A rule replaces a row only when the row belongs to that project, and a dry run reports the same skip the write makes.
+
 ## 3.2.0 - 2026-11-02
 
 ### Added

@@ -144,14 +144,16 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
     return;
   }
 
-  const held = await storedKeysInView(target.store, options, extracted, boldTwins(scrubbed, scrub));
+  const dedup = await captureDedup(target.store.folderFiles, options);
+  const held = await storedKeysInView(target.store, dedup, extracted, boldTwins(scrubbed, scrub));
 
-  printCaptureTally(options, await captureFromCli(target, options, extracted, held));
+  printCaptureTally(options, await captureFromCli(target, options, dedup, extracted, held));
 }
 
 async function captureFromCli(
   { store, config, embed }: CaptureTarget,
   options: CaptureOptions,
+  dedup: CaptureDedup,
   extracted: readonly ExtractedItem[],
   { keys, ruleKeys }: HeldKeys,
 ): Promise<CaptureTally> {
@@ -159,7 +161,7 @@ async function captureFromCli(
     tenantId: options.global ? undefined : options.tenantId,
     originProject: options.originProject,
     lean: false,
-    dedup: captureDedup(options),
+    dedup,
     now: evalClock()(),
   };
   if (!options.dryRun) {
@@ -185,10 +187,15 @@ export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]
   return keys;
 }
 
-/** The held keys that also stop a stated rule: every copy but one the store's write replaces,
- * which holds the rule's exact text, so a bold twin still stops it. */
-export function ruleHeldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
-  const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row)));
+/** The held keys that also stop a stated rule written for `ruleProject` (its names): every copy
+ * but one the store's write replaces, which holds the rule's exact text, so a bold twin still
+ * stops it. */
+export function ruleHeldKeysOf(
+  rows: readonly HeldText[],
+  twins: readonly BoldTwin[],
+  ruleProject: readonly string[],
+): Set<string> {
+  const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row, ruleProject)));
   for (const key of twinKeys(rows, twins)) keys.add(key);
   return keys;
 }
@@ -213,26 +220,39 @@ interface HeldKeys {
 // hidden, so they must not stop its own copy.
 async function storedKeysInView(
   store: Pick<StoreGroups, 'captures'>,
-  options: CaptureOptions,
+  { tenantId, project, everyScope, ruleProject = [] }: CaptureDedup,
   extracted: readonly ExtractedItem[],
   twins: readonly BoldTwin[],
 ): Promise<HeldKeys> {
-  const { tenantId, ...filter } = captureDedup(options);
   // The lookup matches stored text exactly, so it also asks for the lines as capture once stored them.
   const texts = [...extracted.map((item) => item.content), ...twins.map((twin) => twin.old)];
-  const rows = await store.captures.textsHolding(tenantId, texts, filter);
-  return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins) };
+  const rows = await store.captures.textsHolding(tenantId, texts, { project, everyScope });
+  return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins, ruleProject) };
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its
- * own transaction. */
-function captureDedup(options: CaptureOptions): CaptureDedup {
+ * own transaction, and the project a stated rule is written for. */
+async function captureDedup(
+  folderFiles: StoreGroups['folderFiles'],
+  options: CaptureOptions,
+): Promise<CaptureDedup> {
   const tenantId = options.global ? ALL_TENANTS : options.tenantId;
   const origin = options.originProject;
   // classifyOriginProject in SQL: a project with no id sees every row, any other its own names and
   // user-global rows.
-  if (origin === undefined || projectId(origin) === '') return { tenantId, everyScope: true };
-  return { tenantId, everyScope: true, project: projectNames(origin) };
+  if (origin !== undefined && projectId(origin) !== '') {
+    const names = projectNames(origin);
+    return { tenantId, everyScope: true, project: names, ruleProject: names };
+  }
+  const ruleProject = origin === undefined ? await stampedProject(folderFiles) : [];
+  return { tenantId, everyScope: true, ruleProject };
+}
+
+/** The names of the project the store stamps on a row that names none: none for a shared or a
+ * user-global store. */
+async function stampedProject(folderFiles: StoreGroups['folderFiles']): Promise<readonly string[]> {
+  const { shared, project } = await folderFiles.home();
+  return shared || projectId(project) === '' ? [] : projectNames(project);
 }
 
 function printCaptureTally(
