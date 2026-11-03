@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.2.2 - 2026-11-03
+
+### Fixed
+
+- **A model call that thinks first no longer comes back empty.** The Anthropic adapter read only the first block of a reply. A thinking model puts a thinking block first, so the reply text was lost and the call counted as empty. The adapter now reads the first text block.
+- **A pasted block no longer becomes your rule.** Since 3.2.0, capture treats a statement in your reply as your rule. It also read text you pasted into that reply, so a line from a pasted runbook or log could be pinned as a rule you stated, with the paste's tags in its text. Capture now skips `<pasted_content>` blocks. A row that an earlier capture stored this way stays until you remove it with `hippo forget`.
+- **A rule you state now replaces an older pinned copy of the same text that has no from-user tag.** A rule pinned by 3.1.1, before the tag existed, stopped capture from storing the rule again, so it never printed under "Rules from the user". Capture now supersedes that copy with the tagged rule, in the same project only. A pinned copy that already has the tag still stops the rule, so a replayed transcript adds nothing.
+
 ## 3.2.1 - 2026-11-03
 
 ### Fixed
