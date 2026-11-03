@@ -15,7 +15,8 @@ const IDENTITY = { GIT_AUTHOR_NAME: 'eval', GIT_AUTHOR_EMAIL: 'eval@example.com'
 export const SCRUB_WORD = 'store';
 export const WITHHELD = '[line withheld]';
 
-const git = (args, opts = {}) => execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.hooksPath=/dev/null', ...args], { encoding: 'utf8', maxBuffer: 1 << 28, ...opts }).trim();
+// Long paths as the arm's workspace sets them (workspace.mjs WORK_CONFIG): agentscope-java's snapshot checkout failed without (3 Nov).
+const git = (args, opts = {}) => execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.hooksPath=/dev/null', '-c', 'core.longpaths=true', ...args], { encoding: 'utf8', maxBuffer: 1 << 28, ...opts }).trim();
 const isRulePath = (rel) => { const parts = rel.split('/'); return RULE_NAMES.has(parts.at(-1)) || parts.some((p) => RULE_DIRS.has(p)); };
 // Only rule sources (prereg 51) reach the author; settings and command files are removed but never copied.
 const isRuleSource = (rel) => RULE_NAMES.has(rel.split('/').at(-1)) || /(^|\/)\.(cursor|claude)\/rules\//.test(rel);
