@@ -94,8 +94,8 @@ function runnerGit(args, extraEnv) {
 }
 
 // Windows real-time scanning can hold a file git just wrote (anything in .git, a lock file, a temp index) past Git for Windows' own short rename retry.
-// A work-tree file, a lock another git holds (File exists) and commit's index failure after HEAD moved (a line break inside the phrase) never match.
-const SCAN_LOCK = /\.git[\\/][^\n]*: Permission denied|\.lock': Permission denied|unable to write new index file/;
+// A work-tree file, a lock another git holds (File exists), commit's index failure after HEAD moved (a line break inside the phrase) and an update-ref old-value mismatch never match.
+const SCAN_LOCK = /\.git[\\/][^\n]*: Permission denied|\.lock': Permission denied|[Uu]nable to write new index file|update_ref failed for ref '[^'\n]*': couldn't set/;
 const LOCK_WAITS_MS = [500, 1000, 2000, 4000];
 /** Retries taken this process, printed at the end of a run so an environment flake is seen, never hidden. */
 export const objectLockRetries = { count: 0 };

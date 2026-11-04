@@ -13,6 +13,8 @@ const NO_WAIT = [0, 0, 0, 0];
 // Each shape seen on Windows while real-time scanning held a file git had just written.
 const SCAN_LOCKS: [string, string][] = [
   ['an index git cannot replace', 'fatal: unable to write new index file\n'],
+  ['an index update-index cannot replace', 'fatal: Unable to write new index file\n'],
+  ['a ref lock on update-ref', "fatal: update_ref failed for ref 'refs/z0/pre': couldn't set 'refs/z0/pre'\n"],
   ['packed-refs on a clone', 'error replacing C:/w/repo-cache/seqA/.git/packed-refs: Permission denied\nfatal: remote did not send all necessary objects\n'],
   ['the config on a clone or a config set', "fatal: unable to access 'C:\\w\\repo-cache\\seqA\\.git\\config': Permission denied\n"],
   ['a temp index lock outside .git', "fatal: Unable to create 'C:/Users/u/AppData/Local/Temp/z0-git-Ab12/index.lock': Permission denied\n"],
@@ -25,6 +27,7 @@ const ORDINARY: [string, string][] = [
   ['a work-tree file', "error: open(\"src/a.txt\"): Permission denied\nerror: unable to index file 'src/a.txt'\nfatal: adding files failed\n"],
   ['a lock another git holds', "fatal: Unable to create 'C:/w/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository.\n"],
   ['a commit whose HEAD already moved', 'fatal: repository has been updated, but unable to write\nnew index file. Check that disk is not full and quota is\nnot exceeded, and then "git restore --staged :/" to recover.\n'],
+  ['a ref whose old value moved', "fatal: update_ref failed for ref 'refs/z0/pre': cannot lock ref 'refs/z0/pre': is at 1111111111111111111111111111111111111111 but expected 2222222222222222222222222222222222222222\n"],
 ];
 
 describe('retryObjectLock', () => {
