@@ -1,1 +1,0 @@
-- Website: sitemap `lastmod` and article `dateModified` now come from git instead of a typed date.
