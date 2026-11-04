@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.3.1 - 2026-11-04
+
+### Fixed
+
+- **Rules from the user print as stored, with no reply lead removed.** A rule that starts with `No: ` keeps those words under `## Rules from the user`.
+
 ## 3.3.0 - 2026-11-03
 
 ### Added
