@@ -151,10 +151,13 @@ describe('capture keeps what a person says in reply', () => {
   });
 
   it('notes newer than a decision do not push it out of the recent list', async () => {
-    const orders = Array.from({ length: 6 }, (_, i) => `Do not touch the file number ${i} in that folder.`);
     await capture([user(REQUEST), done, user("Let's go with SQLite for the cache.")]);
-    await capture([user(REQUEST), ...orders.flatMap((order) => [done, user(order)])]);
-    expect(rows().filter((e) => e.tags.includes(CAPTURED_NOTE_TAG))).toHaveLength(6);
+    // More than the loader's first window, so it must read past the notes.
+    for (let i = 0; i < 40; i += 1) {
+      const created = new Date(Date.now() + (i + 1) * 1000).toISOString();
+      const content = `Do not touch the file number ${i} in that folder.`;
+      writeEntry(root, memory(content, { created, source: 'capture', tags: [CAPTURED_NOTE_TAG, 'captured'] }));
+    }
     const { entries } = await contextGet(ctxFor(root), {
       currentProject: resolveProjectIdentity(dirname(root)),
       pinnedOnly: true,
