@@ -67,6 +67,13 @@ The `z0/r3` analyzer change and its hash, then dev rounds, then the freeze, then
 - Re-lock 3 (4 Nov): `r3-queue.ps1` now also holds a launch while CPU averages 90% or more over 30 seconds, and counts running authors after a restart. It changes when a session starts, and no brief input.
 - The A9 records and the dev rounds give authors nothing: authors get only the repository notes in `r3-repos.json`, written from the gate specs and logs.
 
+**Amendment B (4 Nov 2026, proposed by this session, not yet approved; it goes to the founder with the budget and build choice):** A hook that Claude Code cancels gives the agent no memory on that turn, and only hippo arms have hooks.
+- **The fault.** Hippo installs its Claude Code hooks with a 5-second limit. On the loaded box, the A2 dev transcripts hold 26 cancelled `UserPromptSubmit` hooks against 229 that delivered, and 7 of 80 set R applies lost the hook (`hook-cancel-count.py`, `hook-cancel-apply.py` in the session scratchpad). One of the 4 repeats on those applies had a cancelled hook. This prereg has no gate for it, and the runner does not read `hook_cancelled`.
+- **Record.** Every A2 and A5 session reports its cancelled hooks by event. The results publish the rate by arm and set.
+- **Hold rule.** The scored run launches no new runner while more than 2% of A2 and A5 apply sessions in the last 50 lost the prompt hook, and it restarts when the rate falls. The rate of this rule is a judgement, set before any scored session.
+- **Analysis.** Every session stays in the primary analysis, because dropping sessions from hippo arms only would bias the result. A second read without the cancelled sessions is reported as a sensitivity read, with no verdict.
+- **Runner fix, no build change.** `exec.mjs:98` retries git lock faults with a pattern that holds lowercase `unable to write new index file`, but git prints `Unable`, and `update_ref failed` is not in it. These faults stopped the `q110` screen, the `q79` probe, the `q133` probe and the `hu3` screen. The pattern is fixed on the run branch before the scored run, because `ab-run` has no resume. Only `scripts/token-eval/` changes, so the dist hash does not.
+
 ## Stages and their checks
 
 | Stage | Check that closes it |
