@@ -106,7 +106,7 @@ async function loadAmbientEntries(
             ownScope: window.ownScope,
           })
         : await source.reads.contextCandidates(tenantId, window);
-    // SHORTCUT: a search filters notes after its limit, so a query matching 200 notes returns fewer rows;
+    // SHORTCUT: a search filters notes after its limit, so a query matching 200 notes returns fewer rows or none;
     // push it into the search SQL if a store gets there.
     return {
       entries: rows.filter((e) => ownTenant(e) && admit(e) && (e.pinned || !isCapturedNote(e))),

@@ -402,7 +402,7 @@ export function listContextCandidates(
 ): MemoryEntry[] {
   // In the SQL, before the cap: a filter after it would let notes fill the cap and starve other rows.
   const rowsWhere = contextRowsWhere(tenantId, filter, [
-    `(pinned = 1 OR tags_json NOT LIKE '%"${CAPTURED_NOTE_TAG}"%')`,
+    `(pinned = 1 OR instr(tags_json, '"${CAPTURED_NOTE_TAG}"') = 0)`,
   ]);
   const { params } = rowsWhere;
   const cap = Math.max(0, Math.trunc(filter.cap));

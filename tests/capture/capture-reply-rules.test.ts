@@ -145,8 +145,8 @@ describe('capture keeps what a person says in reply', () => {
 
   it('a captured note stays out of a context read by query or by strength', async () => {
     await capture([user(REQUEST), done, user('stop, delete everything related to this project.')]);
-    const context = (query?: string) =>
-      contextGet(ctxFor(root), { currentProject: resolveProjectIdentity(dirname(root)), query, budget: 500 });
+    const context = (q?: string) =>
+      contextGet(ctxFor(root), { currentProject: resolveProjectIdentity(dirname(root)), q, budget: 500 });
     expect((await context()).entries).toEqual([]);
     expect((await context('delete everything')).entries).toEqual([]);
   });
@@ -183,6 +183,15 @@ describe('capture keeps what a person says in reply', () => {
       budget: 500,
     });
     expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
+  });
+
+  it('only the exact tag hides a row from a context read', async () => {
+    writeEntry(root, memory('The team keeps the release calendar in the wiki.', { tags: ['Captured-Note'] }));
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(['The team keeps the release calendar in the wiki.']);
   });
 
   it('a matching prompt brings a note back, and a typed note tag stays ordinary', async () => {

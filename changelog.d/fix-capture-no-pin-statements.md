@@ -13,4 +13,4 @@
 - A one-off note can still print under `## Prompt-Relevant Memory` when a prompt matches it, marked as a past observation.
 - A later turn with a rule word, or a preference such as "Skip the review before you merge this one", can still pin a one-off order. Most of the 6 rows in that replay are not lasting rules.
 - Rows that 3.2.0 to 3.3.1 pinned stay pinned until `hippo forget`.
-- A `hippo context` query that matches 200 or more notes can return fewer rows, because that search filters notes after its limit.
+- A `hippo context` query that matches 200 or more notes can return fewer rows or none, because that search filters notes after its limit. `hippo recall` still finds them.
