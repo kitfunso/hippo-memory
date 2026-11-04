@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Font } from 'astro:assets';
 import { site } from '../content/site';
+import { pageDate } from '../lib/page-dates.mjs';
 import BackgroundFx from '../components/BackgroundFx.astro';
 
 interface Props {
@@ -13,9 +14,8 @@ interface Props {
   schema?: object[];
   /** Breadcrumb name for a sub-page, read as Home > crumb. */
   crumb?: string;
-  /** Set on article pages: adds a TechArticle node with these dates (YYYY-MM-DD). */
+  /** Set on article pages: adds a TechArticle node; dateModified comes from git. */
   published?: string;
-  modified?: string;
 }
 
 const {
@@ -24,10 +24,9 @@ const {
   schema = [],
   crumb,
   published,
-  modified = published,
 } = Astro.props;
 const article = published
-  ? [{ '@type': 'TechArticle', headline: title, description, datePublished: published, dateModified: modified }]
+  ? [{ '@type': 'TechArticle', headline: title, description, datePublished: published, dateModified: pageDate(Astro.url.pathname) }]
   : [];
 
 // All URLs derive from astro.config `site` -> a later domain swap is one edit.

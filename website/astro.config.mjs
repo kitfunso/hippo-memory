@@ -3,13 +3,14 @@ import { defineConfig, fontProviders } from 'astro/config';
 import preact from '@astrojs/preact';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
+import { pageDate } from './src/lib/page-dates.mjs';
 
 // Static landing page for hippo-memory, deployed to Cloudflare Pages.
 // No SSR adapter: `astro build` -> dist/ -> `wrangler pages deploy dist`.
 // https://astro.build/config
 export default defineConfig({
   site: 'https://hippo-memory.com',
-  integrations: [preact(), sitemap()],
+  integrations: [preact(), sitemap({ serialize: (item) => ({ ...item, lastmod: pageDate(new URL(item.url).pathname) }) })],
   // Self-hosted Geist: latin only, one file per weight in use, metric-matched fallbacks.
   fonts: [
     {
