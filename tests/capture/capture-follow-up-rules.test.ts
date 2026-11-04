@@ -248,13 +248,13 @@ describe('capture stores the follow-up rules a model picks', () => {
 
   it('sends the last 20 follow-up turns, so the 25th turn of 25 reaches the model', async () => {
     const [{ turn, stored }] = TEACH_TURNS;
-    const fillers = Array.from({ length: 23 }, (_, k) => `Run step ${k + 2} now.`);
+    const fillers = Array.from({ length: 23 }, (_, k) => `Step ${k + 2} is done now.`);
     const model = picking('[{"i": 19, "s": [0]}]');
     await capture(session(...fillers, turn), model);
     expect(model.prompts[0]).toContain('<m i="19"><s n="0">No: Clean build');
     expect(model.prompts[0]).not.toContain('<m i="20">');
-    expect(model.prompts[0]).not.toContain('Run step 5 now.');
-    expect(model.prompts[0]).toContain('Run step 6 now.');
+    expect(model.prompts[0]).not.toContain('Step 5 is done now.');
+    expect(model.prompts[0]).toContain('Step 6 is done now.');
     expect(rows().map((row) => row.content)).toEqual([stored]);
   });
 

@@ -414,7 +414,7 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
 
 // A reply to the agent's work states how the person wants it done, rule word or not.
 const ANY_STATEMENT = [/\S/];
-// A kept reply names code or limits a choice; a thanks or a pasted test count does neither.
+// A kept reply names code, limits a choice or gives an order; a thanks or a pasted test count does none.
 const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
 const LIMIT_CUE =
   /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
@@ -423,6 +423,16 @@ const LIMIT_CUE =
 const ACK_LEAD = /^(?:thanks|thank you|ok(?:ay)?|great|nice|perfect|cool|lgtm)\b[\s,.!:-]*/i;
 const NOT_A_DIRECTIVE = /^(?:for|on|to|so|the|a|an|this|that|it|its|you|your|i|we|all|really)\b/i;
 const APPROVAL = /^(?:\S+\s+){0,3}(?:looks?|works?|worked)\s+(?:good|great|fine|right|now)\b/i;
+// A plain order opens on a verb, often behind symbols or short labels ("No: Package docs: Include ...").
+// SHORTCUT: a closed verb list, not grammar; the opt-in model capture is the upgrade path.
+const IMPERATIVE_VERBS =
+  'include add use run write keep create cut start put make call update remove delete check test follow ' +
+  'document prefer avoid ensure set pass return name move open send bump rebase commit push branch fix ' +
+  'rename replace wrap split extract import export install mock handle validate assert read drop merge ' +
+  'squash pin reuse';
+const IMPERATIVE = new RegExp(String.raw`^(?:${IMPERATIVE_VERBS.replaceAll(' ', '|')})\s`, 'i');
+const LEAD_SYMBOLS = /^[^\p{L}\p{N}]+/u;
+const SHORT_LABEL = /^[^\s:]+(?:\s+[^\s:]+){0,3}:\s+/;
 // Pasted output opens on a file:line, a stack frame or an error word, or holds a file:line:col
 // (a compiler arrow line) or an assertion message.
 const LOG_CUE = new RegExp(
@@ -442,7 +452,18 @@ function isPraise(content: string): boolean {
   return rest.split(/\s+/).filter(Boolean).length <= 3 || NOT_A_DIRECTIVE.test(rest);
 }
 
-/** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word. */
+/** An order of 4 or more words that opens on a verb, past any symbols and labels before it. */
+function isImperative(content: string): boolean {
+  let rest = content.replace(LEAD_SYMBOLS, '');
+  while (!IMPERATIVE.test(rest)) {
+    const label = SHORT_LABEL.exec(rest);
+    if (!label) return false;
+    rest = rest.slice(label[0].length).replace(LEAD_SYMBOLS, '');
+  }
+  return rest.split(/\s+/).length >= 4;
+}
+
+/** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word or a verb lead. */
 function followUpRule(sentence: string): ExtractedItem | null {
   const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
   if (!item) return null;
@@ -450,7 +471,8 @@ function followUpRule(sentence: string): ExtractedItem | null {
   const limits = LIMIT_CUE.test(content);
   if (LOG_CUE.test(content) || (isPraise(content) && !limits)) return null;
   const words = content.split(/\s+/).length;
-  const kept = (words >= 2 && CODE_CUE.test(content)) || (words >= 4 && limits);
+  const kept =
+    (words >= 2 && CODE_CUE.test(content)) || (words >= 4 && limits) || isImperative(content);
   return kept ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
 }
 

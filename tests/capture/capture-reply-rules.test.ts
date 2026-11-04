@@ -379,6 +379,8 @@ describe('which replies capture reads as a rule', () => {
     'Keep button styles in `shared.css` so all dialogs look right.',
     'Use `pnpm` instead of `npm`.',
     'Avoid edits to `generated.ts`.',
+    '✅ Cut a new branch and write a failing test for the feature.',
+    'No: ✅ Style notes: Cut a new branch and write a failing test for the feature.',
     REPLY,
   ])('keeps %s', (reply) => {
     expect(ruleFromReply(reply)).toBe(true);
@@ -396,6 +398,34 @@ describe('which replies capture reads as a rule', () => {
     'Tests 3 failed | 120 passed (123)',
   ])('drops %s', (reply) => {
     expect(ruleFromReply(reply)).toBe(false);
+  });
+
+  it.each([
+    "No: Package documentation: Include package-level documentation, because the project's maintainers require it. Please fix it.",
+    "Yes, keep doing that: Cut a new branch and write a failing test for the feature or bugfix you plan on implementing, because the project's maintainers require it.",
+    'Not like that. Cut a new branch and write a failing test for the feature; the maintainers require it. Could you redo it?',
+    'Cut a new branch and write a failing test for the feature. (The reason: the maintainers require it.) Update your change to match.',
+  ])('keeps the plain imperative rule in %s', (reply) => {
+    const kept = extractFromTexts([REQUEST, reply], 2, 1).find((i) =>
+      /package-level documentation|new branch/.test(i.content),
+    );
+    expect(kept).toMatchObject({ category: 'rule', tags: expect.arrayContaining(['follow-up']) });
+  });
+
+  it.each([
+    'Make it blue',
+    'Thanks, use that one',
+    'Add more detail?',
+    'Running the tests now',
+    'The test passes now',
+    'src/cache.ts:12:4 error: bad',
+  ])('drops %s though it is short, a question, praise or output', (reply) => {
+    expect(ruleFromReply(reply)).toBe(false);
+  });
+
+  it('leaves an imperative statement in the first user text out, as it is the request', () => {
+    const request = 'Cut a new branch and write a failing test for the feature.';
+    expect(extractFromTexts([request, 'Thanks.'], 2, 1)).toEqual([]);
   });
 });
 
