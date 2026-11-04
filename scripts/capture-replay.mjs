@@ -28,7 +28,10 @@ function replay(transcripts, hippo, scratch) {
   const printed = run(hippo, project, env, ['session-rules'], '{"session_id":"capture-replay"}');
   if (printed.trim() === '') return [];
   const text = JSON.parse(printed).hookSpecificOutput.additionalContext;
-  return text.split('\n').filter((line) => line.startsWith('- ')).map((line) => line.slice(2));
+  return text
+    .split('\n')
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.slice(2));
 }
 
 const [list, hippo = resolve('bin/hippo.js')] = process.argv.slice(2);
