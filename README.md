@@ -203,7 +203,7 @@ hippo capture --file conversation.md --dry-run
 
 #### Rules from follow-up turns (opt-in, uses a model)
 
-Word patterns miss a rule that has no rule word in it, such as "That file is generated, so changes belong in the template it comes from." With `{"capture": {"followUpRules": "model"}}` in `.hippo/config.json` and `ANTHROPIC_API_KEY` set, a session capture also asks a model which of your sentences state a lasting rule. Hippo stores those sentences, in your own words, as pinned rules.
+Word patterns pin a later turn only when it holds a rule word (never, always, must, make sure) or a preference word that names code or limits a choice. Any other statement that names code or limits a choice stays an unpinned note, which recall can still find, such as "That file is generated, so changes belong in the template it comes from." With `{"capture": {"followUpRules": "model"}}` in `.hippo/config.json` and `ANTHROPIC_API_KEY` set, a session capture also asks a model which of your sentences state a lasting rule. Hippo stores those sentences, in your own words, as pinned rules.
 
 - **What it sends:** your turns after the first one in the session, the last 20, each cut to 1,000 characters. Pasted blocks, fenced code and log lines are removed first, and secrets, email addresses and home paths are masked. The assistant's replies are never sent.
 - **To whom:** Anthropic, with your `ANTHROPIC_API_KEY`, in one call per session capture. A failed call logs one line and capture keeps its pattern rules. A session with no project never makes the call.

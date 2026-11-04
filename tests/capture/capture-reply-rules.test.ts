@@ -1,4 +1,4 @@
-// A person's reply to the agent's work is their rule even with no rule word; the session's opening request is not.
+// A person's reply is their rule only with a rule or preference word; other replies stay unpinned notes.
 // Real SQLite stores in tmp dirs, no mocks.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
@@ -51,11 +51,21 @@ describe('capture keeps the rules a person gives in reply', () => {
     vi.unstubAllEnvs();
   });
 
-  it('pins a reply with no rule word as a user rule, and leaves the request and a thanks out', async () => {
+  it('keeps a reply with no rule word as a note, and leaves the request and a thanks out', async () => {
     await capture([user(REQUEST), done, user(REPLY), done, user(SHORT)]);
     expect(rows().map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)])).toEqual([
-      [expect.stringContaining('pnpm test:unit'), true, true],
+      [expect.stringContaining('pnpm test:unit'), false, false],
     ]);
+  });
+
+  it.each([
+    "Don't worry about it.",
+    'stop, delete everything related to this project.',
+    'continue dude, submit if you need. do not hold back.',
+    'check https://example.com/page for me.',
+  ])('never pins the one-off reply %s', async (reply) => {
+    await capture([user(REQUEST), done, user(reply)]);
+    expect(rows().filter((e) => e.pinned || e.tags.includes(USER_RULE_TAG))).toEqual([]);
   });
 
   it.each([
@@ -94,7 +104,7 @@ describe('capture keeps the rules a person gives in reply', () => {
     ]);
   });
 
-  it('pins no praise or pasted output that names code, and keeps a thanks that goes on to direct', async () => {
+  it('keeps no praise or pasted output that names code, and keeps a thanks that goes on to direct as a note', async () => {
     await capture([
       user(REQUEST),
       done,
@@ -112,9 +122,9 @@ describe('capture keeps the rules a person gives in reply', () => {
     ]);
     const stored = rows().sort((a, b) => a.content.localeCompare(b.content));
     expect(stored.map((e) => [e.content, e.pinned])).toEqual([
-      ['Thanks, but run `pnpm test:unit`, not the bare `pnpm test`', true],
-      ['Thanks, keep using `pnpm` for all installs', true],
-      ['Use the existing helper in `src/cache.ts:42` rather than duplicating it', true],
+      ['Thanks, but run `pnpm test:unit`, not the bare `pnpm test`', false],
+      ['Thanks, keep using `pnpm` for all installs', false],
+      ['Use the existing helper in `src/cache.ts:42` rather than duplicating it', false],
     ]);
   });
 
@@ -123,7 +133,7 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(rows()).toEqual([]);
   });
 
-  it('pins no reply that names no code and limits no choice', async () => {
+  it('keeps no reply that names no code and limits no choice', async () => {
     const noise = [
       'Thanks, that looks good to me.',
       'Now do the same for the other file.',
@@ -133,9 +143,9 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(rows().map((e) => e.content)).toEqual([expect.stringContaining('pnpm test:unit')]);
   });
 
-  it('pins a short reply that names code, and leaves a short limit with no code out', async () => {
+  it('keeps a short reply that names code as a note, and leaves a short limit with no code out', async () => {
     await capture([user(REQUEST), done, user('`pnpm` for installs.'), done, user('Not that.')]);
-    expect(rows().map((e) => [e.content, e.pinned])).toEqual([['`pnpm` for installs', true]]);
+    expect(rows().map((e) => [e.content, e.pinned])).toEqual([['`pnpm` for installs', false]]);
   });
 
   const replies = (n: number) =>
@@ -143,7 +153,7 @@ describe('capture keeps the rules a person gives in reply', () => {
 
   it('a tail that cut off the request reads its first user turn as a reply', async () => {
     await capture([user(REQUEST), ...replies(20)]);
-    expect(rows().filter((e) => e.pinned)).toHaveLength(20);
+    expect(rows()).toHaveLength(20);
   });
 
   it('a tail of exactly 20 user turns still holds the request, so the request stays out', async () => {
@@ -155,7 +165,7 @@ describe('capture keeps the rules a person gives in reply', () => {
 
   it('a later turn slice reads its first user turn as a reply; a slice from the start does not', async () => {
     await capture([done, user(REPLY)], false);
-    expect(rows().map((e) => [e.content, e.pinned])).toEqual([[expect.stringContaining('pnpm test:unit'), true]]);
+    expect(rows().map((e) => e.content)).toEqual([expect.stringContaining('pnpm test:unit')]);
     rmSync(root, { recursive: true, force: true });
     initTestStore(root);
     await capture([user(REPLY), done]);
@@ -358,7 +368,7 @@ describe('capture keeps the rules a person gives in reply', () => {
     const items = extractFromTexts(["Let's go with SQLite for the cache.", REPLY, REPLY], 2, 1);
     expect(items.map((i) => [i.category, i.fromUser])).toEqual([
       ['decision', true],
-      ['rule', true],
+      ['note', true],
     ]);
     expect(extractFromTexts([REQUEST, REPLY], 0, 0)).toEqual([]);
     const agent = 'Run the suite with `pnpm test:e2e` before the merge.';
@@ -368,8 +378,8 @@ describe('capture keeps the rules a person gives in reply', () => {
   });
 });
 
-describe('which replies capture reads as a rule', () => {
-  const ruleFromReply = (reply: string): boolean =>
+describe('which replies capture keeps', () => {
+  const keptFromReply = (reply: string): boolean =>
     extractFromTexts([REQUEST, reply], 2, 1).some((i) => i.tags.includes('follow-up'));
 
   it.each([
@@ -381,7 +391,7 @@ describe('which replies capture reads as a rule', () => {
     'Avoid edits to `generated.ts`.',
     REPLY,
   ])('keeps %s', (reply) => {
-    expect(ruleFromReply(reply)).toBe(true);
+    expect(keptFromReply(reply)).toBe(true);
   });
 
   it.each([
@@ -395,7 +405,7 @@ describe('which replies capture reads as a rule', () => {
     'TypeError: fetchJson is not a function',
     'Tests 3 failed | 120 passed (123)',
   ])('drops %s', (reply) => {
-    expect(ruleFromReply(reply)).toBe(false);
+    expect(keptFromReply(reply)).toBe(false);
   });
 });
 

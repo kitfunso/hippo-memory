@@ -412,7 +412,7 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
     }));
 }
 
-// A reply to the agent's work states how the person wants it done, rule word or not.
+// A reply can state how the person wants the work done with no rule word, so it is kept for recall.
 const ANY_STATEMENT = [/\S/];
 // A kept reply names code or limits a choice; a thanks or a pasted test count does neither.
 const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
@@ -442,9 +442,9 @@ function isPraise(content: string): boolean {
   return rest.split(/\s+/).filter(Boolean).length <= 3 || NOT_A_DIRECTIVE.test(rest);
 }
 
-/** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word. */
-function followUpRule(sentence: string): ExtractedItem | null {
-  const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
+/** A statement in a reply worth keeping: 2 words when it names code, 4 with a limiting word. */
+function followUpItem(sentence: string, category: string): ExtractedItem | null {
+  const item = extractFromPatterns(sentence, ANY_STATEMENT, category);
   if (!item) return null;
   const { content } = item;
   const limits = LIMIT_CUE.test(content);
@@ -454,14 +454,15 @@ function followUpRule(sentence: string): ExtractedItem | null {
   return kept ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
 }
 
-/** What a sentence holds; in a reply a preference that names code or limits a choice is a rule. */
+/** What a sentence holds; in a reply a preference that names code or limits a choice is a rule. A
+ *  statement with no such word stays a note: most replies are one-off orders, and a rule pins. */
 function sentenceItem(sentence: string, followUp: boolean): ExtractedItem | null {
   const hit =
     CATEGORIES.map(([category, patterns]) =>
       extractFromPatterns(sentence, patterns, category),
     ).find((found) => found !== null) ?? null;
   if (!followUp || (hit !== null && hit.category !== 'preference')) return hit;
-  return followUpRule(sentence) ?? hit;
+  return followUpItem(sentence, hit === null ? 'note' : 'rule') ?? hit;
 }
 
 // The items of the spec bullets first, then those of each prose block.

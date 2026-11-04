@@ -35,9 +35,10 @@ const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
 const NPM = 'npm_' + 'A1'.repeat(18);
 const HF = 'hf_' + 'Ab'.repeat(17);
 const GLPAT = 'glpat-' + 'A1_-'.repeat(5);
+const CLOUDFLARE = 'cfut_' + 'A1'.repeat(24);
 const YA29 = 'ya29.' + 'a0Af'.repeat(10);
 const SLACK_HOOK = 'https://hooks.slack.com/services/T' + 'A'.repeat(8) + '/B' + 'B'.repeat(8) + '/' + 'C'.repeat(24);
-const PROVIDER_TOKENS = [HIPPO_KEY, NPM, HF, GLPAT, YA29, SLACK_HOOK];
+const PROVIDER_TOKENS = [HIPPO_KEY, NPM, HF, GLPAT, CLOUDFLARE, YA29, SLACK_HOOK];
 
 describe('detectSecret patterns', () => {
   const flagged = (content: string, tags: string[] = []) => detectSecret({ content, tags }).flagged;
