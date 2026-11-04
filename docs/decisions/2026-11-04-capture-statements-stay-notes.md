@@ -15,8 +15,8 @@ Since 3.2.0, `followUpRule` in `src/surface/capture/extract.ts` turned a later-t
 - To repeat: `node scripts/capture-replay.mjs <file of transcript paths> [hippo.js]`.
 
 ## Decision
-- A statement that holds no rule or preference word and passes the code or limit cue stays a row with category `note`, with no pin and no `from-user` tag. Other statements store nothing.
-- A captured note stays out of the recent-memory list, where it could push out decisions. A matching prompt can still bring it back, marked as a past observation, so a one-off order can still print there. Keeping it reachable is deliberate: it is the only way a correction with no rule word reaches a later session without a model.
+- A statement that holds no rule or preference word and passes the code or limit cue stays a row tagged `captured-note`, with no pin and no `from-user` tag. Other statements store nothing.
+- A captured note stays out of every `hippo context` read, so `--auto` and the recent list do not print it, and it does not merge or share. Two reviews each found a new path that printed it, so the check sits in the read admission and the context load. A matching prompt can still bring it back, marked as a past observation, so a one-off order can still print there. Keeping it reachable is deliberate: it is the only way a correction with no rule word reaches a later session without a model.
 - Rule words, preferences that name code or limit a choice, and model picks can still pin.
 - Stored rows are not repaired. `hippo forget` removes them.
 

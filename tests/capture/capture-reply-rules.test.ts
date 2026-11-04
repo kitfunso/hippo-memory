@@ -6,10 +6,11 @@ import { dirname, join } from 'node:path';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
-import { USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import { CAPTURED_NOTE_TAG, USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import { NO_MERGE_TAGS, neverAutoShareTags } from '../../src/domain/sharing/share.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { supersede } from '../../src/api/memories/promote.js';
-import { ctxFor } from '../_helpers/query-count-seeds.js';
+import { ctxFor, memory } from '../_helpers/query-count-seeds.js';
 import { contextGet } from '../../src/api/index.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
@@ -139,6 +140,33 @@ describe('capture keeps what a person says in reply', () => {
       budget: 500,
     });
     expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
+  });
+
+  it('a captured note stays out of a context read by query or by strength', async () => {
+    await capture([user(REQUEST), done, user('stop, delete everything related to this project.')]);
+    const context = (query?: string) =>
+      contextGet(ctxFor(root), { currentProject: resolveProjectIdentity(dirname(root)), query, budget: 500 });
+    expect((await context()).entries).toEqual([]);
+    expect((await context('delete everything')).entries).toEqual([]);
+  });
+
+  it('notes newer than a decision do not push it out of the recent list', async () => {
+    const orders = Array.from({ length: 6 }, (_, i) => `Do not touch the file number ${i} in that folder.`);
+    await capture([user(REQUEST), done, user("Let's go with SQLite for the cache.")]);
+    await capture([user(REQUEST), ...orders.flatMap((order) => [done, user(order)])]);
+    expect(rows().filter((e) => e.tags.includes(CAPTURED_NOTE_TAG))).toHaveLength(6);
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
+  });
+
+  it('a captured note never merges or shares by itself', () => {
+    expect(NO_MERGE_TAGS.has(CAPTURED_NOTE_TAG)).toBe(true);
+    expect(neverAutoShareTags([memory('A note', { tags: [CAPTURED_NOTE_TAG] })])).toEqual([CAPTURED_NOTE_TAG]);
   });
 
   it('a session with only its request captures nothing', async () => {
@@ -381,7 +409,7 @@ describe('capture keeps what a person says in reply', () => {
     const items = extractFromTexts(["Let's go with SQLite for the cache.", REPLY, REPLY], 2, 1);
     expect(items.map((i) => [i.category, i.fromUser])).toEqual([
       ['decision', true],
-      ['note', true],
+      [CAPTURED_NOTE_TAG, true],
     ]);
     expect(extractFromTexts([REQUEST, REPLY], 0, 0)).toEqual([]);
     const agent = 'Run the suite with `pnpm test:e2e` before the merge.';

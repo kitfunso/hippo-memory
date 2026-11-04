@@ -113,7 +113,12 @@ export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 export const USER_RULE_TAG = 'from-user';
 
 /** Tag and category of a later statement capture keeps with no rule word. */
-export const CAPTURED_NOTE_TAG = 'note';
+export const CAPTURED_NOTE_TAG = 'captured-note';
+
+/** A note can be a one-off order, so only a matching prompt or an explicit recall may bring it back. */
+export function isCapturedNote(entry: { readonly tags: readonly string[] }): boolean {
+  return entry.tags.includes(CAPTURED_NOTE_TAG);
+}
 
 /** `tags` without the user-rule tag, for every tag a person types: a typed tag must not make a row
  * print as the person's own rule. */

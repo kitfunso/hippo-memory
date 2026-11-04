@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 
 const USAGE = 'usage: node scripts/capture-replay.mjs <file with one transcript path per line> [hippo.js]';
 const LONG_TOKEN = /[A-Za-z0-9_-]{28,}/g;
+const READ_OK = /Captured \d+ items|No actionable items found/;
 
 function run(hippo, cwd, env, args, input) {
   const done = spawnSync(process.execPath, [hippo, ...args], { cwd, env, input, encoding: 'utf8' });
@@ -26,7 +27,7 @@ function replay(transcripts, hippo, scratch) {
   run(hippo, project, env, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
   for (const transcript of transcripts) {
     const out = run(hippo, project, env, ['capture', '--transcript', transcript]);
-    if (out.includes('No transcript found')) throw new Error(`hippo read no transcript from ${transcript}`);
+    if (!READ_OK.test(out)) throw new Error(`hippo read no session from ${transcript}: ${out.slice(0, 200)}`);
   }
   const printed = run(hippo, project, env, ['session-rules'], '{"session_id":"capture-replay"}');
   if (printed.trim() === '') return [];

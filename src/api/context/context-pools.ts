@@ -1,5 +1,5 @@
 // Which rows a context call loads.
-import type { MemoryEntry } from '../../base/memory/entry.js';
+import { isCapturedNote, type MemoryEntry } from '../../base/memory/entry.js';
 import type {
   AmbientLoadResult,
   ContextCandidateFilter,
@@ -106,7 +106,7 @@ async function loadAmbientEntries(
             ownScope: window.ownScope,
           })
         : await source.reads.contextCandidates(tenantId, window);
-    return { entries: rows.filter((e) => ownTenant(e) && admit(e)) };
+    return { entries: rows.filter((e) => ownTenant(e) && admit(e) && !isCapturedNote(e)) };
   }
   // The store applies the quality floor too, or its recent-N load stops short of a store whose
   // newest rows are junk.

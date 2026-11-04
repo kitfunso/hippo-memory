@@ -1,6 +1,6 @@
 // Which rows an ambient load and a summary drill-down admit, as plain data: a store on a worker
 // thread applies the same rule the caller would, since a function cannot cross a thread.
-import { COMPACTION_MEMORY_TAG, type MemoryEntry } from '../memory/entry.js';
+import { COMPACTION_MEMORY_TAG, isCapturedNote, type MemoryEntry } from '../memory/entry.js';
 import { isWorthSurfacing } from '../memory/memory-quality.js';
 import { classifyOriginProject, projectNames, type ProjectRef } from './project-identity.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
@@ -73,7 +73,7 @@ export function ambientAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
 /** Why an ambient load leaves `e` out, or null when it keeps it. */
 export function ambientRefusal(e: MemoryEntry, a: AmbientAdmission): AmbientRefusalReason | null {
   if (!ambientAdmits(e, a)) return 'admission';
-  return e.pinned || isWorthSurfacing(e) ? null : 'quality';
+  return e.pinned || (isWorthSurfacing(e) && !isCapturedNote(e)) ? null : 'quality';
 }
 
 export function descendantAdmits(
