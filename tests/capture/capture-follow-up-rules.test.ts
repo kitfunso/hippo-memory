@@ -88,6 +88,21 @@ describe('capture stores the follow-up rules a model picks', () => {
     expect(model.prompts[0]).not.toContain(OPENER);
   });
 
+  const NOTE = 'Run the tests with `pnpm test:unit`, not the bare `pnpm test`';
+
+  it('a model pick of a note pins one row in the same capture', async () => {
+    await capture(session(`${NOTE}.`), picking('[{"i": 0, "s": [0]}]'));
+    expect(rows().map((row) => [row.content, row.pinned])).toEqual([[NOTE, true]]);
+  });
+
+  it('a model pick in a later capture pins the rule over the stored note', async () => {
+    await capture(session(`${NOTE}.`));
+    expect(rows().map((row) => [row.content, row.pinned])).toEqual([[NOTE, false]]);
+    await capture(session(`${NOTE}.`), picking('[{"i": 0, "s": [0]}]'));
+    const live = rows().filter((row) => row.supersededBy === null);
+    expect(live.map((row) => [row.content, row.pinned])).toEqual([[NOTE, true]]);
+  });
+
   it('stores a rule word patterns miss only through the model', async () => {
     const turn = 'That file is generated, so changes belong in the template it comes from.';
     await capture(session(turn));

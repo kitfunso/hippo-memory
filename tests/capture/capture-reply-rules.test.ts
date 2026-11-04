@@ -1,15 +1,19 @@
-// A person's reply to the agent's work is their rule even with no rule word; the session's opening request is not.
+// A person's reply is their rule only with a rule or preference word; other replies stay unpinned notes.
 // Real SQLite stores in tmp dirs, no mocks.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
-import { USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import { CAPTURED_NOTE_TAG, Layer, USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import { NO_MERGE_TAGS, neverAutoShareTags } from '../../src/domain/sharing/share.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { supersede } from '../../src/api/memories/promote.js';
-import { ctxFor } from '../_helpers/query-count-seeds.js';
+import { ctxFor, memory, seed } from '../_helpers/query-count-seeds.js';
+import { contextGet } from '../../src/api/index.js';
+import { consolidate } from '../../src/index.js';
+import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
@@ -21,7 +25,7 @@ const REPLY =
   'Run the tests with `pnpm test:unit`, not the bare `pnpm test`: the bare one also starts the browser suite.';
 const SHORT = 'Thanks, looks good.';
 
-describe('capture keeps the rules a person gives in reply', () => {
+describe('capture keeps what a person says in reply', () => {
   let scratch: string;
   let root: string;
 
@@ -51,11 +55,21 @@ describe('capture keeps the rules a person gives in reply', () => {
     vi.unstubAllEnvs();
   });
 
-  it('pins a reply with no rule word as a user rule, and leaves the request and a thanks out', async () => {
+  it('keeps a reply with no rule word as a note, and leaves the request and a thanks out', async () => {
     await capture([user(REQUEST), done, user(REPLY), done, user(SHORT)]);
     expect(rows().map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)])).toEqual([
-      [expect.stringContaining('pnpm test:unit'), true, true],
+      [expect.stringContaining('pnpm test:unit'), false, false],
     ]);
+  });
+
+  it.each([
+    "Don't worry about it.",
+    'stop, delete everything related to this project.',
+    'continue dude, submit if you need. do not hold back.',
+    'check https://example.com/page for me.',
+  ])('never pins the one-off reply %s', async (reply) => {
+    await capture([user(REQUEST), done, user(reply)]);
+    expect(rows().filter((e) => e.pinned || e.tags.includes(USER_RULE_TAG))).toEqual([]);
   });
 
   it.each([
@@ -94,7 +108,7 @@ describe('capture keeps the rules a person gives in reply', () => {
     ]);
   });
 
-  it('pins no praise or pasted output that names code, and keeps a thanks that goes on to direct', async () => {
+  it('keeps no praise or pasted output that names code, and keeps a thanks that goes on to direct as a note', async () => {
     await capture([
       user(REQUEST),
       done,
@@ -112,10 +126,125 @@ describe('capture keeps the rules a person gives in reply', () => {
     ]);
     const stored = rows().sort((a, b) => a.content.localeCompare(b.content));
     expect(stored.map((e) => [e.content, e.pinned])).toEqual([
-      ['Thanks, but run `pnpm test:unit`, not the bare `pnpm test`', true],
-      ['Thanks, keep using `pnpm` for all installs', true],
-      ['Use the existing helper in `src/cache.ts:42` rather than duplicating it', true],
+      ['Thanks, but run `pnpm test:unit`, not the bare `pnpm test`', false],
+      ['Thanks, keep using `pnpm` for all installs', false],
+      ['Use the existing helper in `src/cache.ts:42` rather than duplicating it', false],
     ]);
+  });
+
+  it('a captured note stays out of the recent list; a decision does not', async () => {
+    await capture([user(REQUEST), done, user(REPLY), done, user("Let's go with SQLite for the cache.")]);
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
+  });
+
+  it('a captured note stays out of a context read by query or by strength', async () => {
+    await capture([user(REQUEST), done, user('stop, delete everything related to this project.')]);
+    const context = (q?: string) =>
+      contextGet(ctxFor(root), { currentProject: resolveProjectIdentity(dirname(root)), q, budget: 500 });
+    expect((await context()).entries).toEqual([]);
+    expect((await context('delete everything')).entries).toEqual([]);
+  });
+
+  it('notes newer than a decision do not push it out of the recent list', async () => {
+    await capture([user(REQUEST), done, user("Let's go with SQLite for the cache.")]);
+    // More than the loader's first window, so it must read past the notes.
+    for (let i = 0; i < 40; i += 1) {
+      const created = new Date(Date.now() + (i + 1) * 1000).toISOString();
+      const content = `Do not touch the file number ${i} in that folder.`;
+      writeEntry(root, memory(content, { created, source: 'capture', tags: [CAPTURED_NOTE_TAG, 'captured'] }));
+    }
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
+  });
+
+  it('notes past the candidate cap do not starve a context read', async () => {
+    await capture([user(REQUEST), done, user("Let's go with SQLite for the cache.")]);
+    const notes = Array.from({ length: 400 }, (_, i) =>
+      memory(`Do not touch the helper number ${i} in that folder.`, {
+        created: new Date(Date.now() + (i + 1) * 1000).toISOString(),
+        source: 'capture',
+        tags: [CAPTURED_NOTE_TAG, 'captured'],
+      }),
+    );
+    seed(ctxFor(root), notes);
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
+  });
+
+  it('only the exact tag hides a row from a context read', async () => {
+    writeEntry(root, memory('The team keeps the release calendar in the wiki.', { tags: ['Captured-Note'] }));
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(['The team keeps the release calendar in the wiki.']);
+  });
+
+  it('a matching prompt brings a note back, and a typed note tag stays ordinary', async () => {
+    await capture([user(REQUEST), done, user('Do not touch the generated parser folder.')]);
+    writeEntry(root, memory('The team keeps the release calendar in the wiki.', { tags: ['note'] }));
+    const project = resolveProjectIdentity(dirname(root));
+    const prompted = await contextGet(ctxFor(root), {
+      currentProject: project,
+      pinnedOnly: true,
+      prompt: 'where is the generated parser folder',
+      budget: 500,
+    });
+    expect(prompted.entries.map((e) => e.entry.content)).toContain('Do not touch the generated parser folder');
+    const recent = await contextGet(ctxFor(root), {
+      currentProject: project,
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 500,
+    });
+    expect(recent.entries.map((e) => e.entry.content)).toEqual(['The team keeps the release calendar in the wiki.']);
+  });
+
+  it('a person who corrects a note makes an ordinary row that context prints', async () => {
+    await capture([user(REQUEST), done, user('Do not touch the generated parser folder.')]);
+    const [note] = rows();
+    await supersede(ctxFor(root), note.id, 'Regenerate the parser folder whenever the grammar changes.');
+    const live = rows().filter((e) => e.supersededBy === null);
+    expect(live.flatMap((e) => e.tags)).not.toContain(CAPTURED_NOTE_TAG);
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(['Regenerate the parser folder whenever the grammar changes.']);
+  });
+
+  it('a real sleep leaves similar captured notes apart', async () => {
+    for (const end of ['error', 'problem']) {
+      writeEntry(
+        root,
+        memory(`cache refresh failure data pipeline ${end}`, {
+          layer: Layer.Episodic,
+          source: 'capture',
+          tags: [CAPTURED_NOTE_TAG],
+        }),
+      );
+    }
+    const result = await consolidate(root, {});
+    expect(result.merged).toBe(0);
+  });
+
+  it('a captured note never merges or shares by itself', () => {
+    expect(NO_MERGE_TAGS.has(CAPTURED_NOTE_TAG)).toBe(true);
+    expect(neverAutoShareTags([memory('A note', { tags: [CAPTURED_NOTE_TAG] })])).toEqual([CAPTURED_NOTE_TAG]);
   });
 
   it('a session with only its request captures nothing', async () => {
@@ -123,7 +252,7 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(rows()).toEqual([]);
   });
 
-  it('pins no reply that names no code and limits no choice', async () => {
+  it('keeps no reply that names no code and limits no choice', async () => {
     const noise = [
       'Thanks, that looks good to me.',
       'Now do the same for the other file.',
@@ -133,9 +262,9 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(rows().map((e) => e.content)).toEqual([expect.stringContaining('pnpm test:unit')]);
   });
 
-  it('pins a short reply that names code, and leaves a short limit with no code out', async () => {
+  it('keeps a short reply that names code as a note, and leaves a short limit with no code out', async () => {
     await capture([user(REQUEST), done, user('`pnpm` for installs.'), done, user('Not that.')]);
-    expect(rows().map((e) => [e.content, e.pinned])).toEqual([['`pnpm` for installs', true]]);
+    expect(rows().map((e) => [e.content, e.pinned])).toEqual([['`pnpm` for installs', false]]);
   });
 
   const replies = (n: number) =>
@@ -143,7 +272,7 @@ describe('capture keeps the rules a person gives in reply', () => {
 
   it('a tail that cut off the request reads its first user turn as a reply', async () => {
     await capture([user(REQUEST), ...replies(20)]);
-    expect(rows().filter((e) => e.pinned)).toHaveLength(20);
+    expect(rows()).toHaveLength(20);
   });
 
   it('a tail of exactly 20 user turns still holds the request, so the request stays out', async () => {
@@ -155,7 +284,7 @@ describe('capture keeps the rules a person gives in reply', () => {
 
   it('a later turn slice reads its first user turn as a reply; a slice from the start does not', async () => {
     await capture([done, user(REPLY)], false);
-    expect(rows().map((e) => [e.content, e.pinned])).toEqual([[expect.stringContaining('pnpm test:unit'), true]]);
+    expect(rows().map((e) => e.content)).toEqual([expect.stringContaining('pnpm test:unit')]);
     rmSync(root, { recursive: true, force: true });
     initTestStore(root);
     await capture([user(REPLY), done]);
@@ -354,11 +483,11 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(rows().map((e) => [e.content, e.pinned])).toEqual([['Use `pnpm` instead of `npm`', true]]);
   });
 
-  it('a reply the patterns already place keeps their category; the agent never gets the reply rule', () => {
+  it('a reply the patterns already place keeps their category; the agent never gets the reply note', () => {
     const items = extractFromTexts(["Let's go with SQLite for the cache.", REPLY, REPLY], 2, 1);
     expect(items.map((i) => [i.category, i.fromUser])).toEqual([
       ['decision', true],
-      ['rule', true],
+      [CAPTURED_NOTE_TAG, true],
     ]);
     expect(extractFromTexts([REQUEST, REPLY], 0, 0)).toEqual([]);
     const agent = 'Run the suite with `pnpm test:e2e` before the merge.';
@@ -368,8 +497,8 @@ describe('capture keeps the rules a person gives in reply', () => {
   });
 });
 
-describe('which replies capture reads as a rule', () => {
-  const ruleFromReply = (reply: string): boolean =>
+describe('which replies capture keeps', () => {
+  const keptFromReply = (reply: string): boolean =>
     extractFromTexts([REQUEST, reply], 2, 1).some((i) => i.tags.includes('follow-up'));
 
   it.each([
@@ -381,7 +510,7 @@ describe('which replies capture reads as a rule', () => {
     'Avoid edits to `generated.ts`.',
     REPLY,
   ])('keeps %s', (reply) => {
-    expect(ruleFromReply(reply)).toBe(true);
+    expect(keptFromReply(reply)).toBe(true);
   });
 
   it.each([
@@ -395,7 +524,7 @@ describe('which replies capture reads as a rule', () => {
     'TypeError: fetchJson is not a function',
     'Tests 3 failed | 120 passed (123)',
   ])('drops %s', (reply) => {
-    expect(ruleFromReply(reply)).toBe(false);
+    expect(keptFromReply(reply)).toBe(false);
   });
 });
 

@@ -112,10 +112,18 @@ export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 /** Tag on a rule the person stated, which only capture may set. */
 export const USER_RULE_TAG = 'from-user';
 
-/** `tags` without the user-rule tag, for every tag a person types: a typed tag must not make a row
- * print as the person's own rule. */
-export function withoutUserTag(tags: readonly string[]): string[] {
-  return tags.filter((t) => t !== USER_RULE_TAG);
+/** Tag and category of a later statement capture keeps with no rule word. */
+export const CAPTURED_NOTE_TAG = 'captured-note';
+
+/** A note can be a one-off order, so only a matching prompt or an explicit recall may bring it back. */
+export function isCapturedNote(entry: { readonly tags: readonly string[] }): boolean {
+  return entry.tags.includes(CAPTURED_NOTE_TAG);
+}
+
+/** `tags` without the tags only capture may set, for every tag a person types or vouches for: a
+ * typed tag must not make a row print as the person's rule, and a corrected note is no longer a note. */
+export function withoutCaptureTags(tags: readonly string[]): string[] {
+  return tags.filter((t) => t !== USER_RULE_TAG && t !== CAPTURED_NOTE_TAG);
 }
 
 /** A memory counts as high schema fit strictly above this. */
@@ -298,7 +306,7 @@ export function createSuccessor(
 ): MemoryEntry {
   const fields: CreateMemoryOptions = {
     layer: opts.layer ?? old.layer,
-    tags: withoutUserTag(opts.tags ?? old.tags),
+    tags: withoutCaptureTags(opts.tags ?? old.tags),
     pinned: opts.pinned ?? old.pinned,
     source: old.source,
     confidence: 'verified',

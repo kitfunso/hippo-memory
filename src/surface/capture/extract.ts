@@ -4,7 +4,7 @@ import {
   asideCloseOffset,
   QUOTE_MARK,
 } from '../../base/memory/memory-quality.js';
-import { ERROR_TAG } from '../../base/memory/entry.js';
+import { CAPTURED_NOTE_TAG, ERROR_TAG } from '../../base/memory/entry.js';
 import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
 export interface ExtractedItem {
@@ -412,7 +412,7 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
     }));
 }
 
-// A reply to the agent's work states how the person wants it done, rule word or not.
+// A reply can state how the person wants the work done with no rule word, so it is kept for recall.
 const ANY_STATEMENT = [/\S/];
 // A kept reply names code or limits a choice; a thanks or a pasted test count does neither.
 const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
@@ -442,9 +442,9 @@ function isPraise(content: string): boolean {
   return rest.split(/\s+/).filter(Boolean).length <= 3 || NOT_A_DIRECTIVE.test(rest);
 }
 
-/** A statement in a reply as the person's rule: 2 words when it names code, 4 with a limiting word. */
-function followUpRule(sentence: string): ExtractedItem | null {
-  const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
+/** A statement in a reply worth keeping: 2 words when it names code, 4 with a limiting word. */
+function followUpItem(sentence: string, category: string): ExtractedItem | null {
+  const item = extractFromPatterns(sentence, ANY_STATEMENT, category);
   if (!item) return null;
   const { content } = item;
   const limits = LIMIT_CUE.test(content);
@@ -454,14 +454,15 @@ function followUpRule(sentence: string): ExtractedItem | null {
   return kept ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
 }
 
-/** What a sentence holds; in a reply a preference that names code or limits a choice is a rule. */
+/** What a sentence holds; in a reply a preference that names code or limits a choice is a rule. A
+ *  statement with no such word stays a note: most replies are one-off orders, and a rule pins. */
 function sentenceItem(sentence: string, followUp: boolean): ExtractedItem | null {
   const hit =
     CATEGORIES.map(([category, patterns]) =>
       extractFromPatterns(sentence, patterns, category),
     ).find((found) => found !== null) ?? null;
   if (!followUp || (hit !== null && hit.category !== 'preference')) return hit;
-  return followUpRule(sentence) ?? hit;
+  return followUpItem(sentence, hit === null ? CAPTURED_NOTE_TAG : 'rule') ?? hit;
 }
 
 // The items of the spec bullets first, then those of each prose block.
@@ -487,7 +488,7 @@ function extractSourced(text: string, cuts: Cutter, followUp = false): Sourced[]
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
  *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`,
  *  and a copy that is their rule wins over one that is not.
- *  From `firstFollowUp` on, those words answer the agent's work, so a statement in them can be the person's rule. */
+ *  From `firstFollowUp` on, those words answer the agent's work, so a statement in them can be kept as a note. */
 export function extractFromTexts(
   texts: readonly string[],
   userTexts = 0,

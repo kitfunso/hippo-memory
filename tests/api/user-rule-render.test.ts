@@ -18,7 +18,7 @@ import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { planContext, sourceOf } from '../../src/api/context/context-plan.js';
 import { userRuleReserve } from '../../src/api/context/context-pools.js';
 import { isUserRule, USER_RULE_TAG, type UserRuleViewer } from '../../src/api/context/user-rule.js';
-import { withoutUserTag, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { withoutCaptureTags, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { handleContext } from '../../src/surface/cli/context.js';
 import type { CliFlags } from '../../src/surface/cli/flag-values.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -281,8 +281,8 @@ describe('a typed tag cannot make a user rule', () => {
   });
 
   it('strips the tag from a list and keeps the rest in order', () => {
-    expect(withoutUserTag(['a', USER_RULE_TAG, 'b'])).toEqual(['a', 'b']);
-    expect(withoutUserTag(['a'])).toEqual(['a']);
+    expect(withoutCaptureTags(['a', USER_RULE_TAG, 'b'])).toEqual(['a', 'b']);
+    expect(withoutCaptureTags(['a'])).toEqual(['a']);
   });
 });
 

@@ -40,6 +40,8 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/ },
   { name: 'huggingface-token', re: /\bhf_[A-Za-z]{34}\b/ },
   { name: 'gitlab-token', re: /\bglpat-[\w-]{20,}/ },
+  { name: 'cloudflare-token', re: /\bcf(?:k|ut|at)_[\w-]{40,}/ },
+  { name: 'cloudflare-wrangler-token', re: /\bcfoat_[\w-]{20,}/ },
   { name: 'google-oauth-token', re: /\bya29\.[\w-]{20,}/ },
   {
     name: 'slack-webhook',

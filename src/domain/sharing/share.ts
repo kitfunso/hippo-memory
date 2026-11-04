@@ -8,6 +8,7 @@ import {
   COMPACTION_MEMORY_TAG,
   ERROR_TAG,
   EXTRACTED_TAG,
+  CAPTURED_NOTE_TAG,
 } from '../../base/memory/entry.js';
 import { strengthModelFor } from '../../base/memory/eval-switches.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -80,6 +81,7 @@ const TRANSFERABLE_TAGS = new Set([
 /** Tags whose rows only a hand-run share or promote may copy to the global store; derived rows
  * inherit them. */
 export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
+  CAPTURED_NOTE_TAG,
   'git-learned',
   'session-digest',
   ...AGENT_MEMORY_TAGS,
@@ -92,6 +94,7 @@ export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
 /** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict
  * detection keeps its own list. */
 export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
+  CAPTURED_NOTE_TAG,
   EXTRACTED_TAG,
   'session-digest',
   COMPACTION_MEMORY_TAG,
