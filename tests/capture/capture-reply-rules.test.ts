@@ -6,12 +6,13 @@ import { dirname, join } from 'node:path';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
-import { CAPTURED_NOTE_TAG, USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import { CAPTURED_NOTE_TAG, Layer, USER_RULE_TAG } from '../../src/base/memory/entry.js';
 import { NO_MERGE_TAGS, neverAutoShareTags } from '../../src/domain/sharing/share.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { supersede } from '../../src/api/memories/promote.js';
-import { ctxFor, memory } from '../_helpers/query-count-seeds.js';
+import { ctxFor, memory, seed } from '../_helpers/query-count-seeds.js';
 import { contextGet } from '../../src/api/index.js';
+import { consolidate } from '../../src/index.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -165,6 +166,71 @@ describe('capture keeps what a person says in reply', () => {
       budget: 500,
     });
     expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
+  });
+
+  it('notes past the candidate cap do not starve a context read', async () => {
+    await capture([user(REQUEST), done, user("Let's go with SQLite for the cache.")]);
+    const notes = Array.from({ length: 400 }, (_, i) =>
+      memory(`Do not touch the helper number ${i} in that folder.`, {
+        created: new Date(Date.now() + (i + 1) * 1000).toISOString(),
+        source: 'capture',
+        tags: [CAPTURED_NOTE_TAG, 'captured'],
+      }),
+    );
+    seed(ctxFor(root), notes);
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
+  });
+
+  it('a matching prompt brings a note back, and a typed note tag stays ordinary', async () => {
+    await capture([user(REQUEST), done, user('Do not touch the generated parser folder.')]);
+    writeEntry(root, memory('The team keeps the release calendar in the wiki.', { tags: ['note'] }));
+    const project = resolveProjectIdentity(dirname(root));
+    const prompted = await contextGet(ctxFor(root), {
+      currentProject: project,
+      pinnedOnly: true,
+      prompt: 'where is the generated parser folder',
+      budget: 500,
+    });
+    expect(prompted.entries.map((e) => e.entry.content)).toContain('Do not touch the generated parser folder');
+    const recent = await contextGet(ctxFor(root), {
+      currentProject: project,
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 500,
+    });
+    expect(recent.entries.map((e) => e.entry.content)).toEqual(['The team keeps the release calendar in the wiki.']);
+  });
+
+  it('a person who corrects a note makes an ordinary row that context prints', async () => {
+    await capture([user(REQUEST), done, user('Do not touch the generated parser folder.')]);
+    const [note] = rows();
+    await supersede(ctxFor(root), note.id, 'Regenerate the parser folder whenever the grammar changes.');
+    const live = rows().filter((e) => e.supersededBy === null);
+    expect(live.flatMap((e) => e.tags)).not.toContain(CAPTURED_NOTE_TAG);
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(['Regenerate the parser folder whenever the grammar changes.']);
+  });
+
+  it('a real sleep leaves similar captured notes apart', async () => {
+    for (const end of ['error', 'problem']) {
+      writeEntry(
+        root,
+        memory(`cache refresh failure data pipeline ${end}`, {
+          layer: Layer.Episodic,
+          source: 'capture',
+          tags: [CAPTURED_NOTE_TAG],
+        }),
+      );
+    }
+    const result = await consolidate(root, {});
+    expect(result.merged).toBe(0);
   });
 
   it('a captured note never merges or shares by itself', () => {

@@ -106,7 +106,11 @@ async function loadAmbientEntries(
             ownScope: window.ownScope,
           })
         : await source.reads.contextCandidates(tenantId, window);
-    return { entries: rows.filter((e) => ownTenant(e) && admit(e) && !isCapturedNote(e)) };
+    // SHORTCUT: a search filters notes after its limit, so a query matching 200 notes returns fewer rows;
+    // push it into the search SQL if a store gets there.
+    return {
+      entries: rows.filter((e) => ownTenant(e) && admit(e) && (e.pinned || !isCapturedNote(e))),
+    };
   }
   // The store applies the quality floor too, or its recent-N load stops short of a store whose
   // newest rows are junk.

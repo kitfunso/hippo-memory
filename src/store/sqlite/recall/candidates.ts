@@ -1,5 +1,11 @@
 import type { StoreModel } from '../runtime/open.js';
-import { type MemoryEntry, ERROR_TAG, Layer, schemaFitFrom } from '../../../base/memory/entry.js';
+import {
+  type MemoryEntry,
+  CAPTURED_NOTE_TAG,
+  ERROR_TAG,
+  Layer,
+  schemaFitFrom,
+} from '../../../base/memory/entry.js';
 import {
   FALLBACK_HALF_LIFE_DAYS,
   PRODUCTION_STRENGTH,
@@ -394,7 +400,10 @@ export function listContextCandidates(
   tenantId: string,
   filter: ContextCandidateFilter,
 ): MemoryEntry[] {
-  const rowsWhere = contextRowsWhere(tenantId, filter);
+  // In the SQL, before the cap: a filter after it would let notes fill the cap and starve other rows.
+  const rowsWhere = contextRowsWhere(tenantId, filter, [
+    `(pinned = 1 OR tags_json NOT LIKE '%"${CAPTURED_NOTE_TAG}"%')`,
+  ]);
   const { params } = rowsWhere;
   const cap = Math.max(0, Math.trunc(filter.cap));
   const whereSql = rowsWhere.sql;

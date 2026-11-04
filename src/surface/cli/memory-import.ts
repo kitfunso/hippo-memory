@@ -7,7 +7,7 @@ import { embedCoverage, memoryEmbedMissing } from '../../api/embeddings.js';
 import { importAtSessionEnd, importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { detailLines } from '../../base/memory/agent-memory-report.js';
-import { withoutUserTag } from '../../base/memory/entry.js';
+import { withoutCaptureTags } from '../../base/memory/entry.js';
 import {
   importChatGPTInto,
   importClaudeInto,
@@ -89,7 +89,7 @@ export async function handleImport({
 }: CommandContext): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
-  const extraTags = withoutUserTag(stringListFlag(flags, 'tag') ?? []);
+  const extraTags = withoutCaptureTags(stringListFlag(flags, 'tag') ?? []);
 
   const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
 
