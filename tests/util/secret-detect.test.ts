@@ -172,6 +172,13 @@ describe('redactSecretsStrict', () => {
     }
   });
 
+  it.each(['cfut_' + 'A1'.repeat(20) + '_dead-BEEF', 'cfat_' + 'A1'.repeat(24), 'cfoat_' + 'A1_-'.repeat(6)])(
+    'redactSecretsStrict leaves no tail of the Cloudflare token %s',
+    (token) => {
+      expect(redactSecretsStrict(`before ${token} after`)).toBe('before [REDACTED] after');
+    },
+  );
+
   it('redactSecretsStrict removes a Basic auth credential, as a header or quoted in JSON', () => {
     expect(redactSecretsStrict(`Authorization: Basic ${BASIC_CREDENTIAL}`)).not.toContain(BASIC_CREDENTIAL);
     expect(redactSecretsStrict(`{"authorization": "Basic ${BASIC_CREDENTIAL}"}`)).not.toContain(BASIC_CREDENTIAL);

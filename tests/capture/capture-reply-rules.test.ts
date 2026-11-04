@@ -2,7 +2,7 @@
 // Real SQLite stores in tmp dirs, no mocks.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
@@ -10,6 +10,8 @@ import { USER_RULE_TAG } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { supersede } from '../../src/api/memories/promote.js';
 import { ctxFor } from '../_helpers/query-count-seeds.js';
+import { contextGet } from '../../src/api/index.js';
+import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
@@ -21,7 +23,7 @@ const REPLY =
   'Run the tests with `pnpm test:unit`, not the bare `pnpm test`: the bare one also starts the browser suite.';
 const SHORT = 'Thanks, looks good.';
 
-describe('capture keeps the rules a person gives in reply', () => {
+describe('capture keeps what a person says in reply', () => {
   let scratch: string;
   let root: string;
 
@@ -126,6 +128,17 @@ describe('capture keeps the rules a person gives in reply', () => {
       ['Thanks, keep using `pnpm` for all installs', false],
       ['Use the existing helper in `src/cache.ts:42` rather than duplicating it', false],
     ]);
+  });
+
+  it('a captured note stays out of the recent list; a decision does not', async () => {
+    await capture([user(REQUEST), done, user(REPLY), done, user("Let's go with SQLite for the cache.")]);
+    const { entries } = await contextGet(ctxFor(root), {
+      currentProject: resolveProjectIdentity(dirname(root)),
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 500,
+    });
+    expect(entries.map((e) => e.entry.content)).toEqual(["Let's go with SQLite for the cache"]);
   });
 
   it('a session with only its request captures nothing', async () => {
@@ -364,7 +377,7 @@ describe('capture keeps the rules a person gives in reply', () => {
     expect(rows().map((e) => [e.content, e.pinned])).toEqual([['Use `pnpm` instead of `npm`', true]]);
   });
 
-  it('a reply the patterns already place keeps their category; the agent never gets the reply rule', () => {
+  it('a reply the patterns already place keeps their category; the agent never gets the reply note', () => {
     const items = extractFromTexts(["Let's go with SQLite for the cache.", REPLY, REPLY], 2, 1);
     expect(items.map((i) => [i.category, i.fromUser])).toEqual([
       ['decision', true],

@@ -1,7 +1,7 @@
 // The ranking and budget policy of a context block, on plain rows: the api reads the stores, prices
 // the rows and asks these functions who gets in.
 
-import type { MemoryEntry } from '../../base/memory/entry.js';
+import { CAPTURED_NOTE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import type { PromptRecallGate, PromptRecallMetric } from '../../base/rank/prompt-recall.js';
@@ -89,7 +89,12 @@ export function promptRecallGateOf(inject: HippoConfig['pinnedInject']): PromptR
   };
 }
 
-/** The newest `limit` rows worth surfacing; a pin always is. */
+/** A note can be a one-off order, so only a matching prompt may bring it back. */
+function isCapturedNote(entry: MemoryEntry): boolean {
+  return entry.source === 'capture' && entry.tags.includes(CAPTURED_NOTE_TAG);
+}
+
+/** The newest `limit` rows worth surfacing; a pin always is, a captured note never is. */
 export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(
   rows: readonly T[],
   limit: number,
@@ -103,7 +108,7 @@ export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(
       })
       // Filter before slice so a junk row is backfilled past, not counted against N. Pins bypass the floor: a dropped
       // pin's share of the shared budget would go to a backfilled row, and the pin loop could not win it back.
-      .filter(({ entry }) => entry.pinned || isWorthSurfacing(entry))
+      .filter(({ entry }) => entry.pinned || (isWorthSurfacing(entry) && !isCapturedNote(entry)))
       .slice(0, limit)
   );
 }

@@ -4,7 +4,7 @@ import {
   asideCloseOffset,
   QUOTE_MARK,
 } from '../../base/memory/memory-quality.js';
-import { ERROR_TAG } from '../../base/memory/entry.js';
+import { CAPTURED_NOTE_TAG, ERROR_TAG } from '../../base/memory/entry.js';
 import { blankCodeSpans, strongMarkers } from '../../base/memory/markdown-delimiters.js';
 
 export interface ExtractedItem {
@@ -462,7 +462,7 @@ function sentenceItem(sentence: string, followUp: boolean): ExtractedItem | null
       extractFromPatterns(sentence, patterns, category),
     ).find((found) => found !== null) ?? null;
   if (!followUp || (hit !== null && hit.category !== 'preference')) return hit;
-  return followUpItem(sentence, hit === null ? 'note' : 'rule') ?? hit;
+  return followUpItem(sentence, hit === null ? CAPTURED_NOTE_TAG : 'rule') ?? hit;
 }
 
 // The items of the spec bullets first, then those of each prose block.
@@ -488,7 +488,7 @@ function extractSourced(text: string, cuts: Cutter, followUp = false): Sourced[]
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
  *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`,
  *  and a copy that is their rule wins over one that is not.
- *  From `firstFollowUp` on, those words answer the agent's work, so a statement in them can be the person's rule. */
+ *  From `firstFollowUp` on, those words answer the agent's work, so a statement in them can be kept as a note. */
 export function extractFromTexts(
   texts: readonly string[],
   userTexts = 0,

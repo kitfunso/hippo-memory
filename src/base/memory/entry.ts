@@ -112,6 +112,9 @@ export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 /** Tag on a rule the person stated, which only capture may set. */
 export const USER_RULE_TAG = 'from-user';
 
+/** Tag and category of a later statement capture keeps with no rule word. */
+export const CAPTURED_NOTE_TAG = 'note';
+
 /** `tags` without the user-rule tag, for every tag a person types: a typed tag must not make a row
  * print as the person's own rule. */
 export function withoutUserTag(tags: readonly string[]): string[] {

@@ -2,7 +2,7 @@
 // Replays real session transcripts through capture in a throwaway store and prints what would pin.
 // Run it before any change to a capture route: a benchmark's clean teach text cannot show precision.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -21,10 +21,13 @@ function replay(transcripts, hippo, scratch) {
   mkdirSync(project);
   mkdirSync(home);
   const { ANTHROPIC_API_KEY: _key, ...rest } = process.env;
-  const env = { ...rest, HIPPO_HOME: home };
+  const env = { ...rest, HIPPO_HOME: home, HIPPO_SKIP_SCHEDULE: '1' };
   spawnSync('git', ['init', '-q', '.'], { cwd: project });
-  run(hippo, project, env, ['init', '--no-hooks']);
-  for (const transcript of transcripts) run(hippo, project, env, ['capture', '--transcript', transcript]);
+  run(hippo, project, env, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
+  for (const transcript of transcripts) {
+    const out = run(hippo, project, env, ['capture', '--transcript', transcript]);
+    if (out.includes('No transcript found')) throw new Error(`hippo read no transcript from ${transcript}`);
+  }
   const printed = run(hippo, project, env, ['session-rules'], '{"session_id":"capture-replay"}');
   if (printed.trim() === '') return [];
   const text = JSON.parse(printed).hookSpecificOutput.additionalContext;
@@ -34,12 +37,21 @@ function replay(transcripts, hippo, scratch) {
     .map((line) => line.slice(2));
 }
 
-const [list, hippo = resolve('bin/hippo.js')] = process.argv.slice(2);
+const [list, hippoArg = 'bin/hippo.js'] = process.argv.slice(2);
 if (list === undefined) {
   console.error(USAGE);
   process.exit(2);
 }
-const transcripts = readFileSync(list, 'utf8').split(/\r?\n/).filter(Boolean);
+const hippo = resolve(hippoArg);
+const transcripts = readFileSync(list, 'utf8')
+  .split(/\r?\n/)
+  .filter(Boolean)
+  .map((path) => resolve(path));
+const missing = transcripts.find((path) => !existsSync(path));
+if (missing !== undefined) {
+  console.error(`no transcript at ${missing}: fix the list in ${list}`);
+  process.exit(2);
+}
 const scratch = mkdtempSync(join(tmpdir(), 'capture-replay-'));
 try {
   const rules = replay(transcripts, hippo, scratch);
