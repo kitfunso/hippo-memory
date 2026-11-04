@@ -34,8 +34,6 @@ import { runInProcess } from './_helpers/run-in-process.js';
 const PROJECT = { name: 'p', legacyName: 'p' };
 const RULE =
   "No: Clean build: `./mvnw clean package -DskipTests --batch-mode`, because the project's maintainers require it.";
-// The block drops the reply lead the person typed, which reads as an answer and not an order.
-const SHOWN = RULE.replace(/^No: /, '');
 const NOTE = 'Deploys go through the staging queue before the production queue';
 const HEADING = '## Rules from the user';
 
@@ -101,8 +99,8 @@ describe("a rule the person stated, in the hook's block", () => {
 
     const text = await hookText();
 
-    expect(text.startsWith(`${HEADING}\n- ${SHOWN}\n\n`)).toBe(true);
-    expect(text.split(SHOWN)).toHaveLength(2);
+    expect(text.startsWith(`${HEADING}\n- ${RULE}\n\n`)).toBe(true);
+    expect(text.split(RULE)).toHaveLength(2);
     expect(text).not.toMatch(/Previously observed[^\n]*mvnw/);
     expect(text).not.toContain('captured, from-user');
     expect(text.indexOf(HEADING)).toBeLessThan(text.indexOf('## Active Task Snapshot'));
@@ -304,8 +302,8 @@ describe('`hippo context` run in a project', () => {
     writeEntry(flagsRoot, ruleRow({ origin_project: HERE }));
     writeEntry(flagsRoot, noteRow({ origin_project: HERE }));
     const out = await cli({ budget: '1500' });
-    expect(out.startsWith(`${HEADING}\n- ${SHOWN}\n\n`)).toBe(true);
-    expect(out.split(SHOWN)).toHaveLength(2);
+    expect(out.startsWith(`${HEADING}\n- ${RULE}\n\n`)).toBe(true);
+    expect(out.split(RULE)).toHaveLength(2);
     expect(out).toContain('## Project Memory (1 entries,');
   });
 
@@ -314,7 +312,7 @@ describe('`hippo context` run in a project', () => {
     const out = additionalContext(
       await cli({ 'pinned-only': true, 'include-recent': '5', format: 'additional-context' }),
     );
-    expect(out.startsWith(`${HEADING}\n- ${SHOWN}\n`)).toBe(true);
+    expect(out.startsWith(`${HEADING}\n- ${RULE}\n`)).toBe(true);
     expect(out).not.toContain('Previously observed');
   });
 
@@ -332,14 +330,8 @@ describe('`hippo context` run in a project', () => {
   });
 });
 
-describe('the reply lead the person typed before the rule', () => {
-  it.each([
-    ['"No:"', 'No: Clean build first.', 'Clean build first.'],
-    ['"Yes, keep doing that:" and the spaces after it', 'Yes, keep doing that:   Run the linter.', 'Run the linter.'],
-    ['no lead', 'Never edit CHANGELOG.md by hand.', 'Never edit CHANGELOG.md by hand.'],
-    ['a "No" that opens the rule itself', 'No force pushes to main.', 'No force pushes to main.'],
-    ['a lead inside the rule', 'Say No: never.', 'Say No: never.'],
-  ])('cuts %s', (_name, content, shown) => {
-    expect(userRuleLine(ruleRow({ content }))).toBe(`- ${shown}`);
+describe('a rule the person stated, printed as stored', () => {
+  it('keeps a "No: " lead on the line', () => {
+    expect(userRuleLine(ruleRow({ content: 'No: Clean build first.' }))).toBe('- No: Clean build first.');
   });
 });

@@ -82,7 +82,7 @@ describe('hippo session-rules in a project with its own store', () => {
     initStore(local);
   });
 
-  it('prints the SessionStart reply with the rules oldest first and their reply leads cut', async () => {
+  it('prints the SessionStart reply with the rules oldest first and their text as stored', async () => {
     writeEntry(local, ruleRow('Yes, keep doing that: Run the linter before every commit.', 1));
     writeEntry(local, ruleRow('No: Clean build: `./mvnw clean package -DskipTests`, because CI does.', 0));
     writeEntry(local, ruleRow('Never edit CHANGELOG.md by hand.', 2));
@@ -98,8 +98,8 @@ describe('hippo session-rules in a project with its own store', () => {
       reply(
         [
           HEADING,
-          '- Clean build: `./mvnw clean package -DskipTests`, because CI does.',
-          '- Run the linter before every commit.',
+          '- No: Clean build: `./mvnw clean package -DskipTests`, because CI does.',
+          '- Yes, keep doing that: Run the linter before every commit.',
           '- Never edit CHANGELOG.md by hand.',
         ].join('\n'),
       ),
@@ -156,7 +156,7 @@ describe('hippo session-rules in a project folder with no .hippo', () => {
     const { status, stdout } = await sessionRules();
 
     expect(status).toBe(0);
-    expect(stdout).toBe(reply(`${HEADING}\n- Never edit CHANGELOG.md by hand.`));
+    expect(stdout).toBe(reply(`${HEADING}\n- No: Never edit CHANGELOG.md by hand.`));
     expect(fs.existsSync(local)).toBe(false);
   });
 
