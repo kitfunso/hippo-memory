@@ -10,7 +10,6 @@ import { initGitRepo } from '../_helpers/churn-git-repo.js';
 
 const RULE_SENTENCE =
   "No: Clean build: `./mvnw clean package -DskipTests --batch-mode`, because the project's maintainers require it";
-const PRINTED_RULE = RULE_SENTENCE.replace('No: ', '');
 
 let dir: string;
 let cwd: string;
@@ -78,7 +77,7 @@ describe('a follow-up rule in the next session', () => {
     await endSession();
     const block = await nextHookBlock();
     expect(block).toContain('## Rules from the user');
-    expect(block).toContain(PRINTED_RULE);
+    expect(block).toContain(RULE_SENTENCE);
     expect(block).not.toContain('Previously observed');
   });
 
@@ -93,7 +92,7 @@ describe('a follow-up rule in the next session', () => {
     await endSession();
     const block = await nextHookBlock();
     expect(block).toContain('## Rules from the user');
-    expect(block).toContain(PRINTED_RULE);
+    expect(block).toContain(RULE_SENTENCE);
   });
 
   it('stays out of another git project that shares the global store', async () => {

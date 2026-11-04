@@ -224,13 +224,10 @@ export function contextBlockLines(
 
 export const USER_RULES_HEADING = '## Rules from the user';
 
-// The person's reply lead ("No:", "Yes, keep doing that:") reads as an answer, not as an order.
-const CORRECTION_LEAD = /^(?:No|Yes, keep doing that):\s*/;
-
 /** The person's own rule as a plain instruction: no confidence, date or tags to read it as an old
  * note. */
 export function userRuleLine(e: MemoryEntry): string {
-  return `- ${shownContent({ ...e, content: e.content.replace(CORRECTION_LEAD, '') })}`;
+  return `- ${shownContent(e)}`;
 }
 
 /** The section that opens a block; no rules print nothing, and the blank line closes it. */
