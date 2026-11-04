@@ -64,13 +64,15 @@ const CATEGORIES = [
 const MAX_CHARS = 500;
 const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
 const LABEL = /^(?:decision|rule|error|bug|gotcha|important|critical|remember|plan):/i;
+const CONTINUED_LEAD = /^(?:[a-z]|\((?!\w{1,2}\)))/;
 const SENTENCE_END = /[.!?]["')\]]*$/;
 const SPEC_HEADING_PATTERNS = [
   /^#+\s*(?:features?|requirements?|specs?|specifications?|plan|design|architecture|interface|api|todo|tasks?|implementation|notes?)(?:\s|:|$)/i,
   /^(?:features?|requirements?|specs?|specifications?|plan|design|tasks?|implementation)(?:\s*:|$)/i,
 ];
-// A list item may open a fence on its own line: "- ```".
-const FENCE_OPEN = /^(?:(?:[-*]|\d+\.)\s+)?(`{3,}|~{3,})(.*)$/;
+// A list item may open a fence on its own line: "- ```", "+ ```" or "1) ```" (CommonMark markers).
+const FENCE_OPEN = /^(?:(?:[-*+]|\d+[.)])\s+)?(`{3,}|~{3,})(.*)$/;
+const INDENTED_CODE = /^(?: {4}|\t)(?!\s*(?:[-*+]|\d+[.)])\s)/;
 const FENCE_CLOSE = /^(`{3,}|~{3,})\s*$/;
 // Inline code and abbreviation dots never end a sentence; "etc." does when a capital follows.
 const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s+[a-z])/g;
@@ -97,7 +99,7 @@ function proseOnly(text: string): string {
       return '';
     }
     // Quotes, table rows and indented code are not the speaker's own; indented code cannot interrupt a paragraph or list item.
-    const dropped = /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
+    const dropped = /^\s*[>|]/.test(line) || (!afterProse && INDENTED_CODE.test(line));
     afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
     return dropped ? '' : line;
   }).join('\n');
@@ -107,9 +109,9 @@ function masked(text: string): string {
   return text.replace(NO_BREAK, span => 'x'.repeat(span.length));
 }
 
-/** A lowercase line continues the line above only when that line has not ended its sentence; "e.g." at a line end has not. */
+/** A lowercase or bracketed line, but not an enumerator like "(1)", continues the line above only when that line has not ended its sentence; "e.g." at a line end has not. */
 function continues(line: string, previous: string | undefined): boolean {
-  if (previous === undefined || !/^[a-z]/.test(line) || LABEL.test(line)) return false;
+  if (previous === undefined || !CONTINUED_LEAD.test(line) || LABEL.test(line)) return false;
   return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
 }
 

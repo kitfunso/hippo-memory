@@ -521,6 +521,14 @@ describe('capture reads markdown the way it renders', () => {
     ]);
   });
 
+  it('reads a bracketed line under an open sentence as its continuation, but not an enumerator', () => {
+    expect(contents('Always deploy to production\n(only if p95 < 200).')).toEqual([
+      'Always deploy to production (only if p95 < 200)',
+    ]);
+    expect(contents('Always deploy to production.\n(only if p95 < 200).')).toEqual(['Always deploy to production']);
+    expect(contents('Always run these steps\n(1) build the site.')).toEqual(['Always run these steps']);
+  });
+
   it('reads a 4-space line under prose as its continuation and one after a blank line as code', () => {
     const spec = ['## Plan', '- Move the cache to Redis so restarts keep', '    warm entries for the API'].join('\n');
     expect(extractFromText(spec).map((item) => item.content)).toEqual(['Move the cache to Redis so restarts keep warm entries for the API']);
