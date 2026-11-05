@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { sh } from './exec.mjs';
 import { HIPPO_ARMS, CARRY_ARMS, childEnv } from './arms.mjs';
 import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
-import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
+import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, commitInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import {
   findTranscript, sessionFiles, listTranscripts, transcriptUsage, assistantTurns, assistantIds, usageFromResult, invalidRecord, validRecord,
 } from './records.mjs';
@@ -103,11 +103,13 @@ function stageTask(ctx, run, step) {
     run.initDone = true;
   }
   const carry = CARRY_ARMS.has(run.arm) ? applyInstructions(work, run.changes, baseline, path.join(ctx.outDir, 'tmp')) : NO_CARRY;
+  // Pre sits on the commit of the runner's writes, as on the stub before, so a checker's `pre..HEAD` is still the agent's commits alone.
+  const head = commitInstructions(work, baseline) ?? commit;
   const stage = { commit, prepare, baseline, carry, homesAtStart: run.sessionRan ? null : homeFiles(run.dirs), preSession: instructionSnapshot(work) };
   // A Codex session points filesOf at its rollouts once it ends.
   stage.adapter = step.driver.adapter;
   stage.filesOf = (ids) => transcriptsOf(run, ids);
-  stage.pre = stateCommit(work, commit);
+  stage.pre = stateCommit(work, head);
   holdPre(work, stage.pre);
   stage.step = step;
   stage.restores = [];
@@ -125,7 +127,7 @@ function resetTask(ctx, run, t, stage) {
   if (again && again.status !== 0) throw new Error(`${cellName(run, t)}: setup failed on the usage-limit rerun (exit ${again.status})`);
   stage.restores.push(restoreSurfaces(ctx, run, stage.snap, 'retry-restore', stage.step));
   restoreInstructions(work, stage.preSession);
-  stage.pre = stateCommit(work, stage.commit);
+  stage.pre = stateCommit(work, commitInstructions(work, stage.baseline) ?? stage.commit);
   holdPre(work, stage.pre);
   // The cut-off attempt's transcript stays (prereg 113), so it must never be taken for the rerun's.
   stage.transcriptsBefore = new Set(listTranscripts(projectsOf(run)));

@@ -4,8 +4,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { git, gitSpawn } from './exec.mjs';
 import { HIPPO_ARMS } from './arms.mjs';
+import { agentGit } from './checks.mjs';
 
 export const STUB_CLAUDE_MD = '# Instructions for coding agents working in this repository.\n';
+export const INSTRUCTIONS_MESSAGE = 'z0 eval: instruction files';
 // X3's stub is committed, never appended, so the carry cannot copy it twice (E6 plan D8).
 export const X3_STUB = `${STUB_CLAUDE_MD}@AGENTS.md\nWhen you receive a correction, add it to AGENTS.md.\n`;
 const STUB_IDENT = {
@@ -276,6 +278,28 @@ export function applyInstructions(workDir, changes, baseline, tmpRoot) {
 export function restoreInstructions(workDir, snap) {
   for (const rel of instructionSnapshot(workDir).keys()) if (!snap.has(rel)) fs.rmSync(path.join(workDir, rel));
   for (const [rel, bytes] of snap) writeFile(workDir, rel, bytes);
+}
+
+/** Commit the instruction files the runner wrote since `baseline` that `git status` shows, as a user would; the new HEAD, or null when there are none. */
+export function commitInstructions(workDir, baseline) {
+  // Left dirty, a hippo block or taught rule sat in every A2, A4 and A5 session's status and diff, which no real user pays for.
+  const written = [...instructionDelta(baseline, instructionSnapshot(workDir)).keys()];
+  if (!written.length) return null;
+  return agentGit(workDir, (rgit, scratch) => {
+    // No optional locks, so asking never rewrites the index; an ignored file stays out, as `add -A` in stateCommit leaves it.
+    const shown = rgit(['status', '--porcelain=v1', '-z', '-uall', '--no-renames', '--ignore-submodules=all', '--', ...written.map((p) => `:(literal)${p}`)], workDir, { GIT_OPTIONAL_LOCKS: '0' })
+      .split('\0').filter(Boolean).map((e) => e.slice(3));
+    if (!shown.length) return null;
+    const head = rgit(['rev-parse', '--verify', 'HEAD^{commit}'], workDir).trim();
+    const env = { ...STUB_IDENT, GIT_INDEX_FILE: path.join(scratch, 'index') };
+    rgit(['read-tree', head], workDir, env);
+    rgit(['update-index', '--add', '--remove', '--', ...shown], workDir, env);
+    const tree = rgit(['write-tree'], workDir, env).trim();
+    const sha = rgit(['commit-tree', '--no-gpg-sign', tree, '-p', head, '-m', INSTRUCTIONS_MESSAGE], workDir, env).trim();
+    rgit(['update-ref', '-m', `commit: ${INSTRUCTIONS_MESSAGE}`, 'HEAD', sha, head], workDir, STUB_IDENT);
+    rgit(['update-index', '--add', '--remove', '--', ...shown], workDir);
+    return sha;
+  });
 }
 
 /** Write the task's hidden test files from fixRef, read from the cache clone. */

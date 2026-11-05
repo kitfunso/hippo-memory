@@ -35,11 +35,20 @@ const napFor = (marker) => {
 // The session's auto-memory file and what it held at start, so a test can see what a retry put back.
 const folder = process.cwd().replace(/[^a-zA-Z0-9]/g, '-');
 const memoryFile = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, 'memory', 'MEMORY.md');
+const gitOut = (...args) => {
+  const r = spawnSync('git', args, { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trimEnd() : null;
+};
 const startSeen = {
   memory: fs.existsSync(memoryFile) ? fs.readFileSync(memoryFile, 'utf8') : null,
   hippoLimit: fs.existsSync(path.join('.hippo', 'limit.txt')),
   homeLimit: Boolean(process.env.HIPPO_HOME) && fs.existsSync(path.join(process.env.HIPPO_HOME, 'limit.txt')),
 };
+// SEE_STATUS: the work tree's status and HEAD as the session began, read without rewriting the index.
+if (prompt.includes('SEE_STATUS')) {
+  startSeen.gitStatus = gitOut('--no-optional-locks', 'status', '--porcelain=v1', '-uall');
+  startSeen.gitHead = gitOut('log', '-1', '--format=%H%x09%P%x09%an%x09%at%x09%s');
+}
 const memWrite = (text) => {
   fs.mkdirSync(path.dirname(memoryFile), { recursive: true });
   fs.appendFileSync(memoryFile, `${text}\n`);

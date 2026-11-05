@@ -9,7 +9,7 @@ import { runAll, planRuns, validateTasks } from '../scripts/token-eval/ab-run.mj
 import * as records from '../scripts/token-eval/records.mjs';
 import { teachMessage, drawOrder } from '../scripts/token-eval/lessons.mjs';
 import { stateCommit, holdPre, dropPre, runCheck } from '../scripts/token-eval/checks.mjs';
-import { stubBaseCommit, STUB_CLAUDE_MD } from '../scripts/token-eval/workspace.mjs';
+import { stubBaseCommit, STUB_CLAUDE_MD, INSTRUCTIONS_MESSAGE } from '../scripts/token-eval/workspace.mjs';
 import { runScreen } from '../scripts/token-eval/screen.mjs';
 import { loadHippo } from '../scripts/token-eval/runs.mjs';
 import { hippoBuild } from '../scripts/token-eval/pins.mjs';
@@ -83,7 +83,7 @@ interface RunExtra { limitWaitMs?: number; limitMaxWaits?: number; sessionTimeou
 /** What the toy lesson checker logs per call; the probe fields appear only with its `probe` arg. */
 interface CheckLine {
   lesson: string; pre: string; post: string; preRef: string | null; commands: string[]; resume: string[] | null; has?: boolean;
-  head?: string; symbolic?: string | null; logAll?: string; reflog?: string | null; refs?: string;
+  head?: string; symbolic?: string | null; logAll?: string; reflog?: string | null; refs?: string; sincePre?: string | null;
 }
 const lesson = (id: string, rule: string, extra: Partial<LessonDef> = {}): LessonDef => ({ id, rule, reason: `the ${id} checker reads it`, keyPhrase: `zq-${id}`, check: { script: 'lesson.mjs', args: [] }, ...extra });
 const family = (id: string, lessons: LessonDef[]): FamilyDef => ({ id, sequence: 'seqF', lessonSource: 'maintainer', lessons, screen: { id: `${id}-screen`, baseRef: 'x', fixRef: 'x', prompt: 'screen', test: 'node test.js', testFiles: [] } });
@@ -759,4 +759,78 @@ describe('family screen', () => {
       .rejects.toThrow('Z0 task seqF/fL-screen: instruction file docs/AGENTS.md is a symlink in the task repo');
     expect(logLines(log)).toEqual([]);
   }, 60_000);
+});
+
+describe('instruction files at session start', () => {
+  const FIXED = ['z0-eval', '946684800', INSTRUCTIONS_MESSAGE];
+  const count = (text: string, part: string) => text.split(part).length - 1;
+  /** What SEE_STATUS saw as the session began: status, HEAD as sha, parent and [author, date, subject], and the instruction files. */
+  const startOf = (out: string, arm: string, id: string) => {
+    const raw = JSON.parse(readFileSync(join(out, 'raw', 'seqF', arm, 'seed1', `${id}.json`), 'utf8'));
+    const [sha, parent, ...rest] = String(raw.gitHead).split('\t');
+    return { status: raw.gitStatus, sha, parent, rest, files: raw.files };
+  };
+
+  it('every arm starts clean; A2, A4 and the carry sit in one fixed commit on the stub; files, carry and pre..HEAD as before', async () => {
+    const { out, log } = isolate('clean');
+    const r = makeRepo();
+    const fam = family('f1', [lesson('f1-l1', 'Write the lesson file', { check: { script: 'lesson.mjs', args: ['probe'] } })]);
+    const ids = ['t1', 'n1', 'n2', 'a1', 'a2'];
+    // A0 holds no runner write; A2 covers the carry and hippo init, A4 the taught rules.
+    const arms = ['A0', 'A2', 'A4'];
+    await run(spec(r, [fam], [
+      teach(r, 't1', 'f1-l1', 'LESSON_OK CARRY SEE_STATUS'), task(r, 'n1', 'SEE_STATUS'), task(r, 'n2', 'SEE_STATUS\nAPPEND:CLAUDE.md:second agent line'),
+      apply(r, 'a1', 'f1-l1', 'LESSON_OK SEE_STATUS'), apply(r, 'a2', 'f1-l1', 'LESSON_OK SEE_STATUS'),
+    ]), arms, out);
+    const recs = readRecords(out);
+    for (const arm of arms) {
+      for (const id of ids) {
+        const at = startOf(out, arm, id);
+        const base = find(recs, arm, id).baseCommit;
+        expect(find(recs, arm, id).invalid, `${arm} ${id}`).toBeNull();
+        expect(at.status, `${arm} ${id}`).toBe('');
+        // Only a runner write moves HEAD: A0 never, A4 only once taught, A2 from hippo init on.
+        if (arm === 'A2' || (arm === 'A4' && id !== 't1')) expect([at.parent, ...at.rest], `${arm} ${id}`).toEqual([base, ...FIXED]);
+        else expect(at.sha, `${arm} ${id}`).toBe(base);
+      }
+    }
+    // The same writes on the same stub give the same commit, whatever the task.
+    expect(new Set(['n1', 'n2', 'a1', 'a2'].map((id) => startOf(out, 'A4', id).sha)).size).toBe(1);
+    const taught = `${STUB_CLAUDE_MD}\n- Write the lesson file, because the f1-l1 checker reads it.\n`;
+    for (const id of ids) {
+      expect(startOf(out, 'A0', id).files, id).toEqual({ 'CLAUDE.md': STUB_CLAUDE_MD });
+      expect(startOf(out, 'A4', id).files, id).toEqual({ 'CLAUDE.md': id === 't1' ? STUB_CLAUDE_MD : taught });
+      expect(count(startOf(out, 'A2', id).files['CLAUDE.md'], 'hippo:start'), id).toBe(1);
+      expect(find(recs, 'A2', id), id).toMatchObject({ carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 });
+    }
+    // The carry holds the agent's own edits once each: t1's from n1 on, n2's from a1 on.
+    for (const id of ['n1', 'n2', 'a1', 'a2']) {
+      const { files } = startOf(out, 'A2', id);
+      expect(count(files['CLAUDE.md'], 'carried claude line\n'), id).toBe(1);
+      expect(count(files['CLAUDE.md'], 'second agent line\n'), id).toBe(id.startsWith('a') ? 1 : 0);
+      expect(files, id).toMatchObject({ 'AGENTS.md': 'carried agents note\n', '.claude/rules/r.md': 'carried rule\n', 'sub/CLAUDE.md': 'carried sub\n' });
+      expect(Object.keys(files), id).not.toContain('.claude/agents/x.md');
+    }
+    // A checker reading the agent's commits as `pre..HEAD` never sees the runner's commit.
+    const checks = checkLog(log);
+    expect(checks.length).toBeGreaterThan(0);
+    for (const c of checks) expect(c.sincePre, c.head).toBe('');
+    for (const arm of ['A2', 'A4']) expect(checks.some((c) => c.head === startOf(out, arm, 'a1').sha), arm).toBe(true);
+  }, 900_000);
+
+  it('the usage-limit reset commits the restored files again, so the rerun starts clean on the same commit', async () => {
+    const { out } = isolate('clean-reset');
+    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    const r = makeRepo();
+    const fam = family('f1', [lesson('f1-l1', 'Write the lesson file')]);
+    await run(spec(r, [fam], [
+      teach(r, 't1', 'f1-l1', 'LESSON_OK SEE_STATUS'), task(r, 'n1', 'LIMIT SEE_STATUS'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'look around only'), apply(r, 'a2', 'f1-l1', 'look around only'),
+    ]), ['A2'], out, { limitWaitMs: 0 });
+    const n1 = find(readRecords(out), 'A2', 'n1');
+    expect(n1).toMatchObject({ invalid: null, limitRetries: 1 });
+    const at = startOf(out, 'A2', 'n1');
+    expect(at.status).toBe('');
+    expect([at.parent, ...at.rest]).toEqual([n1.baseCommit, ...FIXED]);
+    expect(at.sha).toBe(startOf(out, 'A2', 't1').sha);
+  }, 300_000);
 });

@@ -31,7 +31,7 @@ if (process.argv.includes('probe')) {
     cutoffOnDisk: fs.existsSync('cutoff.txt'), cutoffStaged: out(git('ls-files', '--', 'cutoff.txt')) !== '',
     cachedStatus: git('diff', '--cached', '--name-only').status, stagedA: out(git('show', ':a.txt')), diskA: fs.existsSync('a.txt') ? fs.readFileSync('a.txt', 'utf8').trim() : null,
     kept: fs.existsSync('kept.txt'), claudeMd: fs.readFileSync('CLAUDE.md', 'utf8'),
-    logAll: out(git('log', '--all', '--format=%s')), reflog: out(git('reflog', '--all', '--format=%s')),
+    logAll: out(git('log', '--all', '--format=%s')), reflog: out(git('reflog', '--all', '--format=%s')), sincePre: out(git('log', '--format=%s', `${process.env.CHECK_PRE_COMMIT}..HEAD`)),
     cutCommitAlive: cut ? git('cat-file', '-e', cut).status === 0 : null,
     refs: out(git('for-each-ref', '--format=%(refname)')),
   });
