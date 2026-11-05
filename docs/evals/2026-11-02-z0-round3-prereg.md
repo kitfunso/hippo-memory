@@ -82,6 +82,14 @@ The `z0/r3` analyzer change and its hash, then dev rounds, then the freeze, then
 - **Waves.** A repository starts its scored run when its set N proof and its leak probe pass. The wave 1 power read of item 6 uses the repositories that finish first.
 - **Fewer than 50 repositories.** The run goes ahead at the count reached, and the sizer reruns at that count, as the Limits section says. The result reports the power at that count.
 
+**Amendment D (5 Nov 2026, under the founder's Amendment C answer; this session made each pick below before any scored session ran):**
+- **Instruction files are committed before each session.** The runner wrote hippo's `CLAUDE.md` block (A2, A5), A4's taught rules and the carry into the work tree and left them uncommitted. So every such session showed them in `git status` and `git diff`, which a real user who commits these files once never sees. A parallel session (`c4d04db1`) raised it. Runner fix `04835462b` on `z0/r3-cleanclaude`, off `0a0066195`, commits only the files `git status` shows, with a fixed identity and dates, and moves `pre` onto that commit. So a checker's `pre..HEAD` still lists only the agent's commits. A0, and A1 with no carried edit, make no git call. Only `scripts/token-eval/` changes, and the dist hash stays `97ba0e9b48a27a66527c52c59462fd455395512101c98e2b19768afb32d6b1dd`. Pins: `C:/z0-runs/scored/pins-r3c.json`.
+- **What the fix changes for hippo.** `hippo context --auto` builds its query from `git diff --name-only HEAD`. A2 and A5 used to get "CLAUDE" from the uncommitted block, and now they get the query a real user gets. Round 2's A2 and A5 sessions ran with the old query.
+- **Tests of the fix.** Its new unit test and its two run-level tests pass. 18 older eval tests timed out on the loaded box with the fix, and the same tests time out without it. They have not run on a quiet box.
+- **Leak probes already started stay.** `db3`, `gr3` and `hu3` started on `0a0066195`. Their verdicts only decide whether set R enters wave 1.
+- **The leak probe covers set R only.** `wave1-gate-r3.mjs` reads only the 2 set R families, and wave 1 holds only their lessons. So the probe now runs those 2 families, chosen by `setr-ids.mjs` with the gate's rule, and its store matches the store wave 1 builds. The lane runs 4 probes at once and takes repositories with a passed set N proof first.
+- **Upstream pauses for the box check.** At 14:20 the scored run's box check failed on `db3`, with bare launches at a median of 2,407 ms against the 150 ms limit, from the load of the upstream lanes. The set N, screen and re-prove lanes stopped at 14:25, with 26 set N proofs passed. Jobs already running finish. The lanes restart only if the wave 1 power read needs more repositories.
+
 ## Stages and their checks
 
 | Stage | Check that closes it |
