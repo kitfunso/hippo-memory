@@ -7,12 +7,11 @@ import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { DatabaseSync, type DatabaseSyncLike } from '../../src/db/sqlite.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { ensureMetaTable, setSchemaVersion } from '../../src/db/meta.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from '../../src/db/migrations/index.js';
-import { SCHEMA_PROBE_SQL } from '../../src/db/migrate.js';
-import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/required-objects.js';
+import { runMigrations } from '../../src/db/migrate.js';
 import { waitFor } from '../_helpers/wait-for.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 let root: string;
 let holder: DatabaseSyncLike | undefined;
@@ -96,14 +95,12 @@ describe('an open heals missing tables under the write lock', () => {
   });
 
   it('opens a store with no healed table missing while another process holds the lock', async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-heal-lock-'));
-    closeHippoDb(openHippoDb(root));
+    root = makeRoot('heal-lock');
     holder = new DatabaseSync(join(root, 'hippo.db'));
     // A store that lost compactions stays on the slow open for good, so it must not need the lock.
     holder.exec('DROP TABLE compactions');
-    // SAFETY: the probe always answers one row with an objects count.
-    const probe = holder.prepare(SCHEMA_PROBE_SQL).get() as { objects: number };
-    expect(probe.objects).toBeLessThan(REQUIRED_SCHEMA_OBJECTS.length);
+    // Null means the open could not take the fast path, which is what this test needs.
+    expect(runMigrations(holder)).toBeNull();
     holder.exec('BEGIN IMMEDIATE');
 
     const result = await openInChild(join(root, 'ready'), 1000);
