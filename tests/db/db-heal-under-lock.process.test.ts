@@ -10,6 +10,8 @@ import { DatabaseSync, type DatabaseSyncLike } from '../../src/db/sqlite.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { ensureMetaTable, setSchemaVersion } from '../../src/db/meta.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from '../../src/db/migrations/index.js';
+import { SCHEMA_PROBE_SQL } from '../../src/db/migrate.js';
+import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/required-objects.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
 let root: string;
@@ -99,6 +101,9 @@ describe('an open heals missing tables under the write lock', () => {
     holder = new DatabaseSync(join(root, 'hippo.db'));
     // A store that lost compactions stays on the slow open for good, so it must not need the lock.
     holder.exec('DROP TABLE compactions');
+    // SAFETY: the probe always answers one row with an objects count.
+    const probe = holder.prepare(SCHEMA_PROBE_SQL).get() as { objects: number };
+    expect(probe.objects).toBeLessThan(REQUIRED_SCHEMA_OBJECTS.length);
     holder.exec('BEGIN IMMEDIATE');
 
     const result = await openInChild(join(root, 'ready'), 1000);
