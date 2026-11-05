@@ -55,8 +55,7 @@ interface ChainObject {
 let chainObjects: ReadonlyMap<string, ChainObject> | undefined;
 
 // Before the loop on stamped stores: the chain never re-runs a stamped migration, and v4/v16/v22
-// ALTER or read these tables. IF NOT EXISTS because this runs outside the migration lock, where two
-// processes may heal one store.
+// ALTER or read these tables. Call it under the write lock, so its check and its CREATE see one state.
 export function ensureContinuityTables(db: DatabaseSyncLike): void {
   const missing = new Set<string>(HEALED_TABLES.filter((table) => !tableExists(db, table)));
   if (missing.size === 0) return;

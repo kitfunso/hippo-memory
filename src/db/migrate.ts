@@ -192,7 +192,11 @@ function migrateAndHeal(
   assertBinaryCompatible(db);
 
   let currentVersion = getSchemaVersion(db);
-  if (currentVersion > 0) ensureContinuityTables(db);
+  // Under the lock: another process's migration can make an old-shape table between the check and
+  // the CREATE, and the chain's index on a newer column then fails.
+  if (currentVersion > 0) {
+    withWriteScope(db, 'heal_tables', () => ensureContinuityTables(db), { busyWaitMs });
+  }
   for (const migration of MIGRATIONS) {
     if (migration.version <= currentVersion) continue;
     currentVersion = applyMigration(db, migration, hippoRoot, busyWaitMs);
