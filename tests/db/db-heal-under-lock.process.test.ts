@@ -59,7 +59,7 @@ function openInChild(ready: string, busyWaitMs: number): Promise<Opened> {
     let stderr = '';
     spawned.stdout.on('data', (chunk) => (stdout += String(chunk)));
     spawned.stderr.on('data', (chunk) => (stderr += String(chunk)));
-    spawned.on('exit', (code) => resolve({ code, stderr, ...(code === 0 ? JSON.parse(stdout) : {}) }));
+    spawned.on('exit', (code) => resolve(code === 0 ? { code, stderr, ...JSON.parse(stdout) } : { code, stderr }));
   });
 }
 
