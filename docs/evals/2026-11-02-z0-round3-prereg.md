@@ -74,6 +74,14 @@ The `z0/r3` analyzer change and its hash, then dev rounds, then the freeze, then
 - **Analysis.** Every session stays in the primary analysis, because dropping sessions from hippo arms only would bias the result. A second read without the cancelled sessions is reported as a sensitivity read, with no verdict.
 - **Runner fix, no build change.** `exec.mjs:98` retries git lock faults with a pattern that holds lowercase `unable to write new index file`, but git prints `Unable`, and `update_ref failed` is not in it. These faults stopped the `q110` screen, the `q79` probe, the `q133` probe and the `hu3` screen. The pattern is fixed on the run branch before the scored run, because `ab-run` has no resume. Only `scripts/token-eval/` changes, so the dist hash does not.
 
+**Amendment C (5 Nov 2026, founder: "YOU ARE DRIVING THIS MY GUY, DECIDE WHAT'S BEST FOR US. I NEED THE EVAL RESULTS"; this session made each pick below):**
+- **Build.** The scored run uses `z0-r3-freeze` (`cb992a079`, hippo 3.3.1) with the runner fix `0a0066195`. The fix changes `scripts/token-eval/` only, so the dist hash does not change. The 3.3.2 port (`5e594658c`) is not used, for two reasons. A build change after the freeze needs a new freeze. Also, the no-model reach check showed 22 of 46 taught rules reach the agent on 3.3.2, against 38 of 46 on the frozen build. The result therefore describes the 3.3.1 pinned capture route, not master after 3.3.2.
+- **Amendment B is approved** as written. Its runner fix is `0a0066195`.
+- **The budget is approved** on the subscriptions, as the founder answer above says.
+- **Set N is authored only.** No porter runs in round 3. Each repository whose screen keeps 2 or more families gets one blind set N author, who writes 8 new tasks. `C:/z0-runs/scored/r3-setn-lane.ps1` writes an empty porter record, so `s3x-setn-fill.mjs` gives the Part 2 brief only. The reason is time: the porter needs a hand-written test command for each repository, and round 3 has about 40 repositories on many toolchains. Round 2's rustfs ran all-authored under the same rule. The merge, the set N proof and the first-6 rule do not change. This pick reads no arm result.
+- **Waves.** A repository starts its scored run when its set N proof and its leak probe pass. The wave 1 power read of item 6 uses the repositories that finish first.
+- **Fewer than 50 repositories.** The run goes ahead at the count reached, and the sizer reruns at that count, as the Limits section says. The result reports the power at that count.
+
 ## Stages and their checks
 
 | Stage | Check that closes it |
