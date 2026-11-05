@@ -12,7 +12,11 @@ import {
   setSchemaVersion,
   META_KEY,
 } from './meta.js';
-import { ensureContinuityIndexes, ensureContinuityTables } from './continuity-tables.js';
+import {
+  ensureContinuityIndexes,
+  ensureContinuityTables,
+  missingHealedTables,
+} from './continuity-tables.js';
 import {
   MEMORIES_FTS_DDL,
   ensureTrigramIndex,
@@ -193,8 +197,9 @@ function migrateAndHeal(
 
   let currentVersion = getSchemaVersion(db);
   // Under the lock: another process's migration can make an old-shape table between the check and
-  // the CREATE, and the chain's index on a newer column then fails.
-  if (currentVersion > 0) {
+  // the CREATE, and the chain's index on a newer column then fails. A store with none missing takes
+  // no lock, since some stores stay on this path for good.
+  if (currentVersion > 0 && missingHealedTables(db).size > 0) {
     withWriteScope(db, 'heal_tables', () => ensureContinuityTables(db), { busyWaitMs });
   }
   for (const migration of MIGRATIONS) {
