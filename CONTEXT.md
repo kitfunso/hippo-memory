@@ -36,7 +36,13 @@ replacement. Context never injects it; recall and explain skip it unless asked
 (`--include-superseded`, `--as-of`).
 Only an explicit supersede sets it today (`hippo supersede`, `POST /v1/memories/:id/supersede`).
 ROADMAP Z6's "retired" means superseded or invalidated, never deleted.
+Any `superseded_by` value marks it, even an empty one.
 _Avoid_: deduped (sleep's dedup deletes a near-copy outright), dormant, stale
+
+**Live memory**:
+A memory that is not superseded, is a raw receipt or distilled, and is not quarantined. The
+dashboard shows and counts only live memories.
+_Avoid_: current memory, active memory (a task snapshot's status)
 
 **Raw receipt**:
 A `kind='raw'` memory: a connector message or imported note, append-only. Sleep never

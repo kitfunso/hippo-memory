@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { v61 } from '../../src/db/migrations/v61.js';
+import { CURRENT_DISTILLED } from '../../src/db/sql-predicates.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
@@ -93,6 +94,21 @@ describe('migration v61', () => {
       expect(result.rows.map((row) => row.content).sort()).toEqual(['a  b\tc', 'ab c']);
       const keyRead = statements.find((sql) => sql.includes('HAVING COUNT(*) > 1'));
       expect(plan(db, keyRead!)).toMatch(/USING (COVERING )?INDEX idx_memories_duplicate_hash/);
+    });
+  });
+
+  it('plans the duplicate scan onto the index, whose stored text is the v61 literal and not the scan predicate', () => {
+    withDb(makeRoot('migration-v61-scan-plan'), (db) => {
+      const scan =
+        `SELECT duplicate_hash AS k FROM memories WHERE ${CURRENT_DISTILLED} AND duplicate_hash > ? ` +
+        `GROUP BY duplicate_hash HAVING COUNT(*) > 1 ORDER BY duplicate_hash LIMIT ?`;
+      expect(plan(db, scan)).toMatch(/USING (COVERING )?INDEX idx_memories_duplicate_hash/);
+      // SAFETY: the SELECT names one TEXT column, sql.
+      const index = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_memories_duplicate_hash'`).get() as {
+        sql: string;
+      };
+      expect(index.sql).toContain(`COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''`);
+      expect(index.sql).not.toContain('superseded_by IS NULL');
     });
   });
 

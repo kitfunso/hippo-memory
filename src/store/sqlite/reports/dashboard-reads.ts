@@ -37,14 +37,13 @@ import {
   useDashboardFunctions,
 } from './dashboard-functions.js';
 import { MemoryLists } from './dashboard-lists.js';
+import { IN_PROJECT, LIVE, OPEN_PAIRS } from './dashboard-sql.js';
 import {
-  IN_PROJECT,
   kindIn,
-  LIVE,
-  OPEN_PAIRS,
   quarantinedIn,
   supersededIn,
-} from './dashboard-sql.js';
+  supersededKindIn,
+} from '../../../db/sql-predicates.js';
 import { handlesOf, openStore } from '../runtime/handles.js';
 import { answered, bound } from '../runtime/bound.js';
 
@@ -59,11 +58,12 @@ const noneExcluded = (): ExcludedCounts => ({
 });
 
 function excluded(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
-  // SAFETY: `why` is one of the three CASE arms or NULL.
+  // SAFETY: `why` is one of the three CASE arms or NULL. The kind arm counts a `--kind superseded` row,
+  // which hippo remember saves with no successor link.
   const counts = cachedStatement(
     db,
     `SELECT CASE WHEN ${quarantinedIn('')} THEN 'quarantined' ` +
-      `WHEN ${supersededIn('')} OR ${kindIn('')} = 'superseded' THEN 'superseded' ` +
+      `WHEN ${supersededIn()} OR ${supersededKindIn('')} THEN 'superseded' ` +
       `WHEN ${kindIn('')} = 'archived' THEN 'archived' END AS why, COUNT(*) AS n ` +
       `FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why`,
   ).all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;

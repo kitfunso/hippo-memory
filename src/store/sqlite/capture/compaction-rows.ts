@@ -3,6 +3,7 @@
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 import type { CompactionOrigin } from '../../../base/ports/store/project-tags.js';
 import type { OriginMoveOptions } from '../entries/entry-writes.js';
 
@@ -287,7 +288,7 @@ export function heldMemoryRows(
   return cachedStatement(
     db,
     `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND ` +
-      `superseded_by IS NULL AND kind != 'raw'
+      `${notSupersededIn()} AND kind != 'raw'
        AND ${deny.sql}`,
   ).all(tenantId, ...origins, ...deny.params) as HeldMemoryRow[];
 }

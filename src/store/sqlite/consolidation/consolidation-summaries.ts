@@ -18,6 +18,7 @@ import { keysetPage } from '../../../base/util/keyset.js';
 import { recordAuditEventsRowByRow } from '../audit/audit.js';
 import { reportAuditWriteFailure } from '../../../base/records/audit-report.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 import type {
   DirtySummaries,
   SummarySettle,
@@ -45,7 +46,7 @@ export function listL2SummariesPage(
      WHERE dag_level = ${DAG_LEVEL.topic}
        AND dag_parent_id IS NULL
        AND kind != 'archived'
-       AND superseded_by IS NULL
+       AND ${notSupersededIn()}
        ${range}
      ORDER BY created ASC, id ASC
      LIMIT ?
@@ -102,7 +103,7 @@ function childrenOfSummaries(
          WHERE dag_parent_id IN (SELECT value FROM json_each(?))
            AND tenant_id = ?
            AND kind != 'archived'
-           AND superseded_by IS NULL
+           AND ${notSupersededIn()}
          ORDER BY created ASC, id ASC
       `,
       ).all(JSON.stringify(slice), tenantId) as MemoryRow[];

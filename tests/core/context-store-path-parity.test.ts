@@ -71,7 +71,7 @@ const ALL_BLOCKS: readonly Block[] = ['activeSnapshot', 'sessionHandoff', 'recen
 
 const CASES: readonly Case[] = [
   {
-    name: 'no query, with the active session',
+    name: 'no query, with the active session, a blank superseded link read as superseded',
     opts: { currentSessionId: SESSION },
     expected: {
       ids: [
@@ -84,7 +84,6 @@ const CASES: readonly Case[] = [
         'mem_a_global_2',
         'mem_a_team',
         'mem_a_new',
-        'mem_a_blank',
         'mem_a_archived',
         'mem_a_secret_own',
         'mem_g_pin',
@@ -92,10 +91,10 @@ const CASES: readonly Case[] = [
         'mem_a_decayed',
         'mem_a_flat',
       ],
-      tokens: 253,
+      tokens: 241,
       blocks: ALL_BLOCKS,
-      traced: 21,
-      recalled: 21,
+      traced: 20,
+      recalled: 20,
       globalRetrieved: ['mem_g_note', 'mem_g_pin'],
     },
     reaches: (p) => {
@@ -181,7 +180,7 @@ const CASES: readonly Case[] = [
     storeReads: ['ambientCandidates'],
   },
   {
-    name: 'shared store, member keyed by owner',
+    name: 'shared store, member keyed by owner, a blank superseded link read as superseded',
     opts: {},
     expected: {
       ids: [
@@ -195,16 +194,15 @@ const CASES: readonly Case[] = [
         'mem_a_team',
         'mem_a_alice',
         'mem_a_new',
-        'mem_a_blank',
         'mem_a_archived',
         'mem_a_secret_own',
         'mem_a_decayed',
         'mem_a_flat',
       ],
-      tokens: 241,
+      tokens: 229,
       blocks: ALL_BLOCKS,
-      traced: 20,
-      recalled: 20,
+      traced: 19,
+      recalled: 19,
     },
     actor: ALICE,
     shared: true,
