@@ -23,9 +23,8 @@ type Reader = (typeof READERS)[number];
 const ROWS = ['live', 'superseded', 'successor', 'quarantined', 'raw', 'kindSuperseded', 'blank'] as const;
 type Row = (typeof ROWS)[number];
 
-// What each row must be to each reader: in its answer or not. entriesWhere({ live }) tests the link alone, so it keeps a
-// quarantined row the scope-aware readers drop. A kind 'superseded' row is left open for all but the dashboard and
-// isLiveMemory: recall search keeps it today.
+// entriesWhere({ live }) tests the link alone, so it keeps a quarantined row the scope-aware readers drop. A kind
+// 'superseded' row is left open for all but the dashboard and isLiveMemory: recall search keeps it today.
 const EXPECTED = {
   live: { entries: true, context: true, recall: true, dashboard: true, liveness: true },
   superseded: { entries: false, context: false, recall: false, dashboard: false, liveness: false },
@@ -122,11 +121,12 @@ async function ask(root: string, ids: Record<Row, string>): Promise<Answers> {
 }
 
 describe('liveness agreement across readers', () => {
+  let root: string;
   let ids: Record<Row, string>;
   let answers: Answers;
 
   beforeAll(async () => {
-    const root = makeRoot('liveness-agreement');
+    root = makeRoot('liveness-agreement');
     ids = await seed(root);
     answers = await ask(root, ids);
   });
@@ -143,5 +143,11 @@ describe('liveness agreement across readers', () => {
     expect(answers.totals.projects.map((p) => [p.origin, p.live])).toEqual([[PROJECT, live.length]]);
     // Superseded: the linked row, the blank-linked row and the kind 'superseded' row.
     expect(answers.totals.excluded).toEqual({ superseded: 3, archived: 0, quarantined: 1 });
+  });
+
+  it('refuses to supersede the blank-linked row without naming an empty successor', async () => {
+    await expect(supersede(apiCtx(root, TENANT), ids.blank, 'beacon late note')).rejects.toThrow(
+      `Memory ${ids.blank} is already superseded.`,
+    );
   });
 });

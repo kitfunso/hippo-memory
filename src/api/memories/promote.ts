@@ -165,8 +165,11 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
   // The CAS UPDATE closes the race; this check only gives a clearer error in the common
   // single-writer case.
   if (isSuperseded(row)) {
+    const by = row.supersededBy;
     throw new ConflictError(
-      `Memory ${oldId} is already superseded by ${row.supersededBy}. Supersede that one instead.`,
+      by === ''
+        ? `Memory ${oldId} is already superseded.`
+        : `Memory ${oldId} is already superseded by ${by}. Supersede that one instead.`,
     );
   }
   return row;

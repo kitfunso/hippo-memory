@@ -96,9 +96,8 @@ function linkReads(): Map<string, string[]> {
 const TRIGGER = 'frozen trigger text on a record table, never a memory';
 const RECORD = 'a record row (decision, policy, entity), not a memory';
 
-/** The files that keep reads at the end state: exact counts, so a value use that turns into a truthy
- * test, or a new read anywhere, fails. A boolean reading of a memory never goes in here: it is
- * `isSuperseded`. */
+/** Exact counts, so a value use that turns into a truthy test fails; a boolean reading of a memory
+ * never goes in here, it is `isSuperseded`. */
 const KEPT_READS = {
   'api/memories/promote.ts': { reads: 1, why: 'the already-superseded message names the successor id' },
   'api/recall/rows.ts': { reads: 2, why: 'the wire row copies the link: assignment target and value' },
