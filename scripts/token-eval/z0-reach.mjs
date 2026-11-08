@@ -138,9 +138,21 @@ export function messageTexts(messages) {
   return texts;
 }
 
-/** Message texts as the model saw them: each text part once, and once more decoded when the part is itself a JSON string. */
+/** A text part that is itself a JSON string, decoded; any other part comes back as it was. */
+function decodedText(text) {
+  const quoted = text.trim();
+  if (!JSON_STRING.test(quoted)) return text;
+  try {
+    return JSON.parse(quoted);
+  } catch {
+    // The text only looked like a JSON string (a quoted Windows path, a literal newline), so it is plain text.
+    return text;
+  }
+}
+
+/** Message texts as the model saw them, one per text part; a JSON-encoded part is read decoded and its encoded copy is dropped. */
 export function bodyTexts(messages) {
-  return messageTexts(messages).flatMap((t) => (JSON_STRING.test(t.trim()) ? [t, JSON.parse(t.trim())] : [t]));
+  return messageTexts(messages).map(decodedText);
 }
 
 /** The main agent's calls carry more than 3 tools; the other model calls are its helpers. */

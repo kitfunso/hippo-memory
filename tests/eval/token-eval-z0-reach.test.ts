@@ -61,10 +61,10 @@ interface Report {
   headroom: { unit: string };
 }
 interface Options {
-  teachForm?: string | null; withA5Log?: boolean; duplicateA2?: boolean; withPhrase?: boolean; phrase?: string; a2Texts?: string[]; a5First?: First; extra?: Rec[];
+  teachForm?: string | null; withA5Log?: boolean; duplicateA2?: boolean; withPhrase?: boolean; phrase?: string; a2Texts?: (string | string[])[]; a5First?: First; extra?: Rec[];
 }
 interface Phrase { id: string; keyPhrase: string }
-interface LogFile { file: string; texts: string[] }
+interface LogFile { file: string; texts: (string | string[])[] }
 interface Read { code: number; stderr: string; report: Report }
 interface Dupes { duplicatePair: string[] }
 interface RouteCase { lessonId: string; phrase: string; a2: First; a5: First; a2Texts: string[] }
@@ -85,8 +85,10 @@ function rec(arm: string, kind: 'teach' | 'apply', position: number, extra: Part
   return r;
 }
 
-const logLine = (text: string): string => {
-  const body = JSON.stringify({ tools: [{}, {}, {}, {}], messages: [{ role: 'user', content: [{ type: 'text', text }] }] });
+/** One logged request; an array puts several text parts in the same request, as a real session's history does. */
+const logLine = (parts: string | string[]): string => {
+  const content = (Array.isArray(parts) ? parts : [parts]).map((text) => ({ type: 'text', text }));
+  const body = JSON.stringify({ tools: [{}, {}, {}, {}], messages: [{ role: 'user', content }] });
   return JSON.stringify({ method: 'POST', url: '/v1/messages?beta=true', body });
 };
 
@@ -143,15 +145,22 @@ function read(dir: string): Read {
 const message = (text: string) => [{ role: 'user', content: [{ type: 'text', text }] }];
 
 describe('Z0 lesson reach pure parts', () => {
-  it('reads a text part that is itself a JSON string twice, and leaves backslash sequences in plain text alone', () => {
+  it('reads a text part that is itself a JSON string as its decoded text only, and leaves backslash sequences in plain text alone', () => {
     const inner = 'say "hi"\n## Rules from the user\n- No: run uv run\n- keep short\n';
     const quoted = JSON.stringify(inner);
     expect(bodyTexts(message(inner))).toEqual([inner]);
-    expect(bodyTexts(message(quoted))).toEqual([quoted, inner]);
+    expect(bodyTexts(message(quoted))).toEqual([inner]);
     expect([...ruleLinesOf(quoted)]).toEqual([]);
     expect([...ruleLinesOf(inner)]).toEqual(['- No: run uv run', '- keep short']);
     const digest = 'the digest holds a\\nb as typed';
     expect(bodyTexts(message(digest))).toEqual([digest]);
+  });
+
+  it('keeps a quoted text that is not valid JSON as plain text', () => {
+    const winPath = '"C:\\Users\\x"';
+    const newline = '"first\nsecond"';
+    expect(bodyTexts(message(winPath))).toEqual([winPath]);
+    expect(bodyTexts(message(newline))).toEqual([newline]);
   });
 
   it('classes an entry by its tag list in the fixed order', () => {
@@ -279,6 +288,20 @@ describe('Z0 lesson reach read', () => {
       expect(report.rules.allLessons['No-lead']?.A2).toEqual({ lessons: 1, failed: 0 });
       expect(report.hippoReach.routes).toMatchObject({ ruleLine: 1, neither: 0 });
     }
+  });
+
+  it('finishes the read when a request holds a quoted text that is not valid JSON', () => {
+    const { code, report } = read(scoredDir({ a2Texts: [[BLOCK_TEXT, '"C:\\Users\\x"', '"first\nsecond"']] }));
+    expect(code).toBe(0);
+    expect(report.blocks).toMatchObject({ withBlock: 1, distinctBlocks: 1, entries: 2 });
+    expect(report.rules.allLessons['No-lead']?.A2).toEqual({ lessons: 1, failed: 0 });
+  });
+
+  it('counts a block delivered as a JSON-encoded text part once', () => {
+    const { code, report } = read(scoredDir({ a2Texts: [[JSON.stringify(BLOCK_TEXT), 'a later message']] }));
+    expect(code).toBe(0);
+    expect(report.blocks).toMatchObject({ withBlock: 1, distinctBlocks: 1, sessionsWithSeveralBlocks: 0, entries: 2, declaredEntries: 2, entryMismatches: [] });
+    expect(report.rules.allLessons['No-lead']?.A2).toEqual({ lessons: 1, failed: 0 });
   });
 
   it('sorts four lessons into ruleLine, hookBlock, both and neither, and pairs them with A5 at the same positions', () => {
