@@ -1,6 +1,7 @@
 // The status guard sits in the UPDATE: a row outside a transition's from-set is left alone, and a one-row move on it throws.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
+import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { onHandle } from '../_helpers/test-session.js';
 import { withWriteScopeOr, type DatabaseSyncLike, type SqlValue } from '../../src/db/index.js';
 import {
@@ -170,8 +171,8 @@ const MOVES: Moves = {
     one: (id) => ({ tenantId: TENANT, id, to: 'active' }),
   },
   conflictStale: {
-    many: (ids, to) => ({ ids, to: to as 'resolved', set: { updated_at: STAMP } }),
-    one: (id) => ({ id, to: 'resolved', set: { updated_at: STAMP } }),
+    many: (ids, to) => ({ tenantId: ALL_TENANTS, ids, to: to as 'resolved', set: { updated_at: STAMP } }),
+    one: (id) => ({ tenantId: ALL_TENANTS, id, to: 'resolved', set: { updated_at: STAMP } }),
   },
   quarantineApprove: {
     many: (ids, to) => ({

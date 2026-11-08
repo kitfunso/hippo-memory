@@ -32,7 +32,7 @@ export type ConflictStatus = (typeof CONFLICT_STATUSES)[number];
 export interface ConflictListQuery {
   /** ALL_TENANTS is host admin, which the api checks. */
   readonly tenantId: TenantId;
-  /** '*' reads every status. */
+  /** Open, resolved, or '*' for every status. */
   readonly status: string;
   readonly limit: number;
   /** Resume after this (updatedAt, id) position; the list runs newest change first. */

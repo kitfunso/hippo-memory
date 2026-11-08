@@ -13,7 +13,7 @@ import {
   META_KEY,
 } from './meta.js';
 import {
-  ensureContinuityIndexes,
+  ensureContinuityObjects,
   ensureContinuityTables,
   missingHealedTables,
 } from './continuity-tables.js';
@@ -208,7 +208,7 @@ function migrateAndHeal(
   }
   healUserVersion(db, currentVersion, busyWaitMs);
 
-  ensureContinuityIndexes(db);
+  ensureContinuityObjects(db);
   ensureMetaDefaults(db);
   ensureOptionalFts(db);
 }

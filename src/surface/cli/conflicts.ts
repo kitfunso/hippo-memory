@@ -16,8 +16,21 @@ import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import { printJsonList } from './json-list.js';
 import { fail } from './exit.js';
+import { CONFLICT_STATUSES, type ConflictStatus } from '../../base/ports/store/conflicts.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;
+
+/** `--status` as a conflict status or '*', or exit 1 with the message that lists every allowed value. */
+function conflictStatusFilter(status: string): ConflictStatus | '*' {
+  if (status === '*') return status;
+  const found = CONFLICT_STATUSES.find((s) => s === status);
+  if (found === undefined) {
+    fail(
+      `Invalid --status: "${status}". Must be one of: ${[...CONFLICT_STATUSES, '*'].join(' | ')}.`,
+    );
+  }
+  return found;
+}
 
 export async function handleConflicts({
   hippoRoot,
@@ -26,7 +39,7 @@ export async function handleConflicts({
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  const status = stringFlagOrExit(flags, 'status') ?? 'open';
+  const status = conflictStatusFilter(stringFlagOrExit(flags, 'status') ?? 'open');
   const ctx = cliApiContext(hippoRoot, tenantId);
   const read = (page: api.ConflictPageOptions) =>
     api.conflictList(ctx, status, { everyTenant: true }, page);

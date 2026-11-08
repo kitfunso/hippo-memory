@@ -3,6 +3,7 @@ import type { DatabaseSyncLike, SqlResult } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { SNAPSHOT_CLOSE_STATUSES } from '../../../base/ports/store/sessions.js';
+import type { ALL_TENANTS, TenantId } from '../../../base/util/tenant.js';
 
 // Table, key and column names reach the SQL only through this map, never from a caller.
 const TRANSITIONS = {
@@ -72,7 +73,7 @@ type SetOf<N extends TransitionName> = Transitions[N]['set'][number];
 
 type TenantPart<N extends TransitionName> = Transitions[N]['tenant'] extends true
   ? { readonly tenantId: string }
-  : { readonly tenantId?: undefined };
+  : { readonly tenantId: typeof ALL_TENANTS };
 
 type SetPart<N extends TransitionName> = [SetOf<N>] extends [never]
   ? { readonly set?: undefined }
@@ -102,7 +103,7 @@ interface Spec {
 interface LooseMove {
   readonly to: string;
   readonly ids: readonly (string | number)[];
-  readonly tenantId?: string;
+  readonly tenantId: TenantId;
   readonly set?: Readonly<Record<string, SqlResult>>;
 }
 
@@ -115,12 +116,16 @@ function updateSql(spec: Spec): string {
   );
 }
 
+/** The error for a target status outside the transition's list, naming the statuses allowed. */
+export function badStatusTarget(name: TransitionName, to: string): Error {
+  const spec: Spec = TRANSITIONS[name];
+  return new Error(`invalid ${spec.table} status "${to}": use ${spec.to.join(' | ')}`);
+}
+
 function applyMove(db: DatabaseSyncLike, name: TransitionName, move: LooseMove): number {
   const spec: Spec = TRANSITIONS[name];
   const { to, ids, tenantId, set = {} } = move;
-  if (!spec.to.includes(to)) {
-    throw new Error(`invalid ${spec.table} status "${to}": use ${spec.to.join(' | ')}`);
-  }
+  if (!spec.to.includes(to)) throw badStatusTarget(name, to);
   if (ids.length === 0) return 0;
   const params = [
     to,
