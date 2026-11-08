@@ -429,8 +429,8 @@ async function rebuildIsolated(options: RebuildOneSummaryOptions): Promise<void>
   try {
     await rebuildOneSummary(options);
   } catch (err) {
-    // One throw doesn't abort the queue; log enough to triage an exotic failure (store I/O,
-    // prepare), since audit() already catches its own.
+    // A throw counts toward the hold: it mostly follows a paid model call, and one that repeats on
+    // this row would otherwise cost a call every sleep.
     result.failed++;
     counted.push(nextFailure(options));
     log.error(

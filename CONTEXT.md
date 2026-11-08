@@ -31,9 +31,11 @@ failure. `hippo sleep` shows `N held` in the DAG rebuild line.
 _Avoid_: backoff state, retry lock, quarantine
 
 **Empty extraction mark**:
-Sleep's note that extraction found nothing to keep in a source memory's current text. Sleep skips
-the source until its text changes or 30 days pass, and the sleep result counts it in
-`extractionHeld`. Later memories are offered in its place.
+Sleep's note that extraction found nothing to keep in a source memory's current text: the model
+returned an empty array, or every fact it returned was refused by a rejected value. A reply whose
+facts fail the quality check leaves the source unmarked. Sleep skips the source until its text
+changes or 30 days pass, and the sleep result counts it in `extractionHeld`. Later memories are
+offered in its place.
 _Avoid_: zero-fact tag, extracted flag
 
 **Churn-stale memory**:

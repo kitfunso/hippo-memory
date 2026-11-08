@@ -138,6 +138,20 @@ describe('Empty extraction marks', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('does not mark a source whose facts all fail the quality check', async () => {
+    writeEntry(tmpDir, episodic(SOURCE));
+    // Ends on "to be", a cut-off sentence the quality check rejects.
+    const fetcher = makeOkFetcher(
+      JSON.stringify([{ content: 'Found local migration files to be', tags: [], valence: 'neutral' }]),
+    );
+
+    await sleepAt(fetcher);
+    const second = await sleepAt(fetcher);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(second).toMatchObject({ extractionCandidates: 1, extractionHeld: 0 });
+  });
+
   it.each([
     ['an empty reply', ''],
     ['a reply that is not an array', '{}'],

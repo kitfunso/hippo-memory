@@ -7,7 +7,7 @@ import { extractFactsOutcome, storeExtractedFacts, type ExtractedFact } from '..
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { blockHash } from '../../base/util/token-text.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import { isReusable } from '../../base/memory/memory-quality.js';
+import { certainDefect, isReusable } from '../../base/memory/memory-quality.js';
 import {
   isPermanentFailure,
   llmFailureFields,
@@ -177,8 +177,14 @@ interface EmptyNote {
   clear: string[];
 }
 
-/** Notes what a finished call says about its source: nothing to keep marks it, a stored child clears
- * any mark, and a reply that says neither way (empty, non-array, unusable items) leaves it. */
+/** Whether nothing was stored only because rejected values refused every fact: none has a quality
+ * defect, which would be bad model output worth a retry. */
+function refusedByRejectedValue(facts: Extraction['facts']): boolean {
+  return facts.length > 0 && facts.every((fact) => certainDefect(fact.content) === null);
+}
+
+/** A stored child clears the source's mark. An explicit empty array, or facts that all passed the
+ * quality check and were all refused by a rejected value, marks it; any other reply leaves it. */
 function noteOutcome(
   run: SleepRun,
   note: EmptyNote,
@@ -188,7 +194,7 @@ function noteOutcome(
 ): void {
   if (storedCount > 0) {
     note.clear.push(source.id);
-  } else if (out.emptyArray || out.facts.length > 0) {
+  } else if (out.emptyArray || refusedByRejectedValue(out.facts)) {
     note.mark.push({
       id: source.id,
       digest: blockHash(source.content),

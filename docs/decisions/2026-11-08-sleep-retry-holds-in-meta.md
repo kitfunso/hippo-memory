@@ -22,7 +22,7 @@ Keep both states in per-row `meta` keys, following `mirror_due:<id>`:
 - `rebuild_hold:<summary id>` holds `{"failures": n, "retryAfter": <ISO time or null>}`.
 - `empty_extraction:<source id>` holds `{"digest": <hash of the text>, "at": <ISO time>}`.
 
-The digest is `blockHash` of the content, so any edit, whitespace included, offers the source again. A mark expires after 30 days. A hold starts at the third failure in a row, lasts one day and doubles up to 7 days. A provider failure never counts.
+The digest is `blockHash` of the content, so any edit, whitespace included, offers the source again. A source is marked when the model returns an empty array, or when every fact it returns is refused by a rejected value. A reply whose facts fail the quality check leaves it unmarked, as bad model output is worth a retry. A mark expires after 30 days. A hold starts at the third failure in a row, lasts one day and doubles up to 7 days. A provider failure never counts.
 The marker is therefore a meta key and not a tag. This departs from the acceptance criterion, for the reasons above.
 
 ## Alternatives considered
