@@ -51,16 +51,22 @@ interface EmptyMark {
   readonly at: string;
 }
 
-/** Every empty extraction mark the store holds, by source id; none when the store keeps none. */
+/** Every empty extraction mark the store holds, by source id; none when the store keeps none or
+ * the read fails, since a failed read only costs the sleep the calls the marks would have saved. */
 async function readEmptyMarks({ store }: SleepRun): Promise<Map<string, EmptyMark>> {
   const read = store.consolidation.emptyExtractions?.bind(store.consolidation);
   const marks = new Map<string, EmptyMark>();
   if (read === undefined) return marks;
-  const pages = await readAll(async (after: string | undefined) => {
-    const page = await read({ limit: READ_PAGE_ROWS, after });
-    return { entries: page.marks, next: page.next };
-  });
-  for (const { id, digest, at } of pages) marks.set(id, { digest, at });
+  try {
+    const pages = await readAll(async (after: string | undefined) => {
+      const page = await read({ limit: READ_PAGE_ROWS, after });
+      return { entries: page.marks, next: page.next };
+    });
+    for (const { id, digest, at } of pages) marks.set(id, { digest, at });
+  } catch (err) {
+    log.warn('consolidate extraction could not read empty marks', errorFields(err));
+    marks.clear();
+  }
   return marks;
 }
 

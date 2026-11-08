@@ -285,6 +285,8 @@ describe('Consolidation', () => {
       (_g, s) => s.entryWrites.writeEntry({ entry: laterChild('topicB', TENANT_B), actor: 'cli' }),
       (g) => g.dirtySummaries(10, before),
     ]);
+    // Each note resolved, so the reads below show what it wrote rather than a rejected call.
+    for (const i of [1, 5, 8]) expect(valueAt(sqlite.outcomes, i)).toBeUndefined();
     const clean = { topic: 0, refusing: 0, fresh: 0 };
     expect(dirtyView(sqlite.outcomes, 0)).toEqual({ failures: clean, held: undefined });
     expect(dirtyView(sqlite.outcomes, 2)).toEqual({ failures: { refusing: 0, fresh: 0 }, held: 1 });
@@ -321,6 +323,7 @@ describe('Consolidation', () => {
       (g) => g.noteEmptyExtractions!({ mark: [mark('edited', 'ffffffffffffffff')], clear: [id('kept')] }),
       (g) => g.emptyExtractions!({ limit: 10 }),
     ]);
+    for (const i of [1, 4, 5]) expect(valueAt(sqlite.outcomes, i)).toBeUndefined();
     const marks = (i: number) => valueAt<MarkPage>(sqlite.outcomes, i).marks;
     expect(marks(0).map((m) => m.id)).toEqual([ABSENT, id('replaced')].sort());
     expect(valueAt<MarkPage>(sqlite.outcomes, 2).next).toBe(live[1]);

@@ -9,6 +9,11 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { makeOkFetcher, makeScriptedFetcher, rejectValue } from '../_helpers/dag-rebuild.js';
+import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/host/config-file.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import type { Llm } from '../../src/base/ports/llm.js';
 
 pinClock();
 
@@ -168,5 +173,30 @@ describe('Empty extraction marks', () => {
     expect(first).toMatchObject({ extractionCandidates: 22, extractionHeld: 0, extracted: 0 });
     expect(second).toMatchObject({ extractionCandidates: 2, extractionHeld: 20, extracted: 1 });
     expect(fetcher).toHaveBeenCalledTimes(22);
+  });
+
+  it('offers a marked source again when the marks cannot be read, and the sleep still completes', async () => {
+    writeEntry(tmpDir, episodic(SOURCE));
+    await sleepAt(makeOkFetcher('[]'));
+    const local = sqliteStore(tmpDir);
+    const store = {
+      ...local,
+      consolidation: {
+        ...local.consolidation,
+        emptyExtractions: () => Promise.reject(new Error('meta read failed')),
+      },
+    };
+    const send = vi.fn<Llm['send']>(async () => ({ ok: true, text: '[]' }));
+
+    const result = await runConsolidation(store, {
+      strength: PRODUCTION_STRENGTH,
+      now: FIXED_NOW,
+      config: loadConfig(tmpDir),
+      tenantId: 'default',
+      llm: { send },
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ extractionCandidates: 1, extractionHeld: 0 });
   });
 });
