@@ -7,6 +7,8 @@ import { certainDefect } from '../../base/memory/memory-quality.js';
 export interface DagSummaryOptions {
   llm: Llm;
   model?: string;
+  /** Called once per failed attempt. `failure` is set if and only if the model call itself failed;
+   * a refused reply carries only the message, and a too short one is not reported. */
   onError?: (msg: string, failure?: LlmFailure) => void;
 }
 

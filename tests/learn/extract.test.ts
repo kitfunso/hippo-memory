@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
-import { extractFacts } from '../../src/domain/learn/extract.js';
+import { extractFacts, extractFactsOutcome } from '../../src/domain/learn/extract.js';
 
 function mockFetcher(body: string, ok = true): typeof fetch {
   // A real Response satisfies typeof fetch's return type directly, so no
@@ -93,5 +93,21 @@ describe('extractFacts', () => {
     const facts = await extractFacts('text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toHaveLength(1);
     expect(facts[0]!.valence).toBe('neutral');
+  });
+});
+
+describe('extractFactsOutcome', () => {
+  const valid = { content: 'Alice has a dog named Rex', tags: ['speaker:Alice'], valence: 'neutral' };
+
+  it.each([
+    ['an empty array', '[]', { facts: [], emptyArray: true }],
+    ['an empty reply', '', { facts: [], emptyArray: false }],
+    ['a reply that is not an array', '{}', { facts: [], emptyArray: false }],
+    ['an array of invalid items', '[{"content":"ab"},{"content":42},null]', { facts: [], emptyArray: false }],
+    ['a valid array', JSON.stringify([valid]), { facts: [valid], emptyArray: false }],
+  ])('answers %s with its facts and whether the array was empty', async (_name, reply, expected) => {
+    const llm = anthropicLlm({ apiKey: 'test', fetcher: mockFetcher(reply) });
+
+    expect(await extractFactsOutcome('some text', { llm, onError: () => {} })).toEqual(expected);
   });
 });

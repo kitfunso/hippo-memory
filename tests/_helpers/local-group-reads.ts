@@ -52,6 +52,7 @@ const ACTOR = 'local-group-seed';
 const HOUR_MS = 60 * 60 * 1000;
 const EVER = '2000-01-01T00:00:00.000Z';
 const NEVER = '9999-12-31T23:59:59.999Z';
+const EMPTY_DIGEST = '0123456789abcdef';
 
 const live = (id: string, content: string, over: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory(content, { tenantId: TENANT }),
@@ -85,6 +86,7 @@ export async function seedLocalGroups(root: string): Promise<void> {
     startCompaction(db, TENANT, { ...start, transcriptPath: TRANSCRIPT }, new Date(Date.now() - 2 * HOUR_MS));
   });
   const s = sqliteStore(root);
+  await s.consolidation.noteEmptyExtractions!({ mark: [{ id: NOTE, digest: EMPTY_DIGEST, at: EVER }], clear: [] });
   await s.entryWrites.applyOutcome({ tenantId: TENANT, actor: ACTOR, ownScope: null, ids: [NOTE], good: true });
   // Folds the compaction records' stale project name into the seeded one, which leaves the merge's audit row.
   await s.projectTags.merge(
@@ -110,6 +112,11 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
   read('consolidation.duplicateCandidates', (s) => s.consolidation.duplicateCandidates(), 'mem_z_twin2'),
   read('consolidation.dirtyGraphTenants', (s) => s.consolidation.dirtyGraphTenants(), /maxPendingId: [1-9]/),
   read('consolidation.dirtySummaries', (s) => s.consolidation.dirtySummaries(10), 'mem_x_child1'),
+  read(
+    'consolidation.emptyExtractions',
+    (s) => s.consolidation.emptyExtractions!({ limit: 10 }),
+    `digest: '${EMPTY_DIGEST}'`,
+  ),
   read(
     'consolidation.unprofiledTopicSummaries',
     (s) => s.consolidation.unprofiledTopicSummaries({ limit: 10 }),
