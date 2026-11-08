@@ -6,14 +6,15 @@ export const INVALIDATED_TAG = 'invalidated';
 /** The tag a decision puts on the memory it replaced. */
 export const SUPERSEDED_TAG = 'superseded';
 
-/** The row after an act that withdraws trust in it, marked by tag `marker`: stored tier stale, and
- * half-life halved only the first time that marker lands, so repeating the act changes nothing more. */
+/** The row marked stale under tag `marker`, its half-life halved only when it is not already stale under that
+ * marker: repeating the act changes nothing, and a marker copied onto a fresh row does not block the first halving. */
 export function markStale(entry: MemoryEntry, marker: string): MemoryEntry {
-  if (entry.tags.includes(marker)) return { ...entry, confidence: 'stale' };
+  const tagged = entry.tags.includes(marker);
+  if (tagged && entry.confidence === 'stale') return { ...entry };
   return {
     ...entry,
     confidence: 'stale',
     halfLifeDays: Math.max(1, Math.floor(entry.halfLifeDays / 2)),
-    tags: [...entry.tags, marker],
+    tags: tagged ? entry.tags : [...entry.tags, marker],
   };
 }

@@ -242,4 +242,22 @@ describe('decisions store (first-class object)', () => {
     expect(second.confidence).toBe('stale');
     expect(second.tags.filter((tag) => tag === 'superseded')).toHaveLength(1);
   });
+
+  it('weakening a fresh verified memory that already carries the superseded tag halves it once', async () => {
+    const copied = createMemory('use Postgres', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['decision', 'superseded'],
+      confidence: 'verified',
+      source: 'decision',
+      tenantId: 'default',
+    });
+    writeEntry(home, copied);
+
+    await weakenSupersededMemory(sqliteStore(home).entryWrites, copied);
+    const weakened = readEntry(home, copied.id)!;
+
+    expect(weakened.halfLifeDays).toBe(Math.floor(copied.halfLifeDays / 2));
+    expect(weakened.confidence).toBe('stale');
+    expect(weakened.tags.filter((tag) => tag === 'superseded')).toHaveLength(1);
+  });
 });
