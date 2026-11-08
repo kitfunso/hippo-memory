@@ -4,7 +4,8 @@ Date: 8 Nov 2026. Build read: hippo 3.3.1 at `z0-r3-freeze` (`cb992a079`), the r
 Inputs: the same 35 runs files as the frozen final read (`C:/z0-runs/scored/r3-final-read.sh` lines 8 to 15),
 4,862 records. Script: `node scripts/token-eval/z0-reach.mjs --scored C:/z0-runs/scored` (add `--json` for one
 JSON object). This is a debugging read of round 3, not a verdict. Round 3's result stays as
-`2026-11-08-z0-round3-result.md` records it.
+`2026-11-08-z0-round3-result.md` records it. That file and `2026-11-02-z0-round3-prereg.md` land with PR #1140
+(branch `docs/z0-round3-prereg`).
 
 All rates here use the runner's first check on each lesson (after the post-fix regrade where one ran), on first
 applies: the first apply task of each family, valid and not leaked, 162 per rule arm and 110 for A4.
@@ -40,9 +41,10 @@ round 3's H1 measured.
 
 ## 2. Real hippo against sham hippo, position by position (`paired`)
 
-At 112 positions both arms showed the lesson. Real hippo failed and sham hippo passed at 8; the reverse happened at
-none. At 11 positions sham hippo had not shown the lesson and failed; real hippo passed at 7 of them. The two
-effects cancel, which is the round 3 null.
+At 111 scored positions both arms showed the lesson. Real hippo failed and sham hippo passed at 8; the reverse
+happened at none. At 11 positions sham hippo had not shown the lesson and failed; real hippo passed at 7 of them.
+Over all 161 scored pairs real hippo failed 18 times and sham hippo 15 times, a gap well inside round 3's null
+(A2 against A5, 0.009 [-0.052, 0.070]). One pair is left out because sham hippo's record has no scored lesson.
 
 Built-in reach is not hippo's reach. Counting the lesson's key phrase in hippo's own text (a SessionStart rule line
 or the prompt block), hippo reached 142 of A2's 162 first-apply lessons: 75 by rule line only, 9 by prompt block
@@ -124,7 +126,7 @@ All counts here are lessons, not sessions.
 ## What this means for round 4
 
 1. **Cut the prompt block to lessons** (ROADMAP Z9.3, Z9.4, SI4). Past-task summaries, tool errors and copies of
-   Claude Code's notes are 93% of the block's text, about 389 header tokens a session. This is the candidate lever
+   Claude Code's notes are 93% of the block's text. The whole block is about 389 header tokens a session. This is the candidate lever
    for goal 3 (tokens) and removes the text that contradicted a lesson. This read does not measure what cutting it
    saves per solved task; round 4 must measure that against A1 at paired positions, as H3 does.
 2. **State a correction as its rule.** Print "Check and format code: `./gradlew spotlessApply`", not "No: Check
