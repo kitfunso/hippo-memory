@@ -290,6 +290,8 @@ _Avoid_: sidechain log, child transcript
 **Task snapshot**:
 One session's current task, summary and next step, saved by `hippo pre-compact` or `hippo snapshot
 save`. A store holds one active snapshot (one per owner and project on a shared store).
+A newer save supersedes it; it closes as `cleared` or `done` by hand, or `session-ended` when its
+session ends.
 _Avoid_: working state, active task (as a name for the row)
 
 **Session handoff**:
@@ -302,6 +304,14 @@ The one line the per-prompt hook and the text formats of `hippo context` print i
 session's task snapshot or session handoff. It names the command that prints the full text. A
 session's own snapshot and handoff print whole, as do JSON, MCP and shared stores.
 _Avoid_: stub, teaser, short handoff
+
+### Record status
+
+**Status transition**:
+A record's move from one status to the next, which names the statuses it may leave. A record in any
+other status stays as it is and the caller is told nothing moved. The store refuses a status
+outside the record's list.
+_Avoid_: state change, status flip, status update
 
 ### Support
 

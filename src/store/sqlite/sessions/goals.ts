@@ -19,6 +19,7 @@ import { bound, type Bodies } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { generateId } from '../../../base/memory/entry.js';
 import { handleStamp } from '../runtime/handle-clock.js';
+import { moveOneStatus, moveStatus } from '../runtime/status-transitions.js';
 
 // The goal stack's rules: its ids, its depth cap, the parent check, a new goal and policy, and
 // the strength a completed goal passes to the memories recalled under it.
@@ -360,24 +361,19 @@ function completeGoal(
   withWriteScope(db, 'complete_goal', () => {
     const goalRow = cachedStatement(
       db,
-      `SELECT created_at, status FROM goal_stack WHERE id = ? AND tenant_id = ?`,
-    ).get(goalId, tenantId) as { created_at: string; status: string } | undefined;
+      `SELECT created_at FROM goal_stack WHERE id = ? AND tenant_id = ?`,
+    ).get(goalId, tenantId) as { created_at: string } | undefined;
     if (!goalRow) return;
-    if (goalRow.status === 'completed') {
-      // Already completed -- second call is a no-op for idempotency.
-      return;
-    }
 
-    cachedStatement(
-      db,
-      `
-      UPDATE goal_stack
-      SET status = 'completed', completed_at = ?, outcome_score = ?
-      WHERE id = ? AND tenant_id = ?
-    `,
-    ).run(completedAt, score, goalId, tenantId);
+    // A goal that is already completed moves no row, so a second call neither restamps nor rescales.
+    const moved = moveStatus(db, 'goalComplete', {
+      tenantId,
+      ids: [goalId],
+      to: 'completed',
+      set: { completed_at: completedAt, outcome_score: score },
+    });
 
-    if (score !== null && !opts.noPropagate) {
+    if (moved === 1 && score !== null && !opts.noPropagate) {
       const multiplier = goalOutcomeMultiplier(score);
 
       if (multiplier !== 1) {
@@ -435,10 +431,7 @@ function resumeGoal(db: DatabaseSyncLike, tenantId: string, goalId: string): voi
 
     enforceDepthCapWithinTx(db, tenantId, row.session_id);
 
-    cachedStatement(
-      db,
-      `UPDATE goal_stack SET status = 'active' WHERE id = ? AND tenant_id = ?`,
-    ).run(goalId, tenantId);
+    moveOneStatus(db, 'goalResume', { tenantId, id: goalId, to: 'active' });
   });
 }
 

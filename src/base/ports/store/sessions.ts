@@ -4,6 +4,20 @@ import type { HandoffEvidence, HandoffOutcome, SessionHandoff } from '../../sess
 import type { ContinuityKey } from './types.js';
 import type { MethodEffects } from './effects.js';
 
+/** The statuses a task snapshot takes when it leaves `active` without a successor. */
+export const SNAPSHOT_CLOSE_STATUSES = ['cleared', 'done', 'session-ended'] as const;
+
+/** One of `SNAPSHOT_CLOSE_STATUSES`. */
+export type SnapshotCloseStatus = (typeof SNAPSHOT_CLOSE_STATUSES)[number];
+
+/** Every status a task snapshot row may hold. */
+export const TASK_SNAPSHOT_STATUSES = ['active', 'superseded', ...SNAPSHOT_CLOSE_STATUSES] as const;
+
+/** True when `status` is one of the close statuses a snapshot clear may set. */
+export function isSnapshotCloseStatus(status: string): status is SnapshotCloseStatus {
+  return SNAPSHOT_CLOSE_STATUSES.some((close) => close === status);
+}
+
 export interface TaskSnapshot {
   id: number;
   task: string;

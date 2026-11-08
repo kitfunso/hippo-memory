@@ -23,6 +23,12 @@ export interface ConflictRow {
   readonly b: ConflictMember | null;
 }
 
+/** Every status a memory conflict row may hold. */
+export const CONFLICT_STATUSES = ['open', 'resolved'] as const;
+
+/** One of `CONFLICT_STATUSES`. */
+export type ConflictStatus = (typeof CONFLICT_STATUSES)[number];
+
 export interface ConflictListQuery {
   /** ALL_TENANTS is host admin, which the api checks. */
   readonly tenantId: TenantId;
