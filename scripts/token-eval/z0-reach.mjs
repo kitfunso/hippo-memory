@@ -22,10 +22,12 @@ const TEACH_FORMS = ['correction', 'confirmation'];
 const RULES_BLOCK = /## Rules from the user\n((?:- [^\n]*\n?)+)/g;
 const NO_LEAD = /^- No[:,] /;
 const BLOCK_HEADER = /## (Project Memory|Pinned rules|Prompt-Relevant Memory)[^\n]*\((\d+) entr[a-z]*, (\d+) tokens\)[^\n]*/g;
-const BLOCK_END = /Today's date|\n## |<\/system-reminder>/;
-// A block without a bound would run to the end of the request, so it stops at the size hippo's budget allows.
+// A `## ` line is not a bound: an entry body may hold a markdown heading.
+const BLOCK_END = /Today's date|<\/system-reminder>/;
+// A block with no bound would run to the end of its text part, so it stops at the size hippo's budget allows.
 const BLOCK_CAP = 12_000;
 const ENTRY_TAGS = /\*\* \[([^\]]+)\]/g;
+const JSON_STRING = /^"(?:[^"\\]|\\.)*"$/s;
 const HOOK_FAILED = /UserPromptSubmit hook (?:error|failed|timed? ?out)|hook (?:timed out|timeout)/i;
 const HOOK_OUTPUT = 'UserPromptSubmit hook additional context';
 const NO_BLOCK_KEY = { error: 'hookErrorOrTimeout', output: 'emptyResult', none: 'unknown' };
@@ -34,8 +36,9 @@ const NO_BLOCK_KEY = { error: 'hookErrorOrTimeout', output: 'emptyResult', none:
 /** @typedef {{ rules: Set<string>, hookBlocks: HookBlock[], hookSignal: 'error' | 'output' | 'none', logs: number }} Session */
 
 const fold = (s) => s.toLowerCase().replace(/\s+/g, ' ');
-const failedOf = (r) => r.lessons.some((l) => l.first === 'fail');
 const scoredOf = (r) => r.lessons.filter((l) => l.first !== 'na');
+// A record whose lessons are all 'na' has no outcome; it is neither a pass nor a fail.
+const outcomeOf = (r) => (scoredOf(r).length === 0 ? 'unscored' : r.lessons.some((l) => l.first === 'fail') ? 'fail' : 'pass');
 const shownOf = (r) => r.chain?.shown ?? null;
 const isFirstApply = (r) => r.kind === 'apply' && r.invalid === null && r.leak !== true && r.applyIndex === 1;
 const counts = (items) => ({ lessons: items.length, failed: items.filter((x) => x.failed).length });
@@ -44,13 +47,6 @@ const lessonKey = (r, l) => `${r.runName}|${r.seed}|${r.position}|${l.lessonId}`
 const teachKey = (r, l) => `${r.runName}|${r.arm}|${r.seed}|${l.lessonId}`;
 const pairKey = (r) => `${r.runName.split('-')[0]}|${positionKey(r)}`;
 const isDir = (p) => fs.existsSync(p) && fs.statSync(p).isDirectory();
-
-/** Decodes a request body's nested-escaped newlines, as many levels as the logs nest. */
-export function flat(s) {
-  let out = s;
-  for (let i = 0; i < 4; i++) out = out.replaceAll('\\\\n', '\\n').replaceAll('\\n', '\n');
-  return out;
-}
 
 /** A hippo prompt block's tag class, checked in a fixed order on its bracketed tag list. */
 export function tagClass(tags) {
@@ -62,26 +58,38 @@ export function tagClass(tags) {
   return `other:${tags[0]}`;
 }
 
-/** The bracketed tag list after each entry of a block's text. */
-export const entryTags = (text) => [...text.matchAll(ENTRY_TAGS)].map((m) => m[1].split(',').map((t) => t.trim()));
+/** Each entry of a block's text: the bracketed tag list that ends it and its length in characters, a stand-in for tokens. */
+export function entriesOf(text) {
+  const entries = [];
+  let from = 0;
+  for (const m of text.matchAll(ENTRY_TAGS)) {
+    const body = text.slice(from, m.index).replace(/^\s*(?:\(\d+%\))?\s*/, '');
+    entries.push({ tags: m[1].split(',').map((t) => t.trim()), chars: body.length });
+    from = m.index + m[0].length;
+  }
+  return entries;
+}
 
-/** The SessionStart "Rules from the user" lines of a decoded request body. */
+/** The bracketed tag list after each entry of a block's text. */
+export const entryTags = (text) => entriesOf(text).map((e) => e.tags);
+
+/** The SessionStart "Rules from the user" lines of a message text. */
 export function ruleLinesOf(text) {
   const lines = new Set();
   for (const m of text.matchAll(RULES_BLOCK)) for (const x of m[1].split('\n')) if (x.trim()) lines.add(x.trim());
   return lines;
 }
 
-/** Hippo prompt blocks in decoded text, each from its header to the next "Today's date", `## ` header or reminder end. */
+/** Hippo prompt blocks in a message text, each from its header to the next "Today's date", reminder end or hippo block header.
+ * The text is trimmed, so two copies that differ only in trailing blank lines are one block. */
 export function hookBlocksOf(text) {
-  const blocks = [];
-  for (const m of text.matchAll(BLOCK_HEADER)) {
+  const headers = [...text.matchAll(BLOCK_HEADER)];
+  return headers.map((m, i) => {
     const from = m.index + m[0].length;
-    const body = text.slice(from, from + BLOCK_CAP);
+    const body = text.slice(from, Math.min(headers[i + 1]?.index ?? text.length, from + BLOCK_CAP));
     const end = body.search(BLOCK_END);
-    blocks.push({ header: m[1], entries: Number(m[2]), tokens: Number(m[3]), text: end < 0 ? body : body.slice(0, end) });
-  }
-  return blocks;
+    return { header: m[1], entries: Number(m[2]), tokens: Number(m[3]), text: (end < 0 ? body : body.slice(0, end)).trim() };
+  });
 }
 
 /** Whether any hippo block holds the key phrase, case and spacing folded. */
@@ -123,30 +131,32 @@ export function messageTexts(messages) {
   const texts = [];
   for (const m of messages) {
     for (const c of isString(m.content) ? [{ type: 'text', text: m.content }] : m.content) {
-      if (c.type === 'text') texts.push(c.text);
+      if (c.type === 'text') texts.push(c.text ?? '');
       else if (c.type === 'tool_result') texts.push(...(isString(c.content) ? [c.content] : (c.content ?? []).map((x) => x.text ?? '')));
     }
   }
   return texts;
 }
 
-/** The main agent's calls carry more than 3 tools; the other model calls are its helpers. Returns the messages of a main call, else null. */
-function mainMessages(e) {
-  if (!isString(e.url) || !e.url.includes('/v1/messages')) return null;
-  const b = JSON.parse(e.body);
-  return (b.tools?.length ?? 0) > 3 ? b.messages : null;
+/** Message texts as the model saw them: each text part once, and once more decoded when the part is itself a JSON string. */
+export function bodyTexts(messages) {
+  return messageTexts(messages).flatMap((t) => (JSON_STRING.test(t.trim()) ? [t, JSON.parse(t.trim())] : [t]));
 }
+
+/** The main agent's calls carry more than 3 tools; the other model calls are its helpers. */
+const isMainCall = (e, request) => isString(e.url) && e.url.includes('/v1/messages') && (request.tools?.length ?? 0) > 3;
 
 function scanBody(e, acc) {
   const body = e.body;
   if (body.includes(HOOK_OUTPUT) && acc.hookSignal === 'none') acc.hookSignal = 'output';
   if (HOOK_FAILED.test(body)) acc.hookSignal = 'error';
-  if (body.includes('Rules from the user')) for (const x of ruleLinesOf(flat(body))) acc.rules.add(x);
-  const messages = body.includes(' tokens)') ? mainMessages(e) : null;
-  if (!messages) return;
-  for (const t of messageTexts(messages).filter((x) => x.includes(' tokens)'))) {
-    for (const blk of hookBlocksOf(flat(t))) acc.hookBlocks.set(blk.text, blk);
-  }
+  const wantsRules = body.includes('Rules from the user');
+  const wantsBlocks = body.includes(' tokens)');
+  if (!wantsRules && !wantsBlocks) return;
+  const request = JSON.parse(body);
+  const texts = bodyTexts(request.messages ?? []);
+  if (wantsRules) for (const t of texts) for (const x of ruleLinesOf(t)) acc.rules.add(x);
+  if (wantsBlocks && isMainCall(e, request)) for (const t of texts) for (const blk of hookBlocksOf(t)) acc.hookBlocks.set(blk.text, blk);
 }
 
 /** One pass over a session's request logs: its rule lines, hippo prompt blocks and hook signal.
@@ -256,41 +266,56 @@ function funnelOf(firsts) {
     out[arm] = {
       n: chained.length, stored: count((r) => r.chain.stored === true), builtInShown: shown,
       builtInShownFollowed: count((r) => r.chain.followed === true), builtInShownBroken: count((r) => r.chain.followed === false), notBuiltInShown: chained.length - shown,
+      unscored: rs.filter((r) => outcomeOf(r) === 'unscored').length,
       firstCheck: { builtInShown: byShown(true), notBuiltInShown: byShown(false), noChain: byShown(null) },
     };
   }
   return out;
 }
 
-function armIndex(firsts, arm, errors) {
-  const index = new Map();
-  for (const r of firsts.filter((x) => x.arm === arm && x.chain)) {
-    const key = pairKey(r);
-    if (index.has(key)) errors.duplicatePair.push(`${arm} ${key}`);
-    else index.set(key, r);
+/** A first-apply record must be the only one of its arm at its (run, sequence, seed, position); a repeat is named, never merged. */
+function checkUnique(firsts, errors) {
+  const seen = new Set();
+  for (const r of firsts) {
+    const key = `${r.arm} ${pairKey(r)}`;
+    if (seen.has(key)) errors.duplicatePair.push(key);
+    seen.add(key);
   }
+}
+
+function armIndex(firsts, arm) {
+  const index = new Map();
+  for (const r of firsts.filter((x) => x.arm === arm && x.chain)) if (!index.has(pairKey(r))) index.set(pairKey(r), r);
   return index;
 }
 
-function pairedOf(firsts, errors) {
-  const a2 = armIndex(firsts, 'A2', errors);
-  const a5 = armIndex(firsts, 'A5', errors);
-  const state = (r) => `${r.chain.shown ? 'S' : 'n'}${failedOf(r) ? 'F' : 'p'}`;
+/** A2 against A5 at one position. Pairs where either side has no scored lesson are listed apart, never counted as a pass. */
+function pairedOf(firsts) {
+  const a2 = armIndex(firsts, 'A2');
+  const a5 = armIndex(firsts, 'A5');
+  const mark = { fail: 'F', pass: 'p', unscored: 'u' };
+  const state = (r) => `${r.chain.shown ? 'S' : 'n'}${mark[outcomeOf(r)]}`;
   const cells = new Map();
   const shownFailed = [];
+  const unscored = [];
   for (const [key, r] of a2) {
     const other = a5.get(key);
     if (!other) continue;
+    const [run, sequence] = [r.runName.split('-')[0], r.sequence];
+    const sortKey = `${run}|${sequence}|${String(r.seed).padStart(3, '0')}|${String(r.position).padStart(4, '0')}`;
+    if (outcomeOf(r) === 'unscored' || outcomeOf(other) === 'unscored') {
+      unscored.push([sortKey, { run, sequence, seed: r.seed, position: r.position, a2: state(r), a5: state(other) }]);
+      continue;
+    }
     const cell = `${state(r)}|${state(other)}`;
     cells.set(cell, (cells.get(cell) ?? 0) + 1);
-    if (state(r) === 'SF') {
-      const sortKey = `${r.runName.split('-')[0]}|${r.sequence}|${String(r.seed).padStart(3, '0')}|${String(r.position).padStart(4, '0')}`;
-      shownFailed.push([sortKey, { run: r.runName.split('-')[0], sequence: r.sequence, seed: r.seed, position: r.position, familyId: r.familyId, lessonSource: r.lessonSource, tasksSinceTeach: r.tasksSinceTeach, a5: state(other) }]);
-    }
+    if (state(r) === 'SF') shownFailed.push([sortKey, { run, sequence, seed: r.seed, position: r.position, familyId: r.familyId, lessonSource: r.lessonSource, tasksSinceTeach: r.tasksSinceTeach, a5: state(other) }]);
   }
+  const ordered = (items) => items.sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([, item]) => item);
   return {
     cells: [...cells].sort().map(([k, positions]) => ({ a2: k.split('|')[0], a5: k.split('|')[1], positions })),
-    a2ShownFailed: shownFailed.sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([, item]) => item),
+    a2ShownFailed: ordered(shownFailed),
+    unscored: ordered(unscored),
   };
 }
 
@@ -358,7 +383,7 @@ function sessionCounts(rs, sessions) {
     const no = rules.filter((x) => NO_LEAD.test(x)).length;
     ruleLines += rules.length;
     noLines += no;
-    const key = JSON.stringify({ ruleBlock: rules.length > 0, noLine: no > 0, failed: failedOf(r) });
+    const key = JSON.stringify({ ruleBlock: rules.length > 0, noLine: no > 0, outcome: outcomeOf(r) });
     cells.set(key, (cells.get(key) ?? 0) + 1);
   }
   return { sessions: [...cells].map(([k, n]) => ({ ...JSON.parse(k), sessions: n })), ruleLines, noLines };
@@ -385,34 +410,46 @@ function reachOf(rows, index) {
   };
 }
 
-function blocksOf(a2, sessions) {
+/** Entry counts and characters by tag class over blocks, with the entries the headers declare and every block where the two differ. */
+function entryClasses(blocksByRecord) {
   const classes = new Map();
-  const noBlock = { sessions: 0, hookErrorOrTimeout: 0, emptyResult: 0, unknown: 0 };
-  let withBlock = 0;
-  let distinct = 0;
-  let tokens = 0;
-  let entries = 0;
-  for (const r of a2.filter((x) => sessions.has(x))) {
-    const { hookBlocks, hookSignal } = sessions.get(r);
-    if (hookBlocks.length === 0) {
-      noBlock.sessions++;
-      noBlock[NO_BLOCK_KEY[hookSignal]]++;
-      continue;
-    }
-    withBlock++;
+  const mismatches = [];
+  let [entries, chars, declared, tokens, blocks] = [0, 0, 0, 0, 0];
+  for (const [r, hookBlocks] of blocksByRecord) {
     for (const b of hookBlocks) {
-      distinct++;
+      const parsed = entriesOf(b.text);
+      blocks++;
+      declared += b.entries;
       tokens += b.tokens;
-      for (const tags of entryTags(b.text)) {
+      if (parsed.length !== b.entries) mismatches.push({ run: r.runName, taskId: r.taskId, seed: r.seed, position: r.position, header: b.header, declared: b.entries, parsed: parsed.length });
+      for (const e of parsed) {
+        const c = classes.get(tagClass(e.tags)) ?? { entries: 0, chars: 0 };
+        classes.set(tagClass(e.tags), { entries: c.entries + 1, chars: c.chars + e.chars });
         entries++;
-        classes.set(tagClass(tags), (classes.get(tagClass(tags)) ?? 0) + 1);
+        chars += e.chars;
       }
     }
   }
-  const byClass = Object.fromEntries([...classes].sort((x, y) => y[1] - x[1]).map(([c, n]) => [c, { entries: n, share: n / entries }]));
+  const byClass = Object.fromEntries([...classes].sort((x, y) => y[1].entries - x[1].entries).map(([c, v]) => [c, { ...v, share: v.entries / entries, charShare: v.chars / chars }]));
+  return { blocks, entries, entryChars: chars, declaredEntries: declared, headerTokens: tokens, byClass, entryMismatches: mismatches };
+}
+
+function blocksOf(a2, sessions) {
+  const noBlock = { sessions: 0, hookErrorOrTimeout: 0, emptyResult: 0, unknown: 0 };
+  const withBlocks = new Map();
+  for (const r of a2.filter((x) => sessions.has(x))) {
+    const { hookBlocks, hookSignal } = sessions.get(r);
+    if (hookBlocks.length > 0) withBlocks.set(r, hookBlocks);
+    else {
+      noBlock.sessions++;
+      noBlock[NO_BLOCK_KEY[hookSignal]]++;
+    }
+  }
+  const { blocks, headerTokens, ...rest } = entryClasses(withBlocks);
   return {
-    sessions: a2.length, read: a2.filter((x) => sessions.has(x)).length, withBlock, distinctBlocks: distinct, entries, byClass,
-    headerTokens: { total: tokens, perSession: Math.round(tokens / a2.length) }, noBlock: { ...noBlock, note: NO_BLOCK_NOTE },
+    sessions: a2.length, read: a2.filter((x) => sessions.has(x)).length, withBlock: withBlocks.size, distinctBlocks: blocks,
+    sessionsWithSeveralBlocks: [...withBlocks.values()].filter((b) => b.length > 1).length, ...rest,
+    headerTokens: { total: headerTokens, perSession: Math.round(headerTokens / a2.length) }, noBlock: { ...noBlock, note: NO_BLOCK_NOTE },
   };
 }
 
@@ -441,6 +478,7 @@ function droppedOf(records) {
 export function buildReport(d) {
   const { records, errors, sessions } = d;
   const firsts = records.filter(isFirstApply);
+  checkUnique(firsts.filter((r) => TEACH_ARMS.includes(r.arm)), errors);
   const table = lessonTable(firsts, teachFormIndex(records, errors), errors);
   const rows = a2Rows(table, sessions, d.keyPhrases, errors);
   const funnel = funnelOf(firsts);
@@ -454,7 +492,7 @@ export function buildReport(d) {
     },
     crossCheck: crossCheckOf(firsts, d.blind),
     funnel: { note: SHOWN_NOTE, arms: funnel },
-    paired: { ...pairedOf(firsts, errors), onHippoReach: reach.onHippoReach },
+    paired: { ...pairedOf(firsts), onHippoReach: reach.onHippoReach },
     blocks: blocksOf(a2, sessions),
     rules: rulesOf(firsts, sessions, rows, table),
     hippoReach: { note: SHOWN_NOTE, ...reach.hippoReach },
@@ -466,11 +504,22 @@ export function buildReport(d) {
 const pct = (x, d = 0) => `${(x * 100).toFixed(d)}%`;
 const ratio = (c) => `${c.failed}/${c.lessons}`;
 
+function textBlocks(bl) {
+  const lines = ['== blocks (A2 hippo prompt blocks)'];
+  lines.push(`sessions ${bl.sessions}, with a block ${bl.withBlock} (${bl.sessionsWithSeveralBlocks} with several), distinct blocks ${bl.distinctBlocks}, header tokens ${bl.headerTokens.perSession} a session`);
+  lines.push(`entries parsed ${bl.entries}, declared by the headers ${bl.declaredEntries}, characters ${bl.entryChars}; blocks where the two differ: ${bl.entryMismatches.length}`);
+  for (const m of bl.entryMismatches) lines.push(`    ${m.run} ${m.taskId} seed ${m.seed} pos ${m.position} ${m.header}: declared ${m.declared}, parsed ${m.parsed}`);
+  lines.push('  class: entries (share), characters (share)');
+  for (const [c, v] of Object.entries(bl.byClass)) lines.push(`  ${c}: ${v.entries} (${pct(v.share)}), ${v.chars} (${pct(v.charShare)})`);
+  lines.push(`  no block: ${bl.noBlock.sessions} (hook error or timeout ${bl.noBlock.hookErrorOrTimeout}, empty result ${bl.noBlock.emptyResult}, unknown ${bl.noBlock.unknown}); ${bl.noBlock.note}`);
+  return lines;
+}
+
 function textRules(rules) {
   const lines = ['== rules (SessionStart "Rules from the user")'];
   for (const [arm, c] of Object.entries(rules.perArm)) {
     lines.push(`${arm}: rule lines ${c.ruleLines}, No-lines ${c.noLines}`);
-    for (const s of c.sessions) lines.push(`  ${s.sessions} sessions: rule block ${s.ruleBlock}, No-line ${s.noLine}, failed ${s.failed}`);
+    for (const s of c.sessions) lines.push(`  ${s.sessions} sessions: rule block ${s.ruleBlock}, No-line ${s.noLine}, ${s.outcome}`);
   }
   for (const [title, table] of [['all lessons', rules.allLessons], ['correction-taught only', rules.correctionTaught]]) {
     lines.push(`-- A2 rendering vs first-check fails, ${title} (failed/lessons; A5 and A1 at the same positions)`);
@@ -492,17 +541,15 @@ export function formatText(rep) {
   lines.push(b ? `  blind H1 estimate ${b.h1Estimate.toFixed(4)}; G5 n ${b.g5.n}, disagreements ${b.g5.disagreements}; ${cc.note}` : '  blind read unavailable (see errors.missingInput)');
   lines.push('== funnel', `note: ${rep.funnel.note}`);
   for (const [arm, f] of Object.entries(rep.funnel.arms)) {
-    lines.push(`${arm}: n=${f.n} stored=${f.stored} builtInShown=${f.builtInShown} followed=${f.builtInShownFollowed} broken=${f.builtInShownBroken} notBuiltInShown=${f.notBuiltInShown}`);
+    lines.push(`${arm}: n=${f.n} stored=${f.stored} builtInShown=${f.builtInShown} followed=${f.builtInShownFollowed} broken=${f.builtInShownBroken} notBuiltInShown=${f.notBuiltInShown} unscored=${f.unscored}`);
     lines.push(`  first-check fails: builtInShown ${ratio(f.firstCheck.builtInShown)}, not builtInShown ${ratio(f.firstCheck.notBuiltInShown)}`);
   }
   lines.push('== paired (A2 vs A5, same position; S shown n not shown, F failed p passed)');
   for (const c of rep.paired.cells) lines.push(`  ${c.positions} A2 ${c.a2} A5 ${c.a5}`);
   for (const p of rep.paired.a2ShownFailed) lines.push(`  A2 shown and failed: ${p.run} ${p.sequence} seed ${p.seed} pos ${p.position} ${p.familyId} ${p.lessonSource} since-teach ${p.tasksSinceTeach} A5 ${p.a5}`);
-  const bl = rep.blocks;
-  lines.push('== blocks (A2 hippo prompt blocks)', `sessions ${bl.sessions}, with a block ${bl.withBlock}, distinct blocks ${bl.distinctBlocks}, entries ${bl.entries}, header tokens ${bl.headerTokens.perSession} a session`);
-  for (const [c, v] of Object.entries(bl.byClass)) lines.push(`  ${v.entries} ${pct(v.share)} ${c}`);
-  lines.push(`  no block: ${bl.noBlock.sessions} (hook error or timeout ${bl.noBlock.hookErrorOrTimeout}, empty result ${bl.noBlock.emptyResult}, unknown ${bl.noBlock.unknown}); ${bl.noBlock.note}`);
-  lines.push(...textRules(rep.rules));
+  lines.push(`  unscored pairs (no scored lesson on one side, in no cell): ${rep.paired.unscored.length}`);
+  for (const p of rep.paired.unscored) lines.push(`    ${p.run} ${p.sequence} seed ${p.seed} pos ${p.position} A2 ${p.a2} A5 ${p.a5}`);
+  lines.push(...textBlocks(rep.blocks), ...textRules(rep.rules));
   const hr = rep.hippoReach;
   lines.push('== hippoReach (key phrase in a SessionStart rule line or a hook block)', `note: ${hr.note}`);
   lines.push(`lessons ${hr.lessons}: reached ${ratio(hr.reached)} A2 fails, not reached ${ratio(hr.notReached)}; routes ${JSON.stringify(hr.routes)}`);
@@ -531,6 +578,7 @@ export function parseArgs(argv) {
 /** Loads the inputs, reads the logs and builds the report; `warn` gets one line per missing log.
  * @param {string} scored @param {(line: string) => void} warn */
 export function readReach(scored, warn = () => {}) {
+  if (!isDir(path.join(scored, 'r3run'))) throw new Error(`no round 3 runs at ${path.join(scored, 'r3run')}; pass --scored <dir> with the scored folder that holds r3run/`);
   const errors = { missingLogs: [], missingKeyPhrase: [], duplicatePair: [], missingTeachForm: [], missingInput: [] };
   const { records, runs, warnings } = loadRecords(scored, errors);
   const sessions = readSessions(scored, records.filter(isFirstApply), errors, warn);
