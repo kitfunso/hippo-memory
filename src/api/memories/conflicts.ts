@@ -17,7 +17,7 @@ import type {
 import { conflictLoserFate } from '../../domain/consolidate/conflicts.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
-import { isQuarantineScope } from '../../domain/trust/quarantine.js';
+import { isLiveMemory } from '../../base/memory/liveness.js';
 import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { keysetPages, pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
@@ -54,15 +54,6 @@ export interface ResolveMemoryConflictResult {
   conflictId: number;
   keptId: string;
   loserId: string;
-}
-
-function isLive(member: ConflictMember | null): boolean {
-  return (
-    member !== null &&
-    !member.supersededBy &&
-    (member.kind === 'raw' || member.kind === 'distilled') &&
-    !isQuarantineScope(member.scope)
-  );
 }
 
 /** A row the caller could not read hides its whole pair. */
@@ -103,7 +94,8 @@ export async function conflictResolve(
     throw new ConflictError(`conflict ${conflictId} is already resolved`);
   }
   const { keep, loser } = sidesOf(row, opts.keepId);
-  if (!isLive(row.a) || !isLive(row.b)) {
+  const { a, b } = row;
+  if (!(a !== null && isLiveMemory(a) && b !== null && isLiveMemory(b))) {
     throw new NotFoundError(
       `conflict ${conflictId} names a memory that is superseded, archived or quarantined`,
     );

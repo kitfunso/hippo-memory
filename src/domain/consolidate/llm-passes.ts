@@ -12,6 +12,7 @@ import {
   type Llm,
   type LlmFailure,
 } from '../../base/ports/llm.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 // Bounds the LLM calls one sleep spends on extraction.
 const EXTRACTION_BATCH_LIMIT = 20;
@@ -55,7 +56,7 @@ async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntr
   for await (const e of run.survivors.rows()) {
     const candidate =
       e.layer === Layer.Episodic &&
-      !e.supersededBy &&
+      !isSuperseded(e) &&
       !extractedFromIds.has(e.id) &&
       !keptAsWritten(e) &&
       e.traceOutcome === null &&
@@ -214,7 +215,7 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
       !(
         e.tags.includes(EXTRACTED_TAG) &&
         e.dagLevel === DAG_LEVEL.extracted &&
-        !e.supersededBy &&
+        !isSuperseded(e) &&
         isReusable(e)
       )
     ) {

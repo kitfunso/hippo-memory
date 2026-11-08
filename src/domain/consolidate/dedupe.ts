@@ -13,6 +13,7 @@ import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 export interface DedupPair {
   kept: string;
@@ -129,7 +130,7 @@ function partitionPairs(groups: PartitionGroups, backing: ReadonlySet<string>): 
 
 /** The rows duplicateCandidates selects, picked from pages of every row. */
 const isCurrentDistilled = (e: MemoryEntry): boolean =>
-  (e.kind ?? 'distilled') === 'distilled' && !e.supersededBy;
+  (e.kind ?? 'distilled') === 'distilled' && !isSuperseded(e);
 
 type Partitions = Map<string, PartitionGroups>;
 

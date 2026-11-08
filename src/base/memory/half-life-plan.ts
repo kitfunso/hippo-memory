@@ -3,6 +3,7 @@
 // one transaction.
 import { deriveHalfLife, type MemoryEntry } from './entry.js';
 import { LEGACY_TYPED_HALF_LIFE } from './strength.js';
+import { isSuperseded } from './liveness.js';
 
 const TYPED_SOURCES: ReadonlySet<string> = new Set([
   'decision',
@@ -75,7 +76,7 @@ type HalfLifeFields = Pick<
  * recall added 2 days. */
 export function halfLifeRecallBonus(entry: HalfLifeFields, written: number): number | null {
   if (
-    entry.supersededBy ||
+    isSuperseded(entry) ||
     entry.tags.includes('invalidated') ||
     entry.tags.includes('superseded')
   ) {
@@ -151,7 +152,7 @@ function planMoves(rows: HalfLifeRows, to: number) {
   let count = 0;
   for (const { entry: e, object } of rows.rows) {
     count++;
-    if (e.supersededBy) copies.add(e.supersededBy);
+    if (isSuperseded(e)) copies.add(e.supersededBy);
     const base = baseTarget(e, rows.from, to);
     const typed = typedPending ? typedTarget(e, to) : null;
     if (base === null && typed === null) continue;

@@ -8,6 +8,7 @@ import { Layer } from './entry.js';
 import { calculateStrength, type StrengthModel } from './strength.js';
 import { ERROR_TAG, HIGH_SCHEMA_FIT } from './entry.js';
 import { DAY_MS } from '../util/time.js';
+import { isSuperseded } from './liveness.js';
 
 const STATE_DECIMALS = 3;
 
@@ -127,7 +128,7 @@ export function foldAmbientRows(
   const freshAfter = currentTime.getTime() - AMBIENT_FRESH_WINDOW_MS;
   t.total += entries.length;
   for (const entry of entries) {
-    if (entry.supersededBy) continue;
+    if (isSuperseded(entry)) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
     t.strengthSum += calculateStrength(entry, currentTime, model);
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;

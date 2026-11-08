@@ -25,6 +25,7 @@ import {
   isQuarantineScope,
   scopeReaderOf,
 } from '../../base/scope/recall-scope.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and
  * we add a 'promote' audit event so intent stays distinct. The copy keeps the entry's tenantId
@@ -163,7 +164,7 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
   assertWriteRight(scopeReaderOf(ctx.actor), row, oldId, `Memory not found: ${oldId}`);
   // The CAS UPDATE closes the race; this check only gives a clearer error in the common
   // single-writer case.
-  if (row.supersededBy) {
+  if (isSuperseded(row)) {
     throw new ConflictError(
       `Memory ${oldId} is already superseded by ${row.supersededBy}. Supersede that one instead.`,
     );

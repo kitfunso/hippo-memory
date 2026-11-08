@@ -7,7 +7,7 @@ import { memoryFacts, seriesDay } from '../../src/base/memory/memory-facts.js';
 import { AT_RISK_BELOW } from '../../src/base/memory/strength-bands.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { isLiveMemory } from '../../src/api/dashboard/live.js';
+import { isLiveMemory } from '../../src/base/memory/liveness.js';
 import { buildOverview } from '../../src/api/dashboard/overview.js';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
 import type { Overview, ProjectSummary } from '../../src/api/dashboard/types.js';

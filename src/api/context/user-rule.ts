@@ -2,6 +2,7 @@
 // cannot pass for one.
 import { USER_RULE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 export { USER_RULE_TAG };
 
@@ -19,7 +20,7 @@ export function isUserRule(e: MemoryEntry, viewer: UserRuleViewer): boolean {
     e.source === 'capture' &&
     e.confidence === 'observed' &&
     e.tags.includes(USER_RULE_TAG) &&
-    e.supersededBy === null &&
+    !isSuperseded(e) &&
     e.scope === null &&
     e.tenantId === viewer.tenantId;
   if (!own) return false;
