@@ -2,6 +2,7 @@
 // goes. Pure, so the store runs it inside the move's own write scope and plan, write and audit stay
 // one transaction.
 import { deriveHalfLife, type MemoryEntry } from './entry.js';
+import { INVALIDATED_TAG, SUPERSEDED_TAG } from './stale-mark.js';
 import { LEGACY_TYPED_HALF_LIFE } from './strength.js';
 
 const TYPED_SOURCES: ReadonlySet<string> = new Set([
@@ -76,8 +77,8 @@ type HalfLifeFields = Pick<
 export function halfLifeRecallBonus(entry: HalfLifeFields, written: number): number | null {
   if (
     entry.supersededBy ||
-    entry.tags.includes('invalidated') ||
-    entry.tags.includes('superseded')
+    entry.tags.includes(INVALIDATED_TAG) ||
+    entry.tags.includes(SUPERSEDED_TAG)
   ) {
     return null;
   }

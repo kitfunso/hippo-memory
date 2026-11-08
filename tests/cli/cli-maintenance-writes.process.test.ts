@@ -396,7 +396,7 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
   const WEAKENED_ONLY = '(no active decision row; memory weakened only)';
   const DECISION_TAGS = ['decision', ...PATH_TAGS];
 
-  it('weakens the memory of an earlier decision, and again on a second supersede', async () => {
+  it('weakens the memory of an earlier decision, and a second supersede leaves its half-life as it was', async () => {
     const s = new Store({ spawned: true });
     const first = await s.run('decide', 'use postgres for the ledger', '--context', 'it handles the join load');
     const oldId = s.lastId();
@@ -406,14 +406,14 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
     expect(first).toEqual({ status: 0, stdout: recorded(1, oldId), stderr: '' });
     expect(second.stdout).toBe(recorded(2, sqlite!, `${oldId} (decision #1 superseded)`));
     expect(third.stdout).toBe(recorded(3, duckdb!, `${oldId} ${WEAKENED_ONLY}`));
-    // Each supersede halves the old row's half-life and marks it stale.
+    // The first supersede halves the old row's half-life and marks it stale; the second halves nothing more.
     expect(s.rows()).toMatchObject([
       {
         content: 'use postgres for the ledger\n\nContext: it handles the join load',
         layer: 'semantic',
         source: 'decision',
         confidence: 'stale',
-        half_life_days: 91,
+        half_life_days: 182,
         tags: [...DECISION_TAGS, 'superseded'],
       },
       { content: 'use sqlite for the ledger', confidence: 'verified', half_life_days: 365, tags: DECISION_TAGS },
