@@ -17,7 +17,7 @@ import type {
 import { conflictLoserFate } from '../../domain/consolidate/conflicts.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
-import { isLiveMemory } from '../../base/memory/liveness.js';
+import { isLiveMemory } from '../../base/scope/live-memory.js';
 import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { keysetPages, pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';

@@ -3,7 +3,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { supersede } from '../../src/api/index.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { isLiveMemory } from '../../src/base/memory/liveness.js';
+import { isLiveMemory } from '../../src/base/scope/live-memory.js';
 import { quarantineScopeFor } from '../../src/base/scope/recall-scope.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { DashboardPageQuery, DashboardTotals } from '../../src/base/ports/store/dashboard-reads.js';

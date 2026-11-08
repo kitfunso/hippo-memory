@@ -2,7 +2,7 @@
 
 Date: 2026-11-08
 Status: accepted
-Links: PR #1176; PR #1097 (pinned the opposite for context and the dashboard); `src/base/memory/liveness.ts`; `src/db/sql-predicates.ts`
+Links: PR #1176; PR #1097 (pinned the opposite for context and the dashboard); `src/base/memory/liveness.ts`; `src/base/scope/live-memory.ts`; `src/db/sql-predicates.ts`
 
 ## Context
 Readers disagreed on a memory whose stored `superseded_by` is `''`. Recall search, ambient context and the supersede guard read it as superseded. Context, the dashboard, sleep's duplicate scan and the keep rule read it as live. One predicate needs one meaning.
