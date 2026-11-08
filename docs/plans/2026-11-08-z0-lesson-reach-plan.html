@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Z0 Round 3 Lesson Reach</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+<header>
+  <h1>Lesson Reach Read for Z0 Round 3</h1>
+  <doc-changes new="3" changed="0"></doc-changes>
+  <doc-note tone="info"><strong>Round 3 build</strong> hippo 3.3.1 at cb992a079, per the round 3 prereg.</doc-note>
+  <details class="thread"><summary>Why · 2 requests</summary>
+    <doc-quote via="prompt" from="the user">close round 3, how can we use the results to optimise and improve hippo-memory? we need to learn from https://www.anthropic.com/research/components-of-agent-memory.</doc-quote>
+    <doc-quote via="prompt" from="the user">so we need to optimise and improve and make hippo-memory better to hit all 4 goals. correct? … can we do all 6 items at the same time and run both goals?</doc-quote>
+  </details>
+</header>
+<main>
+<doc-plan>
+
+  <doc-claim>
+    <p>A maintainer can rerun the round 3 reach read with one command.</p>
+    <doc-mock frame="terminal" title="z0-reach" w="470"><template><span class="dim">></span> node scripts/token-eval/z0-reach.mjs --scored C:/z0-runs/scored --json
+<b>grade</b> runner first check (regraded where run), not the blind G5 grade
+<b>first applies</b>  built-in shown  hippo reach  failed
+A1                81/162        -            40/161
+A2               148/162     142/162         18/162
+A5               112/162        -            15/161
+<b>cross-check</b> A2 - A1 runner -13.7 pts, blind H1 -14.9 pts
+<b>dropped</b> leaked, invalid per arm; <b>errors</b> missingLogs 0, missingKeyPhrase 0, duplicatePair 0</template></doc-mock>
+    <doc-claim>
+      <p>The JSON output has one key for each section and one key for errors.</p>
+      <doc-code title="z0-reach.mjs --json shape · sketch" lang="ts">
+<script type="text/plain">
+interface ReachReport {
+  grade: 'runner-first-check';
+  inputs: { runs: string[]; records: number; dropped: Record<Arm, { leaked: number; invalid: number }> };
+  crossCheck: { runnerA2minusA1: number; blindH1: number; g5Agreement: [number, number] };
+  funnel: Record<Arm, { n: number; stored: number; builtInShown: number; hippoReach: number | null; failed: number }>;
+  paired: { onHippoReach: Record<'reached' | 'notReached', { a2Fail: number; a5Fail: number; n: number }> };
+  blocks: { sessions: number; withBlock: number; entries: Record<TagClass, number>; headerTokensPerSession: number };
+  rules: { correctionTaught: Record<Form, Record<Arm, [fail: number, n: number]>> };
+  headroom: { notShown: number; failed: number; a4Rate: [number, number]; gainFails: number; gainPoints: number };
+  errors: { missingLogs: string[]; missingKeyPhrase: string[]; duplicatePair: string[] };
+}
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The script reads the same inputs as the round 3 final read.</p>
+      <doc-code title="input selection, copied from r3-final-read.sh lines 8-15" lang="bash">
+<script type="text/plain">
+for d in $S/r3run/*-w1 $S/r3run/gr3-w1b $S/r3run/*-e[0-9]; do
+  n=$(basename $d); [ "$n" = gr3-w1 ] && continue
+  if [ -d $S/r3-merged/$n ]; then src=$S/r3-merged/$n; else src=$d/run; fi
+  rf=$src/runs.jsonl; [ -f $src/runs.regraded.jsonl ] && rf=$src/runs.regraded.jsonl
+done
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The funnel uses the chain fields that every record already carries.</p>
+      <doc-code src="scripts/token-eval/z0-records.mjs" lines="20" hl="20"></doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The read shows what hippo's prompt block held in each A2 session.</p>
+    <doc-mock frame="terminal" title="z0-reach --blocks" w="470"><template><b>A2 first applies</b>  sessions 162, with a hippo block 150, blocks 157
+no block 12: hook error or timeout n, empty result n
+entries 470   header tokens per session about 390
+ 56%  session digest
+ 17%  imported claude-code-memory
+ 14%  captured rule fragment
+ 11%  tool error
+  1%  user rule, word for word</template></doc-mock>
+    <doc-ask id="labels">
+      <p>How do we count entries that contradict the taught lesson?</p>
+      <label><input type="radio" name="labels" value="read" checked> Read the 14 broken sessions by hand <small>no fan-out, quoted in the doc</small></label>
+      <label><input type="radio" name="labels" value="blind"> Blind Opus labels on all 457 entries <small>about 10 agents, needs a cost yes</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The read shows how each taught lesson reached the agent, per position.</p>
+    <doc-mock frame="terminal" title="z0-reach --rules" w="470"><template><b>correction-taught lessons only</b>, first check failed,
+by how A2's "Rules from the user" block held the lesson
+                    A2       A5 same pos  A1 same pos
+  "No: &lt;rule&gt;"      14/95    12/86        26/90
+  rule, no lead      0/9      0/9          4/9
+  not in the block   4/21     2/21         6/21
+<span class="dim">- No: Check and format code: `./gradlew spotlessApply`,
+  because the project's maintainers require it</span></template></doc-mock>
+    <doc-note tone="warn"><strong>Teach form</strong> The harness teach template writes "No:" only when the teach check failed (task.mjs:166, lessons.mjs:270). So the read compares inside correction-taught lessons. There, A5 fails at the same rate, and the lead shows no measured harm.</doc-note>
+    <doc-claim>
+      <p>Each failed lesson is matched to its own rule line.</p>
+      <doc-code title="z0-reach.mjs · sketch" lang="js">
+<script type="text/plain">
+// key phrases: merged-r3/*-r/tasks-run.json via lessonIndex(); teach form per (run, arm, seed, lessonId)
+const form = !line ? 'absent' : /^- No[:,] /.test(line) ? 'no-lead' : 'clean';
+if (teachForm.get(teachKey(rec, lesson)) === 'correction') tally[`${form}/${lesson.first}`] += 1;
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>A fixture test checks each parser before the doc uses its numbers.</p>
+      <doc-code title="tests/eval/token-eval-z0-reach.test.ts · sketch" lang="ts">
+<script type="text/plain">
+it('decodes a nested-escaped SessionStart body', () => expect(rulesBlock(fixture.escapedBody)).toEqual(['- No: Run X', '- Run Y']));
+it('reads "No:" and "No," as a lead', () => expect(['- No: a', '- No, a'].map(leadOf)).toEqual(['no-lead', 'no-lead']));
+it('classes hook entries by tag', () => expect(tagClass('[session-digest]')).toBe('session-digest'));
+it('names a missing request log', () => expect(readReach(fixture.noLog).errors.missingLogs).toHaveLength(1));
+it('names a duplicate pair key', () => expect(readReach(fixture.dupPair).errors.duplicatePair).toHaveLength(1));
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The read gives the most that hippo's lessons can add over sham hippo.</p>
+    <doc-mock frame="terminal" title="z0-reach --headroom" w="470"><template><b>A5 first applies</b>                         162
+lesson not in loaded MEMORY.md or CLAUDE.md  50
+  failed there                               11
+best case: hippo fixes all 50 at A4's rate (7/110)
+<b>room for A2 over A5</b>                 7.8 fails = <b>4.8 points</b>
+round 4 minimum effect                    15 points</template></doc-mock>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The results doc ranks the round 4 builds by the gap each one closes.</p>
+    <doc-code title="docs/evals/2026-11-08-z0-round3-lesson-reach.md · sketch" lang="md">
+<script type="text/plain">
+## What round 4 builds and tests
+1. Prompt block: stop sending digests, tool errors and imported notes (Z9.3, Z9.4). Goal 3.
+2. Rule text: state a correction as its rule, with no "No:" lead. Cheap defect fix.
+3. Write path: keep task fragments out of user rules (Z3, SI4).
+4. Test design: score where built-in memory fails (Codex, many lessons, long gaps),
+   since round 3's tasks leave hippo's lessons 4.8 points of room over sham hippo.
+Waits: Z4 guards, HG5, Z9.1 fields (schema change, needs a yes).
+</script>
+    </doc-code>
+    <doc-ask id="where">
+      <p>Where does the result doc go?</p>
+      <label><input type="radio" name="where" value="new" checked> A new branch and PR <small>PR #1140 stays the round 3 record</small></label>
+      <label><input type="radio" name="where" value="1140"> Add it to PR #1140</label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim aux="shared">
+    <p>Shared: the record parser in z0-records.mjs.</p>
+    <doc-code src="scripts/token-eval/z0-records.mjs" lines="153-172"></doc-code>
+  </doc-claim>
+
+  <doc-claim aux="scope">
+    <p>Not changing: src/, the frozen analyzer, round 3 verdicts.</p>
+    <ul>
+      <li>No new scored sessions. Round 4 is a separate paid run.</li>
+      <li>No change to the hippo build or its defaults.</li>
+      <li>Round 3 families are debug data only. Round 4 scores fresh families.</li>
+    </ul>
+  </doc-claim>
+
+</doc-plan>
+</main>
+</body></html>
