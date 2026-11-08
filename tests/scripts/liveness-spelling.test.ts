@@ -88,7 +88,12 @@ function linkReads(): Map<string, string[]> {
         at.set(index, `src/${path}:${lineOf(text, index)}: ${hit[0].replace(/\s+/g, ' ')}`);
       }
     }
-    if (at.size > 0) byFile.set(path, [...at.entries()].sort(([a], [b]) => a - b).map(([, hit]) => hit));
+    if (at.size > 0) {
+      byFile.set(
+        path,
+        [...at.entries()].sort(([a], [b]) => a - b).map(([, hit]) => hit),
+      );
+    }
   }
   return byFile;
 }
@@ -132,8 +137,11 @@ describe('liveness TS reads', () => {
     const problems: string[] = [];
     for (const [path, hits] of found) {
       const kept = keptByFile.get(path);
-      if (kept === undefined) problems.push(`unlisted: ${hits.join(' | ')}`);
-      else if (kept.reads !== hits.length) problems.push(`${kept.reads} listed, ${hits.length} found: ${hits.join(' | ')}`);
+      if (kept === undefined) {
+        problems.push(`unlisted: ${hits.join(' | ')}`);
+      } else if (kept.reads !== hits.length) {
+        problems.push(`${kept.reads} listed, ${hits.length} found: ${hits.join(' | ')}`);
+      }
     }
     for (const path of keptByFile.keys()) {
       if (!found.has(path)) problems.push(`src/${path} is listed with no read left`);
