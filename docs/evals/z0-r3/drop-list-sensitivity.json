@@ -1,0 +1,96 @@
+{
+ "droppedLessons": [],
+ "droppedFamilies": [],
+ "hookVoids": [
+  {
+   "sequence": "db3",
+   "seed": 1,
+   "position": 7
+  },
+  {
+   "sequence": "q118",
+   "seed": 3,
+   "position": 9
+  },
+  {
+   "sequence": "q133",
+   "seed": 2,
+   "position": 0
+  },
+  {
+   "sequence": "q135",
+   "seed": 2,
+   "position": 2
+  },
+  {
+   "sequence": "q140",
+   "seed": 1,
+   "position": 0
+  },
+  {
+   "sequence": "q140",
+   "seed": 3,
+   "position": 7
+  },
+  {
+   "sequence": "q156",
+   "seed": 1,
+   "position": 6
+  },
+  {
+   "sequence": "q162",
+   "seed": 2,
+   "position": 4
+  },
+  {
+   "sequence": "q162",
+   "seed": 3,
+   "position": 1
+  },
+  {
+   "sequence": "q162",
+   "seed": 3,
+   "position": 8
+  },
+  {
+   "sequence": "q173",
+   "seed": 2,
+   "position": 10
+  },
+  {
+   "sequence": "q173",
+   "seed": 3,
+   "position": 5
+  },
+  {
+   "sequence": "q184",
+   "seed": 3,
+   "position": 0
+  },
+  {
+   "sequence": "q187",
+   "seed": 3,
+   "position": 7
+  },
+  {
+   "sequence": "q226",
+   "seed": 1,
+   "position": 0
+  },
+  {
+   "sequence": "q226",
+   "seed": 1,
+   "position": 4
+  },
+  {
+   "sequence": "q238",
+   "seed": 3,
+   "position": 0
+  },
+  {
+   "sequence": "q256",
+   "seed": 1,
+   "position": 4
+  }
+ ]
+}
