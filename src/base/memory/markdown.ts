@@ -192,7 +192,8 @@ function confidenceOf(data: FrontmatterData): ConfidenceLevel {
   if (isConfidenceLevel(text)) return text;
   throw new Error(
     `memory ${String(data['id'])}: unknown confidence ${JSON.stringify(value)}; ` +
-      'use verified, observed, inferred or stale, then delete hippo.db to rebuild',
+      'use verified, observed, inferred or stale; the file stays on disk, ' +
+      'and deleting hippo.db to rebuild is safe only before any new write',
   );
 }
 

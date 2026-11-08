@@ -88,8 +88,8 @@ describe('a mirror file with a confidence outside the four tiers', () => {
     const text = withConfidenceLine(bad, 'confidence: high');
 
     expect(() => deserializeEntry(text, new Date())).toThrow(
-      `memory ${bad.id}: unknown confidence "high"; use verified, observed, inferred or stale, ` +
-        'then delete hippo.db to rebuild',
+      `memory ${bad.id}: unknown confidence "high"; use verified, observed, inferred or stale; ` +
+        'the file stays on disk, and deleting hippo.db to rebuild is safe only before any new write',
     );
   });
 });
