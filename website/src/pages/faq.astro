@@ -15,7 +15,7 @@ const anchor = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replac
 <Base title={title} description={description} crumb="FAQ" schema={[faqPageLd(faq)]}>
   <Nav />
   <main id="main">
-    <PageIntro eyebrow="FAQ">
+    <PageIntro>
       <Fragment slot="title">Questions about hippo, <span class="text-gradient">answered.</span></Fragment>
       <p>
         These are the answers in the
