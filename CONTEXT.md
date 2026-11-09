@@ -51,7 +51,8 @@ replacement. Context never injects it; recall and explain skip it unless asked
 (`--include-superseded`, `--as-of`).
 Only an explicit supersede sets it today (`hippo supersede`, `POST /v1/memories/:id/supersede`).
 ROADMAP Z6's "retired" means superseded or invalidated, never deleted.
-Any `superseded_by` value marks it, even an empty one.
+Any `superseded_by` value marks it, even an empty one. A write stores an empty link as none, and store
+schema v63 cleared the old ones; a blank planted by raw SQL still reads as superseded until a write rewrites it.
 _Avoid_: deduped (sleep's dedup deletes a near-copy outright), dormant, stale
 
 **Confidence tier**:
