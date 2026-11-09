@@ -135,9 +135,15 @@ describe('Z0 hook diet read', () => {
   it('renders through a relative --checkout, though the child runs from the staged store', () => {
     const base = tempBase();
     const co = stubCheckout(base, PRINTS_BLOCK);
-    const rel = path.relative(process.cwd(), co);
-    expect(path.isAbsolute(rel)).toBe(false);
-    expect(read(base, scoredTree(base, onlyGoodSeed), rel)).toMatchObject({ code: 0, stderr: '' });
+    const scored = scoredTree(base, onlyGoodSeed);
+    // chdir to the base, so the relative path holds on CI runners with the temp folder on another drive.
+    const prevCwd = process.cwd();
+    process.chdir(base);
+    try {
+      expect(read(base, scored, path.basename(co))).toMatchObject({ code: 0, stderr: '' });
+    } finally {
+      process.chdir(prevCwd);
+    }
     expect(seenBy(co)).toHaveLength(3);
   });
 
