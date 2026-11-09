@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "astro dev",
     "check:readme": "node scripts/check-readme-sync.mjs",
-    "build": "node scripts/check-readme-sync.mjs && astro build",
+    "build": "node scripts/check-readme-sync.mjs && astro build && node scripts/check-build.mjs",
+    "snapshot": "node scripts/check-build.mjs --update",
     "preview": "astro preview",
     "deploy": "npm run build && wrangler pages deploy dist --project-name hippo-memory --branch main"
   },

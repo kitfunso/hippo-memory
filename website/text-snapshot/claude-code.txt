@@ -1,0 +1,55 @@
+Claude Code memory between sessions | hippo-memory
+Skip to content ~/hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+★ N install
+Home
+Quickstart
+How it works
+Benchmarks
+FAQ
+Teams
+Compare
+Docs
+Claude Code
+Claude Code memory between sessions
+Claude Code loads two things into every session: the CLAUDE.md files you write and the auto memory notes it writes itself. Hippo adds a store of lessons that carries over between sessions: what failed, what fixed it, and which facts changed.
+It recalls the lessons that match the task, keeps pinned ones in context, ranks the ones you mark wrong lower, and leaves out the ones you replace. The store is SQLite in your project, with markdown mirrors you can read and commit.
+Set it up in two commands
+$ npm install -g hippo-memory $ hippo init # optional: register every git repo under ~ at once $ hippo init --scan ~ If the project has a CLAUDE.md, hippo init adds a short block saying the prompt hook injects pinned rules and matching memories. The block asks Claude to run hippo context --auto at the start of a task only if no hippo memory block has appeared. Init also adds the hooks below to Claude Code's settings and installs one daily run at N:Nam that learns from the day's commits in every registered project. hippo init --no-hooks --no-schedule skips both, and hippo doctor checks the install.
+What the hooks do
+Claude Code hooks that hippo init installs Hook What it does
+SessionStart Prints what the previous session's hippo sleep consolidated.
+UserPromptSubmit Keeps your pinned memories and the last N writes in context. An unchanged block is skipped, and sent again after N skips or a compaction.
+PreCompact Saves a snapshot of the task, a summary and the next step before the transcript is summarized.
+SessionStart (compact) Prints that snapshot and the recent session trail back into context after compaction.
+PostCompact Tells you what was saved, and prints nothing when nothing was.
+PostToolUseFailure hippo capture-error stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once.
+SessionEnd Runs hippo sleep, which consolidates the store and imports new entries from Claude Code MEMORY.md files, then hippo capture on the session transcript.
+The Claude Code plugin (opens in new tab) is the alternative to these hooks; use one, not both. hippo hook uninstall claude-code removes the hooks.
+A mistakes file that maintains itself
+Some developers ask Claude Code to keep a MISTAKES.md file of what went wrong. Hippo keeps that record for you. The PostToolUseFailure hook turns failed tool calls into error memories, and error memories get twice the half-life of ordinary ones. You can add, correct and replace lessons yourself:
+$ hippo remember "billing uses pnpm; never run npm install here" --error # a recalled lesson was wrong: $ hippo outcome --bad # a fact changed: $ hippo supersede mem_aNbNcN "billing moved to bun" # what the failure hook saw: $ hippo failures Recall pulls the lessons that match the task, ranked by relevance, strength and recency, and a lesson marked wrong drops out of the top results.
+Memories you can read and commit
+The store is SQLite: .hippo/hippo.db in each project, plus ~/.hippo/ for lessons shared across projects. After each change hippo writes markdown mirrors beside it, so you can read, grep and commit what your agent has learned. The same store serves Codex, Cursor and any MCP client, so a lesson Claude Code learned is there when you switch tools.
+MCP, and where CLAUDE.md fits
+claude mcp add hippo-memory -- hippo mcp gives Claude Code hippo's memory tools over MCP; the MCP server page lists them. Keep CLAUDE.md for short standing rules: CLAUDE.md vs memory covers what goes where, and hippo import --claude CLAUDE.md turns notes that piled up there into memories.
+FAQ
+Claude Code questions
+All N questions →
+How do I give Claude Code memory between sessions? +
+Run npm install -g hippo-memory, then hippo init in the project. If the project has a CLAUDE.md, init adds a short block saying the prompt hook injects pinned rules and matching memories, and asking Claude to run hippo context --auto at the start of a task only if no hippo memory block has appeared. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run hippo sleep when the session ends. hippo init --scan ~ gives every git repo under your home folder a store and installs the same hooks, but adds no block to any CLAUDE.md. The Claude Code plugin (opens in new tab) is the alternative to these hooks; use one, not both.
+Do I still need CLAUDE.md? +
+Yes, for short standing rules such as build commands, code style and things never to do. Claude Code loads CLAUDE.md and its auto memory into every session, and its memory docs (opens in new tab) say that when two rules contradict each other, Claude may pick one arbitrarily. Hippo holds the lessons that pile up, recalls the ones that match the task, and retires the ones marked wrong or replaced. hippo init adds its block to CLAUDE.md, and hippo import --claude CLAUDE.md turns existing notes into memories.
+What happens when a memory turns out to be wrong? +
+Mark it, and it drops out of the top results. hippo outcome --bad weakens the memories from the last recall, hippo supersede <id> "<new fact>" replaces one with a newer version, and hippo reject <id> --reason "<why>" stops that value from returning at all. On the synthetic EN test, where every mark is correct, plain BMN plus the outcome mark cut how often a marked-bad memory stayed in the top five from N% to N%. Real marks are noisier, because --bad marks the whole recall batch.
+~/hippo
+A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
+Agents
+Claude CodeCursorCodexMCP server Compare
+hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicense (MIT)
+hippo-memory vN · MIT · built by kitfunso

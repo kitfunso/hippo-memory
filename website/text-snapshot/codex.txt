@@ -1,0 +1,47 @@
+Codex CLI memory across sessions | hippo-memory
+Skip to content ~/hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+★ N install
+Home
+Quickstart
+How it works
+Benchmarks
+FAQ
+Teams
+Compare
+Docs
+Codex CLI
+Codex CLI memory across sessions
+Codex reads AGENTS.md files before it starts work. hippo init adds a short block there. The block tells Codex that Hippo's prompt hook injects pinned rules and matching memories. It tells Codex to run hippo context --auto at the start of a task only when no hippo memory block has appeared in the session. Either way, lessons from earlier sessions, and from your other agents, come back when they match the task.
+Set it up
+$ npm install -g hippo-memory $ hippo init # optional: capture Codex sessions too $ hippo hook install codex Capturing Codex sessions is opt-in. hippo hook install codex wraps the Codex launcher, hippo hook uninstall codex removes the wrapper, and hippo init prints the command when it detects Codex. hippo doctor checks the install.
+What hippo adds to AGENTS.md
+## Project Memory (Hippo) When Hippo's prompt hook is installed, it injects pinned rules and the memories that match each prompt, so never load them yourself. If no hippo memory block has appeared in this session, run this at the start of a task and read the output before writing any code: ```bash hippo context --auto --budget N ``` On errors or unexpected behaviour, record it right then, while you work, never as a closing step: ```bash hippo remember "<description of what went wrong>" --error ``` It closes with a note that session-end capture runs by itself once the Codex wrapper is installed, and a hippo capture --stdin command for a manual summary when it is not. The block sits between <!-- hippo:start --> and <!-- hippo:end --> markers, so the rest of your AGENTS.md stays yours.
+Codex memories and hippo
+Codex has a Memories feature of its own: it can turn useful context from eligible prior chats into local memory files under ~/.codex/memories/. OpenAI's docs say to keep required team guidance in AGENTS.md or checked-in documentation, and to treat memories as a helpful recall layer, not as the only source for rules that must always apply (OpenAI docs (opens in new tab), checked N-N-N).
+Codex memories are off by default. Turn them on with memories = true under [features] in config.toml, and use /memories in a session to choose whether that chat uses them (OpenAI docs (opens in new tab), checked N-N-N).
+When they are on, hippo reads them too. hippo init, every hippo sleep and the daily run import the User Profile, preferences and general tips from ~/.codex/memories/memory_summary.md into your global store, so your other agents can recall them. Hippo only reads that file and never writes to Codex's folders.
+Hippo is a recall layer too, with two differences. You can mark a lesson wrong with hippo outcome --bad or replace one with hippo supersede. And the store sits in your project, with markdown mirrors you can commit, shared with Claude Code, Cursor and any MCP client.
+What the Codex wrapper does
+After hippo hook install codex, each Codex launch goes through hippo codex-run. It shows the summary of the last session-end run, notes where Codex's history.jsonl ends, and then starts the real Codex.
+When Codex exits, a background worker takes over. If the folder has its own store, the worker runs hippo sleep on it. Then it finds this session's transcript and captures lessons from it into the folder's store, or into the global store when the folder has none. With no store at all, it does nothing.
+FAQ
+Codex questions
+All N questions →
+How do I give Codex memory across sessions? +
+hippo init adds its instructions to your AGENTS.md, which Codex reads before it starts work. Capturing Codex sessions is opt-in: hippo hook install codex wraps the Codex launcher, and hippo hook uninstall codex removes the wrapper.
+Which agents does hippo work with? +
+hippo init detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, and wires itself into each one's instruction file, hooks or plugin. It only patches instruction files that already exist. Any MCP client can use the MCP server, and other tools can call the CLI or the HTTP API that hippo serve starts.
+What happens when a memory turns out to be wrong? +
+Mark it, and it drops out of the top results. hippo outcome --bad weakens the memories from the last recall, hippo supersede <id> "<new fact>" replaces one with a newer version, and hippo reject <id> --reason "<why>" stops that value from returning at all. On the synthetic EN test, where every mark is correct, plain BMN plus the outcome mark cut how often a marked-bad memory stayed in the top five from N% to N%. Real marks are noisier, because --bad marks the whole recall batch.
+~/hippo
+A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
+Agents
+Claude CodeCursorCodexMCP server Compare
+hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicense (MIT)
+hippo-memory vN · MIT · built by kitfunso

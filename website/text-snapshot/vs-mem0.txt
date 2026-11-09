@@ -1,0 +1,74 @@
+hippo vs memN: an open-source memN alternative
+Skip to content ~/hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+★ N install
+Home
+Quickstart
+How it works
+Benchmarks
+FAQ
+Teams
+Compare
+Docs
+Comparison
+hippo vs memN: an open-source memN alternative
+Both are open-source memory for AI agents. memN uses a language model to extract memories, and memories stored through its hosted MCP server live in your MemN account. Hippo keeps memories in SQLite on your machine, needs no account and no model, and wires itself into the coding agents it finds.
+Both mark an older fact superseded when a newer one replaces it; memN does that on its hosted platform. Hippo also lets you mark a recalled memory wrong with hippo outcome --bad, and it drops out of the top results.
+Two published numbers, two different metrics
+hippo · retrieval recall@N LongMemEval-S, per-question haystack benchmark scripts with a free local embedder, not hippo recall N%
+memN · end-to-end answer score LongMemEval memN's hosted platform, top-N retrieval, per its README N
+Recall@N asks whether an answer session is in the top five results. An answer score asks whether a model answered correctly from what came back. They are not comparable, so this is not a head-to-head. Hippo's method is on the benchmarks page; memN's figure is from its README (opens in new tab), checked N-N-N
+Feature by feature
+Every row of the README comparison table, hippo against memN The MemN column was last checked against memN's own pages on N-N-N
+hippo and MemN row by row from the README comparison table Feature hippo MemN
+Decay by default Yes No
+Retrieval strengthening Yes No
+Reward-proportional decay Yes No
+Hybrid search (BMN + embeddings) Yes Yes (semantic + BMN + entity)
+Schema acceleration / knowledge graph Yes (schema) Partial (entity linking; graph memory on Pro)
+Conflict detection + resolution Yes Partial (hosted platform marks superseded facts)
+Multi-agent shared memory Yes No
+Transfer scoring Yes No
+Outcome tracking Yes No
+Confidence tiers Yes No
+Spatial organization No No
+Lossless compression No No
+Cross-tool import (ChatGPT/Claude/Cursor) Yes No
+Auto-hook install Yes No
+MCP server Yes Yes (hosted, needs an account)
+Zero runtime deps Yes No
+LongMemEval (best published) N% any / N% all R@N* (local MiniLM; N% any-evidence with voyage-N-large; s_cleaned, per-haystack) N (hosted platform)**
+Git-friendly Yes No
+Framework agnostic Yes Partial
+License MIT Apache-N
+* Hippo's figures are on longmemeval_s_cleaned with a per-question haystack, each the best of five retrieval settings in the benchmark scripts, not hippo recall. Any-evidence R@N counts a hit when any answer session is in the top N over all N questions: N% with the free local MiniLM embedder (an optional install) and N% with voyage-N-large (measured N-N-N not re-run). All-evidence R@N counts a hit only when every answer session is in the top N over the N questions that have an answer: N to N% with MiniLM. gbrain first published N%, an any-evidence score over all N; its report (opens in new tab) now leads with all-evidence, N% (N of N) with the paid Voyage rerank-N reranker and N% without it. On all-evidence recall gbrain is ahead. The June N build scored N any-evidence; docs/evals/N-N-N-longmemeval-reproduction.md (opens in new tab) has both runs. An older hippo number, N% R@N on longmemeval_oracle under pooled (non-per-haystack) retrieval, is not comparable to per-haystack figures.
+** Different metric: these are end-to-end answer scores, not retrieval R@N MemN's N comes from its hosted platform, which its README says includes optimizations the open-source SDK lacks. Zep's N% and N% are accuracy figures from its homepage. Memoria's N% and EverMind's N% are overall accuracy with a reader LLM. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@N numbers above. The MemN Zep and Letta columns were last checked against each vendor's own pages on N-N-N
+What memN ships today (checked N-N-N)
+Three ways to run it: a library (pip install memNai or npm install memNai), a self-hosted server on Postgres with pgvector, and the hosted MemN platform (docs (opens in new tab)).
+The open-source library needs a key for a language model provider, OpenAI by default.
+Its MCP server is hosted and needs a MemN Platform account and API key. In memN's words, memories stored this way "live in your MemN account, not on your computer" (memN MCP docs (opens in new tab)).
+On the hosted platform, a background process called Dream marks an older memory superseded and links it to the fact that replaced it (Dream docs (opens in new tab)).
+Graph memory (entity linking) is listed on the Pro plan (pricing (opens in new tab)). The licence is Apache-N
+When to pick which
+Pick hippo
+The memory is for coding agents on your machine. You want no account, no API key and no model in the loop, a store that hippo init wires into the agents you already run, lessons you can mark wrong, and markdown mirrors you can read and commit.
+Pick memN
+You are building an app whose memory belongs to your end users, the case memN describes as "customer support chatbots, AI assistants, and autonomous systems", and a hosted platform or a Postgres server fits your stack.
+Get started with hippo All questions
+FAQ
+hippo and memN asked directly
+Is hippo an open-source memN alternative? +
+Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, keeps memories in SQLite in your project, needs no account or API key, and hippo init wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. memN is Apache-N and runs as a library, a self-hosted server or a hosted platform; its open-source library calls a language model to extract memories, OpenAI by default.
+Is memN's N on LongMemEval better than hippo's N%? +
+Neither beats the other, because they measure different things. Hippo's N% is retrieval recall@N on LongMemEval-S with a per-question haystack: whether an answer session is in the top five results. It comes from the benchmark scripts with a free local embedder, not hippo recall. memN's N is an end-to-end answer score: whether a model answered correctly from what came back. memN's README says it comes from its hosted platform at a top-N retrieval budget, with optimizations the open-source SDK lacks.
+~/hippo
+A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
+Agents
+Claude CodeCursorCodexMCP server Compare
+hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicense (MIT)
+hippo-memory vN · MIT · built by kitfunso
