@@ -215,8 +215,9 @@ describe('prompt recall with excludeTags', () => {
       row('Lunch orders close at eleven sharp', 2),
     ];
     for (const r of unrelated) writeEntry(local, { ...r, tags: ['rule'] });
-    for (let n = 1; n <= 3; n++)
+    for (let n = 1; n <= 3; n++) {
       writeEntry(local, row(`Digest ${n}: postgres migration rollback deploy checklist`, 10 + n, { tags: [DIGEST] }));
+    }
 
     const filtered = await pool(PROMPT, [DIGEST]);
     expect(filtered.map((e) => e.id)).toEqual(unrelated.map((r) => r.id));
