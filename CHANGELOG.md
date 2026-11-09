@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.4.0 - 2026-11-09
+
+### Added
+
+- **Z0 lesson reach read (`scripts/token-eval/z0-reach.mjs`).** One read-only command shows where each taught lesson sat between its teach and its first apply in Z0 round 3: built-in memory reach, hippo's own reach, what hippo's prompt block held, and the most hippo's lessons can add over sham hippo. Results are in `docs/evals/2026-11-08-z0-round3-lesson-reach.md`.
+
+### Changed
+
+- **The Health action controller is now a reducer.** Forget, Mark wrong, Resolve and Pin keep their state in one pure `reduce(state, event)` over an exhaustive event union, with each row's state held as independent lanes that each carry a phase. Timers and requests run as effects of that state. What you see on the dashboard is unchanged.
+- **Schema v62 adds the status triggers.** Four triggers check the status of task snapshots and conflicts on insert and on status update; rows already stored are kept as they are.
+- **Every reader now asks one question to decide whether a memory is superseded or live.** The SQL lives in `src/db/sql-predicates.ts` and the TypeScript in `src/base/memory/liveness.ts` (`isSuperseded`) and `src/base/scope/live-memory.ts` (`isLiveMemory`). Before this, recall, context, the dashboard, sleep and the keep rule spelled it by hand in three SQL forms and about 40 TypeScript ones. A test fails when a new reader spells it again.
+- **A memory whose stored `superseded_by` is blank now counts as superseded everywhere.** Recall search, ambient context and the supersede guard already treated it that way, while context, the dashboard, sleep's duplicate scan and the keep rule treated it as live. Only a store written by an older binary, or edited by hand, can hold such a row. Such a row is no longer kept by the imported-agent-memory keep rule, so sleep handles it like any other memory that rule does not keep. Four tests that pinned the old rule now pin this one.
+- **Sleep's extraction and its retry marks read a blank `superseded_by` as superseded too.** Such a memory is no longer offered for fact extraction or given an empty-extraction mark, and a mark already left for one is dropped.
+- **A store built on `hippo-memory/store-kit` may add three optional `consolidation` members.** They are `noteRebuildFailures`, `emptyExtractions` and `noteEmptyExtractions`. Such a store may also honour the new optional `at` argument of `dirtySummaries`. A store without them behaves as before.
+
+### Fixed
+
+- **Invalidating or superseding a memory again no longer halves its half-life again.** A re-scan of git history or a repeated `hippo invalidate` with the same pattern used to compound the half-life down to 1 day. Each cause now halves it once and repeating the act changes nothing more.
+- **Rebuilding a store from its markdown mirror skips a file whose confidence is not verified, observed, inferred or stale.** The warning names the file, the row and the value, and the other files still load. Before, the unknown value went into the store as the memory's confidence. The file stays on disk: fix or remove the line, then delete `hippo.db` and open the store again, which is safe only before any new write.
+- **A Health panel no longer shows the previous project's error.** When a panel switched to a new key, it kept the old key's error and loading flag until the next fetch started. It now returns no error and a loading state for the new key at once.
+- **Refresh on the Board clears the old error.** After a failed load, pressing refresh now shows "loading cards" (or removes the toolbar alert) while the new fetch runs, instead of leaving the old error on screen.
+- **A Health panel no longer stays on loading after a switch away and back.** If the load for the other key was cut short or failed, returning to the first key left the panel loading with nothing to end it. It now loads the first key again.
+- **A task snapshot clear no longer closes a snapshot that another process closed first.** Every status move on compaction records, goals, conflicts, quarantined memories and task snapshots now names the statuses it may leave, so a second writer finds nothing to change instead of overwriting the first.
+- **The store refuses a task snapshot or conflict status outside its list.** `hippo snapshot clear --status` and `hippo conflicts --status` reject a value outside their list with exit 1, where a misspelt status used to be stored for good.
+- **Sleep no longer re-sends the same failing work to the model every run.** A DAG summary whose rebuild kept failing went back to the model on every sleep, and a memory whose extraction found nothing was offered again each time. After 3 failed rebuilds in a row, sleep now waits a day before it tries that summary again. The wait doubles for each further failure, up to 7 days, and a provider outage does not count as a failure. Sleep also skips a memory whose extraction found nothing until its text changes or 30 days pass, so later memories are no longer starved when the first 20 have nothing to extract. That means the model returned an empty array, or every fact it returned was refused by a rejected value. A reply whose facts fail the quality check leaves the memory unmarked, so sleep tries it again. `hippo sleep` shows `N held` in the DAG rebuild line, and the sleep result gains `summariesRebuildHeld` and `extractionHeld`. There is no migration.
+
 ## 3.3.3 - 2026-11-05
 
 ### Fixed
