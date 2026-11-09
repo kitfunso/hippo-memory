@@ -156,7 +156,7 @@ export function bodyTexts(messages) {
 }
 
 /** The main agent's calls carry more than 3 tools; the other model calls are its helpers. */
-const isMainCall = (e, request) => isString(e.url) && e.url.includes('/v1/messages') && (request.tools?.length ?? 0) > 3;
+export const isMainCall = (e, request) => isString(e.url) && e.url.includes('/v1/messages') && (request.tools?.length ?? 0) > 3;
 
 function scanBody(e, acc) {
   const body = e.body;

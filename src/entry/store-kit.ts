@@ -218,7 +218,8 @@ export { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 export { replacesIndex } from '../base/embeddings/index-identity.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the
 // same code. An add-on's ambientCandidates and summaryWithDescendants admit rows by hippo.db's
-// rule.
+// rule. A store that ignores `admit.excludeTags` or `recall.excludeTags` gets only core's after-load
+// filter, so its recent-N or recall pool can come short.
 export {
   ambientRefusal,
   descendantAdmits,

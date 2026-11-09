@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import { site } from '../content/site';
+import RepeatMistakes from '../components/RepeatMistakes.astro';
 
 const title = 'hippo benchmarks: LongMemEval retrieval (R@5 98.0 / 99.8)';
 // Each clause states its corpus and its bound BEFORE its numbers: this string is the
@@ -79,6 +80,17 @@ const heroChips = [
             </div>
           ))}
         </div>
+      </div>
+    </section>
+
+    <!-- Agent sessions -->
+    <section class="relative border-t border-white/5">
+      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
+        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Agent sessions: repeat&nbsp;mistakes</h2>
+        <p class="mt-4 mb-8 leading-relaxed text-zinc-400">
+          Retrieval scores say whether the right memory comes back. This test asks what the agent then does. Each run teaches Claude Code one rule by correcting it, then gives it later tasks where the same mistake is possible, with and without hippo.
+        </p>
+        <RepeatMistakes />
       </div>
     </section>
 
