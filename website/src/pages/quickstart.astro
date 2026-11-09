@@ -2,6 +2,8 @@
 import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
+import Cmd from '../components/Cmd.astro';
+import CopyButton from '../components/CopyButton.astro';
 import { getStarted, site } from '../content/site';
 
 const title = 'hippo quickstart: memory for Claude Code, Cursor and MCP';
@@ -74,11 +76,10 @@ const howTo = {
       </div>
     </section>
 
-    <section class="relative border-t border-white/5 bg-white/[0.02]">
+    <section id="install" class="relative border-t border-white/5 bg-white/[0.02]">
       <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
         <h2 class="text-3xl leading-tight sm:text-4xl">Install</h2>
-        <pre class="mt-6 overflow-x-auto rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg" data-scroll-x><code><span class="text-term-prompt">$</span> {site.installCmd}
-<span class="text-term-prompt">$</span> hippo init</code></pre>
+        <div class="mt-6"><Cmd lines={[site.installCmd, 'hippo init']} copy /></div>
         <p class="mt-4 text-sm leading-relaxed text-zinc-400">
           <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init</code> creates a <code>.hippo/</code> store in the project and adds hippo's instructions to the agent files it finds there, such as <code>CLAUDE.md</code> and <code>AGENTS.md</code> (which Codex, Cursor, OpenClaw, OpenCode and Pi read), plus Claude Code's session hooks. To register every git repo under a folder at once, run <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">{site.initCmd}</code>, which gives each repo a store seeded from its git history.
         </p>
@@ -89,14 +90,14 @@ const howTo = {
       </div>
     </section>
 
-    <section class="relative border-t border-white/5">
+    <section id="works-with-your-agents" class="relative border-t border-white/5">
       <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
         <h2 class="text-3xl leading-tight sm:text-4xl">Works with your agents</h2>
         <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {integrations.map((i, n) => (
             <div class:list={['glass rounded-2xl p-5', n === integrations.length - 1 && 'sm:col-span-2 lg:col-span-3']}>
               {i.href
-                ? <a href={i.href} class="link text-sm font-medium">{i.name}</a>
+                ? <a href={i.href} class="link tap text-sm font-medium">{i.name}</a>
                 : <span class="text-sm font-medium text-zinc-200">{i.name}</span>}
               <span class="mt-2 block text-xs leading-relaxed text-zinc-400">{i.note}</span>
             </div>
@@ -105,7 +106,7 @@ const howTo = {
       </div>
     </section>
 
-    <section class="relative border-t border-white/5 bg-white/[0.02]">
+    <section id="the-memory-loop" class="relative border-t border-white/5 bg-white/[0.02]">
       <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
         <h2 class="text-3xl leading-tight sm:text-4xl">The memory loop</h2>
         <p class="mt-4 leading-relaxed text-zinc-400">
@@ -114,7 +115,10 @@ const howTo = {
         <div class="mt-8 space-y-3">
           {loop.map((step) => (
             <div class="rounded-2xl border border-white/8 p-5">
-              <code class="block overflow-x-auto font-mono text-sm text-zinc-200" data-scroll-x><span class="text-term-prompt">$</span> {step.cmd}</code>
+              <div class="flex items-start gap-3">
+                <code class="block min-w-0 flex-1 overflow-x-auto font-mono text-sm text-zinc-200" data-scroll-x><span class="select-none text-term-prompt">$</span> {step.cmd}</code>
+                <CopyButton text={step.cmd} label={`Copy command: ${step.cmd}`} />
+              </div>
               <span class="mt-2 block text-xs leading-relaxed text-zinc-400">{step.note}</span>
             </div>
           ))}

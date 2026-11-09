@@ -1,12 +1,22 @@
 ---
+import CopyButton from './CopyButton.astro';
 // Terminal block. Shell lines get a prompt and `#` lines read as comments; prompt={false} shows a config file as-is.
+// copy adds a button: true copies what is shown (a shell block minus its # lines), a list copies exactly those lines.
 interface Props {
   lines: string[];
   prompt?: boolean;
+  copy?: boolean | string[];
 }
-const { lines, prompt = true } = Astro.props;
+const { lines, prompt = true, copy = false } = Astro.props;
+const copied = Array.isArray(copy) ? copy : prompt ? lines.filter((line) => !line.startsWith('#')) : lines;
+const label = !prompt ? 'Copy config block' : copied.length === 1 ? `Copy command: ${copied[0]}` : `Copy commands: ${copied.join('; ')}`;
+// The wrapper exists only with a button, so a block without one renders as before.
+const Wrap = copy ? 'div' : Fragment;
 ---
 
-<pre class="whitespace-pre-wrap rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg [overflow-wrap:anywhere]"><code>{lines.map((line, i) => (
+<Wrap class="relative">
+<pre class:list={['whitespace-pre-wrap rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg [overflow-wrap:anywhere]', copy && 'pr-20']}><code>{lines.map((line, i) => (
   <Fragment>{i > 0 && '\n'}{!prompt ? line : line.startsWith('#') ? <span class="text-zinc-400">{line}</span> : <Fragment><span class="select-none text-term-prompt">$ </span>{line}</Fragment>}</Fragment>
 ))}</code></pre>
+{copy && <div class="absolute right-3 top-3"><CopyButton text={copied.join('\n')} label={label} /></div>}
+</Wrap>

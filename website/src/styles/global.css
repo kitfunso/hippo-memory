@@ -144,6 +144,16 @@ header.glass {
 .link:focus-visible {
   text-decoration-color: var(--color-acc-cyan);
 }
+/* a text link that stands alone gets a 24px tap area; the text does not move */
+.tap { position: relative; display: inline-block; }
+.tap::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: max(100%, 1.5rem);
+  transform: translateY(-50%);
+}
 
 /* ---- inline code in long-form copy (README markdown and the content pages); long config strings wrap on phones ---- */
 .copy code {

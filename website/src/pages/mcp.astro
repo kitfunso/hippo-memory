@@ -77,13 +77,13 @@ const others = [
 
     <Section title="Add it to your client">
       <p>In Claude Code, one command:</p>
-      <Cmd lines={['claude mcp add hippo-memory -- hippo mcp']} />
+      <Cmd lines={['claude mcp add hippo-memory -- hippo mcp']} copy />
       <p>
         Other clients take a config block. Cursor reads it from <code>.cursor/mcp.json</code> and Claude Desktop from
         <code>claude_desktop_config.json</code>; Windsurf and Cline take the same <code>mcpServers</code> block in their
         own MCP settings.
       </p>
-      <Cmd lines={mcpJson} prompt={false} />
+      <Cmd lines={mcpJson} prompt={false} copy />
       <p>
         No global install? <code>"command": "npx", "args": ["-y", "hippo-memory", "mcp"]</code> works too. With no store
         anywhere, the first tool call creates the global store in <code>~/.hippo</code>, and <code>hippo init</code> in a

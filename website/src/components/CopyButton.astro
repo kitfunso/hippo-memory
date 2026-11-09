@@ -1,0 +1,17 @@
+---
+// The click handler is the one in layouts/Base.astro, which reads data-copy and flips the data-copy-label text.
+interface Props {
+  text: string;
+  label: string;
+}
+const { text, label } = Astro.props;
+---
+
+<button
+  type="button"
+  data-copy={text}
+  aria-label={label}
+  class="relative shrink-0 rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-400 transition after:absolute after:-inset-2 after:content-[''] hover:border-acc-violet/50 hover:text-zinc-100 focus-visible:text-zinc-100"
+>
+  <span data-copy-label>Copy</span>
+</button>
