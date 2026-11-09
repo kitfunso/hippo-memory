@@ -214,6 +214,8 @@ export function promptRecallRequest(
   plan: ContextPlan,
 ): AmbientRecallRequest | undefined {
   const { pinnedInject } = plan.config;
+  // Optional: a config built in code before this key existed has none, and reads as no list.
+  const excludeTags = pinnedInject.excludeTags ?? [];
   const promptRecallTerms =
     plan.promptRecallPending && pinnedInject.enabled ? promptSearchTerms(opts.prompt ?? '') : [];
   return promptRecallTerms.length > 0
@@ -226,7 +228,7 @@ export function promptRecallRequest(
           }),
         ),
         ownScope: plan.ownScope,
-        ...(pinnedInject.excludeTags.length > 0 && { excludeTags: pinnedInject.excludeTags }),
+        ...(excludeTags.length > 0 && { excludeTags }),
       }
     : undefined;
 }

@@ -89,7 +89,7 @@ export interface HippoConfig {
     /** FTS candidate pool size per store before gating. Default 100. */
     promptRecallCandidates: number;
     /** Tags the hook block leaves out: a row carrying any is no pin, recent or recall candidate. Default []. */
-    excludeTags: string[];
+    excludeTags?: string[];
   };
   /** Memory scope isolation (default true): ambient context (`hippo context`, the hook,
    * /v1/context, MCP hippo_context) excludes OTHER projects' memories; explicit recall is

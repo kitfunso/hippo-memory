@@ -128,6 +128,20 @@ describe('the hook block with excludeTags', () => {
     expect(absent.staticHash).not.toBeNull();
     expect(empty).toEqual(absent);
   });
+
+  it('reads a config built in code without the key as no list, prompt recall on', async () => {
+    writeEntry(local, row(ruleText(1), 1, { pinned: true, tags: ['rule'] }));
+    writeEntry(local, row('postgres migration rollback deploy checklist for the billing worker', 2, { tags: [DIGEST] }));
+
+    writeConfig({ promptRecall: true, excludeTags: [] });
+    const empty = await hook(PROMPT);
+    const { excludeTags: _dropped, ...older } = ctx.config.pinnedInject;
+    ctx = { ...ctx, config: { ...ctx.config, pinnedInject: older } };
+    const absent = await hook(PROMPT);
+
+    expect(absent.stdout).toContain('billing worker');
+    expect(absent).toEqual(empty);
+  });
 });
 
 describe('prompt recall with excludeTags', () => {
