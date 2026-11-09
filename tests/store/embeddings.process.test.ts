@@ -68,6 +68,19 @@ describe('isEmbeddingAvailable', () => {
     expect(availableWith(['@xenova/transformers'])).toBe('true');
   });
 
+  it('sees a package installed after a false answer, in the same process', () => {
+    const script = `import(${JSON.stringify(LOCAL_JS)}).then((m) => {
+      process.stdout.write(String(m.isEmbeddingAvailable()) + '\\n');
+      process.env.TRANSFORMERS_INSTALLED = '@huggingface/transformers';
+      process.stdout.write(String(m.isEmbeddingAvailable()));
+    })`;
+    const out = execFileSync(process.execPath, ['--require', INSTALLED_ONLY, '-e', script], {
+      encoding: 'utf8',
+      env: { ...process.env, TRANSFORMERS_INSTALLED: '' },
+    });
+    expect(out.split('\n')).toEqual(['false', 'true']);
+  });
+
   it('matches what this install resolves, and is true on the CI leg that requires the backend', async () => {
     const { isEmbeddingAvailable } = await import('../../src/base/embeddings/local.js');
     const req = createRequire(import.meta.url);

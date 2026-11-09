@@ -49,15 +49,32 @@ export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
   );
 }
 
-function failureOf<R>(
-  reply: SleepReply<R> | undefined,
-  code: number | null,
-  signal: NodeJS.Signals | null,
-): Error {
-  if (!reply || reply.ok) {
-    return new Error(`sleep process ended without an answer (code ${code}, signal ${signal})`);
+/** How a child's run ended, held as one value so no reader sees a mix of flags. */
+type Unanswered =
+  | { readonly kind: 'failed'; readonly reply: FailureReply }
+  | { readonly kind: 'malformed' }
+  | { readonly kind: 'deadline' }
+  | { readonly kind: 'closed' };
+type ChildEnd<R> = { readonly kind: 'answered'; readonly result: R } | Unanswered;
+
+type ChildEvent<R> =
+  | { readonly kind: 'reply'; readonly reply: SleepReply<R> }
+  | { readonly kind: 'malformed' | 'deadline' | 'close' };
+
+// The failed-versus-deadline order lives in this precedence, not in the type.
+function settle<R>(end: ChildEnd<R> | undefined, event: ChildEvent<R>): ChildEnd<R> {
+  if (end?.kind === 'answered') return end;
+  switch (event.kind) {
+    case 'reply':
+      if (event.reply.ok) return { kind: 'answered', result: event.reply.result };
+      return end ?? { kind: 'failed', reply: event.reply };
+    case 'malformed':
+      return end ?? { kind: 'malformed' };
+    case 'deadline':
+      return { kind: 'deadline' };
+    case 'close':
+      return end ?? { kind: 'closed' };
   }
-  return replyError(reply);
 }
 
 /** A child's answer, settled by its reply, and its end, which comes after the work it does once
@@ -84,19 +101,21 @@ function childAnswer<R>(job: SleepJob, ended: () => void): Promise<R> {
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
       windowsHide: true,
     });
-    let reply: SleepReply<R> | undefined;
-    let timedOut = false;
-    let malformed = false;
+    let end: ChildEnd<R> | undefined;
     // SIGKILL because the child is inside synchronous hippo.db work and cannot run a handler; the
     // OS drops its write lock.
     const timer = setTimeout(() => {
-      timedOut = true;
+      end = settle(end, { kind: 'deadline' });
       child.kill('SIGKILL');
     }, deadlineMs);
     child.once('message', (message) => {
-      if (isSleepReply<R, typeof message>(message)) reply = message;
-      else malformed = true;
-      if (reply?.ok) resolve(reply.result);
+      end = settle(
+        end,
+        isSleepReply<R, typeof message>(message)
+          ? { kind: 'reply', reply: message }
+          : { kind: 'malformed' },
+      );
+      if (end.kind === 'answered') resolve(end.result);
     });
     child.once('error', (err) => {
       clearTimeout(timer);
@@ -108,38 +127,35 @@ function childAnswer<R>(job: SleepJob, ended: () => void): Promise<R> {
     child.once('close', (code, signal) => {
       clearTimeout(timer);
       ended();
-      if (reply?.ok) return;
-      reject(unansweredFailure(reply, code, signal, { timedOut, malformed, deadlineMs }));
+      end = settle(end, { kind: 'close' });
+      if (end.kind !== 'answered') reject(unansweredFailure(end, deadlineMs, code, signal));
     });
     child.send({ ...job, deadline: Date.now() + deadlineMs } satisfies SleepMessage);
   });
 }
 
-interface ChildEnd {
-  readonly timedOut: boolean;
-  readonly malformed: boolean;
-  readonly deadlineMs: number;
-}
-
-/** Why a child that closed without a good reply failed, the deadline first. */
-function unansweredFailure<R>(
-  reply: SleepReply<R> | undefined,
+/** Why a child that closed without a good reply failed. */
+function unansweredFailure(
+  end: Unanswered,
+  deadlineMs: number,
   code: number | null,
   signal: NodeJS.Signals | null,
-  { timedOut, malformed, deadlineMs }: ChildEnd,
 ): Error {
-  if (timedOut) {
-    return new HttpError(
-      504,
-      `sleep did not finish within ${deadlineMs} ms and was stopped; the next sleep carries on from there`,
-    );
+  switch (end.kind) {
+    case 'deadline':
+      return new HttpError(
+        504,
+        `sleep did not finish within ${deadlineMs} ms and was stopped; the next sleep carries on from there`,
+      );
+    case 'malformed':
+      return new Error(
+        `sleep process sent a reply that is not a sleep result (code ${code}, signal ${signal})`,
+      );
+    case 'failed':
+      return replyError(end.reply);
+    case 'closed':
+      return new Error(`sleep process ended without an answer (code ${code}, signal ${signal})`);
   }
-  if (malformed) {
-    return new Error(
-      `sleep process sent a reply that is not a sleep result (code ${code}, signal ${signal})`,
-    );
-  }
-  return failureOf(reply, code, signal);
 }
 
 // One running and one waiting: each further sleep would only hold a request open behind work the
