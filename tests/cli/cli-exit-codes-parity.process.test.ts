@@ -68,6 +68,8 @@ const CASES: readonly Case[] = [
   inStore('inspect without an id', 'inspect'),
   inStore('forget without an id', 'forget'),
   inStore('snapshot save without a task', 'snapshot', 'save'),
+  inStore('snapshot clear with an unknown status', 'snapshot', 'clear', '--status', 'bogus'),
+  inStore('conflicts with an unknown status', 'conflicts', '--status', 'bogus'),
   inStore('card show of a missing card', 'card', 'show', '999'),
   inStore('list with an unknown status', 'process', 'list', '--status', 'bogus'),
   inStore('decide get of a missing decision', 'decide', 'get', '999'),

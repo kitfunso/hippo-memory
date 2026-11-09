@@ -13,6 +13,7 @@ import type {
   ConflictMember,
   ConflictRow,
   ConflictSide,
+  ConflictStatus,
 } from '../../base/ports/store/conflicts.js';
 import { conflictLoserFate } from '../../domain/consolidate/conflicts.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
@@ -182,7 +183,7 @@ export async function conflictListOpen(
  * own view, so the host admin only. */
 export async function conflictList(
   ctx: ContextWith<'conflicts'>,
-  status: string,
+  status: ConflictStatus | '*',
   reach: TenantReach = {},
   opts: ConflictPageOptions = {},
 ): Promise<ConflictPage> {

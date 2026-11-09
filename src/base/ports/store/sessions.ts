@@ -4,6 +4,17 @@ import type { HandoffEvidence, HandoffOutcome, SessionHandoff } from '../../sess
 import type { ContinuityKey } from './types.js';
 import type { MethodEffects } from './effects.js';
 
+/** The statuses a task snapshot takes when it leaves `active` without a successor. */
+export const SNAPSHOT_CLOSE_STATUSES = ['cleared', 'done', 'session-ended'] as const;
+
+/** One of `SNAPSHOT_CLOSE_STATUSES`. */
+export type SnapshotCloseStatus = (typeof SNAPSHOT_CLOSE_STATUSES)[number];
+
+/** True when `status` is one of the close statuses a snapshot clear may set. */
+export function isSnapshotCloseStatus(status: string): status is SnapshotCloseStatus {
+  return SNAPSHOT_CLOSE_STATUSES.some((close) => close === status);
+}
+
 export interface TaskSnapshot {
   id: number;
   task: string;
@@ -170,7 +181,7 @@ export interface Sessions {
     query: WorkingMemoryFilter & { readonly limit?: number },
   ): Promise<WorkingMemoryItem[]>;
   /** Closes with `status` the key's active snapshots the session saved, never a newer session's;
-   * rows closed. */
+   * rows closed. `status` is cleared, done or session-ended. */
   clear(
     tenantId: string,
     kind: 'snapshot',
@@ -178,7 +189,7 @@ export interface Sessions {
     key: ContinuityKey | null,
   ): Promise<number>;
   /** Closes with `status` the tenant's newest active snapshot, whoever saved it, and drops its
-   * mirror; a shared store refuses. Rows closed. */
+   * mirror; a shared store refuses. Rows closed. `status` is cleared, done or session-ended. */
   clear(tenantId: string, kind: 'snapshot', close: { readonly status: string }): Promise<number>;
   /** Rows cleared; a session-end flush is the same call. */
   clear(tenantId: string, kind: 'working_memory', filter: WorkingMemoryFilter): Promise<number>;

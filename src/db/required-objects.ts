@@ -1,5 +1,5 @@
 import { META_TABLE_DDL } from './meta.js';
-import { HEALED_INDEXES, HEALED_TABLES } from './continuity-tables.js';
+import { HEALED_INDEXES, HEALED_TABLES, HEALED_TRIGGERS } from './continuity-tables.js';
 import { FTS_INDEX_DDL } from './fts-index.js';
 
 const CREATED_NAME =
@@ -16,5 +16,6 @@ export const REQUIRED_SCHEMA_OBJECTS: readonly string[] = Object.freeze([
   ...createdObjectNames(META_TABLE_DDL),
   ...HEALED_TABLES,
   ...HEALED_INDEXES,
+  ...HEALED_TRIGGERS,
   ...FTS_INDEX_DDL.flatMap(createdObjectNames),
 ]);

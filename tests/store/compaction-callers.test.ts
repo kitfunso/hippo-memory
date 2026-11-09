@@ -10,6 +10,12 @@ import {
   startCompaction,
   type ItemContext,
 } from '../../src/store/sqlite/capture/compactions-record.js';
+import {
+  closeStartedWithoutSummary,
+  compactionProgress,
+  type CompactionStatus,
+} from '../../src/store/sqlite/capture/compaction-rows.js';
+import type { DatabaseSyncLike } from '../../src/db/index.js';
 import { storeLesson } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { snapshotFields, WORKING_STATE_CAPS } from '../../src/base/session/working-state.js';
@@ -82,6 +88,62 @@ describe('saveItems for a caller', () => {
       ]);
     });
   });
+});
+
+describe('saveItems on a record another process moved', () => {
+  // The in-scope status read refuses these; the guard under it is proved in status-transition-guard.test.ts.
+  const save = (db: DatabaseSyncLike, recordId: string): number => {
+    const ctx: ItemContext = {
+      tenantId: TENANT,
+      recordId,
+      sessionId: 's1',
+      originProject: 'acme/app',
+      cwd: null,
+      items: ITEMS,
+    };
+    return saveItems(db, { files: storeFilesOf(root), ctx, log: noLog, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+  };
+  const summarised = (db: DatabaseSyncLike): string =>
+    recordSummary(db, storeFilesOf(root), TENANT, {
+      meta: META,
+      text: { summary: 'The summary.', items: ITEMS },
+      at: new Date(),
+    }).id;
+  const recordIn = (db: DatabaseSyncLike, status: CompactionStatus): string => {
+    if (status === 'summarised') return summarised(db);
+    if (status === 'done') {
+      const id = summarised(db);
+      save(db, id);
+      return id;
+    }
+    const id = startCompaction(db, TENANT, { ...META, originProject: 'acme/app' });
+    if (status === 'no-summary') closeStartedWithoutSummary(db, TENANT, id);
+    return id;
+  };
+
+  it('writes the items and marks a summarised record done', () => {
+    withDb((db) => {
+      const id = recordIn(db, 'summarised');
+      const written = save(db, id);
+      expect(written).toBe(ITEMS.length);
+      expect(compactionProgress(db, TENANT, id)).toEqual({ status: 'done', items_written: written });
+      expect(writtenRows(db, 'compaction:s1')).toHaveLength(written);
+    });
+  });
+
+  it.each(['started', 'done', 'no-summary'] as const)(
+    'a %s record: the in-scope read writes no items and leaves the record as it was',
+    (status) => {
+      withDb((db) => {
+        const id = recordIn(db, status);
+        const memories = count(db, 'memories');
+        const before = compactionProgress(db, TENANT, id);
+        save(db, id);
+        expect(count(db, 'memories')).toBe(memories);
+        expect(compactionProgress(db, TENANT, id)).toEqual(before);
+      });
+    },
+  );
 });
 
 describe('storeLesson for a caller', () => {
