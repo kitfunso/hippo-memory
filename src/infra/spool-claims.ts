@@ -115,8 +115,8 @@ export function moveBad(
   return true;
 }
 
-/** Removes a claim once the store holds its summary; a claim left behind is imported again, so
- * the log says so. */
+/** Removes a claim once the store holds its summary; a claim left behind comes back for another
+ * import, so the log names it. */
 export function removeClaim(fsx: SpoolFs, claim: string, name: string, log: Log): void {
   const removed = settleCode(
     () => fsx.unlinkSync(claim),
@@ -125,7 +125,8 @@ export function removeClaim(fsx: SpoolFs, claim: string, name: string, log: Log)
   );
   if (removed.settled === 'busy') {
     log(
-      `spool file ${name} saved; its claim could not be removed (${removed.code}); it will be imported again`,
+      `spool file ${name} saved; its claim could not be removed (${removed.code}); ` +
+        'a later import reuses the saved record',
     );
   }
 }

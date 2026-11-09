@@ -143,6 +143,8 @@ export interface SpooledSummary {
   payload: Omit<CompactionStart, 'originProject'>;
   text: CompactionText;
   at: Date;
+  /** Stable per spool file, so a second import of it finds the record its first one made. */
+  importKey?: string;
 }
 
 /** How long a call waits on a locked store; unset is the store's default wait. */
