@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,7 +13,6 @@ FAQ
 Teams
 Compare
 Docs
-Comparison
 hippo vs Zep: a local Zep alternative
 Zep is a managed context service for agents, built on Graphiti, its open-source temporal knowledge graph. Its self-hosted Community Edition is deprecated, so Zep today means Zep Cloud, or your own cloud on the Enterprise plan. Hippo runs on your machine with no account, and wires itself into the coding agents it finds.
 Both keep an old fact when a newer one replaces it. Graphiti gives facts validity windows and invalidates old ones rather than deleting them. Hippo links a superseded memory to its replacement and leaves it out of recall, and hippo recall --as-of <date> shows what was current on a given date.
@@ -54,7 +53,6 @@ The memory is for coding agents on your machine. You want no account, graph data
 Pick Zep
 You want a managed service that turns business data, documents and conversations into a knowledge graph for your agents, with someone else running it.
 Get started with hippo All questions
-FAQ
 hippo and Zep, asked directly
 Can I still self-host Zep? +
 Not Zep itself. Zep's FAQ says Zep Community Edition, the version you could host locally, is deprecated and no longer supported (checked N-N-N); Enterprise customers can run Zep in their own cloud. Graphiti, the open-source framework under Zep, is Apache-N and runs anywhere, but it needs a graph database such as NeoNj or FalkorDB and a language model key, OpenAI by default.
@@ -63,7 +61,6 @@ Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licens
 Is Zep's N% on LongMemEval comparable to hippo's N%? +
 No. Zep's homepage reports N% accuracy on LongMemEval, which scores whether answers were right. Hippo's figure is retrieval: on LongMemEval-S with a per-question haystack, using the benchmark scripts and a free local embedder rather than hippo recall, an answer session was in the top five results N% of the time. Different metrics, so neither number beats the other.
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

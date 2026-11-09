@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,7 +13,6 @@ FAQ
 Teams
 Compare
 Docs
-FAQ
 Questions about hippo, answered.
 These are the answers in the README's FAQ (opens in new tab), word for word, so this page, GitHub and npm give the same answer.
 How do I give Claude Code memory between sessions?
@@ -45,7 +44,6 @@ Judge it by what is tested. N+ tests run against a real database, with no module
 Has hippo been shown to make agents better at their work?
 On repeat mistakes, yes. ZN round N ran real Claude Code sessions on N repositories, with hippo and with Claude Code's built-in memory alone. An agent corrected once repeated that mistake about half as often with hippo installed: N times in N against N N to N tasks after the correction, at the same cost. Over every first chance to repeat, the pre-registered read is N points fewer [N N] (result (opens in new tab)). On tasks with no lesson to apply, hippo changed neither the cost nor the share solved. The gain was the same with lesson capture switched off, so round N tests how much of it the stored lessons carry. The other published numbers measure retrieval. Every measurement, including failed runs and one retracted claim, is indexed in docs/evals (opens in new tab).
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

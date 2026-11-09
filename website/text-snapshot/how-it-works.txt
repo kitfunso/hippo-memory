@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,7 +13,6 @@ FAQ
 Teams
 Compare
 Docs
-How it works
 How hippo decides what your agent forgets
 Every memory has a strength. It fades on a half-life, grows each time the memory is recalled, and drops when you mark the memory wrong. A newer fact can supersede an older one, and memories that contradict each other are flagged.
 The design borrows from the hippocampus, but that is inspiration, not evidence. In our mechanism audit, outcome marks and retrieval strengthening measured helping; supersession is not measured yet, and decay and sleep have not been shown to make recall better.
@@ -24,11 +23,9 @@ encode
 Episodic Timestamped, decays by default. Retrieval strengthens it; errors stick.
 sleep
 Semantic Repeated episodes compress into stable patterns. The originals decay.
-weak traces are forgotten; repeated ones consolidate during sleep
 N½N
 recallmarked wrong×supersededrecalledleft alone
 savedN moN yrN moN yr
-strength = decay over time, re-strengthened on every recall
 Nd half-life Decay by default
 Every memory fades on a one-year half-life unless it is used. We did not tune N days: it tied with N days and with decay off.
 +Nd / recall Retrieval strengthens
@@ -54,7 +51,6 @@ Sleep and dormant memories
 hippo sleep merges three or more related episodes into one pattern, and the originals decay. It keeps the store tidy but has not been shown to improve recall: in round N of the mechanism audit, a slept LongMemEval store scored N points lower at hit@N than the same store never slept. A memory that fades below the threshold goes dormant instead of being deleted. hippo dormant restore <id> brings it back, and a dormant memory nobody restores is deleted after N days by default.
 Confidence
 Each memory is verified, observed, inferred or stale, and hippo context shows the level beside each memory. A memory unretrieved for N days or more is marked stale at the next sleep, and a recall wakes it back to observed.
-FAQ
 Questions about how it works
 All N questions →
 What happens when a memory turns out to be wrong? +
@@ -64,7 +60,6 @@ No. RAG searches a fixed corpus. Hippo's store changes as your agent works: a me
 Does it need embeddings? +
 No. Recall runs on BMN out of the box, with no model and no network call, and a default install has no embedder. Embeddings are an optional install for hybrid search. On LongMemEval-S, where each question gets its own haystack, the benchmark scripts (not hippo recall) fuse BMN with the free local MiniLM embedder and reach N% recall@N counting a hit when any answer session is in the top five. On LongMemEval's oracle split with one pooled store, BMN alone scored N% recall@N in vN The two runs use different setups, so they are not a before and after.
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,16 +13,15 @@ FAQ
 Teams
 Compare
 Docs
-Quickstart
 Add memory in two commands.
 hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, run hippo init in a project, and it wires itself into the agents that project uses.
 Package installation alone does not enable automatic preservation on every agent. Complete the documented setup and required host trust; capture and compaction coverage depend on the integration.
-N steps · ~N minutes
 N Install $ npm install -g hippo-memory
 N Initialize $ hippo init
 N Use the loop remember · recall · outcome · sleep
 Install
-$ npm install -g hippo-memory $ hippo init hippo init creates a .hippo/ store in the project and adds hippo's instructions to the agent files it finds there, such as CLAUDE.md and AGENTS.md (which Codex, Cursor, OpenClaw, OpenCode and Pi read), plus Claude Code's session hooks. To register every git repo under a folder at once, run hippo init --scan ~, which gives each repo a store seeded from its git history.
+$ npm install -g hippo-memory $ hippo init Copy
+hippo init creates a .hippo/ store in the project and adds hippo's instructions to the agent files it finds there, such as CLAUDE.md and AGENTS.md (which Codex, Cursor, OpenClaw, OpenCode and Pi read), plus Claude Code's session hooks. To register every git repo under a folder at once, run hippo init --scan ~, which gives each repo a store seeded from its git history.
 Memories are stored in SQLite with markdown mirrors, and recall makes no network call by default. No account. Where hippo keeps your data lists the opt-in features that send text to a provider.
 Works with your agents
 Claude Code A block in CLAUDE.md plus hooks: pinned memories each turn, sleep on exit, a snapshot before compaction, failed tool calls stored as errors.
@@ -34,13 +33,16 @@ Pi A block in AGENTS.md; copy the Pi extension from the repo for session hooks.
 Any MCP client hippo mcp serves N tools over stdio to Windsurf (now Devin Desktop), Cline, Claude Desktop and others.
 The memory loop
 Four commands. Memories decay on a half-life unless something keeps them alive: a retrieval, a good outcome, an error tag, or consolidation during sleep.
-$ hippo remember "deploy failed: forgot migrations" --error Store a memory. Errors get a longer half-life and stick.
-$ hippo recall "why did the deploy break" --budget N Retrieve within a token budget, ranked by relevance and strength.
-$ hippo outcome --good Tell hippo the recall helped. Useful memories decay slower.
-$ hippo sleep Consolidate repeats into patterns, decay the unused, flag conflicts.
+$ hippo remember "deploy failed: forgot migrations" --error Copy
+Store a memory. Errors get a longer half-life and stick.
+$ hippo recall "why did the deploy break" --budget N Copy
+Retrieve within a token budget, ranked by relevance and strength.
+$ hippo outcome --good Copy
+Tell hippo the recall helped. Useful memories decay slower.
+$ hippo sleep Copy
+Consolidate repeats into patterns, decay the unused, flag conflicts.
 Full docs (opens in new tab) See the benchmarks
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

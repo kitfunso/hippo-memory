@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,7 +13,6 @@ FAQ
 Teams
 Compare
 Docs
-Comparison
 hippo vs Letta: a Letta alternative for coding agents
 Letta, formerly MemGPT, now builds Letta Code, a stateful agent harness whose memory lives in blocks the agent edits itself. Hippo is memory for the agents you already run, such as Claude Code, Codex and Cursor, in one store they share.
 Both keep memory where you can see it: Letta Code tracks its context in git, and hippo writes markdown mirrors you can commit. They differ in who edits memory. In Letta, the agent rewrites its own blocks with built-in tools. In hippo, memories come from hooks, the CLI and MCP tools, and you can mark a recalled one wrong or supersede an old fact.
@@ -53,14 +52,12 @@ You already use Claude Code, Codex or Cursor and want them to share one store of
 Pick Letta
 You want a coding agent whose memory is part of the agent, one that edits its own memory blocks, and you are ready to switch agents to get it.
 Get started with hippo All questions
-FAQ
 hippo and Letta, asked directly
 Is Letta the same as MemGPT? +
 Letta grew out of MemGPT; its GitHub README calls it "Letta (f.k.a. MemGPT)". Active development has moved to Letta Code, a stateful agent harness, and the original Letta server now sits on an archive branch (checked N-N-N).
 Is hippo a Letta alternative? +
 It depends on what you want from Letta. Letta Code is a stateful agent harness with its memory built in. Hippo is memory for the agents you already use: Claude Code, Codex, Cursor and any MCP client share one store, on your machine with no account, and you can mark a lesson wrong or supersede an old fact. If you want an agent that manages its own memory blocks, that is Letta Code.
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

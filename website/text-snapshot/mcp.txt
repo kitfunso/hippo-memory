@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,14 +13,15 @@ FAQ
 Teams
 Compare
 Docs
-MCP server
 MCP memory server for Claude Code, Cursor and Windsurf (now Devin Desktop)
 hippo mcp runs a memory server over stdio. Any MCP client can use it, including Claude Code, Cursor, Windsurf, Cline and Claude Desktop. Memories are stored in SQLite on your machine, with no account and no API key.
 The agent gets N tools to recall and store memories, mark what it recalled as helpful or wrong, and see where memories contradict each other.
 Add it to your client
 In Claude Code, one command:
-$ claude mcp add hippo-memory -- hippo mcp Other clients take a config block. Cursor reads it from .cursor/mcp.json and Claude Desktop from claude_desktop_config.json; Windsurf and Cline take the same mcpServers block in their own MCP settings.
-{ "mcpServers": { "hippo-memory": { "command": "hippo", "args": ["mcp"] } } } No global install? "command": "npx", "args": ["-y", "hippo-memory", "mcp"] works too. With no store anywhere, the first tool call creates the global store in ~/.hippo, and hippo init in a project adds a project store. hippo doctor checks the install.
+$ claude mcp add hippo-memory -- hippo mcp Copy
+Other clients take a config block. Cursor reads it from .cursor/mcp.json and Claude Desktop from claude_desktop_config.json; Windsurf and Cline take the same mcpServers block in their own MCP settings.
+{ "mcpServers": { "hippo-memory": { "command": "hippo", "args": ["mcp"] } } } Copy
+No global install? "command": "npx", "args": ["-y", "hippo-memory", "mcp"] works too. With no store anywhere, the first tool call creates the global store in ~/.hippo, and hippo init in a project adds a project store. hippo doctor checks the install.
 The N tools
 Tools the hippo MCP server exposes Tool What it does
 hippo_recall Memories that match a query, ranked by relevance, strength and recency within a token budget.
@@ -51,7 +52,6 @@ A hosted MCP endpoint, used with a Letta API key, that lets an MCP agent create 
 hippo
 Runs on your machine over stdio, stores memories in SQLite with markdown mirrors you can commit, and needs no account. You can mark a recalled memory wrong, replace an old fact with hippo supersede, and list conflicts between memories. Compared feature by feature: vs memN vs Zep, vs Letta.
 The reference server, Basic Memory and hippo store memories on your machine. The MCP servers from MemN Zep and Letta are hosted services.
-FAQ
 MCP questions
 All N questions →
 Can I use hippo as an MCP memory server? +
@@ -61,7 +61,6 @@ On your machine, in SQLite: .hippo/hippo.db in each project, plus a global store
 Does it need embeddings? +
 No. Recall runs on BMN out of the box, with no model and no network call, and a default install has no embedder. Embeddings are an optional install for hybrid search. On LongMemEval-S, where each question gets its own haystack, the benchmark scripts (not hippo recall) fuse BMN with the free local MiniLM embedder and reach N% recall@N counting a hit when any answer session is in the top five. On LongMemEval's oracle split with one pooled store, BMN alone scored N% recall@N in vN The two runs use different setups, so they are not a before and after.
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

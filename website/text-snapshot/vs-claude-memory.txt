@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,7 +13,6 @@ FAQ
 Teams
 Compare
 Docs
-Comparison
 CLAUDE.md vs MEMORY.md: what goes where
 If you are working out how to deal with a CLAUDE.md file properly, most of the answer is deciding what belongs in it and what belongs somewhere else. Claude Code has two memories of its own: the CLAUDE.md files you write and the auto memory it writes. Hippo adds a third kind, a store of lessons that are recalled when they match the task.
 Claude Code's two memories (checked N-N-N)
@@ -37,7 +36,6 @@ Claude Code's built-in memory N in N
 Built-in memory plus hippo N in N
 Bringing CLAUDE.md notes into hippo
 # preview first, then import $ hippo import --claude CLAUDE.md --dry-run $ hippo import --claude CLAUDE.md The import skips hippo's own block and any duplicates. After that, hippo sleep at the end of each session also imports new entries from Claude Code's MEMORY.md files, so auto memory notes reach the store your other agents read. hippo init adds a short block to CLAUDE.md saying the prompt hook injects pinned rules and matching memories, and asking Claude to run hippo context --auto at the start of a task only if no hippo memory block has appeared. It leaves the rest of the file alone. The Claude Code page covers the hooks.
-FAQ
 CLAUDE.md questions
 All N questions →
 What is the difference between CLAUDE.md and auto memory? +
@@ -47,7 +45,6 @@ The first N lines of MEMORY.md or the first NKB, whichever comes first, per Clau
 Do I still need CLAUDE.md? +
 Yes, for short standing rules such as build commands, code style and things never to do. Claude Code loads CLAUDE.md and its auto memory into every session, and its memory docs (opens in new tab) say that when two rules contradict each other, Claude may pick one arbitrarily. Hippo holds the lessons that pile up, recalls the ones that match the task, and retires the ones marked wrong or replaced. hippo init adds its block to CLAUDE.md, and hippo import --claude CLAUDE.md turns existing notes into memories.
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

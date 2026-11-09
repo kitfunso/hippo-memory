@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,7 +13,6 @@ FAQ
 Teams
 Compare
 Docs
-Benchmarks
 Numbers, with the methodology.
 hippo's retrieval, measured on LongMemEval (opens in new tab) (ICLR N), the public N-question memory benchmark, and on LoCoMo (opens in new tab), N long multi-session conversations. The harness, the data hash, and the per-question results for both are in the repo so you can rerun them.
 N% R@N free local embedder
@@ -68,7 +67,6 @@ adversarial N N
 overall N N
 A point estimate, not an exact value: n=N and the run predates the vN determinism fix and a harness fix that lost tags on N% of stored rows. Not comparable to the LLM-as-judge numbers MemN and Letta publish. Informational only, gates no feature. Protocol, caveats and regeneration commands: LOCOMO_INVESTIGATION.md (opens in new tab).
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

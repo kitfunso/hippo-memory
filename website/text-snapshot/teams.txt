@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -35,7 +35,6 @@ in development Leads approve what spreads
 A lesson moves from one repository to a team, or to the whole company, only after a tech lead approves it.
 shipped Every write is on the record
 An audit log of who stored, recalled, changed or forgot what. Keys scoped to tenants and roles.
-The pilot
 Measured on your work, against a holdout.
 For four weeks, a random share of sessions runs without memory. Both groups work on the same days, with the same people and models, so a model price change or a quiet week cannot fake a saving. The numbers come from your agent’s own telemetry, computed inside your network.
 If there is no difference, the report says so. We publish our own losses too.
@@ -45,7 +44,6 @@ Repeat-error rate the same failure seen again in a later session
 Guardrails reverts, rejected reviews and CI failures must not rise
 with hippo vs holdout · N% interval · your result
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

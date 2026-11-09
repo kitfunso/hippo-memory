@@ -4,7 +4,7 @@ Teams
 Benchmarks
 Compare
 Docs
-★ N install
+N install
 Home
 Quickstart
 How it works
@@ -13,7 +13,6 @@ FAQ
 Teams
 Compare
 Docs
-Comparison
 hippo vs memN: an open-source memN alternative
 Both are open-source memory for AI agents. memN uses a language model to extract memories, and memories stored through its hosted MCP server live in your MemN account. Hippo keeps memories in SQLite on your machine, needs no account and no model, and wires itself into the coding agents it finds.
 Both mark an older fact superseded when a newer one replaces it; memN does that on its hosted platform. Hippo also lets you mark a recalled memory wrong with hippo outcome --bad, and it drops out of the top results.
@@ -58,14 +57,12 @@ The memory is for coding agents on your machine. You want no account, no API key
 Pick memN
 You are building an app whose memory belongs to your end users, the case memN describes as "customer support chatbots, AI assistants, and autonomous systems", and a hosted platform or a Postgres server fits your stack.
 Get started with hippo All questions
-FAQ
 hippo and memN asked directly
 Is hippo an open-source memN alternative? +
 Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, keeps memories in SQLite in your project, needs no account or API key, and hippo init wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. memN is Apache-N and runs as a library, a self-hosted server or a hosted platform; its open-source library calls a language model to extract memories, OpenAI by default.
 Is memN's N on LongMemEval better than hippo's N%? +
 Neither beats the other, because they measure different things. Hippo's N% is retrieval recall@N on LongMemEval-S with a per-question haystack: whether an answer session is in the top five results. It comes from the benchmark scripts with a free local embedder, not hippo recall. memN's N is an end-to-end answer score: whether a model answered correctly from what came back. memN's README says it comes from its hosted platform at a top-N retrieval budget, with optimizations the open-source SDK lacks.
 ~/hippo
-A memory layer for AI agents that learns what is wrong. Good memory is knowing what to forget: what was wrong, replaced, or never used.
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
