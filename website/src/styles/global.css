@@ -44,6 +44,12 @@
     --measure: 30em;
     /* DESIGN section_padding_y: one vertical rhythm, used as py-(--section-y) on every section */
     --section-y: 2.5rem;
+    /* two durations and one curve for all motion (Astryx bands: hover 125-175ms, entrance 300-410ms) */
+    --duration-fast: 150ms;
+    --duration-medium: 400ms;
+    --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+    /* DESIGN h1_leading: one display leading for every h1 */
+    --leading-display: 1.1;
   }
   @media (width >= 48rem) {
     :root { --section-y: 3.5rem; }
@@ -123,7 +129,7 @@ header.glass {
   background: rgba(11, 15, 12, 0.88);
 }
 .glass-hover {
-  transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease;
+  transition: border-color var(--duration-fast) ease, background var(--duration-fast) ease, transform var(--duration-fast) ease;
 }
 .glass-hover:hover {
   border-color: rgba(124, 227, 139, 0.35);
@@ -240,7 +246,7 @@ nav[aria-label='Pages'] a[aria-current='page'] {
   to { opacity: 1; transform: none; }
 }
 .reveal {
-  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fade-up var(--duration-medium) var(--ease-standard) both;
 }
 
 /* ---- scroll-reveal (below-fold). Gated on .js so no-JS shows everything; the IO
@@ -253,8 +259,8 @@ nav[aria-label='Pages'] a[aria-current='page'] {
   opacity: 1;
   transform: none;
   transition:
-    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity var(--duration-medium) var(--ease-standard),
+    transform var(--duration-medium) var(--ease-standard);
 }
 @media (prefers-reduced-motion: reduce) {
   .js [data-reveal] { opacity: 1; transform: none; }

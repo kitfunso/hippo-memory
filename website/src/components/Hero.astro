@@ -16,7 +16,7 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
     <div class="grid items-start gap-12 lg:grid-cols-[minmax(0,32.5rem)_minmax(0,1fr)]">
       <div class="flex min-w-0 max-w-xl flex-col gap-6">
         <h1
-          class="reveal text-balance text-[2.5rem] leading-[1.1] tracking-[-0.03em] sm:text-5xl lg:text-[3.25rem]"
+          class="reveal text-balance text-[2.5rem] leading-(--leading-display) tracking-[-0.03em] sm:text-5xl lg:text-[3.25rem]"
           style="animation-delay: 60ms"
         >
           {site.tagline.lead}<br /><span class="text-gradient">{site.tagline.accent}</span>
