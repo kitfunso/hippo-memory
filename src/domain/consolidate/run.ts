@@ -31,7 +31,12 @@ export interface ConsolidationResult {
   promotedTraces: number;
   /** Sessions skipped because their events span two derivation scopes. */
   tracesSkippedMixedScope: number;
+  /** Episodic memories extraction could read. A dry run counts every one, marked sources included;
+   * a sleep that may call a model leaves out those held by `extractionHeld`. */
   extractionCandidates: number;
+  /** Sources left out because extraction found nothing in their current text less than 30 days
+   * ago. Always 0 when no model may run, as no mark is read then. */
+  extractionHeld: number;
   extracted: number;
   dagCandidateClusters: number;
   dagSummariesCreated: number;
@@ -45,6 +50,9 @@ export interface ConsolidationResult {
   // applyRebuildResult's return contract).
   summariesRebuildRefused: number;
   summariesRebuildCapped: boolean;
+  /** Dirty summaries left out because their rebuild failed three times in a row and the hold has
+   * not ended; they stay dirty and are not in `summariesRebuildFailed`. */
+  summariesRebuildHeld: number;
   entityProfilesCreated: number;
   dryRun: boolean;
   /** What the run did, in order; the CLI and /v1/sleep render each event as a line. */
@@ -113,6 +121,7 @@ export function newConsolidationResult(dryRun: boolean): ConsolidationResult {
     promotedTraces: 0,
     tracesSkippedMixedScope: 0,
     extractionCandidates: 0,
+    extractionHeld: 0,
     extracted: 0,
     dagCandidateClusters: 0,
     dagSummariesCreated: 0,
@@ -121,6 +130,7 @@ export function newConsolidationResult(dryRun: boolean): ConsolidationResult {
     summariesZeroChildSkipped: 0,
     summariesRebuildRefused: 0,
     summariesRebuildCapped: false,
+    summariesRebuildHeld: 0,
     entityProfilesCreated: 0,
     dryRun,
     events: [],

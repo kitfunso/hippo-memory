@@ -60,6 +60,8 @@ import {
   settleSummary,
 } from './consolidation-summaries.js';
 import { META_KEY } from '../../../db/meta.js';
+import { noteRebuildFailures } from './rebuild-holds.js';
+import { emptyExtractions, noteEmptyExtractions } from './empty-extractions.js';
 
 // A half-life move reads, writes, audits and records its base on one handle, so it commits whole or
 // not at all.
@@ -188,6 +190,9 @@ type BareBodies =
   | 'particlesByRecall'
   | 'saveParticles'
   | 'auditEachRow'
+  | 'noteRebuildFailures'
+  | 'emptyExtractions'
+  | 'noteEmptyExtractions'
   | 'dirtyGraphTenants';
 
 const bareBodies: Bodies<Pick<Consolidation, BareBodies | 'markGraphDrained'>> = {
@@ -199,6 +204,9 @@ const bareBodies: Bodies<Pick<Consolidation, BareBodies | 'markGraphDrained'>> =
   particlesByRecall: storedParticlesByRecall,
   saveParticles: saveStoredParticles,
   auditEachRow: auditRows,
+  noteRebuildFailures,
+  emptyExtractions,
+  noteEmptyExtractions,
   dirtyGraphTenants: listPendingExtractionTenants,
   markGraphDrained: markPendingProcessedUpTo,
 };

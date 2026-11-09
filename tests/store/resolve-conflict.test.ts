@@ -374,3 +374,34 @@ describe('conflict tenant isolation', () => {
     expect(readEntry(tmpDir, a.id)!.conflictsWith).not.toContain(b.id);
   });
 });
+
+describe('replaceDetectedConflicts stale sweep', () => {
+  const DETECTED_AT = '2026-01-01T00:00:00.000Z';
+  const SWEPT_AT = '2026-02-01T00:00:00.000Z';
+  const LATER_AT = '2026-03-01T00:00:00.000Z';
+
+  function seedDetectedPair(): void {
+    const a = createMemory7('sweep memory one', { tags: ['sweep'] });
+    const b = createMemory7('sweep memory two', { tags: ['sweep'] });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, b);
+    replaceDetectedConflicts(tmpDir, [{ memoryAId: a.id, memoryBId: b.id, reason: 'clash', score: 0.8 }], DETECTED_AT);
+  }
+
+  it('resolves an open conflict that is not detected again and stamps the refresh time', async () => {
+    seedDetectedPair();
+    replaceDetectedConflicts(tmpDir, [], SWEPT_AT);
+    const swept = await listMemoryConflicts(tmpDir, '*');
+    expect(swept).toHaveLength(1);
+    expect(swept[0]).toMatchObject({ status: 'resolved', detectedAt: DETECTED_AT, updatedAt: SWEPT_AT });
+  });
+
+  it('keeps the updated_at of a resolved conflict that is not detected again', async () => {
+    seedDetectedPair();
+    replaceDetectedConflicts(tmpDir, [], SWEPT_AT);
+    replaceDetectedConflicts(tmpDir, [], LATER_AT);
+    const swept = await listMemoryConflicts(tmpDir, '*');
+    expect(swept).toHaveLength(1);
+    expect(swept[0]).toMatchObject({ status: 'resolved', updatedAt: SWEPT_AT });
+  });
+});

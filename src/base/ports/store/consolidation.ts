@@ -42,8 +42,47 @@ export interface Consolidation {
   /** Writes the particles over their stored state, as one batch. */
   saveParticles(particles: PhysicsParticle[]): Promise<void>;
   /** The `limit` dirty summaries changed last, each with its live children by created then id,
-   * and whether more were waiting. */
-  dirtySummaries(limit: number): Promise<DirtySummaries>;
+   * and whether more were waiting. With `at`, a summary held past it is skipped and counted in
+   * `held`; an adapter that ignores `at` stores no hold unless it has `noteRebuildFailures`. */
+  dirtySummaries(limit: number, at?: string): Promise<DirtySummaries>;
+  /** Stores one pass's counted rebuild failures in one write; an item lands only while the stored
+   * count equals its `priorFailures`. Optional: a store without it keeps no holds and sleep sends
+   * every dirty summary as before. */
+  noteRebuildFailures?(
+    failed: ReadonlyArray<{
+      readonly id: string;
+      readonly tenantId: string;
+      readonly priorFailures: number;
+      readonly failures: number;
+      /** The ISO time the summary is next sent to the model; null while it is not held. */
+      readonly retryAfter: string | null;
+    }>,
+  ): Promise<void>;
+  /** Up to `page.limit` empty extraction marks by source id, after the id `page.after`, and the id
+   * to continue after (null on the last page). A mark says extraction found nothing in that
+   * text of the source. Optional: a store without it keeps no marks and sleep offers every
+   * source as before. */
+  emptyExtractions?(page: { readonly limit: number; readonly after?: string }): Promise<{
+    readonly marks: ReadonlyArray<{
+      readonly id: string;
+      /** The hash of the source text the model found nothing in. */
+      readonly digest: string;
+      /** The ISO time of that call. */
+      readonly at: string;
+    }>;
+    readonly next: string | null;
+  }>;
+  /** Stores `mark` and drops the marks of the ids in `clear`, in one write; a mark lands only for
+   * a source that is live (neither archived nor superseded), and the marks of sources that are
+   * gone or no longer live are dropped with it. Optional, as `emptyExtractions` is. */
+  noteEmptyExtractions?(note: {
+    readonly mark: ReadonlyArray<{
+      readonly id: string;
+      readonly digest: string;
+      readonly at: string;
+    }>;
+    readonly clear: readonly string[];
+  }): Promise<void>;
   /** Up to `page.limit` of the L2 topic summaries with no L3 profile above them, oldest first,
    * after `page.after`. */
   unprofiledTopicSummaries(page: {
@@ -82,6 +121,9 @@ export const CONSOLIDATION_EFFECTS = {
   particlesByRecall: 'read',
   saveParticles: 'write',
   dirtySummaries: 'read',
+  noteRebuildFailures: 'write',
+  emptyExtractions: 'read',
+  noteEmptyExtractions: 'write',
   unprofiledTopicSummaries: 'read',
   settleSummary: 'write',
   commit: 'write',
@@ -149,8 +191,14 @@ export interface DirtySummaries {
   readonly summaries: ReadonlyArray<{
     readonly summary: MemoryEntry;
     readonly children: MemoryEntry[];
+    /** The rebuild failures in a row stored for it; 0 when none, and unset by a store that keeps
+     * none. */
+    readonly failures?: number;
   }>;
   readonly more: boolean;
+  /** Dirty summaries skipped because their hold had not ended at `at`; unset when `at` was not
+   * given or the store keeps no holds. */
+  readonly held?: number;
 }
 
 /** The fields one dirty summary settles to; its dirty mark is cleared with them. */

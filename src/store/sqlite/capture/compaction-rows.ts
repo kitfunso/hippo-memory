@@ -4,6 +4,7 @@ import type { DatabaseSyncLike } from '../../../db/index.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { notSupersededIn } from '../../../db/sql-predicates.js';
+import { moveOneStatus } from '../runtime/status-transitions.js';
 import type { CompactionOrigin } from '../../../base/ports/store/project-tags.js';
 import type { OriginMoveOptions } from '../entries/entry-writes.js';
 
@@ -241,10 +242,12 @@ export function markCompactionDone(
   id: string,
   itemsWritten: number,
 ): void {
-  cachedStatement(
-    db,
-    `UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`,
-  ).run(itemsWritten, tenantId, id);
+  moveOneStatus(db, 'compactionDone', {
+    tenantId,
+    id,
+    to: 'done',
+    set: { items_written: itemsWritten },
+  });
 }
 
 /** Rows changed: 1 when the `started` row was closed, 0 when it had already moved. */

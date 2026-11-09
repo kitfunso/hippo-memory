@@ -43,6 +43,15 @@ export const HEALED_INDEXES = [
   'idx_failure_log_request',
 ] as const;
 
+/** The triggers the chain puts on those tables, by name: a dropped table takes its triggers with
+ * it, so the open's probe counts them and a missing one is made again from the chain. */
+export const HEALED_TRIGGERS = [
+  'trg_task_snapshots_status_check_insert',
+  'trg_task_snapshots_status_check_update',
+] as const;
+
+const HEALED_OBJECTS = [...HEALED_INDEXES, ...HEALED_TRIGGERS] as const;
+
 // The request indexes' tables: never healed, since a store that lost one still opens so its hooks
 // can log the step.
 const REQUEST_TABLES = ['compactions', 'failure_log'] as const;
@@ -68,26 +77,27 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
   for (const { table, sql } of chainObjects.values()) if (missing.has(table)) db.exec(sql);
 }
 
-// After the loop, when every column an index names exists; only a store missing one builds the
-// chain.
-export function ensureContinuityIndexes(db: DatabaseSyncLike): void {
+// After the loop, when every column an index names exists; only a store missing an index or a
+// trigger builds the chain.
+export function ensureContinuityObjects(db: DatabaseSyncLike): void {
   // SAFETY: one TEXT column named name.
   const present = db
     .prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'index' AND name IN (${placeholders(HEALED_INDEXES.length)})`,
+      `SELECT name FROM sqlite_master WHERE type IN ('index', 'trigger') ` +
+        `AND name IN (${placeholders(HEALED_OBJECTS.length)})`,
     )
-    .all(...HEALED_INDEXES) as Array<{ name: string }>;
-  if (present.length === HEALED_INDEXES.length) return;
+    .all(...HEALED_OBJECTS) as Array<{ name: string }>;
+  if (present.length === HEALED_OBJECTS.length) return;
   const have = new Set(present.map(({ name }) => name));
   chainObjects ??= objectsFromChain();
-  for (const name of HEALED_INDEXES) {
+  for (const name of HEALED_OBJECTS) {
     const made = chainObjects.get(name);
     if (!have.has(name) && made !== undefined && tableExists(db, made.table)) db.exec(made.sql);
   }
 }
 
-/** Each healed table's CREATE TABLE, then every index on it and on the request tables, keyed by
- * object name, as the migration chain leaves them on an empty database. */
+/** Each healed table's CREATE TABLE, then every index and trigger on it and on the request tables,
+ * keyed by object name, as the migration chain leaves them on an empty database. */
 function objectsFromChain(): ReadonlyMap<string, ChainObject> {
   const db = new DatabaseSync(':memory:');
   try {
@@ -99,8 +109,9 @@ function objectsFromChain(): ReadonlyMap<string, ChainObject> {
     // NULL.
     const rows = db
       .prepare(
-        `SELECT name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL AND type IN ('table', 'index') ` +
-          `AND tbl_name IN (${placeholders(tables.length)}) ORDER BY type DESC, name`,
+        `SELECT name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL ` +
+          `AND type IN ('table', 'index', 'trigger') AND tbl_name IN (${placeholders(tables.length)}) ` +
+          `ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 ELSE 2 END, name`,
       )
       .all(...tables) as Array<{ name: string; tbl_name: string; sql: string }>;
     return new Map(
@@ -113,4 +124,4 @@ function objectsFromChain(): ReadonlyMap<string, ChainObject> {
 
 // sqlite_master keeps each CREATE without its IF NOT EXISTS.
 const ifNotExists = (sql: string): string =>
-  sql.replace(/^CREATE (UNIQUE )?(TABLE|INDEX) /, 'CREATE $1$2 IF NOT EXISTS ');
+  sql.replace(/^CREATE (UNIQUE )?(TABLE|INDEX|TRIGGER) /, 'CREATE $1$2 IF NOT EXISTS ');

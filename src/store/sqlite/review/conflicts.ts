@@ -37,6 +37,7 @@ import { openStore } from '../runtime/handles.js';
 import { bound, type Bodies } from '../runtime/bound.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { handleStamp } from '../runtime/handle-clock.js';
+import { moveStatus } from '../runtime/status-transitions.js';
 
 // The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be
 // ambiguous.
@@ -314,10 +315,12 @@ function resolveStaleOpenConflicts(
         !sameTenant(row.memory_a_id, row.memory_b_id),
     );
     if (resolved.length > 0) {
-      cachedStatement(
-        db,
-        `UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id IN (SELECT value FROM json_each(?))`,
-      ).run(detectedAt, JSON.stringify(resolved.map((row) => row.id)));
+      moveStatus(db, 'conflictStale', {
+        tenantId: ALL_TENANTS,
+        ids: resolved.map((row) => row.id),
+        to: 'resolved',
+        set: { updated_at: detectedAt },
+      });
     }
     if (page.length < READ_PAGE_ROWS) return;
     after = page[page.length - 1].id;

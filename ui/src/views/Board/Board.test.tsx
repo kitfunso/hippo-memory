@@ -342,4 +342,88 @@ describe("Board", () => {
     expect(screen.queryByRole("button", { name: /stale/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /second/i })).toBeInTheDocument();
   });
+
+  it("B15: Refresh after a failed first load shows loading cards, not the old error", async () => {
+    const router = createRouter();
+    router.queue("/api/cards", { status: 500, body: { error: "boom first" } });
+    renderBoard(router);
+    expect(await screen.findByText("boom first")).toBeInTheDocument();
+
+    const pending = deferredResponse();
+    router.queue("/api/cards", pending.promise);
+    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("loading cards");
+    expect(screen.queryByText("boom first")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    pending.resolve(new Response(JSON.stringify({ cards: [makeCard({ title: "Landed" })] }), { status: 200 }));
+    expect(await screen.findByRole("button", { name: /landed/i })).toBeInTheDocument();
+  });
+
+  it("B16: Refresh after a failed refresh clears the toolbar alert while the next fetch is pending", async () => {
+    const router = createRouter();
+    const card = makeCard({ title: "Keep me" });
+    router.queue("/api/cards", { status: 200, body: { cards: [card] } });
+    renderBoard(router);
+    await screen.findByRole("button", { name: /keep me/i });
+
+    router.queue("/api/cards", { status: 500, body: { error: "boom refresh" } });
+    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("boom refresh");
+
+    const pending = deferredResponse();
+    router.queue("/api/cards", pending.promise);
+    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /keep me/i })).toBeInTheDocument();
+
+    pending.resolve(new Response(JSON.stringify({ cards: [card] }), { status: 200 }));
+    expect(await screen.findByRole("button", { name: /^refresh$/i })).toBeInTheDocument();
+  });
+
+  it("B17: the Refresh button keeps keyboard focus while the fetch is pending", async () => {
+    const router = createRouter();
+    router.queue("/api/cards", { status: 200, body: { cards: [makeCard()] } });
+    renderBoard(router);
+    await screen.findByRole("button", { name: /do the thing/i });
+
+    const pending = deferredResponse();
+    router.queue("/api/cards", pending.promise);
+    const button = screen.getByRole("button", { name: /^refresh$/i });
+    button.focus();
+    fireEvent.click(button);
+
+    expect(screen.getByRole("button", { name: /refreshing/i })).toBe(button);
+    expect(button).not.toBeDisabled();
+    expect(document.activeElement).toBe(button);
+
+    pending.resolve(new Response(JSON.stringify({ cards: [makeCard()] }), { status: 200 }));
+    expect(await screen.findByRole("button", { name: /^refresh$/i })).toBe(button);
+  });
+
+  it("B18: opening card B while its detail is held never shows card A's detail in the dialog", async () => {
+    const router = createRouter();
+    const cardA = makeCard({ id: "card_a", title: "Card A" });
+    const cardB = makeCard({ id: "card_b", title: "Card B" });
+    router.queue("/api/cards", { status: 200, body: { cards: [cardA, cardB] } });
+    router.queue(`/api/cards/${cardA.id}`, { status: 200, body: makeDetail(cardA) });
+    renderBoard(router);
+
+    fireEvent.click(await screen.findByRole("button", { name: /card a/i }));
+    const dialogA = await screen.findByRole("dialog", { name: "Card details" });
+    expect(await within(dialogA).findByText("Card A")).toBeInTheDocument();
+
+    const pendingB = deferredResponse();
+    router.queue(`/api/cards/${cardB.id}`, pendingB.promise);
+    fireEvent.click(screen.getByRole("button", { name: /card b/i }));
+
+    const dialogB = screen.getByRole("dialog", { name: "Card details" });
+    expect(within(dialogB).queryByText("Card A")).not.toBeInTheDocument();
+
+    pendingB.resolve(new Response(JSON.stringify(makeDetail(cardB)), { status: 200 }));
+    expect(await within(dialogB).findByText("Card B")).toBeInTheDocument();
+    expect(within(dialogB).queryByText("Card A")).not.toBeInTheDocument();
+  });
 });

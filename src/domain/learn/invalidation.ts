@@ -3,6 +3,7 @@ import type { StoreWith } from '../../base/ports/store.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import { CJK_LETTERS, hasCjk, splitCjkRuns } from '../../base/util/tokenize.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import { INVALIDATED_TAG, markStale } from '../../base/memory/stale-mark.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
@@ -84,7 +85,7 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
   return null;
 }
 
-/** Find memories that reference the invalidated pattern and weaken them (halve half_life_days,
+/** Find memories that reference the invalidated pattern and weaken them (halve half_life_days once,
  * confidence 'stale', add 'invalidated' tag; pinned are skipped). Tag matching is EXACT: the
  * FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
  * mass-weaken every memory with that tag. */
@@ -177,7 +178,7 @@ function referencesPattern(entry: MemoryEntry, fromTokens: string[], exactTag: s
   return tokenMatch >= MENTION_TOKEN_MATCH_MIN || tagMatch;
 }
 
-/** The match pass: weakens each unpinned match in place and returns them, writing nothing. */
+/** The match pass: returns a weakened copy of each unpinned match and writes nothing. */
 function weakenMatches(
   entries: readonly MemoryEntry[],
   target: InvalidationTarget,
@@ -210,8 +211,7 @@ function weakenMatches(
     countTarget(result, entry);
     if (dryRun) continue;
 
-    weakenEntry(entry);
-    weakened.push(entry);
+    weakened.push(markStale(entry, INVALIDATED_TAG));
   }
 
   return { result, weakened };
@@ -229,14 +229,6 @@ function countTarget(result: InvalidationResult, entry: MemoryEntry): void {
     id: entry.id,
     headline: previewHeadline(entry),
   });
-}
-
-function weakenEntry(entry: MemoryEntry): void {
-  entry.halfLifeDays = Math.max(1, Math.floor(entry.halfLifeDays / 2));
-  entry.confidence = 'stale';
-  if (!entry.tags.includes('invalidated')) {
-    entry.tags.push('invalidated');
-  }
 }
 
 const NOT_INVALIDATION_WORD = new RegExp(String.raw`[^a-z0-9\s_.${CJK_LETTERS}-]`, 'gu');

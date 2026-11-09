@@ -28,6 +28,8 @@ export type ConsolidateEvent =
       refused: number;
       zeroChildSkipped: number;
       failed: number;
+      /** Dirty summaries left out because their hold had not ended. */
+      held: number;
       /** The rebuild cap when it stopped the pass, else null. */
       cappedAt: number | null;
     }

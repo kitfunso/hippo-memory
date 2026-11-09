@@ -27,6 +27,7 @@ function dagRebuildLine(e: EventOf<'dagRebuild'>): string {
   if (e.refused > 0) parts.push(`${e.refused} refused`);
   if (e.zeroChildSkipped > 0) parts.push(`${e.zeroChildSkipped} zero-child-skipped`);
   if (e.failed > 0) parts.push(`${e.failed} failed`);
+  if (e.held > 0) parts.push(`${e.held} held`);
   if (e.cappedAt !== null) parts.push(`CAPPED@${e.cappedAt}`);
   return `  🌳 DAG rebuild: ${parts.join(', ')}`;
 }

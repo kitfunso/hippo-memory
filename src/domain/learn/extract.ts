@@ -58,7 +58,24 @@ Input text:
 // Output budget for one extraction reply.
 const EXTRACTION_MAX_TOKENS = 1200;
 
+/** What one extraction call produced. */
+export interface ExtractOutcome {
+  facts: ExtractedFact[];
+  /** True only when the reply parsed as a JSON array with no element: the model found nothing to
+   * keep. An empty or unparseable reply, a non-array and an array of unusable items are false. */
+  emptyArray: boolean;
+}
+
+/** The facts the model extracts from `text`; none when the call or the parse fails. */
 export async function extractFacts(text: string, opts: ExtractOptions): Promise<ExtractedFact[]> {
+  return (await extractFactsOutcome(text, opts)).facts;
+}
+
+/** The facts the model extracts from `text`, and whether it answered an empty array. */
+export async function extractFactsOutcome(
+  text: string,
+  opts: ExtractOptions,
+): Promise<ExtractOutcome> {
   const reply = await opts.llm.send({
     model: opts.model,
     maxTokens: EXTRACTION_MAX_TOKENS,
@@ -69,22 +86,22 @@ export async function extractFacts(text: string, opts: ExtractOptions): Promise<
     const msg = describeLlmFailure(reply.failure);
     if (opts.onError) opts.onError(msg, reply.failure);
     else log.warn(`fact extraction failed: ${msg}`, llmFailureFields(reply.failure));
-    return [];
+    return { facts: [], emptyArray: false };
   }
 
   try {
     const raw = reply.text;
-    if (!raw) return [];
+    if (!raw) return { facts: [], emptyArray: false };
 
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) return { facts: [], emptyArray: false };
 
-    return parseExtractedFacts(parsed);
+    return { facts: parseExtractedFacts(parsed), emptyArray: parsed.length === 0 };
   } catch (err) {
     const msg = `unparseable response: ${errorMessage(err)}`;
     if (opts.onError) opts.onError(msg);
     else log.warn(`fact extraction failed: ${msg}`, errorFields(err));
-    return [];
+    return { facts: [], emptyArray: false };
   }
 }
 

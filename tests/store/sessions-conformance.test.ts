@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { SessionHandoff } from '../../src/base/session/handoff.js';
-import type { SnapshotInput } from '../../src/base/ports/store/sessions.js';
+import { SNAPSHOT_CLOSE_STATUSES, type SnapshotInput } from '../../src/base/ports/store/sessions.js';
 import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 import {
   runOnFixture,
@@ -13,6 +13,8 @@ import {
   type GroupCall,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { onHandle, sqliteStore } from '../_helpers/test-session.js';
 
 const START = Date.parse('2026-03-01T12:00:00.000Z');
 const ALICE: ContinuityKey = { owner: 'alice', project: ['proj'] };
@@ -72,9 +74,9 @@ describe('Sessions snapshots', () => {
       (g) => g.loadSnapshot(TENANT_A, { ambient: { maxAgeMs: 3000 } }, ALICE),
       (g) => g.loadSnapshot(TENANT_A, { ambient: { maxAgeMs: 60_000, sessionId: 's1' } }, ALICE),
       (g) => g.loadSnapshot(TENANT_A, { ambient: { sessionId: 'other' } }, ALICE),
-      (g) => g.clear(TENANT_A, 'snapshot', { status: 'session_end', sessionId: 's2' }, BOB),
-      (g) => g.clear(TENANT_A, 'snapshot', { status: 'session_end', sessionId: 's2' }, BOB),
-      (g) => g.clear(TENANT_A, 'snapshot', { status: 'session_end', sessionId: 's1' }, PARTIAL),
+      (g) => g.clear(TENANT_A, 'snapshot', { status: 'session-ended', sessionId: 's2' }, BOB),
+      (g) => g.clear(TENANT_A, 'snapshot', { status: 'session-ended', sessionId: 's2' }, BOB),
+      (g) => g.clear(TENANT_A, 'snapshot', { status: 'session-ended', sessionId: 's1' }, PARTIAL),
       (g) => g.clear(TENANT_A, 'snapshot', { status: 'cleared' }),
       (g) => g.loadSnapshot(TENANT_A, {}, null),
       (g) => g.loadSnapshot(TENANT_B, {}, ALICE),
@@ -87,6 +89,74 @@ describe('Sessions snapshots', () => {
     expect(outcomes[16]).toEqual({ value: 1 });
     expect(outcomes[17]).toMatchObject({ value: { task: 'plain' } });
   });
+});
+
+describe('Sessions snapshot close', () => {
+  const T = 'default';
+  const SEEDED_AT = '2026-02-01T00:00:00.000Z';
+  // The snapshot rows as one JSON text, so a read of them needs no row type.
+  const rowsOf = (root: string, columns = 'id, task, status, updated_at'): string =>
+    onHandle(root, (db) =>
+      String(
+        db
+          .prepare(
+            `SELECT json_group_array(json_array(${columns})) AS rows FROM (SELECT * FROM task_snapshots ORDER BY id)`,
+          )
+          .get()?.rows,
+      ),
+    );
+  // The port never leaves a snapshot without a successor in a status but its own, so the seed names the row.
+  const seedRow = (root: string, status: string): void =>
+    onHandle(root, (db) => {
+      db.prepare(
+        `INSERT INTO task_snapshots (tenant_id, task, summary, next_step, status, source, created_at, updated_at)
+         VALUES (?, 'seeded', 's', 'n', ?, 'test', ?, ?)`,
+      ).run(T, status, SEEDED_AT, SEEDED_AT);
+    });
+
+  it.each(SNAPSHOT_CLOSE_STATUSES)('closes the newest active snapshot with %s and returns 1', async (status) => {
+    const root = makeRoot('snapshot-close');
+    const { sessions } = sqliteStore(root);
+    vi.setSystemTime(START);
+    await sessions.save(T, 'snapshot', snap('first', 's1'), ALICE);
+    vi.setSystemTime(START + 1000);
+    await sessions.save(T, 'snapshot', snap('second', 's2'), BOB);
+    vi.setSystemTime(START + 2000);
+    expect(await sessions.clear(T, 'snapshot', { status })).toBe(1);
+    expect(rowsOf(root, 'task, status')).toBe(
+      JSON.stringify([
+        ['first', 'active'],
+        ['second', status],
+      ]),
+    );
+  });
+
+  it.each(['superseded', ...SNAPSHOT_CLOSE_STATUSES])(
+    'returns 0 and touches nothing when the only snapshot is %s',
+    async (status) => {
+      const root = makeRoot('snapshot-close');
+      seedRow(root, status);
+      const before = rowsOf(root);
+      const closeWith = status === 'done' ? 'cleared' : 'done';
+      expect(await sqliteStore(root).sessions.clear(T, 'snapshot', { status: closeWith })).toBe(0);
+      expect(rowsOf(root)).toBe(before);
+    },
+  );
+
+  it.each(['session_end', ''])(
+    'refuses the close status "%s" and leaves the active snapshot active',
+    async (status) => {
+      const root = makeRoot('snapshot-close');
+      const { sessions } = sqliteStore(root);
+      await sessions.save(T, 'snapshot', snap('keep', 's1'), ALICE);
+      const before = rowsOf(root);
+      const refusal = `invalid task_snapshots status "${status}": use cleared | done | session-ended`;
+      await expect(sessions.clear(T, 'snapshot', { status })).rejects.toThrow(refusal);
+      await expect(sessions.clear(T, 'snapshot', { status, sessionId: 's1' }, ALICE)).rejects.toThrow(refusal);
+      expect(rowsOf(root)).toBe(before);
+      expect(rowsOf(root, 'status')).toBe('[["active"]]');
+    },
+  );
 });
 
 describe('Sessions events', () => {

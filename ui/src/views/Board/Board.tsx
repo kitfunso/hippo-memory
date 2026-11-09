@@ -60,6 +60,7 @@ export function Board() {
 
   // Button never disabled during a fetch: disabling it would drop keyboard focus.
   function refresh() {
+    setError(null);
     setLoading(true);
     setLoadCount((n) => n + 1);
   }

@@ -7,12 +7,15 @@ import {
 } from '../../base/memory/entry.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
+import { rebuildRetryAfter } from './retry-holds.js';
 import { overlapPartners } from './overlap-index.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
+import type { LlmFailure } from '../../base/ports/llm.js';
 import type { StoreWith } from '../../base/ports/store.js';
+import type { Consolidation } from '../../base/ports/store/consolidation.js';
 import { applyRebuild, settleFreshSummary } from './summary-settle.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
@@ -225,7 +228,13 @@ export interface DagRebuildResult {
   zeroChildSkipped: number; // dirty-cleared without LLM (descendants all gone)
   failed: number; // LLM null, fetch error, or applyRebuildResult throw
   capped: boolean; // true if queue had more than cap entries
+  /** Dirty summaries left out of this pass because their hold had not ended; none of them was
+   * attempted, so none is in `attempted` or `failed`. */
+  held: number;
 }
+
+/** One failed rebuild of this pass, as the store keeps it toward the summary's hold. */
+type CountedFailure = Parameters<NonNullable<Consolidation['noteRebuildFailures']>>[0][number];
 
 /** Regenerate one dirty summary from its children and tally the outcome; throws reach the
  * caller's isolation. */
@@ -237,10 +246,14 @@ interface RebuildOneSummaryOptions {
   preloaded: readonly MemoryEntry[];
   /** The new content of each summary rebuilt earlier in this drain, by id. */
   rebuiltContent: Map<string, string>;
+  /** The failures in a row stored for this summary before this attempt. */
+  failures: number;
+  /** The failures of this pass that count toward a hold, noted once when the pass ends. */
+  counted: CountedFailure[];
 }
 
 async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<void> {
-  const { store, summary, opts, result, preloaded, rebuiltContent } = options;
+  const { store, summary, opts, result, preloaded, rebuiltContent, counted } = options;
   // A child rebuilt earlier in this drain was loaded before its rebuild, so it takes the content
   // that rebuild wrote.
   const children = preloaded.map((c) => {
@@ -253,15 +266,13 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
     return;
   }
 
-  const newContent = await generateDagSummary(
-    summaryLabel(summary),
-    children.map((c) => c.content),
-    opts,
-  );
+  const { text: newContent, providerFailed } = await regenerate(summary, children, opts);
 
   if (!newContent) {
-    // LLM null / fetch error → leave dirty for next cycle
+    // Left dirty for the next cycle. A provider failure says nothing about this summary, so only
+    // a content failure counts toward its hold.
     result.failed++;
+    if (!providerFailed) counted.push(nextFailure(options));
     return;
   }
 
@@ -283,6 +294,38 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
     rebuiltContent.set(summary.id, newContent);
   }
   // changed=false (refused also false) → race lost; not failure, not success, silently skip
+}
+
+/** The model's new text for a summary, and whether the model call itself failed. */
+async function regenerate(
+  summary: MemoryEntry,
+  children: readonly MemoryEntry[],
+  opts: DagSummaryOptions,
+): Promise<{ text: string | null; providerFailed: boolean }> {
+  let providerFailed = false;
+  const text = await generateDagSummary(
+    summaryLabel(summary),
+    children.map((c) => c.content),
+    {
+      ...opts,
+      onError: (msg: string, failure?: LlmFailure) => {
+        if (failure) providerFailed = true;
+        opts.onError?.(msg, failure);
+      },
+    },
+  );
+  return { text, providerFailed };
+}
+
+/** The summary's failure count after one more content failure, with the hold that count earns. */
+function nextFailure({ summary, failures, opts }: RebuildOneSummaryOptions): CountedFailure {
+  return {
+    id: summary.id,
+    tenantId: summary.tenantId,
+    priorFailures: failures,
+    failures: failures + 1,
+    retryAfter: rebuildRetryAfter(failures + 1, opts.now),
+  };
 }
 
 /** Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump. */
@@ -323,7 +366,11 @@ export async function rebuildDirtySummaries(
   opts: DagSummaryOptions & { cap?: number; now: Date },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
-  const { summaries: queue, more } = await store.consolidation.dirtySummaries(cap);
+  const {
+    summaries: queue,
+    more,
+    held,
+  } = await store.consolidation.dirtySummaries(cap, opts.now.toISOString());
 
   const result: DagRebuildResult = {
     attempted: queue.length,
@@ -332,10 +379,12 @@ export async function rebuildDirtySummaries(
     zeroChildSkipped: 0,
     failed: 0,
     capped: more,
+    held: held ?? 0,
   };
 
   const rebuiltContent = new Map<string, string>();
-  for (const [index, { summary, children }] of queue.entries()) {
+  const counted: CountedFailure[] = [];
+  for (const [index, { summary, children, failures }] of queue.entries()) {
     // Yield the macrotask queue every 25 summaries: each iteration is synchronous store work, so a
     // batch of up to 1000 would starve timers and IPC (server keep-alives, Vitest's birpc
     // heartbeat).
@@ -349,20 +398,41 @@ export async function rebuildDirtySummaries(
       result,
       preloaded: children,
       rebuiltContent,
+      failures: failures ?? 0,
+      counted,
     });
   }
+  await noteFailedRebuilds(store, counted);
 
   return result;
 }
 
+/** Stores the pass's counted failures in one call. A store without the method keeps no holds,
+ * and a note that fails only leaves them uncounted: the next failure counts. */
+async function noteFailedRebuilds(
+  store: DagStore,
+  counted: readonly CountedFailure[],
+): Promise<void> {
+  if (counted.length === 0) return;
+  try {
+    await store.consolidation.noteRebuildFailures?.(counted);
+  } catch (err) {
+    log.warn(
+      `rebuildDirtySummaries: noting ${counted.length} failed rebuilds failed: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+  }
+}
+
 async function rebuildIsolated(options: RebuildOneSummaryOptions): Promise<void> {
-  const { summary, result } = options;
+  const { summary, result, counted } = options;
   try {
     await rebuildOneSummary(options);
   } catch (err) {
-    // One throw doesn't abort the queue; log enough to triage an exotic failure (store I/O,
-    // prepare), since audit() already catches its own.
+    // A throw counts toward the hold: it mostly follows a paid model call, and one that repeats on
+    // this row would otherwise cost a call every sleep.
     result.failed++;
+    counted.push(nextFailure(options));
     log.error(
       `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${errorMessage(err)}`,
       errorFields(err),

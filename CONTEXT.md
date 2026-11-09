@@ -23,6 +23,21 @@ one with a certain defect is never reused by sleep or shared, and `hippo audit r
 it aside. A person's memory is never judged on its wording.
 _Avoid_: auto memory (Claude Code's own feature), generated memory, low-quality memory
 
+**Rebuild hold**:
+A dirty DAG summary whose rebuild failed 3 times in a row. Sleep keeps it dirty and does not send
+it to the model until its hold time passes. The first hold is one day; each further failure doubles
+it, up to seven days. A rebuild that lands ends the hold. A provider outage does not count as a
+failure. `hippo sleep` shows `N held` in the DAG rebuild line.
+_Avoid_: backoff state, retry lock, quarantine
+
+**Empty extraction mark**:
+Sleep's note that extraction found nothing to keep in a source memory's current text: the model
+returned an empty array, or every fact it returned was refused by a rejected value. A reply whose
+facts fail the quality check leaves the source unmarked. Sleep skips the source until its text
+changes or 30 days pass, and the sleep result counts it in `extractionHeld`. Later memories are
+offered in its place.
+_Avoid_: zero-fact tag, extracted flag
+
 **Churn-stale memory**:
 A memory whose named file, code symbol or `npm run` script changed or disappeared in its own
 repo's git history after the memory was stored or last confirmed (`churnStaleness.enabled`, off by
@@ -38,6 +53,23 @@ Only an explicit supersede sets it today (`hippo supersede`, `POST /v1/memories/
 ROADMAP Z6's "retired" means superseded or invalidated, never deleted.
 Any `superseded_by` value marks it, even an empty one.
 _Avoid_: deduped (sleep's dedup deletes a near-copy outright), dormant, stale
+
+**Confidence tier**:
+Why hippo believes a memory, stored with it: verified (a person vouched), observed, inferred, or
+stale (an invalidation or a decision that replaced it withdrew trust). Only those two acts write
+stale.
+_Avoid_: confidence score, trust level, stale for an old memory (that is aged-out)
+
+**Aged-out memory**:
+An unpinned memory below verified that nobody retrieved for over 30 days. Derived when read and
+never stored: it shows as `<tier>, aged`, warns, and replay skips it.
+_Avoid_: stale (that is a confidence tier), expired
+
+**Invalidated memory**:
+A memory a commit message or `hippo invalidate` named as replaced: tier stale, tagged
+`invalidated`, half-life halved once; invalidating it again changes nothing more. Pinned memories
+are skipped.
+_Avoid_: superseded (that has a replacement row), churn-stale
 
 **Live memory**:
 A memory that is not superseded, is a raw receipt or distilled, and is not quarantined. The
@@ -296,6 +328,8 @@ _Avoid_: sidechain log, child transcript
 **Task snapshot**:
 One session's current task, summary and next step, saved by `hippo pre-compact` or `hippo snapshot
 save`. A store holds one active snapshot (one per owner and project on a shared store).
+A newer save supersedes it; it closes as `cleared` or `done` by hand, or `session-ended` when its
+session ends.
 _Avoid_: working state, active task (as a name for the row)
 
 **Session handoff**:
@@ -308,6 +342,14 @@ The one line the per-prompt hook and the text formats of `hippo context` print i
 session's task snapshot or session handoff. It names the command that prints the full text. A
 session's own snapshot and handoff print whole, as do JSON, MCP and shared stores.
 _Avoid_: stub, teaser, short handoff
+
+### Record status
+
+**Status transition**:
+A record's move from one status to the next, which names the statuses it may leave. A record in any
+other status stays as it is and the caller is told nothing moved. The store refuses a status
+outside the record's list.
+_Avoid_: state change, status flip, status update
 
 ### Support
 
