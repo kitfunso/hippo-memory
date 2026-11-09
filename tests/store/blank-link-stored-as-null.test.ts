@@ -70,6 +70,23 @@ describe('a blank superseded link is stored as no link', () => {
     expect(await liveIds(home)).toEqual([entry.id]);
   });
 
+  it('keeps a whitespace-only link as a link', async () => {
+    const home = makeRoot('blank-link-whitespace');
+    const empty = { ...createMemory('the vpn gateway sits in the london rack'), supersededBy: '' };
+    const spaces = { ...createMemory('the vpn gateway failover is manual'), supersededBy: '  ' };
+    const store = kitStore(home);
+    try {
+      await store.entryWrites.writeEntry({ entry: empty, actor: 'cli' });
+      await store.entryWrites.writeEntry({ entry: spaces, actor: 'cli' });
+    } finally {
+      await store.close();
+    }
+
+    // storedLink maps only the empty string to no link, so a trimming compare would turn a real link live.
+    expect(storedLink(home, empty.id)).toEqual(NO_LINK);
+    expect(storedLink(home, spaces.id)).toEqual({ superseded_by: '  ' });
+  });
+
   it('when an outcome rewrites a row that raw SQL blanked, which turns the memory live', async () => {
     const home = makeRoot('blank-link-outcome');
     const entry = createMemory('the canary host was canary-3');
