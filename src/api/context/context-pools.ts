@@ -141,6 +141,8 @@ export function ambientAdmission(
     ownSessionId: opts.currentSessionId || undefined,
     handoffSessionId:
       digestHandoff?.evidence?.derivedFrom === 'transcript' ? digestHandoff.sessionId : undefined,
+    // Only the hook block's pinned-only reads drop tags; a search or plain context read keeps them.
+    excludeTags: plan.pinnedOnly ? plan.config.pinnedInject.excludeTags : undefined,
   };
   const admit = (e: MemoryEntry): boolean => ambientAdmits(e, rule);
   // The two-store search has always ranked a session's own compaction items; only the local search

@@ -226,6 +226,7 @@ export function promptRecallRequest(
           }),
         ),
         ownScope: plan.ownScope,
+        ...(pinnedInject.excludeTags.length > 0 && { excludeTags: pinnedInject.excludeTags }),
       }
     : undefined;
 }

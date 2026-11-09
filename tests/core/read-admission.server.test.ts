@@ -299,6 +299,42 @@ describe('ambient admission as data', () => {
   );
 });
 
+describe('ambient admission by excluded tag', () => {
+  const base: AmbientAdmission = { currentProject: 'proj', includeCrossProject: false };
+  const digest = (): MemoryEntry => rows.find((r) => r.tenantId === ACME && r.id === 'a_digest')!;
+  const plain = (): MemoryEntry => rows.find((r) => r.tenantId === ACME && r.id === 'a_s0_o0')!;
+  const loadedIds = async (store: HippoStore & StoreGroups, admit: AmbientAdmission): Promise<string[]> => {
+    const got = await store.contextReads.ambientCandidates(ACME, { recentNeeded: 200, admit });
+    return got.entries.map((e) => e.id);
+  };
+
+  it('refuses a row carrying a listed tag and admits an untagged one', () => {
+    const admit = { ...base, excludeTags: [SESSION_DIGEST_TAG] };
+    expect(digest().tags).toContain(SESSION_DIGEST_TAG);
+    expect(ambientRefusal(digest(), admit)).toBe('admission');
+    expect(ambientRefusal(plain(), admit)).toBeNull();
+  });
+
+  it.each([['undefined', undefined], ['an empty list', []]])('admits both rows when the list is %s', (_, excludeTags) => {
+    const admit = { ...base, excludeTags };
+    expect(ambientRefusal(digest(), admit)).toBeNull();
+    expect(ambientRefusal(plain(), admit)).toBeNull();
+  });
+
+  it('leaves tagged rows out of a load in process and on a worker, and keeps them without the list', async () => {
+    for (const store of [inProcess, onWorkers]) {
+      const without = await loadedIds(store, { ...base, excludeTags: [SESSION_DIGEST_TAG] });
+      expect(without).toContain('a_s0_o0');
+      expect(without).not.toContain('a_digest');
+      expect(without).not.toContain('a_digest_else');
+      for (const excludeTags of [undefined, []]) {
+        const kept = await loadedIds(store, { ...base, excludeTags });
+        expect(kept).toEqual(expect.arrayContaining(['a_s0_o0', 'a_digest', 'a_digest_else']));
+      }
+    }
+  });
+});
+
 describe('descendant admission as data', () => {
   it.each(DESCENDANT.map((a, i) => [i, a] as const))(
     'case %i admits each row the old readable admitted',

@@ -32,7 +32,7 @@ import {
   rowToEntry,
   parseJsonArray,
 } from '../runtime/rows.js';
-import { pickRarestFtsQuery, listRecallEntries } from './search-rows.js';
+import { pickRarestFtsQuery, listRecallEntriesWithout } from './search-rows.js';
 import type { HeldText, EntryCursor } from '../../../base/ports/store/types.js';
 import type { TenantId } from '../../../base/util/tenant.js';
 import { oldestFirst } from '../../rules/order.js';
@@ -304,12 +304,12 @@ function promptRecallEntries(
 ): MemoryEntry[] {
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
   return ftsQuery
-    ? listRecallEntries(db, ftsQuery, {
-        limit: recall.limit,
-        tenantId,
-        includeSuperseded: false,
-        ownScope: recall.ownScope,
-      })
+    ? listRecallEntriesWithout(
+        db,
+        ftsQuery,
+        { limit: recall.limit, tenantId, includeSuperseded: false, ownScope: recall.ownScope },
+        recall.excludeTags ?? [],
+      )
     : [];
 }
 
