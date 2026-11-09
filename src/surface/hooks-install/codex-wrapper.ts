@@ -159,6 +159,12 @@ function pathLauncherFolders(): LauncherSlot[][] {
   );
 }
 
+/** Whether the plan's command path is empty or hippo's wrapper, so writing a wrapper there loses no
+ * launcher; a cmd shim for a vacated exe slot would otherwise overwrite a live codex.cmd. */
+function commandPathIsFree(plan: LauncherSlot['plan']): boolean {
+  return !fs.existsSync(plan.commandPath) || isHippoCodexWrapperFile(plan.commandPath);
+}
+
 export function detectRealCodexPath(): string | null {
   const metadata = readCodexWrapperMetadata();
   if (isCodexWrapperMetadataValid(metadata)) return metadata.realCodexPath;
@@ -167,7 +173,8 @@ export function detectRealCodexPath(): string | null {
   // backup beside an empty slot means an install stopped after its rename, so the slot is the launcher.
   for (const slots of pathLauncherFolders()) {
     const vacated = slots.find(
-      ({ original, plan }) => fs.existsSync(plan.backupPath) && !fs.existsSync(original),
+      ({ original, plan }) =>
+        fs.existsSync(plan.backupPath) && !fs.existsSync(original) && commandPathIsFree(plan),
     );
     if (vacated) {
       log.info(
@@ -287,12 +294,13 @@ function restoreCodexLauncher(metadata: CodexWrapperMetadata, metadataPath: stri
 }
 
 /** With no metadata, a backup beside an empty or hippo-wrapped slot is an install that stopped
- * part-way; a slot holding a real launcher is never touched. */
+ * part-way; a slot or command path holding a real launcher is never touched. */
 function restoreLeftoverBackups(): boolean {
   let changed = false;
   for (const { original, plan } of pathLauncherFolders().flat()) {
     if (!fs.existsSync(plan.backupPath)) continue;
     if (fs.existsSync(original) && !isHippoCodexWrapperFile(original)) continue;
+    if (!commandPathIsFree(plan)) continue;
     if (isHippoCodexWrapperFile(plan.commandPath)) fs.rmSync(plan.commandPath, { force: true });
     fs.renameSync(plan.backupPath, original);
     changed = true;

@@ -269,4 +269,28 @@ describe('setupDailySchedule on a crontab that may already hold the daily runner
     install('', new Error('crontab: you are not allowed to use this program'));
     expect(said).toContain(`   15 6 * * * ${CMD} ${MARKER}`);
   });
+
+  // Another job that only holds the marker as quoted data is not our entry, whatever its schedule.
+  const BACKUP_JOB = `0 0 * * * crontab -l | grep -v ' ${MARKER} ' > /tmp/cron.bak`;
+  const ECHO_JOB = `0 1 * * * echo "kept ${MARKER} here"`;
+
+  it('keeps a real entry and leaves a job that only quotes the marker alone', () => {
+    for (const quoting of [BACKUP_JOB, ECHO_JOB]) {
+      const entry = `15 6 * * * ${CMD} ${MARKER}`;
+      expect(install(`${quoting}\n${entry}\n`).map(({ args }) => args)).toEqual([['-l']]);
+      expect(install(`${entry}\n${quoting}\n`).map(({ args }) => args)).toEqual([['-l']]);
+    }
+  });
+
+  it('adds an entry when the only marker is inside quotes in another job', () => {
+    for (const quoting of [BACKUP_JOB, ECHO_JOB]) {
+      expect(written(install(`MAILTO=me\n${quoting}\n`))).toBe(`MAILTO=me\n${quoting}\n15 6 * * * ${CMD} ${MARKER}\n`);
+    }
+  });
+
+  it('rewrites only the real entry when a stale one sits beside a job that quotes the marker', () => {
+    const calls = install(`${BACKUP_JOB}\n30 4 * * * ${STALE} ${MARKER}\n${ECHO_JOB}\n`);
+    expect(written(calls)).toBe(`${BACKUP_JOB}\n30 4 * * * ${CMD} ${MARKER}\n${ECHO_JOB}\n`);
+    expect(said.some((line) => line.includes('Removed a duplicate'))).toBe(false);
+  });
 });

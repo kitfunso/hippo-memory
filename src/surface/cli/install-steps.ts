@@ -181,11 +181,19 @@ const dailyCronLine = (cmd: string, marker: string): string => `15 6 * * * ${cmd
 // The five schedule fields or an @macro, with any leading blanks.
 const CRON_SCHEDULE = /^\s*(?:@\S+|\S+(?:\s+\S+){4})(?=\s|$)/;
 
-/** Where `marker` stands in `line` as a whole token, or -1; `<marker>-old` is another name. */
+/** Best effort: after an unclosed ' or " the text is another job's data, so a marker there is not ours. */
+function outsideQuotes(text: string): boolean {
+  const bare = text.replace(/\./g, '');
+  return [`'`, '"'].every((quote) => (bare.split(quote).length - 1) % 2 === 0);
+}
+
+/** Where `marker` stands in `line` as a whole token outside quotes, or -1; `<marker>-old` is another name. */
 function markerAt(line: string, marker: string): number {
   const blankOrEdge = (i: number): boolean => i < 0 || i >= line.length || /\s/.test(line[i]);
+  const isOurs = (at: number): boolean =>
+    blankOrEdge(at - 1) && blankOrEdge(at + marker.length) && outsideQuotes(line.slice(0, at));
   for (let at = line.indexOf(marker); at >= 0; at = line.indexOf(marker, at + 1)) {
-    if (blankOrEdge(at - 1) && blankOrEdge(at + marker.length)) return at;
+    if (isOurs(at)) return at;
   }
   return -1;
 }
