@@ -85,7 +85,7 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
 type Take =
   | { readonly kind: 'took'; readonly mode: WorkerMode }
   | { readonly kind: 'empty' }
-  | { readonly kind: 'failed'; readonly message: string };
+  | { readonly kind: 'failed'; readonly err: unknown };
 
 /** Takes the queued request by renaming it, so one queued while this reads it lands in a fresh
  * file. */
@@ -101,7 +101,7 @@ function takeQueued(queued: string): Take {
       `session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`,
       errorFields(err),
     );
-    return { kind: 'failed', message: errorMessage(err) };
+    return { kind: 'failed', err };
   }
   try {
     return { kind: 'took', mode: fs.readFileSync(taken, 'utf8') === 'full' ? 'full' : 'turn' };
@@ -122,12 +122,14 @@ function queuedKind(queued: string): string {
   }
 }
 
-function reportGaveUp(queued: string, lastError: string | null, gaveUp?: LineLog): void {
+function reportGaveUp(queued: string, lastError: unknown, gaveUp?: LineLog): void {
+  const lastTake =
+    lastError === null ? 'none: the request was queued again each round' : errorMessage(lastError);
   const line =
     `session worker: gave up after ${MAX_ROUNDS} rounds with the ${queuedKind(queued)} request ` +
     `still queued in ${queued}; ` +
-    `last take error: ${lastError ?? 'none: the request was queued again each round'}`;
-  logger.warn(line);
+    `last take error: ${lastTake}`;
+  logger.warn(line, lastError === null ? undefined : errorFields(lastError));
   gaveUp?.(line);
 }
 
@@ -144,7 +146,7 @@ export async function runSessionWorker(
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
   let idleRounds = 0;
-  let lastError: string | null = null;
+  let lastError: unknown = null;
   for (let take = takeFileLock(files.lock); take.kind !== 'held'; take = takeFileLock(files.lock)) {
     if (take.kind === 'unusable') {
       warnUnusableLockOnce(files.lock, take.cause);
@@ -160,7 +162,7 @@ export async function runSessionWorker(
     } finally {
       take.lock.release();
     }
-    if (next.kind === 'failed') lastError = next.message;
+    if (next.kind === 'failed') lastError = next.err;
     // A taker that found the lock held left its request queued, so look again after every release.
     if (!fs.existsSync(files.queued)) return;
     if (!ran && ++idleRounds >= MAX_ROUNDS) {
