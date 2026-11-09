@@ -116,6 +116,10 @@ export function originInSql(names: readonly string[], column = 'origin_project')
   return names.length === 0 ? '0' : `${column} IN (${placeholders(names.length)})`;
 }
 
+// A tags column that is not a JSON array reads as no tags, as parseJsonArray reads it.
+export const tagsOf = (column: string): string =>
+  `CASE WHEN NOT json_valid(${column}) THEN '[]' WHEN json_type(${column}) = 'array' THEN ${column} ELSE '[]' END`;
+
 /** SQL twin of ownScopeTouches, which is also canReadScope for an admin: every row but another
  * person's personal one. LIKE folds ASCII case as isPersonalScope's /i does. */
 export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {

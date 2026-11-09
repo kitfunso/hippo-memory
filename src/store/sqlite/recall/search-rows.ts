@@ -2,7 +2,7 @@ import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { isFtsAvailable, type DatabaseSyncLike } from '../../../db/index.js';
 import { cjkIndexTerms, partitionCjkTerms, tokenize } from '../../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../../base/scope/recall-scope.js';
-import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
+import { originInSql, scopeAdmitSql, tagsOf } from '../runtime/rule-sql.js';
 import type { SqlFragment } from '../../../db/sql.js';
 import {
   ftsTermParts,
@@ -72,6 +72,21 @@ function withProject(
   };
 }
 
+// In SQL, not after the window cut, so excluded rows cannot fill the LIMIT that kept rows need.
+function withoutTags(
+  scope: SqlFragment,
+  col: 'm.' | '',
+  excludeTags: readonly string[],
+): SqlFragment {
+  if (excludeTags.length === 0) return scope;
+  return {
+    sql:
+      `${scope.sql} AND NOT EXISTS (SELECT 1 FROM json_each(${tagsOf(`${col}tags_json`)}) ` +
+      `WHERE value IN (${placeholders(excludeTags.length)}))`,
+    params: [...scope.params, ...excludeTags],
+  };
+}
+
 const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
 
 /** SQL predicate fragments every candidate path appends, built once per load. */
@@ -92,6 +107,8 @@ interface SearchRowsOptions {
   readonly scopeFilter?: RecallScopeFilter;
   readonly includeSuperseded?: boolean;
   readonly originProjects?: OriginFilter;
+  /** Rows with any of these tags are left out; internal, as the recall port has no such option. */
+  readonly excludeTags?: readonly string[];
 }
 
 interface ListSearchRowsOptions {
@@ -105,8 +122,8 @@ function listSearchRows(
   db: DatabaseSyncLike,
   { query, limit, tenantId, options = {} }: ListSearchRowsOptions,
 ): MemoryRow[] {
-  const { scopeFilter, includeSuperseded = true, originProjects } = options;
-  const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects);
+  const { scopeFilter, includeSuperseded = true, originProjects, excludeTags = [] } = options;
+  const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects, excludeTags);
 
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
@@ -162,6 +179,7 @@ function searchPredicates(
   scopeFilter: RecallScopeFilter | undefined,
   includeSuperseded: boolean,
   originProjects: OriginFilter | undefined,
+  excludeTags: readonly string[],
 ): SearchPredicates {
   // One tenant reads through the composite idx_memories_tenant_created.
   const one = tenantId !== ALL_TENANTS;
@@ -176,8 +194,16 @@ function searchPredicates(
   // between ' AND' and ' WHERE' by caller context.
   const archivedClauseTenantOnly = one ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
-  const aliasScope = withProject(recallScopeClause('m.', scopeFilter), 'm.', originProjects);
-  const plainScope = withProject(recallScopeClause('', scopeFilter), '', originProjects);
+  const aliasScope = withoutTags(
+    withProject(recallScopeClause('m.', scopeFilter), 'm.', originProjects),
+    'm.',
+    excludeTags,
+  );
+  const plainScope = withoutTags(
+    withProject(recallScopeClause('', scopeFilter), '', originProjects),
+    '',
+    excludeTags,
+  );
   const scopeParams = aliasScope.params;
 
   const currentAlias = includeSuperseded ? '' : ` AND ${notSupersededIn('m.')}`;
@@ -334,6 +360,17 @@ export function listRecallEntries(
   query: string,
   options: RecallSearchEntriesOptions,
 ): MemoryEntry[] {
+  return listRecallEntriesWithout(db, query, options, []);
+}
+
+/** `listRecallEntries` with rows tagged `excludeTags` cut before the limit, which the recall port
+ * has no option for. */
+export function listRecallEntriesWithout(
+  db: DatabaseSyncLike,
+  query: string,
+  options: RecallSearchEntriesOptions,
+  excludeTags: readonly string[],
+): MemoryEntry[] {
   const {
     limit = DEFAULT_SEARCH_CANDIDATE_LIMIT,
     tenantId,
@@ -352,6 +389,7 @@ export function listRecallEntries(
       scopeFilter,
       includeSuperseded,
       originProjects,
+      excludeTags,
     },
   }).map(rowToEntry);
 }

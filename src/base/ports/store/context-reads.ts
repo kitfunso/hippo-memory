@@ -64,6 +64,8 @@ export interface AmbientRecallRequest {
   terms: string[];
   limit: number;
   ownScope?: string;
+  /** Rows with any of these tags stay out of the full-text window, before its limit. */
+  excludeTags?: readonly string[];
 }
 
 /** The rows a non-pinned context read may admit; each predicate is one contextGet's admission

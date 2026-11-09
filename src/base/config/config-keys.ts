@@ -81,6 +81,7 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
     promptRecallMinShared: read('promptRecallMinShared', count(P.promptRecallMinShared)),
     promptRecallMaxItems: read('promptRecallMaxItems', count(P.promptRecallMaxItems)),
     promptRecallCandidates: read('promptRecallCandidates', count(P.promptRecallCandidates)),
+    excludeTags: read('excludeTags', textList([])),
   };
 }
 

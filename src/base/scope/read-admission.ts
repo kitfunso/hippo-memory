@@ -25,6 +25,8 @@ export interface AmbientAdmission {
   /** The session of a shown or omitted transcript handoff: it stands for the closing message its
    * digest rows hold, so that session's digest stays out. */
   readonly handoffSessionId?: string;
+  /** Rows carrying any of these tags stay out; the prompt hook sets it from `pinnedInject.excludeTags`. */
+  readonly excludeTags?: readonly string[];
 }
 
 /**
@@ -66,9 +68,14 @@ export function ambientEnvelopeAdmits(e: MemoryEntry, a: AmbientAdmission): bool
   return classifyOriginProject(e.originProject, a.currentProject) !== 'cross-project';
 }
 
-// Superseded rows go first because the envelope regex-scans content for secrets.
+// The cheap checks go before the envelope, which regex-scans content for secrets.
 export function ambientAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
-  return !isSuperseded(e) && !isOwnCompactionItem(e, a.ownSessionId) && ambientEnvelopeAdmits(e, a);
+  return (
+    !isSuperseded(e) &&
+    !isOwnCompactionItem(e, a.ownSessionId) &&
+    !hasExcludedTag(e, a.excludeTags) &&
+    ambientEnvelopeAdmits(e, a)
+  );
 }
 
 /** Why an ambient load leaves `e` out, or null when it keeps it. */
@@ -91,4 +98,8 @@ function isOwnCompactionItem(e: MemoryEntry, ownSessionId: string | undefined): 
   return (
     !!ownSessionId && e.sourceSessionId === ownSessionId && e.tags.includes(COMPACTION_MEMORY_TAG)
   );
+}
+
+function hasExcludedTag(e: MemoryEntry, excludeTags: readonly string[] | undefined): boolean {
+  return excludeTags !== undefined && excludeTags.some((tag) => e.tags.includes(tag));
 }
