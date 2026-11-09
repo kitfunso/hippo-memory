@@ -93,10 +93,13 @@ function seedTables(): void {
     };
     // A hold left behind for a clean summary: the sweep drops it, so it cannot hold the row once it is dirty again.
     db.prepare('INSERT INTO meta(key, value) VALUES (?, ?)').run(`rebuild_hold:${rows.topicB!.id}`, STALE_HOLD);
-    // Marks as an earlier sleep left them: two for sources that left, one that is not JSON.
+    // Marks as an earlier sleep left them: three for sources that left, one that is not JSON.
     const mark = db.prepare('INSERT INTO meta(key, value) VALUES (?, ?)');
     db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ?').run(id('kept'), id('replaced'));
+    // A blank link counts as superseded; no writer makes one, so the UPDATE is the test's subject.
+    db.prepare("UPDATE memories SET superseded_by = '' WHERE id IN (?, ?)").run(id('blankMarked'), id('blankUnmarked'));
     mark.run(`empty_extraction:${id('replaced')}`, STALE_MARK);
+    mark.run(`empty_extraction:${id('blankMarked')}`, STALE_MARK);
     mark.run(`empty_extraction:${ABSENT}`, STALE_MARK);
     mark.run(`empty_extraction:${id('gone')}`, 'not json');
     dormant('the old staging host was build-01', '2001-01-01T00:00:00.000Z');
@@ -118,6 +121,8 @@ async function seed(): Promise<void> {
   seedRow('pinned', 'never deploy on a friday afternoon', { pinned: true });
   seedRow('fading', 'the canary host was canary-3');
   seedRow('replaced', 'the old ingress was haproxy');
+  seedRow('blankMarked', 'the old cache layer was memcached');
+  seedRow('blankUnmarked', 'the old queue was rabbitmq');
   for (const [tenantId, sessionId] of [
     [TENANT_A, 'done'],
     [TENANT_A, 'traced'],
@@ -150,6 +155,7 @@ async function conforms(calls: readonly GroupCall<'consolidation', unknown>[]) {
 
 const id = (name: string): string => rows[name]!.id;
 const named = (...names: string[]): string[] => names.map(id);
+const markOf = (name: string, digest: string) => ({ id: id(name), digest, at: AT });
 const read = (names: string[]) => (_g: StoreGroups['consolidation'], s: HippoStore) =>
   s.entriesByIds(named(...names), TENANT_A);
 
@@ -298,17 +304,16 @@ describe('Consolidation', () => {
   });
 
   it('keeps empty extraction marks for live sources only, pages them by source id, and drops those that left', async () => {
-    const mark = (name: string, digest: string) => ({ id: id(name), digest, at: AT });
     const live = named('kept', 'edited', 'gone').sort();
     const sqlite = await conforms([
       (g) => g.emptyExtractions!({ limit: 10 }),
-      // The first note drops the marks left for a superseded and a missing source, and replaces the one that is not JSON.
+      // The first note drops the marks left for a superseded, a blank-linked and a missing source, and replaces the one that is not JSON.
       (g) =>
         g.noteEmptyExtractions!({
           mark: [
-            mark('kept', 'bbbbbbbbbbbbbbbb'),
-            mark('edited', 'cccccccccccccccc'),
-            mark('gone', 'dddddddddddddddd'),
+            markOf('kept', 'bbbbbbbbbbbbbbbb'),
+            markOf('edited', 'cccccccccccccccc'),
+            markOf('gone', 'dddddddddddddddd'),
           ],
           clear: [],
         }),
@@ -317,15 +322,15 @@ describe('Consolidation', () => {
       // A superseded and a missing source take no mark.
       (g) =>
         g.noteEmptyExtractions!({
-          mark: [mark('replaced', 'eeeeeeeeeeeeeeee'), { ...mark('kept', 'x'), id: ABSENT }],
+          mark: [markOf('replaced', 'eeeeeeeeeeeeeeee'), { ...markOf('kept', 'x'), id: ABSENT }],
           clear: [],
         }),
-      (g) => g.noteEmptyExtractions!({ mark: [mark('edited', 'ffffffffffffffff')], clear: [id('kept')] }),
+      (g) => g.noteEmptyExtractions!({ mark: [markOf('edited', 'ffffffffffffffff')], clear: [id('kept')] }),
       (g) => g.emptyExtractions!({ limit: 10 }),
     ]);
     for (const i of [1, 4, 5]) expect(valueAt(sqlite.outcomes, i)).toBeUndefined();
     const marks = (i: number) => valueAt<MarkPage>(sqlite.outcomes, i).marks;
-    expect(marks(0).map((m) => m.id)).toEqual([ABSENT, id('replaced')].sort());
+    expect(marks(0).map((m) => m.id)).toEqual([ABSENT, id('replaced'), id('blankMarked')].sort());
     expect(valueAt<MarkPage>(sqlite.outcomes, 2).next).toBe(live[1]);
     expect(marks(2).map((m) => m.id)).toEqual(live.slice(0, 2));
     expect(valueAt<MarkPage>(sqlite.outcomes, 3).next).toBeNull();
@@ -335,7 +340,32 @@ describe('Consolidation', () => {
         .sort()
         .map((markId) => expect.objectContaining({ id: markId })),
     );
-    expect(marks(6).find((m) => m.id === id('edited'))).toEqual(mark('edited', 'ffffffffffffffff'));
+    expect(marks(6).find((m) => m.id === id('edited'))).toEqual(markOf('edited', 'ffffffffffffffff'));
+  });
+
+  it('drops the empty mark of a source whose superseded_by is blank, as it does a superseded one', async () => {
+    const sqlite = await conforms([
+      (g) => g.emptyExtractions!({ limit: 10 }),
+      (g) => g.noteEmptyExtractions!({ mark: [markOf('kept', 'bbbbbbbbbbbbbbbb')], clear: [] }),
+      (g) => g.emptyExtractions!({ limit: 10 }),
+    ]);
+    const marked = (i: number) => valueAt<MarkPage>(sqlite.outcomes, i).marks.map((m) => m.id);
+    expect(marked(0)).toContain(id('blankMarked'));
+    expect(marked(2)).toEqual([id('kept')]);
+  });
+
+  it('writes no empty mark for a source whose superseded_by is blank', async () => {
+    const sqlite = await conforms([
+      (g) =>
+        g.noteEmptyExtractions!({
+          mark: [markOf('blankUnmarked', 'cccccccccccccccc'), markOf('kept', 'bbbbbbbbbbbbbbbb')],
+          clear: [],
+        }),
+      (g) => g.emptyExtractions!({ limit: 10 }),
+    ]);
+    const marked = valueAt<MarkPage>(sqlite.outcomes, 1).marks.map((m) => m.id);
+    expect(marked).toContain(id('kept'));
+    expect(marked).not.toContain(id('blankUnmarked'));
   });
 
   it('commits the flush and the dormant expiry, then records the sleep', async () => {

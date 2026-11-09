@@ -1,6 +1,7 @@
 // A source's empty extraction mark, one `meta` row per source: {"digest": hash of its text, "at": ISO}.
 // When a mark stands is decided in src/domain/consolidate/retry-holds.ts.
 import { type DatabaseSyncLike, withWriteScope } from '../../../db/index.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import type { Consolidation } from '../../../base/ports/store/consolidation.js';
 
@@ -43,7 +44,7 @@ export function emptyExtractions(
 const MARK_SQL = `INSERT INTO meta(key, value)
   SELECT ?, ?
    WHERE EXISTS (SELECT 1 FROM memories
-                  WHERE id = ? AND kind != 'archived' AND COALESCE(superseded_by, '') = '')
+                  WHERE id = ? AND kind != 'archived' AND ${notSupersededIn()})
   ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
 
 // A mark left for a source that is gone, archived or superseded would never be read again.
@@ -51,7 +52,7 @@ const SWEEP_SQL = `DELETE FROM meta
   WHERE key > '${MARK_KEY}' AND key < '${MARK_END}'
     AND NOT EXISTS (SELECT 1 FROM memories m
                      WHERE m.id = substr(meta.key, ${ID_FROM})
-                       AND m.kind != 'archived' AND COALESCE(m.superseded_by, '') = '')`;
+                       AND m.kind != 'archived' AND ${notSupersededIn('m.')})`;
 
 /** Stores the marks and drops the cleared ones in one write, then drops the marks of sources that
  * are no longer live. */
