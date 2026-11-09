@@ -256,7 +256,11 @@ const signed = (x, digits) => {
   const text = x.toFixed(digits);
   return Number(text) === 0 ? (0).toFixed(digits) : `${x >= 0 ? '+' : ''}${text}`;
 };
-const line = (e) => `${fixed(e.estimate, 3)} [${fixed(e.low, 3)}, ${fixed(e.high, 3)}]`;
+// A ratio or bound that rounds to 1.000 without being 1 gets a fourth digit, so the reader sees its side of 1.
+const ratio = (x) => (Number.isFinite(x) && x !== 1 && x.toFixed(3) === '1.000' ? x.toFixed(4) : fixed(x, 3));
+// 0.000 would read as exactly zero, so a p under 0.0005 prints as a bound.
+const pValue = (x) => (Number.isFinite(x) && x < 0.0005 ? '<0.001' : fixed(x, 3));
+const line = (e) => `${ratio(e.estimate)} [${ratio(e.low)}, ${ratio(e.high)}]`;
 const COLUMNS = [['pair', 6], ['seeds', 5], ['kind', 11], ['units', 5], ['ratio', 6], ['low', 6], ['high', 6], ['p', 6], ['$t', 9], ['$c', 9], ['$diff', 9], ['resolve', 7]];
 const tableRow = (cells) => cells.map((c, i) => (i < 3 ? String(c).padEnd(COLUMNS[i][1]) : String(c).padStart(COLUMNS[i][1]))).join('  ');
 
@@ -273,7 +277,7 @@ export function formatText(rep) {
     tableRow(COLUMNS.map(([name]) => name)),
   ];
   for (const r of rep.rows) {
-    lines.push(tableRow([r.pair, r.seeds, r.kind, r.units, fixed(r.ratio, 3), fixed(r.low, 3), fixed(r.high, 3), fixed(r.p, 3), fixed(r.dollarsT, 2), fixed(r.dollarsC, 2), signed(r.dollarsDiff, 2), signed(r.resolve.estimate, 3)]));
+    lines.push(tableRow([r.pair, r.seeds, r.kind, r.units, ratio(r.ratio), ratio(r.low), ratio(r.high), pValue(r.p), fixed(r.dollarsT, 2), fixed(r.dollarsC, 2), signed(r.dollarsDiff, 2), signed(r.resolve.estimate, 3)]));
   }
   return `${lines.join('\n')}\n`;
 }

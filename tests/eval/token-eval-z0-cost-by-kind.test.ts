@@ -321,6 +321,35 @@ describe('Z0 cost by kind: formatText', () => {
     expect(text.split('\n')[6]!.match(/n\/a/g)).toHaveLength(4);
   });
 
+  const cellsOf = (...rows: Cell[]): string[][] => formatText(rep(rows)).split('\n').slice(6, 6 + rows.length).map((l) => l.trim().split(/\s{2,}/));
+
+  it('prints a p under 0.0005 as <0.001 and any other p to three decimals', () => {
+    const cells = cellsOf(row({ p: 0 }), row({ p: 0.00049 }), row({ p: 0.0006 }), row({ p: 0.7908 }));
+    expect(cells.map((c) => c[7])).toEqual(['<0.001', '<0.001', '0.001', '0.791']);
+  });
+
+  it('prints a ratio or bound that rounds to 1.000 without being 1 with four digits, on the side of 1 it falls', () => {
+    const [near, exact, plain] = cellsOf(
+      row({ ratio: 1.00047, low: 0.99951, high: 1.0004 }), row({ ratio: 1, low: 1, high: 1 }), row({ ratio: 1.0006, low: 0.9994, high: 1.05 }),
+    );
+    expect(near!.slice(4, 7)).toEqual(['1.0005', '0.9995', '1.0004']);
+    expect(exact!.slice(4, 7)).toEqual(['1.000', '1.000', '1.000']);
+    expect(plain!.slice(4, 7)).toEqual(['1.001', '0.999', '1.050']);
+  });
+
+  it('keeps every row as wide as the header when a four-digit bound or a <0.001 p is printed', () => {
+    const lines = formatText(rep([row({ ratio: 1.00047, low: 0.99951, high: 1.0004, p: 0.0001 }), row()])).split('\n');
+    expect(lines[6]).toHaveLength(lines[5]!.length);
+    expect(lines[7]).toHaveLength(lines[5]!.length);
+    expect(lines[6]).toMatch(/995 {2}1\.0005 {2}0\.9995 {2}1\.0004 {2}<0\.001 /);
+  });
+
+  it('prints the header lines of the self-check with the same four-digit rule', () => {
+    const near = { ...EST, estimate: 1.00047, low: 0.99951 };
+    const text = formatText({ ...rep([]), selfCheck: { exact: true, H3: near, maintainerOnlyH3: EST, H4: { costRatio: EST, resolveDiff: EST } } });
+    expect(text.split('\n')[2]).toContain('self-check H3 1.0005 [0.9995, 1.049]');
+  });
+
   it('prints a value that rounds to zero without a sign, and keeps the sign of any other difference', () => {
     const zero = row({ dollarsDiff: -0.004, resolve: { estimate: 0.0004, low: null, high: null, p: null } });
     const small = row({ dollarsDiff: 0.006, resolve: { estimate: -0.0006, low: null, high: null, p: null } });
