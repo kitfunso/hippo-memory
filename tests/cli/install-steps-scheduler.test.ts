@@ -282,6 +282,22 @@ describe('setupDailySchedule on a crontab that may already hold the daily runner
     }
   });
 
+  it('recognises its own entry when the runner folder holds an apostrophe', () => {
+    const run = (root: string, listing: string): Call[] => {
+      const calls: Call[] = [];
+      const exec = (file: string, args: readonly string[], opts: Call['opts']): string => {
+        calls.push({ file, args, opts });
+        return args[0] === '-l' ? listing : '';
+      };
+      setupDailySchedule(root, exec, 'linux');
+      return calls;
+    };
+    for (const root of ["/srv/keith's/.hippo"]) {
+      const entry = written(run(root, '')) ?? '';
+      expect(run(root, entry).map(({ args }) => args)).toEqual([['-l']]);
+    }
+  });
+
   it('adds an entry when the only marker is inside quotes in another job', () => {
     for (const quoting of [BACKUP_JOB, ECHO_JOB]) {
       expect(written(install(`MAILTO=me\n${quoting}\n`))).toBe(`MAILTO=me\n${quoting}\n15 6 * * * ${CMD} ${MARKER}\n`);
