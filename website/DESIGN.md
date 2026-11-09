@@ -7,7 +7,7 @@ tokens:
   font:
     display: "Geist"                          # h1-h3, weight 500
     sans: "Geist"                             # body
-    mono: "Geist Mono"                        # code, terminal, nav, eyebrows, numbers, stats
+    mono: "Geist Mono"                        # code, terminal, nav, numbers, stats
     loading: "self-hosted via astro.config fonts: latin woff2, weights 400/500/600, display swap, metric-matched fallbacks"
   color:
     bg: "#0b0f0c"                   # ink
@@ -55,7 +55,7 @@ confirmed findings are the deltas; the strengths it verified are the rules.
 
 Developer tool, receipts-led. The site argues with numbers (85.6% R@5, 3,500+
 tests, 0 deps) and publishes its own bad results. Every page sequences:
-claim, methodology, trust, reproduce. Dark-premium surface; the violet-cyan
+claim, methodology, trust, reproduce. Dark-premium surface; the mint
 gradient is a scalpel, not a wash.
 
 ## Hierarchy grammar
@@ -79,7 +79,7 @@ means wrong, superseded or unused, never age (ROADMAP FE4).
 AA 4.5:1 for all prose (zinc-400 minimum on bg), 3:1 for non-text glyphs.
 Skip link, landmarks (labeled when repeated), one h1 per page, no skipped
 heading levels, scope attrs on all comparison tables, aria-current on the
-active nav item, the wordmark links home, visible focus (cyan outline), full
+active nav item, the wordmark links home, visible focus (accent-light outline), full
 prefers-reduced-motion handling, 44px touch targets. `scroll-padding-top` on
 html keeps focus and anchor targets clear of the sticky header (WCAG 2.4.11), so
 sections carry no `scroll-mt`. A scroll container that overflows and holds no

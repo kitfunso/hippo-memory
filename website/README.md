@@ -1,15 +1,17 @@
 # hippo website
 
 Marketing landing page for [hippo-memory](https://github.com/kitfunso/hippo-memory).
-Static Astro 6 + Tailwind v4 + one Preact island, deployed to Cloudflare Pages.
+Static Astro 7 + Tailwind v4 + one Preact island, deployed to Cloudflare Pages.
+Rules for agents and the component list are in `AGENTS.md`; design rules are in `DESIGN.md`.
 
 ## Develop
 
 ```bash
 npm install
-npm run dev      # local dev server
-npm run build    # drift-guard + astro build -> dist/
-npm run preview  # serve the built dist/
+npm run dev       # local dev server
+npm run build     # drift guard + astro build -> dist/ + build guard
+npm run snapshot  # accept a wording change: rewrite text-snapshot/ from dist/
+npm run preview   # serve the built dist/
 ```
 
 ## Images
@@ -63,5 +65,10 @@ node scripts/indexnow.mjs https://hippo-memory.com/faq/   # only the URLs given
   would carry markdown into its plain-text JSON-LD, or if hand-written copy (the test
   count, the LoCoMo rows, the hero proofs) drifts from the README. The README is the
   source of truth.
+- **Build guard** (`scripts/check-build.mjs`, run by `npm run build` after `astro build`
+  and by the `Website` workflow on a PR that touches the site): fails on a word glued to a
+  link or inline code, a duplicate id on a page, a `DESIGN.md` colour the code does not
+  use, and visible text that differs from `text-snapshot/`. Each failure line says how to
+  fix it.
 - **One Preact island** only (`DecayCurve.tsx`, `client:visible`); everything else is
   static `.astro` + CSS + small inline scripts.
