@@ -363,3 +363,17 @@ _Avoid_: diagnostics dump, debug archive (it is one JSON file)
 A minor version (`x.y`) promoted to the `stable` npm tag. It gets security and data-loss fixes as
 patch releases for 12 months from that promotion, even after `stable` moves on.
 _Avoid_: LTS
+
+### Process boundaries
+
+**Served write**:
+A `remember`, `forget`, `archive` or `promote` the CLI sends to the `hippo serve` that answers for the store, instead of writing the store itself.
+_Avoid_: remote write, proxied write
+
+**Possibly delivered**:
+The state of a served write whose request may have reached the server: the CLI never replays it on the local store and tells the user it may already have been applied. Every error the CLI does not know is possibly delivered; only a server answer or a request that was never built is not.
+_Avoid_: ambiguous write, unknown failure
+
+**Give-up line**:
+The one line a session worker writes to the session log when it stops after five idle rounds with a request still queued: the queued file, the request kind and the last take error. The request stays queued for the next worker.
+_Avoid_: timeout line, abandon message
