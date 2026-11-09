@@ -116,8 +116,8 @@ ends, so there is nothing to record or run by hand.
   },
 };
 
-// sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited.
-// Add the old hash when a block changes.
+// sha256 of every block text hippo has shipped, current ones included, so init refreshes only
+// blocks nobody edited. scripts/checks/check-hook-block-hashes.mjs fails while a text is unlisted.
 const SHIPPED_HOOK_HASHES = new Map([
   ['c80e760208aed70f6094757736b9a2f496ba5c30d88bc2a7ae3e128b403dcc6b', 'claude-code'],
   ['75937be6b7fdc2b87bcb08b7fec56757808075db129d99eff3e9f769f80a7781', 'claude-code'],
@@ -142,6 +142,13 @@ const SHIPPED_HOOK_HASHES = new Map([
   ['8b8f5986d7f7ed15f06e68720d8913c3cab23d94366b411935ca2bbaa334553b', 'pi'],
   ['37767b355e18beac726b05b9e2b898dab8c6135fd7b98f3aa52edc734d5dd283', 'pi'],
   ['6e85a5cccb3cfeaa9a080713754936db730f96376f94cc9a9888a746149c7268', 'pi'],
+  ['9943e6f7e3e18cda82197f77f012841916223fd2e026c10196392f9090554dd8', 'claude-code'],
+  ['baa311df8f1cf35bc014f27e5e9cf8f9120bfa1594d5a48a4c31d6bf5922b5ae', 'codex'],
+  ['0fdf490b8120e538b0f2c2417b844d39da772415715d0572f31c5337162a4912', 'cursor'],
+  ['80d457096eabd14cc9a2178c06cb76b2440c02eec4eb117ef9fe57eaa03c3c20', 'openclaw'],
+  ['9af7ca33d8b9e96cec2dd519d5a52435ccd7bcb7590a9b1c4f8615da70ac48ce', 'opencode'],
+  ['ffb8b55d4ee75b876afabfa75df3836b6aa50cff117120562b71fa28888a5f7b', 'pi'],
+  ['349d81d433a8000a92fa99e97eebe88e31f752dec6456198c648bb0953129beb', 'openclaw'],
 ]);
 
 /**

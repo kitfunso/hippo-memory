@@ -137,22 +137,46 @@ export function installedRealCodexPath(): string {
   return metadata.realCodexPath;
 }
 
-export function detectRealCodexPath(): string | null {
-  const metadata = readCodexWrapperMetadata();
-  if (isCodexWrapperMetadataValid(metadata)) return metadata.realCodexPath;
+interface LauncherSlot {
+  original: string;
+  plan: ReturnType<typeof resolveCodexInstallPlan>;
+}
 
+/** The launcher paths of each PATH folder, in PATH order, wrapper folder excluded, with their
+ * install plans. */
+function pathLauncherFolders(): LauncherSlot[][] {
   const { wrapperDir } = resolveCodexWrapperPaths();
-  const entries = (envPath() ?? '')
+  const folders = (envPath() ?? '')
     .split(path.delimiter)
     .map((entry) => entry.trim())
     .filter(Boolean)
     .filter((entry) => !pathEquals(entry, wrapperDir));
+  return folders.map((folder) =>
+    CODEX_LAUNCHER_NAMES.map((name) => {
+      const original = path.join(folder, name);
+      return { original, plan: resolveCodexInstallPlan(original) };
+    }),
+  );
+}
 
-  for (const entry of entries) {
-    for (const name of CODEX_LAUNCHER_NAMES) {
-      const candidate = path.join(entry, name);
-      if (fs.existsSync(candidate)) return candidate;
+export function detectRealCodexPath(): string | null {
+  const metadata = readCodexWrapperMetadata();
+  if (isCodexWrapperMetadataValid(metadata)) return metadata.realCodexPath;
+
+  // The first folder with a launcher wins, as the shell would resolve `codex`; within a folder a
+  // backup beside an empty slot means an install stopped after its rename, so the slot is the launcher.
+  for (const slots of pathLauncherFolders()) {
+    const vacated = slots.find(
+      ({ original, plan }) => fs.existsSync(plan.backupPath) && !fs.existsSync(original),
+    );
+    if (vacated) {
+      log.info(
+        `recovered an interrupted codex wrapper install from the backup ${vacated.plan.backupPath}`,
+      );
+      return vacated.original;
     }
+    const present = slots.find(({ original }) => fs.existsSync(original));
+    if (present) return present.original;
   }
 
   return null;
@@ -222,6 +246,8 @@ function makeWrapperDirs(paths: CodexWrapperPaths): void {
 }
 
 function backUpRealLauncher(realCodexPath: string, backupPath: string): void {
+  // The launcher is gone and its backup is not: an earlier install already made this rename.
+  if (!fs.existsSync(realCodexPath) && fs.existsSync(backupPath)) return;
   // A launcher that is not our wrapper is the current codex, so it replaces any older backup a
   // Codex update left.
   if (!isHippoCodexWrapperFile(realCodexPath)) {
@@ -260,10 +286,27 @@ function restoreCodexLauncher(metadata: CodexWrapperMetadata, metadataPath: stri
   return true;
 }
 
+/** With no metadata, a backup beside an empty or hippo-wrapped slot is an install that stopped
+ * part-way; a slot holding a real launcher is never touched. */
+function restoreLeftoverBackups(): boolean {
+  let changed = false;
+  for (const { original, plan } of pathLauncherFolders().flat()) {
+    if (!fs.existsSync(plan.backupPath)) continue;
+    if (fs.existsSync(original) && !isHippoCodexWrapperFile(original)) continue;
+    if (isHippoCodexWrapperFile(plan.commandPath)) fs.rmSync(plan.commandPath, { force: true });
+    fs.renameSync(plan.backupPath, original);
+    changed = true;
+  }
+  return changed;
+}
+
 export function uninstallCodexWrapper(): boolean {
   const paths = resolveCodexWrapperPaths();
   const metadata = readCodexWrapperMetadata();
-  let changed = metadata !== null && restoreCodexLauncher(metadata, paths.metadataPath);
+  let changed =
+    metadata === null
+      ? restoreLeftoverBackups()
+      : restoreCodexLauncher(metadata, paths.metadataPath);
 
   cleanupLegacyCodexPathWrappers(paths);
 
