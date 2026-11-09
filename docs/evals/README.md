@@ -13,6 +13,7 @@ notes. Each links to the document that holds the method, the intervals and the l
 
 | Claim | Number | Source |
 |---|---|---|
+| Z0 round 3, 29 repositories, Claude Code with hippo against built-in memory alone, repeat-mistake rate on the first apply | -14.9 points [-24.3, -5.5], adjusted p 0.006; 0.111 against 0.211 at 2 to 4 tasks after the teach, 0.832 with no memory; cost ratio 1.006 [0.964, 1.049]; hippo against sham hippo 0.009 [-0.052, 0.070] | [2026-11-08-z0-round3-result.md](2026-11-08-z0-round3-result.md) |
 | LongMemEval-S, `hippo recall` on a default install, per-question haystack, R@5 | 85.6% inside the 4,000-token default budget, 87.6% with MiniLM; 96.8% and 97.4% with the budget lifted, which returns every candidate | [2026-09-28-recall-cli-longmemeval-result.md](2026-09-28-recall-cli-longmemeval-result.md) |
 | LongMemEval-S, the benchmark scripts (not `hippo recall`), per-question haystack, R@5 | 98.0% free local MiniLM (best of five settings; the June build gave 98.6), 99.8% voyage-3-large (June, not re-run) | [2026-09-23-longmemeval-reproduction.md](2026-09-23-longmemeval-reproduction.md), [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
 | Decay against decay switched off, synthetic E1 test of 20 sessions, currentR5 | -0.7 pp [-1.4, 0.1], no measurable effect | [2026-09-23-mechanism-audit-round2-result.md](2026-09-23-mechanism-audit-round2-result.md) |
@@ -44,6 +45,8 @@ claim is a shorter context, not a better answer.
 | [2026-10-03-z0-analyzer.md](2026-10-03-z0-analyzer.md) | The Z0 analyzer: CLI, the `z0-record/1` contract, filter order, blind mode, and the readings where the Z0 prereg is silent |
 | [2026-10-18-z0-round2-prereg.md](2026-10-18-z0-round2-prereg.md) | Pre-registration of Z0 round 2: scope, dev rounds, sizing, and the amendments before each read |
 | [2026-11-01-z0-round2-result.md](2026-11-01-z0-round2-result.md) | Result: no extra cost (H3 0.999 [0.962, 1.037]), H4 passes at 1.054 [1.016, 1.093], H1 inconclusive at -8.9 points [-18.5, +0.7] |
+| [2026-11-02-z0-round3-prereg.md](2026-11-02-z0-round3-prereg.md) | Pre-registration of Z0 round 3: more repositories, the sham arm, sizing, and Amendments A to E |
+| [2026-11-08-z0-round3-result.md](2026-11-08-z0-round3-result.md) | Result: H1 a small win at -14.9 points [-24.3, -5.5], no extra cost (H3 1.006 [0.964, 1.049]), H4 passes, every gate passes; hippo against sham hippo 0.009 [-0.052, 0.070], so the lessons are not shown to cause it |
 
 ### Mechanism audit (2026-09)
 
