@@ -10,6 +10,8 @@ import { pageDate } from './src/lib/page-dates.mjs';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://hippo-memory.com',
+  // Astro 7's 'jsx' default glues a word to an inline tag that starts on the next source line.
+  compressHTML: true,
   integrations: [preact(), sitemap({ serialize: (item) => ({ ...item, lastmod: pageDate(new URL(item.url).pathname) }) })],
   // Self-hosted Geist: latin only, one file per weight in use, metric-matched fallbacks.
   fonts: [
