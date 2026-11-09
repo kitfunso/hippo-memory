@@ -194,16 +194,16 @@ describe('every top-level config key is checked', () => {
     expect(cfg.pinnedInject.excludeTags).toEqual(['a']);
   });
 
-  it.each([['a string', 'a'], ['a list with a number', [1]]])(
-    'reads pinnedInject.excludeTags as [] with one warning when it is %s',
-    (_, bad) => {
-      const { cfg, warnings } = load({ pinnedInject: { excludeTags: bad } });
-      expect(warnings).toHaveLength(1);
-      expect(warnings[0]).toMatch(WARNING);
-      expect(warnings[0]).toContain('"pinnedInject.excludeTags"');
-      expect(cfg.pinnedInject.excludeTags).toEqual([]);
-    },
-  );
+  it.each([
+    ['a string', 'a'],
+    ['a list with a number', [1]],
+  ])('reads pinnedInject.excludeTags as [] with one warning when it is %s', (_, bad) => {
+    const { cfg, warnings } = load({ pinnedInject: { excludeTags: bad } });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(WARNING);
+    expect(warnings[0]).toContain('"pinnedInject.excludeTags"');
+    expect(cfg.pinnedInject.excludeTags).toEqual([]);
+  });
 
   it('lets an unknown embeddings.provider through, so the provider refuses it instead of falling back to local', () => {
     const { cfg, warnings } = load({ embeddings: { provider: 'opneai' } });

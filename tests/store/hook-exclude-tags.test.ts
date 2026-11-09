@@ -131,7 +131,10 @@ describe('the hook block with excludeTags', () => {
 
   it('reads a config built in code without the key as no list, prompt recall on', async () => {
     writeEntry(local, row(ruleText(1), 1, { pinned: true, tags: ['rule'] }));
-    writeEntry(local, row('postgres migration rollback deploy checklist for the billing worker', 2, { tags: [DIGEST] }));
+    writeEntry(
+      local,
+      row('postgres migration rollback deploy checklist for the billing worker', 2, { tags: [DIGEST] }),
+    );
 
     writeConfig({ promptRecall: true, excludeTags: [] });
     const empty = await hook(PROMPT);
@@ -145,7 +148,8 @@ describe('the hook block with excludeTags', () => {
 });
 
 describe('prompt recall with excludeTags', () => {
-  const RULE = 'Rule: take a postgres backup before any migration, then keep the rollback and deploy notes ready for review';
+  const RULE =
+    'Rule: take a postgres backup before any migration, then keep the rollback and deploy notes ready for review';
   const admit: AmbientAdmission = { currentProject: PROJECT, includeCrossProject: false };
   const recallConfig = { promptRecall: true, promptRecallThreshold: 0.01, promptRecallMinShared: 1 };
 
@@ -206,9 +210,13 @@ describe('prompt recall with excludeTags', () => {
   });
 
   it('falls back to the untagged rows when every match is excluded, and the block holds no excluded row', async () => {
-    const unrelated = [row('Coffee machine descaling happens on the first Monday', 1), row('Lunch orders close at eleven sharp', 2)];
+    const unrelated = [
+      row('Coffee machine descaling happens on the first Monday', 1),
+      row('Lunch orders close at eleven sharp', 2),
+    ];
     for (const r of unrelated) writeEntry(local, { ...r, tags: ['rule'] });
-    for (let n = 1; n <= 3; n++) writeEntry(local, row(`Digest ${n}: postgres migration rollback deploy checklist`, 10 + n, { tags: [DIGEST] }));
+    for (let n = 1; n <= 3; n++)
+      writeEntry(local, row(`Digest ${n}: postgres migration rollback deploy checklist`, 10 + n, { tags: [DIGEST] }));
 
     const filtered = await pool(PROMPT, [DIGEST]);
     expect(filtered.map((e) => e.id)).toEqual(unrelated.map((r) => r.id));

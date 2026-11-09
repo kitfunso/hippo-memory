@@ -315,7 +315,10 @@ describe('ambient admission by excluded tag', () => {
     expect(ambientRefusal(plain(), admit)).toBeNull();
   });
 
-  it.each([['undefined', undefined], ['an empty list', []]])('admits both rows when the list is %s', (_, excludeTags) => {
+  it.each([
+    ['undefined', undefined],
+    ['an empty list', []],
+  ])('admits both rows when the list is %s', (_, excludeTags) => {
     const admit = { ...base, excludeTags };
     expect(ambientRefusal(digest(), admit)).toBeNull();
     expect(ambientRefusal(plain(), admit)).toBeNull();
