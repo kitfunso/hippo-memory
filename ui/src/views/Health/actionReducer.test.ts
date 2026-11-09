@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   type ActionEvent,
+  type ActionRequest,
   type ControllerState,
   type Effect,
   type Job,
   type OverlayEntry,
-  type Request,
   type RowAction,
   type RowOverlay,
   type RowState,
@@ -33,8 +33,7 @@ const defer = (request: Ev<"defer">["request"]): ActionEvent => ({
   projectKey: P,
   undoKey: KEY,
 });
-const ids = (r: Request): string[] => (r.kind === "resolve" ? [r.keepId, r.loserId] : [r.id]);
-const job = (owner: number, request: Request): Job => ({ owner, request, ids: ids(request), projectKey: P });
+const job = (owner: number, request: ActionRequest): Job => ({ owner, request, projectKey: P });
 const run = (j: Job, keepalive = false): Effect => ({ type: "run", job: j, keepalive });
 const forget = (id = "m1") => defer({ kind: "forget", id });
 const wrong = (id = "m1") => defer({ kind: "wrong", id });
@@ -58,7 +57,7 @@ const UNDO: ActionEvent = { type: "undo" };
 const PAUSED: ActionEvent = { type: "toastPaused" };
 const RESUMED: ActionEvent = { type: "toastResumed" };
 const RESTORED: ActionEvent = { type: "restored" };
-const ABSENT: Job = { owner: 99, request: { kind: "forget", id: "m1" }, ids: ["m1"], projectKey: P };
+const ABSENT: Job = { owner: 99, request: { kind: "forget", id: "m1" }, projectKey: P };
 
 /** The state after these events, each applied at `now` 0. */
 const fold = (...events: ActionEvent[]): ControllerState =>
@@ -110,7 +109,7 @@ const facts = (o: RowOverlay | undefined) => ({
 const pending = (action: RowAction): RowState => ({ phase: "pending", action });
 const heldAt = (action: RowAction, snapshotId: number): RowState => ({ phase: "settled", action, snapshotId });
 
-describe("transition 1: defer", () => {
+describe("defer: opens pending rows with an Undo window", () => {
   it("shows its rows pending, its toast with the undo key, and the 6 s window", () => {
     const { state, effects } = reduce(INITIAL_STATE, forget(), 500);
     expect(rows(state)).toEqual(["1 m1 forget pending"]);
@@ -123,7 +122,6 @@ describe("transition 1: defer", () => {
   it("creates a keep row and a weaken row under one owner for a resolve", () => {
     const { state } = reduce(INITIAL_STATE, resolve("m1", "m2"), 0);
     expect(rows(state)).toEqual(["1 m1 keep pending", "1 m2 weaken pending"]);
-    expect(jobOf(state).ids).toEqual(["m1", "m2"]);
     expect(state.toast?.text).toBe("Resolving conflict. Undo: Ctrl+Z");
   });
 
@@ -137,7 +135,7 @@ describe("transition 1: defer", () => {
   });
 });
 
-describe("transition 2: pin", () => {
+describe("pin: sends at once and offers Undo", () => {
   it("sends at once: the row is sent, a run effect follows, and the toast offers Undo", () => {
     const { state, effects } = reduce(INITIAL_STATE, pin(true), 0);
     expect(rows(state)).toEqual(["1 m1 pin:true sent"]);
@@ -159,8 +157,8 @@ describe("transition 2: pin", () => {
   });
 });
 
-describe("transitions 3 and 4: commit and timerFired", () => {
-  it("3: commit sends the job, turns its rows pending to sent and closes the toast", () => {
+describe("commit and timerFired: close the Undo window and send the job", () => {
+  it("commit sends the job, turns its rows pending to sent and closes the toast", () => {
     const start = fold(resolve());
     const { state, effects } = reduce(start, commit(), 0);
     expect(rows(state)).toEqual(["1 m1 keep sent", "1 m2 weaken sent"]);
@@ -170,20 +168,20 @@ describe("transitions 3 and 4: commit and timerFired", () => {
     expect(state.timer).toEqual({ kind: "off" });
   });
 
-  it("3: a keepalive commit leaves the rows sent and flags the run", () => {
+  it("a keepalive commit leaves the rows sent and flags the run", () => {
     const { state, effects } = reduce(fold(forget()), commit(true), 0);
     expect(rows(state)).toEqual(["1 m1 forget sent"]);
     expect(effects).toMatchObject([{ type: "run", keepalive: true }]);
   });
 
-  it("3: a commit hands the screen to the oldest waiting notice", () => {
+  it("a commit hands the screen to the oldest waiting notice", () => {
     const { state } = reduce(fold(forget(), notify("first"), notify("second")), commit(), 0);
     expect(state.toast).toMatchObject({ text: "first", undo: false });
     expect(state.slot).toEqual({ kind: "notice" });
     expect(state.queue).toEqual(["second"]);
   });
 
-  it("4: timerFired on a deferred slot commits with keepalive false", () => {
+  it("timerFired on a deferred slot commits with keepalive false", () => {
     const start = fold(wrong());
     const { state, effects } = reduce(start, FIRED, 0);
     expect(rows(state)).toEqual(["1 m1 wrong sent"]);
@@ -191,7 +189,7 @@ describe("transitions 3 and 4: commit and timerFired", () => {
     expect(state.timer).toEqual({ kind: "off" });
   });
 
-  it("4b: timerFired on a pin toast closes it and shows the next notice, with no effect", () => {
+  it("timerFired on a pin toast closes it and shows the next notice, with no effect", () => {
     const start = fold(pin(true), notify("next"));
     const { state, effects } = reduce(start, FIRED, 0);
     expect(state.toast).toMatchObject({ text: "next", undo: false });
@@ -200,28 +198,28 @@ describe("transitions 3 and 4: commit and timerFired", () => {
     expect(rows(state)).toEqual(["1 m1 pin:true sent"]);
   });
 
-  it("4b: timerFired on the last notice leaves nothing on screen", () => {
+  it("timerFired on the last notice leaves nothing on screen", () => {
     const { state } = reduce(fold(notify("only")), FIRED, 0);
     expect(state).toMatchObject({ toast: null, slot: null, timer: { kind: "off" } });
   });
 });
 
-describe("transition 5: undo", () => {
-  it("5: Undo of a deferred job closes the toast and removes its rows with no POST", () => {
+describe("undo: cancels a deferred job or reverses a pin", () => {
+  it("Undo of a deferred job closes the toast and removes its rows with no POST", () => {
     const { state, effects } = reduce(fold(resolve()), UNDO, 0);
     expect(state.entries).toEqual([]);
     expect(state).toMatchObject({ toast: null, slot: null, timer: { kind: "off" } });
     expect(effects).toEqual([]);
   });
 
-  it("5b: Undo of a pin sends the reverse pin under a new owner and keeps the first pin's row", () => {
+  it("Undo of a pin sends the reverse pin under a new owner and keeps the first pin's row", () => {
     const { state, effects } = reduce(fold(pin(true)), UNDO, 0);
     expect(rows(state)).toEqual(["1 m1 pin:true sent", "3 m1 pin:false sent"]);
     expect(effects).toEqual([run(job(3, { kind: "pin", id: "m1", pinned: false }))]);
     expect(state.toast).toBeNull();
   });
 
-  it("5b: the pin Undo's owner differs from the next defer's owner", () => {
+  it("the pin Undo's owner differs from the next defer's owner", () => {
     const afterUndo = reduce(fold(pin(true)), UNDO, 0).state;
     const next = reduce(afterUndo, forget(), 0).state;
     const owners = next.entries.map((e) => e.owner);
@@ -229,7 +227,7 @@ describe("transition 5: undo", () => {
     expect(jobOf(next).owner).toBe(4);
   });
 
-  it("5c: Undo does nothing on a notice, and Ctrl+Z has nothing to swallow", () => {
+  it("Undo does nothing on a notice, and Ctrl+Z has nothing to swallow", () => {
     const start = fold(notify("hello"));
     expect(start.toast?.undo).toBe(false);
     expect(start.slot).toEqual({ kind: "notice" });
@@ -237,7 +235,7 @@ describe("transition 5: undo", () => {
   });
 });
 
-describe("transition 7: failed", () => {
+describe("failed: drops the owner's rows and reports the failure", () => {
   it("drops the owner's rows and shows the message", () => {
     const { state } = reduce(sentJob(forget()).state, failed(1, "disk full"), 0);
     expect(state.entries).toEqual([]);
@@ -268,7 +266,7 @@ describe("transition 7: failed", () => {
   });
 });
 
-describe("transition 8: settled", () => {
+describe("settled: drops the owner's rows or holds them for the drawer", () => {
   it("drops the rows when the drawer shows another memory, and notifies", () => {
     const { job, state } = sentJob(forget("m1"), "m9");
     const next = reduce(state, settled(job, { message: "Saved" }), 0).state;
@@ -311,54 +309,54 @@ describe("transition 8: settled", () => {
   });
 });
 
-describe("transitions 9 and 10: drawerBound and released", () => {
+describe("drawerBound and released: held rows follow the open drawer", () => {
   const heldResolve = () => {
     const { job, state } = sentJob(resolve("m1", "m2"), "m1");
     return reduce(state, settled(job), 0).state;
   };
 
-  it("9: moving the drawer drops settled entries whose owner holds none on the new id", () => {
+  it("moving the drawer drops settled entries whose owner holds none on the new id", () => {
     const { state } = reduce(heldResolve(), bound("m3"), 0);
     expect(state.entries).toEqual([]);
     expect(state.drawerId).toBe("m3");
   });
 
-  it("9: moving to the owner's other memory keeps both rows held", () => {
+  it("moving to the owner's other memory keeps both rows held", () => {
     expect(rows(reduce(heldResolve(), bound("m2"), 0).state)).toEqual(["1 m1 keep settled@2", "1 m2 weaken settled@2"]);
   });
 
-  it("9: moving the drawer keeps entries that are not settled", () => {
+  it("moving the drawer keeps entries that are not settled", () => {
     const live = fold(bound("m1"), forget("m1"));
     expect(rows(reduce(live, bound("m3"), 0).state)).toEqual(["1 m1 forget pending"]);
   });
 
-  it("9: closing the drawer drops what was held", () => {
+  it("closing the drawer drops what was held", () => {
     expect(reduce(heldResolve(), bound(null), 0).state.entries).toEqual([]);
   });
 
-  it("9: the same id returns the identical state", () => {
+  it("the same id returns the identical state", () => {
     const start = heldResolve();
     expect(reduce(start, bound("m1"), 0).state).toBe(start);
   });
 
-  it("10: a release that covers the snapshot drops the whole owner, both rows", () => {
+  it("a release that covers the snapshot drops the whole owner, both rows", () => {
     expect(reduce(heldResolve(), { type: "released", id: "m1", snapshotId: 2 }, 0).state.entries).toEqual([]);
   });
 
-  it("10: a release below the held snapshot, or on another id, changes nothing", () => {
+  it("a release below the held snapshot, or on another id, changes nothing", () => {
     const start = heldResolve();
     expect(reduce(start, { type: "released", id: "m1", snapshotId: 1 }, 0).state).toBe(start);
     expect(reduce(start, { type: "released", id: "m3", snapshotId: 9 }, 0).state).toBe(start);
   });
 
-  it("10: a release leaves another owner's entries on the same id", () => {
+  it("a release leaves another owner's entries on the same id", () => {
     const start = heldResolve();
     const both = reduce(start, forget("m1"), 0).state;
     expect(rows(reduce(both, { type: "released", id: "m1", snapshotId: 2 }, 0).state)).toEqual(["3 m1 forget pending"]);
   });
 });
 
-describe("transition 11: restored", () => {
+describe("restored: drops every row and asks for a reload", () => {
   it("empties the entries, asks for a reload, and leaves the toast alone", () => {
     const start = fold(forget());
     const { state, effects } = reduce(start, RESTORED, 0);
@@ -374,40 +372,40 @@ describe("transition 11: restored", () => {
   });
 });
 
-describe("transitions 12 and 13: pause and resume", () => {
+describe("pause and resume: the Undo window keeps its remaining time", () => {
   const started = reduce(INITIAL_STATE, forget(), 1000).state;
 
-  it("12: pausing at 2000 ms leaves 4000, and resuming starts 4000 from the resume time", () => {
+  it("pausing at 2000 ms leaves 4000, and resuming starts 4000 from the resume time", () => {
     const paused = reduce(started, PAUSED, 3000).state;
     expect(paused.timer).toEqual({ kind: "paused", left: 4000 });
     expect(reduce(paused, RESUMED, 9000).state.timer).toEqual({ kind: "running", left: 4000, startedAt: 9000 });
   });
 
-  it("12: the time left never goes below zero", () => {
+  it("the time left never goes below zero", () => {
     expect(reduce(started, PAUSED, 60_000).state.timer).toEqual({ kind: "paused", left: 0 });
   });
 
-  it("12b: pausing a timer that is off or already paused changes nothing", () => {
+  it("pausing a timer that is off or already paused changes nothing", () => {
     expect(reduce(INITIAL_STATE, PAUSED, 0).state).toBe(INITIAL_STATE);
     const paused = reduce(started, PAUSED, 3000).state;
     expect(reduce(paused, PAUSED, 4000).state).toBe(paused);
   });
 
-  it("13b: resuming a running timer, or with no toast, changes nothing", () => {
+  it("resuming a running timer, or with no toast, changes nothing", () => {
     expect(reduce(started, RESUMED, 2000).state).toBe(started);
     expect(reduce(INITIAL_STATE, RESUMED, 0).state).toBe(INITIAL_STATE);
   });
 });
 
-describe("transition 14: notify", () => {
-  it("14: shows a notice at once when nothing is on screen and nothing waits", () => {
+describe("notify: shows a message or queues it behind a toast", () => {
+  it("shows a notice at once when nothing is on screen and nothing waits", () => {
     const { state } = reduce(INITIAL_STATE, notify("hello"), 250);
     expect(state.toast).toEqual({ seq: 1, text: "hello", undo: false });
     expect(state.slot).toEqual({ kind: "notice" });
     expect(state.timer).toEqual({ kind: "running", left: UNDO_WINDOW_MS, startedAt: 250 });
   });
 
-  it("14b: queues behind a toast and leaves the Undo window running", () => {
+  it("queues behind a toast and leaves the Undo window running", () => {
     const start = fold(forget());
     const { state } = reduce(start, notify("later"), 0);
     expect(state.queue).toEqual(["later"]);
@@ -415,7 +413,7 @@ describe("transition 14: notify", () => {
     expect(state.timer).toBe(start.timer);
   });
 
-  it("14b: queues behind a waiting message even with the screen clear", () => {
+  it("queues behind a waiting message even with the screen clear", () => {
     const start: ControllerState = { ...INITIAL_STATE, queue: ["first"] };
     expect(reduce(start, notify("second"), 0).state.queue).toEqual(["first", "second"]);
   });
@@ -493,8 +491,7 @@ describe("identity: no-op events return the same state, unrelated events keep th
 interface Case {
   name: string;
   event: ActionEvent;
-  request: Request;
-  ids: string[];
+  request: ActionRequest;
   start: string[];
   sent: string[];
   held: string[];
@@ -506,7 +503,6 @@ describe("per-action matrix", () => {
       name: "forget",
       event: forget(),
       request: { kind: "forget", id: "m1" },
-      ids: ["m1"],
       start: ["1 m1 forget pending"],
       sent: ["1 m1 forget sent"],
       held: ["1 m1 forget settled@2"],
@@ -515,7 +511,6 @@ describe("per-action matrix", () => {
       name: "wrong",
       event: wrong(),
       request: { kind: "wrong", id: "m1" },
-      ids: ["m1"],
       start: ["1 m1 wrong pending"],
       sent: ["1 m1 wrong sent"],
       held: ["1 m1 wrong settled@2"],
@@ -524,7 +519,6 @@ describe("per-action matrix", () => {
       name: "resolve",
       event: resolve("m1", "m2"),
       request: { kind: "resolve", conflictId: 7, keepId: "m1", loserId: "m2" },
-      ids: ["m1", "m2"],
       start: ["1 m1 keep pending", "1 m2 weaken pending"],
       sent: ["1 m1 keep sent", "1 m2 weaken sent"],
       held: ["1 m1 keep settled@2", "1 m2 weaken settled@2"],
@@ -540,7 +534,6 @@ describe("per-action matrix", () => {
     const sent = reduce(start, FIRED, 0);
     expect(rows(sent.state)).toEqual(c.sent);
     expect(sent.effects).toEqual([run(job(1, c.request))]);
-    expect(jobOf(start).ids).toEqual(c.ids);
 
     expect(rows(reduce(sent.state, settled(jobOf(start)), 0).state)).toEqual(c.held);
     const away = reduce(sent.state, bound("m9"), 0).state;

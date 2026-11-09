@@ -96,7 +96,7 @@ export interface DrawerSink {
 }
 
 /** An action as data; the interpreter turns it into the POST. */
-export type Request =
+export type ActionRequest =
   | { kind: "forget"; id: string }
   | { kind: "wrong"; id: string }
   | { kind: "resolve"; conflictId: number; keepId: string; loserId: string }
@@ -105,8 +105,7 @@ export type Request =
 /** A request with the owner that tags its rows and the memories it touches. */
 export interface Job {
   owner: number;
-  request: Request;
-  ids: readonly string[];
+  request: ActionRequest;
   projectKey: string;
 }
 
@@ -138,7 +137,7 @@ type Ev<T extends ActionEvent["type"]> = Extract<ActionEvent, { type: T }>;
 
 /** Everything that can happen to the controller. */
 export type ActionEvent =
-  | { type: "defer"; request: Exclude<Request, { kind: "pin" }>; projectKey: string; undoKey: string }
+  | { type: "defer"; request: Exclude<ActionRequest, { kind: "pin" }>; projectKey: string; undoKey: string }
   | { type: "pin"; id: string; pinned: boolean; projectKey: string; undoKey: string }
   | { type: "commit"; keepalive: boolean }
   | { type: "timerFired" }
@@ -179,7 +178,7 @@ const TOAST_TEXT = { forget: "Forgetting memory", wrong: "Marking memory wrong",
 
 const noEffects = (state: ControllerState): Reduction => ({ state, effects: NONE });
 
-function actionsOf(request: Request): [string, RowAction][] {
+function actionsOf(request: ActionRequest): [string, RowAction][] {
   switch (request.kind) {
     case "forget":
       return [[request.id, { kind: "forget" }]];
@@ -246,7 +245,7 @@ function closePending(state: ControllerState, flush: boolean, keepalive: boolean
 
 // A pin sends at once, so its row starts sent and its owner comes from the same counter as every other.
 function startPin(state: ControllerState, id: string, pinned: boolean, projectKey: string): Reduction {
-  const job: Job = { owner: state.seq + 1, request: { kind: "pin", id, pinned }, ids: [id], projectKey };
+  const job: Job = { owner: state.seq + 1, request: { kind: "pin", id, pinned }, projectKey };
   const next = { ...state, seq: job.owner, entries: [...state.entries, ...rowsOf(job, "sent")] };
   return { state: next, effects: [{ type: "run", job, keepalive: false }] };
 }
@@ -254,8 +253,7 @@ function startPin(state: ControllerState, id: string, pinned: boolean, projectKe
 function onDefer(state: ControllerState, e: Ev<"defer">, now: number): Reduction {
   const closed = closePending(state, false, false, now);
   const owner = closed.state.seq + 1;
-  const ids = actionsOf(e.request).map(([id]) => id);
-  const job: Job = { owner, request: e.request, ids, projectKey: e.projectKey };
+  const job: Job = { owner, request: e.request, projectKey: e.projectKey };
   const entries = [...closed.state.entries, ...rowsOf(job, "pending")];
   const text = `${TOAST_TEXT[e.request.kind]}. Undo: ${e.undoKey}`;
   const next = show({ ...closed.state, seq: owner, entries }, text, { kind: "deferred", job }, now);
@@ -293,7 +291,7 @@ function onFailed(state: ControllerState, e: Ev<"failed">, now: number): Reducti
 // A row on the shown memory waits for the drawer's fresh detail, so Keep and Mark wrong never re-enable on stale data.
 function onSettled(state: ControllerState, e: Ev<"settled">, now: number): Reduction {
   const { job, snapshotId } = e;
-  const shown = state.drawerId !== null && job.ids.includes(state.drawerId);
+  const shown = actionsOf(job.request).some(([id]) => id === state.drawerId);
   const held = !e.taken && shown && snapshotId !== null;
   const rows = held
     ? mapOwner(state, job.owner, (x) => ({ ...x, row: { phase: "settled", action: x.row.action, snapshotId } }))

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { type LoadOptions, type Panel, usePanelCore, useSnapshotClockState } from "./usePanel";
 
@@ -66,5 +66,34 @@ describe("usePanelCore key change", () => {
 
     expect(result.current.error?.message).toBe("boom a");
     expect(result.current.loading).toBe(false);
+  });
+
+  it("returning to a loaded key after another key's load was cut short loads it again", async () => {
+    const loadA = vi.fn(() => Promise.resolve({ snapshotId: 1 }));
+    const { result, rerender } = mountPanel({ depsKey: "a", load: loadA, enabled: true });
+    await waitFor(() => expect(result.current.data).toEqual({ snapshotId: 1 }));
+
+    rerender({ depsKey: "b", load: hangs, enabled: true });
+    rerender({ depsKey: "a", load: loadA, enabled: true });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(loadA).toHaveBeenCalledTimes(2);
+    expect(result.current.data).toEqual({ snapshotId: 1 });
+    expect(result.current.error).toBeNull();
+  });
+
+  it("returning to a loaded key after another key's load failed loads it again without the failure", async () => {
+    const loadA = vi.fn(() => Promise.resolve({ snapshotId: 1 }));
+    const { result, rerender } = mountPanel({ depsKey: "a", load: loadA, enabled: true });
+    await waitFor(() => expect(result.current.data).toEqual({ snapshotId: 1 }));
+
+    rerender({ depsKey: "b", load: fails("boom b"), enabled: true });
+    await waitFor(() => expect(result.current.error?.message).toBe("boom b"));
+    rerender({ depsKey: "a", load: loadA, enabled: true });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(loadA).toHaveBeenCalledTimes(2);
+    expect(result.current.data).toEqual({ snapshotId: 1 });
+    expect(result.current.error).toBeNull();
   });
 });

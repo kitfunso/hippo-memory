@@ -212,7 +212,7 @@ describe("overlaps: every pair of actions on one memory shows both facts, in bot
   });
 });
 
-describe("overlaps: pairs the audit named", () => {
+describe("overlaps: a forget, a pin, a resolve and a wrong combined on one memory", () => {
   it("a pinned memory with a forget pending shows both chips, and Unpin stays enabled in the drawer", async () => {
     openSubject();
     await openDrawer();

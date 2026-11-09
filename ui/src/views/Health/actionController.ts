@@ -65,7 +65,7 @@ interface Runtime {
   state: ControllerState;
   listeners: Set<() => void>;
   timer: ReturnType<typeof setTimeout> | undefined;
-  sink: DrawerSink | null;
+  accept: DrawerSink["accept"] | null;
   tail: Promise<unknown>;
 }
 
@@ -134,7 +134,7 @@ async function runJob(rt: Runtime, job: Job, keepalive: boolean): Promise<void> 
   }
   if (keepalive) return;
   const { detail } = outcome;
-  const taken = detail !== undefined && rt.sink !== null && rt.sink.id === detail.id && rt.sink.accept(detail);
+  const taken = detail !== undefined && rt.accept !== null && rt.state.drawerId === detail.id && rt.accept(detail);
   await refreshAfter(rt, job, outcome.note, taken);
 }
 
@@ -168,7 +168,7 @@ export function createController(hooks: ControllerHooks): ActionStore {
     state: INITIAL_STATE,
     listeners: new Set(),
     timer: undefined,
-    sink: null,
+    accept: null,
     tail: Promise.resolve(),
   };
   const send = (event: ActionEvent) => dispatch(rt, event);
@@ -187,7 +187,7 @@ export function createController(hooks: ControllerHooks): ActionStore {
     notify: (text) => send({ type: "notify", text }),
     commitPending: (keepalive) => send({ type: "commit", keepalive }),
     bindDrawer(next) {
-      rt.sink = next;
+      rt.accept = next?.accept ?? null;
       send({ type: "drawerBound", id: next?.id ?? null });
     },
     release: (id, snapshotId) => send({ type: "released", id, snapshotId }),

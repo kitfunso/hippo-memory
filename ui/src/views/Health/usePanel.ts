@@ -74,6 +74,8 @@ export function usePanelCore<T extends { snapshotId: number }>(
     if (!enabled) return;
     const h = held.current;
     if (!forced.current && h && h.key === depsKey && h.id >= seen.current) return;
+    // The state drops the old key's data below, so `held` must stop naming it or a return to that key would skip its load.
+    if (h && h.key !== depsKey) held.current = null;
     forced.current = false;
     const ctrl = new AbortController();
     setState((s) => ({ ...s, data: s.key === depsKey ? s.data : null, error: null, loading: true, key: depsKey }));
