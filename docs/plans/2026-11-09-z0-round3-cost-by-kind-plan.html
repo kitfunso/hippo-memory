@@ -94,7 +94,7 @@ export const KINDS = {
   </doc-claim>
 
   <doc-claim>
-    <p>The read stops unless it gives round 3's two H3 lines exactly.</p>
+    <p>The read stops unless it gives round 3's H3 and H4 lines exactly.</p>
     <doc-code title="self-check · sketch" lang="js">
 <script type="text/plain">
 const FIELDS = ['estimate', 'low', 'high', 'se', 'df', 'p'];
@@ -102,6 +102,7 @@ const checks = [
   ['H3', inSets('R', 'N'), report.hypotheses.H3],
   ['maintainer-only H3', (r) => inSets('R', 'N')(r) && maintainer(r), report.reported.maintainerOnly.H3],
 ];
+// H4 also pins the harmT path: costRatio and resolveDiff on A2/A1 set N against report.hypotheses.H4.
 // On a miss, print got and want per field and process.version, so a float drift under another Node reads apart from a data drift.
 </script>
     </doc-code>
@@ -138,6 +139,8 @@ Each number in the Answer cites its row: pair, seeds and kind.
 A ratio whose interval crosses 1 is "no change shown", never a drop or a rise.
 Attribution between A2 and A5 comes from the A2/A5 cells only.
 A dollar share comes from the dollar columns.
+"resolve" is the round 3 resolved flag: acceptance passed, every lesson check passed, no timeout.
+Cells of different pairs sit on nearly the same positions, not identical ones (677 against 676).
 A4 is the cost headroom of a lesson that reaches the model, on seeds 1-2 (prereg 192).
 A0/A1 shows that the cost read can see the value of memory.
 The doc labels the 35 cells exploratory, with p not adjusted.
