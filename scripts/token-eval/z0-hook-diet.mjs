@@ -189,8 +189,11 @@ function checkCheckout(checkout) {
 }
 
 function shaOf(checkout) {
+  const git = (args) => execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   try {
-    return execFileSync('git', ['-C', checkout, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    // The figures belong to the code that rendered them, so an edited tree must not pass as its commit.
+    const dirty = git(['status', '--porcelain', '--untracked-files=no', '--', 'src', 'bin', 'scripts', 'package.json']) !== '';
+    return `${git(['rev-parse', '--short', 'HEAD'])}${dirty ? '-dirty' : ''}`;
   } catch {
     // A checkout with no git history has no sha, and the read still holds.
     return 'unknown';
