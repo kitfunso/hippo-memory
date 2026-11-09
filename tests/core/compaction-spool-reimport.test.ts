@@ -273,11 +273,9 @@ describe('a spool import that carries a key', () => {
       expect(plain).toHaveLength(1);
       expect(keyed[0]?.request_id).toBe(`spool:${SAME_ROW_STEM}`);
       expect(plain[0]?.request_id).toBeNull();
-      const columns = (row: Row | undefined): Record<string, unknown> =>
-        Object.fromEntries(
-          Object.entries(row ?? {}).filter(([k]) => !['id', 'request_id', 'summarised_at'].includes(k)),
-        );
-      expect(columns(keyed[0])).toHaveProperty('origin_project');
+      const columns = (row: Row | undefined): Array<[string, unknown]> =>
+        Object.entries(row ?? {}).filter(([k]) => !['id', 'request_id', 'summarised_at'].includes(k));
+      expect(columns(keyed[0]).map(([k]) => k)).toContain('origin_project');
       expect(columns(keyed[0])).toEqual(columns(plain[0]));
     } finally {
       removeScratch(other);
