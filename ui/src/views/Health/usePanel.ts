@@ -111,10 +111,11 @@ export function usePanelCore<T extends { snapshotId: number }>(
   );
 
   const current = state.key === depsKey;
+  // A new key starts clean: the old key's error and loading flag must not show for it before its effect runs.
   return {
     data: current ? state.data : null,
-    error: state.error,
-    loading: state.loading,
+    error: current ? state.error : null,
+    loading: current ? state.loading : enabled,
     reload,
     accept,
     fetchedAt: current ? state.fetchedAt : 0,

@@ -1,5 +1,16 @@
-import { type ReactNode, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { type Controller, type OverlayEntry, type RowOverlay, type ToastState, createController, mergeOverlay } from "./actionController";
+import {
+  type ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { type Controller, createController } from "./actionController";
+import { type RowOverlay, type ToastState, mergeOverlay } from "./actionState";
 import { useHealth } from "./HealthContext";
 
 /** The controller's methods plus what views read: the row overlay and the toast. */
@@ -25,9 +36,9 @@ export function ActionsProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     latest.current = health;
   });
-  const [entries, setEntries] = useState<readonly OverlayEntry[]>([]);
-  const [toast, setToast] = useState<ToastState | null>(null);
-  const [ctl] = useState(() => createController({ setEntries, setToast, health: () => latest.current }));
+  const [store] = useState(() => createController({ health: () => latest.current }));
+  const ctl = store.actions;
+  const { entries, toast } = useSyncExternalStore(store.subscribe, store.getState);
 
   useEffect(() => {
     const onHide = () => ctl.commitPending(true);

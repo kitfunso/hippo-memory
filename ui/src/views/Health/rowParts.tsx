@@ -1,5 +1,5 @@
 import type { MemoryRow } from "../../types";
-import type { RowOverlay } from "./actionController";
+import { type RowOverlay, isForgetting, isKept, isResolved, isWeakened, isWrong, pinnedOf } from "./actionState";
 import { fmt } from "./format";
 import type { MemoryPages } from "./useMemoryPages";
 
@@ -10,19 +10,19 @@ export function readyRow(pages: MemoryPages, index: number): MemoryRow | null {
 }
 
 /** Extra row class while an action is pending on the row. */
-export const rowClass = (overlay: RowOverlay | undefined): string => (overlay?.forgetting ? "forgetting" : "");
+export const rowClass = (overlay: RowOverlay | undefined): string => (isForgetting(overlay) ? "forgetting" : "");
 
 /** Flag chips of a row; a pending action shows its result at once, before the server confirms. */
 export function RowFlags({ row, overlay }: { row: MemoryRow; overlay: RowOverlay | undefined }) {
-  const pinned = overlay?.pinned ?? row.pinned;
+  const pinned = pinnedOf(overlay) ?? row.pinned;
   return (
     <>
       {pinned && <span className="flag pin">pinned</span>}
-      {row.inConflict && !overlay?.resolved && <span className="flag cf">conflict</span>}
-      {(row.wrong || overlay?.wrong) && <span className="flag wr">wrong</span>}
-      {overlay?.kept && <span className="flag ok">kept</span>}
-      {overlay?.weakened && <span className="flag wk">weakened</span>}
-      {overlay?.forgetting && <span className="flag wr">forgetting</span>}
+      {row.inConflict && !isResolved(overlay) && <span className="flag cf">conflict</span>}
+      {(row.wrong || isWrong(overlay)) && <span className="flag wr">wrong</span>}
+      {isKept(overlay) && <span className="flag ok">kept</span>}
+      {isWeakened(overlay) && <span className="flag wk">weakened</span>}
+      {isForgetting(overlay) && <span className="flag wr">forgetting</span>}
     </>
   );
 }
