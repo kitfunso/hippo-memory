@@ -35,18 +35,18 @@ function gate() {
   return { handler, seen, answer: (r: Response) => waiting.shift()?.(r) };
 }
 
-type Step = "forget" | "wrong" | "keep" | "weaken" | "pin" | "unpin";
+const STEPS = ["forget", "wrong", "keep", "weaken", "pin", "unpin"] as const;
+type Step = (typeof STEPS)[number];
 
 /** The drawer button each step presses; with two conflicts open the first match is conflict 7. */
-const BUTTON: Record<Step, string> = {
+const BUTTON = {
   forget: "Forget",
   wrong: "Mark wrong",
   keep: "Keep this one",
   weaken: "Keep the other",
   pin: "Pin",
   unpin: "Unpin",
-};
-const STEPS = Object.keys(BUTTON) as Step[];
+} satisfies Record<Step, string>;
 const DEFERRED: Step[] = ["forget", "wrong", "keep"];
 
 /** m1 sits in two conflicts (with m2 and m3) and every action route holds its answer until the test gives it. */
