@@ -41,6 +41,7 @@ import {
 import type { ActiveGoals, PlanningFallacyEvidence } from '../../base/ports/store/types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import { type RankedBands, rankBands, overflowGroups } from './bands.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 const DEFAULT_RECALL_LIMIT = 10;
 
@@ -219,7 +220,7 @@ function admitCandidates(
   limit: number,
   personalScope: string | undefined,
 ): CandidateWindow {
-  const current = all.filter((e) => !e.supersededBy);
+  const current = all.filter((e) => !isSuperseded(e));
   const scope = opts.filter?.scope;
   let entries: typeof all;
   if (scope !== undefined && scope !== '') {

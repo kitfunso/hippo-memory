@@ -62,6 +62,7 @@ import { openStore } from '../runtime/handles.js';
 import { bound } from '../runtime/bound.js';
 import { readMemoryReach } from '../runtime/tenant-lookup.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 
 export interface WriteEntryOptions {
   actor?: string;
@@ -429,7 +430,7 @@ export function renameEntrySource(
 ): number {
   const moved = cachedStatement(
     db,
-    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
+    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND ${notSupersededIn()}`,
   ).run(to, id, tenantId, from);
   return Number(moved.changes ?? 0);
 }
@@ -465,7 +466,7 @@ export function supersedeEntry(
 ): boolean {
   const result = cachedStatement(
     db,
-    `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`,
+    `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND ${notSupersededIn()}`,
   ).run(newId, id, tenantId);
   return Number(result.changes ?? 0) !== 0;
 }
@@ -478,7 +479,7 @@ export function supersedeInTx(
 ): boolean {
   const won = cachedStatement(
     db,
-    'UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL ' +
+    `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND ${notSupersededIn()} ` +
       'RETURNING dag_parent_id',
   ).get(newId, id, tenantId) as { dag_parent_id: string | null } | undefined;
   if (!won) return false;
@@ -719,8 +720,8 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
       // No row means another writer got there first.
       const won = cachedStatement(
         db,
-        'UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING ' +
-          'dag_parent_id',
+        `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND ${notSupersededIn()} ` +
+          'RETURNING dag_parent_id',
       ).get(successor.id, oldId, tenantId) as { dag_parent_id: string | null } | undefined;
       if (!won) throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
       // After the CAS, so a lost race marks no parent for rebuild.

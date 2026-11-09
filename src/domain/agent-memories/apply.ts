@@ -26,6 +26,7 @@ import {
 import { emptyTally, type Tally } from '../../base/memory/agent-memory-report.js';
 import { MIN_ITEM_CHARS, splitSource, storedText } from './source.js';
 import type { MemoryItem } from './types.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 export interface ContainerOutcome {
   readonly tally: Tally;
@@ -169,7 +170,7 @@ async function dormantSnapshots(
     tenantId: s.tenantId,
     sourcePrefix: w.prefix,
   });
-  return [...under, ...view.movedDormant].filter((snap) => !snap.entry.supersededBy);
+  return [...under, ...view.movedDormant].filter((snap) => !isSuperseded(snap.entry));
 }
 
 /** The plan asks which notes another path already stores only for the rows it would write; those

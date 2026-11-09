@@ -16,6 +16,7 @@ import {
   type AutomaticMemoryDefect,
 } from './memory-quality.js';
 import { heldTexts } from '../util/same-text.js';
+import { isSuperseded } from './liveness.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -155,7 +156,7 @@ export interface RepairDefect {
 
 /** The rows quality repair judges: a superseded or archived row is already out of recall. */
 export function isRepairCandidate(entry: MemoryEntry): boolean {
-  return !entry.supersededBy && entry.kind !== 'archived';
+  return !isSuperseded(entry) && entry.kind !== 'archived';
 }
 
 function structured(entry: MemoryEntry): boolean {

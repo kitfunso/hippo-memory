@@ -4,6 +4,7 @@
 // only once restored.
 import { generateId, type MemoryEntry } from './entry.js';
 import { duplicateKey, heldTexts, mergedText } from '../util/same-text.js';
+import { isSuperseded } from './liveness.js';
 
 /**
  * The row that replaces a merged row once its retired texts leave: undefined when it holds none,
@@ -42,10 +43,10 @@ export function successorAfterRetirement(
   byId: ReadonlyMap<string, MemoryEntry>,
   rejected: (text: string) => boolean,
 ): MemoryEntry | null | undefined {
-  if (row.source !== 'consolidation' || row.supersededBy) return undefined;
+  if (row.source !== 'consolidation' || isSuperseded(row)) return undefined;
   const sources = row.parents.flatMap((id) => byId.get(id) ?? []);
   const retiredIds = new Set(
-    sources.filter((s) => Boolean(s.supersededBy) || rejected(s.content)).map((s) => s.id),
+    sources.filter((s) => isSuperseded(s) || rejected(s.content)).map((s) => s.id),
   );
   const live = new Set(
     sources.filter((s) => !retiredIds.has(s.id)).map((s) => duplicateKey(s.content)),

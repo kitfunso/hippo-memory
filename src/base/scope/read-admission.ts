@@ -6,6 +6,7 @@ import { classifyOriginProject, projectNames, type ProjectRef } from './project-
 import { passesScopeFilterForRecall } from './recall-scope.js';
 import { isSessionDigestRow } from '../session/session-digest-row.js';
 import { detectSecret } from '../util/secret-detect.js';
+import { isSuperseded } from '../memory/liveness.js';
 
 /** The rows an ambient read admits. */
 export interface AmbientAdmission {
@@ -67,7 +68,7 @@ export function ambientEnvelopeAdmits(e: MemoryEntry, a: AmbientAdmission): bool
 
 // Superseded rows go first because the envelope regex-scans content for secrets.
 export function ambientAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
-  return !e.supersededBy && !isOwnCompactionItem(e, a.ownSessionId) && ambientEnvelopeAdmits(e, a);
+  return !isSuperseded(e) && !isOwnCompactionItem(e, a.ownSessionId) && ambientEnvelopeAdmits(e, a);
 }
 
 /** Why an ambient load leaves `e` out, or null when it keeps it. */

@@ -12,6 +12,7 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 import { escapeLike } from '../../../base/util/escape.js';
 import { scopeAdmitSql } from '../runtime/rule-sql.js';
 import type { SqlFragment } from '../../../db/sql.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, orderSql } from '../../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../../base/util/tenant.js';
@@ -383,7 +384,7 @@ export function countByOrigin(
   return cachedStatement(
     db,
     `SELECT origin_project AS origin, COUNT(*) AS live, SUM(substr(source, 1, ?) = ?) AS prefixed, ` +
-      `MAX(created) AS newest FROM memories WHERE tenant_id = ? AND COALESCE(superseded_by, '') = '' ` +
+      `MAX(created) AS newest FROM memories WHERE tenant_id = ? AND ${notSupersededIn()} ` +
       `GROUP BY origin_project ORDER BY MIN(created || char(31) || id)`,
   ).all(sourcePrefix.length, sourcePrefix, tenantId) as OriginTallyDbRow[];
 }

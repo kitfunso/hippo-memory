@@ -23,6 +23,7 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 import { escapeLike } from '../../../base/util/escape.js';
 import { ftsAnyPhrase } from './fts-phrase.js';
 import { placeholders } from '../../../db/sql.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 import type { OriginFilter } from '../../../base/ports/store/types.js';
 import type { RecallSearchEntriesOptions } from '../../../base/ports/store/sharing.js';
 import {
@@ -179,8 +180,8 @@ function searchPredicates(
   const plainScope = withProject(recallScopeClause('', scopeFilter), '', originProjects);
   const scopeParams = aliasScope.params;
 
-  const currentAlias = includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
-  const currentNoAlias = includeSuperseded ? '' : ' AND superseded_by IS NULL';
+  const currentAlias = includeSuperseded ? '' : ` AND ${notSupersededIn('m.')}`;
+  const currentNoAlias = includeSuperseded ? '' : ` AND ${notSupersededIn()}`;
   return {
     tenantPredicate,
     tenantOnlyPredicate,
@@ -365,7 +366,7 @@ export async function listVectorCandidateEntries(
 ): Promise<MemoryEntry[]> {
   const scope = withProject(recallScopeClause('m.', spec.scope), 'm.', spec.origin);
   const tenant = tenantAnd(spec.tenantId, 'm.tenant_id = ?');
-  const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
+  const current = spec.includeSuperseded ? '' : ` AND ${notSupersededIn('m.')}`;
   const params = [...tenant.params, ...scope.params];
   const matches = await topVectorMatches(db, {
     query: queryVector,

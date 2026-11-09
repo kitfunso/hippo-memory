@@ -1,6 +1,4 @@
 // What the dashboard shows: live memories by origin project, under the wire's layer and band names.
-import type { MemoryEntry } from '../../base/memory/entry.js';
-import { isQuarantineScope } from '../../domain/trust/quarantine.js';
 import type { DashboardChip, Origin } from '../../base/ports/store/dashboard-reads.js';
 import type { Band, Layer, ProjectKind } from './types.js';
 
@@ -9,16 +7,6 @@ export const LAYERS: readonly Layer[] = ['buffer', 'episodic', 'semantic', 'trac
 export const BANDS: readonly Band[] = ['pinned', 'strong', 'fading', 'atRisk'];
 
 export type Chip = DashboardChip;
-
-/** The one predicate for "shown on the dashboard": not superseded, not archived, not
- * quarantined. */
-export function isLiveMemory(entry: Pick<MemoryEntry, 'supersededBy' | 'kind' | 'scope'>): boolean {
-  return (
-    !entry.supersededBy &&
-    (entry.kind === 'raw' || entry.kind === 'distilled') &&
-    !isQuarantineScope(entry.scope)
-  );
-}
 
 /** Wire key, display name and kind of a project. */
 export interface ProjectIdentity {

@@ -55,16 +55,15 @@ function setColumn(root: string, column: 'superseded_by' | 'created', value: str
 }
 
 describe('detectChurnStale candidate read', () => {
-  it('checks and skips the same rows, in store order, with and without a legacy name', async () => {
+  it('checks and skips the same rows, in store order, with and without a legacy name; a blank link is superseded', async () => {
     const root = newRoot();
     const checked = new Set<string>();
     const legacyChecked = new Set<string>();
     const pinned = new Set<string>();
     checked.add(put(root, 'current'));
     checked.add(put(root, 'kind superseded', { kind: 'superseded' }));
-    const emptySupersededBy = put(root, 'empty superseded_by');
-    setColumn(root, 'superseded_by', '', emptySupersededBy);
-    checked.add(emptySupersededBy);
+    // A blank link counts as superseded, so churn skips the row like a linked one.
+    setColumn(root, 'superseded_by', '', put(root, 'empty superseded_by'));
     legacyChecked.add(put(root, 'legacy', { originProject: 'legacy' }));
     pinned.add(put(root, 'pinned', { pinned: true }));
     // Pinned is judged before the date, so a pinned row with no usable date is still reported.

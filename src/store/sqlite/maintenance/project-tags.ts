@@ -50,6 +50,7 @@ import type { EntryFilter } from '../../../base/ports/store/reports.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { listEntriesWhere } from '../entries/entry-filter.js';
 import { META_KEY } from '../../../db/meta.js';
+import { isSuperseded } from '../../../base/memory/liveness.js';
 
 const TX_LABEL = 'merge_projects';
 
@@ -123,7 +124,7 @@ function fold(
   // yet to read.
   for (const row of rowsWhere(db, { tenantId, origins: [from] })) {
     const tag = toolTag(row.source);
-    const live = isImport(row.source) && !row.supersededBy && row.kind !== 'raw';
+    const live = isImport(row.source) && !isSuperseded(row) && row.kind !== 'raw';
     const copy = live && tag !== null && held.has(noteKey(row.source));
     if (
       copy &&
@@ -183,7 +184,7 @@ function setAsideCopies(
   for (const { id, origin } of copies) {
     const row = rows.get(id);
     const tag = row ? toolTag(row.source) : null;
-    if (!row || tag === null || row.supersededBy || (row.originProject ?? null) !== origin) {
+    if (!row || tag === null || isSuperseded(row) || (row.originProject ?? null) !== origin) {
       continue;
     }
     if (setAsideRow(db, { tag, row, why: 'project-repair', rules: files }).kind === 'dormant') {
@@ -201,7 +202,7 @@ function userGlobalMerges(
   ids: readonly string[],
 ): Map<string, MemoryEntry> {
   const rows = readEntriesByIds(db, ids, tenantId);
-  return new Map([...rows].filter(([, e]) => !e.supersededBy && e.originProject === ''));
+  return new Map([...rows].filter(([, e]) => !isSuperseded(e) && e.originProject === ''));
 }
 
 interface RetireOptions {

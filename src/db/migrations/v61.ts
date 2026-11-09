@@ -1,4 +1,4 @@
-import { CURRENT_DISTILLED, TEXT_OUTSIDE_TRIGRAMS } from '../sql-predicates.js';
+import { DUPLICATE_HASH_INDEX_WHERE, TEXT_OUTSIDE_TRIGRAMS } from '../sql-predicates.js';
 import { ensureTrigramIndex, isFtsMissing } from '../fts-index.js';
 import { tableHasColumn } from '../tables.js';
 import { duplicateHash } from '../../base/util/same-text.js';
@@ -6,7 +6,7 @@ import { errorMessage } from '../../base/util/log.js';
 import type { Migration } from './types.js';
 
 const INDEXES = [
-  `idx_memories_duplicate_hash ON memories(duplicate_hash) WHERE ${CURRENT_DISTILLED}`,
+  `idx_memories_duplicate_hash ON memories(duplicate_hash) WHERE ${DUPLICATE_HASH_INDEX_WHERE}`,
   'idx_audit_log_tenant_op_ts ON audit_log(tenant_id, op, ts DESC, id DESC)',
   'idx_memory_conflicts_updated ON memory_conflicts(updated_at)',
   `idx_memories_text_outside_trigrams ON memories(tenant_id) WHERE ${TEXT_OUTSIDE_TRIGRAMS}`,
@@ -33,7 +33,7 @@ function backfillDuplicateHashes(db: Parameters<Migration['up']>[0]): void {
   );
   db.exec(
     `UPDATE memories SET duplicate_hash = hippo_duplicate_hash(content) ` +
-      `WHERE duplicate_hash IS NULL AND ${CURRENT_DISTILLED}`,
+      `WHERE duplicate_hash IS NULL AND ${DUPLICATE_HASH_INDEX_WHERE}`,
   );
 }
 
