@@ -9,7 +9,7 @@ The prompt hook block (`hippo context --pinned-only --include-recent 5 --format 
 
 ## Evidence
 - Lesson reach read (`docs/evals/2026-11-08-z0-round3-lesson-reach.md`): over 162 A2 first applies, summaries and copied notes were 89% of the block text.
-- Offline replay on copies of round 3's A2 pre-session stores, 81 sessions in the 35 final-read runs, no model calls. With no list, 63 of 76 renders matched round 3's recorded block exactly. With `["session-digest","claude-code-memory","auto-captured"]`, the memory sections fell from 512 to 113 tokens a session on average (78% less). At Opus 5.5 prices that is about $0.004 of a $0.26 session, about 1.5%.
+- Offline replay on copies of round 3's A2 pre-session stores, 81 sessions in the 35 final-read runs, no model calls (`docs/evals/2026-11-09-z0-round3-hook-diet-replay.md`, each render at its session's start time). With no list, 75 of 76 renders matched round 3's recorded block exactly. With `["session-digest","claude-code-memory","auto-captured"]`, the memory sections fell from 496 to 113 tokens a session on average (77% less). At Opus 5.5 prices that is about $0.0039 of a $0.257 session, about 1.5%. The round 3 prereg already put all of hippo's injected text at about 1.5% of cost (`docs/evals/2026-11-02-z0-round3-prereg.md` line 12). This record first quoted a wall-clock render (63 of 76, 512 tokens, 78%), corrected on 2026-11-09.
 - Round 3's cost read gives no cost win to build on: A2/A1 cost ratio 1.006 [0.964, 1.049], and cost per resolved task $0.365 for A2 against $0.368 for A1.
 
 ## Decision

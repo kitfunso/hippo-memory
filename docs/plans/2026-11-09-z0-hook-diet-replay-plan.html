@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Z0 Round 3 Hook Diet</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+<header>
+  <h1>Hook Diet Replay for Z0 Round 3</h1>
+  <doc-changes new="4" changed="0"></doc-changes>
+  <doc-note tone="info"><strong>Build read</strong> hippo master at 0402d3daa, the first build with pinnedInject.excludeTags (PR #1183).</doc-note>
+  <details class="thread"><summary>Why · 1 request</summary>
+    <doc-quote via="prompt" from="the user">remember our goals, we need to prove hippo help with token cost and efficiency</doc-quote>
+  </details>
+</header>
+<main>
+<doc-plan>
+
+  <doc-claim>
+    <p>A maintainer can rerun the hook diet replay with one command.</p>
+    <doc-mock frame="terminal" title="z0-hook-diet" w="480"><template><span class="dim">></span> node scripts/token-eval/z0-hook-diet.mjs --scored C:/z0-runs/scored --json
+<b>build</b> 0402d3daa  <b>clock</b> each render at its session's first request time
+<b>stores</b> 91 in the final-read runs, rendered 81, no prompt 10
+<b>fidelity</b> recorded block 76, replay matches it exactly 63
+<b>arm</b>     header tokens mean  median  empty
+none        511.8           513.0   0
+digest      163.2            91.0   4
+list3       113.3            62.0   4
+<b>cut</b> list3 77.9% of block tokens
+<b>sessions</b> mean block-bearing main calls n, cache read n
+<b>list3 saving</b> n% of cache-read tokens, $n of $n mean session cost
+<span class="dim">figures above are the unpinned scratch run; the doc quotes the pinned run</span></template></doc-mock>
+    <doc-claim>
+      <p>The script renders each pre-session store three times through the real hook.</p>
+      <doc-calls title="one store, one arm" caption="Only the hook call touches hippo; the rest is file copies and parsing.">
+<script type="text/plain">
++ **readHookDiet**(scored, checkout)           @ scripts/token-eval/z0-hook-diet.mjs:1
++   runNames(scored)                           @ scripts/token-eval/z0-reach.mjs:200   -- the 35 final-read runs
++   **stageStore**(snap, dir, excludeTags)     @ scripts/token-eval/z0-hook-diet.mjs:1 -- copy stores, write project id
++   **stagedConfig**(cfg, excludeTags)         @ scripts/token-eval/z0-hook-diet.mjs:1 -- keep other pinnedInject keys
++   **renderEnv**(dir, fakeNow)                @ scripts/token-eval/z0-hook-diet.mjs:1 -- allowlist env
++   **renderHook**(checkout, dir, prompt)      @ scripts/token-eval/z0-hook-diet.mjs:1 -- hippo context, additional-context
++   **blockOf**(stdout)                        @ scripts/token-eval/z0-hook-diet.mjs:1 -- section headers
++   extractSession(files)                      @ scripts/token-eval/z0-reach.mjs:176   -- recorded block
+</script>
+      </doc-calls>
+      <doc-claim at="scripts/token-eval/replay.mjs:48">
+        <p><b>replay.mjs:48</b> · runCli()</p>
+        <doc-code src="scripts/token-eval/replay.mjs" lines="46-56"></doc-code>
+      </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>The script reads the same 35 runs as the round 3 final read.</p>
+      <doc-code src="scripts/token-eval/z0-reach.mjs" lines="200-203"></doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>Each render gets the env of hippo-iso.sh and no parent knobs.</p>
+      <doc-code title="renderEnv(dir, fakeNow) · sketch, mirrors hippo-iso.sh:56-94" lang="js">
+<script type="text/plain">
+const KEEP = ['SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'TMPDIR', 'LANG'];
+const env = Object.fromEntries(KEEP.filter((k) => process.env[k]).map((k) => [k, process.env[k]]));
+Object.assign(env, {
+  PATH: path.dirname(process.execPath),
+  HOME: user, USERPROFILE: user,
+  APPDATA: path.join(user, 'AppData', 'Roaming'),
+  LOCALAPPDATA: path.join(user, 'AppData', 'Local'),
+  HIPPO_HOME: path.join(dir, 'home'),
+  HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_SKIP_SCHEDULE: '1', HIPPO_SKIP_POSTINSTALL: '1',
+  HIPPO_FAKE_NOW: fakeNow,
+});
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>Each render runs at the time its session started.</p>
+      <doc-code title="clock pin · sketch" lang="js">
+<script type="text/plain">
+// The hook scores decay and recency against now; the session's first request-log `at` is that now.
+const fakeNow = new Date(firstLogLine(files).at).toISOString();
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The read stops if the run folder is outside the temp root.</p>
+      <doc-code title="guard · sketch, mirrors hippo-iso.sh:18-33" lang="text">
+<script type="text/plain">
+z0-hook-diet: --work C:/runs is not under the temp root C:/Users/x/AppData/Local/Temp;
+  pass a folder under it, so hippo cannot walk up to a real store
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The read checks the replay against the block that round 3 sent.</p>
+    <doc-code src="scripts/token-eval/z0-reach.mjs" lines="176-198"></doc-code>
+    <doc-claim>
+      <p>An exact match means the same headers, entry counts and token counts.</p>
+      <doc-code title="fidelity rule · sketch" lang="js">
+<script type="text/plain">
+const recorded = extractSession(requestLogs(scored, rec).files).hookBlocks.map((b) => [b.header, b.entries, b.tokens]);
+const replayed = blockOf(stdout).sections.filter((s) => s[0] !== 'Rules from the user');
+const same = sameBlock(recorded, replayed); // order-sensitive, exported, unit-tested
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>A render that exits non-zero stops the read with a named error.</p>
+      <doc-code title="error text · sketch" lang="text">
+<script type="text/plain">
+z0-hook-diet: 3 renders exited non-zero, first hu3-e2 q188 seed 1 arm list3
+  (no dist/cli.js); run npm run build in --checkout and rerun
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The read prices the cut against the real token use of each session.</p>
+    <doc-code title="saving per session · sketch" lang="js">
+<script type="text/plain">
+// The block sits in the first user turn: one cache write, then one read on each later main call.
+const calls = mainCallsWithBlock(files); // z0-reach's isMainCall rule, tools > 3
+const saved = cut * (p.cacheWritePerMTok + (calls - 1) * p.cacheReadPerMTok) / 1e6;
+const share = saved / session.total_cost_usd;
+</script>
+    </doc-code>
+    <doc-claim>
+      <p>Prices come from the file that round 3's cost read used.</p>
+      <doc-code title="--prices default" lang="text">
+<script type="text/plain">
+C:/z0-runs/s7/prices.json  ["claude-code"]: inputPerMTok 4, cacheWritePerMTok 8, cacheReadPerMTok 0.2, outputPerMTok 20
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The results doc states that the cut cannot prove a cost win alone.</p>
+    <doc-code title="docs/evals/2026-11-09-z0-round3-hook-diet-replay.md · sketch" lang="markdown">
+<script type="text/plain">
+## Answer
+The excludeTags list cuts hippo's prompt block by n% of its tokens
+(hippo's own estimate, chars / 4). That is about n% of a session's cost.
+The sample is the last A2 session of each seed, where the store is largest.
+Round 3 ties built-in memory on cost per solved task, $0.365 against
+$0.368 (r3-final/unblind.json, reported.perArm.*.costPerResolved),
+and H3's cost ratio interval is [0.964, 1.049] (unblind.stdout).
+A cut of that size sits inside the interval.
+Round 4 needs a lever on turns or pass rate to show a cost win.
+</script>
+    </doc-code>
+    <doc-ask id="round4">
+      <p>What round 4 framing does the doc give?</p>
+      <label><input type="radio" name="round4" value="B" checked> B: aim the cost test at the turns a repeat mistake costs <small>the cut runs as an extra arm</small></label>
+      <label><input type="radio" name="round4" value="A"> A: test the block cut on cost alone <small>needs several times round 3's size</small></label>
+      <label><input type="radio" name="round4" value="none"> No framing in this doc <small>the prereg decides it</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim aux="shared">
+    <p>Shared: the pure functions that the test pins.</p>
+    <doc-code title="exports of z0-hook-diet.mjs · sketch" lang="ts">
+<script type="text/plain">
+export function blockOf(stdout: string): { text: string; sections: [string, number, number][] };
+export function stagedConfig(cfg: object, excludeTags: string[] | null): object;
+export function renderEnv(dir: string, fakeNow: string): Record<string, string>;
+export function sameBlock(recorded: Section[], replayed: Section[]): boolean;
+export function mainCallsWithBlock(lines: string[]): number;
+export function userPrompt(requestLogLines: string[]): string | null;
+export function lastA2Task(plan: PlanStep[], sequence: string, seed: number): string | null;
+export function summarize(rows: Row[], usage: Map<string, Usage>, prices: Prices): Report;
+export function parseArgs(argv: string[]): Args;
+export function runCli(argv: string[]): { code: number; stdout: string; stderr: string };
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim aux="scope">
+    <p>Not changing: hippo src, the hook, the round 3 results, or any paid run.</p>
+    <ul>
+      <li>The pure functions get a unit test on fixture text. A process test drives the whole read over a fixture tree with a stub hippo.js (added after code review).</li>
+      <li>The round 4 prereg is a separate episode.</li>
+      <li>A changelog fragment names the new script.</li>
+    </ul>
+  </doc-claim>
+
+</doc-plan>
+</main>
+</body></html>
