@@ -82,10 +82,11 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   }
 }
 
+type TakeFailed = { readonly kind: 'failed'; readonly err: unknown };
 type Take =
   | { readonly kind: 'took'; readonly mode: WorkerMode }
   | { readonly kind: 'empty' }
-  | { readonly kind: 'failed'; readonly err: unknown };
+  | TakeFailed;
 
 /** Takes the queued request by renaming it, so one queued while this reads it lands in a fresh
  * file. */
@@ -122,14 +123,16 @@ function queuedKind(queued: string): string {
   }
 }
 
-function reportGaveUp(queued: string, lastError: unknown, gaveUp?: LineLog): void {
+function reportGaveUp(queued: string, lastFailed: TakeFailed | null, gaveUp?: LineLog): void {
   const lastTake =
-    lastError === null ? 'none: the request was queued again each round' : errorMessage(lastError);
+    lastFailed === null
+      ? 'none: the request was queued again each round'
+      : errorMessage(lastFailed.err);
   const line =
     `session worker: gave up after ${MAX_ROUNDS} rounds with the ${queuedKind(queued)} request ` +
     `still queued in ${queued}; ` +
     `last take error: ${lastTake}`;
-  logger.warn(line, lastError === null ? undefined : errorFields(lastError));
+  logger.warn(line, lastFailed === null ? undefined : errorFields(lastFailed.err));
   gaveUp?.(line);
 }
 
@@ -146,7 +149,7 @@ export async function runSessionWorker(
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
   let idleRounds = 0;
-  let lastError: unknown = null;
+  let lastFailed: TakeFailed | null = null;
   for (let take = takeFileLock(files.lock); take.kind !== 'held'; take = takeFileLock(files.lock)) {
     if (take.kind === 'unusable') {
       warnUnusableLockOnce(files.lock, take.cause);
@@ -162,11 +165,11 @@ export async function runSessionWorker(
     } finally {
       take.lock.release();
     }
-    if (next.kind === 'failed') lastError = next.err;
+    if (next.kind === 'failed') lastFailed = next;
     // A taker that found the lock held left its request queued, so look again after every release.
     if (!fs.existsSync(files.queued)) return;
     if (!ran && ++idleRounds >= MAX_ROUNDS) {
-      reportGaveUp(files.queued, lastError, gaveUp);
+      reportGaveUp(files.queued, lastFailed, gaveUp);
       return;
     }
   }
