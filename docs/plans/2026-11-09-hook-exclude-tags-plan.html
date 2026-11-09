@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Hook Exclude Tags</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+<header>
+  <h1>Tag Exclusion for the Prompt Hook Block</h1>
+  <doc-changes new="2" changed="7"></doc-changes>
+  <doc-note tone="info"><strong>Evidence</strong> docs/evals/2026-11-08-z0-round3-lesson-reach.md: over 162 A2 first applies, past-task summaries, copied Claude Code notes and tool errors were 93% of the block text.</doc-note>
+  <details class="thread"><summary>Why · 2 requests</summary>
+    <doc-quote via="prompt" from="the user">so we need to optimise and improve and make hippo-memory better to hit all 4 goals. correct? … can we do all 6 items at the same time and run both goals?</doc-quote>
+    <doc-quote via="prompt" from="the user">continue</doc-quote>
+  </details>
+</header>
+<main>
+<doc-plan>
+
+  <doc-claim>
+    <p>An operator can name tags that the prompt hook block leaves out.</p>
+    <doc-mock frame="terminal" title=".hippo/config.json and the hook block" w="470"><template><span class="dim">></span> cat .hippo/config.json
+{"pinnedInject": {"excludeTags":
+  ["session-digest", "claude-code-memory", "auto-captured"]}}
+<span class="dim">></span> hippo context --pinned-only --include-recent 5 --format additional-context
+## Project Memory (5 entries)
+- [rule] Run tests with `uv run pytest`.
+- [preference] Keep the changelog entry under 2 lines.
+<span class="dim">  (no session digests, copied notes or captured tool failures)</span></template></doc-mock>
+    <doc-claim>
+      <p>The admission rule refuses a row that carries an excluded tag.</p>
+      <doc-code title="src/base/scope/read-admission.ts · sketch" lang="ts">
+<script type="text/plain">
+export interface AmbientAdmission {
+  // ...existing fields
+  /** Rows with any of these tags stay out; the prompt hook sets it from pinnedInject.excludeTags. */
+  readonly excludeTags?: readonly string[];
+}
+
+export function ambientAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
+  return (
+    !e.supersededBy &&
+    !isOwnCompactionItem(e, a.ownSessionId) &&
+    !hasExcludedTag(e, a.excludeTags) &&
+    ambientEnvelopeAdmits(e, a)
+  );
+}
+</script>
+      </doc-code>
+      <doc-claim at="src/store/sqlite/store.ts:315">
+        <p><b>store.ts:315</b> · ambientCandidates judges each row with ambientRefusal</p>
+        <doc-code src="src/store/sqlite/store.ts" lines="313-317" hl="315"></doc-code>
+      </doc-claim>
+      <doc-claim at="src/api/context/context-pools.ts:126">
+        <p><b>context-pools.ts:126</b> · core rechecks every loaded row with the same rule</p>
+        <doc-code src="src/api/context/context-pools.ts" lines="124-127" hl="126"></doc-code>
+      </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>The store applies the rule before it takes the 5 recent rows.</p>
+      <doc-code src="src/store/sqlite/recall/candidates.ts" lines="259-270" hl="268"></doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The prompt-recall query leaves excluded rows out before its 100-row limit.</p>
+      <doc-code title="AmbientRecallRequest and promptRecallEntries · sketch" lang="ts">
+<script type="text/plain">
+export interface AmbientRecallRequest {
+  terms: string[];
+  limit: number;
+  ownScope?: string;
+  /** Rows with one of these tags stay out of the FTS window. */
+  excludeTags?: readonly string[];
+}
+// context-plan.ts:216-226 sets it from
+//   pinnedInject.excludeTags.
+// promptRecallEntries passes it to listRecallEntries,
+//   and listSearchRows adds the predicate:
+//   NOT EXISTS (SELECT 1 FROM json_each(tags_json)
+//     WHERE value IN (?, ?, ...))
+// The same json_each shape as entry-filter.ts:83.
+</script>
+      </doc-code>
+      <doc-claim at="src/store/sqlite/recall/candidates.ts:300">
+        <p><b>candidates.ts:300</b> · promptRecallEntries()</p>
+        <doc-code src="src/store/sqlite/recall/candidates.ts" lines="300-314" hl="307"></doc-code>
+      </doc-claim>
+      <doc-claim at="src/api/context/context-select.ts:217">
+        <p><b>context-select.ts:217</b> · core admit() still drops a row a port store returns</p>
+        <doc-code src="src/api/context/context-select.ts" lines="210-220" hl="217"></doc-code>
+      </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>Only pinned-only reads get the list; recall and plain context do not change.</p>
+      <doc-code title="src/api/context/context-pools.ts ambientAdmission · sketch" lang="ts">
+<script type="text/plain">
+const rule: AmbientAdmission = {
+  // ...existing fields
+  excludeTags: plan.pinnedOnly ? plan.config.pinnedInject.excludeTags : undefined,
+};
+</script>
+      </doc-code>
+      <doc-ask id="scope">
+        <p>Does the list also apply to pinned rows and user rules?</p>
+        <label><input type="radio" name="scope" value="all" checked> Yes, every row of the block <small>the arm names exactly what it removes</small></label>
+        <label><input type="radio" name="scope" value="backfill"> Only the recent and recall rows <small>pins always print</small></label>
+      </doc-ask>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A malformed list warns once and reads as empty.</p>
+    <doc-code title="src/base/config/config-keys.ts pinnedInjectFields · sketch" lang="ts">
+<script type="text/plain">
+excludeTags: read('excludeTags', textList(P.excludeTags)),
+// DEFAULT_CONFIG.pinnedInject.excludeTags = []
+</script>
+    </doc-code>
+    <doc-claim at="src/base/config/config-keys.ts:66">
+      <p><b>config-keys.ts:66</b> · pinnedInjectFields()</p>
+      <doc-code src="src/base/config/config-keys.ts" lines="66-85"></doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>With no list set, every block stays byte-identical to today.</p>
+    <doc-code title="tests · sketch" lang="ts">
+<script type="text/plain">
+// Unchanged goldens are the check:
+//   tests/cli/__snapshots__/cli-context-output-golden.test.ts.snap,
+//   cli-context-render-snapshot.test.ts.snap,
+//   tests/store/prompt-hook-context.process.test.ts parity.
+// tests/core/read-admission.server.test.ts: a NEW describe,
+//   in process and on the worker store; the AMBIENT
+//   parity matrix against oldLoaderAdmit stays as is.
+//   Tagged row refused, untagged admitted,
+//   undefined and [] admit both.
+// tests/core/config-keys.test.ts: ["a"] reads ["a"];
+//   "a" and [1] warn once and read []. Exact match.
+// tests/store/hook-exclude-tags.test.ts (new, real store):
+//   7 digest rows newer than 5 rule rows: the block
+//     holds the 5 rules, so the backfill fills;
+//   a pinned digest row stays out;
+//   prompt recall: 120 digest rows match the prompt
+//     (over promptRecallCandidates 100) and 1 rule
+//     matches; the rule reaches the block;
+//   [] and an absent key: equal stdout and staticHash;
+//   userRulesGet with the list drops a tagged rule.
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Every pinned-only reader gets the list, the SessionStart rules too.</p>
+    <ul>
+      <li><code>userRulesGet</code> (src/api/context/user-rules-get.ts:17-19) plans a pinned-only read, so <code>hippo session-rules</code> drops a listed user rule.</li>
+      <li>The Copilot and VS Code SessionStart envelopes use the same render (src/api/prompt-hook.ts:87-93).</li>
+      <li>Derived rows keep their source tags: DAG summaries (src/domain/consolidate/dag.ts:123) and extracted facts (src/domain/learn/extract.ts:136-139). A list with <code>session-digest</code> drops them too. This is intended: their text comes from digests. The round 4 prereg must say so.</li>
+      <li>The delivery ledger logs an excluded row as an <code>admission</code> or <code>scope</code> refusal. The round 4 prereg must read it that way.</li>
+    </ul>
+  </doc-claim>
+
+  <doc-claim aux="shared">
+    <p>Shared: one optional field on each of two published port types.</p>
+    <doc-code src="src/base/scope/read-admission.ts" lines="11-27"></doc-code>
+  </doc-claim>
+
+  <doc-claim aux="scope">
+    <p>Not changing: the default block, hippo recall, plain context, capture and the Z0 runner.</p>
+    <ul>
+      <li>No default tag list: Z0 stage 4 says a default changes only after a Z0 arm shows a cost win.</li>
+      <li>No version bump or publish; a changelog.d fragment, README.md:850 and ARCHITECTURE.md:336-342 lines.</li>
+      <li>The round 4 prereg picks the list and runs the arm; that run is paid and waits on its own yes. Tool failures carry <code>auto-captured</code> (src/surface/capture/capture-error.ts:110); a lesson a person saves with <code>--error</code> carries only <code>error</code>, so the arm names <code>auto-captured</code>.</li>
+    </ul>
+  </doc-claim>
+
+</doc-plan>
+</main>
+</body></html>

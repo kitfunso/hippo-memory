@@ -16,6 +16,7 @@ import {
   type EntryPageRequest,
 } from '../runtime/keyset.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../runtime/rows.js';
+import { tagsOf } from '../runtime/rule-sql.js';
 import { tenantAnd, TENANT_IS } from '../runtime/tenant.js';
 
 /** A memories column a filter reads; a dormant snapshot answers each from its JSON field of the
@@ -67,10 +68,6 @@ function startsWith(column: string, prefix: string): SqlFragment {
     ? { sql: `${column} >= ?`, params: [prefix] }
     : { sql: `${column} >= ? AND ${column} < ?`, params: [prefix, upper] };
 }
-
-// A tags column that is not a JSON array reads as no tags, as parseJsonArray reads it.
-const tagsOf = (column: string): string =>
-  `CASE WHEN NOT json_valid(${column}) THEN '[]' WHEN json_type(${column}) = 'array' THEN ${column} ELSE '[]' END`;
 
 type Terms = { readonly [K in Field]: Term<K> };
 
