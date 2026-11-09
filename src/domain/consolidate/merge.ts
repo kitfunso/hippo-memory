@@ -9,6 +9,7 @@ import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35; // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2; // minimum cluster size to merge
@@ -33,7 +34,7 @@ export async function retireHeldTexts(run: SleepRun): Promise<void> {
   // page past.
   const held: Array<readonly [number, string]> = [];
   for await (const [index, row] of survivors.indexed()) {
-    if (row.source === 'consolidation' && !row.supersededBy && run.retirable(row)) {
+    if (row.source === 'consolidation' && !isSuperseded(row) && run.retirable(row)) {
       held.push([index, row.id]);
     }
   }
@@ -84,10 +85,10 @@ function retireHeldText({ run, index, row, sources, rejected }: RetireHeldTextOp
 
 /** The texts the retirement check asks about, the row's own and its live sources'. */
 function askedTexts(row: MemoryEntry, sources: ReadonlyMap<string, MemoryEntry>): string[] {
-  if (row.source !== 'consolidation' || row.supersededBy) return [];
+  if (row.source !== 'consolidation' || isSuperseded(row)) return [];
   const live = row.parents.flatMap((id) => {
     const source = sources.get(id);
-    return source && !source.supersededBy ? [source.content] : [];
+    return source && !isSuperseded(source) ? [source.content] : [];
   });
   return [...new Set([...live, ...heldTexts(row)])];
 }
@@ -141,7 +142,7 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
   for await (const e of run.survivors.rows()) {
     const candidate =
       e.layer === Layer.Episodic &&
-      !e.supersededBy &&
+      !isSuperseded(e) &&
       !keptAsWritten(e) &&
       !alreadyMergedIds.has(e.id) &&
       !e.pinned && // a pin merged with a look-alike would read as one of two values

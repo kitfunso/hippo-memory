@@ -11,17 +11,19 @@ import { raiseMinBinary } from '../../../db/meta.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../../base/util/version.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from '../runtime/rows.js';
-import type {
-  SessionCalls,
-  SessionClearArgs,
-  SessionEvent,
-  SessionEventInput,
-  SessionReadArgs,
-  Sessions,
-  SessionSaveArgs,
-  WorkingMemoryItem,
-  WorkingMemoryFilter,
-  WorkingMemoryPush,
+import {
+  isSnapshotCloseStatus,
+  type SessionCalls,
+  type SessionClearArgs,
+  type SessionEvent,
+  type SessionEventInput,
+  type SessionReadArgs,
+  type Sessions,
+  type SessionSaveArgs,
+  type SnapshotCloseStatus,
+  type WorkingMemoryItem,
+  type WorkingMemoryFilter,
+  type WorkingMemoryPush,
 } from '../../../base/ports/store/sessions.js';
 import type { UntracedSession } from '../../../base/ports/store/consolidation.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './session-mirrors.js';
@@ -48,6 +50,13 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 import { RECENT_MIRROR_EVENTS, TRACE_EVENT_ROWS } from '../../rules/windows.js';
 import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../../../base/util/limits.js';
 import { handleNow, handleStamp } from '../runtime/handle-clock.js';
+import { badStatusTarget, moveOneStatus } from '../runtime/status-transitions.js';
+
+/** `status` as a close status, or a throw before any write that names the statuses allowed. */
+function requireSnapshotCloseStatus(status: string): SnapshotCloseStatus {
+  if (isSnapshotCloseStatus(status)) return status;
+  throw badStatusTarget('snapshotClose', status);
+}
 
 /** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
 function clearActiveTaskSnapshot(
@@ -59,23 +68,21 @@ function clearActiveTaskSnapshot(
   const { hippoRoot } = files;
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', files, undefined);
+  const to = requireSnapshotCloseStatus(clearedStatus);
   const now = handleStamp(db);
-  const active = cachedStatement(
-    db,
-    `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
-      `LIMIT 1`,
-  ).get(tenantId) as { id?: number } | undefined;
-  if (!active?.id) {
-    removeActiveTaskMirror(hippoRoot, tenantId);
-    return 0;
-  }
-
-  cachedStatement(
-    db,
-    `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`,
-  ).run(clearedStatus, now, active.id, tenantId);
+  // The read and the move share one write scope, so a second clear finds no active row.
+  const closed = withWriteScope(db, 'clear_snapshot', () => {
+    const active = cachedStatement(
+      db,
+      `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
+        `LIMIT 1`,
+    ).get(tenantId) as { id?: number } | undefined;
+    if (!active?.id) return 0;
+    moveOneStatus(db, 'snapshotClose', { id: active.id, to, tenantId, set: { updated_at: now } });
+    return 1;
+  });
   removeActiveTaskMirror(hippoRoot, tenantId);
-  return 1;
+  return closed;
 }
 
 /** An ending session and the status its active snapshots close with. */
@@ -94,6 +101,7 @@ function closeTaskSnapshotsForSession(
   key: ContinuityKey | null | undefined,
 ): number {
   assertTenantId('closeTaskSnapshotsForSession', tenantId);
+  requireSnapshotCloseStatus(status);
   if (key) continuityStamp(key);
   // a partial key is a caller bug, so fail loud rather than close nothing
   const owned = key ? continuityWhere(key) : null;

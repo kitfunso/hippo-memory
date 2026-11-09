@@ -71,16 +71,16 @@ describe('assemble admission', () => {
     expect(r.items).toHaveLength(4);
   });
 
-  it('assembles and counts a raw row whose superseded_by is blank, as every live-row read does', async () => {
-    const root = seeded(3);
+  it('leaves out a raw row whose superseded_by is blank: a blank link counts as superseded in every read', async () => {
+    const root = seeded(4);
     sql(root, `UPDATE memories SET superseded_by = '' WHERE id = ?`, 'raw-001');
     const whole = await assemble(member(root), 's1', { budget: 100000 });
-    expect(whole.items.map((it) => it.id)).toEqual(['raw-000', 'raw-001', 'raw-002']);
+    expect(whole.items.map((it) => it.id)).toEqual(['raw-000', 'raw-002', 'raw-003']);
     // A capped window reports the uncapped count, read by sessionRawCount.
     const capped = await assemble(member(root), 's1', { budget: 100000, rowCap: 2 });
     expect(capped.truncated).toBe(true);
     expect(capped.totalRaw).toBe(3);
     // The recall fresh tail reads the same session's raw rows by the same rule.
-    expect(loadFreshRawMemories(root, 10, 'default', 's1').map((r) => r.id)).toContain('raw-001');
+    expect(loadFreshRawMemories(root, 10, 'default', 's1').map((r) => r.id)).not.toContain('raw-001');
   });
 });

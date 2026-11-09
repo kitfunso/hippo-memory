@@ -9,6 +9,7 @@ import type { DormantSnapshot, EntryCursor } from '../../base/ports/store/types.
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { itemSource } from './source.js';
 import type { Container, ImportStore } from './types.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 export interface StoreSession {
   readonly store: ImportStore;
@@ -119,7 +120,7 @@ async function standingLegacy(
   const from = new Map(rows.map((row) => [row.id, row.source]));
   const out = new Map<string, MemoryEntry>();
   for (const row of await s.store.entriesByIds([...from.keys()], s.tenantId)) {
-    if (!row.supersededBy && row.source === from.get(row.id)) out.set(row.id, row);
+    if (!isSuperseded(row) && row.source === from.get(row.id)) out.set(row.id, row);
   }
   return out;
 }

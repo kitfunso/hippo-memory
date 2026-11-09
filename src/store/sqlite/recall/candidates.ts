@@ -1,5 +1,6 @@
 import type { StoreModel } from '../runtime/open.js';
 import {
+  type ConfidenceLevel,
   type MemoryEntry,
   CAPTURED_NOTE_TAG,
   ERROR_TAG,
@@ -26,6 +27,7 @@ import { type DatabaseSyncLike, withReadSnapshot } from '../../../db/index.js';
 import { sortableStamp } from '../../../base/memory/created-stamp.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import type { SqlFragment } from '../../../db/sql.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 import {
   MEMORY_SELECT_COLUMNS,
   type MemoryRow,
@@ -66,7 +68,12 @@ function tallyStatus(
   rules: StoreModel,
 ): Omit<StatusCounts, 'openConflicts' | 'embedded'> {
   const byLayer = { [Layer.Buffer]: 0, [Layer.Episodic]: 0, [Layer.Semantic]: 0, [Layer.Trace]: 0 };
-  const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
+  const byConfidence = {
+    verified: 0,
+    observed: 0,
+    inferred: 0,
+    stale: 0,
+  } satisfies Record<ConfidenceLevel, number>;
   const sums = { total: 0, strength: 0, pinned: 0, atRisk: 0, agedOut: 0 };
   for (const row of rows) {
     const strength = calculateStrength(row, now, rules.strength);
@@ -91,8 +98,8 @@ function tallyStatus(
   };
 }
 
-const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
-const AMBIENT_PINNED = 'pinned = 1 AND superseded_by IS NULL';
+const AMBIENT_SCOPED = `${notSupersededIn()} AND tenant_id = ?`;
+const AMBIENT_PINNED = `pinned = 1 AND ${notSupersededIn()}`;
 /** A stamp whose text does not sort by time; idx_memories_created_drift (migration v51) holds
  * the live ones. */
 const CREATED_DRIFTED = "(length(created) <> 24 OR created NOT LIKE '%Z')";
@@ -331,7 +338,7 @@ export function contextRowsWhere(
   filter: Pick<ContextCandidateFilter, 'exactScope' | 'ownScope' | 'project'>,
   extra: readonly string[] = [],
 ): SqlFragment {
-  const where = ['tenant_id = ?', `COALESCE(superseded_by, '') = ''`, ...extra];
+  const where = ['tenant_id = ?', notSupersededIn(), ...extra];
   const params: Array<string | number> = [tenantId];
   if (filter.exactScope) {
     where.push('scope = ?');

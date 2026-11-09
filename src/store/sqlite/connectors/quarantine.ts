@@ -27,6 +27,7 @@ import { bound } from '../runtime/bound.js';
 import { writeEntryMirrors } from '../entries/entry-writes.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
+import { moveOneStatus } from '../runtime/status-transitions.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
 
@@ -150,22 +151,24 @@ function approveQuarantineRow(
   db: DatabaseSyncLike,
   { tenantId, id: memoryId, actor: decidedBy }: DecisionOptions,
 ): void {
-  cachedStatement(
-    db,
-    `UPDATE memory_quarantine SET status = 'approved', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
-      `memory_id = ?`,
-  ).run(handleStamp(db), decidedBy, tenantId, memoryId);
+  moveOneStatus(db, 'quarantineApprove', {
+    id: memoryId,
+    to: 'approved',
+    tenantId,
+    set: { decided_at: handleStamp(db), decided_by: decidedBy },
+  });
 }
 
 function rejectQuarantineRow(
   db: DatabaseSyncLike,
   { tenantId, id: memoryId, actor: decidedBy }: DecisionOptions,
 ): void {
-  cachedStatement(
-    db,
-    `UPDATE memory_quarantine SET status = 'rejected', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
-      `memory_id = ?`,
-  ).run(handleStamp(db), decidedBy, tenantId, memoryId);
+  moveOneStatus(db, 'quarantineReject', {
+    id: memoryId,
+    to: 'rejected',
+    tenantId,
+    set: { decided_at: handleStamp(db), decided_by: decidedBy },
+  });
 }
 
 /** A page of the tenant's records, each with its memory's content read in the same query batch. */

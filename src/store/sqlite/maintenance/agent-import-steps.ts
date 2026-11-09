@@ -2,6 +2,7 @@
 // and a plan whose rows moved on since the sync read them writes nothing.
 import { SYNC_ACTOR } from '../../../base/memory/agent-memory-tools.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
+import { isSuperseded } from '../../../base/memory/liveness.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../base/util/pages.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
@@ -86,11 +87,11 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
   for (const ids of chunked(outside)) {
     for (const row of readEntriesInIdOrder(db, ids, plan.tenantId)) rows.set(row.id, row);
   }
-  const adoptable = plan.steps.every(
-    (step) =>
-      step.kind !== 'adopt' ||
-      (rows.get(step.id)?.source === step.from && !rows.get(step.id)?.supersededBy),
-  );
+  const adoptable = plan.steps.every((step) => {
+    if (step.kind !== 'adopt') return true;
+    const row = rows.get(step.id);
+    return row !== undefined && row.source === step.from && !isSuperseded(row);
+  });
   return adoptable ? rows : null;
 }
 

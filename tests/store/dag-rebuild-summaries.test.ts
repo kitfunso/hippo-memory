@@ -13,7 +13,19 @@ import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { makeOkFetcher, getRow, forceMarkDirty, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
+import {
+  archiveBySql,
+  forceMarkDirty,
+  getRow,
+  makeChild,
+  makeOkFetcher,
+  makeProviderFailureFetcher,
+  makeScriptedFetcher,
+  makeSummary,
+  readRebuildHold,
+  rejectValue,
+  writeMetaRaw,
+} from '../_helpers/dag-rebuild.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
@@ -412,5 +424,155 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Dirty still set
     const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.map((s) => s.id)).toContain(summary.id);
+  });
+});
+
+const T0 = Date.parse('2026-06-01T00:00:00.000Z');
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+// Under 20 chars, so generateDagSummary returns null with no provider failure.
+const SHORT_REPLY = 'too short';
+const GOOD_REPLY = 'a rebuilt summary that is long enough';
+const at = (offsetMs: number): string => new Date(T0 + offsetMs).toISOString();
+
+describe('rebuild hold', () => {
+  let hippoRoot: string;
+
+  beforeEach(() => {
+    hippoRoot = makeRoot('dag-hold');
+  });
+
+  function seedDirty(content: string, childText: string, latestAt?: string) {
+    const summary = makeSummary(content);
+    if (latestAt) summary.latestAt = latestAt;
+    writeEntry(hippoRoot, summary);
+    writeEntry(hippoRoot, makeChild(summary.id, childText));
+    forceMarkDirty(hippoRoot, summary.id);
+    return summary;
+  }
+
+  const rebuildAt = (fetcher: typeof fetch, offsetMs: number, cap = 20) =>
+    rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: new Date(T0 + offsetMs),
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
+      cap,
+    });
+
+  it('stops sending a summary whose rebuild failed three times in a row until its hold ends', async () => {
+    const summary = seedDirty('held summary', 'fact xyz');
+    const fetcher = makeOkFetcher(SHORT_REPLY);
+
+    for (const hours of [0, 1, 2]) {
+      expect((await rebuildAt(fetcher, hours * HOUR)).failed).toBe(1);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(readRebuildHold(hippoRoot, summary.id)).toEqual({ failures: 3, retryAfter: at(26 * HOUR) });
+
+    for (const hours of [3, 4, 5]) {
+      expect(await rebuildAt(fetcher, hours * HOUR)).toMatchObject({ attempted: 0, failed: 0, held: 1 });
+    }
+    expect(fetcher).toHaveBeenCalledTimes(3);
+
+    expect(await rebuildAt(fetcher, 27 * HOUR)).toMatchObject({ attempted: 1, failed: 1, held: 0 });
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(readRebuildHold(hippoRoot, summary.id)).toEqual({
+      failures: 4,
+      retryAfter: at(27 * HOUR + 2 * DAY),
+    });
+  });
+
+  it('does not count a provider failure toward the hold', async () => {
+    const summary = seedDirty('outage summary', 'fact xyz');
+    const fetcher = makeProviderFailureFetcher();
+
+    for (const hours of [0, 1, 2, 3]) {
+      expect(await rebuildAt(fetcher, hours * HOUR)).toMatchObject({ attempted: 1, failed: 1, held: 0 });
+    }
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(readRebuildHold(hippoRoot, summary.id)).toBeNull();
+  });
+
+  it.each([
+    'not json',
+    '{"failures":3,"retryAfter":',
+    '[]',
+    '"held"',
+    '{"failures":"3","retryAfter":null}',
+    '{"failures":2.5,"retryAfter":null}',
+  ])('reads the malformed hold value %j as no hold and counts the failure from zero', async (value) => {
+    const summary = seedDirty('bad hold summary', 'fact xyz');
+    writeMetaRaw(hippoRoot, `rebuild_hold:${summary.id}`, value);
+    const fetcher = makeOkFetcher(SHORT_REPLY);
+
+    expect(await rebuildAt(fetcher, 0)).toMatchObject({ attempted: 1, failed: 1, held: 0 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(readRebuildHold(hippoRoot, summary.id)).toEqual({ failures: 1, retryAfter: null });
+  });
+
+  it('lets a healthy summary through when the broken one with the newest latest_at is held and cap is 1', async () => {
+    const broken = seedDirty('broken summary', 'broken-fact', '2026-05-31T00:00:00.000Z');
+    const healthy = seedDirty('healthy summary', 'healthy-fact', '2026-05-01T00:00:00.000Z');
+    const fetcher = makeScriptedFetcher((_call, prompt) => (prompt.includes('broken-fact') ? SHORT_REPLY : GOOD_REPLY));
+
+    for (const hours of [0, 1, 2]) await rebuildAt(fetcher, hours * HOUR, 1);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(readRebuildHold(hippoRoot, healthy.id)).toBeNull();
+
+    expect(await rebuildAt(fetcher, 3 * HOUR, 1)).toMatchObject({ attempted: 1, rebuilt: 1, failed: 0, held: 1 });
+    expect((await loadAllDirtySummaries(hippoRoot)).map((s) => s.id)).toEqual([broken.id]);
+  });
+
+  it('ends the hold and starts the count over when a rebuild lands', async () => {
+    const summary = seedDirty('flaky summary', 'fact xyz');
+    const fetcher = makeScriptedFetcher((call) => (call <= 2 ? SHORT_REPLY : GOOD_REPLY));
+
+    await rebuildAt(fetcher, 0);
+    await rebuildAt(fetcher, HOUR);
+    expect(readRebuildHold(hippoRoot, summary.id)).toEqual({ failures: 2, retryAfter: null });
+
+    expect(await rebuildAt(fetcher, 2 * HOUR)).toMatchObject({ rebuilt: 1, failed: 0 });
+    expect(readRebuildHold(hippoRoot, summary.id)).toBeNull();
+    expect(await loadAllDirtySummaries(hippoRoot)).toEqual([]);
+
+    forceMarkDirty(hippoRoot, summary.id);
+    await rebuildAt(makeOkFetcher(SHORT_REPLY), 3 * HOUR);
+    expect(readRebuildHold(hippoRoot, summary.id)).toEqual({ failures: 1, retryAfter: null });
+  });
+
+  it('ends the hold of a refused rebuild and of a zero-child summary too', async () => {
+    const refused = seedDirty('refused summary', 'fact abc');
+    const emptied = makeSummary('emptied summary');
+    writeEntry(hippoRoot, emptied);
+    const orphan = makeChild(emptied.id, 'soon archived');
+    writeEntry(hippoRoot, orphan);
+    archiveBySql(hippoRoot, orphan.id);
+    forceMarkDirty(hippoRoot, emptied.id);
+    for (const { id } of [refused, emptied]) {
+      writeMetaRaw(hippoRoot, `rebuild_hold:${id}`, JSON.stringify({ failures: 2, retryAfter: null }));
+    }
+    rejectValue(hippoRoot, 'default', GOOD_REPLY);
+
+    const result = await rebuildAt(makeOkFetcher(GOOD_REPLY), 0);
+
+    expect(result).toMatchObject({ refused: 1, zeroChildSkipped: 1, failed: 0 });
+    expect(readRebuildHold(hippoRoot, refused.id)).toBeNull();
+    expect(readRebuildHold(hippoRoot, emptied.id)).toBeNull();
+  });
+
+  it('drops the hold of a summary that is gone, archived or clean when a failure is noted', async () => {
+    const failing = seedDirty('failing summary', 'fact xyz');
+    const clean = makeSummary('clean summary');
+    const archived = makeSummary('archived summary');
+    writeEntriesTogether(hippoRoot, [clean, archived]);
+    forceMarkDirty(hippoRoot, archived.id);
+    archiveBySql(hippoRoot, archived.id);
+    const stale = [clean.id, archived.id, 'mem_missing'];
+    const held = JSON.stringify({ failures: 5, retryAfter: '2999-01-01T00:00:00.000Z' });
+    for (const id of stale) writeMetaRaw(hippoRoot, `rebuild_hold:${id}`, held);
+
+    await rebuildAt(makeOkFetcher(SHORT_REPLY), 0);
+
+    expect(readRebuildHold(hippoRoot, failing.id)).toEqual({ failures: 1, retryAfter: null });
+    for (const id of stale) expect(readRebuildHold(hippoRoot, id)).toBeNull();
   });
 });

@@ -20,7 +20,7 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/required-objects.js';
-import { HEALED_INDEXES, HEALED_TABLES } from '../../src/db/continuity-tables.js';
+import { HEALED_INDEXES, HEALED_TABLES, HEALED_TRIGGERS } from '../../src/db/continuity-tables.js';
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -116,8 +116,8 @@ describe('store open fast path', () => {
     withDb((db) => db.prepare(`DELETE FROM meta WHERE key = 'last_trace_id'`).run());
 
     const created = new Set(openAndClose().flatMap((sql) => [...sql.matchAll(ANY_CREATE)].map((m) => m[1])));
-    // A healed table or index is created only when it is missing.
-    const healed = new Set<string>([...HEALED_TABLES, ...HEALED_INDEXES]);
+    // A healed table, index or trigger is created only when it is missing.
+    const healed = new Set<string>([...HEALED_TABLES, ...HEALED_INDEXES, ...HEALED_TRIGGERS]);
 
     expect([...created].filter((name) => !REQUIRED_SCHEMA_OBJECTS.includes(name))).toEqual([]);
     expect(REQUIRED_SCHEMA_OBJECTS.filter((name) => !created.has(name) && !healed.has(name))).toEqual([]);
@@ -138,6 +138,21 @@ describe('store open fast path', () => {
       );
     });
     expect(made.sort()).toEqual([...HEALED_INDEXES].sort());
+  });
+
+  it('HEALED_TRIGGERS names every trigger the migrations put on a healed table, and each one exists', () => {
+    const list = (names: readonly string[]): string => names.map(() => '?').join(', ');
+    let made: string[] = [];
+    withDb((db) => {
+      const sql =
+        `SELECT name FROM sqlite_master WHERE type = 'trigger' ` +
+        `AND (tbl_name IN (${list(HEALED_TABLES)}) OR name IN (${list(HEALED_TRIGGERS)}))`;
+      // SAFETY: one TEXT column named name.
+      made = (db.prepare(sql).all(...HEALED_TABLES, ...HEALED_TRIGGERS) as Array<{ name: string }>).map(
+        ({ name }) => name,
+      );
+    });
+    expect(made.sort()).toEqual([...HEALED_TRIGGERS].sort());
   });
 
   it('applies the last migration when both versions are stale', () => {

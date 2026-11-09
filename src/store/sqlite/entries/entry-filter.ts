@@ -5,6 +5,7 @@ import { keysetPage } from '../../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../../base/util/tenant.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { SqlFragment } from '../../../db/sql.js';
+import { notSupersededAt } from '../../../db/sql-predicates.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import type { EntryFilter, EntryNarrowing } from '../../../base/ports/store/reports.js';
 import type { EntryCursor, EntryPage } from '../../../base/ports/store/types.js';
@@ -81,7 +82,7 @@ const TERMS: Terms = {
     params: [tag],
   }),
   kinds: (kinds, column) => inList(`COALESCE(${column('kind')}, 'distilled')`, kinds),
-  live: (_live, column) => ({ sql: `COALESCE(${column('superseded_by')}, '') = ''`, params: [] }),
+  live: (_live, column) => ({ sql: notSupersededAt(column('superseded_by')), params: [] }),
   sessionId: (sessionId, column) => ({
     sql: `${column('source_session_id')} = ?`,
     params: [sessionId],

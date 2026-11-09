@@ -1,16 +1,24 @@
 // hippo.db's DAG summary reads and the one write that settles a dirty summary; what a summary
 // settles to is decided in src/domain/consolidate/dag.ts.
 import { DAG_LEVEL, type MemoryEntry } from '../../../base/memory/entry.js';
-import { type DatabaseSyncLike, withWriteScope } from '../../../db/index.js';
+import { type DatabaseSyncLike, withReadSnapshot, withWriteScope } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { rejectionDigest } from '../../../base/records/rejection-digest.js';
 import { readRejectedValue } from '../review/rejection.js';
 import {
+  MEMORY_SEARCH_COLUMNS,
   MEMORY_SELECT_COLUMNS,
   type MemoryRow,
   parseJsonArray,
   rowToEntry,
 } from '../runtime/rows.js';
+import {
+  clearRebuildHold,
+  heldSummaryCount,
+  holdFailuresSql,
+  holdRetryAfterSql,
+  REBUILD_HOLD_KEY,
+} from './rebuild-holds.js';
 import { refusalAudit } from '../../rules/audit-rows.js';
 import { syncFtsRow } from '../entries/entry-row.js';
 import { chunked } from '../../../base/util/chunked.js';
@@ -18,6 +26,7 @@ import { keysetPage } from '../../../base/util/keyset.js';
 import { recordAuditEventsRowByRow } from '../audit/audit.js';
 import { reportAuditWriteFailure } from '../../../base/records/audit-report.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 import type {
   DirtySummaries,
   SummarySettle,
@@ -45,7 +54,7 @@ export function listL2SummariesPage(
      WHERE dag_level = ${DAG_LEVEL.topic}
        AND dag_parent_id IS NULL
        AND kind != 'archived'
-       AND superseded_by IS NULL
+       AND ${notSupersededIn()}
        ${range}
      ORDER BY created ASC, id ASC
      LIMIT ?
@@ -56,26 +65,42 @@ export function listL2SummariesPage(
 }
 
 /** The `limit` dirty summaries of every tenant changed last (latest_at DESC NULLS LAST, id ASC),
- * each with its live children; one row past the limit tells whether more were waiting without
- * reading the rest. */
-export function dirtySummaries(db: DatabaseSyncLike, limit: number): DirtySummaries {
-  const rows = cachedStatement(
-    db,
-    `
-    SELECT ${MEMORY_SELECT_COLUMNS}
-      FROM memories
-     WHERE summary_dirty = 1
-       AND kind != 'archived'
-     ORDER BY latest_at DESC NULLS LAST, id ASC
-     LIMIT ?
-  `,
-  ).all(limit + 1) as MemoryRow[];
-  const summaries = rows.slice(0, limit).map(rowToEntry);
-  const children = childrenOfSummaries(db, summaries);
-  return {
-    summaries: summaries.map((summary, i) => ({ summary, children: children[i]! })),
-    more: rows.length > limit,
-  };
+ * each with its live children and stored failure count; one row past the limit tells whether more
+ * were waiting. With `at`, a summary held past it is skipped and counted in `held`. */
+export function dirtySummaries(db: DatabaseSyncLike, limit: number, at?: string): DirtySummaries {
+  return withReadSnapshot(db, () => {
+    const retry = holdRetryAfterSql('h');
+    const unheld = at === undefined ? '' : `AND (${retry} IS NULL OR ${retry} <= ?)`;
+    // SAFETY: MEMORY_SEARCH_COLUMNS selects every MemoryRow key and hold_failures is named here.
+    // The literal summary_dirty = 1 lets idx_memories_summary_dirty drive the order and the limit.
+    const rows = cachedStatement(
+      db,
+      `
+      SELECT ${MEMORY_SEARCH_COLUMNS}, ${holdFailuresSql('h')} AS hold_failures
+        FROM memories m
+        LEFT JOIN meta h ON h.key = '${REBUILD_HOLD_KEY}' || m.id
+       WHERE m.summary_dirty = 1
+         AND m.kind != 'archived'
+         ${unheld}
+       ORDER BY m.latest_at DESC NULLS LAST, m.id ASC
+       LIMIT ?
+    `,
+    ).all(...(at === undefined ? [] : [at]), limit + 1) as Array<
+      MemoryRow & { hold_failures: number }
+    >;
+    const kept = rows.slice(0, limit);
+    const summaries = kept.map(rowToEntry);
+    const children = childrenOfSummaries(db, summaries);
+    return {
+      summaries: summaries.map((summary, i) => ({
+        summary,
+        children: children[i]!,
+        failures: kept[i]!.hold_failures,
+      })),
+      more: rows.length > limit,
+      held: at === undefined ? undefined : heldSummaryCount(db, at),
+    };
+  });
 }
 
 /** The live children of each summary in one IN query per tenant chunk: one list per summary in
@@ -102,7 +127,7 @@ function childrenOfSummaries(
          WHERE dag_parent_id IN (SELECT value FROM json_each(?))
            AND tenant_id = ?
            AND kind != 'archived'
-           AND superseded_by IS NULL
+           AND ${notSupersededIn()}
          ORDER BY created ASC, id ASC
       `,
       ).all(JSON.stringify(slice), tenantId) as MemoryRow[];
@@ -153,13 +178,16 @@ interface SettledRow {
   tags_json: string;
 }
 
-/** Lands the settle in one write scope when it carries fields, as a rebuild always has; a bare
- * clean is one UPDATE. */
+/** Lands the settle and ends the summary's rebuild hold in one write scope when the row changed. */
 export function settleSummary(db: DatabaseSyncLike, settle: SummarySettle): SummarySettled {
   assertTenantId('settleSummary', settle.tenantId);
-  return settle.fields
-    ? withWriteScope(db, 'rebuild_summary', () => settleFields(db, settle, settle.fields!))
-    : settleClean(db, settle);
+  return withWriteScope(db, 'rebuild_summary', () => {
+    const settled = settle.fields
+      ? settleFields(db, settle, settle.fields)
+      : settleClean(db, settle);
+    if (settled.changed) clearRebuildHold(db, settle.id);
+    return settled;
+  });
 }
 
 function settleClean(db: DatabaseSyncLike, settle: SummarySettle): SummarySettled {

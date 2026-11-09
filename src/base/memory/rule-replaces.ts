@@ -1,5 +1,6 @@
 // Not in same-text because it reads the user-rule tag, and base/util may not import base/memory.
 import { USER_RULE_TAG, type MemoryEntry } from './entry.js';
+import { isSuperseded } from './liveness.js';
 
 type HeldCopy = Partial<
   Pick<MemoryEntry, 'source' | 'pinned' | 'tags' | 'originProject' | 'supersededBy'>
@@ -14,7 +15,7 @@ export function ruleReplaces(row: HeldCopy, ruleProject: readonly string[]): boo
     row.source === 'capture' &&
     Boolean(row.originProject) &&
     ruleProject.includes(row.originProject ?? '') &&
-    row.supersededBy == null &&
+    !isSuperseded(row) &&
     row.confidence === 'observed'
   );
 }

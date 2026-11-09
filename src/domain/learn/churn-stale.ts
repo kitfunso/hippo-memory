@@ -15,6 +15,7 @@ import {
   loadChurnGitView,
   churnEvidence,
 } from './churn-evidence.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 export interface DetectChurnStaleOptions {
   tenantId: string;
@@ -83,7 +84,7 @@ function collectChurnCandidates(
     ) {
       continue;
     }
-    if (entry.supersededBy) continue;
+    if (isSuperseded(entry)) continue;
     if (entry.kind === 'raw' || entry.kind === 'archived') continue;
     if (entry.pinned) {
       skippedPinned.push(entry.id);

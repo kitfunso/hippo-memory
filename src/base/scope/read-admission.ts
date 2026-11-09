@@ -6,6 +6,7 @@ import { classifyOriginProject, projectNames, type ProjectRef } from './project-
 import { passesScopeFilterForRecall } from './recall-scope.js';
 import { isSessionDigestRow } from '../session/session-digest-row.js';
 import { detectSecret } from '../util/secret-detect.js';
+import { isSuperseded } from '../memory/liveness.js';
 
 /** The rows an ambient read admits. */
 export interface AmbientAdmission {
@@ -70,7 +71,7 @@ export function ambientEnvelopeAdmits(e: MemoryEntry, a: AmbientAdmission): bool
 // The cheap checks go before the envelope, which regex-scans content for secrets.
 export function ambientAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
   return (
-    !e.supersededBy &&
+    !isSuperseded(e) &&
     !isOwnCompactionItem(e, a.ownSessionId) &&
     !hasExcludedTag(e, a.excludeTags) &&
     ambientEnvelopeAdmits(e, a)

@@ -23,12 +23,20 @@ const CASES: ReadonlyArray<[SleepEvent, string]> = [
   [{ kind: 'passFailed', phase: 'dag', message: 'HTTP 500' }, '  ⚠️ dag: HTTP 500'],
   [{ kind: 'dagSummaries', created: 2, factsLinked: 5 }, '  🌳 DAG: 2 summaries created, 5 facts linked'],
   [
-    { kind: 'dagRebuild', rebuilt: 1, refused: 2, zeroChildSkipped: 3, failed: 4, cappedAt: 20 },
+    { kind: 'dagRebuild', rebuilt: 1, refused: 2, zeroChildSkipped: 3, failed: 4, held: 0, cappedAt: 20 },
     '  🌳 DAG rebuild: 1 rebuilt, 2 refused, 3 zero-child-skipped, 4 failed, CAPPED@20',
   ],
   [
-    { kind: 'dagRebuild', rebuilt: 1, refused: 0, zeroChildSkipped: 0, failed: 0, cappedAt: null },
+    { kind: 'dagRebuild', rebuilt: 1, refused: 0, zeroChildSkipped: 0, failed: 0, held: 0, cappedAt: null },
     '  🌳 DAG rebuild: 1 rebuilt',
+  ],
+  [
+    { kind: 'dagRebuild', rebuilt: 1, refused: 2, zeroChildSkipped: 3, failed: 4, held: 2, cappedAt: 20 },
+    '  🌳 DAG rebuild: 1 rebuilt, 2 refused, 3 zero-child-skipped, 4 failed, 2 held, CAPPED@20',
+  ],
+  [
+    { kind: 'dagRebuild', rebuilt: 0, refused: 0, zeroChildSkipped: 0, failed: 0, held: 2, cappedAt: null },
+    '  🌳 DAG rebuild: 2 held',
   ],
   [{ kind: 'dagProfiles', profiles: 3, l2sLinked: 7 }, '  🌲 DAG L3: 3 entity profiles, 7 L2s linked'],
   [{ kind: 'retiredText', id: 'a', successorId: 'b' }, '  ✂️  a held a retired text, b holds the rest'],

@@ -18,6 +18,7 @@ import {
   RECALL_DEFAULT_DENY_SCOPES,
 } from '../../../base/scope/recall-scope.js';
 import { placeholders, type SqlFragment } from '../../../db/sql.js';
+import { notSupersededIn } from '../../../db/sql-predicates.js';
 import { rewardFactorAt } from '../../../db/decay-key.js';
 import { SPACE_CODES } from '../../rules/copies.js';
 
@@ -83,7 +84,7 @@ export const julianDayOfMs = (msParam: string): string =>
 // like startsWith.
 const keepPairSql = (p: KeepPair): SqlFragment => ({
   sql:
-    `(COALESCE(superseded_by, '') = '' AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN ` +
+    `(${notSupersededIn()} AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN ` +
     `tags_json ELSE '[]' END) WHERE value = ?) AND substr(source, 1, ${p.sourcePrefix.length}) = ?)`,
   params: [p.tag, p.sourcePrefix],
 });

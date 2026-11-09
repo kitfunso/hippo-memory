@@ -6,9 +6,9 @@ import type { StoreModel } from '../runtime/open.js';
 import { withReadSnapshot } from '../../../db/busy.js';
 import { pragmaDataVersion } from '../../../db/meta.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { CONFIDENCE_LEVELS } from '../../../base/memory/entry.js';
 import {
   BAND_AT_RISK,
-  CONFIDENCE_ORDER,
   LAYER_ORDER,
   listHead,
   memoryFacts,
@@ -53,7 +53,7 @@ const SORT_SQL = {
   retrievals: 'COALESCE(retrieval_count, 0)',
   last: 'hippo_days(last_retrieved, :now)',
   age: 'age',
-  confidence: rankBy(`COALESCE(confidence, 'observed')`, CONFIDENCE_ORDER),
+  confidence: rankBy(`COALESCE(confidence, 'observed')`, CONFIDENCE_LEVELS),
   scope: `hippo_text_key(COALESCE(scope, ''))`,
 } satisfies Record<DashboardSortKey, string>;
 

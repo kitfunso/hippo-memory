@@ -12,6 +12,7 @@ import {
   PRODUCTION_STRENGTH,
   type StrengthModel,
 } from './strength.js';
+import { isSuperseded } from './liveness.js';
 
 export const DEFAULT_SCHEMA_FIT = 0.5;
 
@@ -24,7 +25,13 @@ export enum Layer {
 
 export type EmotionalValence = 'neutral' | 'positive' | 'negative' | 'critical';
 
-export type ConfidenceLevel = 'verified' | 'observed' | 'inferred' | 'stale';
+export const CONFIDENCE_LEVELS = ['verified', 'observed', 'inferred', 'stale'] as const;
+export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
+
+/** True when `value` is one of the four stored confidence tiers. */
+export function isConfidenceLevel(value: string): value is ConfidenceLevel {
+  return CONFIDENCE_LEVELS.some((level) => level === value);
+}
 
 export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 
@@ -429,7 +436,7 @@ export function markRetrieved(
 ): MemoryEntry[] {
   if (!model.recallStrengthens) return entries;
   return entries.map((e) => {
-    if (e.supersededBy) return e;
+    if (isSuperseded(e)) return e;
     const wrong = netWrong(e, model) > 0;
     // Confidence stays untouched: it is an epistemic tier, not a recency signal.
     const updated: MemoryEntry = {

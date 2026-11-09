@@ -186,8 +186,8 @@ export const OBJECT_VERBS = {
     --id <memory-id>       Invalidate exactly one memory (instead of a pattern)
     --dry-run              Preview what would be hit; writes nothing
                            Note: a pattern equal to the system tag
-                           'invalidated' re-weakens previously invalidated
-                           memories - preview with --dry-run first
+                           'invalidated' matches every previously invalidated
+                           memory; their half-life is not halved again
     --reason "<why>"       Optional: what replaced it
   invalidate --churn       FE2: tag memories 'churn-stale' whose named file
                            changed or was deleted, or whose named symbol or

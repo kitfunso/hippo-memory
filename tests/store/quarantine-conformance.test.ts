@@ -422,6 +422,36 @@ describe('Quarantine.decideQuarantined reject', () => {
   });
 });
 
+const DECIDERS = { approve, reject };
+// first decision, second decision, the status the first leaves, the scope the first leaves the memory under
+const DECIDED_TWICE = [
+  ['approve', 'approve', 'approved', 'team:alpha'],
+  ['approve', 'reject', 'approved', 'team:alpha'],
+  ['reject', 'approve', 'rejected', ALPHA_HELD],
+  ['reject', 'reject', 'rejected', ALPHA_HELD],
+] as const;
+
+describe('Quarantine.decideQuarantined on a decided record', () => {
+  it.each(DECIDED_TWICE)(
+    '%s then %s refuses with the first status, scope and audit rows',
+    async (first, second, status, scope) => {
+      const side = await conforms([
+        at(T1, DECIDERS[first](HELD.a1)),
+        at(T2, DECIDERS[second](HELD.a1)),
+        list({ status }),
+        scopeOf(HELD.a1),
+      ]);
+      const [, refused, decided, memory] = values(side);
+      expect(refused).toEqual({ outcome: 'already_decided', status });
+      expect(decided).toEqual([
+        { ...pending(HELD.a1, 'team:alpha', 1, heldContent(HELD.a1)), status, decidedAt: T1, decidedBy: ACTOR },
+      ]);
+      expect(memory).toEqual([{ id: HELD.a1, scope }]);
+      expect(added(side).map((e) => [e.op, e.targetId, e.ts])).toEqual([[`quarantine_${first}`, HELD.a1, T1]]);
+    },
+  );
+});
+
 describe('on hippo.db, a decision whose audit row is refused', () => {
   let root: string;
 

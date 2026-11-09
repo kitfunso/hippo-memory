@@ -19,6 +19,7 @@ import {
 } from '../../base/scope/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
 import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
@@ -209,7 +210,7 @@ export function recallJsonRow({
   if (r.entry.layer === Layer.Trace) {
     base.trace_outcome = r.entry.traceOutcome;
   }
-  if (r.entry.supersededBy) {
+  if (isSuperseded(r.entry)) {
     base.superseded = true;
     base.superseded_by = r.entry.supersededBy;
   }

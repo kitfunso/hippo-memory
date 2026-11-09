@@ -102,7 +102,8 @@ function runsOnWorker(group: WorkerGroup, method: string): boolean {
   return Object.hasOwn(places, method);
 }
 
-type MethodsOf<T> = T extends T ? T[keyof T] : never;
+// NonNullable: a group may carry an optional method, which reads as `fn | undefined`.
+type MethodsOf<T> = T extends T ? NonNullable<T[keyof T]> : never;
 
 /** What a method the op table names can return. */
 type Ran = ReturnType<

@@ -20,6 +20,7 @@ import {
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
 } from '../../base/scope/recall-scope.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds worst-case work and keeps the
  *  flag honest). */
@@ -176,12 +177,12 @@ function passesRecallFilters(
   const isSupersededEndpoint = via.relType === 'supersedes' && via.direction === 'to';
   if (asOfDate) {
     if (new Date(mem.validFrom) > asOfDate) return false; // not yet valid at asOf
-    if (mem.supersededBy) {
+    if (isSuperseded(mem)) {
       const succVf = successorValidFrom.get(mem.supersededBy);
       // Visible only while its successor was NOT yet valid at asOf (matches recall).
       if (succVf && new Date(succVf) <= asOfDate) return false;
     }
-  } else if (!includeSuperseded && (mem.supersededBy || isSupersededEndpoint)) {
+  } else if (!includeSuperseded && (isSuperseded(mem) || isSupersededEndpoint)) {
     return false; // default recall drops superseded
   }
   return recallScope.additive

@@ -2,6 +2,7 @@
 // table's migration but missing it crashed every prompt; ensureContinuityTables fixes it.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { HEALED_TRIGGERS } from '../../src/db/continuity-tables.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
@@ -47,6 +48,20 @@ function columns(db: DatabaseSyncLike, table: string): ColumnInfo[] {
 function indexNames(db: DatabaseSyncLike, table: string): string[] {
   // SAFETY: PRAGMA index_list always yields rows with a `name` column.
   return (db.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string }>).map((r) => r.name).sort();
+}
+
+function snapshotTriggers(db: DatabaseSyncLike): Array<{ name: string; sql: string }> {
+  // SAFETY: the SELECT names two TEXT columns, name and sql.
+  return db
+    .prepare(`SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'task_snapshots' ORDER BY name`)
+    .all() as Array<{ name: string; sql: string }>;
+}
+
+function insertSnapshot(db: DatabaseSyncLike, status: string): void {
+  db.prepare(
+    `INSERT INTO task_snapshots (task, summary, next_step, status, source, created_at, updated_at) ` +
+      `VALUES ('task', 'summary', 'next', ?, 'test', '2026-01-01', '2026-01-01')`,
+  ).run(status);
 }
 
 describe('continuity tables self-heal, missing table after schema stamp', () => {
@@ -148,6 +163,70 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
       } finally {
         closeHippoDb(db2);
       }
+    }
+  });
+
+  it('heals both status triggers with a dropped task_snapshots, and the healed table refuses a bad status', () => {
+    const db1 = openHippoDb(root);
+    try {
+      db1.exec('DROP TABLE task_snapshots');
+    } finally {
+      closeHippoDb(db1);
+    }
+
+    const db2 = openHippoDb(root);
+    try {
+      expect(snapshotTriggers(db2).map((t) => t.name)).toEqual([...HEALED_TRIGGERS].sort());
+      expect(() => insertSnapshot(db2, 'session_end')).toThrow(/invalid task snapshot status/);
+      insertSnapshot(db2, 'session-ended');
+    } finally {
+      closeHippoDb(db2);
+    }
+  });
+
+  it.each(HEALED_TRIGGERS)('heals %s when only that trigger is dropped', (trigger) => {
+    const db1 = openHippoDb(root);
+    try {
+      insertSnapshot(db1, 'active');
+      db1.exec(`DROP TRIGGER ${trigger}`);
+    } finally {
+      closeHippoDb(db1);
+    }
+
+    const db2 = openHippoDb(root);
+    try {
+      expect(snapshotTriggers(db2).map((t) => t.name)).toEqual([...HEALED_TRIGGERS].sort());
+      expect(() => db2.exec(`UPDATE task_snapshots SET status = 'session_end'`)).toThrow(
+        /invalid task snapshot status/,
+      );
+      expect(() => insertSnapshot(db2, 'session_end')).toThrow(/invalid task snapshot status/);
+    } finally {
+      closeHippoDb(db2);
+    }
+  });
+
+  it('trigger parity: a healed table carries the same trigger SQL as a fresh store', () => {
+    const freshDb = openHippoDb(root);
+    let fresh: Array<{ name: string; sql: string }>;
+    try {
+      fresh = snapshotTriggers(freshDb);
+    } finally {
+      closeHippoDb(freshDb);
+    }
+
+    const healRoot = makeRoot('continuity-heal-trg');
+    const db1 = openHippoDb(healRoot);
+    try {
+      db1.exec('DROP TABLE task_snapshots');
+    } finally {
+      closeHippoDb(db1);
+    }
+    const db2 = openHippoDb(healRoot);
+    try {
+      expect(fresh).toHaveLength(HEALED_TRIGGERS.length);
+      expect(snapshotTriggers(db2)).toEqual(fresh);
+    } finally {
+      closeHippoDb(db2);
     }
   });
 

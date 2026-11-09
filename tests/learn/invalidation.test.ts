@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/learn/invalidation.js';
+import {
+  extractInvalidationTarget,
+  invalidateMatching,
+  invalidateMatchingAmong,
+} from '../../src/domain/learn/invalidation.js';
+import { createSuccessor } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
@@ -352,5 +359,106 @@ describe('invalidateMatching dryRun + onlyId composition', () => {
     const untouched = readEntry(hippoRoot, mem.id);
     expect(untouched!.confidence).toBe(mem.confidence);
     expect(untouched!.tags).not.toContain('invalidated');
+  });
+});
+
+describe('invalidating the same memory again', () => {
+  let hippoRoot: string;
+  const rest = { from: 'REST', to: 'GraphQL', type: 'migration' } as const;
+
+  beforeEach(() => {
+    ({ root: hippoRoot } = makeStore('inv-twice'));
+  });
+
+  it('invalidating a memory twice halves its half-life once', async () => {
+    const mem = createMemory('REST API endpoint /users returns paginated results', { tags: ['api', 'rest'] });
+    writeEntry(hippoRoot, mem);
+
+    await invalidateMatching(sqliteStore(hippoRoot), rest, 'default');
+    const first = readEntry(hippoRoot, mem.id)!;
+    const again = await invalidateMatching(sqliteStore(hippoRoot), rest, 'default');
+    const second = readEntry(hippoRoot, mem.id)!;
+
+    expect(first.halfLifeDays).toBe(Math.floor(mem.halfLifeDays / 2));
+    expect(second.halfLifeDays).toBe(first.halfLifeDays);
+    expect(second.tags.filter((tag) => tag === 'invalidated')).toHaveLength(1);
+    expect(again.targets).toEqual([mem.id]);
+  });
+
+  it('a replacement of an invalidated memory halves on its first invalidation and not its second', async () => {
+    const old = createMemory('REST API endpoint /users returns paginated results', { tags: ['api', 'rest'] });
+    writeEntry(hippoRoot, old);
+    await invalidateMatching(sqliteStore(hippoRoot), rest, 'default', { onlyId: old.id });
+    const successor = createSuccessor(
+      readEntry(hippoRoot, old.id)!,
+      'REST API endpoint /v2/users returns paginated results',
+      { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS },
+      evalNow(),
+    );
+    writeEntry(hippoRoot, successor);
+    const start = readEntry(hippoRoot, successor.id)!;
+    expect(start.confidence).toBe('verified');
+    expect(start.tags).toContain('invalidated');
+
+    await invalidateMatching(sqliteStore(hippoRoot), rest, 'default', { onlyId: successor.id });
+    const first = readEntry(hippoRoot, successor.id)!;
+    await invalidateMatching(sqliteStore(hippoRoot), rest, 'default', { onlyId: successor.id });
+    const second = readEntry(hippoRoot, successor.id)!;
+
+    expect(first.halfLifeDays).toBe(Math.floor(start.halfLifeDays / 2));
+    expect(first.confidence).toBe('stale');
+    expect(second.halfLifeDays).toBe(first.halfLifeDays);
+    expect(second.confidence).toBe('stale');
+    expect(second.tags.filter((tag) => tag === 'invalidated')).toHaveLength(1);
+  });
+
+  it('a memory tagged invalidated but not stale halves on its first invalidation', async () => {
+    const mem = createMemory('REST API endpoint /users returns paginated results', {
+      tags: ['api', 'rest', 'invalidated'],
+    });
+    writeEntry(hippoRoot, mem);
+
+    await invalidateMatching(sqliteStore(hippoRoot), rest, 'default');
+    const after = readEntry(hippoRoot, mem.id)!;
+
+    expect(after.halfLifeDays).toBe(Math.floor(mem.halfLifeDays / 2));
+    expect(after.confidence).toBe('stale');
+    expect(after.tags.filter((tag) => tag === 'invalidated')).toHaveLength(1);
+  });
+
+  it('invalidateMatchingAmong twice on one live list halves once and keeps the list current', async () => {
+    const mem = createMemory('REST API endpoint /users returns paginated results', { tags: ['api', 'rest'] });
+    writeEntry(hippoRoot, mem);
+    const live = [readEntry(hippoRoot, mem.id)!];
+
+    await invalidateMatchingAmong(sqliteStore(hippoRoot), live, rest, 'default');
+    const first = readEntry(hippoRoot, mem.id)!;
+    expect(first.halfLifeDays).toBe(Math.floor(mem.halfLifeDays / 2));
+    expect(live[0]).toMatchObject({ halfLifeDays: first.halfLifeDays, confidence: 'stale' });
+    expect(live[0].tags).toContain('invalidated');
+
+    await invalidateMatchingAmong(sqliteStore(hippoRoot), live, rest, 'default');
+    expect(readEntry(hippoRoot, mem.id)!.halfLifeDays).toBe(first.halfLifeDays);
+    expect(live[0].halfLifeDays).toBe(first.halfLifeDays);
+    expect(live[0].tags.filter((tag) => tag === 'invalidated')).toHaveLength(1);
+  });
+
+  it('a pattern equal to the invalidated tag leaves already invalidated memories as they were', async () => {
+    const mem = createMemory('REST API endpoint /users returns paginated results', { tags: ['api', 'rest'] });
+    writeEntry(hippoRoot, mem);
+    await invalidateMatching(sqliteStore(hippoRoot), rest, 'default');
+    const before = readEntry(hippoRoot, mem.id)!;
+
+    const result = await invalidateMatching(
+      sqliteStore(hippoRoot),
+      { from: 'invalidated', to: null, type: 'removal' },
+      'default',
+    );
+    const after = readEntry(hippoRoot, mem.id)!;
+
+    expect(result.targets).toEqual([mem.id]);
+    expect(after.halfLifeDays).toBe(before.halfLifeDays);
+    expect(after.tags).toEqual(before.tags);
+    expect(after.confidence).toBe('stale');
   });
 });

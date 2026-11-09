@@ -15,7 +15,7 @@ The prompt hook block (`hippo context --pinned-only --include-recent 5 --format 
 ## Decision
 - `pinnedInject.excludeTags` is a list in `.hippo/config.json`, default `[]`. An empty or absent list leaves every block byte-identical to before.
 - The list applies on pinned-only reads only: the prompt hook, the server prompt-hook route and `hippo session-rules`. Recall and plain context do not change.
-- The store applies it in SQL before each row limit, so excluded rows do not use up the recent or prompt-recall windows.
+- Excluded rows never use up a window. Prompt recall cuts them in SQL before its 100-row limit. Pins and the recent rows go through the admission rule, and the store pages past the window until it has enough kept rows.
 - The key is optional in the published `HippoConfig`, so a config built in code before the key existed still works.
 - No default list. Z0 stage 4 allows a default change only after a Z0 arm shows a cost win, and the replay's 1.5% is inside round 3's cost interval.
 

@@ -24,6 +24,7 @@ import { failedUnitOf } from '../../base/errors/failed-unit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { SleepGroup, StoreWith } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial:
  * true` row, or shrink the pages dedup, the audit and ambient read; production never sets them. */
@@ -335,7 +336,7 @@ async function summarizeAmbient(
   for await (const page of pages()) {
     foldAmbientRows(
       tallies,
-      page.filter((e) => !e.supersededBy),
+      page.filter((e) => !isSuperseded(e)),
       now,
       rules,
     );

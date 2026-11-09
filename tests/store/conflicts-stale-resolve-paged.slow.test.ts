@@ -31,7 +31,8 @@ describe('resolving stale open conflicts', () => {
     }));
     replaceDetectedConflicts(root, pairs);
     const { statements } = recordStatements(() => replaceDetectedConflicts(root, []));
-    expect(countMatching(statements, /^UPDATE memory_conflicts SET status = 'resolved'/)).toBe(2);
+    // The status move binds its target, so the statement carries a placeholder where the literal was.
+    expect(countMatching(statements, /^UPDATE memory_conflicts SET status = \?/)).toBe(2);
     const db = openHippoDb(root);
     try {
       // SAFETY: an aggregate with no GROUP BY always answers one row.

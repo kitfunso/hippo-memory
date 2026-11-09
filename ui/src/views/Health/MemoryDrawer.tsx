@@ -6,6 +6,7 @@ import { useIsPhone } from "../../hooks/useMediaQuery";
 import { navigate } from "../../router";
 import type { MemoryDetail } from "../../types";
 import { useActions } from "./actions";
+import { isResolved, isWrong, pinnedOf, settledAt } from "./actionState";
 import { fmt } from "./format";
 import { useHealth } from "./HealthContext";
 import { LayerMark } from "./LayerMark";
@@ -113,9 +114,9 @@ export function MemoryDrawer({ projectKey, memoryId, onClose }: MemoryDrawerProp
 
   const d = panel.data;
   const ov = d ? actions.overlay.get(d.id) : undefined;
-  const pinned = d ? (ov?.pinned ?? d.pinned) : false;
-  const wrong = d ? d.wrong || ov?.wrong === true : false;
-  const settled = ov?.settled;
+  const pinned = d ? (pinnedOf(ov) ?? d.pinned) : false;
+  const wrong = d ? d.wrong || isWrong(ov) : false;
+  const settled = settledAt(ov);
 
   useEffect(() => {
     if (d && settled !== undefined && d.snapshotId >= settled) release(d.id, d.snapshotId);
@@ -176,7 +177,7 @@ export function MemoryDrawer({ projectKey, memoryId, onClose }: MemoryDrawerProp
             </div>
             <p className="muted">{PIN_HELP}</p>
             {d.conflicts.map((c) =>
-              ov?.resolved && actions.overlay.get(c.other.id)?.resolved ? null : (
+              isResolved(ov) && isResolved(actions.overlay.get(c.other.id)) ? null : (
                 <div key={c.id} className="cfbox">
                   <h3>Conflicts with another memory</h3>
                   <p className="oth">{c.other.content}</p>

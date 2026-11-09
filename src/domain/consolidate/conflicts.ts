@@ -13,6 +13,7 @@ import { DECAY_THRESHOLD } from './decay.js';
 import type { DetectedConflict } from '../../base/ports/store/consolidation.js';
 import type { ConflictSide, LoserFate } from '../../base/ports/store/conflicts.js';
 import { BadRequestError } from '../../base/errors/api-errors.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The
 // Jaccard threshold on stopword-filtered tokens only applies after a polarity signal, so it filters
@@ -95,7 +96,7 @@ function conflictRow(place: number, e: MemoryEntry): ConflictRow {
     place,
     id: e.id,
     trace: e.layer === Layer.Trace,
-    superseded: Boolean(e.supersededBy),
+    superseded: isSuperseded(e),
     restated: e.tags.includes(EXTRACTED_TAG) || e.tags.includes('session-digest'),
     scope: e.scope,
     tenantId: e.tenantId,

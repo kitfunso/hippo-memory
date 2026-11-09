@@ -5,6 +5,7 @@
  */
 
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import { markStale, SUPERSEDED_TAG } from '../../base/memory/stale-mark.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -16,8 +17,6 @@ import type { Decision, DecisionStatus } from '../../base/records/object-types.j
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { Decision, DecisionStatus } from '../../base/records/object-types.js';
-
-const SUPERSEDED_TAG = 'superseded';
 
 export const VALID_DECISION_STATES: ReadonlySet<DecisionStatus> = new Set<DecisionStatus>([
   'active',
@@ -62,20 +61,15 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOptions> = {
 };
 
 /**
- * Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day
- * at least, marked stale, tagged `superseded`.
+ * Weaken the memory a new decision replaces, once the save has committed: marked stale, tagged
+ * `superseded`, and its half-life halved to a day at least the first time only.
  */
 export function weakenSupersededMemory(
   writes: EntryWrites,
   entry: MemoryEntry,
   actor: string = CLI_ACTOR,
 ): Promise<void> {
-  const tags = entry.tags.includes(SUPERSEDED_TAG) ? entry.tags : [...entry.tags, SUPERSEDED_TAG];
-  const halved = Math.max(1, Math.floor(entry.halfLifeDays / 2));
-  return writes.writeEntry({
-    entry: { ...entry, halfLifeDays: halved, confidence: 'stale', tags },
-    actor,
-  });
+  return writes.writeEntry({ entry: markStale(entry, SUPERSEDED_TAG), actor });
 }
 
 export function loadDecisions(

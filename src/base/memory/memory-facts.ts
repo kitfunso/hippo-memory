@@ -21,9 +21,6 @@ export const BAND_AT_RISK = 3;
 /** Layers in the dashboard's wire order; a layer's index is its place here. */
 export const LAYER_ORDER = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
 
-/** Confidence tiers in sort order; any other tier sorts after them. */
-export const CONFIDENCE_ORDER = ['verified', 'observed', 'inferred', 'stale'] as const;
-
 /** Days of created history the dashboard's series spans; an older row counts at its first point. */
 export const SERIES_DAYS = 90;
 

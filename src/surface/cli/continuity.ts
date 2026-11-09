@@ -2,7 +2,12 @@
 
 import { CONTINUITY_EVENT_LIMIT, continuityLatest } from '../../api/continuity/continuity.js';
 import { cliApiContext, cliStore } from './api-context.js';
-import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import {
+  SNAPSHOT_CLOSE_STATUSES,
+  isSnapshotCloseStatus,
+  type SessionEvent,
+  type TaskSnapshot,
+} from '../../base/ports/store/sessions.js';
 import { snapshotJson } from '../../api/continuity/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot } from './print.js';
@@ -55,6 +60,9 @@ async function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags
 
 async function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const status = stringFlagOrExit(flags, 'status') ?? 'cleared';
+  if (!isSnapshotCloseStatus(status)) {
+    fail(`Invalid --status: "${status}". Must be one of: ${SNAPSHOT_CLOSE_STATUSES.join(' | ')}.`);
+  }
   const cleared = await cliStore(hippoRoot).sessions.clear(tenantId, 'snapshot', { status });
   if (cleared === 0) {
     console.log('No active task snapshot to clear.');
