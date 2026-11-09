@@ -3,14 +3,14 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { blockOf, checkWorkDir, lastA2Task, mainCallsWithBlock, parseArgs, renderEnv, runCli, sameBlock, stagedConfig, summarize, userPrompt } from '../../scripts/token-eval/z0-hook-diet.mjs';
+import { blockOf, checkPathDirs, checkWorkDir, lastA2Task, mainCallsWithBlock, parseArgs, renderEnv, runCli, sameBlock, stagedConfig, summarize, userPrompt } from '../../scripts/token-eval/z0-hook-diet.mjs';
 
 type Section = [string, number, number];
 interface Part { type: string; text: string }
 interface Body { model?: string; tools?: string[]; messages?: { role: string; content: string | Part[] }[] }
 interface Arm { exit: number; chars: number; sections: Section[] }
 interface Row {
-  run: string; task: string; seed: number; taskId: string | null; noPrompt: boolean; recorded: Section[]; calls: number;
+  run: string; task: string; seed: number; taskId: string | null; log: string; noLog: boolean; noPrompt: boolean; recorded: Section[]; calls: number;
   usage: { cacheRead: number; cacheWrite: number; input: number; output: number; turns: number; costUsd: number } | null;
   arms: Record<string, Arm> | null;
 }
@@ -25,6 +25,7 @@ const BLOCK = [
   '- **[observed] I fixed the parser.** [session-digest]',
 ].join('\n');
 const PRICES = { cacheWritePerMTok: 8, cacheReadPerMTok: 0.2 };
+const wrapped = (text: string): string => JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } });
 
 /** One logged request, shaped like the proxy's request log. */
 const logLine = (body: Body, method = 'POST', url = '/v1/messages?beta=true'): string => JSON.stringify({ at: '2026-11-07T23:10:57.497Z', method, url, body: JSON.stringify(body) });
@@ -33,32 +34,36 @@ const arm = (tokens: number, chars: number, name = 'Project Memory'): Arm => ({ 
 
 function row(over: Partial<Row>): Row {
   const usage = { cacheRead: 100_000, cacheWrite: 10_000, input: 10, output: 1_000, turns: 4, costUsd: 0.5 };
-  return { run: 'ab-w1', task: 'seq', seed: 1, taskId: 'f1-a2', noPrompt: false, recorded: [], calls: 3, usage, arms: null, ...over };
+  return { run: 'ab-w1', task: 'seq', seed: 1, taskId: 'f1-a2', log: 'raw/f1-a2.session1.requests.jsonl', noLog: false, noPrompt: false, recorded: [], calls: 3, usage, arms: null, ...over };
 }
 
 describe('Z0 hook diet block parsing', () => {
   it('reads the block text and section headers out of the hook JSON wrapper', () => {
-    const stdout = JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: BLOCK } });
-    expect(blockOf(stdout)).toEqual({ text: BLOCK, sections: [['Pinned rules', 2, 40], ['Prompt-Relevant Memory', 3, 90]] });
+    expect(blockOf(wrapped(BLOCK))).toEqual({ text: BLOCK, sections: [['Pinned rules', 2, 40], ['Prompt-Relevant Memory', 3, 90]], error: null });
   });
 
-  it('gives an empty text and no sections for empty output', () => {
-    expect(blockOf('')).toEqual({ text: '', sections: [] });
-    expect(blockOf('  \n')).toEqual({ text: '', sections: [] });
+  it('gives an empty text, no sections and no error for empty output', () => {
+    expect(blockOf('')).toEqual({ text: '', sections: [], error: null });
+    expect(blockOf('  \n')).toEqual({ text: '', sections: [], error: null });
   });
 
-  it('reads output that is not the JSON wrapper as the block text itself', () => {
-    expect(blockOf(BLOCK)).toEqual({ text: BLOCK, sections: [['Pinned rules', 2, 40], ['Prompt-Relevant Memory', 3, 90]] });
-    expect(blockOf('{"other":1}').sections).toEqual([]);
+  it('gives an empty wrapper text as an empty block with no error', () => {
+    expect(blockOf(wrapped(''))).toEqual({ text: '', sections: [], error: null });
+  });
+
+  it('reports output that is not the hook JSON wrapper as an error, never as block text', () => {
+    for (const stdout of [BLOCK, 'hippo: something went wrong', '{"other":1}', 'null', '[]', JSON.stringify({ hookSpecificOutput: { additionalContext: 7 } })]) {
+      expect(blockOf(stdout)).toMatchObject({ text: '', sections: [], error: expect.stringContaining('not the hook JSON wrapper') });
+    }
   });
 
   it('gives a Rules heading with no token header no section, and keeps one that carries a header', () => {
-    expect(blockOf(`## Rules from the user\n- No: run uv run\n\n${BLOCK}`).sections).toEqual([['Pinned rules', 2, 40], ['Prompt-Relevant Memory', 3, 90]]);
-    expect(blockOf('## Rules from the user (1 entry, 7 tokens)\n- a\n').sections).toEqual([['Rules from the user', 1, 7]]);
+    expect(blockOf(wrapped(`## Rules from the user\n- No: run uv run\n\n${BLOCK}`)).sections).toEqual([['Pinned rules', 2, 40], ['Prompt-Relevant Memory', 3, 90]]);
+    expect(blockOf(wrapped('## Rules from the user (1 entry, 7 tokens)\n- a\n')).sections).toEqual([['Rules from the user', 1, 7]]);
   });
 
   it('does not take the CLAUDE.md "Project Memory (Hippo)" heading for a section', () => {
-    expect(blockOf('## Project Memory (Hippo)\n\nThe hook injects rules.').sections).toEqual([]);
+    expect(blockOf(wrapped('## Project Memory (Hippo)\n\nThe hook injects rules.')).sections).toEqual([]);
   });
 });
 
@@ -113,6 +118,14 @@ describe('Z0 hook diet render env', () => {
     expect(env.LOCALAPPDATA).toBe(path.join(user, 'AppData', 'Local'));
     expect(env).toMatchObject({ HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_SKIP_SCHEDULE: '1', HIPPO_SKIP_POSTINSTALL: '1' });
     expect((env.PATH ?? '').split(path.delimiter)[0]).toBe(path.dirname(process.execPath));
+  });
+});
+
+describe('Z0 hook diet codex launcher guard', () => {
+  it('refuses a PATH folder that holds a codex launcher, naming the file', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-hook-diet-codex-'));
+    for (const name of ['git', 'git.exe', 'git.cmd', 'codex.cmd']) fs.writeFileSync(path.join(dir, name), '');
+    expect(() => checkPathDirs({ PATH: dir })).toThrow(/a codex launcher .*codex/);
   });
 });
 
@@ -210,12 +223,13 @@ describe('Z0 hook diet summary', () => {
       arms: { none: { exit: 0, chars: 3000, sections: [['Project Memory', 5, 600], ['Rules from the user', 2, 50]] }, digest: arm(400, 2400), list3: arm(300, 2000) },
     }),
     row({ seed: 3, calls: 0, arms: { none: arm(0, 0), digest: arm(0, 0), list3: arm(0, 0) } }),
-    row({ seed: 4, noPrompt: true, taskId: null, usage: null }),
+    row({ seed: 4, noPrompt: true, usage: null }),
+    row({ seed: 5, noLog: true, taskId: null, usage: null }),
   ];
   const rep = summarize(rows, PRICES);
 
-  it('counts stores, rendered stores and stores with no prompt', () => {
-    expect(rep).toMatchObject({ stores: 4, rendered: 3, noPrompt: 1 });
+  it('counts stores, rendered stores, stores with no session log and stores with no first prompt apart', () => {
+    expect(rep).toMatchObject({ stores: 5, rendered: 3, noLog: 1, noPrompt: 1 });
   });
 
   it('sums header tokens per arm without the Rules section, and counts empty blocks', () => {

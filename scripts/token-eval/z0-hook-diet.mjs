@@ -24,6 +24,7 @@ const RULES = 'Rules from the user';
 const HEADER = /## (Project Memory|Pinned rules|Prompt-Relevant Memory|Rules from the user)[^\n]*\((\d+) entr[a-z]*, (\d+) tokens\)/g;
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
 const KEEP_ENV = ['SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'TMPDIR', 'LANG'];
+const USAGE_FIELDS = ['cache_read_input_tokens', 'cache_creation_input_tokens', 'input_tokens', 'output_tokens'];
 const RENDER_TIMEOUT_MS = 120_000;
 const VALUE_FLAGS = { '--scored': ['scored', 'directory'], '--checkout': ['checkout', 'directory'], '--work': ['work', 'directory'], '--prices': ['prices', 'file'] };
 const CLOCK_NOTE = { session: "each render at its session's first request time", wall: 'each render at the wall clock' };
@@ -53,21 +54,23 @@ function parseLine(line) {
   }
 }
 
-/** The text of the block hippo's hook printed, and its section headers; the Rules heading has no token header today, and the sums drop it if it gains one. */
-export function blockOf(stdout) {
-  const text = hookText(stdout);
-  return { text, sections: [...text.matchAll(HEADER)].map((m) => [m[1], Number(m[2]), Number(m[3])]) };
+/** The additionalContext of the hook's JSON wrapper, or undefined when the output is not that wrapper. */
+function wrappedText(stdout) {
+  try {
+    return JSON.parse(stdout).hookSpecificOutput?.additionalContext;
+  } catch {
+    // Non-JSON output has no wrapper; blockOf reports it as an error.
+    return undefined;
+  }
 }
 
-function hookText(stdout) {
-  if (stdout.trim() === '') return '';
-  try {
-    const out = JSON.parse(stdout).hookSpecificOutput?.additionalContext;
-    return isString(out) ? out : stdout;
-  } catch {
-    // Output that is not the hook's JSON wrapper is the block text itself.
-    return stdout;
-  }
+/** The block text hippo's hook printed and its section headers; empty output is an empty block, and any other output that is not the
+ * hook's JSON wrapper is an `error`. The Rules heading has no token header today, and the sums drop it if it gains one. */
+export function blockOf(stdout) {
+  if (stdout.trim() === '') return { text: '', sections: [], error: null };
+  const text = wrappedText(stdout);
+  if (!isString(text)) return { text: '', sections: [], error: `output is not the hook JSON wrapper, it starts ${JSON.stringify(stdout.trim().slice(0, 60))}` };
+  return { text, sections: [...text.matchAll(HEADER)].map((m) => [m[1], Number(m[2]), Number(m[3])]), error: null };
 }
 
 /** A copy of a store config with pinnedInject.excludeTags set; null leaves the copy as it was. Never touches the input. */
@@ -84,13 +87,25 @@ function dirHolding(command, parent) {
   return dirs.find((d) => d !== '' && names.some((n) => fs.existsSync(path.join(d, n)))) ?? null;
 }
 
+/** The folders a render's PATH holds: node's, then git's. */
+const pathDirs = (parent) => [...new Set([path.dirname(process.execPath), dirHolding('git', parent)])].filter(Boolean);
+
+/** hippo rewrites any codex launcher it finds on PATH, so a render refuses a PATH folder that holds one, as hippo-iso.sh does.
+ * @param {NodeJS.ProcessEnv} [parent] */
+export function checkPathDirs(parent = process.env) {
+  for (const dir of pathDirs(parent)) {
+    const launcher = fs.readdirSync(dir).find((n) => fold(n).startsWith('codex'));
+    if (launcher) throw new Error(`a codex launcher ${path.join(dir, launcher)} sits in a folder the render puts on PATH; move it, or run node and git from another folder`);
+  }
+}
+
 /** The env of one render, as hippo-iso.sh builds it: an allowlist, so keys, tenant and agent-home vars never reach the CLI.
  * @param {string} dir @param {string | null} fakeNow @param {NodeJS.ProcessEnv} [parent] */
 export function renderEnv(dir, fakeNow, parent = process.env) {
   const user = path.join(dir, 'user');
   const env = Object.fromEntries(KEEP_ENV.filter((k) => parent[k]).map((k) => [k, parent[k]]));
   Object.assign(env, {
-    PATH: [...new Set([path.dirname(process.execPath), dirHolding('git', parent)])].filter(Boolean).join(path.delimiter),
+    PATH: pathDirs(parent).join(path.delimiter),
     HOME: user,
     USERPROFILE: user,
     APPDATA: path.join(user, 'AppData', 'Roaming'),
@@ -141,7 +156,7 @@ export function mainCallsWithBlock(lines) {
   return calls;
 }
 
-/** The task whose pre-session the snapshot holds: the last A2 step of this sequence and seed in plan order, or null. */
+/** The last A2 step of this sequence and seed in plan order, or null; a run that stopped early may never have run it, so its log can be missing. */
 export function lastA2Task(plan, sequence, seed) {
   return plan.filter((s) => s.arm === 'A2' && s.seed === seed && s.sequence === sequence).map((s) => s.taskId).at(-1) ?? null;
 }
@@ -249,6 +264,9 @@ function usageOf(file) {
   if (!fs.existsSync(file)) throw new Error(`${file} is missing for a rendered store; restore the session's usage file or drop the run from the read`);
   const d = JSON.parse(fs.readFileSync(file, 'utf8'));
   const u = d.usage;
+  if (u?.constructor !== Object) throw new Error(`${file} has no usage object; the session record is cut off, so rerun the session or drop the run from the read`);
+  const missing = USAGE_FIELDS.filter((k) => !Number.isFinite(u[k])).concat(['num_turns', 'total_cost_usd'].filter((k) => !Number.isFinite(d[k])));
+  if (missing.length > 0) throw new Error(`${file} has no number for ${missing.join(', ')}; the session record is cut off, so rerun the session or drop the run from the read`);
   return { cacheRead: u.cache_read_input_tokens, cacheWrite: u.cache_creation_input_tokens, input: u.input_tokens, output: u.output_tokens, turns: d.num_turns, costUsd: d.total_cost_usd };
 }
 
@@ -261,21 +279,24 @@ function renderArms(store, i, ctx, prompt, fakeNow) {
     fs.rmSync(dir, { recursive: true, force: true });
     const block = blockOf(r.stdout);
     arms[arm] = { exit: r.exit, chars: block.text.length, sections: block.sections };
-    if (r.exit !== 0) arms[arm].error = r.stderr.split('\n')[0];
+    const error = r.exit === 0 ? block.error : `exit ${r.exit}: ${r.stderr.split('\n')[0] || 'no stderr'}`;
+    if (error) arms[arm].error = error;
   }
   return arms;
 }
 
-/** One store: its last A2 session's prompt, the three renders, round 3's recorded block and the session's usage. */
+/** One store: its last A2 session's prompt, the three renders, round 3's recorded block and the session's usage.
+ * A store with no session log is `noLog` and keeps the log path it expected; one whose log holds no first prompt is `noPrompt`. */
 function readStore(store, i, ctx) {
   const { run, runDir, task, seed } = store;
   const taskId = lastA2Task(store.plan, task, seed);
   const raw = path.join(runDir, 'raw', task, 'A2', `seed${seed}`);
-  const log = path.join(raw, `${taskId}.session1.requests.jsonl`);
-  const lines = taskId && fs.existsSync(log) ? linesOf(log) : [];
+  const log = path.join(raw, `${taskId ?? '(no A2 step in plan.json)'}.session1.requests.jsonl`);
+  const row = { run, task, seed, taskId, log, noLog: false, noPrompt: false, arms: null, recorded: [], calls: 0, usage: null };
+  if (taskId === null || !fs.existsSync(log)) return { ...row, noLog: true };
+  const lines = linesOf(log);
   const prompt = userPrompt(lines);
-  const row = { run, task, seed, taskId, noPrompt: prompt === null, arms: null, recorded: [], calls: 0, usage: null };
-  if (prompt === null) return row;
+  if (prompt === null) return { ...row, noPrompt: true };
   const usage = usageOf(path.join(raw, `${taskId}.json`));
   const logs = requestLogs(ctx.scored, { runName: run, sequence: task, arm: 'A2', seed, taskId }).files;
   const fakeNow = ctx.clock === 'session' ? sessionStart(lines, log) : null;
@@ -323,7 +344,8 @@ export function summarize(rows, prices) {
   return {
     stores: rows.length,
     rendered: rendered.length,
-    noPrompt: rows.length - rendered.length,
+    noLog: rows.filter((r) => r.noLog).length,
+    noPrompt: rows.filter((r) => r.noPrompt).length,
     fidelity: { recorded: recorded.length, exact: recorded.filter((r) => sameBlock(r.recorded, r.arms.none.sections)).length },
     arms,
     cut: Object.fromEntries(CUT_ARMS.map((a) => [a, { tokensPct: cutPct(arms.none.sumTokens, arms[a].sumTokens), charsPct: cutPct(arms.none.sumChars, arms[a].sumChars) }])),
@@ -340,15 +362,23 @@ export function summarize(rows, prices) {
 }
 
 function failedRenders(rows) {
-  return rows.flatMap((r) => (r.arms ? ARM_NAMES.filter((a) => r.arms[a].exit !== 0).map((a) => ({ r, arm: a })) : []));
+  return rows.flatMap((r) => (r.arms ? ARM_NAMES.filter((a) => r.arms[a].error).map((a) => ({ r, arm: a })) : []));
 }
 
-/** The whole read: stage, render and read every store, then fail on any render that exited non-zero.
+/** The error for a read that rendered nothing, so a moved raw folder never reports NaN with exit 0. */
+function noneRendered(rows) {
+  const first = rows.find((r) => r.noLog);
+  const missing = first ? `, first missing log ${first.log}` : '';
+  return `0 of ${rows.length} stores rendered (noLog ${rows.filter((r) => r.noLog).length}, noPrompt ${rows.filter((r) => r.noPrompt).length})${missing}; check that --scored holds snap/ and raw/ under each r3run/<run>/run, then rerun`;
+}
+
+/** The whole read: stage, render and read every store, then fail on any render that exited non-zero or printed no hook JSON.
  * @param {{ scored: string, checkout: string, work: string | null, prices: string, clock: string, limit: number }} args
  * @param {(line: string) => void} progress */
 export function readHookDiet(args, progress = () => {}) {
   if (!isDir(path.join(args.scored, 'r3run'))) throw new Error(`no round 3 runs at ${path.join(args.scored, 'r3run')}; pass --scored <dir> with the scored folder that holds r3run/`);
   checkCheckout(args.checkout);
+  checkPathDirs();
   const prices = pricesOf(args.prices);
   const own = args.work === null;
   const work = own ? fs.mkdtempSync(path.join(os.tmpdir(), 'z0-hook-diet-')) : path.resolve(args.work);
@@ -360,14 +390,16 @@ export function readHookDiet(args, progress = () => {}) {
     const picked = args.limit > 0 ? stores.slice(0, args.limit) : stores;
     const rows = picked.map((s, i) => {
       const row = readStore(s, i, ctx);
-      progress(`[${i + 1}/${picked.length}] ${s.run} ${s.task} seed ${s.seed}: ${row.arms ? ARM_NAMES.map((a) => `${a} ${headerTokens(row.arms[a].sections)}`).join(' ') : 'no prompt'}\n`);
+      const shown = row.arms ? ARM_NAMES.map((a) => `${a} ${headerTokens(row.arms[a].sections)}`).join(' ') : row.noLog ? 'no log' : 'no prompt';
+      progress(`[${i + 1}/${picked.length}] ${s.run} ${s.task} seed ${s.seed}: ${shown}\n`);
       return row;
     });
     const failed = failedRenders(rows);
     if (failed.length > 0) {
       const { r, arm } = failed[0];
-      throw new Error(`${failed.length} renders exited non-zero, first ${r.run} ${r.task} seed ${r.seed} arm ${arm} (${r.arms[arm].error || 'no stderr'}); check that --checkout is built and runs, then rerun`);
+      throw new Error(`${failed.length} renders failed, first ${r.run} ${r.task} seed ${r.seed} arm ${arm} (${r.arms[arm].error}); check that --checkout is built and prints the hook JSON, then rerun`);
     }
+    if (rows.every((r) => r.arms === null)) throw new Error(noneRendered(rows));
     return { build: shaOf(args.checkout), clock: args.clock, ...summarize(rows, prices), rows };
   } finally {
     if (own) fs.rmSync(work, { recursive: true, force: true });
@@ -380,7 +412,7 @@ const tableRow = (cells) => cells.map((c, i) => (i === 0 ? String(c).padEnd(8) :
 /** The report as plain text. */
 export function formatText(rep) {
   const lines = [`build ${rep.build}  clock ${rep.clock}: ${CLOCK_NOTE[rep.clock]}`];
-  lines.push(`stores ${rep.stores} in the final-read runs, rendered ${rep.rendered}, no prompt ${rep.noPrompt}`);
+  lines.push(`stores ${rep.stores} in the final-read runs, rendered ${rep.rendered}, noLog ${rep.noLog} (no session log), noPrompt ${rep.noPrompt} (log has no first prompt)`);
   lines.push(`fidelity: recorded block ${rep.fidelity.recorded}, replay (none arm) matches it exactly ${rep.fidelity.exact}`);
   lines.push(tableRow(['arm', 'tok mean', 'tok median', 'tok sum', 'chars mean', 'empty']));
   for (const arm of ARM_NAMES) {
