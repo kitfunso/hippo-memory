@@ -238,7 +238,12 @@ function stageStore(snap, dir, excludeTags) {
   fs.cpSync(path.join(snap, 'hippoWork', '.hippo'), path.join(dir, 'cwd', '.hippo'), { recursive: true });
   fs.cpSync(path.join(snap, 'hippoGlobal', 'hippo-home'), path.join(dir, 'home'), { recursive: true });
   const file = path.join(dir, 'cwd', '.hippo', 'config.json');
-  const cfg = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
   fs.writeFileSync(file, JSON.stringify(stagedConfig(cfg, excludeTags), null, 2));
   // Round 3 named each project after its folder, `work`; without the id the block renders empty.
   fs.writeFileSync(path.join(dir, 'cwd', '.hippo-project.json'), '{"id":"work"}');
