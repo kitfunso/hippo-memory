@@ -9,7 +9,7 @@ import { normalizeValueForRejection, rejectionDigest } from '../../src/base/reco
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
-import type { SleepCommit, SummarySettle } from '../../src/base/ports/store/consolidation.js';
+import type { DirtySummaries, SleepCommit, SummarySettle } from '../../src/base/ports/store/consolidation.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -19,14 +19,21 @@ import {
   TENANT_A,
   TENANT_B,
   type GroupCall,
+  type Outcome,
   type TwoTenantFixture,
   valueAt,
 } from '../_helpers/store-conformance.js';
 import { appendSessionEvent, writeEntry } from '../_helpers/root-forms.js';
 
+type MarkPage = Awaited<ReturnType<NonNullable<StoreGroups['consolidation']['emptyExtractions']>>>;
+
 const START = Date.parse('2026-03-01T12:00:00.000Z');
 const AT = '2026-02-15T00:00:00.000Z';
 const REFUSED = 'the summary nobody wants';
+const HELD_UNTIL = '2026-03-02T00:00:00.000Z';
+const ABSENT = 'mem_absent';
+const STALE_MARK = JSON.stringify({ digest: 'aaaaaaaaaaaaaaaa', at: AT });
+const STALE_HOLD = JSON.stringify({ failures: 5, retryAfter: '2999-01-01T00:00:00.000Z' });
 const TOPIC = { layer: Layer.Semantic, dagLevel: DAG_LEVEL.topic, tags: ['dag-summary', 'topic:billing'] };
 
 let fixture: TwoTenantFixture;
@@ -84,6 +91,14 @@ function seedTables(): void {
       const entry = { ...createMemory(content, { tenantId: TENANT_A }), originProject: 'proj' };
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt });
     };
+    // A hold left behind for a clean summary: the sweep drops it, so it cannot hold the row once it is dirty again.
+    db.prepare('INSERT INTO meta(key, value) VALUES (?, ?)').run(`rebuild_hold:${rows.topicB!.id}`, STALE_HOLD);
+    // Marks as an earlier sleep left them: two for sources that left, one that is not JSON.
+    const mark = db.prepare('INSERT INTO meta(key, value) VALUES (?, ?)');
+    db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ?').run(id('kept'), id('replaced'));
+    mark.run(`empty_extraction:${id('replaced')}`, STALE_MARK);
+    mark.run(`empty_extraction:${ABSENT}`, STALE_MARK);
+    mark.run(`empty_extraction:${id('gone')}`, 'not json');
     dormant('the old staging host was build-01', '2001-01-01T00:00:00.000Z');
     dormant('the staging host was build-07', AT);
     savePhysicsState(db, [particle(rows.kept!.id, 0.5), particle(rows.edited!.id, 0.25)]);
@@ -102,6 +117,7 @@ async function seed(): Promise<void> {
   seedRow('gone', 'the old wiki lives on confluence');
   seedRow('pinned', 'never deploy on a friday afternoon', { pinned: true });
   seedRow('fading', 'the canary host was canary-3');
+  seedRow('replaced', 'the old ingress was haproxy');
   for (const [tenantId, sessionId] of [
     [TENANT_A, 'done'],
     [TENANT_A, 'traced'],
@@ -147,6 +163,32 @@ function rebuilt(name: string, text: string): SummarySettle {
     audit: [{ tenantId: TENANT_A, actor: 'sleep', op: 'summary_rebuilt', targetId: id(name), metadata: audit }],
   };
 }
+
+const nameOf = (entryId: string): string => Object.keys(rows).find((n) => rows[n]!.id === entryId) ?? entryId;
+
+/** What a dirtySummaries answer holds: each summary's stored failure count by row name, and `held`. */
+function dirtyView(outcomes: readonly Outcome<unknown>[], i: number) {
+  const { summaries, held } = valueAt<DirtySummaries>(outcomes, i);
+  return { failures: Object.fromEntries(summaries.map((s) => [nameOf(s.summary.id), s.failures])), held };
+}
+
+const failedRebuild = (
+  name: string,
+  priorFailures: number,
+  failures: number,
+  retryAfter: string | null,
+  tenantId = TENANT_A,
+) => ({ id: id(name), tenantId, priorFailures, failures, retryAfter });
+
+const laterChild = (parent: string, tenantId: string): MemoryEntry => ({
+  ...createMemory(`a later fact about ${parent}`, {
+    tenantId,
+    dagLevel: DAG_LEVEL.extracted,
+    dagParentId: id(parent),
+    tags: ['extracted'],
+  }),
+  originProject: 'proj',
+});
 
 // An untraced session comes with its events, the ones its complete event ends.
 const untraced = (sessionId: string) => ({
@@ -219,6 +261,81 @@ describe('Consolidation', () => {
       'summary_rebuilt',
       'summary_marked_clean',
     ]);
+  });
+
+  it('holds a summary after failed rebuilds: skips it until its time, counts failures once, and a settle ends the hold', async () => {
+    const before = '2026-03-01T13:00:00.000Z';
+    const sqlite = await conforms([
+      (g) => g.dirtySummaries(10),
+      (g) => g.noteRebuildFailures!([failedRebuild('topic', 0, 3, HELD_UNTIL)]),
+      (g) => g.dirtySummaries(10, before),
+      (g) => g.dirtySummaries(10),
+      (g) => g.dirtySummaries(10, HELD_UNTIL),
+      // A stale prior count and another tenant's row write nothing.
+      (g) =>
+        g.noteRebuildFailures!([
+          failedRebuild('refusing', 5, 6, HELD_UNTIL),
+          failedRebuild('fresh', 0, 1, null, TENANT_B),
+        ]),
+      (g) => g.dirtySummaries(10, before),
+      (g) => g.settleSummary(rebuilt('topic', 'alice runs billing and payroll for acme')),
+      // The row is clean now, so a late note writes nothing.
+      (g) => g.noteRebuildFailures!([failedRebuild('topic', 0, 1, null)]),
+      (_g, s) => s.entryWrites.writeEntry({ entry: laterChild('topic', TENANT_A), actor: 'cli' }),
+      (_g, s) => s.entryWrites.writeEntry({ entry: laterChild('topicB', TENANT_B), actor: 'cli' }),
+      (g) => g.dirtySummaries(10, before),
+    ]);
+    // Each note resolved, so the reads below show what it wrote rather than a rejected call.
+    for (const i of [1, 5, 8]) expect(valueAt(sqlite.outcomes, i)).toBeUndefined();
+    const clean = { topic: 0, refusing: 0, fresh: 0 };
+    expect(dirtyView(sqlite.outcomes, 0)).toEqual({ failures: clean, held: undefined });
+    expect(dirtyView(sqlite.outcomes, 2)).toEqual({ failures: { refusing: 0, fresh: 0 }, held: 1 });
+    expect(dirtyView(sqlite.outcomes, 3)).toEqual({ failures: { ...clean, topic: 3 }, held: undefined });
+    expect(dirtyView(sqlite.outcomes, 4)).toEqual({ failures: { ...clean, topic: 3 }, held: 0 });
+    expect(dirtyView(sqlite.outcomes, 6)).toEqual({ failures: { refusing: 0, fresh: 0 }, held: 1 });
+    // The settle cleared topic's hold and the sweep cleared topicB's stale one, so neither is held again.
+    expect(dirtyView(sqlite.outcomes, 11)).toEqual({ failures: { ...clean, topicB: 0 }, held: 0 });
+  });
+
+  it('keeps empty extraction marks for live sources only, pages them by source id, and drops those that left', async () => {
+    const mark = (name: string, digest: string) => ({ id: id(name), digest, at: AT });
+    const live = named('kept', 'edited', 'gone').sort();
+    const sqlite = await conforms([
+      (g) => g.emptyExtractions!({ limit: 10 }),
+      // The first note drops the marks left for a superseded and a missing source, and replaces the one that is not JSON.
+      (g) =>
+        g.noteEmptyExtractions!({
+          mark: [
+            mark('kept', 'bbbbbbbbbbbbbbbb'),
+            mark('edited', 'cccccccccccccccc'),
+            mark('gone', 'dddddddddddddddd'),
+          ],
+          clear: [],
+        }),
+      (g) => g.emptyExtractions!({ limit: 2 }),
+      (g) => g.emptyExtractions!({ limit: 2, after: live[1] }),
+      // A superseded and a missing source take no mark.
+      (g) =>
+        g.noteEmptyExtractions!({
+          mark: [mark('replaced', 'eeeeeeeeeeeeeeee'), { ...mark('kept', 'x'), id: ABSENT }],
+          clear: [],
+        }),
+      (g) => g.noteEmptyExtractions!({ mark: [mark('edited', 'ffffffffffffffff')], clear: [id('kept')] }),
+      (g) => g.emptyExtractions!({ limit: 10 }),
+    ]);
+    for (const i of [1, 4, 5]) expect(valueAt(sqlite.outcomes, i)).toBeUndefined();
+    const marks = (i: number) => valueAt<MarkPage>(sqlite.outcomes, i).marks;
+    expect(marks(0).map((m) => m.id)).toEqual([ABSENT, id('replaced')].sort());
+    expect(valueAt<MarkPage>(sqlite.outcomes, 2).next).toBe(live[1]);
+    expect(marks(2).map((m) => m.id)).toEqual(live.slice(0, 2));
+    expect(valueAt<MarkPage>(sqlite.outcomes, 3).next).toBeNull();
+    expect(marks(3).map((m) => m.id)).toEqual(live.slice(2));
+    expect(marks(6)).toEqual(
+      named('edited', 'gone')
+        .sort()
+        .map((markId) => expect.objectContaining({ id: markId })),
+    );
+    expect(marks(6).find((m) => m.id === id('edited'))).toEqual(mark('edited', 'ffffffffffffffff'));
   });
 
   it('commits the flush and the dormant expiry, then records the sleep', async () => {

@@ -2,10 +2,12 @@ import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/me
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { buildDag, buildEntityProfiles, rebuildDirtySummaries } from './dag.js';
-import { extractFacts, storeExtractedFacts } from '../learn/extract.js';
-import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { emptyMarkStands } from './retry-holds.js';
+import { extractFactsOutcome, storeExtractedFacts, type ExtractedFact } from '../learn/extract.js';
+import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
+import { blockHash } from '../../base/util/token-text.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import { isReusable } from '../../base/memory/memory-quality.js';
+import { certainDefect, isReusable } from '../../base/memory/memory-quality.js';
 import {
   isPermanentFailure,
   llmFailureFields,
@@ -43,28 +45,67 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   return { llmError, llmOpts: { llm, model: config.extraction.model } };
 }
 
+/** A source's empty extraction mark: the hash of its text the model found nothing in, and when. */
+interface EmptyMark {
+  readonly digest: string;
+  readonly at: string;
+}
+
+/** Every empty extraction mark the store holds, by source id; none when the store keeps none or
+ * the read fails, since a failed read only costs the sleep the calls the marks would have saved. */
+async function readEmptyMarks({ store }: SleepRun): Promise<Map<string, EmptyMark>> {
+  const read = store.consolidation.emptyExtractions?.bind(store.consolidation);
+  const marks = new Map<string, EmptyMark>();
+  if (read === undefined) return marks;
+  try {
+    const pages = await readAll(async (after: string | undefined) => {
+      const page = await read({ limit: READ_PAGE_ROWS, after });
+      return { entries: page.marks, next: page.next };
+    });
+    for (const { id, digest, at } of pages) marks.set(id, { digest, at });
+  } catch (err) {
+    log.warn('consolidate extraction could not read empty marks', errorFields(err));
+    marks.clear();
+  }
+  return marks;
+}
+
+/** Whether sleep could extract facts from `e`: a live episodic memory the model has not been asked
+ * about and nothing keeps as written. */
+function extractable(e: MemoryEntry, extractedFromIds: ReadonlySet<string>): boolean {
+  return (
+    e.layer === Layer.Episodic &&
+    !e.supersededBy &&
+    !extractedFromIds.has(e.id) &&
+    !keptAsWritten(e) &&
+    e.traceOutcome === null &&
+    e.source !== 'auto-promote' &&
+    isReusable(e)
+  );
+}
+
 /** Counts the survivors extraction could read and returns the first `limit` of them, holding no
- * others. */
+ * others. A source with a standing empty mark is counted in `extractionHeld` instead, and only
+ * when a model may run (`limit` above 0), so a sleep with no model reads no marks. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
   for await (const e of run.survivors.rows()) {
     if (e.extractedFrom) extractedFromIds.add(e.extractedFrom);
   }
+  const marks = limit > 0 ? await readEmptyMarks(run) : new Map<string, EmptyMark>();
   const batch: MemoryEntry[] = [];
   let candidates = 0;
+  let held = 0;
   for await (const e of run.survivors.rows()) {
-    const candidate =
-      e.layer === Layer.Episodic &&
-      !e.supersededBy &&
-      !extractedFromIds.has(e.id) &&
-      !keptAsWritten(e) &&
-      e.traceOutcome === null &&
-      e.source !== 'auto-promote' &&
-      isReusable(e);
-    if (!candidate) continue;
+    if (!extractable(e, extractedFromIds)) continue;
+    if (emptyMarkStands(marks.get(e.id), e.content, run.now)) {
+      held++;
+      continue;
+    }
     if (candidates++ < limit) batch.push(e);
   }
   run.result.extractionCandidates = candidates;
+  run.result.extractionHeld = held;
   return batch;
 }
 
@@ -90,7 +131,8 @@ export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<
 const EXTRACTION_CONCURRENCY = 4;
 
 interface Extraction {
-  facts: Awaited<ReturnType<typeof extractFacts>>;
+  facts: ExtractedFact[];
+  emptyArray: boolean;
   errors: Array<[string, LlmFailure | undefined]>;
   threw?: unknown;
 }
@@ -129,6 +171,49 @@ function keepFacts(
   });
 }
 
+/** What the pass tells the store about its sources: marks to keep and the ids whose mark goes. */
+interface EmptyNote {
+  mark: Array<{ id: string; digest: string; at: string }>;
+  clear: string[];
+}
+
+/** Whether nothing was stored only because rejected values refused every fact: none has a quality
+ * defect, which would be bad model output worth a retry. */
+function refusedByRejectedValue(facts: Extraction['facts']): boolean {
+  return facts.length > 0 && facts.every((fact) => certainDefect(fact.content) === null);
+}
+
+/** A stored child clears the source's mark. An explicit empty array, or facts that all passed the
+ * quality check and were all refused by a rejected value, marks it; any other reply leaves it. */
+function noteOutcome(
+  run: SleepRun,
+  note: EmptyNote,
+  source: MemoryEntry,
+  out: Extraction,
+  storedCount: number,
+): void {
+  if (storedCount > 0) {
+    note.clear.push(source.id);
+  } else if (out.emptyArray || refusedByRejectedValue(out.facts)) {
+    note.mark.push({
+      id: source.id,
+      digest: blockHash(source.content),
+      at: run.now.toISOString(),
+    });
+  }
+}
+
+/** Hands the store the pass's marks in one call; a failure is logged and the sources are offered
+ * again next sleep. */
+async function saveEmptyNote(run: SleepRun, note: EmptyNote): Promise<void> {
+  if (note.mark.length === 0 && note.clear.length === 0) return;
+  try {
+    await run.store.consolidation.noteEmptyExtractions?.(note);
+  } catch (err) {
+    log.warn('consolidate extraction could not note empty results', errorFields(err));
+  }
+}
+
 /**
  * Extracts facts from each candidate, up to four model calls at once; every write, count and report
  * then runs in input order. True when it stopped on a failure every later call would repeat (bad
@@ -148,16 +233,16 @@ async function extractionPass(
     (index) => extractOne(llm, batch[index].content, index, stop),
   );
   let extractedCount = 0;
+  const note: EmptyNote = { mark: [], clear: [] };
   for (const [index, candidate] of batch.entries()) {
     const out = results[index];
     if (out === undefined) break;
     for (const [msg, failure] of out.errors) report(msg, failure);
     try {
       if (out.threw !== undefined) throw out.threw;
-      if (out.facts.length > 0) {
-        const stored = await keepFacts(run, candidate, out.facts);
-        extractedCount += stored.length;
-      }
+      const stored = out.facts.length > 0 ? await keepFacts(run, candidate, out.facts) : [];
+      extractedCount += stored.length;
+      if (out.errors.length === 0) noteOutcome(run, note, candidate, out, stored.length);
     } catch (err) {
       report(errorMessage(err));
       log.warn('consolidate extraction threw', errorFields(err));
@@ -168,6 +253,7 @@ async function extractionPass(
     }
   }
   run.result.extracted = extractedCount;
+  await saveEmptyNote(run, note);
   return stop.at !== Number.POSITIVE_INFINITY;
 }
 
@@ -182,13 +268,15 @@ async function extractOne(
   index: number,
   stop: StopIndex,
 ): Promise<Extraction> {
-  const out: Extraction = { facts: [], errors: [] };
+  const out: Extraction = { facts: [], emptyArray: false, errors: [] };
   const onError = (msg: string, failure?: LlmFailure): void => {
     out.errors.push([msg, failure]);
     if (failure && isPermanentFailure(failure)) stop.at = Math.min(stop.at, index);
   };
   try {
-    out.facts = await extractFacts(content, { ...llm.llmOpts, onError });
+    const outcome = await extractFactsOutcome(content, { ...llm.llmOpts, onError });
+    out.facts = outcome.facts;
+    out.emptyArray = outcome.emptyArray;
   } catch (err) {
     out.threw = err;
   }
@@ -266,11 +354,13 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
     result.summariesZeroChildSkipped = rebuildResult.zeroChildSkipped;
     result.summariesRebuildRefused = rebuildResult.refused;
     result.summariesRebuildCapped = rebuildResult.capped;
+    result.summariesRebuildHeld = rebuildResult.held;
     if (
       rebuildResult.rebuilt > 0 ||
       rebuildResult.zeroChildSkipped > 0 ||
       rebuildResult.failed > 0 ||
-      rebuildResult.refused > 0
+      rebuildResult.refused > 0 ||
+      rebuildResult.held > 0
     ) {
       result.events.push({
         kind: 'dagRebuild',
@@ -278,6 +368,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
         refused: rebuildResult.refused,
         zeroChildSkipped: rebuildResult.zeroChildSkipped,
         failed: rebuildResult.failed,
+        held: rebuildResult.held,
         cappedAt: rebuildResult.capped ? cap : null,
       });
     }

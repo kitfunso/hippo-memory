@@ -1,6 +1,6 @@
 // Fetchers, dirty-summary setters and entry builders the DAG rebuild tests share.
 import { vi } from 'vitest';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { closeHippoDb, getMeta, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -25,6 +25,51 @@ export function makeOkFetcher(content: string = 'synthetic-summary-from-fetcher-
 }
 
 /**
+ * A fetcher whose reply text is chosen per call: `textFor` gets the 1-based call number and the
+ * prompt. Count the model calls with `toHaveBeenCalledTimes`; text under 20 chars is a content
+ * failure of the summary.
+ */
+export function makeScriptedFetcher(textFor: (call: number, prompt: string) => string): typeof fetch {
+  let call = 0;
+  return vi.fn<typeof fetch>(async (_url, init) => {
+    // SAFETY: the Anthropic adapter always JSON.stringifies the request body, so init.body is a string.
+    const body = init?.body ? JSON.parse(init.body as string) : {};
+    const text = textFor(++call, body?.messages?.[0]?.content ?? '');
+    return new Response(JSON.stringify({ content: [{ text }] }), { status: 200 });
+  });
+}
+
+/** A fetcher whose every call is an HTTP 400: a provider failure that says nothing about the summary. */
+export function makeProviderFailureFetcher(): typeof fetch {
+  return vi.fn<typeof fetch>(async () => new Response('bad request', { status: 400 }));
+}
+
+/** The `rebuild_hold:<id>` meta value as stored, parsed; null when the summary has none. */
+export function readRebuildHold(
+  hippoRoot: string,
+  summaryId: string,
+): { failures: number; retryAfter: string | null } | null {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const raw = getMeta(db, `rebuild_hold:${summaryId}`, '');
+    // SAFETY: the adapter writes this key as {"failures": n, "retryAfter": ISO | null}.
+    return raw === '' ? null : (JSON.parse(raw) as { failures: number; retryAfter: string | null });
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Writes a meta row by key, as the store would have left it (or a bad write would). */
+export function writeMetaRaw(hippoRoot: string, key: string, value: string): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    setMeta(db, key, value);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
  * Typed wrapper around a single-row SELECT used throughout this file. Every
  * call site queries a row this test itself already wrote (memories /
  * audit_log / memories_fts, synchronously updated by rebuildDirtySummaries /
@@ -46,6 +91,17 @@ export function forceMarkDirty(hippoRoot: string, ...summaryIds: string[]): void
   try {
     const mark = db.prepare(`UPDATE memories SET summary_dirty = 1 WHERE id = ?`);
     for (const id of summaryIds) mark.run(id);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Archives rows by direct SQL, so a summary's children or the summary itself drop out of the live set. */
+export function archiveBySql(hippoRoot: string, ...ids: string[]): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const archive = db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`);
+    for (const id of ids) archive.run(id);
   } finally {
     closeHippoDb(db);
   }

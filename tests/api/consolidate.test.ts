@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { consolidate } from '../../src/index.js';
@@ -16,6 +16,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { forceMarkDirty, makeChild, makeOkFetcher, makeSummary } from '../_helpers/dag-rebuild.js';
 
 const { writeEntry, readEntry } = sessionPerTest();
 
@@ -579,5 +580,32 @@ describe('Physics pass', () => {
     const result = await consolidate(empty, { now: FIXED_NOW });
     expect(result.physicsSimulated).toBe(0);
     expect(detailLines(result).filter((line) => line.includes('physics'))).toEqual([]);
+  });
+});
+
+describe('Rebuild hold', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('stops sending a dirty summary the model keeps failing after three sleeps, and reports it held', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    initTestStore(tmpDir);
+    const summary = makeSummary('a summary the model cannot rebuild');
+    writeEntry(tmpDir, summary);
+    writeEntry(tmpDir, makeChild(summary.id, 'a child fact of the stubborn summary'));
+    forceMarkDirty(tmpDir, summary.id);
+    // A reply under 20 chars is a content failure of the summary, not a provider failure.
+    const fetcher = makeOkFetcher('too short');
+
+    for (let sleep = 1; sleep <= 3; sleep++) {
+      const result = await consolidate(tmpDir, { now: FIXED_NOW, fetcher });
+      expect(result).toMatchObject({ summariesRebuildFailed: 1, summariesRebuildHeld: 0 });
+    }
+    const held = await consolidate(tmpDir, { now: FIXED_NOW, fetcher });
+
+    expect(held).toMatchObject({ summariesRebuildFailed: 0, summariesRebuildHeld: 1 });
+    expect(held.events).toContainEqual(expect.objectContaining({ kind: 'dagRebuild', failed: 0, held: 1 }));
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });
