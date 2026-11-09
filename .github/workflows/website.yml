@@ -1,0 +1,37 @@
+# Builds the website and runs its guards. ci.yml only checks README drift and never
+# runs `astro build`, so an Astro upgrade once changed the rendered text with no check.
+name: Website
+
+on:
+  pull_request:
+    paths:
+      - 'website/**'
+      - 'README.md'
+      - '.github/workflows/website.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # The sitemap reads each page's last commit date, which a shallow clone leaves out.
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+        working-directory: website
+      # README guard, astro build, then check-build.mjs: glued links, duplicate ids, token drift, text snapshot.
+      - run: npm run build
+        working-directory: website
