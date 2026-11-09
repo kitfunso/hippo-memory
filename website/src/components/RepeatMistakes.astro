@@ -18,17 +18,17 @@ import { repeatMistakes as z } from '../content/site';
     </span>
   </div>
 
-  <dl class="space-y-5">
+  <ul class="space-y-5">
     {z.bars.map((b) => (
-      <div>
-        <div class="flex items-baseline justify-between gap-3">
-          <dt class:list={['text-sm', b.lead ? 'font-medium text-zinc-100' : 'text-zinc-400']}>{b.name}</dt>
-          <dd class:list={['font-mono text-sm tabular-nums', b.lead ? 'text-acc-cyan' : 'text-zinc-300']}>{b.rate} {z.unit}</dd>
-        </div>
-        <div class="mt-2 h-2.5 overflow-hidden rounded-full bg-white/5" aria-hidden="true">
-          <div class:list={['h-full rounded-full', b.lead ? 'bg-acc-cyan' : 'bg-zinc-600']} style={`width: ${b.rate}%`}></div>
-        </div>
-      </div>
+      <li>
+        <span class="flex items-baseline justify-between gap-3">
+          <span class:list={['text-sm', b.lead ? 'font-medium text-zinc-100' : 'text-zinc-400']}>{b.name}</span>
+          <span class:list={['font-mono text-sm tabular-nums', b.lead ? 'text-acc-cyan' : 'text-zinc-300']}>{b.rate} {z.unit}</span>
+        </span>
+        <span class="mt-2 block h-2.5 overflow-hidden rounded-full bg-white/5" aria-hidden="true">
+          <span class:list={['block h-full rounded-full', b.lead ? 'bg-acc-cyan' : 'bg-zinc-600']} style={`width: ${b.rate}%`}></span>
+        </span>
+      </li>
     ))}
-  </dl>
+  </ul>
 </a>
