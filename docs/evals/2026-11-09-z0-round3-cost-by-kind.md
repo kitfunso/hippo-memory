@@ -39,11 +39,15 @@ any part of it.
 
 1. It checks the sha256 of the 10 analyzer sources and of every input (35 runs, 35 plans, prices, grading, drop
    list) against the hashes in `C:/z0-runs/scored/r3-final/unblind.json`. Grading and drop list default to the
-   copies in `docs/evals/z0-r3/`, because the report's own paths name a deleted worktree.
+   copies in `docs/evals/z0-r3/`, because the report's own paths name a deleted worktree. The 10 sources are the list
+   that round 3's report recorded. The analyzer also loads `arms.mjs` and `exec.mjs`, which no figure here uses, and
+   neither is hashed.
 2. It runs the analyzer's own `loadInputs`, `filterRecords`, `taskUnits` and `harmT`, at the Opus 5.5 list prices
    of the `claude-code` block in the prices file.
 3. It stops unless three lines of round 3's report come out exact in every field: H3 1.006 [0.964, 1.049],
    maintainer-only H3 0.995 [0.948, 1.044], and H4 (set N cost ratio 1.009 [0.978, 1.040] and resolve difference).
+   It also stops unless its own A2/A1 cells for sets R and N and for set N equal H3 and H4, so the cell code is
+   held to round 3's numbers too.
 4. It prints 35 cells: seven arm pairs, each over sets R and N and over four kinds. The kinds are teach, first
    apply, later apply (the second apply and after) and set N. It stops if the four kinds do not sum to sets R and
    N, or if the two arms of a pair disagree on a task's set, kind or apply slot.
@@ -63,7 +67,7 @@ check passed, no timeout), so on set R it includes lesson compliance.
 | A2/A1 | all | teach | 189 | 1.054 [1.0005, 1.111] | 0.048 | 116.09 | 110.12 | +5.97 | +0.017 [-0.012, +0.046] |
 | A2/A1 | all | first apply | 148 | 0.834 [0.664, 1.047] | 0.112 | 40.66 | 48.77 | -8.12 | +0.042 [-0.008, +0.091] |
 | A2/A1 | all | later apply | 184 | 1.062 [0.977, 1.153] | 0.150 | 51.51 | 48.52 | +2.99 | +0.003 [-0.047, +0.053] |
-| A2/A1 | all | set N | 474 | 1.009 [0.978, 1.040] | 0.584 | 124.74 | 123.69 | +1.06 | +0.000 |
+| A2/A1 | all | set N | 474 | 1.009 [0.978, 1.040] | 0.584 | 124.74 | 123.69 | +1.06 | 0.000 |
 | A5/A1 | all | sets R+N | 995 | 0.968 [0.933, 1.005] | 0.087 | 320.55 | 331.10 | -10.56 | +0.009 [-0.001, +0.019] |
 | A5/A1 | all | teach | 189 | 0.987 [0.943, 1.033] | 0.559 | 108.67 | 110.12 | -1.45 | -0.003 [-0.033, +0.028] |
 | A5/A1 | all | first apply | 148 | 0.829 [0.682, 1.008] | 0.060 | 40.45 | 48.77 | -8.32 | +0.045 [-0.015, +0.104] |
@@ -78,16 +82,16 @@ check passed, no timeout), so on set R it includes lesson compliance.
 | A4/A1 | 1-2 | teach | 129 | 0.924 [0.865, 0.988] | 0.022 | 71.64 | 77.49 | -5.85 | +0.013 [-0.023, +0.049] |
 | A4/A1 | 1-2 | first apply | 101 | 0.773 [0.566, 1.056] | 0.077 | 26.06 | 33.70 | -7.64 | +0.057 [-0.006, +0.119] |
 | A4/A1 | 1-2 | later apply | 123 | 0.928 [0.806, 1.068] | 0.281 | 31.41 | 33.86 | -2.44 | +0.040 [+0.007, +0.074] |
-| A4/A1 | 1-2 | set N | 324 | 0.992 [0.959, 1.026] | 0.648 | 83.40 | 84.05 | -0.66 | +0.000 |
+| A4/A1 | 1-2 | set N | 324 | 0.992 [0.959, 1.026] | 0.648 | 83.40 | 84.05 | -0.66 | 0.000 |
 | A0/A1 | 1-2 | sets R+N | 674 | 1.156 [1.093, 1.223] | <0.001 | 264.28 | 228.55 | +35.74 | -0.024 [-0.045, -0.004] |
 | A0/A1 | 1-2 | teach | 129 | 0.970 [0.900, 1.046] | 0.410 | 75.19 | 77.49 | -2.30 | +0.016 [-0.032, +0.064] |
 | A0/A1 | 1-2 | first apply | 101 | 1.364 [1.066, 1.746] | 0.017 | 45.97 | 33.70 | +12.27 | -0.235 [-0.346, -0.124] |
 | A0/A1 | 1-2 | later apply | 123 | 1.821 [1.574, 2.107] | <0.001 | 61.65 | 33.86 | +27.79 | -0.167 [-0.278, -0.056] |
 | A0/A1 | 1-2 | set N | 321 | 0.976 [0.938, 1.016] | 0.228 | 81.48 | 83.50 | -2.02 | +0.003 |
 | A2/A1 | 1-2 | sets R+N | 676 | 1.003 [0.957, 1.050] | 0.905 | 229.55 | 228.91 | +0.65 | +0.010 [-0.003, +0.022] |
-| A2/A1 | 1-2 | teach | 129 | 1.031 [0.964, 1.102] | 0.356 | 79.89 | 77.49 | +2.41 | +0.029 [+0.000, +0.057] |
+| A2/A1 | 1-2 | teach | 129 | 1.031 [0.964, 1.102] | 0.356 | 79.89 | 77.49 | +2.41 | +0.029 [0.000, +0.057] |
 | A2/A1 | 1-2 | first apply | 101 | 0.835 [0.661, 1.055] | 0.123 | 28.14 | 33.70 | -5.56 | +0.039 [-0.005, +0.082] |
-| A2/A1 | 1-2 | later apply | 123 | 1.068 [0.955, 1.195] | 0.236 | 36.17 | 33.86 | +2.32 | +0.000 [-0.047, +0.047] |
+| A2/A1 | 1-2 | later apply | 123 | 1.068 [0.955, 1.195] | 0.236 | 36.17 | 33.86 | +2.32 | 0.000 [-0.047, +0.047] |
 | A2/A1 | 1-2 | set N | 323 | 1.018 [0.985, 1.052] | 0.293 | 85.35 | 83.87 | +1.48 | +0.006 |
 | A5/A1 | 1-2 | sets R+N | 675 | 0.960 [0.920, 1.002] | 0.061 | 219.65 | 228.74 | -9.09 | +0.010 [-0.002, +0.022] |
 | A5/A1 | 1-2 | teach | 129 | 0.975 [0.922, 1.031] | 0.342 | 75.55 | 77.49 | -1.94 | -0.009 [-0.044, +0.027] |

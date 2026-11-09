@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { KINDS, PAIRS, checkSources, costByKind, fieldsOff, formatText, inputArgs, parseArgs, selfCheck } from '../../scripts/token-eval/z0-cost-by-kind.mjs';
+import { KINDS, PAIRS, checkCells, checkSources, costByKind, fieldsOff, formatText, inputArgs, parseArgs, selfCheck } from '../../scripts/token-eval/z0-cost-by-kind.mjs';
 
 interface Rec { arm: string; sequence: string; seed: number; position: number; set: string; kind: string; applyIndex: number | null; cost: number }
 interface Hash { role: string; file: string; sha256: string }
@@ -35,11 +35,15 @@ const EST = { estimate: 1.0057, low: 0.9639, high: 1.0493, se: 0.0215, df: 248.2
 
 describe('Z0 cost by kind: kinds and pairs', () => {
   const rec = (set: string, kind: string, applyIndex: number | null): Rec => ({ arm: 'A2', sequence: 'seq', seed: 1, position: 0, set, kind, applyIndex, cost: 1 });
-  const RECORDS = [rec('R', 'teach', null), rec('R', 'apply', 1), rec('R', 'apply', 2), rec('R', 'apply', 3), rec('N', 'apply', null), rec('X', 'apply', 1)];
+  // The last four sit outside sets R and N, or outside teach and apply, with an apply slot that tempts a filter missing its kind or set check.
+  const RECORDS = [
+    rec('R', 'teach', null), rec('R', 'apply', 1), rec('R', 'apply', 2), rec('R', 'apply', 3), rec('N', 'apply', null), rec('X', 'apply', 1),
+    rec('X', 'teach', null), rec('X', 'apply', 2), rec('R', 'review', 1), rec('R', 'review', 2),
+  ];
 
-  it('splits sets R and N with no overlap and no gap, and leaves set X out', () => {
+  it('splits sets R and N with no overlap and no gap, and leaves set X and other kinds out', () => {
     const hits = RECORDS.map((r) => Object.entries(KINDS).filter(([, keep]) => keep(r)).map(([name]) => name));
-    expect(hits).toEqual([['teach'], ['first apply'], ['later apply'], ['later apply'], ['set N'], []]);
+    expect(hits).toEqual([['teach'], ['first apply'], ['later apply'], ['later apply'], ['set N'], [], [], [], [], []]);
   });
 
   it('holds the seven pairs, three on all seeds and four labelled seeds 1-2', () => {
@@ -164,10 +168,45 @@ describe('Z0 cost by kind: selfCheck', () => {
     expect(message).toContain(`se: got ${GOT.se}, want ${nextUp(GOT.se)}`);
     expect(message).toContain(process.version);
     expect(message).not.toContain('estimate:');
+    expect(message).toContain('every file matched its hash, so the cause is another Node version (a last-digit difference) or a changed call in this script (the filterRecords options or the prices key)');
   });
 
   it('throws when the report has no block to compare, instead of reading a string as an estimate', () => {
     expect(() => selfCheck(api, { scored: [] }, {}, report('withheld: invalid run (G1)'))).toThrow(/no H3 block; pass an unblinded report/);
+  });
+});
+
+describe('Z0 cost by kind: checkCells', () => {
+  const H3 = { estimate: 1.5, low: 1, high: 2, se: 0.1, df: 9, p: 0.5 };
+  const NSET = { estimate: 1.1, low: 0.9, high: 1.3, se: 0.2, df: 7, p: 0.3 };
+  const checks = { H3, H4: { costRatio: NSET } };
+  const cell = (kind: string, e: Est, over: Partial<Cell> = {}): Cell => ({
+    pair: 'A2/A1', seeds: 'all', kind, units: 5, ratio: e.estimate, low: e.low, high: e.high, p: e.p, se: e.se, df: e.df,
+    dollarsT: 2, dollarsC: 1, dollarsDiff: 1, resolve: { estimate: 0, low: 0, high: 0, p: 1 }, ...over,
+  });
+  const good = [cell('sets R+N', H3), cell('teach', NSET), cell('set N', NSET)];
+
+  it('passes when the whole-set row is H3 and the set N row is the H4 cost ratio, whatever other pairs hold', () => {
+    const decoys = [cell('sets R+N', NSET, { seeds: 's1-2' }), cell('sets R+N', NSET, { pair: 'A5/A1' }), cell('set N', H3, { seeds: 's1-2' })];
+    expect(() => checkCells([...decoys, ...good], checks)).not.toThrow();
+  });
+
+  it('throws on a one-ulp miss in the whole-set row, with the same got and want shape as the self-check', () => {
+    const rows = [cell('sets R+N', H3, { df: nextUp(H3.df) }), ...good.slice(1)];
+    const message = messageOf(() => checkCells(rows, checks));
+    expect(message).toContain('cell A2/A1 all sets R+N against H3 differs from the report in df');
+    expect(message).toContain(`df: got ${nextUp(H3.df)}, want ${H3.df}`);
+    expect(message).toContain(process.version);
+    expect(message).toContain('report this rather than rerun');
+  });
+
+  it('throws on a miss in the set N row, and on a null field where round 3 has a number', () => {
+    expect(() => checkCells([good[0]!, cell('set N', NSET, { p: nextUp(NSET.p) })], checks)).toThrow(/cell A2\/A1 all set N against H4 cost ratio differs from the report in p/);
+    expect(() => checkCells([cell('sets R+N', H3, { se: null }), good[2]!], checks)).toThrow(/against H3 differs from the report in se/);
+  });
+
+  it('throws when the plan left A2/A1 out, instead of reading no cell as a match', () => {
+    expect(() => checkCells(good.filter((r) => r.kind !== 'set N'), checks)).toThrow(/no A2\/A1 all-seed set N cell/);
   });
 });
 
@@ -212,12 +251,12 @@ describe('Z0 cost by kind: costByKind', () => {
   it('throws when the four kinds miss a task of sets R and N', () => {
     const odd = RECORDS.map((r) => (r.arm === 'A2' && r.seed === 1 && r.position === 0 ? { ...r, kind: 'warmup' } : r));
     expect(() => costByKind(stub(), { arms: ['A1', 'A2'], scored: odd.map((r) => (r.arm === 'A1' && r.seed === 1 && r.position === 0 ? { ...r, kind: 'warmup' } : r)) }, {}))
-      .toThrow(/A2\/A1 all: the four kinds hold 11 units and sets R\+N holds 12/);
+      .toThrow(/A2\/A1 all: the four kinds hold 11 units and sets R\+N holds 12, so a task sits outside every kind; the scored records cannot be cut by kind, so report this rather than rerun/);
   });
 
   it('throws when the control task sits in another apply slot than the hippo-arm task', () => {
     const moved = RECORDS.map((r) => (r.arm === 'A1' && r.seed === 2 && r.position === 2 ? { ...r, applyIndex: 3 } : r));
-    expect(() => costByKind(stub(), { arms: ['A1', 'A2'], scored: moved }, {})).toThrow(/A2\/A1 at seq seed 2 position 2: A2 has applyIndex 2 and A1 has 3/);
+    expect(() => costByKind(stub(), { arms: ['A1', 'A2'], scored: moved }, {})).toThrow(/A2\/A1 at seq seed 2 position 2: A2 has applyIndex 2 and A1 has 3, so a kind filter would read one arm only; the scored records cannot be cut by kind, so report this rather than rerun/);
   });
 });
 
@@ -268,7 +307,7 @@ describe('Z0 cost by kind: formatText', () => {
       'analyzer 04835462b clean, 10 sources match the report, node v24.13.0',
       'inputs 35 runs, 35 plans, prices, grading and drop list match the report',
       'self-check H3 1.006 [0.964, 1.049] and maintainer-only H3 1.006 [0.964, 1.049]: exact',
-      'self-check H4 cost ratio 1.006 [0.964, 1.049] and resolve difference -0.000: exact',
+      'self-check H4 cost ratio 1.006 [0.964, 1.049] and resolve difference 0.000: exact',
       'exploratory 1 cells, p not adjusted',
     ]);
     expect(lines[6]).toMatch(/^A2\/A1 {3}all {4}sets R\+N {7}995 {3}1\.006 {3}0\.964 {3}1\.049 {3}0\.791 {5}333\.00 {5}331\.10 {6}\+1\.90 {3}\+0\.005$/);
@@ -280,6 +319,14 @@ describe('Z0 cost by kind: formatText', () => {
     expect(cells).toContain('n/a');
     expect(text).toContain('-8.12');
     expect(text.split('\n')[6]!.match(/n\/a/g)).toHaveLength(4);
+  });
+
+  it('prints a value that rounds to zero without a sign, and keeps the sign of any other difference', () => {
+    const zero = row({ dollarsDiff: -0.004, resolve: { estimate: 0.0004, low: null, high: null, p: null } });
+    const small = row({ dollarsDiff: 0.006, resolve: { estimate: -0.0006, low: null, high: null, p: null } });
+    const [a, b] = formatText(rep([zero, small])).split('\n').slice(6, 8).map((l) => l.trim().split(/\s{2,}/));
+    expect(a!.slice(-2)).toEqual(['0.00', '0.000']);
+    expect(b!.slice(-2)).toEqual(['+0.01', '-0.001']);
   });
 
   it('prints dirty for an edited tree and only the label for a folder without git', () => {

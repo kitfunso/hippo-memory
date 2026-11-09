@@ -23,7 +23,7 @@ const FIELDS = ['estimate', 'low', 'high', 'se', 'df', 'p'];
 const ALL_KIND = 'sets R+N';
 const NA = 'n/a';
 
-/** The four kinds split sets R and N with no overlap and no gap; taskUnits' keep reads the hippo-arm task only. */
+// taskUnits' keep reads the hippo-arm task only, so checkAgreement vouches for the control side.
 export const KINDS = {
   teach: (r) => r.set === 'R' && r.kind === 'teach',
   'first apply': (r) => r.set === 'R' && r.kind === 'apply' && r.applyIndex === 1,
@@ -52,7 +52,6 @@ export function sha256File(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 
-/** Stops unless every source file under the analyzer root has the sha256 the report recorded; returns how many it checked. */
 export function checkSources(analyzer, hashes) {
   const sources = hashes.filter((h) => h.role === 'source');
   if (sources.length === 0) throw new Error('the report lists no source hashes; pass the unblind.json round 3 wrote with --report');
@@ -78,7 +77,7 @@ function listed(hashes, role, exactlyOne) {
   return found;
 }
 
-/** The analyzer's args object, built from the report's hashes; every input is checked, the report's own paths are read for runs, plan and prices only. */
+// The report's grading and drop-list paths point at a deleted worktree, so those two come from the flags.
 export function inputArgs(hashes, files) {
   const own = (role, label) => listed(hashes, role, false).map((h) => checkedFile(label, h.file, h.sha256, RESTORE));
   const [prices] = listed(hashes, 'prices', true);
@@ -99,22 +98,27 @@ export function inputArgs(hashes, files) {
   };
 }
 
-/** The names of the fields that differ; exact `!==`, since the same code on the same inputs gives the same doubles. */
+// Exact on purpose: the same code on the same inputs gives the same doubles.
 export function fieldsOff(got, want) {
   return FIELDS.filter((k) => got[k] !== want[k]);
 }
 
+function miss(subject, got, want, off, advice) {
+  const lines = off.map((k) => `  ${k}: got ${got[k]}, want ${want[k]}`);
+  return new Error(`${subject} differs from the report in ${off.join(', ')} (node ${process.version}):\n${lines.join('\n')}\n${advice}`);
+}
+
+const SELF_CHECK_ADVICE = 'every file matched its hash, so the cause is another Node version (a last-digit difference) or a changed call in this script (the filterRecords options or the prices key)';
+const CELL_ADVICE = 'the self-check matched, so the cell code in this script (rowOf) differs from the analyzer call it copies; report this rather than rerun';
+
 function compare(name, got, want) {
   if (!isRecord(want)) throw new Error(`the report has no ${name} block; pass an unblinded report (unblind.json) with --report`);
   const off = fieldsOff(got, want);
-  if (off.length > 0) {
-    const lines = off.map((k) => `  ${k}: got ${got[k]}, want ${want[k]}`);
-    throw new Error(`self-check ${name} differs from the report in ${off.join(', ')} (node ${process.version}):\n${lines.join('\n')}\ncheck that --analyzer and every input match round 3; a difference in the last digits only points at another Node version`);
-  }
+  if (off.length > 0) throw miss(`self-check ${name}`, got, want, off, SELF_CHECK_ADVICE);
   return pick(got);
 }
 
-/** Round 3's H3, maintainer-only H3 and H4 lines, rebuilt through the same calls; the read stops unless all of them are exact. */
+// H3 and H4 pin the call path (filters, prices, harmT) to round 3 before any new cell is read.
 export function selfCheck(api, f, prices, report) {
   const units = (keep) => api.taskUnits(f.scored, 'A2', 'A1', prices, keep);
   const rn = api.inSets('R', 'N');
@@ -130,11 +134,12 @@ export function selfCheck(api, f, prices, report) {
   };
 }
 
-/** The kind filters read the treatment task only, so the control task must sit in the same set, kind and apply slot. */
+const UNCUT = 'the scored records cannot be cut by kind, so report this rather than rerun';
+
 function checkAgreement(api, scored, armT, armC) {
   for (const { t, c } of api.pairTasks(scored, armT, armC)) {
     const off = ['set', 'kind', 'applyIndex'].find((k) => t[k] !== c[k]);
-    if (off !== undefined) throw new Error(`${armT}/${armC} at ${t.sequence} seed ${t.seed} position ${t.position}: ${armT} has ${off} ${t[off]} and ${armC} has ${c[off]}, so a kind filter would read one arm only`);
+    if (off !== undefined) throw new Error(`${armT}/${armC} at ${t.sequence} seed ${t.seed} position ${t.position}: ${armT} has ${off} ${t[off]} and ${armC} has ${c[off]}, so a kind filter would read one arm only; ${UNCUT}`);
   }
 }
 
@@ -152,7 +157,6 @@ function rowOf(api, f, prices, [armT, armC, seeds], kind, keep) {
   };
 }
 
-/** One row per pair and kind (plus the sets R+N row); a pair with an arm the plan left out is skipped. */
 export function costByKind(api, f, prices) {
   const planned = new Set(f.arms);
   const rows = [];
@@ -161,19 +165,40 @@ export function costByKind(api, f, prices) {
     const whole = rowOf(api, f, prices, pair, ALL_KIND, api.inSets('R', 'N'));
     const parts = Object.entries(KINDS).map(([kind, keep]) => rowOf(api, f, prices, pair, kind, keep));
     const held = sum(parts.map((r) => r.units));
-    if (held !== whole.units) throw new Error(`${whole.pair} ${pair[2]}: the four kinds hold ${held} units and ${ALL_KIND} holds ${whole.units}, so a task sits outside every kind`);
+    if (held !== whole.units) throw new Error(`${whole.pair} ${pair[2]}: the four kinds hold ${held} units and ${ALL_KIND} holds ${whole.units}, so a task sits outside every kind; ${UNCUT}`);
     rows.push(whole, ...parts);
   }
   return rows;
 }
 
+const asEstimate = (r) => ({ estimate: r.ratio, low: r.low, high: r.high, se: r.se, df: r.df, p: r.p });
+
+// Puts rowOf under round 3's numbers: the whole-set row is H3 and the set N row is H4's cost ratio.
+export function checkCells(rows, checks) {
+  const cases = [[ALL_KIND, 'H3', checks.H3], ['set N', 'H4 cost ratio', checks.H4.costRatio]];
+  for (const [kind, name, want] of cases) {
+    const row = rows.find((r) => r.pair === 'A2/A1' && r.seeds === 'all' && r.kind === kind);
+    if (row === undefined) throw new Error(`no A2/A1 all-seed ${kind} cell to hold against round 3's ${name}; the plan must hold arms A1 and A2`);
+    const got = asEstimate(row);
+    const off = fieldsOff(got, want);
+    if (off.length > 0) throw miss(`cell A2/A1 all ${kind} against ${name}`, got, want, off, CELL_ADVICE);
+  }
+}
+
 function gitLabel(root) {
   const git = (args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  // A label only: the source hashes are the gate, so a folder without git history still reads.
+  let sha;
   try {
-    return { sha: git(['rev-parse', '--short', 'HEAD']), clean: git(['status', '--porcelain']) === '' };
+    sha = git(['rev-parse', '--short', 'HEAD']);
   } catch {
-    // A label only: the source hashes are the gate, so a folder without git history still reads.
     return { sha: 'not a git checkout', clean: null };
+  }
+  try {
+    return { sha, clean: git(['status', '--porcelain']) === '' };
+  } catch {
+    // The sha still names the code, so only the clean flag is lost.
+    return { sha, clean: null };
   }
 }
 
@@ -201,7 +226,6 @@ function readReport(file) {
   return report;
 }
 
-/** The whole read: hash checks, the analyzer's own filters, the self-check, then every cell. */
 export async function readCostByKind(args) {
   const analyzer = path.resolve(args.analyzer);
   if (!fs.existsSync(analyzer) || !fs.statSync(analyzer).isDirectory()) throw new Error(`no folder at --analyzer ${analyzer}; pass the root of a built checkout of 04835462b`);
@@ -214,6 +238,7 @@ export async function readCostByKind(args) {
   const prices = inputs.prices['claude-code'];
   const checks = selfCheck(api, f, prices, report);
   const rows = costByKind(api, f, prices);
+  checkCells(rows, checks);
   return {
     analyzer: { root: analyzer, ...gitLabel(analyzer), node: process.version, sources },
     report: path.resolve(args.report),
@@ -225,12 +250,16 @@ export async function readCostByKind(args) {
 }
 
 const fixed = (x, digits) => (Number.isFinite(x) ? x.toFixed(digits) : NA);
-const signed = (x, digits) => (Number.isFinite(x) ? `${x >= 0 ? '+' : ''}${x.toFixed(digits)}` : NA);
+// A value that rounds to zero prints unsigned, so noise never reads as a direction.
+const signed = (x, digits) => {
+  if (!Number.isFinite(x)) return NA;
+  const text = x.toFixed(digits);
+  return Number(text) === 0 ? (0).toFixed(digits) : `${x >= 0 ? '+' : ''}${text}`;
+};
 const line = (e) => `${fixed(e.estimate, 3)} [${fixed(e.low, 3)}, ${fixed(e.high, 3)}]`;
 const COLUMNS = [['pair', 6], ['seeds', 5], ['kind', 11], ['units', 5], ['ratio', 6], ['low', 6], ['high', 6], ['p', 6], ['$t', 9], ['$c', 9], ['$diff', 9], ['resolve', 7]];
 const tableRow = (cells) => cells.map((c, i) => (i < 3 ? String(c).padEnd(COLUMNS[i][1]) : String(c).padStart(COLUMNS[i][1]))).join('  ');
 
-/** The report as plain text. */
 export function formatText(rep) {
   const a = rep.analyzer;
   const state = a.clean === null ? '' : a.clean ? ' clean' : ' dirty';

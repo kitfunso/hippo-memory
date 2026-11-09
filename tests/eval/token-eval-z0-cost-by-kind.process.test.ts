@@ -38,10 +38,12 @@ function records(arms: Arm[]): Rec[] {
   }))));
 }
 
+// A rate other than 1, so a read that passes the wrong prices block gets NaN dollars and a read that drops the rate gets the wrong ones.
+const RATE = 2;
 const ANALYZE = `import * as fs from 'node:fs';
 export const loadInputs = (args, cwd) => {
   fs.writeFileSync(new URL('../../seen.json', import.meta.url), JSON.stringify({ args, cwd }));
-  return { records: [], planCells: [], prices: { 'claude-code': { rate: 1 } }, grading: null, dropList: null };
+  return { records: [], planCells: [], prices: { 'claude-code': { rate: ${RATE} } }, grading: null, dropList: null };
 };
 `;
 const filters = (scored: Rec[]) => `export const filterRecords = () => ({ arms: ${JSON.stringify([...new Set(scored.map((r) => r.arm))].sort())}, scored: ${JSON.stringify(scored)} });
@@ -49,14 +51,16 @@ export const pairTasks = (scored, armT, armC) => scored.filter((t) => t.arm === 
   .map((t) => ({ t, c: scored.find((c) => c.arm === armC && c.seed === t.seed && c.position === t.position) }))
   .filter((pair) => pair.c !== undefined);
 `;
-const HYPOTHESES = `import { pairTasks } from './z0-filters.mjs';
+// With `drift`, harmT moves the cost ratio of a 12-unit cell (sets R+N) by 1e-9 while ratioT stays put, as a rowOf that strays from the analyzer would.
+const hypotheses = (drift: boolean) => `import { pairTasks } from './z0-filters.mjs';
 const est = (n) => ({ estimate: n / 10, low: n / 20, high: n / 5, se: 0.5, df: 7, p: 0.25 });
 export const inSets = (...sets) => (r) => sets.includes(r.set);
 export const maintainer = (r) => r.lessonSource !== 'template';
 export const taskUnits = (scored, armT, armC, prices, keep) => pairTasks(scored, armT, armC)
-  .filter(({ t }) => keep(t)).map(({ t, c }) => ({ t: { cost: t.cost }, c: { cost: c.cost } }));
+  .filter(({ t }) => keep(t)).map(({ t, c }) => ({ t: { cost: t.cost * prices.rate }, c: { cost: c.cost * prices.rate } }));
 export const ratioT = (units) => est(units.length);
-export const harmT = (units) => ({ costRatio: est(units.length), resolveDiff: { ...est(0), estimate: 0.125 } });
+const shift = (units) => (${drift} && units.length === 12 ? 1e-9 : 0);
+export const harmT = (units) => ({ costRatio: { ...est(units.length), estimate: est(units.length).estimate + shift(units) }, resolveDiff: { ...est(0), estimate: 0.125 } });
 `;
 
 describe('Z0 cost by kind CLI', () => {
@@ -68,14 +72,14 @@ describe('Z0 cost by kind CLI', () => {
   };
 
   /** One tree per case: Node caches a module by URL, so a stub that changes needs a new folder. */
-  function build(over: { scored?: Rec[]; report?: (r: StubReport) => void } = {}): Tree {
+  function build(over: { scored?: Rec[]; drift?: boolean; report?: (r: StubReport) => void } = {}): Tree {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-kind-cli-'));
     dirs.push(base);
     const analyzer = path.join(base, 'analyzer');
     const text: Record<string, string> = Object.fromEntries(SOURCES.map((s) => [s, `// stub ${s}\n`]));
     text['scripts/token-eval/z0-analyze.mjs'] = ANALYZE;
     text['scripts/token-eval/z0-filters.mjs'] = filters(over.scored ?? records(['A1', 'A2', 'A5']));
-    text['scripts/token-eval/z0-hypotheses.mjs'] = HYPOTHESES;
+    text['scripts/token-eval/z0-hypotheses.mjs'] = hypotheses(over.drift ?? false);
     for (const [file, body] of Object.entries(text)) write(path.join(analyzer, file), body);
     const inputs = { 'a.jsonl': 'run a', 'b.jsonl': 'run b', 'p1.json': 'plan 1', 'p2.json': 'plan 2', 'prices.json': '{}', 'grading.json': '{"g":1}', 'drop.json': '{"d":1}' };
     for (const [file, body] of Object.entries(inputs)) write(path.join(base, 'in', file), body);
@@ -112,9 +116,9 @@ describe('Z0 cost by kind CLI', () => {
     expect(rep.rows.map((r: { pair: string; seeds: string }) => `${r.pair} ${r.seeds}`).filter((_: string, i: number) => i % 5 === 0))
       .toEqual(['A2/A1 all', 'A5/A1 all', 'A2/A5 all', 'A2/A1 s1-2', 'A5/A1 s1-2']);
     const whole = rep.rows.find((r: { pair: string; seeds: string; kind: string }) => r.pair === 'A2/A1' && r.seeds === 'all' && r.kind === 'sets R+N');
-    expect(whole).toMatchObject({ units: 12, ratio: 1.2, dollarsT: 24, dollarsC: 12, dollarsDiff: 12, resolve: { estimate: 0.125 } });
+    expect(whole).toMatchObject({ units: 12, ratio: 1.2, dollarsT: 48, dollarsC: 24, dollarsDiff: 24, resolve: { estimate: 0.125 } });
     const early = rep.rows.find((r: { pair: string; seeds: string; kind: string }) => r.pair === 'A5/A1' && r.seeds === 's1-2' && r.kind === 'first apply');
-    expect(early).toMatchObject({ units: 2, dollarsT: 3, dollarsC: 2, dollarsDiff: 1 });
+    expect(early).toMatchObject({ units: 2, dollarsT: 6, dollarsC: 4, dollarsDiff: 2 });
     const seen = JSON.parse(fs.readFileSync(t.seen, 'utf8'));
     expect(seen.args).toEqual({
       runs: [path.join(t.base, 'in', 'b.jsonl').replaceAll('\\', '/'), path.join(t.base, 'in', 'a.jsonl').replaceAll('\\', '/')],
@@ -134,7 +138,7 @@ describe('Z0 cost by kind CLI', () => {
     expect(lines[3]).toBe('self-check H4 cost ratio 0.300 [0.150, 0.600] and resolve difference +0.125: exact');
     expect(lines[4]).toBe('exploratory 25 cells, p not adjusted');
     expect(lines).toHaveLength(5 + 1 + 25 + 1);
-    expect(lines[6]).toMatch(/^A2\/A1 {3}all {4}sets R\+N {8}12 {3}1\.200 {3}0\.600 {3}2\.400 {3}0\.250 {6}24\.00 {6}12\.00 {5}\+12\.00 {3}\+0\.125$/);
+    expect(lines[6]).toMatch(/^A2\/A1 {3}all {4}sets R\+N {8}12 {3}1\.200 {3}0\.600 {3}2\.400 {3}0\.250 {6}48\.00 {6}24\.00 {5}\+24\.00 {3}\+0\.125$/);
   });
 
   it('stops on a changed source file, naming it, both hashes and the fix', async () => {
@@ -170,6 +174,15 @@ describe('Z0 cost by kind CLI', () => {
     expect(out.stderr).toContain('z0-cost-by-kind: self-check H3 differs from the report in low');
     expect(out.stderr).toMatch(/ {2}low: got 0\.6, want 0\.6000000000000\d+/);
     expect(out.stderr).toContain(`node ${process.version}`);
+    expect(out.stderr).toContain('every file matched its hash, so the cause is another Node version (a last-digit difference) or a changed call in this script (the filterRecords options or the prices key)');
+  });
+
+  it('stops when a cell differs from the round 3 line it copies, naming the cell and the field', async () => {
+    const out = await runCli(build({ drift: true }).flags);
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain('z0-cost-by-kind: cell A2/A1 all sets R+N against H3 differs from the report in estimate');
+    expect(out.stderr).toMatch(/ {2}estimate: got 1\.2000000010*\d*, want 1\.2\n/);
+    expect(out.stderr).toContain('report this rather than rerun');
   });
 
   it('stops on a maintainer-only H3 miss and on an H4 resolve miss', async () => {
@@ -183,20 +196,62 @@ describe('Z0 cost by kind CLI', () => {
     const scored = records(['A1', 'A2', 'A5']).map((r) => (r.arm === 'A1' && r.seed === 2 && r.position === 1 ? { ...r, applyIndex: 2 } : r));
     const out = await runCli(build({ scored }).flags);
     expect(out.code).toBe(1);
-    expect(out.stderr).toContain('z0-cost-by-kind: A2/A1 at seq seed 2 position 1: A2 has applyIndex 1 and A1 has 2');
+    expect(out.stderr).toContain('z0-cost-by-kind: A2/A1 at seq seed 2 position 1: A2 has applyIndex 1 and A1 has 2, so a kind filter would read one arm only; the scored records cannot be cut by kind, so report this rather than rerun');
   });
 
   it('stops when the four kinds do not add up to sets R and N', async () => {
     const scored = records(['A1', 'A2', 'A5']).map((r) => (r.seed === 1 && r.position === 0 ? { ...r, kind: 'warmup' } : r));
     const out = await runCli(build({ scored }).flags);
     expect(out.code).toBe(1);
-    expect(out.stderr).toContain('z0-cost-by-kind: A2/A1 all: the four kinds hold 11 units and sets R+N holds 12');
+    expect(out.stderr).toContain('z0-cost-by-kind: A2/A1 all: the four kinds hold 11 units and sets R+N holds 12, so a task sits outside every kind; the scored records cannot be cut by kind, so report this rather than rerun');
   });
 
   it('skips a pair with an arm the plan left out', async () => {
     const t = build({ scored: records(['A1', 'A2']) });
     const rep = JSON.parse((await runCli([...t.flags, '--json'])).stdout);
     expect(rep.exploratory.cells).toBe(10);
+  });
+
+  describe('the analyzer label', () => {
+    /** Commits the stub tree; seen.json is ignored so a read leaves the tree clean. */
+    function commit(dir: string): string {
+      const run = (...args: string[]): string => {
+        const r = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+        expect(r.status, r.stderr).toBe(0);
+        return r.stdout.trim();
+      };
+      run('init', '-q');
+      fs.writeFileSync(path.join(dir, '.gitignore'), 'seen.json\n');
+      run('add', '-A');
+      run('-c', 'user.name=stub', '-c', 'user.email=stub@example.com', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'stub');
+      return run('rev-parse', '--short', 'HEAD');
+    }
+
+    it('names the commit and calls an untouched checkout clean', async () => {
+      const t = build();
+      const head = commit(t.analyzer);
+      const out = await runCli([...t.flags, '--json']);
+      expect(JSON.parse(out.stdout).analyzer).toMatchObject({ sha: head, clean: true });
+      expect((await runCli(t.flags)).stdout.split('\n')[0]).toBe(`analyzer ${head} clean, 10 sources match the report, node ${process.version}`);
+    });
+
+    it('calls a checkout with an extra file dirty', async () => {
+      const t = build();
+      const head = commit(t.analyzer);
+      fs.writeFileSync(path.join(t.analyzer, 'extra.txt'), 'x');
+      expect(JSON.parse((await runCli([...t.flags, '--json'])).stdout).analyzer).toMatchObject({ sha: head, clean: false });
+      expect((await runCli(t.flags)).stdout.split('\n')[0]).toContain(`${head} dirty,`);
+    });
+
+    it('keeps the commit when git status fails, with the clean flag lost', async () => {
+      const t = build();
+      const head = commit(t.analyzer);
+      fs.writeFileSync(path.join(t.analyzer, '.git', 'index'), 'not an index');
+      const out = await runCli([...t.flags, '--json']);
+      expect(out.code).toBe(0);
+      expect(JSON.parse(out.stdout).analyzer).toMatchObject({ sha: head, clean: null });
+      expect((await runCli(t.flags)).stdout.split('\n')[0]).toBe(`analyzer ${head}, 10 sources match the report, node ${process.version}`);
+    });
   });
 
   it('reads a relative --analyzer from the working folder', async () => {
