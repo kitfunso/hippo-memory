@@ -15,6 +15,7 @@ import {
 } from '../../api/context/context-render.js';
 import type { ContextResult } from '../../api/context/context-types.js';
 import { printError } from './output.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 export function fmt(n: number, digits = 2): string {
   return n.toFixed(digits);
@@ -43,7 +44,7 @@ export function recallEntryText({
   const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
   const lines = [
     `--- ${e.id} [${e.layer}] ` +
-      `${confLabel}${isGlobal ? ' [global]' : ''}${e.supersededBy ? ' [superseded]' : ''}${graphMark} ` +
+      `${confLabel}${isGlobal ? ' [global]' : ''}${isSuperseded(e) ? ' [superseded]' : ''}${graphMark} ` +
       `score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`,
     `    [${'█'.repeat(bars)}${'░'.repeat(10 - bars)}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ` +
       `${e.retrievalCount}x`,

@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../../src/base/memory/agent-memory-tools.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { KEEP_PAIRS, canAutoDelete } from '../../src/base/memory/keep-rules.js';
+import { KEEP_PAIRS, canAutoDelete, isKeptForGood } from '../../src/base/memory/keep-rules.js';
 import { AUTO_DELETABLE } from '../../src/store/sqlite/runtime/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
@@ -387,6 +387,24 @@ describe('forget and supersede still work on a kept row', () => {
 
     expect(canAutoDelete(readEntry(root, kept.id)!)).toBe(true);
     expect(canAutoDelete(readEntry(root, newId)!)).toBe(false);
+    expect(sqlDeletableIds(root)).toEqual([kept.id]);
+  });
+
+  it('a blank superseded link counts as superseded: the imported row is not kept and is auto-deletable in both', () => {
+    const root = newRoot();
+    const kept = keptRow('the release train leaves on thursdays');
+    writeEntry(root, kept);
+    const db = openHippoDb(root);
+    try {
+      db.prepare(`UPDATE memories SET superseded_by = '' WHERE id = ?`).run(kept.id);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const stored = readEntry(root, kept.id)!;
+    expect(stored.supersededBy).toBe('');
+    expect(isKeptForGood(stored)).toBe(false);
+    expect(canAutoDelete(stored)).toBe(true);
     expect(sqlDeletableIds(root)).toEqual([kept.id]);
   });
 });

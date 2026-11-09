@@ -10,6 +10,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { makeOkFetcher, makeScriptedFetcher, rejectValue } from '../_helpers/dag-rebuild.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -64,6 +65,32 @@ describe('Batch extraction during consolidation', () => {
     const result = await consolidate(tmpDir, { dryRun: false, now: FIXED_NOW });
 
     expect(result.extractionCandidates).toBe(0);
+  });
+
+  it('does not offer an episodic memory whose superseded_by is blank: a blank link counts as superseded', async () => {
+    initTestStore(tmpDir);
+
+    const live = createMemory('redis cache eviction policy is set to allkeys-lru in production', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+    });
+    const blank = createMemory('the deploy pipeline uses blue-green strategy on kubernetes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+    });
+    writeEntry(tmpDir, live);
+    writeEntry(tmpDir, blank);
+    // No writer makes a blank link, so the UPDATE is the test's subject.
+    const db = openHippoDb(tmpDir);
+    try {
+      db.prepare(`UPDATE memories SET superseded_by = '' WHERE id = ?`).run(blank.id);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const result = await consolidate(tmpDir, { dryRun: false, now: FIXED_NOW });
+
+    expect(result.extractionCandidates).toBe(1);
   });
 });
 

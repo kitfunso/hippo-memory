@@ -1,6 +1,7 @@
 // Which memories sleep may never delete, and how an outcome mark changes an entry.
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './entry.js';
+import { isSuperseded } from './liveness.js';
 import { calculateStrength, type StrengthModel } from './strength.js';
 
 /** An imported agent memory is kept for good: the agent's note file is its record. It needs its
@@ -19,7 +20,7 @@ export function isKeptForGood(
   entry: Pick<MemoryEntry, 'tags' | 'source' | 'supersededBy'>,
 ): boolean {
   return (
-    !entry.supersededBy &&
+    !isSuperseded(entry) &&
     KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix))
   );
 }

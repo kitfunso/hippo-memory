@@ -12,6 +12,7 @@ import {
   PRODUCTION_STRENGTH,
   type StrengthModel,
 } from './strength.js';
+import { isSuperseded } from './liveness.js';
 
 export const DEFAULT_SCHEMA_FIT = 0.5;
 
@@ -435,7 +436,7 @@ export function markRetrieved(
 ): MemoryEntry[] {
   if (!model.recallStrengthens) return entries;
   return entries.map((e) => {
-    if (e.supersededBy) return e;
+    if (isSuperseded(e)) return e;
     const wrong = netWrong(e, model) > 0;
     // Confidence stays untouched: it is an epistemic tier, not a recency signal.
     const updated: MemoryEntry = {

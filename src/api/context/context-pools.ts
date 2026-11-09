@@ -18,6 +18,7 @@ import {
 import type { ContextOptions } from './context-types.js';
 import type { Context } from '../types.js';
 import { NO_QUERY, globalSource, type ContextPlan, type ContextSource } from './context-plan.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 /** The ambient admit rules. */
 export interface ContextAdmission {
@@ -146,7 +147,7 @@ export function ambientAdmission(
   // The two-store search has always ranked a session's own compaction items; only the local search
   // drops them.
   const bothStoresAdmit = (e: MemoryEntry): boolean =>
-    !e.supersededBy && ambientEnvelopeAdmits(e, rule);
+    !isSuperseded(e) && ambientEnvelopeAdmits(e, rule);
   return { rule, admit, bothStoresAdmit };
 }
 

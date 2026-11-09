@@ -1,6 +1,7 @@
 // hippo.db's Reports group: the tenant reports, listings and usage reports the status verbs print.
 import { type DatabaseSyncLike, withReadSnapshot } from '../../../db/index.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { supersededIn } from '../../../db/sql-predicates.js';
 import { summarizeTokenUse } from '../ledger/token-ledger.js';
 import { summarizeFailures } from '../capture/failure-log.js';
 import { keysetPage } from '../../../base/util/keyset.js';
@@ -50,7 +51,7 @@ function correctionLinks(db: DatabaseSyncLike, page: ReportPage): CorrectionLink
        src.created AS source_created
      FROM memories old JOIN memories new ON new.id = old.superseded_by
      LEFT JOIN memories src ON new.extracted_from <> '' AND src.id = new.extracted_from
-     WHERE old.superseded_by IS NOT NULL AND old.superseded_by != ''${range.sql}
+     WHERE ${supersededIn('old.')}${range.sql}
      ORDER BY old.created ASC, old.id ASC LIMIT ?`,
   ).all(...range.params, page.limit + 1) as CorrectionLinkDbRow[];
   const kept = keysetPage(rows, page.limit, (r) => ({ created: r.old_created, id: r.old_id }));

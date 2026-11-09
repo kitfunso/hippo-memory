@@ -2,6 +2,7 @@
 // the client holds.
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import { isLiveMemory } from '../../base/scope/live-memory.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
 import { round1 } from '../../base/util/format.js';
 import type { RequiredStore } from '../../base/ports/store.js';
@@ -9,7 +10,7 @@ import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
 import type { DashboardReads } from '../../base/ports/store/dashboard-reads.js';
 import { memoryGet } from '../memories/memories.js';
 import { strengthOf, type Context } from '../types.js';
-import { BANDS, isLiveMemory, LAYERS, projectIdentity, round3 } from './live.js';
+import { BANDS, LAYERS, projectIdentity, round3 } from './live.js';
 import type { SnapshotClock } from './snapshot-clock.js';
 import type { MemoryConflictDetail, MemoryDetail } from './types.js';
 

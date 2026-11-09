@@ -7,7 +7,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
-import { isLiveMemory } from '../../api/dashboard/live.js';
+import { isLiveMemory } from '../../base/scope/live-memory.js';
 import type { ForgetResult, ResolveResult } from '../../api/dashboard/types.js';
 
 /** What an action hands the router: a status, a JSON body, and whether the store changed. */

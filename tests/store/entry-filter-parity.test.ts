@@ -152,12 +152,12 @@ describe('entriesWhere', () => {
     expect(kept.get(`${name} first page`)).toEqual(oldest.slice(0, 3));
   });
 
-  it('reads each edge as the field means it', () => {
+  it('reads each edge as the field means it, a blank superseded link as superseded', () => {
     const ids = (name: string): string[] => (kept.get(`${name} oldest`) ?? []).map((id) => id.slice(4));
     expect(ids('ref prefix')).toEqual(['f08']);
     expect(ids('tag a JSON string holds')).toEqual(['f02']);
     expect(ids('prefix')).toEqual(['f02', 'f03', 'f16']);
-    expect(ids('live')).toContain('f18');
+    expect(ids('live')).not.toContain('f18');
     expect(ids('live')).not.toContain('f12');
     expect(ids('ids')).toEqual(['f02', 'f12']);
     expect(ids('empty prefix')).toEqual(ids('one tenant'));

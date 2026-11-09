@@ -33,6 +33,7 @@ import type {
   SettledOptions,
 } from './pipeline.js';
 import { poolScope } from './rank-search.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 
 export interface RankState {
   results: SearchResult[];
@@ -178,7 +179,7 @@ function reorderResults(opts: RankRecallOptions, state: RankState): void {
     state.results = newestOnTopicFirst(opts.query, state.results);
   }
   if (opts.filterConflicts) {
-    dropUnless(state, (r) => !r.entry.supersededBy);
+    dropUnless(state, (r) => !isSuperseded(r.entry));
     demoteConflictPeers(opts, state);
   }
   if (opts.valueAware && state.results.length >= 1) applyValueAware(opts, state);
