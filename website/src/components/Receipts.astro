@@ -1,5 +1,6 @@
 ---
 import { receipts } from '../content/site';
+import RepeatMistakes from './RepeatMistakes.astro';
 ---
 
 <section id="receipts" class="relative border-t border-white/5 bg-white/[0.02]">
@@ -12,7 +13,11 @@ import { receipts } from '../content/site';
       <p class="font-mono text-sm text-zinc-400">every claim links to its source</p>
     </div>
 
-    <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="mt-10">
+      <RepeatMistakes />
+    </div>
+
+    <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {receipts.map((r) => (
         <a
           href={r.href}
