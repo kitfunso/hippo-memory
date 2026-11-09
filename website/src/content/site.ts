@@ -40,6 +40,7 @@ export const site = {
     longmemeval: `${REPO}/tree/master/benchmarks/longmemeval`,
     license: `${REPO}/blob/master/LICENSE`,
     jevEval: `${REPO}/blob/master/docs/evals/2026-09-19-jev-reranker.md`,
+    z0Round3: `${REPO}/blob/master/docs/evals/2026-11-08-z0-round3-result.md`,
     atlas: 'https://neoneye.github.io/agent-memory-atlas/systems/hippo-memory/',
     // Pilot requests open a GitHub issue until a booking link exists.
     pilot: `${REPO}/issues/new?title=Pilot%20request&body=Company%2C%20team%20size%2C%20agents%20in%20use%3A`,
@@ -50,6 +51,12 @@ export const site = {
 // Hero proof lines, above the fold (audit: lead with capability proof, not adjectives).
 // The reranker line carries its null result inline; the win never travels without it.
 export const proofs = [
+  {
+    stat: 'About half the repeat mistakes',
+    text: "of Claude Code's built-in memory alone, at the same cost: 11 in 100 against 21, 2 to 4 tasks after one correction, on 29 repositories.",
+    href: site.links.z0Round3,
+    hrefLabel: 'the Z0 round 3 result',
+  },
   { stat: '98.0% R@5', text: 'on LongMemEval-S with a free local embedder (best of five settings).' },
   {
     stat: 'R@1 0.41 to 0.62',
@@ -125,6 +132,20 @@ export const mechanics = [
     body: 'On `hippo sleep`, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy; it has not been shown to improve recall.',
   },
 ] as const;
+
+/** Z0 round 3, the agent-session result. Every figure is in docs/evals/2026-11-08-z0-round3-result.md. */
+export const repeatMistakes = {
+  stat: 'About half',
+  label: "as many repeat mistakes as Claude Code's built-in memory alone, at the same cost.",
+  note: 'Correct the agent once, then count how often it makes that mistake again 2 to 4 tasks later. Real Claude Code sessions on 29 repositories, registered before the run. Over every first chance to repeat: 14.9 points fewer [5.5, 24.3], cost ratio 1.006. The gain is the same with lesson capture switched off, so round 4 tests how much of it the stored lessons carry.',
+  unit: 'in 100',
+  bars: [
+    { name: 'No memory', rate: 83, lead: false },
+    { name: "Claude Code's built-in memory", rate: 21, lead: false },
+    { name: 'Built-in memory plus hippo', rate: 11, lead: true },
+  ],
+  href: site.links.z0Round3,
+} as const;
 
 export const receipts = [
   {
