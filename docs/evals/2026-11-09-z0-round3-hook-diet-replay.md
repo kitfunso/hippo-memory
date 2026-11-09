@@ -4,7 +4,7 @@ Date: 9 Nov 2026. Build read: hippo master at `0402d3daa`, the first build with 
 Inputs: the 35 runs of the round 3 final read (`C:/z0-runs/scored/r3-final-read.sh` lines 8 to 15), through
 `runNames` in `scripts/token-eval/z0-reach.mjs`. Script:
 `node scripts/token-eval/z0-hook-diet.mjs --scored C:/z0-runs/scored` (add `--json` for one JSON object). The run
-makes no model calls and costs nothing. It prints the checkout's HEAD; the runs below read `016d30459`, whose `src/`
+makes no model calls and costs nothing. It prints the checkout's HEAD; the runs below read `fcb215f61`, whose `src/`
 and `dist/` equal `0402d3daa`'s. This is a model-free read of round 3's saved stores, not a scored run.
 
 ## Answer
@@ -13,8 +13,10 @@ The longest exclude list cuts hippo's prompt block by 77% of its tokens. That sa
 cost, $0.0039 of $0.257. Round 3 already ties built-in memory on cost per solved task: A2 $0.365 against A1 $0.368
 (`C:/z0-runs/scored/r3-final/unblind.json`, `reported.perArm.A1|A2.costPerResolved.estimate`). H3's cost ratio is
 1.006 [0.964, 1.049] (`unblind.stdout` line 25). A 1.5% saving sits well inside that interval, so this cut alone
-cannot show a cost win at round 3's size. A cost win needs a lever on the turns a session takes or on the tasks it
-solves.
+cannot show a cost win at round 3's size. The round 3 prereg already put the whole of hippo's injected text at
+about 1.5% of cost: removing all of it moved round 2's pooled ratio from 1.00 to about 0.985
+(`2026-11-02-z0-round3-prereg.md` line 12). This replay measures the part that the list removes, on round 3's
+stores, and gets the same order.
 
 ## What the script does
 
@@ -85,14 +87,17 @@ Those 76 sessions average 8.5 main calls with the block, 9.1 turns and 373,488 c
 ## Limits
 
 - **The sample leans to large stores.** Each seed's snapshot is the store before its last A2 session, where the
-  store is largest. A mean A2 session has a smaller block, so its saving is likely smaller still.
+  store has grown the most. This read does not render the earlier sessions, so it does not measure their block.
 - **Tokens are hippo's estimate.** The cut is in hippo's character-based count, not in API tokens.
 - **Only the block's own tokens count.** The replay cannot show whether a smaller block changes what the agent does,
   how many turns it takes or whether it solves the task. Only a scored run can show that.
 
 ## What this means for round 4
 
-A round 4 cost test built on this cut alone would need a run several times round 3's size to separate a 1.5% saving
-from noise. Round 3's measured benefit is 14.9 points fewer repeat mistakes at the same cost
-(`2026-11-08-z0-round3-result.md`). A repeat mistake costs turns. So this read recommends that round 4's cost test aim
-at the turns that repeat mistakes cost, with the list3 cut as an extra arm. The round 4 prereg makes that choice.
+A cost test of this cut alone is out of reach. H3's standard error in round 3 is 0.0215 (`unblind.json`,
+`hypotheses.H3.se`). To see a 1.5% shift at 80% power with a two-sided 5% test, it must fall to
+0.015 / 2.80 = 0.0054, which takes about (0.0215 / 0.0054)^2 = 16 times round 3's size.
+
+So the cut cannot be round 4's cost endpoint by itself. Round 4's cost design depends on where round 3's cost sits
+by task kind (teach, first apply, later applies, set N) and by arm, A5 (sham hippo) included. The round 4 prereg
+reads that split from the round 3 records before it picks an endpoint. The list3 cut goes in as an arm there.
