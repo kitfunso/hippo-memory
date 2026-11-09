@@ -285,8 +285,9 @@ describe('learn', () => {
     expect(result.invalidations.map((i) => i.count)).toEqual([2, 3, 4]);
     const lessons = loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source);
     const base = lessons.find((e) => !e.tags.includes('invalidated'))?.halfLifeDays ?? 0;
+    // The first lesson is weakened by both later ones and loses its half-life once.
     expect(lessons.map((e) => e.halfLifeDays).sort((a, b) => a - b)).toEqual([
-      Math.floor(Math.floor(base / 2) / 2),
+      Math.floor(base / 2),
       Math.floor(base / 2),
       base,
     ]);

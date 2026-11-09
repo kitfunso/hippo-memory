@@ -24,7 +24,13 @@ export enum Layer {
 
 export type EmotionalValence = 'neutral' | 'positive' | 'negative' | 'critical';
 
-export type ConfidenceLevel = 'verified' | 'observed' | 'inferred' | 'stale';
+export const CONFIDENCE_LEVELS = ['verified', 'observed', 'inferred', 'stale'] as const;
+export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
+
+/** True when `value` is one of the four stored confidence tiers. */
+export function isConfidenceLevel(value: string): value is ConfidenceLevel {
+  return CONFIDENCE_LEVELS.some((level) => level === value);
+}
 
 export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 

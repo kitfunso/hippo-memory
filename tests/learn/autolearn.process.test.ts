@@ -315,14 +315,10 @@ describe('a gated lesson still invalidates', () => {
     // PINS A DELIBERATE LIMITATION, not a fix. A subject too thin to store
     // also does not invalidate, because the gate filters the loop input.
     //
-    // The alternative was tried and reverted: letting dropped lessons
-    // invalidate removes the stored record that makes invalidation
-    // idempotent, so every rescan re-weakens the same memories and
-    // half_life_days compounds down (measured 7 -> 3 -> 1 over two runs).
-    // Across 413 real auto-learn rows, ZERO gated lessons carry a migration
-    // target, so both failure modes are empty on real data and the tie
-    // breaks on which is benign. Backlog: make invalidateMatching idempotent,
-    // which would allow both behaviours at once.
+    // Invalidation halves a memory's half-life once, so a rescan no longer
+    // compounds it. Letting dropped lessons invalidate is a separate change
+    // that is not made here: across 413 real auto-learn rows, ZERO gated
+    // lessons carry a migration target, so the limit costs nothing today.
     //
     // If this assertion ever flips, someone changed that decision - make it
     // deliberate rather than incidental.

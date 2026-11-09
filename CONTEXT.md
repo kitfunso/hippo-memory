@@ -38,6 +38,23 @@ Only an explicit supersede sets it today (`hippo supersede`, `POST /v1/memories/
 ROADMAP Z6's "retired" means superseded or invalidated, never deleted.
 _Avoid_: deduped (sleep's dedup deletes a near-copy outright), dormant, stale
 
+**Confidence tier**:
+Why hippo believes a memory, stored with it: verified (a person vouched), observed, inferred, or
+stale (an invalidation or a decision that replaced it withdrew trust). Only those two acts write
+stale.
+_Avoid_: confidence score, trust level, stale for an old memory (that is aged-out)
+
+**Aged-out memory**:
+An unpinned memory below verified that nobody retrieved for over 30 days. Derived when read and
+never stored: it shows as `<tier>, aged`, warns, and replay skips it.
+_Avoid_: stale (that is a confidence tier), expired
+
+**Invalidated memory**:
+A memory a commit message or `hippo invalidate` named as replaced: tier stale, tagged
+`invalidated`, half-life halved once; invalidating it again changes nothing more. Pinned memories
+are skipped.
+_Avoid_: superseded (that has a replacement row), churn-stale
+
 **Raw receipt**:
 A `kind='raw'` memory: a connector message or imported note, append-only. Sleep never
 deletes one; only the raw archive removes it.

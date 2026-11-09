@@ -5,6 +5,7 @@ import {
   DEFAULT_SCHEMA_FIT,
   type ConfidenceLevel,
   type MemoryKind,
+  isConfidenceLevel,
 } from './entry.js';
 import { FALLBACK_HALF_LIFE_DAYS } from './strength.js';
 import { fromWire, toWire, type MemoryWire } from './memory-wire.js';
@@ -157,9 +158,8 @@ function scoringWireOf(
   data: FrontmatterData,
   now: Date,
 ): Omit<MemoryWire, 'content' | keyof LineageWire> {
-  // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member; frontmatter is only
-  // written by serializeEntry, so out-of-range values mean hand-edited files, which this parser may
-  // accept (permissive parse).
+  // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member, so a hand-edited
+  // value outside it parses through. Confidence alone is checked: it becomes a stored tier.
   return {
     id: String(data['id']),
     created: String(data['created'] ?? now.toISOString()),
@@ -180,8 +180,21 @@ function scoringWireOf(
     outcome_negative: Number(data['outcome_negative'] ?? 0),
     conflicts_with: normalizeStringArray(data['conflicts_with']),
     pinned: Boolean(data['pinned'] ?? false),
-    confidence: (data['confidence'] as ConfidenceLevel) ?? 'observed',
+    confidence: confidenceOf(data),
   };
+}
+
+function confidenceOf(data: FrontmatterData): ConfidenceLevel {
+  const given = data['confidence'];
+  // This parser reads a bare `confidence:` line as '', so it counts as missing like null.
+  const value = given === undefined || given === null || given === '' ? 'observed' : given;
+  const text = String(value);
+  if (isConfidenceLevel(text)) return text;
+  throw new Error(
+    `memory ${String(data['id'])}: unknown confidence ${JSON.stringify(value)}; ` +
+      'use verified, observed, inferred or stale; the file stays on disk, ' +
+      'and deleting hippo.db to rebuild is safe only before any new write',
+  );
 }
 
 function lineageWireOf(data: FrontmatterData, now: Date): LineageWire {

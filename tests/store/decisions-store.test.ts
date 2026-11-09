@@ -8,6 +8,7 @@
  * 3. saveDecision without context: bare memory content, has_context false
  * 4. loadDecisions status filter; status 'active' excludes non-active
  * 5. resolveActiveDecisionIdByMemory (row id first-class, null legacy/superseded)
+ * 6. weakenSupersededMemory halves the replaced memory's half-life once, however often it runs
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -15,7 +16,12 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { loadDecisions, resolveActiveDecisionIdByMemory, DECISION } from '../../src/domain/objects/decisions.js';
+import {
+  loadDecisions,
+  resolveActiveDecisionIdByMemory,
+  weakenSupersededMemory,
+  DECISION,
+} from '../../src/domain/objects/decisions.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -26,7 +32,7 @@ import { saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-const { writeEntry, objectsAt } = sessionPerTest();
+const { writeEntry, readEntry, objectsAt, sqliteStore } = sessionPerTest();
 
 /**
  * Typed wrappers around DatabaseSyncLike's untyped get/all and JSON.parse.
@@ -214,5 +220,44 @@ describe('decisions store (first-class object)', () => {
       supersedesDecisionId: sup.id,
     });
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', sup.memoryId!)).toBeNull();
+  });
+
+  it('weakening a memory a decision replaced twice halves its half-life once', async () => {
+    const old = createMemory('use Postgres', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['decision'],
+      source: 'decision',
+      tenantId: 'default',
+    });
+    writeEntry(home, old);
+    const { entryWrites } = sqliteStore(home);
+
+    await weakenSupersededMemory(entryWrites, old);
+    const first = readEntry(home, old.id)!;
+    await weakenSupersededMemory(entryWrites, first);
+    const second = readEntry(home, old.id)!;
+
+    expect(first.halfLifeDays).toBe(Math.floor(old.halfLifeDays / 2));
+    expect(second.halfLifeDays).toBe(first.halfLifeDays);
+    expect(second.confidence).toBe('stale');
+    expect(second.tags.filter((tag) => tag === 'superseded')).toHaveLength(1);
+  });
+
+  it('weakening a fresh verified memory that already carries the superseded tag halves it once', async () => {
+    const copied = createMemory('use Postgres', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['decision', 'superseded'],
+      confidence: 'verified',
+      source: 'decision',
+      tenantId: 'default',
+    });
+    writeEntry(home, copied);
+
+    await weakenSupersededMemory(sqliteStore(home).entryWrites, copied);
+    const weakened = readEntry(home, copied.id)!;
+
+    expect(weakened.halfLifeDays).toBe(Math.floor(copied.halfLifeDays / 2));
+    expect(weakened.confidence).toBe('stale');
+    expect(weakened.tags.filter((tag) => tag === 'superseded')).toHaveLength(1);
   });
 });
