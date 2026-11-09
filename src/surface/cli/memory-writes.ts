@@ -278,7 +278,8 @@ async function sendOrFallBack<T>(
         'a served write may have landed, so it is not replayed on the store',
         errorFields(err),
       );
-      fail(`hippo: ${client.deliveryUnknownReason(err, server.url)}`);
+      const reason = client.deliveryUnknownReason(err, server.url);
+      fail(`hippo: ${reason} Check with \`hippo recall\` before running this again.`);
     }
     failIfServerRequired('the server pidfile was stale (connection refused)');
     log.warn('stale server pidfile detected, falling back to direct mode', errorFields(err));

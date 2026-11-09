@@ -263,6 +263,8 @@ describe('deliveryUnknownReason', () => {
   });
 });
 
+const RECALL_HINT = 'Check with `hippo recall` before running this again.';
+
 describe('remember over HTTP when the socket resets after the commit', () => {
   it('does not replay the write on the direct path', async () => {
     assertFreshBuild();
@@ -282,7 +284,7 @@ describe('remember over HTTP when the socket resets after the commit', () => {
       expect(countMemories(hippoRoot, content)).toBe(1);
       expect(status, stderr).toBe(1);
       expect(stderr).toContain('may already have been applied');
-      expect(stderr).not.toContain('hippo recall');
+      expect(stderr).toContain(RECALL_HINT);
     } finally {
       await closeServer(server);
     }
@@ -355,7 +357,7 @@ describe('a served write whose 2xx reply cannot be read', () => {
       expect(writes.count, `the CLI never routed to the stub server; stderr: ${stderr}`).toBe(1);
       expect(status, stderr).toBe(1);
       expect(stderr).toContain('answered, but its reply could not be read, so the write may already have been applied');
-      expect(stderr).not.toContain('hippo recall');
+      expect(stderr).toContain(RECALL_HINT);
       untouched(hippoRoot, id, globalHome);
     } finally {
       await closeServer(server);
