@@ -10,7 +10,8 @@ Node v24.13.0.
 ## Answer
 
 Hippo costs 3.9% more than sham hippo over sets R and N: A2/A5 is 1.039 [1.008, 1.070], p 0.013, which is $12.41
-on $320.38 (all seeds). Sham hippo is hippo without its capture hooks (base prereg line 83). So A2 minus A5
+on $320.38 (all seeds). Sham hippo drops hippo's capture hooks and turns `remember`, `capture`, `learn` and `outcome` into no-ops (base
+prereg line 83). So A2 minus A5
 measures hippo's capture and its import of Claude Code's own memory notes together, with all that follows from them
 (base prereg line 93). No capture model call is in these dollars: hippo's LLM extraction is off (base prereg line
 76), and the cost counts session tokens only (`costOf`, frozen `z0-hypotheses.mjs:33`). Teach tasks carry $7.42 of
@@ -131,7 +132,7 @@ These are hypotheses for round 4 to test, not results of this read.
   ($7.42 of $12.41). The source can be the captured lessons, the imported notes or what the agent does with either.
   Round 4 must find which one before it changes capture.
 - **Delivery can be worth more.** A4 shows about 7% on Opus, but A4 mixes its rule with no auto memory. An arm
-  with the rule and auto memory on can split the two. The size of hippo's injected block is not the lever. The hook
+  with the rule and auto memory on can split the two. The size of hippo's injected block looks small next to that, on two point estimates. The hook
   diet replay put its longest exclude list at about 1.5% of an A2 session's cost
   (`2026-11-09-z0-round3-hook-diet-replay.md` line 12). Removing all of hippo's injected text moved round 2's
   Amendment 9 pooled ratio from 1.00 to about 0.985 (`2026-11-02-z0-round3-prereg.md` line 12).
