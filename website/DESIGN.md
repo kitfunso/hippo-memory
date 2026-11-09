@@ -11,7 +11,7 @@ tokens:
     loading: "self-hosted via astro.config fonts: latin woff2, weights 400/500/600, display swap, metric-matched fallbacks"
   color:
     bg: "#0b0f0c"                   # ink
-    accent_mint: "#7ce38b"          # recalled; token names acc-violet/acc-cyan kept, both resolve to mint
+    accent_mint: "#7ce38b"          # accent: recalled, the brand mint; accent-light: links and the focus ring; warn: marked wrong and published losses
     accent_mint_light: "#a7f0b1"
     accent_amber: "#f2b84b"         # marked wrong, published losses, in-development labels
     neutrals: "zinc scale overridden in global.css with ink-tinted greys"

@@ -53,7 +53,7 @@ const rows = homeFeatures.map((f) => {
                 Feature
               </th>
               {systems.map((s) => (
-                <th scope="col" class:list={['px-2 py-3 text-center align-bottom font-sans text-[13px] font-semibold leading-tight', s.self ? 'bg-acc-violet/5' : '']}>
+                <th scope="col" class:list={['px-2 py-3 text-center align-bottom font-sans text-[13px] font-semibold leading-tight', s.self ? 'bg-accent/5' : '']}>
                   <a
                     href={s.href}
                     target="_blank"
@@ -81,7 +81,7 @@ const rows = homeFeatures.map((f) => {
                     class:list={[
                       'px-2 py-3 text-center align-middle text-[13px] leading-snug',
                       cellTone(c),
-                      ci === 0 ? 'bg-acc-violet/5 font-medium' : '',
+                      ci === 0 ? 'bg-accent/5 font-medium' : '',
                     ]}
                   >{c}</td>
                 ))}

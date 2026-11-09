@@ -44,7 +44,7 @@ const kpis = [
       <div class="pointer-events-none absolute inset-0 -z-10 hero-glow"></div>
       <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-(--section-y) pt-10 sm:pt-12 lg:grid-cols-2">
         <div class="min-w-0">
-          <span class="inline-flex items-center gap-2 rounded-full border border-acc-amber/40 bg-acc-amber/10 px-3 py-1 font-mono text-xs text-acc-amber">
+          <span class="inline-flex items-center gap-2 rounded-full border border-warn/40 bg-warn/10 px-3 py-1 font-mono text-xs text-warn">
             Enterprise v1 · in development · pilots open
           </span>
           <h1 class="mt-6 font-display text-4xl font-medium leading-(--leading-display) tracking-tight sm:text-5xl">
@@ -54,7 +54,7 @@ const kpis = [
             {enterprise.availability} One plugin turns on shared memory for every agent seat. It runs inside your network, recalls only what each developer can already see, and logs every write. No usage beacon, nothing sent home.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
-            <a href={site.links.pilot} target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-acc-violet px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:opacity-90">Ask about a 4-week pilot</a>
+            <a href={site.links.pilot} target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:opacity-90">Ask about a 4-week pilot</a>
             <a href={site.links.security} target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-white/12 px-5 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/5">Security policy</a>
           </div>
         </div>
@@ -65,8 +65,8 @@ const kpis = [
             {agents.map((a) => <li class="rounded-lg border border-white/10 px-3 py-2.5 text-center text-sm text-zinc-200">{a}</li>)}
           </ul>
           <p class="mt-3 text-center font-mono text-xs text-zinc-400">MCP over OAuth, signed in as the developer</p>
-          <div class="mt-3 rounded-xl border-2 border-dashed border-acc-violet/50 p-4">
-            <p class="font-mono text-xs text-acc-violet">YOUR NETWORK</p>
+          <div class="mt-3 rounded-xl border-2 border-dashed border-accent/50 p-4">
+            <p class="font-mono text-xs text-accent">YOUR NETWORK</p>
             <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-900 px-4 py-3">
               <span class="font-display text-base">hippo server</span>
               <span class="font-mono text-xs text-zinc-400">Postgres · Helm · SSO · audit log</span>
@@ -84,7 +84,7 @@ const kpis = [
       <div class="mx-auto grid max-w-6xl gap-4 px-5 py-(--section-y) md:grid-cols-3">
         {pillars.map((p) => (
           <div class="glass flex flex-col gap-3 rounded-2xl p-6">
-            <span class:list={['self-start rounded px-2 py-0.5 font-mono text-xs', p.status === 'shipped' ? 'bg-acc-violet/15 text-acc-violet' : 'bg-acc-amber/15 text-acc-amber']}>{p.status}</span>
+            <span class:list={['self-start rounded px-2 py-0.5 font-mono text-xs', p.status === 'shipped' ? 'bg-accent/15 text-accent' : 'bg-warn/15 text-warn']}>{p.status}</span>
             <h2 class="text-xl leading-snug">{p.title}</h2>
             <p class="text-sm leading-relaxed text-zinc-400">{p.body}</p>
           </div>
@@ -108,7 +108,7 @@ const kpis = [
               <span class="text-sm text-zinc-400">{k.how}</span>
             </li>
           ))}
-          <li class="px-6 py-4 font-mono text-sm text-acc-violet">with hippo vs holdout · 95% interval · your result</li>
+          <li class="px-6 py-4 font-mono text-sm text-accent">with hippo vs holdout · 95% interval · your result</li>
         </ul>
       </div>
     </section>

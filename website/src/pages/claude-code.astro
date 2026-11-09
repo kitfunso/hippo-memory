@@ -67,7 +67,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
           <tbody class="divide-y divide-white/5">
             {hooks.map((h) => (
               <tr class="align-top">
-                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-acc-cyan sm:whitespace-nowrap sm:px-5">{h.event}</th>
+                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-accent-light sm:whitespace-nowrap sm:px-5">{h.event}</th>
                 <td class="copy px-3 py-3 text-zinc-300 sm:px-5" set:html={mdInline(h.does)} />
               </tr>
             ))}

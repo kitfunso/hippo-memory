@@ -1,6 +1,6 @@
 /* hippo-memory design system, "Terminal Native": ink ground, mint = recalled, amber = marked wrong.
    Geist sets text and headings, Geist Mono code, terminal and nav (faces come from astro.config fonts).
-   acc-violet / acc-cyan keep their old names so components re-theme without edits; both are mint. */
+   accent: recalled, the brand mint. accent-light: links and the focus ring. warn: marked wrong and published losses. */
 
 @import 'tailwindcss';
 
@@ -10,9 +10,9 @@
   --font-mono: var(--font-geist-mono);
 
   /* brand accents: mint = recalled, amber = marked wrong */
-  --color-acc-violet: #7ce38b;
-  --color-acc-cyan: #a7f0b1;
-  --color-acc-amber: #f2b84b;
+  --color-accent: #7ce38b;
+  --color-accent-light: #a7f0b1;
+  --color-warn: #f2b84b;
 
   /* neutrals tinted toward the ink ground (overrides Tailwind's zinc scale sitewide) */
   --color-zinc-50: #f2f5f2;
@@ -89,12 +89,12 @@
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--color-acc-violet) 40%, transparent);
+    background: color-mix(in oklab, var(--color-accent) 40%, transparent);
     color: #fff;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-acc-cyan);
+    outline: 2px solid var(--color-accent-light);
     outline-offset: 3px;
     border-radius: 4px;
   }
@@ -106,7 +106,7 @@
 }
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
   .text-gradient {
-    background-image: linear-gradient(110deg, var(--color-acc-violet) 0%, var(--color-acc-cyan) 100%);
+    background-image: linear-gradient(110deg, var(--color-accent) 0%, var(--color-accent-light) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -141,14 +141,14 @@ header.glass {
    Applied per-link via this class - deliberately NOT a blanket `a` rule, so nav
    pills, CTAs, and card links keep their own treatments. */
 .link {
-  color: var(--color-acc-cyan);
+  color: var(--color-accent-light);
   text-decoration-line: underline;
   text-decoration-color: rgba(167, 240, 177, 0.45);
   text-underline-offset: 4px;
 }
 .link:hover,
 .link:focus-visible {
-  text-decoration-color: var(--color-acc-cyan);
+  text-decoration-color: var(--color-accent-light);
 }
 /* a text link that stands alone gets a 24px tap area; the text does not move */
 .tap { position: relative; display: inline-block; }
@@ -185,7 +185,7 @@ header.glass {
 
 /* ---- current-page nav markers (aria-current set in Nav.astro) ---- */
 nav a[aria-current='page'] {
-  color: var(--color-acc-cyan);
+  color: var(--color-accent-light);
 }
 /* the mobile chip rail additionally gets a mint border + faint fill */
 nav[aria-label='Pages'] a[aria-current='page'] {
@@ -233,7 +233,7 @@ nav[aria-label='Pages'] a[aria-current='page'] {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(120deg, var(--color-acc-violet), var(--color-acc-cyan));
+  background: linear-gradient(120deg, var(--color-accent), var(--color-accent-light));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;

@@ -71,7 +71,7 @@ const qa = [
         <div class="mt-6 grid gap-4 sm:grid-cols-2">
           {strip.map((s) => (
             <div class="glass flex flex-col rounded-2xl p-6">
-              <span class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{s.who} · {s.metric}</span>
+              <span class="font-mono text-xs uppercase tracking-wider text-accent-light">{s.who} · {s.metric}</span>
               <span class="mt-3 text-sm leading-relaxed text-zinc-300">{s.corpus}</span>
               <span class="text-sm leading-relaxed text-zinc-400">{s.limit}</span>
               <span class:list={['mt-3 font-mono text-4xl font-semibold tracking-tight', s.who === 'hippo' ? 'text-gradient' : 'text-zinc-200']}>{s.num}</span>

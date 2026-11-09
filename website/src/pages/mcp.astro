@@ -105,7 +105,7 @@ const others = [
             {tools.map((t) => (
               <tr class="align-top">
                 {/* break points after underscores give the description column room on a phone */}
-                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-acc-cyan sm:whitespace-nowrap sm:px-5">{t.name.split('_').map((part, i, all) => <Fragment>{part}{i < all.length - 1 && <Fragment>_<wbr /></Fragment>}</Fragment>)}</th>
+                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-accent-light sm:whitespace-nowrap sm:px-5">{t.name.split('_').map((part, i, all) => <Fragment>{part}{i < all.length - 1 && <Fragment>_<wbr /></Fragment>}</Fragment>)}</th>
                 <td class="px-3 py-3 text-zinc-300 sm:px-5">{t.does}</td>
               </tr>
             ))}

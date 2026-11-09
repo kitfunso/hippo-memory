@@ -18,17 +18,17 @@ import DecayCurve from './DecayCurve.tsx';
     <!-- the three stores: buffer -> episodic -> semantic -->
     <div class="mt-10 grid items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr]" data-reveal>
       <div class="glass flex flex-col rounded-2xl p-5">
-        <span class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Buffer</span>
+        <span class="font-mono text-xs uppercase tracking-wider text-accent-light">Buffer</span>
         <p class="mt-2 text-sm leading-relaxed text-zinc-400">New information lands here. Session-only, no decay.</p>
       </div>
       <div class="flex items-center justify-center font-mono text-xs text-zinc-400" aria-hidden="true">encode</div>
       <div class="glass flex flex-col rounded-2xl p-5">
-        <span class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Episodic</span>
+        <span class="font-mono text-xs uppercase tracking-wider text-accent-light">Episodic</span>
         <p class="mt-2 text-sm leading-relaxed text-zinc-400">Timestamped, decays by default. Retrieval strengthens it; errors stick.</p>
       </div>
       <div class="flex items-center justify-center font-mono text-xs text-zinc-400" aria-hidden="true">sleep</div>
       <div class="glass flex flex-col rounded-2xl p-5">
-        <span class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Semantic</span>
+        <span class="font-mono text-xs uppercase tracking-wider text-accent-light">Semantic</span>
         <p class="mt-2 text-sm leading-relaxed text-zinc-400">Repeated episodes compress into stable patterns. The originals decay.</p>
       </div>
     </div>

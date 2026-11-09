@@ -144,12 +144,12 @@ export default function DecayCurve() {
 
         <div style={fade(0.9)}>
           {RECALLS.map((day) => <Dot day={day} s={1} color={MINT} />)}
-          <span class={`${label} -translate-x-1/2 -translate-y-[calc(100%+10px)] text-acc-violet`} style={pos(RECALLS[0], 1)}>recall</span>
+          <span class={`${label} -translate-x-1/2 -translate-y-[calc(100%+10px)] text-accent`} style={pos(RECALLS[0], 1)}>recall</span>
           <Dot day={WRONG_AT} s={wrongBefore} color={AMBER} />
-          <span class={`${label} -translate-x-[calc(100%+10px)] -translate-y-1/2 text-acc-amber`} style={pos(WRONG_AT, wrongAfter)}>marked wrong</span>
-          <span class="absolute -translate-x-1/2 -translate-y-1/2 text-lg leading-none text-acc-amber" style={pos(SUPERSEDED_AT, supersededS)}>×</span>
-          <span class={`${label} -translate-x-1/2 translate-y-[12px] text-acc-amber`} style={pos(SUPERSEDED_AT, supersededS)}>superseded</span>
-          <span class={`${label} -translate-x-full translate-y-[8px] text-acc-violet`} style={pos(END, strengthAt(recalled, END))}>recalled</span>
+          <span class={`${label} -translate-x-[calc(100%+10px)] -translate-y-1/2 text-warn`} style={pos(WRONG_AT, wrongAfter)}>marked wrong</span>
+          <span class="absolute -translate-x-1/2 -translate-y-1/2 text-lg leading-none text-warn" style={pos(SUPERSEDED_AT, supersededS)}>×</span>
+          <span class={`${label} -translate-x-1/2 translate-y-[12px] text-warn`} style={pos(SUPERSEDED_AT, supersededS)}>superseded</span>
+          <span class={`${label} -translate-x-full translate-y-[8px] text-accent`} style={pos(END, strengthAt(recalled, END))}>recalled</span>
           <span class={`${label} -translate-x-full translate-y-[8px] text-zinc-400`} style={pos(END, strengthAt(alone, END))}>left alone</span>
         </div>
       </div>

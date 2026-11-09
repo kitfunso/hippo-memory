@@ -26,7 +26,7 @@ const { items = faq, heading = 'Questions, answered.', moreHref } = Astro.props;
         <details class="group rounded-2xl glass px-6 [&>summary]:list-none">
           <summary class="flex cursor-pointer items-center justify-between gap-4 py-5 text-left text-base font-medium text-zinc-100">
             <span>{item.q}</span>
-            <span class="shrink-0 text-xl leading-none text-acc-cyan transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
+            <span class="shrink-0 text-xl leading-none text-accent-light transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
           </summary>
           <div class="copy max-w-2xl space-y-3 pb-5 text-sm leading-relaxed text-zinc-400">
             {mdParagraphs(item.a).map((html) => <p set:html={html} />)}

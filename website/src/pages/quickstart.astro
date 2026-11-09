@@ -66,7 +66,7 @@ const howTo = {
           <ol class="space-y-3.5">
             {heroSteps.map((step) => (
               <li class="grid grid-cols-[1.5rem_1fr] gap-x-2">
-                <span class="font-mono text-xs leading-6 text-acc-cyan" aria-hidden="true">{step.n}</span>
+                <span class="font-mono text-xs leading-6 text-accent-light" aria-hidden="true">{step.n}</span>
                 <span class="text-sm font-medium text-zinc-200">{step.label}</span>
                 <code class="col-start-2 mt-0.5 font-mono text-xs leading-relaxed text-zinc-400">{step.prompt ? <><span class="text-term-prompt">$</span> {step.cmd}</> : step.cmd}</code>
               </li>
