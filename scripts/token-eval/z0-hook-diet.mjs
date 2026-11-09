@@ -386,7 +386,9 @@ function noneRendered(rows) {
  * @param {(line: string) => void} progress */
 export function readHookDiet(args, progress = () => {}) {
   if (!isDir(path.join(args.scored, 'r3run'))) throw new Error(`no round 3 runs at ${path.join(args.scored, 'r3run')}; pass --scored <dir> with the scored folder that holds r3run/`);
-  checkCheckout(args.checkout);
+  // The child runs from the staged store, so a relative checkout would point inside it.
+  const checkout = path.resolve(args.checkout);
+  checkCheckout(checkout);
   checkPathDirs();
   const prices = pricesOf(args.prices);
   const own = args.work === null;
@@ -394,7 +396,7 @@ export function readHookDiet(args, progress = () => {}) {
   try {
     checkWorkDir(work);
     fs.mkdirSync(work, { recursive: true });
-    const ctx = { scored: args.scored, checkout: args.checkout, work, clock: args.clock };
+    const ctx = { scored: args.scored, checkout, work, clock: args.clock };
     const stores = storesOf(args.scored);
     const picked = args.limit > 0 ? stores.slice(0, args.limit) : stores;
     const rows = picked.map((s, i) => {
@@ -409,7 +411,7 @@ export function readHookDiet(args, progress = () => {}) {
       throw new Error(`${failed.length} renders failed, first ${r.run} ${r.task} seed ${r.seed} arm ${arm} (${r.arms[arm].error}); check that --checkout is built and prints the hook JSON, then rerun`);
     }
     if (rows.every((r) => r.arms === null)) throw new Error(noneRendered(rows));
-    return { build: shaOf(args.checkout), clock: args.clock, ...summarize(rows, prices), rows };
+    return { build: shaOf(checkout), clock: args.clock, ...summarize(rows, prices), rows };
   } finally {
     if (own) fs.rmSync(work, { recursive: true, force: true });
   }

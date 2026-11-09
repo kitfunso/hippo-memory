@@ -132,6 +132,15 @@ describe('Z0 hook diet read', () => {
     expect(fs.readdirSync(path.join(base, 'work'))).toEqual([]);
   });
 
+  it('renders through a relative --checkout, though the child runs from the staged store', () => {
+    const base = tempBase();
+    const co = stubCheckout(base, PRINTS_BLOCK);
+    const rel = path.relative(process.cwd(), co);
+    expect(path.isAbsolute(rel)).toBe(false);
+    expect(read(base, scoredTree(base, onlyGoodSeed), rel)).toMatchObject({ code: 0, stderr: '' });
+    expect(seenBy(co)).toHaveLength(3);
+  });
+
   it('sets no HIPPO_FAKE_NOW under the wall clock', () => {
     const base = tempBase();
     const co = stubCheckout(base, PRINTS_BLOCK);
