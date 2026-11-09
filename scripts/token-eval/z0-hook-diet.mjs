@@ -192,6 +192,7 @@ function shaOf(checkout) {
   const git = (args) => execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   try {
     // The figures belong to the code that rendered them, so an edited tree must not pass as its commit.
+    // SHORTCUT: dist/ is gitignored, so a stale build still prints clean; hash dist if a read ever needs that proof.
     const dirty = git(['status', '--porcelain', '--untracked-files=no', '--', 'src', 'bin', 'scripts', 'package.json']) !== '';
     return `${git(['rev-parse', '--short', 'HEAD'])}${dirty ? '-dirty' : ''}`;
   } catch {

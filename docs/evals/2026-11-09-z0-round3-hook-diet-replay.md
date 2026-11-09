@@ -46,9 +46,10 @@ entry counts and token counts.
 | session (default) | 91 | 81 | 76 | 75 |
 | wall | 91 | 81 | 76 | 63 |
 
-The script skips 10 stores because their session left no request log. The snapshot is taken before the last A2
-step in the plan, and in these 10 runs that step never ran a session: 8 have no files for it, and 2 (`q145-w1`
-seed 1, `q256-w1` seed 3) have only setup files. Of the 81 rendered sessions, 76 have a recorded block. In the
+The script skips 10 stores because their session left no request log. It pairs each snapshot with the plan's last
+A2 step for that seed, and in these 10 runs that step left no session log: 8 have no files for it, and 2
+(`q145-w1` seed 1, `q256-w1` seed 3) have only setup files. Their snapshots are newer than any logged session (for
+example `hu3-w1` seed 1: snapshot 02:17:45, last logged session start 01:56:40), so no log holds their prompt. Of the 81 rendered sessions, 76 have a recorded block. In the
 other 5, round 3 sent no memory section, and the replay renders none too. The one session that differs, `q254-w1` seed 2
 (`q254-f2-a2`), has the same 5 entries at 859 tokens against 898 recorded. Its cause is not known.
 
@@ -99,5 +100,5 @@ A cost test of this cut alone is out of reach. H3's standard error in round 3 is
 0.015 / 2.80 = 0.0054, which takes about (0.0215 / 0.0054)^2 = 16 times round 3's size.
 
 So the cut cannot be round 4's cost endpoint by itself. Round 4's cost design depends on where round 3's cost sits
-by task kind (teach, first apply, later applies, set N) and by arm, A5 (sham hippo) included. The round 4 prereg
-reads that split from the round 3 records before it picks an endpoint. The list3 cut goes in as an arm there.
+by task kind (teach, first apply, later applies, set N) and by arm, A5 (sham hippo) included. The next step is to read
+that split from the round 3 records, then write the round 4 prereg on it, with the list3 cut as an arm.
