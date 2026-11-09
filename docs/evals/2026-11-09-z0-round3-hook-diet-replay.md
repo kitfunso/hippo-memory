@@ -4,7 +4,8 @@ Date: 9 Nov 2026. Build read: hippo master at `0402d3daa`, the first build with 
 Inputs: the 35 runs of the round 3 final read (`C:/z0-runs/scored/r3-final-read.sh` lines 8 to 15), through
 `runNames` in `scripts/token-eval/z0-reach.mjs`. Script:
 `node scripts/token-eval/z0-hook-diet.mjs --scored C:/z0-runs/scored` (add `--json` for one JSON object). The run
-makes no model calls and costs nothing. This is a model-free read of round 3's saved stores, not a scored run.
+makes no model calls and costs nothing. It prints the checkout's HEAD; the runs below read `016d30459`, whose `src/`
+and `dist/` equal `0402d3daa`'s. This is a model-free read of round 3's saved stores, not a scored run.
 
 ## Answer
 
@@ -34,16 +35,19 @@ session's request log (the proxy's `HEAD /api/hello`). `--clock wall` runs at th
 
 ## Fidelity: the replay shows what round 3 sent
 
-The script compares the none arm with the hippo block that round 3 put in the session's first request, read by
-`extractSession` in `z0-reach.mjs`. A match means the same section headers, entry counts and token counts.
+The script compares the none arm with the hippo blocks that round 3 sent in the session's main calls, read by
+`extractSession` in `z0-reach.mjs` (one copy of each distinct block). A match means the same section headers,
+entry counts and token counts.
 
 | Clock | Stores | Rendered | Recorded block | Exact match |
 |---|---|---|---|---|
 | session (default) | 91 | 81 | 76 | 75 |
 | wall | 91 | 81 | 76 | 63 |
 
-10 stores have no first prompt in their request log, so the script skips them. In the other 5 rendered sessions,
-round 3 sent no memory section, and the replay renders none too. The one session that differs, `q254-w1` seed 2
+The script skips 10 stores because their session left no request log. The snapshot is taken before the last A2
+step in the plan, and in these 10 runs that step never ran a session: 8 have no files for it, and 2 (`q145-w1`
+seed 1, `q256-w1` seed 3) have only setup files. Of the 81 rendered sessions, 76 have a recorded block. In the
+other 5, round 3 sent no memory section, and the replay renders none too. The one session that differs, `q254-w1` seed 2
 (`q254-f2-a2`), has the same 5 entries at 859 tokens against 898 recorded. Its cause is not known.
 
 The clock matters: run at today's date, 12 blocks change, because decay and recency scoring read the clock. So the
