@@ -74,7 +74,7 @@ function memoryRows(): MemoryEntry[] {
     a('legacy import about the rollout freeze', 'mem_a_legacy', 33, {}, { scope: 'unknown:legacy' }),
     a('rollout target was the old staging cluster', 'mem_a_old', 60, { supersededBy: 'mem_a_new' }),
     a('rollout target is the new staging cluster', 'mem_a_new', 41),
-    a('rollout note whose supersede link was blanked', 'mem_a_blank', 42, { supersededBy: '' }),
+    a('rollout note whose supersede link was blanked', 'mem_a_blank', 42),
     a('archived rollout plan from last quarter', 'mem_a_archived', 43, { kind: 'archived' }),
     a('own project vault path lives in the ops runbook', 'mem_a_secret_own', 44, {}, { tags: ['secret'] }),
     a(
@@ -239,10 +239,21 @@ function plantLegacyStamp(dir: string): void {
   }
 }
 
+// The row writer stores NULL for a blank link, so the blank is planted by SQL.
+function plantBlankLink(dir: string): void {
+  const db = openHippoDb(dir);
+  try {
+    db.prepare("UPDATE memories SET superseded_by = '' WHERE id = 'mem_a_blank'").run();
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /** Adds the context rows to a store folder that seedTwoTenants made. */
 export function seedContextRows(dir: string): void {
   writeEntriesTogether(dir, memoryRows());
   plantLegacyStamp(dir);
+  plantBlankLink(dir);
   insertTaskState(dir);
   pinUpdatedAt(dir);
 }

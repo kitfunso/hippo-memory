@@ -1,5 +1,5 @@
-// A blank superseded link comes back from dormant storage as it went: superseded, never live. Its own file
-// since tests/store/dormant-memories.test.ts sits at the 800-line cap.
+// A blank superseded link goes into dormant storage as written, and a restore stores no link, so the memory is live
+// again. Its own file since tests/store/dormant-memories.test.ts sits at the 800-line cap.
 import { describe, expect, it } from 'vitest';
 import * as api from '../../src/api/index.js';
 import { isSuperseded } from '../../src/base/memory/liveness.js';
@@ -11,7 +11,7 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 const { writeEntry, readEntry, sessionDb, sqliteStore, apiCtx } = sessionPerTest();
 
 describe('a blank superseded link through dormant storage', () => {
-  it('moved to dormant and restored, reads back blank and superseded, and is absent from the live read', async () => {
+  it('moves to dormant as written, and a restore stores no link and returns the memory to the live read', async () => {
     const home = makeRoot('dormant-blank-link');
     const entry = createMemory('the release train leaves on thursdays');
     writeEntry(home, entry);
@@ -25,12 +25,18 @@ describe('a blank superseded link through dormant storage', () => {
 
     expect(batchWriteAndDeleteInFolder(home, [], [], { dormant: [move] })).toEqual([entry.id]);
     expect(readEntry(home, entry.id)).toBeNull();
-    const restored = await api.dormantRestore(apiCtx(home, 'default', { subject: 'test', role: 'admin' }), entry.id);
+    // Only the restore normalises: the snapshot keeps what the row held.
+    const snapshot = sessionDb(home)
+      .prepare(`SELECT json_extract(entry_json, '$.superseded_by') AS link FROM dormant_memories WHERE id = ?`)
+      .get(entry.id);
+    expect(snapshot).toEqual({ link: '' });
+    await api.dormantRestore(apiCtx(home, 'default', { subject: 'test', role: 'admin' }), entry.id);
 
+    const stored = sessionDb(home).prepare('SELECT superseded_by FROM memories WHERE id = ?').get(entry.id);
+    expect(stored).toEqual({ superseded_by: null });
     const back = readEntry(home, entry.id)!;
-    expect([restored.supersededBy, back.supersededBy]).toEqual(['', '']);
-    expect(isSuperseded(back)).toBe(true);
+    expect(isSuperseded(back)).toBe(false);
     const live = await sqliteStore(home).entriesWhere({ tenantId: 'default', live: true }, { limit: 10 });
-    expect(live.entries.map((e) => e.id)).not.toContain(entry.id);
+    expect(live.entries.map((e) => e.id)).toContain(entry.id);
   });
 });

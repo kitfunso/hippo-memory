@@ -242,6 +242,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     "trigger trg_task_snapshots_status_check_insert: CREATE TRIGGER trg_task_snapshots_status_check_insert BEFORE INSERT ON task_snapshots WHEN NEW.status NOT IN ('active', 'superseded', 'cleared', 'done', 'session-ended') BEGIN SELECT RAISE(ABORT, 'invalid task snapshot status: must be active|superseded|cleared|done|session-ended'); END",
     "trigger trg_task_snapshots_status_check_update: CREATE TRIGGER trg_task_snapshots_status_check_update BEFORE UPDATE OF status ON task_snapshots WHEN NEW.status NOT IN ('active', 'superseded', 'cleared', 'done', 'session-ended') BEGIN SELECT RAISE(ABORT, 'invalid task snapshot status: must be active|superseded|cleared|done|session-ended'); END",
   ],
-  "userVersion": 62,
+  "userVersion": 63,
 }
 `;
