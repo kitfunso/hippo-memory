@@ -260,10 +260,15 @@ After a stop, the next step is a new-family round with the author step and scree
       <p>armEnv sets the pins, and the G1 allowlist admits them.</p>
       <doc-code diff file="scripts/token-eval/arms.mjs" wrap>
 <script type="text/plain">
-@@ -22,1 +22,2 @@
+@@ -21,2 +21,3 @@
+-// The keys armEnv sets itself: a --pass-env copy would silently override the arm (and a second PATH key on Windows).
++// The keys the runner sets (armEnv, or the task env for VIRTUAL_ENV and PIP_CONSTRAINT): a --pass-env copy would silently override them.
 -const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
 +const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH',
 +  'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE', 'VIRTUAL_ENV', 'PIP_CONSTRAINT'];
+@@ -40,1 +41,1 @@
+-  'VIRTUAL_ENV', 'PYTHONUTF8', 'PYTHONIOENCODING',
++  'PYTHONUTF8', 'PYTHONIOENCODING',
 @@ -84,4 +85,8 @@
    env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = NO_AUTO_MEMORY.has(arm) ? '1' : '0';
 +  const { model } = ARM_TABLE[arm];
@@ -383,6 +388,7 @@ s4-run.ps1 is a copy of s3x-run.ps1 with these changes:
   line 16: no --model claude-opus-5-5; the arm table names each model.
   line 25: --pass-env skips VIRTUAL_ENV, which is now a runner key.
 s4-regrade.ps1 is a copy of s3x-regrade.ps1 that passes no VIRTUAL_ENV.
+Both launchers pass the pinned poetry folder and the PIP_CONSTRAINT file, which sit outside every --out folder.
 The other 22 repositories get no --venv, no venv folder and no VIRTUAL_ENV.
 s3x-env.ps1 stays as it is, because its hash is in round 3's author lock (Amendment A).
 Its PATH entry {work}\venv\Scripts then names no folder, and the task env puts the task venv first.
@@ -528,8 +534,9 @@ Arm environment  A smoke session in each arm records envKeys inside the allowlis
                  A smoke fail follows the pilot rules below; a fail for another cause uses the second tag.
 Venv             A unit test stubs the spawn: every spawn of one task (setup, session, resume, checks, tests)
                  gets one VIRTUAL_ENV, unique to the task, and PIP_CONSTRAINT. Two tasks of one Python run: a package from uv pip install in the first imports there
-                 and is gone in the second. A non-Python run has no VIRTUAL_ENV. A regrade of one q255 set R cell passes and
-                 gives the run's checker verdicts and acceptance. A setup retry and a reset start from an empty venv.
+                 and is gone in the second. A non-Python run has no VIRTUAL_ENV or PIP_CONSTRAINT.
+                 Regrades of one q255 set R and one set N cell from a run the check makes pass and give
+                 the run's checker verdicts and acceptance. A setup retry and a reset start from an empty venv.
                  q255-a1's bare poetry install passes in a new task venv, with the pinned poetry Scripts on PATH;
                  q255-f1-teach's boot install, in the task env the runner builds, leaves poetry 2.5.1.
                  G1: a read in the current task's venv or its -boot sibling passes; a read in any other venv is void.
@@ -537,7 +544,8 @@ Venv             A unit test stubs the spawn: every spawn of one task (setup, se
 Freeze           One tag on z0/r4, z0-r4-freeze-1 (z0-r4-freeze-2 only under the pilot rule). dist rebuilt from the tag in a clean checkout has round 3's hash
                  97ba0e9b.... The pins file names each arm's model, the effort, the Claude Code version,
                  the poetry version, the tasks files with their checker trees (one manifest hash), the PIP_CONSTRAINT file
-                 and the launcher hashes. The pins check makes the manifest again before the launch and each regrade.
+                 and the launcher hashes. Before the launch and each regrade, the pins check makes the manifest
+                 and hashes the PIP_CONSTRAINT file and the launchers again.
 Pilot            claim 5.2.     Batch 1: claim 2.2.     Scored run: G1 to G5 pass; hook voids under 5%.
 </script>
       </doc-code>
