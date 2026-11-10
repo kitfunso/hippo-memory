@@ -74,6 +74,11 @@ export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryE
   }
 }
 
+// Storage spells "no successor" one way: a blank link is stored as none. Whitespace stays a link.
+function storedLink(link: string | null | undefined): string | null {
+  return link === '' ? null : (link ?? null);
+}
+
 /** Bind values for WRITTEN_COLUMNS, in its order. */
 function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by
@@ -103,7 +108,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.traceOutcome ?? null,
     entry.sourceSessionId ?? null,
     entry.validFrom ?? created,
-    entry.supersededBy ?? null,
+    storedLink(entry.supersededBy),
     entry.extractedFrom ?? null,
     entry.dagLevel ?? 0,
     entry.dagParentId ?? null,

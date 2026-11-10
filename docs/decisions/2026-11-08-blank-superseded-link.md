@@ -1,7 +1,7 @@
 # A blank superseded_by link means superseded
 
 Date: 2026-11-08
-Status: accepted
+Status: accepted; reconsidered 2026-11-09 after the owner approved the migration, see `2026-11-09-one-spelling-of-no-successor.md`
 Links: PR #1176; PR #1097 (pinned the opposite for context and the dashboard); `src/base/memory/liveness.ts`; `src/base/scope/live-memory.ts`; `src/db/sql-predicates.ts`
 
 ## Context

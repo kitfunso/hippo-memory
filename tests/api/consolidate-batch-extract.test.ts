@@ -13,7 +13,8 @@ import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { calculateStrength, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { sessionDecayContext } from '../../src/domain/consolidate/decay.js';
 import type { Llm } from '../../src/base/ports/llm.js';
 
 pinClock();
@@ -80,10 +81,15 @@ describe('Batch extraction during consolidation', () => {
     });
     writeEntry(tmpDir, live);
     writeEntry(tmpDir, blank);
-    // No writer makes a blank link, so the UPDATE is the test's subject.
+    // The writer stores NULL for a blank link, so SQL makes the blank. The subject is the read, so its strength is
+    // pinned to the decayed value the sleep computes and no strength refresh rewrites the row.
     const db = openHippoDb(tmpDir);
     try {
-      db.prepare(`UPDATE memories SET superseded_by = '' WHERE id = ?`).run(blank.id);
+      const decayed = calculateStrength(blank, FIXED_NOW, PRODUCTION_STRENGTH, {
+        decayBasis: loadConfig(tmpDir).decayBasis,
+        ...sessionDecayContext({ sleepCount: 0, recentRuns: [] }),
+      });
+      db.prepare(`UPDATE memories SET superseded_by = '', strength = ? WHERE id = ?`).run(decayed, blank.id);
     } finally {
       closeHippoDb(db);
     }
