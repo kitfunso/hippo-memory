@@ -15,6 +15,10 @@ ap = argparse.ArgumentParser()
 r3_manifest.add_flags(ap)
 ap.add_argument('--prices', type=pathlib.Path, default=pathlib.Path('C:/z0-runs/s7/prices.json'))
 args = ap.parse_args()
+# The prices hash that round 3's unblind.json records; other rates would price a different round.
+REPORT_PRICES_SHA256 = '8978b782e6a85656828ac6aea5c47a8f813c2482671645001a9ed7f9a6423393'
+if hashlib.sha256(args.prices.read_bytes()).hexdigest() != REPORT_PRICES_SHA256:
+    sys.exit(f'{args.prices}: sha256 differs from the prices file round 3 recorded ({REPORT_PRICES_SHA256[:12]})')
 row = json.loads(args.prices.read_text(encoding='utf-8'))['claude-code']
 P = {'inputTokens': row['inputPerMTok'], 'outputTokens': row['outputPerMTok'],
      'cacheCreationInputTokens': row['cacheWritePerMTok'], 'cacheReadInputTokens': row['cacheReadPerMTok']}

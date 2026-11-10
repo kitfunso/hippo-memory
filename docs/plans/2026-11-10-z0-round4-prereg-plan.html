@@ -91,7 +91,7 @@ Round 3's H3 was a cost per task (ratioT, z0-hypotheses.mjs:138); T2 uses cost p
       </doc-code>
       <doc-ask id="margins">
         <p>How close to O1 must S2 be in T2?</p>
-        <label><input type="radio" name="margins" value="3-15" checked> Resolve 3 points, repeats 15 points <small>about a quarter of built-in memory's 57 to 60-point effect</small></label>
+        <label><input type="radio" name="margins" value="3-15" checked> Resolve 3 points, repeats 15 points <small>a quarter of round 3's 57 to 60 points (unblind.stdout:29)</small></label>
         <label><input type="radio" name="margins" value="3-10"> Resolve 3 points, repeats 10 points <small>stricter; lower power at the same seeds</small></label>
       </doc-ask>
       <doc-note tone="warn"><strong>Power is an assumption</strong> The Sizer stage computes it on round 3's same-model spreads, and batch 1 measures it (claim 2.2). An early sizing pass kept no script, so the page gives none of its figures.</doc-note>
@@ -400,7 +400,7 @@ The pins file holds the sha256 of both launchers.
   </doc-claim>
 
   <doc-claim>
-    <p>The scored run waits for a pilot and the yes of the founder.</p>
+    <p>The scored run waits for a pilot and the whole-run check.</p>
     <doc-code title="budget, list price on the subscriptions · sketch" lang="text" wrap>
 <script type="text/plain">
 Basis: round 3's recorded spend, the sum of costUsd over every record of every attempt, kept, aborted or set aside:
@@ -421,7 +421,7 @@ Ceiling, r = 2 and 9 seeds on O1, S1, S2 and S5: about $5,210.
   python -I docs/evals/z0-r4/r4-projection.py C:/z0-runs/scored/r3run: 1,284.83, 1,714.02, 2,143.21, 5,206.29; batch 1 376.34, 635.94
 Both run low for q145, which lost 143 of 156 records in round 3 ($7.62 against $61.38 on q140): roughly $36 to $61 more.
 q256 lost 24 records to the same break: about $8 at round 3's $0.34 a record, before the 0.5 x r scale.
-Whole-run check after the pilot, at $2,140.00: fits at 3 seeds up to r = 1.45, 4 seeds 1.06, 5 seeds 0.79.
+Whole-run check after the pilot, at $2,140.00 and 5 seeds: fits up to r = 0.79 (3 seeds: 1.45).
   At r = 1 it needs $1,641.63 at 3 seeds and $2,464.81 at 5 seeds (r4-projection.py, the whole-run lines).
 These figures are at medium effort. O2 adds about $385 (A2's $385.21, r3-total-spend.py).
 Ledger: costUsd of every record (no costUsd: priced from its transcript at each message's own model; round 3's 545 had none: 370 leaks, 175 setup; r3-null-cost.py),
@@ -434,7 +434,7 @@ Ledger: costUsd of every record (no costUsd: priced from its transcript at each 
 Admission: a run that stops partway is never analysed, so spend is checked before each batch, not inside it.
   Batch 1, batch 2 and each seed raise start only if ledger + 1.25 x projection is at most the approved figure.
   Batch 1 also needs the whole-run check: ledger + 1.25 x (batch 1 + batch 2 + q145's gap + the seed raise
-  to the largest count any test's rule gives on round 3's spreads) at the pilot's r. If it fails, the founder
+  to 5 seeds, the largest count the rules give on round 3's records, r3-seed-count.mjs) at the pilot's r. If it fails, the founder
   is asked before batch 1; without a raise that fits, the run stops with no claim after the pilot.
   After batch 1, the projection is scaled by batch 1's own spend (no pilot) over its projection.
   A batch can still run over. These are list-price usage on the subscriptions, not a bill; overruns are reported.
@@ -445,7 +445,7 @@ Admission: a run that stops partway is never analysed, so spend is checked befor
 After the unblind: each arm's recorded spend per paired solve. If S2's is not below O1's, the T2 headline says
   the saving holds on the scored records only, and gives the figure with discarded and rerun work.
 The whole-run check prints r, the projection, and T2 power at r on round 3's spreads (an assumption).
-It also prints the projection at that r, at each test's rule count on round 3's spreads, and at 9 seeds.
+It also prints the projection at that r at 5 seeds and at 9 seeds.
 If either arm's r is 1.9 or more, it names that arm: on the pilot tasks its cost per task is
   0.95 of Opus's or more before any saving.
 If it passes and no r is 1.9 or more, the 10 Nov yes covers batch 1, batch 2 and the seed raises.
@@ -454,7 +454,7 @@ If it passes and no r is 1.9 or more, the 10 Nov yes covers batch 1, batch 2 and
     </doc-code>
     <doc-ask id="budget">
       <p>Which yes did the founder give on 10 Nov?</p>
-      <label><input type="radio" name="budget" value="figure" checked> The pilot and $2,140.00 in all <small>asked again only if the whole-run check fails</small></label>
+      <label><input type="radio" name="budget" value="figure" checked> The pilot and $2,140.00 in all <small>"go, approved"; asked again if the check fails or an r is 1.9+</small></label>
       <label><input type="radio" name="budget" value="all"> Pilot and scored run, up to the ceiling <small>no second stop; about $5,210 at most</small></label>
     </doc-ask>
     <doc-claim>
