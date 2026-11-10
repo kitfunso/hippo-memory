@@ -386,8 +386,9 @@ s4-regrade.ps1 is a copy of s3x-regrade.ps1 that passes no VIRTUAL_ENV.
 The other 22 repositories get no --venv, no venv folder and no VIRTUAL_ENV.
 s3x-env.ps1 stays as it is, because its hash is in round 3's author lock (Amendment A).
 Its PATH entry {work}\venv\Scripts then names no folder, and the task env puts the task venv first.
-s4-run.ps1 names a pinned poetry 2.5.1 folder; the runner puts it after the task venv's Scripts on PATH,
+s4-run.ps1 names a pinned poetry 2.5.1 folder; the runner puts its Scripts after the task venv's Scripts on PATH,
 so q255's bare poetry install finds poetry and installs into the task venv. The pins file holds its version.
+q255's set R setups pip install an unpinned poetry in a -boot venv; PIP_CONSTRAINT (poetry==2.5.1) pins it there.
 Each task gets a new venv at <run root>/venv/<position>, made with python -m venv before setup.
 once() deletes and remakes it before each setup, so a setup retry and a usage-limit reset start empty.
 G1 counts the current task's folder as an own folder of the session (readcheck.mjs:204, :231, :233).
@@ -425,7 +426,7 @@ Whole-run check after the pilot, at $2,140.00 and 5 seeds: fits up to r = 0.79 (
   At r = 1 it needs $1,641.63 at 3 seeds and $2,464.81 at 5 seeds (r4-projection.py, the whole-run lines).
 These figures are at medium effort. O2 adds about $385 (A2's $385.21, r3-total-spend.py).
 Ledger: costUsd of every record (no costUsd: priced from its transcript at each message's own model; round 3's 545 had none: 370 leaks, 175 setup; r3-null-cost.py),
-  every cut-off attempt, warm-ups at their saved total_cost_usd (runs.mjs:111-115) and the pilot. The total only, never by arm, before the unblind.
+  every cut-off attempt, warm-ups at their saved total_cost_usd (runs.mjs:111-115), the smoke and the pilot. The total only, never by arm, before the unblind.
   A cut-off first session keeps its transcript under its own id (turns.mjs:114). restoreWork deletes the new
   transcripts of a cut-off resume (turns.mjs:164-179), so the runner first copies them to <out>/cutoffs/, where
   G1 voids any session that reads them (readcheck.mjs:231). New messages are priced once per id (task.mjs:271).
@@ -522,17 +523,19 @@ Ledger           A resume cut off at a plan limit: the runner copies its transcr
                  ledger prices its new messages once. A cut-off first session keeps its own ids and is priced once.
                  A session that reads <out>/cutoffs is void.
 Arm environment  A smoke session in each arm records envKeys inside the allowlist, the pins included.
-                 It runs on the tag, after the freeze and before the pilot.
+                 It runs on the tag, after the freeze and before the pilot, on a dev task. Its spend goes in the ledger.
+                 A smoke fail follows the pilot rules below; a fail for another cause uses the second tag.
 Venv             A unit test stubs the spawn: every spawn of one task (setup, session, resume, checks, tests)
                  gets one VIRTUAL_ENV, unique to the task. Two tasks of one Python run: a package from uv pip install in the first imports there
                  and is gone in the second. A non-Python run has no VIRTUAL_ENV. A regrade of one Python cell passes and
                  gives the run's checker verdicts and acceptance. A setup retry and a reset start from an empty venv.
-                 q255-a1's bare poetry install passes in a new task venv, with the pinned poetry folder on PATH.
+                 q255-a1's bare poetry install passes in a new task venv, with the pinned poetry Scripts on PATH;
+                 q255-f1-teach's boot install, with PIP_CONSTRAINT set, leaves poetry 2.5.1.
                  G1: a read in the current task's venv or its -boot sibling passes; a read in any other venv is void.
                  The check prints the setup time of each task.
 Freeze           One tag on z0/r4, z0-r4-freeze-1 (z0-r4-freeze-2 only under the pilot rule). dist rebuilt from the tag in a clean checkout has round 3's hash
                  97ba0e9b.... The pins file names each arm's model, the effort, the Claude Code version,
-                 the poetry version, the tasks files and the launcher hashes.
+                 the poetry version, the tasks files with their checker trees (one manifest hash) and the launcher hashes.
 Pilot            claim 5.2.     Batch 1: claim 2.2.     Scored run: G1 to G5 pass; hook voids under 5%.
 </script>
       </doc-code>
@@ -560,10 +563,10 @@ cut is a cost ratio: k x r = 0.95.
 The pilot reports invalid and timeout cells per model with no stop: at 18 positions, one cell is 5.6 points.
 G4 for each arm is read in the blind gate block of batch 1 (claim 2.2).
 If a pin does not act in the pinned Claude Code version (2.1.288), the newest version that passes is pinned.
-The arm environment check and the whole pilot run again on it (r and costUsd included), and an amendment
+The arm environment smoke and the whole pilot run again on it (r and costUsd included), and an amendment
 records it before batch 1. The tag and the dist hash do not change.
-Any other pilot failure, a pin that needs code included: fix the harness, rerun every stage check, tag
-z0-r4-freeze-2 in place of z0-r4-freeze-1, record an amendment and run a second pilot. Both pilots go in
+Any other pilot failure, a pin that needs code included: fix the harness, rerun every stage check but the smoke, tag
+z0-r4-freeze-2 in place of z0-r4-freeze-1, run the smoke on it, record an amendment and run a second pilot. Both pilots go in
 the ledger, and the whole-run check uses the last pilot's r. The freeze-1 pilot counts once, however many
 version reruns it takes; the freeze-2 pilot is the second. A second failure for another cause stops the run.
 </script>
