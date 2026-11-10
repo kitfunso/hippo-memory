@@ -256,7 +256,7 @@ const signed = (x, digits) => {
   const text = x.toFixed(digits);
   return Number(text) === 0 ? (0).toFixed(digits) : `${x >= 0 ? '+' : ''}${text}`;
 };
-// A ratio or bound that rounds to 1.000 without being 1 gets a fourth digit, so the reader sees its side of 1.
+// A value that rounds to 1.000 but is not 1 gets a fourth digit; within 0.00005 of 1 that is still 1.0000.
 const ratio = (x) => (Number.isFinite(x) && x !== 1 && x.toFixed(3) === '1.000' ? x.toFixed(4) : fixed(x, 3));
 // 0.000 would read as exactly zero, so a p under 0.0005 prints as a bound.
 const pValue = (x) => (Number.isFinite(x) && x < 0.0005 ? '<0.001' : fixed(x, 3));
