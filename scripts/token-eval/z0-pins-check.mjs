@@ -20,9 +20,15 @@ const MANIFEST_LINE = /^([0-9a-f]{64}) {2}(.+)$/;
 
 const fileHash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
-/** Every file under `dir` but its own manifest, as forward-slash paths in code-unit order. */
+/** A stop that exits 3, its message already a `PINS:` line. */
+class PinsStop extends Error {}
+
+/** Every file under `dir` but its own manifest, as forward-slash paths in code-unit order; a link stops the read, since its target sits outside the hash. */
 function filesUnder(dir) {
-  return fs.readdirSync(dir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile())
+  const entries = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
+  const link = entries.find((e) => e.isSymbolicLink());
+  if (link !== undefined) throw new PinsStop(`PINS: ${path.join(link.parentPath, link.name)} is a link; a pinned folder holds files only`);
+  return entries.filter((e) => e.isFile())
     .map((e) => path.relative(dir, path.join(e.parentPath, e.name)).split(path.sep).join('/')).filter((f) => f !== MANIFEST).sort();
 }
 
@@ -97,6 +103,12 @@ function checkPins(args, cwd, states) {
     if (s.hash !== null && pins[`sha256:${s.role}`] === undefined) problems.push(`PINS: ${s.role}: ${args.pins} has no key sha256:${s.role}`);
     else if (s.hash !== null && pins[`sha256:${s.role}`] !== s.hash) problems.push(`PINS: ${s.role} is pinned ${pins[`sha256:${s.role}`]}, this file has ${s.hash}`);
   }
+  // The prereg Freeze row (:118) hashes every pinned file again, so a pin that no role on the call names is a stop, not a skip.
+  const checked = new Set(states.map((s) => s.role));
+  for (const key of Object.keys(pins)) {
+    const role = key.slice('sha256:'.length);
+    if (key.startsWith('sha256:') && !checked.has(role)) problems.push(`PINS: ${role} is pinned but not checked; pass ${role}=<path>`);
+  }
   for (const line of pinMismatches(pins, { hippoCommit: build.hippoCommit, hippoDistHash: build.hippoDistHash })) problems.push(`PINS: ${line}`);
   if (build.hippoDirty) problems.push(`PINS: the hippo checkout ${checkout} has changes beyond its commit, so the commit does not name the build`);
   return problems;
@@ -133,7 +145,7 @@ export function runCli(argv, cwd = process.cwd()) {
     if (problems.length > 0) return { code: 3, stdout: '', stderr: `${problems.join('\n')}\n` };
     return { code: 0, stdout: `${writePins(args, cwd, states).map((f) => `wrote ${f}`).join('\n')}\n`, stderr: '' };
   } catch (e) {
-    return { code: 1, stdout: '', stderr: `${e.message}\n` };
+    return { code: e instanceof PinsStop ? 3 : 1, stdout: '', stderr: `${e.message}\n` };
   }
 }
 

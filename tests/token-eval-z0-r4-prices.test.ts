@@ -106,3 +106,26 @@ describe('checkPrices', () => {
     expect(() => checkPrices(close, 'p.json', DESIGNS.r4)).not.toThrow();
   });
 });
+
+describe('a price file with two top-level rows for one model', () => {
+  const nine = { inputPerMTok: 9, cacheWritePerMTok: 9, cacheReadPerMTok: 9, outputPerMTok: 9 };
+  // The first Sonnet row is priced at 9, the last is exactly half of Opus: each used to be the row of one side only.
+  const twice = { opus: { ...OPUS, model: OPUS_MODEL }, sonnetA: { ...nine, model: SONNET_MODEL }, sonnetB: { ...SONNET, model: SONNET_MODEL } };
+  const s1 = first(generate({ design: DESIGNS.r4, repos: 1 }).records, 'S1');
+
+  it('stops checkPrices under r4 and the price row of an S1 record, naming both row keys, the model and the file', () => {
+    expect(() => checkPrices(twice, 'p.json', DESIGNS.r4)).toThrow('p.json: rows "sonnetA" and "sonnetB" both name model claude-sonnet-5-5; a model has one price row');
+    expect(() => priceRow(twice, s1, { ...r4, file: 'p.json' })).toThrow('p.json: rows "sonnetA" and "sonnetB" both name model claude-sonnet-5-5; a model has one price row');
+    expect(() => costOf(s1, twice, r4)).toThrow(/^the price file: rows "sonnetA" and "sonnetB" both name model claude-sonnet-5-5/);
+  });
+
+  it('still prices and passes round 3\'s file, a claude-code row that names Opus plus a codex row, under r3 and r4-on-r3', () => {
+    const withCodex = { ...R3_FILE, codex: { model: 'gpt-5.6-sol', inputPerMTok: 4, cacheWritePerMTok: 5, cacheReadPerMTok: 0.4, outputPerMTok: 20 } };
+    const { records } = generate({ repos: 1 });
+    const [teach, a1] = [first(records, 'X2', 'teach'), first(records, 'A1')];
+    for (const [name, design] of [['r3', DESIGNS.r3], ['r4-on-r3', DESIGNS['r4-on-r3']]] as const) expect(() => checkPrices(withCodex, 'p.json', design), name).not.toThrow();
+    expect(priceRow(withCodex, a1, { design: DESIGNS['r4-on-r3'] })).toBe(withCodex['claude-code']);
+    expect(costOf(a1, withCodex, { design: DESIGNS['r4-on-r3'] })).toBe(costOf(a1, withCodex));
+    expect(costOf(teach, withCodex)).toBe(byHand(teach, withCodex['claude-code']));
+  });
+});

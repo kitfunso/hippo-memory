@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { DESIGNS } from '../scripts/token-eval/arms.mjs';
 import { FILTER_KEYS, filterOpts, filteredInput, readVoids } from '../scripts/token-eval/z0-filters.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
-import { GRADING, generate, jsonl, type Generated, type PlanCell, type Z0Record } from './fixtures/z0-gen.js';
+import { GRADING, generate, jsonl, planOf, type Generated, type PlanCell, type Z0Record } from './fixtures/z0-gen.js';
 
 const BASE = generate();
 const fresh = (): Generated => structuredClone(BASE);
@@ -125,6 +125,33 @@ describe('off-pin voids in filteredInput', () => {
     expect(() => filteredInput(parse(onlyA), plan, { design: DESIGNS['r4-on-r3'] }, { dropAbandoned: false })).toThrow(/plan cell arm X1 is not in design r4-on-r3; pass the design that holds it/);
   });
 
+});
+
+describe('an off-pin void on seed 4 under DESIGNS["r4-on-r3"]', () => {
+  const DESIGN = DESIGNS['r4-on-r3'];
+  const base = generate({ arms: ['A0', 'A1', 'A2', 'A4', 'A5'] });
+  // The generator makes seeds 1 to 3, so seed 4 is a hand-made copy of seed 3.
+  const clones = base.records.filter((r) => r.seed === 3 && ['A1', 'A2', 'A5'].includes(r.arm)).map((r) => ({ ...r, seed: 4, order: r.order + 1_000_000 }));
+  const records = [...base.records, ...clones];
+  const plan = planOf(records);
+  const voidsAt = (position: number) => {
+    const dir = tmp();
+    return readVoids(offPinFile(dir, [{ ...VOID, seed: 4, position }]), { cwd: dir });
+  };
+  const run = (design: typeof DESIGN, voids: unknown[] = []) => filteredInput(parse(records), plan, { design, voids }, { dropAbandoned: false }).filtered;
+  const plain = <T>(x: T): T => JSON.parse(JSON.stringify(x));
+
+  it('passes the void check, leaves the scored records as with no void and does not count', () => {
+    expect(clones.some((r) => inRun(r, 'rn-repo2', 4) && r.position === 9)).toBe(true);
+    const [none, voided] = [run(DESIGN), run(DESIGN, voidsAt(9))];
+    expect(plain(voided.scored)).toEqual(plain(none.scored));
+    expect(voided.offPinVoided).toEqual({ positions: 0, share: 0 });
+    // The check still sees seed 4: a void at a cell no plan file holds stops, and a design that keeps seed 4 voids the tail.
+    expect(() => run(DESIGN, voidsAt(99))).toThrow(/off-pin\.json void 0: cell .* is not in any plan file/);
+    const classic = run(DESIGNS.r3, voidsAt(9));
+    expect(classic.offPinVoided.positions).toBeGreaterThan(0);
+    expect(classic.scored.some((r: Z0Record) => inRun(r, 'rn-repo2', 4) && r.position >= 9)).toBe(false);
+  });
 });
 
 describe('filterOpts', () => {

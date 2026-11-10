@@ -13,10 +13,29 @@ const isObject = (v) => v !== undefined && v !== null && v.constructor === Objec
 const isPrices = (p) => p !== undefined && p !== null && PRICE_FIELDS.every((f) => Number.isFinite(p[f]) && p[f] >= 0);
 const priced = (usage, row) => (row === null ? Number.NaN : priceUsage(usage, row));
 
-function modelRow(prices, model) {
-  if (prices.models !== undefined) return own(prices.models, model) ? prices.models[model] : null;
-  return Object.values(prices).find((p) => isObject(p) && p.model === model && isPrices(p)) ?? null;
+/** The rows of a by-model file keyed by model id: the `models` block, else each top-level row that names its model. Two rows naming one model stop the read. */
+function modelRows(prices, file) {
+  const where = file ?? 'the price file';
+  if (prices.models !== undefined) {
+    if (!isObject(prices.models)) throw new Error(`${where}: "models" must be an object with one price row per model id`);
+    for (const [id, p] of Object.entries(prices.models)) if (!isPrices(p)) throw new Error(`${where}: models.${id} needs ${PRICE_FIELDS.join(', ')}`);
+    return new Map(Object.entries(prices.models));
+  }
+  const [rows, keys] = [new Map(), new Map()];
+  for (const [key, p] of Object.entries(prices)) {
+    // A top-level string, such as asOf, is no row.
+    if (!isObject(p)) continue;
+    if (!isPrices(p)) throw new Error(`${where}: "${key}" needs ${PRICE_FIELDS.join(', ')}`);
+    if (!isString(p.model)) continue;
+    if (rows.has(p.model)) throw new Error(`${where}: rows "${keys.get(p.model)}" and "${key}" both name model ${p.model}; a model has one price row`);
+    rows.set(p.model, p);
+    keys.set(p.model, key);
+  }
+  return rows;
 }
+
+/** The one way to find a model's price row, for the read and the check alike: null when the file has none. */
+const modelRow = (prices, model, file) => modelRows(prices, file).get(model) ?? null;
 
 /** The price row of one record, or null when a round 3 file has no row for its tool; round 4 stops on a record it cannot price.
  * @param {any} prices
@@ -29,7 +48,7 @@ export function priceRow(prices, record, { design = DESIGNS.r3, rowModel = undef
   const arm = ARM_TABLE[record.arm];
   if (record.tool !== arm.tool) throw new Error(`${where}: tool ${record.tool} but arm ${record.arm} runs ${arm.tool}; a design that prices by model holds Claude Code arms only`);
   const model = rowModel ?? arm.model;
-  const row = modelRow(prices, model);
+  const row = modelRow(prices, model, file);
   if (row === null) throw new Error(`no price row for model ${model} (arm ${record.arm}) in ${file ?? 'the price file'}; add its row from the price page and record it in an amendment (prereg item 7)`);
   return row;
 }
@@ -40,23 +59,6 @@ export const costOf = (record, prices, opts = {}) => priced(addUsage(record.usag
 /** One part of a record's usage (`usage.firstSession` or `usage.extra`) priced at the record's own row. */
 export const partCost = (usage, record, prices, opts = {}) => priced(usage, priceRow(prices, record, opts));
 
-/** The rows of a by-model file keyed by model id: the `models` block, else each top-level row that names its model. */
-function modelRows(prices, file) {
-  if (prices.models !== undefined) {
-    if (!isObject(prices.models)) throw new Error(`${file}: "models" must be an object with one price row per model id`);
-    for (const [id, p] of Object.entries(prices.models)) if (!isPrices(p)) throw new Error(`${file}: models.${id} needs ${PRICE_FIELDS.join(', ')}`);
-    return new Map(Object.entries(prices.models));
-  }
-  const rows = new Map();
-  for (const [key, p] of Object.entries(prices)) {
-    // A top-level string, such as asOf, is no row.
-    if (!isObject(p)) continue;
-    if (!isPrices(p)) throw new Error(`${file}: "${key}" needs ${PRICE_FIELDS.join(', ')}`);
-    if (isString(p.model)) rows.set(p.model, p);
-  }
-  return rows;
-}
-
 /** Stops, naming the file, when the price file cannot price the design: a missing tool row, a model with no row, or a Sonnet 5.5 rate that is not half the Opus 5.5 rate. */
 export function checkPrices(prices, file, design = DESIGNS.r3) {
   if (design.prices === 'tool') {
@@ -65,12 +67,11 @@ export function checkPrices(prices, file, design = DESIGNS.r3) {
     }
     return;
   }
-  const rows = modelRows(prices, file);
   for (const model of new Set([...design.arms.map((a) => ARM_TABLE[a].model), OPUS_MODEL])) {
-    if (!rows.has(model)) throw new Error(`${file}: no price row for model ${model}; add its row from the price page and record it in an amendment (prereg item 7)`);
+    if (modelRow(prices, model, file) === null) throw new Error(`${file}: no price row for model ${model}; add its row from the price page and record it in an amendment (prereg item 7)`);
   }
-  const [opus, sonnet] = [rows.get(OPUS_MODEL), rows.get(SONNET_MODEL)];
-  if (sonnet === undefined) return;
+  const [opus, sonnet] = [modelRow(prices, OPUS_MODEL, file), modelRow(prices, SONNET_MODEL, file)];
+  if (sonnet === null) return;
   for (const column of PRICE_FIELDS) {
     if (Math.abs(sonnet[column] - opus[column] / 2) > HALF_TOLERANCE) {
       throw new Error(`${file}: ${column} is ${sonnet[column]} for ${SONNET_MODEL} and ${opus[column]} for ${OPUS_MODEL}, not half; the freeze stops; an amendment sets k (prereg item 7)`);

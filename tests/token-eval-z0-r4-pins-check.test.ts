@@ -66,6 +66,15 @@ describe('--pins', () => {
     expect(lines(check())).toEqual(['PINS: hippoCommit is not pinned']);
   });
 
+  it('exits 3 naming each pinned role that the call does not check, with none given and with one of the two', () => {
+    const none = runCli(['--pins', 'pins.json', '--checkout', checkout], work);
+    expect([none.code, none.stdout, lines(none)]).toEqual([3, '', ['PINS: seam is pinned but not checked; pass seam=<path>', 'PINS: tasks is pinned but not checked; pass tasks=<path>']]);
+    const one = runCli(['--pins', 'pins.json', '--checkout', checkout, 'seam=seam.sh'], work);
+    expect([one.code, lines(one)]).toEqual([3, ['PINS: tasks is pinned but not checked; pass tasks=<path>']]);
+    const other = runCli(['--pins', 'pins.json', '--checkout', checkout, 'tree:tasks=tasks'], work);
+    expect([other.code, lines(other)]).toEqual([3, ['PINS: seam is pinned but not checked; pass seam=<path>']]);
+  });
+
   it('exits 3 on a file that does not exist, naming the role', () => {
     fs.rmSync(path.join(work, 'seam.sh'));
     const r = check();
@@ -127,6 +136,19 @@ describe('the tree role', () => {
     expect(lines(check())).toContain(`PINS: tasks: ${MANIFEST} line 1 is not "<sha256>  <path>"`);
     fs.rmSync(path.join(work, 'tasks', MANIFEST));
     expect(lines(check())).toEqual([expect.stringMatching(/^PINS: tasks: .*sha256\.txt does not exist; write it with --manifest$/)]);
+  });
+
+  it('exits 3 naming a link under the folder, in --manifest and in the check', () => {
+    // A directory junction needs no privilege on Windows, where a file symlink does.
+    put(work, 'outside/x.txt', 'x');
+    const link = path.join(work, 'tasks', 'k', 'lnk');
+    fs.symlinkSync(path.join(work, 'outside'), link, 'junction');
+    const manifest = fs.readFileSync(path.join(work, 'tasks', MANIFEST), 'utf8');
+    for (const r of [runCli(['--manifest', 'tasks'], work), check()]) {
+      expect(r.code).toBe(3);
+      expect(lines(r)).toEqual([`PINS: ${link} is a link; a pinned folder holds files only`]);
+    }
+    expect(fs.readFileSync(path.join(work, 'tasks', MANIFEST), 'utf8')).toBe(manifest);
   });
 
   it('refuses --write on a folder that differs from its manifest', () => {
