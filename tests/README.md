@@ -39,4 +39,4 @@ A `*.process.test.ts` spawns `node dist/...` through `tests/_helpers/spawn-hippo
 
 ## Rule tests that scan the tree
 
-`tests/scripts/*` read the source and test trees and fail on a shape: elapsed-time bounds, floating promises, caught-error logs, row casts, fallback sites, em dashes, long lines, comment history, test env names, store-port use, test-only exports, stale-tier writes. They import no changed file, so run all of them after any edit under `src` or `tests`.
+`tests/scripts/*` read the source and test trees and fail on a shape: elapsed-time bounds, floating promises, caught-error logs, row casts, fallback sites, em dashes, long lines, comment history, test env names, store-port use, test-only exports, stale-tier writes, shipped hook block hashes. They import no changed file, so run all of them after any edit under `src` or `tests`.

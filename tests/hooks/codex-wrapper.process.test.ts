@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const prevPathForChild = process.env.PATH ?? '';
 
 import {
+  detectRealCodexPath,
   ensureCodexWrapperInstalled,
   installCodexWrapper,
   isCodexWrapperInstalled,
@@ -15,6 +16,8 @@ import {
   uninstallCodexWrapper,
   resolveCodexWrapperPaths,
 } from '../../src/surface/hooks-install/codex-wrapper.js';
+import { HIPPO_CODEX_WRAPPER_MARKER } from '../../src/surface/hooks-install/rules/shared.js';
+import { log } from '../../src/base/util/log.js';
 import { resolveCodexSessionTranscript } from '../../src/surface/capture/codex-session.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -465,5 +468,280 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     expect(readLog()).not.toContain('skip capture');
     expect(saved().some((c) => c.includes(SENTINEL))).toBe(true);
     expect(saved().some((c) => c.includes(DECOY))).toBe(false);
+  });
+});
+
+// The launcher slot, its backup and the metadata are built by hand into the states a stopped install
+// or uninstall leaves; PATH holds only the temp launcher folder.
+const LAUNCHER = process.platform === 'win32' ? 'codex.cmd' : 'codex';
+const BACKUP = process.platform === 'win32' ? 'codex.hippo-real.cmd' : 'codex.hippo-real';
+const ORIGINAL_BYTES = 'original codex launcher\n';
+const UPDATED_BYTES = 'updated codex launcher\n';
+
+describe('Codex wrapper recovery from a stopped install or uninstall', () => {
+  let env: { cleanup: () => Promise<void>; home: string };
+  let bin: string;
+  let slot: string;
+  let backup: string;
+
+  beforeEach(() => {
+    env = withFakeHome();
+    vi.stubEnv('APPDATA', path.join(env.home, 'appdata'));
+    setCodexHome(undefined);
+    bin = path.join(env.home, 'launcher-bin');
+    fs.mkdirSync(bin, { recursive: true });
+    vi.stubEnv('PATH', bin);
+    slot = path.join(bin, LAUNCHER);
+    backup = path.join(bin, BACKUP);
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await env.cleanup();
+  });
+
+  const read = (file: string): string => fs.readFileSync(file, 'utf8');
+  const handWrapper = `# ${HIPPO_CODEX_WRAPPER_MARKER}\n`;
+
+  // PATH becomes the first folder, then a second one, so a test can say which folder wins.
+  function addLaterFolder(): string {
+    const later = path.join(env.home, 'later-bin');
+    fs.mkdirSync(later, { recursive: true });
+    vi.stubEnv('PATH', [bin, later].join(path.delimiter));
+    return later;
+  }
+
+  // A full install, then the state a stopped uninstall leaves: the wrapper removed by hand.
+  function installThenDropWrapper(): void {
+    fs.writeFileSync(slot, ORIGINAL_BYTES);
+    installCodexWrapper();
+    fs.rmSync(slot);
+  }
+
+  describe('install', () => {
+    it('wraps the vacated slot when an earlier install stopped after moving the launcher aside', () => {
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+
+      const result = installCodexWrapper();
+
+      expect(result.commandPath).toBe(slot);
+      expect(read(slot)).toContain('codex-run');
+      expect(read(backup)).toBe(ORIGINAL_BYTES);
+      expect(ensureCodexWrapperInstalled().status).toBe('already-installed');
+    });
+
+    it.skipIf(process.platform !== 'win32')(
+      'wraps a vacated exe slot with a cmd shim when an earlier install stopped after the rename',
+      () => {
+        const exeBackup = path.join(bin, 'codex.hippo-real.exe');
+        fs.writeFileSync(exeBackup, ORIGINAL_BYTES);
+
+        const result = installCodexWrapper();
+
+        expect(result.commandPath).toBe(path.join(bin, 'codex.cmd'));
+        expect(read(path.join(bin, 'codex.cmd'))).toContain('codex-run');
+        expect(fs.existsSync(path.join(bin, 'codex.exe'))).toBe(false);
+        expect(read(exeBackup)).toBe(ORIGINAL_BYTES);
+        expect(ensureCodexWrapperInstalled().status).toBe('already-installed');
+      },
+    );
+
+    it.skipIf(process.platform !== 'win32')(
+      'finishes a cmd shim whose exe was moved aside and whose metadata was never written',
+      () => {
+        const exeBackup = path.join(bin, 'codex.hippo-real.exe');
+        fs.writeFileSync(exeBackup, ORIGINAL_BYTES);
+        fs.writeFileSync(path.join(bin, 'codex.cmd'), handWrapper);
+
+        installCodexWrapper();
+
+        expect(read(path.join(bin, 'codex.cmd'))).toContain('codex-run');
+        expect(read(exeBackup)).toBe(ORIGINAL_BYTES);
+        expect(ensureCodexWrapperInstalled().status).toBe('already-installed');
+      },
+    );
+
+    it.skipIf(process.platform !== 'win32')(
+      'wraps a live cmd launcher, not a vacated exe slot whose cmd shim would overwrite it',
+      () => {
+        const exeBackup = path.join(bin, 'codex.hippo-real.exe');
+        fs.writeFileSync(slot, UPDATED_BYTES);
+        fs.writeFileSync(exeBackup, ORIGINAL_BYTES);
+
+        expect(detectRealCodexPath()).toBe(slot);
+        installCodexWrapper();
+
+        expect(read(slot)).toContain('codex-run');
+        expect(read(backup)).toBe(UPDATED_BYTES);
+        expect(read(exeBackup)).toBe(ORIGINAL_BYTES);
+        expect(fs.existsSync(path.join(bin, 'codex.exe'))).toBe(false);
+      },
+    );
+
+    it('wraps again when an earlier uninstall stopped after removing the wrapper', () => {
+      installThenDropWrapper();
+
+      expect(detectRealCodexPath()).toBe(slot);
+      installCodexWrapper();
+
+      expect(read(slot)).toContain('codex-run');
+      expect(read(backup)).toBe(ORIGINAL_BYTES);
+      expect(ensureCodexWrapperInstalled().status).toBe('already-installed');
+    });
+
+    it('names the backup it recovered in the log when only the backup is left', () => {
+      const info = vi.spyOn(log, 'info').mockImplementation(() => undefined);
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+
+      installCodexWrapper();
+
+      const recovered = info.mock.calls.filter(([message]) => message.includes(backup));
+      expect(recovered).toHaveLength(1);
+      expect(read(slot)).toContain('codex-run');
+    });
+
+    it('finishes an install that stopped after writing the wrapper', () => {
+      fs.writeFileSync(slot, handWrapper);
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+
+      installCodexWrapper();
+
+      expect(read(slot)).toContain('codex-run');
+      expect(read(backup)).toBe(ORIGINAL_BYTES);
+      expect(ensureCodexWrapperInstalled().status).toBe('already-installed');
+    });
+
+    it('finishes an uninstall that stopped after restoring the launcher', () => {
+      installThenDropWrapper();
+      fs.renameSync(backup, slot);
+
+      installCodexWrapper();
+
+      expect(read(slot)).toContain('codex-run');
+      expect(read(backup)).toBe(ORIGINAL_BYTES);
+      expect(ensureCodexWrapperInstalled().status).toBe('already-installed');
+    });
+
+    it('backs up the newer launcher a Codex update put over the wrapper', () => {
+      fs.writeFileSync(slot, ORIGINAL_BYTES);
+      installCodexWrapper();
+      fs.writeFileSync(slot, UPDATED_BYTES);
+
+      installCodexWrapper();
+
+      expect(read(backup)).toBe(UPDATED_BYTES);
+      expect(read(slot)).toContain('codex-run');
+    });
+
+    it('replaces a stale backup with the launcher in the slot when no metadata exists', () => {
+      fs.writeFileSync(slot, UPDATED_BYTES);
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+
+      installCodexWrapper();
+
+      expect(read(backup)).toBe(UPDATED_BYTES);
+      expect(read(slot)).toContain('codex-run');
+    });
+
+    it('wraps the launcher in an earlier PATH folder, not a vacated slot in a later one', () => {
+      const later = addLaterFolder();
+      fs.writeFileSync(slot, UPDATED_BYTES);
+      fs.writeFileSync(path.join(later, BACKUP), ORIGINAL_BYTES);
+
+      expect(detectRealCodexPath()).toBe(slot);
+      installCodexWrapper();
+
+      expect(read(slot)).toContain('codex-run');
+      expect(read(backup)).toBe(UPDATED_BYTES);
+      expect(fs.existsSync(path.join(later, LAUNCHER))).toBe(false);
+      expect(read(path.join(later, BACKUP))).toBe(ORIGINAL_BYTES);
+    });
+
+    it('recovers a vacated slot in an earlier PATH folder ahead of a real launcher in a later one', () => {
+      const later = addLaterFolder();
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+      fs.writeFileSync(path.join(later, LAUNCHER), UPDATED_BYTES);
+
+      expect(detectRealCodexPath()).toBe(slot);
+      installCodexWrapper();
+
+      expect(read(slot)).toContain('codex-run');
+      expect(read(backup)).toBe(ORIGINAL_BYTES);
+      expect(read(path.join(later, LAUNCHER))).toBe(UPDATED_BYTES);
+      expect(fs.existsSync(path.join(later, BACKUP))).toBe(false);
+    });
+  });
+
+  describe('uninstall without metadata', () => {
+    it('restores the launcher when an install stopped after moving it aside', () => {
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+
+      expect(uninstallCodexWrapper()).toBe(true);
+
+      expect(read(slot)).toBe(ORIGINAL_BYTES);
+      expect(fs.existsSync(backup)).toBe(false);
+    });
+
+    it('restores the launcher when an install stopped before writing its metadata', () => {
+      fs.writeFileSync(slot, handWrapper);
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+
+      expect(uninstallCodexWrapper()).toBe(true);
+
+      expect(read(slot)).toBe(ORIGINAL_BYTES);
+      expect(fs.existsSync(backup)).toBe(false);
+    });
+
+    it.skipIf(process.platform !== 'win32')(
+      'restores the exe and removes the cmd shim of an install that stopped before its metadata',
+      () => {
+        const exeBackup = path.join(bin, 'codex.hippo-real.exe');
+        fs.writeFileSync(exeBackup, ORIGINAL_BYTES);
+        fs.writeFileSync(path.join(bin, 'codex.cmd'), handWrapper);
+
+        expect(uninstallCodexWrapper()).toBe(true);
+
+        expect(read(path.join(bin, 'codex.exe'))).toBe(ORIGINAL_BYTES);
+        expect(fs.existsSync(path.join(bin, 'codex.cmd'))).toBe(false);
+        expect(fs.existsSync(exeBackup)).toBe(false);
+      },
+    );
+
+    it.skipIf(process.platform !== 'win32')('leaves a live cmd launcher and an exe backup beside it alone', () => {
+      const exeBackup = path.join(bin, 'codex.hippo-real.exe');
+      fs.writeFileSync(slot, UPDATED_BYTES);
+      fs.writeFileSync(exeBackup, ORIGINAL_BYTES);
+
+      expect(uninstallCodexWrapper()).toBe(false);
+
+      expect(read(slot)).toBe(UPDATED_BYTES);
+      expect(read(exeBackup)).toBe(ORIGINAL_BYTES);
+      expect(fs.existsSync(path.join(bin, 'codex.exe'))).toBe(false);
+    });
+
+    it('leaves a real launcher and the backup beside it alone', () => {
+      fs.writeFileSync(slot, UPDATED_BYTES);
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+
+      expect(uninstallCodexWrapper()).toBe(false);
+
+      expect(read(slot)).toBe(UPDATED_BYTES);
+      expect(read(backup)).toBe(ORIGINAL_BYTES);
+    });
+
+    // Every leftover backup beside an empty or hippo-wrapped slot is restored, in any PATH folder.
+    it('restores a backup beside an empty slot in a later folder and leaves an earlier real launcher alone', () => {
+      const later = addLaterFolder();
+      fs.writeFileSync(slot, UPDATED_BYTES);
+      fs.writeFileSync(backup, ORIGINAL_BYTES);
+      fs.writeFileSync(path.join(later, BACKUP), ORIGINAL_BYTES);
+
+      expect(uninstallCodexWrapper()).toBe(true);
+
+      expect(read(path.join(later, LAUNCHER))).toBe(ORIGINAL_BYTES);
+      expect(fs.existsSync(path.join(later, BACKUP))).toBe(false);
+      expect(read(slot)).toBe(UPDATED_BYTES);
+      expect(read(backup)).toBe(ORIGINAL_BYTES);
+    });
   });
 });

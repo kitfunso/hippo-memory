@@ -13,6 +13,7 @@ One line per gate. Each runs from the repo root as `node scripts/checks/<name>`.
 - `check-floating-api.mjs`: src and tests never drop the Promise of an api write function.
 - `check-floating-promises.mjs`: a promise call in src is awaited or handled.
 - `check-graph-writes.mjs`: only the two graph writers in src/store/sqlite/graph write the graph tables.
+- `check-hook-block-hashes.mjs`: each agent's current hook block text has its hash in SHIPPED_HOOK_HASHES; run after build.
 - `check-lint-ratchet.mjs`: oxlint hits per rule may fall, never rise.
 - `check-long-lines.mjs`: no src line over 120 characters beyond the baseline.
 - `check-manifest-versions.mjs`: every JSON manifest declares the version about to be published.

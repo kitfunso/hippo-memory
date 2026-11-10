@@ -93,6 +93,9 @@ jobs:
       # A module move breaks a script's dist/ import here, not only in the one shard or eval that runs the script.
       - name: Every dist/ import in scripts, benchmarks, evals and tests resolves
         run: node scripts/checks/check-dist-imports.mjs
+      # A block text with no listed hash reads as a user's edit once the text changes again, so init skips its refresh.
+      - name: Every shipped hook block text has its hash listed
+        run: node scripts/checks/check-hook-block-hashes.mjs
       # The committed API report must match the built declarations.
       - run: npm run check:dts
       # Tests are type-checked so a wrong-shaped call cannot pass.

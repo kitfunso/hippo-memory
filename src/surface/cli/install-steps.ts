@@ -130,8 +130,15 @@ function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): vo
       return; // already scheduled
     }
   } catch (err) {
-    // A non-zero exit means the task does not exist yet, so it is created below.
-    if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /query');
+    if (schedulerTimedOut(err)) {
+      // An unanswered query may hide an existing task, so nothing is created over it.
+      console.log(
+        `   schtasks /query did not answer within ${SCHEDULER_CALL_TIMEOUT_MS / 1000} s and was stopped, so Task ` +
+          `Scheduler was not changed; run hippo init again, or check for the task ${taskName}.`,
+      );
+      return;
+    }
+    // Any other non-zero exit means the task does not exist yet, so it is created below.
   }
 
   try {
@@ -169,20 +176,106 @@ function readCrontab(run: RunScheduler): string {
   }
 }
 
+const dailyCronLine = (cmd: string, marker: string): string => `15 6 * * * ${cmd} ${marker}`;
+
+// The five schedule fields or an @macro, with any leading blanks.
+const CRON_SCHEDULE = /^\s*(?:@\S+|\S+(?:\s+\S+){4})(?=\s|$)/;
+
+/** Best effort shell scan: false when `text` ends inside a quote, where a marker is another job's data. */
+function outsideQuotes(text: string): boolean {
+  let open = '';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (open === `'`) open = c === `'` ? '' : open;
+    else if (c === '\\') i++;
+    else if (open === '"') open = c === '"' ? '' : open;
+    else if (c === `'` || c === '"') open = c;
+  }
+  return open === '';
+}
+
+/** Where `marker` stands in `line` as a whole token outside quotes, or -1; `<marker>-old` is another name. */
+function markerAt(line: string, marker: string): number {
+  const blankOrEdge = (i: number): boolean => i < 0 || i >= line.length || /\s/.test(line[i]);
+  const isOurs = (at: number): boolean =>
+    blankOrEdge(at - 1) && blankOrEdge(at + marker.length) && outsideQuotes(line.slice(0, at));
+  for (let at = line.indexOf(marker); at >= 0; at = line.indexOf(marker, at + 1)) {
+    if (isOurs(at)) return at;
+  }
+  return -1;
+}
+
+/** `line` with its command replaced by `cmd`, schedule and marker kept; null when it has no schedule. */
+function withCommand(line: string, at: number, cmd: string): string | null {
+  const schedule = CRON_SCHEDULE.exec(line)?.[0];
+  if (schedule === undefined || at < schedule.length) return null;
+  return line.slice(schedule.length, at).trim() === cmd
+    ? line
+    : `${schedule} ${cmd} ${line.slice(at)}`;
+}
+
+type CrontabPlan =
+  | { readonly kind: 'keep' }
+  | { readonly kind: 'unreadable'; readonly line: string }
+  | { readonly kind: 'write'; readonly text: string; readonly said: readonly string[] };
+
+function appendEntry(existing: string, marker: string, cmd: string): CrontabPlan {
+  // A user with no crontab yet gets the line alone, with no blank line above it.
+  const kept = existing.trimEnd();
+  return {
+    kind: 'write',
+    text: `${kept === '' ? '' : `${kept}\n`}${dailyCronLine(cmd, marker)}\n`,
+    said: ['   Scheduled machine-level daily runner (6:15am) via crontab'],
+  };
+}
+
+/**
+ * What to do with the user's crontab so it holds exactly one active line for the daily runner.
+ * Every other line is kept as it was, line endings included.
+ */
+function reconcileCrontab(existing: string, marker: string, cmd: string): CrontabPlan {
+  const lines = existing.split('\n');
+  const isEntry = (line: string): boolean => !/^\s*#/.test(line) && markerAt(line, marker) >= 0;
+  const [first, ...extra] = lines.flatMap((line, i) => (isEntry(line) ? [i] : []));
+  if (first === undefined) return appendEntry(existing, marker, cmd);
+  const old = lines[first];
+  const fresh = withCommand(old, markerAt(old, marker), cmd);
+  if (fresh === null) return { kind: 'unreadable', line: old.trim() };
+  if (fresh === old && extra.length === 0) return { kind: 'keep' };
+  const said = [
+    ...(fresh === old
+      ? []
+      : [
+          '   Updated the daily runner entry in your crontab (the command changed).',
+          `   was: ${old.trimEnd()}`,
+          `   now: ${fresh.trimEnd()}`,
+        ]),
+    ...extra.flatMap((i) => [
+      '   Removed a duplicate daily runner entry from your crontab:',
+      `   ${lines[i].trimEnd()}`,
+    ]),
+  ];
+  const text = lines
+    .map((line, i) => (i === first ? fresh : line))
+    .filter((_, i) => !extra.includes(i))
+    .join('\n');
+  return { kind: 'write', text: text.endsWith('\n') ? text : `${text}\n`, said };
+}
+
 function scheduleOnCrontab(taskName: string, cmd: string, run: RunScheduler): void {
   const marker = `# hippo:${taskName}`;
   try {
-    const existing = readCrontab(run);
-    if (existing.includes(marker)) {
-      return; // already scheduled
+    const plan = reconcileCrontab(readCrontab(run), marker, cmd);
+    if (plan.kind === 'keep') return; // already scheduled
+    if (plan.kind === 'unreadable') {
+      log.warn(
+        `install: the daily runner line in your crontab is not a cron schedule hippo can read, so it was left as it ` +
+          `is: ${plan.line}`,
+      );
+      return;
     }
-
-    const cronLine = `15 6 * * * ${cmd} ${marker}`;
-    // A user with no crontab yet gets the line alone, with no blank line above it.
-    const kept = existing.trimEnd();
-    const newCrontab = `${kept === '' ? '' : `${kept}\n`}${cronLine}\n`;
-    run('crontab', ['-'], { ...SCHEDULER_CALL, input: newCrontab });
-    console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
+    run('crontab', ['-'], { ...SCHEDULER_CALL, input: plan.text });
+    for (const line of plan.said) console.log(line);
   } catch (err) {
     if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');
     log.warn(
@@ -190,8 +283,7 @@ function scheduleOnCrontab(taskName: string, cmd: string, run: RunScheduler): vo
       errorFields(err),
     );
     // No permission or no crontab program: print the line for the user to add by hand.
-    const cronLine = `15 6 * * * ${cmd}`;
     console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
-    console.log(`   ${cronLine}`);
+    console.log(`   ${dailyCronLine(cmd, marker)}`);
   }
 }
