@@ -27,7 +27,7 @@ preview, which is uploaded by hand in the repo settings.
 ## Deploy (Cloudflare Pages)
 
 ```bash
-npm run deploy   # build + wrangler pages deploy dist
+npm run deploy   # newest-master check + build + wrangler pages deploy dist
 ```
 
 Production: https://hippo-memory.com (apex custom domain on Cloudflare Pages). The
