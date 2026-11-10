@@ -263,7 +263,7 @@ After a stop, the next step is a new-family round with the author step and scree
 @@ -22,1 +22,2 @@
 -const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
 +const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH',
-+  'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE', 'VIRTUAL_ENV'];
++  'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE', 'VIRTUAL_ENV', 'PIP_CONSTRAINT'];
 @@ -84,4 +85,8 @@
    env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = NO_AUTO_MEMORY.has(arm) ? '1' : '0';
 +  const { model } = ARM_TABLE[arm];
@@ -365,7 +365,7 @@ const offPin = (log, arm) => log.filter(isRequest).some((e) => offModel(e, arm) 
 ~ runTask meta                                  @ scripts/token-eval/task.mjs:472 -- envKeys are the keys of the task env
 ~ scratchPaths(out, g)                          @ scripts/token-eval/regrade.mjs:88 -- <scratch root>/venv/<position>; entries run one at a time (:383)
 ~ regradeCell setup                             @ scripts/token-eval/regrade.mjs:164 -- python -m venv before setup, removed after
-~ envKeyCheck(records, entries, ...)            @ scripts/token-eval/regrade.mjs:319 -- finds VIRTUAL_ENV in the cell env
+~ envKeyCheck(records, entries, ...)            @ scripts/token-eval/regrade.mjs:319 -- finds VIRTUAL_ENV and PIP_CONSTRAINT in the cell env
 </script>
     </doc-calls>
     <doc-claim at="scripts/token-eval/task.mjs:85">
@@ -388,7 +388,8 @@ s3x-env.ps1 stays as it is, because its hash is in round 3's author lock (Amendm
 Its PATH entry {work}\venv\Scripts then names no folder, and the task env puts the task venv first.
 s4-run.ps1 names a pinned poetry 2.5.1 folder; the runner puts its Scripts after the task venv's Scripts on PATH,
 so q255's bare poetry install finds poetry and installs into the task venv. The pins file holds its version.
-q255's set R setups pip install an unpinned poetry in a -boot venv; PIP_CONSTRAINT (poetry==2.5.1) pins it there.
+q255's set R setups pip install an unpinned poetry in a -boot venv; the runner sets PIP_CONSTRAINT (poetry==2.5.1)
+in each task env that gets VIRTUAL_ENV, which pins it there. Both names join RUNNER_KEYS; VIRTUAL_ENV leaves TOOLCHAIN_ENV.
 Each task gets a new venv at <run root>/venv/<position>, made with python -m venv before setup.
 once() deletes and remakes it before each setup, so a setup retry and a usage-limit reset start empty.
 G1 counts the current task's folder as an own folder of the session (readcheck.mjs:204, :231, :233).
@@ -526,16 +527,17 @@ Arm environment  A smoke session in each arm records envKeys inside the allowlis
                  It runs on the tag, after the freeze and before the pilot, on a dev task. Its spend goes in the ledger.
                  A smoke fail follows the pilot rules below; a fail for another cause uses the second tag.
 Venv             A unit test stubs the spawn: every spawn of one task (setup, session, resume, checks, tests)
-                 gets one VIRTUAL_ENV, unique to the task. Two tasks of one Python run: a package from uv pip install in the first imports there
-                 and is gone in the second. A non-Python run has no VIRTUAL_ENV. A regrade of one Python cell passes and
+                 gets one VIRTUAL_ENV, unique to the task, and PIP_CONSTRAINT. Two tasks of one Python run: a package from uv pip install in the first imports there
+                 and is gone in the second. A non-Python run has no VIRTUAL_ENV. A regrade of one q255 set R cell passes and
                  gives the run's checker verdicts and acceptance. A setup retry and a reset start from an empty venv.
                  q255-a1's bare poetry install passes in a new task venv, with the pinned poetry Scripts on PATH;
-                 q255-f1-teach's boot install, with PIP_CONSTRAINT set, leaves poetry 2.5.1.
+                 q255-f1-teach's boot install, in the task env the runner builds, leaves poetry 2.5.1.
                  G1: a read in the current task's venv or its -boot sibling passes; a read in any other venv is void.
                  The check prints the setup time of each task.
 Freeze           One tag on z0/r4, z0-r4-freeze-1 (z0-r4-freeze-2 only under the pilot rule). dist rebuilt from the tag in a clean checkout has round 3's hash
                  97ba0e9b.... The pins file names each arm's model, the effort, the Claude Code version,
-                 the poetry version, the tasks files with their checker trees (one manifest hash) and the launcher hashes.
+                 the poetry version, the tasks files with their checker trees (one manifest hash), the PIP_CONSTRAINT file
+                 and the launcher hashes. The pins check makes the manifest again before the launch and each regrade.
 Pilot            claim 5.2.     Batch 1: claim 2.2.     Scored run: G1 to G5 pass; hook voids under 5%.
 </script>
       </doc-code>
