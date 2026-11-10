@@ -1,16 +1,16 @@
 // First-class object verbs for decisions: record one (optionally superseding an older one's
 // memory), list, get, close.
 
-import { MemoryEntry } from '../../base/memory/entry.js';
 import type { Decision } from '../../base/records/object-types.js';
 import { memoryGet } from '../../api/memories/memories.js';
-import { decisionIdByMemory, decisionMemoryWeaken } from '../../api/objects/object-kinds.js';
+import { decisionIdByMemory } from '../../api/objects/object-kinds.js';
 import {
   objectClose,
   objectCreate,
   objectGet,
   objectList,
   objectStates,
+  type ObjectWrites,
 } from '../../api/objects/objects.js';
 import { printError } from './output.js';
 import {
@@ -31,11 +31,12 @@ import {
   printLifecycleTail,
   type ObjectNames,
 } from './object-verbs.js';
-import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { shellFolder } from './versioned-verbs.js';
 
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };
+const NOT_RECORDED =
+  'The decision was NOT recorded. Nothing changed, so it is safe to run the command again.';
 
 function printDecisionRow(d: Decision): void {
   const supPart = d.supersededBy !== null ? ` superseded_by=#${d.supersededBy}` : '';
@@ -97,23 +98,20 @@ async function decideCreate(
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
-  // Commit the table create+supersede first (inside the save's SAVEPOINT) and weaken the old memory
-  // last, best-effort, so a memory-write failure cannot leave the memory stale while the table
-  // shows the supersession.
+  // The save weakens the old memory in the same write. A decision row backing the memory is
+  // weakened through its supersede link; a plain memory is named so the save weakens it too.
   let supersedesDecisionId: number | undefined;
-  let oldEntry: MemoryEntry | null = null;
+  let weakensMemoryId: string | undefined;
   if (supersedesMemId) {
-    oldEntry = await memoryGet(ctx, supersedesMemId);
-    if (!oldEntry) {
+    if (!(await memoryGet(ctx, supersedesMemId))) {
       fail(`Memory ${supersedesMemId} not found.`);
     }
     supersedesDecisionId = (await decisionIdByMemory(ctx, supersedesMemId)) ?? undefined;
+    if (supersedesDecisionId === undefined) weakensMemoryId = supersedesMemId;
   }
 
-  const write = { decisionText, context, supersedesDecisionId };
-  const created = await objectCreate(ctx, 'decision', write, shellFolder());
-
-  if (oldEntry) await weakenOrWarn(ctx, oldEntry, supersedesMemId);
+  const write = { decisionText, context, supersedesDecisionId, weakensMemoryId };
+  const created = await recordDecision(ctx, write, Boolean(supersedesMemId));
 
   console.log(`Decision recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
@@ -127,19 +125,17 @@ function exitWithDecideUsage(): never {
   fail('       hippo decide close <id>');
 }
 
-async function weakenOrWarn(
+async function recordDecision(
   ctx: ContextWith<'objects'>,
-  oldEntry: MemoryEntry,
-  supersedesMemId: string | null,
-): Promise<void> {
-  // Best-effort and last: the decision already committed. Failing here would make a retry find no
-  // active decision for the old memory and create a duplicate active successor, so warn instead.
+  write: ObjectWrites['decision'],
+  supersedes: boolean,
+): Promise<Decision> {
   try {
-    await decisionMemoryWeaken(ctx, oldEntry);
+    return await objectCreate(ctx, 'decision', write, shellFolder());
   } catch (e) {
-    printError(
-      `  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`,
-    );
+    // True only while the save is whole or nothing: a throw after its commit would break this claim.
+    if (supersedes) printError(NOT_RECORDED);
+    throw e;
   }
 }
 

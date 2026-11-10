@@ -467,26 +467,69 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
     expect([s.rows(), decisions(s), s.audit()]).toEqual([[], [], []]);
   });
 
-  it('a weaken the store refuses still records the decision, with a warning', async () => {
-    const s = new Store();
-    const oldId = s.seed(CLEAN, { tags: ['billing'] });
+  const NOT_RECORDED = 'The decision was NOT recorded. Nothing changed, so it is safe to run the command again.\n';
+  const REFUSING = ['INSERT', 'UPDATE'].map((event) => `refuse_weaken_${event}`);
+
+  /** Makes the store refuse the write that marks `memoryId` stale, as a rule of the operator's own would. */
+  function refuseWeaken(s: Store, memoryId: string): void {
     for (const event of ['INSERT', 'UPDATE']) {
       exec(
         s.root,
-        `CREATE TRIGGER refuse_weaken_${event} BEFORE ${event} ON memories WHEN NEW.id = '${oldId}' AND NEW.confidence = 'stale' BEGIN SELECT RAISE(ABORT, 'refused'); END`,
+        `CREATE TRIGGER refuse_weaken_${event} BEFORE ${event} ON memories WHEN NEW.id = '${memoryId}' AND NEW.confidence = 'stale' BEGIN SELECT RAISE(ABORT, 'refused'); END`,
       );
     }
+  }
+
+  it('a weaken the store refuses fails the whole save: no decision, no memory, no audit row', async () => {
+    const s = new Store();
+    const oldId = s.seed(CLEAN, { tags: ['billing'] });
+    refuseWeaken(s, oldId);
     s.settle();
     const r = await s.run('decide', 'the billing service retries a failed charge five times', '--supersedes', oldId);
+    expect(r).toEqual({ status: 1, stdout: '', stderr: `${NOT_RECORDED}Error: refused\n` });
+    expect(s.rows()).toMatchObject([{ id: oldId, confidence: 'verified', half_life_days: 365, tags: ['billing'] }]);
+    expect(decisions(s)).toEqual([]);
+    expect(s.audit()).toEqual([]);
+  });
+
+  it('a retry after a refused weaken records exactly one decision and weakens the memory', async () => {
+    const s = new Store();
+    const oldId = s.seed(CLEAN, { tags: ['billing'] });
+    refuseWeaken(s, oldId);
+    s.settle();
+    const text = 'the billing service retries a failed charge five times';
+    expect((await s.run('decide', text, '--supersedes', oldId)).status).toBe(1);
+    exec(s.root, REFUSING.map((name) => `DROP TRIGGER ${name}`).join('; '));
+    const retried = await s.run('decide', text, '--supersedes', oldId);
     const newId = s.lastId();
-    expect(r).toEqual({
-      status: 0,
-      stdout: recorded(1, newId, `${oldId} ${WEAKENED_ONLY}`),
-      stderr: `  warning: decision recorded and superseded, but failed to weaken the prior memory ${oldId}: refused\n`,
-    });
-    expect(s.rows()[0]).toMatchObject({ id: oldId, confidence: 'verified', half_life_days: 365, tags: ['billing'] });
+    expect(retried).toEqual({ status: 0, stdout: recorded(1, newId, `${oldId} ${WEAKENED_ONLY}`), stderr: '' });
+    expect(s.rows()).toMatchObject([
+      { id: oldId, confidence: 'stale', half_life_days: 182, tags: ['billing', 'superseded'] },
+      { id: newId, source: 'decision', confidence: 'verified' },
+    ]);
     expect(decisions(s)).toEqual([`1 ${newId} active`]);
-    expect(s.audit()).toEqual(['default cli decision_create 1', `default cli remember ${newId}`]);
+    expect(s.audit()).toEqual([
+      'default cli decision_create 1',
+      `default cli remember ${newId}`,
+      `default cli remember ${oldId}`,
+    ]);
+  });
+
+  it('superseding a decision-backed memory writes exactly one remember row for the old memory', async () => {
+    const s = new Store();
+    await s.run('decide', 'use postgres for the ledger');
+    const oldId = s.lastId();
+    s.settle();
+    const r = await s.run('decide', 'use sqlite for the ledger', '--supersedes', oldId);
+    const newId = s.lastId();
+    expect(r.stdout).toBe(recorded(2, newId, `${oldId} (decision #1 superseded)`));
+    expect(s.audit()).toEqual([
+      'default cli decision_supersede 1',
+      'default cli decision_create 2',
+      `default cli remember ${newId}`,
+      `default cli remember ${oldId}`,
+    ]);
+    expect(s.rows()[0]).toMatchObject({ id: oldId, confidence: 'stale', half_life_days: 182 });
   });
 });
 

@@ -6,6 +6,8 @@ import { placeholders } from '../../../db/sql.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { calculateStrength, LEGACY_TYPED_HALF_LIFE } from '../../../base/memory/strength.js';
 import { deriveHalfLife, type MemoryEntry } from '../../../base/memory/entry.js';
+import { markStale, SUPERSEDED_TAG } from '../../../base/memory/stale-mark.js';
+import { readEntriesByIds } from '../entries/entry-reads.js';
 import { stampOriginProject, upsertEntryRow } from '../entries/entry-row.js';
 import { auditEntryWrite, writeEntryMirrors, auditingRefusal } from '../entries/entry-writes.js';
 import { markGraphDirty } from '../graph/graph-queue.js';
@@ -30,6 +32,7 @@ import type {
   ObjectCloseArgs,
   ObjectSave,
   ObjectSaveArgs,
+  SaveRefusal,
 } from '../../../base/ports/store/objects.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -269,11 +272,14 @@ function refusalOf<R extends object, F extends Refused>(written: R | F): written
   return 'refused' in written;
 }
 
-interface MirroredWrite {
+interface MirroredWrite<F extends Refused = never> {
   readonly mirror: MemoryEntry;
   readonly actor: string;
   /** Set for a kind the graph reads, so its mirror is queued for a rebuild. */
   readonly graphTenant?: string;
+  /** Runs in the scope after the mirror's remember row: the other memories it wrote, whose
+   * markdown follows the commit, or a refusal that undoes the whole write. */
+  readonly alsoWrite?: (db: DatabaseSyncLike) => MemoryEntry[] | F;
 }
 
 /** Until the typed migration has run, a mirror goes in on the flat half-life that migration
@@ -292,29 +298,77 @@ function onStoreHalfLife(
  * and every audit row, the mirror's remember row last. */
 function withMirror<R extends object, F extends Refused>(
   on: OnHandle,
-  write: MirroredWrite,
+  write: MirroredWrite<F>,
   writeRow: (db: DatabaseSyncLike, memoryId: string) => R | F,
 ): R | F {
   return on(
     (db, files) =>
       auditingRefusal(db, write.actor, () => {
         let mirror = stampOriginProject(files, write.mirror);
+        let also: MemoryEntry[] = [];
         const written = withWriteScopeOr(db, 'write_entry', (rollback) => {
           mirror = onStoreHalfLife(db, mirror, files);
           upsertEntryRow(db, mirror);
           const row = writeRow(db, mirror.id);
           if (refusalOf<R, F>(row)) return rollback(row);
           auditEntryWrite(db, mirror, write.actor);
+          const others = write.alsoWrite?.(db) ?? [];
+          if (refusalOf<MemoryEntry[], F>(others)) return rollback(others);
+          also = others;
           return row;
         });
         if (refusalOf<R, F>(written)) return written;
         // The graph mark takes its own write lock, so it waits for the commit.
         if (write.graphTenant !== undefined) markGraphDirty(db, write.graphTenant, mirror.id);
         writeEntryMirrors(files.hippoRoot, mirror);
+        for (const entry of also) writeEntryMirrors(files.hippoRoot, entry);
         return written;
       }),
     openStore,
   );
+}
+
+/** The memory the replaced row mirrors; none when the save replaces nothing or the mirror is gone. */
+function replacedMirrorId(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  kind: SavableKind,
+  replaced: number | undefined,
+): string | undefined {
+  if (replaced === undefined) return undefined;
+  // SAFETY: the SELECT names memory_id, a column every typed-object table has.
+  const row = cachedStatement(
+    db,
+    `SELECT memory_id FROM ${objectTable(kind)} WHERE id = ? AND tenant_id = ?`,
+  ).get(replaced, tenantId) as { memory_id: string | null } | undefined;
+  return row?.memory_id ?? undefined;
+}
+
+/** Weakens the memory the replaced row mirrors, if it has one, and the one the save names, in the
+ * save's scope. A named memory the tenant does not hold refuses the save; a gone mirror is skipped. */
+function weakenWithSave(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  kind: SavableKind,
+  save: ObjectSave,
+): MemoryEntry[] | SaveRefusal {
+  const named = save.weakensMemoryId;
+  const derived = replacedMirrorId(db, tenantId, kind, save.supersedesId);
+  const ids = [...new Set([derived, named].filter((id): id is string => id !== undefined))];
+  const held = readEntriesByIds(db, ids, tenantId);
+  if (named !== undefined && !held.has(named)) {
+    return { refused: 'memory_missing', memoryId: named };
+  }
+  const weakened: MemoryEntry[] = [];
+  for (const id of ids) {
+    const entry = held.get(id);
+    if (entry === undefined) continue;
+    const marked = markStale(entry, SUPERSEDED_TAG);
+    upsertEntryRow(db, marked);
+    auditEntryWrite(db, marked, save.actor);
+    weakened.push(marked);
+  }
+  return weakened;
 }
 
 function save<K extends SavableKind>(
@@ -322,17 +376,20 @@ function save<K extends SavableKind>(
   tenantId: string,
   kind: K,
   save: ObjectSave<K>,
-): ObjectByKind[K] | ObjectRefusal {
+): ObjectByKind[K] | SaveRefusal {
   const spec = rowSpec(kind);
-  const write: MirroredWrite = {
+  const write: MirroredWrite<SaveRefusal> = {
     mirror: save.mirror,
     actor: save.actor,
     graphTenant: spec.graphType ? tenantId : undefined,
+    alsoWrite: SAVE_RULES[kind].weakensPredecessor
+      ? (db) => weakenWithSave(db, tenantId, kind, save)
+      : undefined,
   };
-  const written = withMirror<RowByKind[K], ObjectRefusal>(on, write, (db, memoryId) =>
+  const written = withMirror<RowByKind[K], SaveRefusal>(on, write, (db, memoryId) =>
     writeObjectRow(db, { tenantId, kind, memoryId, save }),
   );
-  return isObjectRefusal(written) ? written : spec.rowTo(written);
+  return refusalOf<RowByKind[K], SaveRefusal>(written) ? written : spec.rowTo(written);
 }
 
 /** The linked ids are checked once the mirror is in and before the INSERT, so a refusal undoes

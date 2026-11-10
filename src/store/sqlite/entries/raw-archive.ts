@@ -2,13 +2,14 @@ import { DEFAULT_TENANT_ID } from '../../../base/util/tenant.js';
 import { memoryNotFoundText, NotFoundError } from '../../../base/errors/api-errors.js';
 import { rawRemovalRefusal } from '../../../base/errors/raw-append-only.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
-import { isFtsAvailable, withWriteScope } from '../../../db/index.js';
+import { isFtsAvailable, isSqliteBusy, withWriteScope } from '../../../db/index.js';
 import { appendAuditEvents } from '../audit/audit.js';
 import { reportAuditWriteFailure } from '../../../base/records/audit-report.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
+import { errorFields, log } from '../../../base/util/log.js';
 
 export interface ArchiveOptions {
   reason: string;
@@ -27,12 +28,22 @@ interface ArchivedMemoryRow {
   dag_parent_id: string | null;
 }
 
-/** Stamps the archived copy of `memoryId` as having its markdown mirror cleaned at `at`. */
+/** Stamps the archived copy of `memoryId` as having its markdown mirror cleaned at `at`; a busy store
+ * leaves it unstamped for the reaper, since the change it follows has already committed. */
 export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: string): void {
-  cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-    at,
-    memoryId,
-  );
+  try {
+    cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+      at,
+      memoryId,
+    );
+  } catch (err) {
+    if (!isSqliteBusy(err)) throw err;
+    log.warnThenDebug(
+      'archive-mirror-stamp-busy',
+      `removed raw ${memoryId}; the store was busy, so the mirror reaper will re-check it on the next open`,
+      errorFields(err),
+    );
+  }
 }
 
 // Every id list binds as one JSON array, so each statement's text is the same for one row or many.

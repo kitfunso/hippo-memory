@@ -142,6 +142,7 @@ const TYPES: readonly TypeRow[] = [
       'decision_supersede key 1 {"decision_id":1,"superseded_by":2}',
       'decision_create key 2 {"decision_id":2,"has_context":false}',
       'remember key <mem> {"kind":"distilled","scope":null}',
+      'remember key <mem> {"kind":"distilled","scope":null}',
       'decision_close key 2 {"decision_id":2}',
     ],
   },

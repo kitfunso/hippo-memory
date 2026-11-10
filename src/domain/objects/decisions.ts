@@ -4,17 +4,14 @@
  * recall only; saveDecision commits both in one `objects` transaction.
  */
 
-import type { MemoryEntry } from '../../base/memory/entry.js';
-import { markStale, SUPERSEDED_TAG } from '../../base/memory/stale-mark.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
-import type { EntryWrites, Objects } from '../../base/ports/store.js';
+import type { Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { requireText } from './fields.js';
 import { listObjects } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../../base/records/object-types.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { Decision, DecisionStatus } from '../../base/records/object-types.js';
 
@@ -30,6 +27,9 @@ export interface SaveDecisionOptions {
   /** Table id of an ACTIVE decision this one supersedes; the CLI resolves a `--supersedes <memory-id>` via
    *  resolveActiveDecisionIdByMemory, HTTP/SDK pass the table id. */
   supersedesDecisionId?: number;
+  /** A memory of the tenant the save also weakens, for a `--supersedes <memory-id>` that names one
+   * no active decision backs; the save is refused when the tenant holds none. */
+  weakensMemoryId?: string;
   /** Extra memory tags merged after ['decision'] (the CLI passes path-context tags; HTTP/SDK
    * pass none). */
   extraTags?: string[];
@@ -55,22 +55,11 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOptions> = {
       content: opts.context ? `${decisionText}\n\nContext: ${opts.context}` : decisionText,
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesDecisionId,
+      weakensMemoryId: opts.weakensMemoryId,
       at: now.toISOString(),
     };
   },
 };
-
-/**
- * Weaken the memory a new decision replaces, once the save has committed: marked stale, tagged
- * `superseded`, and its half-life halved to a day at least the first time only.
- */
-export function weakenSupersededMemory(
-  writes: EntryWrites,
-  entry: MemoryEntry,
-  actor: string = CLI_ACTOR,
-): Promise<void> {
-  return writes.writeEntry({ entry: markStale(entry, SUPERSEDED_TAG), actor });
-}
 
 export function loadDecisions(
   objects: Objects,

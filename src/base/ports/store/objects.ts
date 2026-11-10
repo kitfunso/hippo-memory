@@ -44,6 +44,9 @@ export interface ObjectSave<K extends SavableKind = SavableKind> {
   readonly supersedesId?: number;
   /** Stored on a successor of a versioned kind only; a first version and a decision keep none. */
   readonly changeSummary?: string;
+  /** A decision only: a memory of the tenant the save also weakens, beside the one the replaced
+   * row mirrors; the save is refused when the tenant holds none. */
+  readonly weakensMemoryId?: string;
   readonly actor: string;
   /** The new row's createdAt and the replaced row's supersededAt: core's clock, as `toISOString`
    * gives it, since the list orders createdAt as text. */
@@ -64,6 +67,12 @@ export interface IncidentOpen {
 export type IncidentOpenRefusal =
   | { readonly refused: 'unlinked'; readonly memoryId: string }
   | { readonly refused: 'vanished' };
+
+/** Why a save wrote nothing: any `ObjectRefusal`, or `memoryId`, the memory the save named to
+ * weaken, is no memory of the tenant. */
+export type SaveRefusal =
+  | ObjectRefusal
+  | { readonly refused: 'memory_missing'; readonly memoryId: string };
 
 export interface IncidentResolve {
   /** The row's resolutionText; core has checked it is not blank. */
@@ -154,13 +163,15 @@ export interface Objects {
   ): Promise<Prediction>;
   /** In one transaction, in order: writes `mirror` as `EntryWrites.writeEntry` does; inserts the
    * row active (version 1, or the replaced row's plus one); with `supersedesId`, supersedes that
-   * row; appends the supersede and create rows. A refusal (`missing`, `status`, `raced`,
-   * `vanished`) writes nothing. */
+   * row; appends the supersede and create rows and the mirror's remember row. A decision then
+   * weakens the memory the replaced row mirrors, if it still has one, and the one
+   * `weakensMemoryId` names, each marked stale as `markStale` does and followed by its remember
+   * row. A refusal (`missing`, `status`, `raced`, `vanished`, `memory_missing`) writes nothing. */
   saveObject<K extends SavableKind>(
     tenantId: string,
     kind: K,
     save: ObjectSave<K>,
-  ): Promise<ObjectByKind[K] | ObjectRefusal>;
+  ): Promise<ObjectByKind[K] | SaveRefusal>;
   /** In one transaction, in order: writes `mirror` as `EntryWrites.writeEntry` does; checks each
    * linked id is a memory of the tenant; inserts the row open under the next id; appends the
    * incident_open row, then the mirror's remember row. A refusal leaves no mirror, row or audit
@@ -229,7 +240,7 @@ export interface ObjectCalls {
     id: number,
   ): Promise<AnyObject | null>;
   closeObject(...args: ObjectCloseArgs): Promise<AnyObject | ObjectRefusal>;
-  saveObject(...args: ObjectSaveArgs): Promise<AnyObject | ObjectRefusal | IncidentOpenRefusal>;
+  saveObject(...args: ObjectSaveArgs): Promise<AnyObject | SaveRefusal | IncidentOpenRefusal>;
   briefReceipts: Objects['briefReceipts'];
   predictionBaserate: Objects['predictionBaserate'];
 }

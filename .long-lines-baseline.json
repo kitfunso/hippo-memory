@@ -7,7 +7,6 @@
   "src/db/migrations/v49.ts": 1,
   "src/domain/objects/lifecycle.ts": 1,
   "src/surface/cli/curate.ts": 1,
-  "src/surface/cli/decisions.ts": 1,
   "src/surface/cli/explain.ts": 2,
   "src/surface/cli/predictions.ts": 1,
   "src/surface/cli/slack.ts": 1,
