@@ -266,6 +266,30 @@ nav[aria-label='Pages'] a[aria-current='page'] {
   .js [data-reveal] { opacity: 1; transform: none; }
 }
 
+/* ---- print and "Save as PDF": paper drops backgrounds, so the dark theme's light text needs dark ink ---- */
+@media print {
+  /* a dark color-scheme keeps the page canvas dark even with no background */
+  html { background: #fff !important; color-scheme: light; scroll-padding-top: 0; }
+  *, *::before, *::after {
+    color: #111 !important;
+    -webkit-text-fill-color: currentColor !important;
+    background: transparent !important;
+    border-color: #c8c8c8 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    mask-image: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  /* reveal, the typed terminal lines and the curve labels start at opacity 0 and would print blank */
+  .reveal, .js [data-reveal], [style*='opacity'] { opacity: 1 !important; transform: none !important; }
+  header.sticky { position: static; }
+  #bg-fx, nav[aria-label='Pages'], [data-copy], .caret { display: none !important; }
+  svg text { fill: #111 !important; }
+  a { text-decoration: underline; }
+  h2, h3, tr, pre, .glass { break-inside: avoid; }
+}
+
 @keyframes caret-blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
