@@ -148,14 +148,23 @@ describe('the designs', () => {
     }
   });
 
-  it('prints the reported pair lines from the design\'s reported list', () => {
+  const r3Report = () => {
     const g = generate();
     const analysis = analyzeZ0(parseZ0Records(jsonl(g.records), 'runs.jsonl').records, { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, refuse: () => null, iterations: 200, seed: 1 });
-    const report = buildReport(analysis, { warnings: [] }, {}, null, []);
+    return buildReport(analysis, { warnings: [] }, {}, null, []);
+  };
+
+  it('prints the reported pair lines from the design\'s reported list', () => {
+    const report = r3Report();
     const names = ['A1vA0', 'A4vA1', 'X2vX1'];
     const printed = (text: string) => text.split('\n').filter((l) => names.some((n) => l.startsWith(`  ${n}: `))).map((l) => l.slice(2, l.indexOf(':')));
     expect(printed(renderText(report))).toEqual(names);
     expect(printed(renderText(report, { ...DESIGNS.r3, reported: ['X2vX1', 'H1', 'A1vA0'] }))).toEqual(['X2vX1', 'A1vA0']);
+  });
+
+  it('stops, naming the design and the pair, on a reported name that is no test and that the report lacks', () => {
+    // Round 4's first reported name, S1vS0, is a pair that no round 3 report holds.
+    expect(() => renderText(r3Report(), DESIGNS.r4)).toThrow(/^design r4 reports S1vS0, but the report holds no block for it$/);
   });
 
   it('reads a pair by name from tests or pairs and stops on an unknown name', () => {

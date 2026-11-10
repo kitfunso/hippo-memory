@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DESIGNS, designByName } from './arms.mjs';
+import { DESIGNS, designByName, designName } from './arms.mjs';
 import { SEALED, blindView, inputHashes, loadOrCreateKey, sha256, unblindRefusal } from './z0-blind.mjs';
 import { filteredInput, readVoids } from './z0-filters.mjs';
 import { computeGates } from './z0-gates.mjs';
@@ -216,8 +216,11 @@ function hypothesisLines(h) {
 
 function reportedLines(rep, design) {
   const lines = ['reported, no verdicts:'];
-  // A reported test (H1 to H3) prints in the lines below, so only the names that hold a block of their own print here.
-  for (const k of design.reported.filter((name) => Object.hasOwn(rep, name))) lines.push(`  ${k}: ${pairText(rep[k])}`);
+  // A reported test prints in the test lines; any other name the report lacks stops, since a silent drop hides a pair the design reports.
+  for (const k of design.reported.filter((name) => !Object.hasOwn(design.tests, name))) {
+    if (!Object.hasOwn(rep, k)) throw new Error(`design ${designName(design)} reports ${k}, but the report holds no block for it`);
+    lines.push(`  ${k}: ${pairText(rep[k])}`);
+  }
   for (const [arm, a] of Object.entries(rep.perArm)) lines.push(`  ${arm}: ${a.tasks} tasks, resolve ${est(a.resolveRate)}, cost per resolved ${est(a.costPerResolved)}, stale-follow ${est(a.staleFollow)}`);
   lines.push(`  maintainer only: H1 ${pairText(rep.maintainerOnly.H1)}; H2 ${pairText(rep.maintainerOnly.H2)}; H3 ${est(rep.maintainerOnly.H3)}`);
   lines.push(`  all applies: H1 ${pairText(rep.allApplies.H1)}`);

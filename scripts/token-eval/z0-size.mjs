@@ -225,6 +225,16 @@ function sized(search, repos, unit) {
   return 'boundsPower' in search ? { ...size, boundsPower: search.boundsPower } : size;
 }
 
+export const HARM_TEST = 'H4';
+// The tests that share H1's repeat-mistake rule; the T2 parts get their own rules in part B (prereg line 80).
+const REPEAT_TESTS = ['H1', 'H2', 'T1', 'T3'];
+
+/** Stops on a seed-rule test that neither the seed rule nor this sizer can size, naming it; both call it, so they stop on the same tests. */
+export function requireSizedTests(design, tests) {
+  const unsized = tests.find((name) => name !== HARM_TEST && !REPEAT_TESTS.includes(name));
+  if (unsized !== undefined) throw new Error(`${unsized}: design ${designName(design)} names it in its seed rule, but the rule sizes only ${[...REPEAT_TESTS, HARM_TEST].join(', ')}; part B sizes ${unsized} with its own rule`);
+}
+
 // A seed-rule group runs the seeds of its own search, in the design's group order; any other arm runs wave 1's seeds.
 const seedsFor = (groups, perGroup) => (arm) => {
   if (TWO_SEED_ARMS.has(arm)) return 2;
@@ -313,6 +323,8 @@ function levelOf(cal, chosen, m, opts) {
 /** Calibration estimates, then per minimum effect the grid rows and the chosen one. Abandoned runs are left out and listed.
  * @param {any[]} records @param {any[]} planCells @param {any} prices @param {any} opts */
 export function sizeZ0(records, planCells, prices, opts) {
+  const design = opts.design ?? DESIGNS.r3;
+  requireSizedTests(design, design.seedRule.flatMap((g) => g.tests));
   const { filtered, abandoned, records: counted, planCells: cells } = filteredInput(records, planCells, opts, { dropAbandoned: true });
   const cal = calibrate(filtered, prices, opts.spreadBound, opts);
   const layout = planLayout(cells);
@@ -322,7 +334,7 @@ export function sizeZ0(records, planCells, prices, opts) {
   const unavailable = Object.entries(cal).filter(([h, c]) => c.reason !== undefined && !(h === 'H2' && layout.X === null)).map(([h, c]) => `${h}: ${c.reason}`);
   const ctx = {
     searches: searchesOf(cal, layout, opts), layout, arms, table, quota: opts.quota, power: opts.power, seedCap: opts.seedCap,
-    seedRule: (opts.design ?? DESIGNS.r3).seedRule, available: unavailable.length === 0 && layout.R !== null,
+    seedRule: design.seedRule, available: unavailable.length === 0 && layout.R !== null,
   };
   const effects = opts.effects.map((m) => {
     const rows = opts.repos.map((repos) => gridRow(ctx, repos, m));

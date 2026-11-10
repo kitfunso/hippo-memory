@@ -216,3 +216,17 @@ describe('the seed rule on a design with a test it cannot size', () => {
     expect(() => seedRule(parse(g.records), g.plan, PRICES, { ...SETTINGS, design: DESIGNS['r4-on-r3'] })).toThrow(/^design r4-on-r3 names no test in its seed rule, so the rule has nothing to size$/);
   });
 });
+
+describe('the sizer on a design with a test it cannot size', () => {
+  const settings = () => {
+    const args = parseSize(['--runs', 'r', '--plan', 'p', '--prices', 'c', '--sims', '20', '--repos', '5', '--effects', '0.2', '--level-sims', '20']);
+    const quota = Object.fromEntries(Object.entries(QUOTA_USD_PER_DAY).map(([tool, usdPerDay]) => [tool, { usdPerDay, source: 'default assumption' }]));
+    return { ...Object.fromEntries(Object.entries(args).filter(([k]) => k in DEFAULTS)), firstWave: 3, holmLevel: 0.025, quota };
+  };
+
+  it('stops under r4 on the first T2 part, as the seed rule does, rather than sizing it at H1\'s search', () => {
+    const g = generate({ design: DESIGNS.r4 });
+    const opts = { ...settings(), ...filterOpts({ design: DESIGNS.r4 }), design: DESIGNS.r4 };
+    expect(() => sizeZ0(parse(g.records), g.plan, PRICES_BY_MODEL, opts)).toThrow(/^T2a: design r4 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
+  });
+});

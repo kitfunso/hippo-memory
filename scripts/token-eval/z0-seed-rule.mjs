@@ -14,12 +14,9 @@ import { inputHashes } from './z0-blind.mjs';
 import { filterOpts, filteredInput } from './z0-filters.mjs';
 import { CODINGS, codexApply, firstApplyR, inSets, repeatMistakeUnits, taskUnits } from './z0-hypotheses.mjs';
 import { SEED_CAP, isString } from './z0-records.mjs';
-import { calibrate } from './z0-size.mjs';
+import { HARM_TEST, calibrate, requireSizedTests } from './z0-size.mjs';
 import { SEEDS, TARGET_Z, harmSizer, seedsNeeded } from './z0-size-sim.mjs';
 
-const HARM_TEST = 'H4';
-// The tests that share H1's repeat-mistake rule; the T2 parts get their own rules in part B (prereg line 80).
-const REPEAT_TESTS = ['H1', 'H2', 'T1', 'T3'];
 const DEFAULTS = { minimumEffect: 0.15, targetZ: TARGET_Z, cap: SEED_CAP, onMiss: 'cap', power: 0.8, sims: 2_000, seed: 1, bound: 0.8 };
 const STOP_NOTE = 'the run stops after wave 1 and scores nothing; size the next run with z0-size.mjs on these records as calibration (prereg line 215)';
 const USAGE = 'usage: z0-seed-rule.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--grading FILE] [--drop-list FILE] [--off-pin FILE ...] '
@@ -106,8 +103,7 @@ export function seedRule(records, planCells, prices, opts) {
   // The first group is the primary family and always runs; a later group runs only when all its arms are planned.
   const groups = design.seedRule.filter((g, i) => i === 0 || g.arms.every((a) => filtered.arms.includes(a)));
   const named = groups.flatMap((g) => g.tests);
-  const unsized = named.find((name) => name !== HARM_TEST && !REPEAT_TESTS.includes(name));
-  if (unsized !== undefined) throw new Error(`${unsized}: design ${designName(design)} names it in its seed rule, but the rule sizes only ${[...REPEAT_TESTS, HARM_TEST].join(', ')}; part B sizes ${unsized} with its own rule`);
+  requireSizedTests(design, named);
   if (named.length === 0) throw new Error(`design ${designName(design)} names no test in its seed rule, so the rule has nothing to size`);
   const repeat = (name) => {
     const pair = pairOf(design, name);

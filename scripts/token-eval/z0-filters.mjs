@@ -78,7 +78,7 @@ const isName = (v) => isString(v) && v.length > 0;
 /** An off-pin file's voids, each tagged with its file and index. `runHashes` are the sha256 of every runs file the read loads and are required:
  * a `runs` entry outside them stops the read, so a leaked run's void never voids its rerun, and voids with no `runs` entry are refused.
  * @param {string} file @param {{cwd?: string, runHashes: string[]}} options */
-export function readVoids(file, { cwd = process.cwd(), runHashes }) {
+export function readVoids(file, { cwd = process.cwd(), runHashes } = {}) {
   if (!Array.isArray(runHashes)) throw new Error(`${file}: runHashes is required, the sha256 of each runs file the read loads`);
   const text = fs.readFileSync(path.resolve(cwd, file), 'utf8');
   let body;

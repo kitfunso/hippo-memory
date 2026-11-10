@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url';
 import { hippoBuild, pinMismatches } from './pins.mjs';
 
 export const MANIFEST = 'sha256.txt';
-const EFFORT_FILES = { low: 'pins-effort-low.json', high: 'pins-effort-high.json' };
+const EFFORT_VARIANTS = ['low', 'high'];
+const BUILD_KEYS = ['hippoCommit', 'hippoDistHash'];
 const USAGE = 'usage: z0-pins-check.mjs --pins FILE --checkout DIR [tree:]<role>=<path>...\n'
-  + '       z0-pins-check.mjs --write FILE --checkout DIR [--set key=value ...] [tree:]<role>=<path>...\n'
+  + '       z0-pins-check.mjs --write FILE --checkout DIR --set effort=<value> [--set key=value ...] [tree:]<role>=<path>...\n'
   + '       z0-pins-check.mjs --manifest DIR\n'
   + 'exit 0 pass, 3 pins mismatch, 1 bad usage';
 const FLAGS = new Map([['--pins', 'pins'], ['--write', 'write'], ['--checkout', 'checkout'], ['--manifest', 'manifest']]);
@@ -88,6 +89,7 @@ function parseArgs(argv) {
   const modes = [args.pins, args.write, args.manifest].filter((m) => m !== null);
   if (modes.length !== 1) throw new Error(`give exactly one of --pins, --write and --manifest\n${USAGE}`);
   if (args.manifest === null && args.checkout === null) throw new Error(`--checkout is needed\n${USAGE}`);
+  if (args.write !== null) checkWriteSets(setPairs(args.set));
   return args;
 }
 
@@ -96,6 +98,16 @@ const setPairs = (sets) => sets.map((s) => {
   if (at < 1) throw new Error(`--set ${s}: a pair is key=value`);
   return [s.slice(0, at), s.slice(at + 1)];
 });
+
+/** The --set pairs of a --write, refused when one names a key the build computes, repeats a key, or leaves out the effort the main file pins. */
+function checkWriteSets(pairs) {
+  const keys = pairs.map(([k]) => k);
+  const built = keys.find((k) => BUILD_KEYS.includes(k));
+  if (built !== undefined) throw new Error(`--set ${built}: the build computes it from --checkout, so --set cannot name it`);
+  const twice = keys.find((k, i) => keys.indexOf(k) !== i);
+  if (twice !== undefined) throw new Error(`--set ${twice} is given twice; each key takes one value`);
+  if (!pairs.some(([k, v]) => k === 'effort' && v !== '')) throw new Error('--write needs --set effort=<value>: the main pins file pins the effort and each effort file overrides it');
+}
 
 function checkPins(args, cwd, states) {
   const pins = JSON.parse(fs.readFileSync(path.resolve(cwd, args.pins), 'utf8'));
@@ -124,7 +136,9 @@ function writePins(args, cwd, states) {
     hippoCommit: build.hippoCommit, hippoDistHash: build.hippoDistHash,
   };
   const file = path.resolve(cwd, args.write);
-  const out = [[file, pins], ...Object.entries(EFFORT_FILES).map(([effort, name]) => [path.join(path.dirname(file), name), { ...pins, effort }])];
+  // An effort file takes its pins file's name, so two pins files in one folder keep their own.
+  const { dir, name } = path.parse(file);
+  const out = [[file, pins], ...EFFORT_VARIANTS.map((effort) => [path.join(dir, `${name}-effort-${effort}.json`), { ...pins, effort }])];
   for (const [f, body] of out) fs.writeFileSync(f, `${JSON.stringify(body, null, 2)}\n`);
   return out.map(([f]) => f);
 }

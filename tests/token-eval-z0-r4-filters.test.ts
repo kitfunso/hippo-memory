@@ -65,6 +65,7 @@ describe('readVoids', () => {
     const file = offPinFile(dir, [VOID]);
     // @ts-expect-error runHashes is required
     expect(() => readVoids(file, { cwd: dir })).toThrow(/off-pin\.json: runHashes is required/);
+    expect(() => readVoids(file)).toThrow(/off-pin\.json: runHashes is required/);
     expect(() => load(offPinFile(dir, [VOID], []), dir)).toThrow(/off-pin\.json: it lists voids but its runs is empty/);
     expect(load(offPinFile(dir, [], []), dir)).toEqual([]);
   });
