@@ -16,8 +16,10 @@ export interface AutoSleepHost {
   /** The rows `tenantId` wrote since the store's last sleep, counted on the store of the call
    * that wrote, so a write's count opens no second connection. */
   readonly newSince: (tenantId: string, now: Date) => Promise<number>;
-  /** Held while a sleep is counted or run, so two writes landing together start one. */
-  readonly latch: { held: boolean };
+  /** `held` is set while a sleep is counted or run, so two writes landing together start one.
+   * `notBefore` is the epoch ms before which no write retries, set after a sleep another process
+   * made this host skip. */
+  readonly latch: { held: boolean; notBefore?: number };
 }
 
 export type AutoSleepStart = Omit<AutoSleepHost, 'latch'>;

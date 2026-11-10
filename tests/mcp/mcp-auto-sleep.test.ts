@@ -1,5 +1,5 @@
 // MCP auto-sleep: a remember that lands while a sleep runs on the same store must not start a second one.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
@@ -10,6 +10,8 @@ import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import type { CliStore } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import * as fileLock from '../../src/host/file-lock.js';
+import { log } from '../../src/base/util/log.js';
 
 const roots: string[] = [];
 
@@ -113,5 +115,74 @@ describe('MCP auto-sleep', () => {
     await remember(host, root, 'the deploy moved to friday');
     expect(await host.settle(20_000)).toBe(0);
     expect(sleepRuns(root)).toBe(1);
+  });
+});
+
+describe('MCP auto-sleep and the store claim', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function autoSleepRoot(label: string): string {
+    const root = makeRoot(label);
+    roots.push(root);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 })),
+    );
+    return root;
+  }
+
+  /** How many times a sleep reached for the store's claim, read from the lock it takes on the folder. */
+  function claimsAsked(takes: MockInstance<typeof fileLock.takeFileLock>): number {
+    return takes.mock.calls.filter(([file]) => file.endsWith('sleep.lock.db')).length;
+  }
+
+  it('tries once while another sleep holds the store, and again only after the backoff', async () => {
+    const root = autoSleepRoot('mcp-autosleep-held');
+    const rival = fileLock.takeFileLock(join(root, 'sleep.lock.db'));
+    if (rival.kind !== 'taken') throw new Error(`test setup: the claim was already ${rival.kind}`);
+    const takes = vi.spyOn(fileLock, 'takeFileLock');
+    const skipped = vi.spyOn(log, 'info');
+    const host = cliStdioHost();
+
+    try {
+      // Ten seconds apart, all inside the minute after the first refusal.
+      for (const second of ['00', '10', '20', '30', '40']) {
+        vi.stubEnv('HIPPO_FAKE_NOW', `2026-06-01T12:00:${second}.000Z`);
+        await remember(host, root, `alice reviewed change ${second} to the deploy`);
+        await host.settle(20_000);
+      }
+
+      expect(claimsAsked(takes)).toBe(1);
+      expect(skipped.mock.calls.filter(([message]) => message.includes('already running'))).toHaveLength(1);
+      expect(sleepRuns(root)).toBe(0);
+    } finally {
+      // The folder cannot be removed while the lock file is open.
+      rival.lock.release();
+    }
+    vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:01:01.000Z');
+    await remember(host, root, 'alice reviewed the last change to the deploy');
+    await host.settle(20_000);
+
+    expect(claimsAsked(takes)).toBe(2);
+    expect(sleepRuns(root)).toBe(1);
+  });
+
+  it('starts the next sleep at once after a sleep that ran, with no backoff', async () => {
+    const root = autoSleepRoot('mcp-autosleep-claim-freed');
+    const takes = vi.spyOn(fileLock, 'takeFileLock');
+    const host = cliStdioHost();
+
+    await remember(host, root, 'the deploy moved to friday');
+    await host.settle(20_000);
+    expect(sleepRuns(root)).toBe(1);
+    await remember(host, root, 'alice reviews every schema change');
+    await host.settle(20_000);
+
+    expect(sleepRuns(root)).toBe(2);
+    expect(claimsAsked(takes)).toBe(2);
   });
 });

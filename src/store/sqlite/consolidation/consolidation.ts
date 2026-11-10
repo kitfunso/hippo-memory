@@ -62,6 +62,7 @@ import {
 import { META_KEY } from '../../../db/meta.js';
 import { noteRebuildFailures } from './rebuild-holds.js';
 import { emptyExtractions, noteEmptyExtractions } from './empty-extractions.js';
+import { sleepClaim } from './sleep-lock.js';
 
 // A half-life move reads, writes, audits and records its base on one handle, so it commits whole or
 // not at all.
@@ -219,5 +220,6 @@ export function sqliteConsolidation(handles: Handles): Consolidation {
     ...bound(on, recordSleepBody(files), openStore),
     ...bound(on, bareBodies),
     commit: chunkedCommit(handles),
+    ...sleepClaim(files.hippoRoot),
   };
 }

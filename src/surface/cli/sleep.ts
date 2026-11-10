@@ -13,6 +13,7 @@ import * as api from '../../api/index.js';
 import { cliConfig, cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
 import { saveVectorGraphFile } from '../open-store.js';
 import { sleepResultLines } from './sleep-render.js';
+import { sleepWasRefused } from '../../api/sleep/one-sleep.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
@@ -40,8 +41,9 @@ export async function handleSleep({
   await sleepStore({ hippoRoot: root, tenantId, args, flags });
 }
 
-/** Sleeps one store; with `--log-file` it also tees its output to that file. */
-export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+/** Sleeps one store; with `--log-file` it also tees its output to that file. True when another
+ * sleep held the store's claim, so this one consolidated nothing. */
+export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext): Promise<boolean> {
   // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the
   // SessionStart hook can re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;
@@ -61,8 +63,9 @@ export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext)
   }
 
   try {
-    await runSleepCommand(hippoRoot, tenantId, flags);
-    if (logFile) console.log('[hippo] sleep complete');
+    const refused = await runSleepCommand(hippoRoot, tenantId, flags);
+    if (logFile && !refused) console.log('[hippo] sleep complete');
+    return refused;
   } catch (err) {
     if (logFile) printError(`[hippo] sleep failed: ${errorMessage(err)}`);
     throw err;
@@ -142,11 +145,12 @@ async function learnBeforeSleep(
   }
 }
 
+/** True when another sleep held the store's claim, so this one consolidated nothing. */
 async function runSleepCommand(
   hippoRoot: string,
   tenantId: string,
   flags: CliFlags,
-): Promise<void> {
+): Promise<boolean> {
   requireInit(hippoRoot);
 
   await learnBeforeSleep(hippoRoot, tenantId, flags);
@@ -176,10 +180,12 @@ async function runSleepCommand(
     noShare: boolFlag(flags, 'no-share'),
   });
   renderSleepResult(result);
+  const refused = sleepWasRefused(result);
   // A store with no `hippo serve` gets its saved vector graph from its sleeps.
-  if (!result.dryRun) {
+  if (!result.dryRun && !refused) {
     await saveVectorGraphFile(hippoRoot, {
       maxVectors: ctx.config.vectorGraph.maxVectors,
     });
   }
+  return refused;
 }

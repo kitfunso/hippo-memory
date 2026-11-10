@@ -11,7 +11,8 @@ import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
-import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
+import { autoSleepConsolidate, type AutoSleepRunner } from '../../api/sleep/auto-sleep.js';
+import { sleepWasRefused } from '../../api/sleep/one-sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpContext, McpHost } from '../mcp/protocol.js';
@@ -251,7 +252,7 @@ export function cliLedgerReach(hippoRoot: string): LedgerReach {
 
 /** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
  * it. */
-function rootAutoSleep(root: string, hostTenantId: string): () => Promise<void> {
+function rootAutoSleep(root: string, hostTenantId: string): AutoSleepRunner {
   return () =>
     runStoreRequest(
       (session) =>
@@ -263,7 +264,7 @@ function rootAutoSleep(root: string, hostTenantId: string): () => Promise<void> 
         }),
       'cli',
       cliRuntime(),
-    ).then(() => undefined);
+    ).then((outcome) => (sleepWasRefused(outcome) ? outcome : undefined));
 }
 
 /** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep

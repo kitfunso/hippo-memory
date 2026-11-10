@@ -4,6 +4,7 @@ import type { AmbientState } from '../../base/memory/ambient.js';
 import type { SleepContext } from '../types.js';
 import type { SleepEvent } from './events.js';
 import { runSleep } from './sleep-run.js';
+import { oneSleepPerStore, refusedSleep } from './one-sleep.js';
 
 /** Options for `sleep`, one consolidation cycle on a store with the sleep groups that returns
  * counts; unlike `hippo sleep` it skips the auto-learn step. */
@@ -48,6 +49,9 @@ export interface SleepResult {
   graph?: { tenants: number; entities: number; relations: number };
   /** What the sleep did, in order. */
   events?: SleepEvent[];
+  /** Set when another sleep held the store's claim since that ISO time, so this one did nothing and
+   * its 0 counts mean "nothing was done", not "the store is empty". */
+  alreadyRunning?: { since: string };
 }
 
 /** Sleeps the WHOLE store, every tenant, so /v1/sleep stays loopback-only; never auto-deletes
@@ -56,5 +60,5 @@ export async function sleepWholeStore(
   ctx: SleepContext,
   opts: SleepOptions = {},
 ): Promise<SleepResult> {
-  return runSleep(ctx, opts);
+  return oneSleepPerStore(ctx.store, opts.dryRun === true, () => runSleep(ctx, opts), refusedSleep);
 }
