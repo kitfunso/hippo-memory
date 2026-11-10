@@ -2,7 +2,7 @@
 
 Date: 2026-11-10
 Status: accepted
-Links: `changelog.d/fix-share-once-truthful-dry-run.md`; `src/domain/consolidate/tombstones.ts`; `src/domain/consolidate/merge.ts`; `CONTEXT.md`, "Rejected value"
+Links: `changelog.d/fix-share-once-truthful-dry-run.md`; `src/domain/consolidate/tombstones.ts`; `src/domain/consolidate/merge.ts`
 
 ## Context
 `hippo sleep --dry-run` is the preview a user reads before a real sleep. Its tombstone checks answered "none" without reading the store. A cluster whose merged text a user had rejected was therefore counted as merged in the preview, and the real sleep refused it.

@@ -183,8 +183,8 @@ describe("a dry run's retired-text check", () => {
 
     // A real sleep swaps in the rollup's successor, which frees the rejected text's source to merge with its look-alike;
     // a dry run keeps the old rollup, so its merge count can fall short of the real one.
-    console.log(`merged episodic: dry run ${preview.merged}, real sleep ${actual.merged}`);
     expect(retirements(actual).map((r) => r.id)).toEqual([rollup.id]);
-    expect(preview.merged).toBeLessThanOrEqual(actual.merged);
+    // Pins the known shortfall: if the dry run ever swaps the successor, update both numbers.
+    expect([preview.merged, actual.merged]).toEqual([0, 2]);
   });
 });
