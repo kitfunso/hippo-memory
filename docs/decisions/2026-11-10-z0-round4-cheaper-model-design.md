@@ -30,7 +30,7 @@ lower cost per solved task."
 - Budget on round 3's recorded spend, a lower bound, checked before each batch, never inside one.
 - Each test reads seeds 1 to its own seed count, so the count the arms run never changes a test's data.
 - Part (a)'s seed rule uses a fixed m of log(1 / 0.9), so the rule that runs does not depend on the pilot.
-  On a miss it takes the fewest seeds whose predicted SE is within 10% of the 9-seed SE, so a large family
+  On a miss it takes the fewest seeds whose predicted SE is at most 1.1 times the 9-seed SE, so a large family
   spread does not push every arm to 9 seeds.
 - A budget refusal removes verdicts only, so spend never changes a test's data or its level.
 - Every test and T2 part is simulated with round 3's cell generator on its own cell values, and joint power uses
@@ -48,10 +48,10 @@ lower cost per solved task."
 - Add an Opus-with-hippo arm (O2): repeats round 3's H1 test for about $385 more.
 
 ## Consequences
-- The result describes hippo 3.3.1, round 3's build, not master.
+- The result describes round 3's frozen build `cb992a079` (hippo 1.71.0 with later changes ported), not a release and not master.
 - The result holds at medium effort only.
 - Families were screened on Opus; G2 (S4 against S0) is the positive control on Sonnet.
 
 ## Reconsider when
 - Batch 1's power read is below 0.8 for T1, or the pilot's cost ratio 0.5 x r is 0.95 or more (r of 1.9).
-- Master's hippo build differs from 3.3.1 in capture or delivery enough that a result on 3.3.1 no longer describes it.
+- Master's hippo build differs from the frozen build in capture or delivery enough that a result on the frozen build no longer describes it.

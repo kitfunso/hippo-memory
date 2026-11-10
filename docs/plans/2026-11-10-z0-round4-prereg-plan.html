@@ -8,7 +8,7 @@
 <header>
   <h1>Z0 Round 4 Cheaper-Model Pre-registration</h1>
   <doc-changes new="4"></doc-changes>
-  <doc-note tone="info"><strong>Scope</strong> This episode writes the prereg, this plan, a decision record and a changelog fragment. A later episode builds claims 3 and 4 on a new branch <code>z0/r4</code>, cut from round 3's run tree <code>04835462b</code>. No session runs before the founder approves the budget.</doc-note>
+  <doc-note tone="info"><strong>Scope</strong> This episode writes the prereg, this plan, a decision record and a changelog fragment. A later episode builds the harness for prereg items 1 to 10 on a new branch <code>z0/r4</code>, cut from round 3's run tree <code>04835462b</code>. No session runs before the founder approves the budget.</doc-note>
   <details class="thread"><summary>Why · 4 requests</summary>
     <doc-quote via="prompt" from="the user">remember our goals, we need to prove hippo help with token cost and efficiency</doc-quote>
     <doc-quote via="prompt" from="the user">we need to show that hippo can reduce token cost or improve efficiency, has this done it?</doc-quote>
@@ -100,9 +100,12 @@ Round 3's H3 was a cost per task (ratioT, z0-hypotheses.mjs:138); T2 uses cost p
       <p>The cost claim stands only when hippo beats Sonnet alone.</p>
       <doc-code title="rules for the result doc · sketch" lang="text" wrap>
 <script type="text/plain">
-T1 wins, T2 passes: "At <effort> effort, Sonnet 5.5 with hippo solved these tasks at <ratio> of the
-                     cost per solved task of Opus 5.5 with built-in memory, inside the T2 bars,
-                     and hippo cut Sonnet's first-apply repeats by <d> points."
+T1 wins, T2 passes: "At <effort> effort and at list prices on <asOf>, Sonnet 5.5 with hippo solved these
+                     tasks at <ratio> of the cost per solved task of Opus 5.5 with built-in memory. Its intervals
+                     ruled out more than 3 points fewer tasks solved and more than 15 points more first-apply
+                     repeats, and hippo cut Sonnet's first-apply repeats by <d> points."
+                     Beside it: the ratio at the Opus 5.5 row for both arms (no price gap), H3 (S2 against S1,
+                     no verdict) and the O1 drift line.
                      "Solved" means part (b)'s difference: repositories count equally, and each
                      (family, seed) cell counts once inside one (additive fit if cells are missing). The pooled task difference is printed beside it, with no verdict;
                      below -0.03 the headline adds "counted per task, it solved <x> points fewer".
@@ -110,7 +113,8 @@ S1 against O1 runs the same three-part test, at the same estimators and seeds as
   of the same S2 part (its level at 0.025 when T1 does not win). No verdict;
   exploratory, it can only narrow the headline. S1 passes too: "In an exploratory read, Sonnet alone also
   stayed inside the Opus bars on these tasks",
-  and hippo gets no part of the cost result. S1 does not pass: "Sonnet alone did not pass the same test".
+  and hippo gets no part of the cost result. S1 does not pass: "In an exploratory read, Sonnet alone did not pass the same test.
+  This read does not test whether hippo made the difference."
 T1 wins, T2 does not pass: "hippo cuts Sonnet's repeat mistakes, but this run did not show that Sonnet with hippo
                    meets the Opus bar."
 T1 does not win: T2 and T3 are not reached. The doc gives their estimates with no verdict and makes no cost claim.
@@ -126,7 +130,7 @@ A ratio whose interval holds 1 is "no change shown". Every headline names the ef
     <p>Round 4 reruns the 29 repositories of round 3 on its frozen tree.</p>
     <doc-code title="inputs · sketch" lang="text" wrap>
 <script type="text/plain">
-Tree      z0/r4, cut from 04835462b (z0/r3-cleanclaude): the frozen hippo 3.3.1 build cb992a079,
+Tree      z0/r4, cut from 04835462b (z0/r3-cleanclaude): round 3's frozen build cb992a079 (hippo 1.71.0 with later changes ported, not a release),
           runner fixes 0a0066195 and 04835462b, plus the harness changes of prereg items 1 to 8, then one new freeze tag.
 Inputs    the 29 repositories of round 3's final read (C:/z0-runs/scored/r3-final-read.sh lines 8-15),
           with their families, set N tasks and the fixed G5 checkers.
@@ -210,7 +214,7 @@ The seed rule then reads all 29 at base seeds, as z0-seed-rule.mjs:103 reads bas
   O1, S1, S2 and S5 run the largest count. Each test and each T2 part reads seeds 1 to its own count,
   so the shared count never changes the data of a test. S0 and S4 stay at 2.
 A test that 9 seeds cannot size runs at 9, and the result states its power (round 3's --on-miss cap).
-Part (a) on a miss takes the fewest seeds from 3 to 9 whose predicted SE is within 10% of the 9-seed SE.
+Part (a) on a miss takes the fewest seeds from 3 to 9 whose predicted SE is at most 1.1 times the 9-seed SE.
 After a stop, the next step is a new-family round with the author step and screen of round 3.
 </script>
       </doc-code>
@@ -509,7 +513,7 @@ Venv             A unit test stubs the spawn: every spawn of one task (setup, se
                  gives the run's checker verdicts and acceptance. A setup retry and a reset start from an empty venv.
                  G1: a read in the current task's venv or its -boot sibling passes; a read in any other venv is void.
                  The check prints the setup time of each task.
-Freeze           One tag on z0/r4. dist rebuilt from the tag in a clean checkout has round 3's hash
+Freeze           One tag on z0/r4 (a second only under the pilot rule). dist rebuilt from the tag in a clean checkout has round 3's hash
                  97ba0e9b.... The pins file names each arm's model, the effort, the Claude Code version,
                  the tasks files and the launcher hashes.
 Pilot            claim 5.2.     Batch 1: claim 2.2.     Scored run: G1 to G5 pass; hook voids under 5%.
@@ -569,7 +573,7 @@ export const ROUNDS = {
 // z0-size.mjs:140-142, :187, :200, :226, :319; z0-seed-rule.mjs:90, :103-113; ab-run.mjs:64, :72, :246.
 // screen.mjs:8, :34-36, :47 and z0-author.mjs:57 take the r3 rows by name; round 4 runs neither.
 // The Round 4 corpus check (claim 5.1) finds any reader this list misses.
-// memory gives NO_AUTO_MEMORY, HIPPO_ARMS, CAPTURE_ARMS, FLOOR_ARMS, RESTORED_ARMS, the shim mode and the taught write.
+// memory gives NO_AUTO_MEMORY, HIPPO_ARMS, CARRY_ARMS, CAPTURE_ARMS, FLOOR_ARMS, RESTORED_ARMS, the shim mode and the taught write.
 </script>
     </doc-schema>
   </doc-claim>
@@ -577,7 +581,7 @@ export const ROUNDS = {
   <doc-claim aux="scope">
     <p>Not changing: the hippo build, round 3 results, H1 to H4 rules, paid runs.</p>
     <ul>
-      <li>The hippo build stays at round 3's frozen 3.3.1 build, so the result describes that build, not master.</li>
+      <li>The hippo build stays at round 3's frozen build cb992a079 (hippo 1.71.0 with later changes ported), so the result describes that build, not a release and not master.</li>
       <li>Round 3's records, analyzer and verdicts stay as they are. The O1 drift line and the regression check only read them.</li>
       <li>H1 to H4 rules carry over unless a claim above changes them. Round 4 has no Codex arm.</li>
       <li>This episode changes no harness code. The harness changes get their own episode, tests and freeze.</li>
