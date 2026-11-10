@@ -30,7 +30,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
 <Base title={title} description={description} crumb="Claude Code" published="2026-09-28">
   <Nav />
   <main id="main">
-    <PageIntro eyebrow="Claude Code">
+    <PageIntro>
       <Fragment slot="title">Claude Code memory <span class="text-gradient">between sessions</span></Fragment>
       <p>
         Claude Code loads two things into every session: the <code>CLAUDE.md</code> files you write and the auto memory
@@ -44,7 +44,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
     </PageIntro>
 
     <Section title="Set it up in two commands">
-      <Cmd lines={[site.installCmd, 'hippo init', '# optional: register every git repo under ~ at once', site.initCmd]} />
+      <Cmd lines={[site.installCmd, 'hippo init', '# optional: register every git repo under ~ at once', site.initCmd]} copy={[site.installCmd, 'hippo init']} />
       <p>
         If the project has a <code>CLAUDE.md</code>, <code>hippo init</code> adds a short block saying the prompt hook
         injects pinned rules and matching memories. The block asks Claude to run <code>hippo context --auto</code> at
@@ -67,7 +67,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
           <tbody class="divide-y divide-white/5">
             {hooks.map((h) => (
               <tr class="align-top">
-                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-acc-cyan sm:whitespace-nowrap sm:px-5">{h.event}</th>
+                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-accent-light sm:whitespace-nowrap sm:px-5">{h.event}</th>
                 <td class="copy px-3 py-3 text-zinc-300 sm:px-5" set:html={mdInline(h.does)} />
               </tr>
             ))}

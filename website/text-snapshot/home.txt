@@ -1,0 +1,135 @@
+hippo-memory: Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+Skip to content ~/hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+N install
+How
+Get started
+Receipts
+Compare
+FAQ
+Stop re‑teaching
+your agent.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents. It's a critical layer for your AI harness that connects across your different tools (Cursor, Claude Code, Codex). It keeps your proprietary data completely local, and it actually learns over time. By strengthening memories each time they are recalled, Hippo preserves what works, lets mistakes decay, and continuously compounds your agents' intelligence.
+$ npm install -g hippo-memory Copy
+Claude Code
+Codex
+Cursor
+OpenClaw
+OpenCode
+Pi
+any MCP client
+About half the repeat mistakes (the ZN round N result, opens in new tab) of Claude Code's built-in memory alone, at the same cost: N in N against N N to N tasks after one correction, on N repositories.
+N% R@N on LongMemEval-S with a free local embedder (best of five settings).
+R@N N to N (the Jev reranker eval, opens in new tab) with the opt-in Jev reranker, against the free local cross-encoder. Ranking only: no answer-rate win was shown.
+N stars · N downloads · compared in the agent-memory-atlas
+claude · with hippo hooks
+Monday · billing-service
+> add the refunds endpoint
+● Bash(npm install stripe)
+⎿ lockfile is pnpm-lock.yaml; npm install would rewrite it
+hippo · stored error memory (observed)
+Tuesday · new session
+> add a webhook for failed payments
+hippo · N memories in context
+· billing uses pnpm; never run npm install here
+● Bash(pnpm add stripe) ✓
+> /compact
+Hippo saved your task snapshot before compacting.
+an illustrated session · the hippo lines are real hippo output
+hippo capture-error Real failures become lessons. Interrupts, declined permissions and empty searches are skipped.
+hippo outcome --bad Mark a lesson wrong and it stops coming back.
+hippo doctor One command checks the install and names the fix for anything missing.
+Most AI memory saves everything and searches later.
+That's storage with semantic search bolted on. It's why your agent kept hitting the same deploy bug last week. And the week before.
+The system saw the failure four times. It had no way to know it should remember.
+✗ deploy failed: forgot migrations run #N
+✗ deploy failed: forgot migrations run #N
+✗ deploy failed: forgot migrations run #N
+✓ remembered · surfaced before run #N [verified]
+Memories decay. Retrieval makes them stronger.
+The layers borrow from the brain as design inspiration. On our tests, decay made no measurable difference to recall and sleep cost a little. Outcome marks and retrieval strengthening are what measured helpful; supersession is not measured yet.
+Buffer New information lands here. Session-only, no decay.
+encode
+Episodic Timestamped, decays by default. Retrieval strengthens it; errors stick.
+sleep
+Semantic Repeated episodes compress into stable patterns. The originals decay.
+N½N
+recallmarked wrong×supersededrecalledleft alone
+savedN moN yrN moN yr
+Nd half-life Decay by default
+Every memory fades on a one-year half-life unless it is used. We did not tune N days: it tied with N days and with decay off.
++Nd / recall Retrieval strengthens
+Use it or lose it. Each recall extends the half-life. Memories you reach for survive.
+Nx half-life Errors stick
+Tag a failure once. It decays slower and resurfaces every time you walk back into that code.
+N+ → N Sleep consolidates
+On hippo sleep, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy; it has not been shown to improve recall.
+Zero config. It wires itself in.
+Install it, run init in your repo, and hippo detects your agent framework and patches the right config file. Next session, your agent just uses it.
+Package installation alone does not enable automatic preservation on every agent. Complete the documented setup and required host trust; capture and compaction coverage depend on the integration.
+Detected and patched automatically
+Claude Code
+Codex
+Cursor
+OpenClaw
+OpenCode
+Pi
+In a repo, init patches the instruction file each agent already has (CLAUDE.md, AGENTS.md) and adds session hooks where the agent supports them. hippo init --scan ~ gives every git repo under your home folder a store and installs the Claude Code hooks and the OpenCode plugin, but patches no instruction files. hippo init --no-hooks --no-schedule skips the hooks and the daily run.
+N $ npm install -g hippo-memory Copy
+N $ hippo init Copy
+Then hippo sleep tidies the store when a Claude Code session ends, and a daily run at N:Nam learns from the day's commits in every registered project.
+Your memory lives on your machine.
+N outbound HTTP Proven by a globalThis.fetch spy that throws on call, across the N-event ingestion smoke. Not a hardcoded zero. The default recall path makes no network call either; opt-in features such as the Jev reranker, the LLM reranker and the API embedders do.
+SQLite on disk Memories live in a local .hippo/ store with markdown mirrors you can read, grep, and commit. No cloud and no account. One default to know: hippo sleep sends text to Anthropic for fact extraction when ANTHROPIC_API_KEY is set, and one config line turns that off.
+N call to forget Right-to-be-forgotten is a single API call. Every row carries kind, scope, owner, and provenance.
+tenant-safe by default Multi-tenant keys are scrypt-hashed with an audit log on every mutation. Tenant A cannot see tenant B, proven by a negative test.
+And it's not locked to one tool.
+Your ChatGPT memories don't travel to Claude; your .cursorrules don't travel to Codex. Hippo is one store behind all of them.
+imports from ChatGPTCLAUDE.md.cursorrulesSlackmarkdown
+Numbers, including the losses.
+About half as many repeat mistakes as Claude Code's built-in memory alone, at the same cost. Correct the agent once, then count how often it makes that mistake again N to N tasks later. Real Claude Code sessions on N repositories, registered before the run. Over every first chance to repeat: N points fewer [N N], cost ratio N The gain is the same with lesson capture switched off, so round N tests how much of it the stored lessons carry. source ↗ (the ZN round N result, opens in new tab)
+No memory N in N
+Claude Code's built-in memory N in N
+Built-in memory plus hippo N in N
+N% R@N on LongMemEval-S Any answer session in the top N per haystack, free local MiniLM (an optional install), best of five settings. Requiring every answer session: N to N%. N% with voyage-N-large (June N). BMN only, older oracle split: N%. source ↗ −N points behind BMN published LoCoMo answer accuracy with the old N-day default, in a Sonnet trial we registered first. The cause was the default; at N days the retrieval gap fell from N points to N source ↗ N+ tests, real DB No module mocks and no mocked store. Only paid network calls are stubbed. source ↗ N runtime deps Node N+. SQLite under the hood. Optional embeddings. source ↗
+Learn what is wrong. Stop repeating it.
+How hippo compares with nine other memory tools on the features that define a memory lifecycle.
+Feature Hippo MemPalace MemN Basic Memory gbrain Zep Letta Cognee Memoria EverMind
+Decay by default YesNoNoNoNoNoNoNoNoNo
+Retrieval strengthening YesNoNoNoNoNoNoPartialNoPartial
+Cross-tool import (ChatGPT/Claude/Cursor) YesNoNoNoPartial?NoPartialNoPartial
+Auto-hook install YesNoNoNoNoNoNoNoNoNo
+Zero runtime deps YesNoNoNoNoNoNoNoYesNo
+LongMemEval (best published) N% any / N% all R@N*N% raw / N% reranked R@N**N/AN% all R@N*N% accuracy**N/AN/AN% accuracy**N% accuracy**
+* LongMemEval retrieval recall at N "Any" counts a hit when one answer session is in the top N "all" only when every one is. gbrain leads on "all".
+** Answer accuracy with a reader model, a different metric from recall.
+Every feature, with sources and check dates, on GitHub →
+Questions, answered.
+All N questions →
+Is this just RAG? +
+No. RAG searches a fixed corpus. Hippo's store changes as your agent works: a memory marked wrong drops out of the top results, a newer fact supersedes the old one, and memories that keep getting recalled last longer while unused ones fade on a half-life. Recall itself is search: BMN plus embeddings if you install them.
+Which agents does hippo work with? +
+hippo init detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, and wires itself into each one's instruction file, hooks or plugin. It only patches instruction files that already exist. Any MCP client can use the MCP server, and other tools can call the CLI or the HTTP API that hippo serve starts.
+Where does hippo keep my data? +
+On your machine, in SQLite: .hippo/hippo.db in each project, plus a global store in ~/.hippo/ for lessons shared across projects, with markdown mirrors you can read and commit. Recall makes no network call by default. Text goes to an outside provider only through features that use one: an API embedder, the Jev or LLM reranker, hippo refine, and the fact extraction hippo sleep runs through Anthropic's API whenever ANTHROPIC_API_KEY is set in its environment. To turn that last one off, set {"extraction":{"enabled":false}} in .hippo/config.json.
+How is hippo different from memN? +
+memN uses a language model to extract memories, OpenAI by default in its open-source library, and memories stored through its hosted MCP server live in your MemN account (memN docs (opens in new tab), checked N-N-N). Hippo stores memories in SQLite on your machine, needs no account and no model, and hippo init wires it into the coding agents it finds. memN's platform and hippo both mark an older fact superseded when a newer one replaces it. Hippo also lets you mark a recalled memory wrong with hippo outcome --bad, and it drops out of the top results.
+What happens when a memory turns out to be wrong? +
+Mark it, and it drops out of the top results. hippo outcome --bad weakens the memories from the last recall, hippo supersede <id> "<new fact>" replaces one with a newer version, and hippo reject <id> --reason "<why>" stops that value from returning at all. On the synthetic EN test, where every mark is correct, plain BMN plus the outcome mark cut how often a marked-bad memory stayed in the top five from N% to N%. Real marks are noisier, because --bad marks the whole recall batch.
+Has hippo been shown to make agents better at their work? +
+On repeat mistakes, yes. ZN round N ran real Claude Code sessions on N repositories, with hippo and with Claude Code's built-in memory alone. An agent corrected once repeated that mistake about half as often with hippo installed: N times in N against N N to N tasks after the correction, at the same cost. Over every first chance to repeat, the pre-registered read is N points fewer [N N] (result (opens in new tab)). On tasks with no lesson to apply, hippo changed neither the cost nor the share solved. The gain was the same with lesson capture switched off, so round N tests how much of it the stored lessons carry. The other published numbers measure retrieval. Every measurement, including failed runs and one retracted claim, is indexed in docs/evals (opens in new tab).
+One command. Every repo gets memory.
+Zero config. SQLite under the hood, zero runtime deps. The scan gives every git repo under your home folder a store and wires in Claude Code and OpenCode; run hippo init inside a repo for Codex, Cursor, OpenClaw and Pi.
+$ npm install -g hippo-memory Copy
+$ hippo init --scan ~ Copy
+Star on GitHub View on npm
+~/hippo
+Agents
+Claude CodeCursorCodexMCP server Compare
+hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicense (MIT)
+hippo-memory vN · MIT · built by kitfunso

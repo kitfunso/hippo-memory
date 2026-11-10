@@ -8,8 +8,7 @@ import CopyCommand from './CopyCommand.astro';
     <!-- On wide screens the commands sit under the intro so the left column is not half empty; on phones the install card still comes first. -->
     <div class="grid grid-cols-1 gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-x-16 lg:gap-y-8">
       <div class="lg:col-start-1 lg:row-start-1">
-        <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{getStarted.kicker}</p>
-        <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">{getStarted.heading}</h2>
+        <h2 class="text-3xl leading-tight sm:text-4xl">{getStarted.heading}</h2>
         <p class="mt-5 max-w-md text-lg leading-relaxed text-zinc-400">{getStarted.body}</p>
         <p class="mt-4 max-w-md text-sm leading-relaxed text-zinc-400">{getStarted.notice}</p>
       </div>
@@ -30,7 +29,7 @@ import CopyCommand from './CopyCommand.astro';
         <ol class="space-y-4">
           {getStarted.steps.map((cmd, i) => (
             <li class="flex items-start gap-4">
-              <span class="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 font-mono text-xs text-acc-cyan">{i + 1}</span>
+              <span class="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 font-mono text-xs text-accent-light">{i + 1}</span>
               <div class="min-w-0 flex-1"><CopyCommand command={cmd} size="lg" /></div>
             </li>
           ))}

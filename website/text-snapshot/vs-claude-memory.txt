@@ -1,0 +1,53 @@
+CLAUDE.md vs MEMORY.md: when to use hippo | hippo-memory
+Skip to content ~/hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+N install
+Home
+Quickstart
+How it works
+Benchmarks
+FAQ
+Teams
+Compare
+Docs
+CLAUDE.md vs MEMORY.md: what goes where
+If you are working out how to deal with a CLAUDE.md file properly, most of the answer is deciding what belongs in it and what belongs somewhere else. Claude Code has two memories of its own: the CLAUDE.md files you write and the auto memory it writes. Hippo adds a third kind, a store of lessons that are recalled when they match the task.
+Claude Code's two memories (checked N-N-N)
+CLAUDE.md files hold instructions you write. They can sit at four levels: managed policy, user (~/.claude/CLAUDE.md), project (./CLAUDE.md or ./.claude/CLAUDE.md) and local (./CLAUDE.local.md). Every file found is added to context; none overrides another.
+Auto memory holds notes Claude writes itself from your corrections and preferences: a MEMORY.md index and one topic file per memory, in ~/.claude/projects/<project>/memory/. It is on by default and stays on the machine.
+Both load at the start of every conversation, as context rather than enforced configuration. For auto memory, that is the first N lines of MEMORY.md or the first NKB, whichever comes first.
+When two rules contradict each other, Claude may pick one arbitrarily. /doctor prompt-audit looks for contradictions and stale instructions and proposes edits.
+Source: Claude Code's memory docs (opens in new tab).
+What goes where
+CLAUDE.md
+Rules you write for every session: build and test commands, code style, things never to do. The project file can be checked in, so your team shares it.
+Auto memory
+Notes Claude writes itself from your corrections and preferences. On by default, loaded at the start of each conversation, and kept on this machine.
+hippo
+Lessons that pile up as you work: what failed, what fixed it, which facts changed. Recalled when they match the task, marked wrong or superseded when they stop being true, and shared with Codex, Cursor and your other agents.
+Measured against built-in memory
+Hippo runs beside Claude Code's own memory, so the fair test is built-in memory alone against built-in memory plus hippo, on the same tasks.
+About half as many repeat mistakes as Claude Code's built-in memory alone, at the same cost. Correct the agent once, then count how often it makes that mistake again N to N tasks later. Real Claude Code sessions on N repositories, registered before the run. Over every first chance to repeat: N points fewer [N N], cost ratio N The gain is the same with lesson capture switched off, so round N tests how much of it the stored lessons carry. source ↗ (the ZN round N result, opens in new tab)
+No memory N in N
+Claude Code's built-in memory N in N
+Built-in memory plus hippo N in N
+Bringing CLAUDE.md notes into hippo
+# preview first, then import $ hippo import --claude CLAUDE.md --dry-run $ hippo import --claude CLAUDE.md The import skips hippo's own block and any duplicates. After that, hippo sleep at the end of each session also imports new entries from Claude Code's MEMORY.md files, so auto memory notes reach the store your other agents read. hippo init adds a short block to CLAUDE.md saying the prompt hook injects pinned rules and matching memories, and asking Claude to run hippo context --auto at the start of a task only if no hippo memory block has appeared. It leaves the rest of the file alone. The Claude Code page covers the hooks.
+CLAUDE.md questions
+All N questions →
+What is the difference between CLAUDE.md and auto memory? +
+CLAUDE.md files hold instructions you write; auto memory holds notes Claude writes itself from your corrections and preferences. Both load at the start of every conversation, as context rather than enforced configuration. CLAUDE.md can sit at user, project and local level, and the project file can be checked in; auto memory stays on the machine, in ~/.claude/projects/<project>/memory/ (Claude Code's memory docs, checked N-N-N).
+How much of Claude Code's auto memory loads each session? +
+The first N lines of MEMORY.md or the first NKB, whichever comes first, per Claude Code's memory docs (checked N-N-N). MEMORY.md is the index of auto memory, with one topic file per memory beside it.
+Do I still need CLAUDE.md? +
+Yes, for short standing rules such as build commands, code style and things never to do. Claude Code loads CLAUDE.md and its auto memory into every session, and its memory docs (opens in new tab) say that when two rules contradict each other, Claude may pick one arbitrarily. Hippo holds the lessons that pile up, recalls the ones that match the task, and retires the ones marked wrong or replaced. hippo init adds its block to CLAUDE.md, and hippo import --claude CLAUDE.md turns existing notes into memories.
+~/hippo
+Agents
+Claude CodeCursorCodexMCP server Compare
+hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicense (MIT)
+hippo-memory vN · MIT · built by kitfunso

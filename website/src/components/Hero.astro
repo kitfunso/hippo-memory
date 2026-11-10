@@ -16,7 +16,7 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
     <div class="grid items-start gap-12 lg:grid-cols-[minmax(0,32.5rem)_minmax(0,1fr)]">
       <div class="flex min-w-0 max-w-xl flex-col gap-6">
         <h1
-          class="reveal text-balance text-[2.5rem] leading-[1.1] tracking-[-0.03em] sm:text-5xl lg:text-[3.25rem]"
+          class="reveal text-balance text-[2.5rem] leading-(--leading-display) tracking-[-0.03em] sm:text-5xl lg:text-[3.25rem]"
           style="animation-delay: 60ms"
         >
           {site.tagline.lead}<br /><span class="text-gradient">{site.tagline.accent}</span>
@@ -48,15 +48,15 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
         </ul>
 
         <p class="reveal flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-400" style="animation-delay: 280ms">
-          <a href={site.links.repo} target="_blank" rel="noopener noreferrer" class="transition hover:text-zinc-100">
+          <a href={site.links.repo} target="_blank" rel="noopener noreferrer" class="tap transition hover:text-zinc-100">
             <span class="font-medium text-zinc-200 tabular-nums">{stats.starsLabel}</span> stars
           </a>
           <span aria-hidden="true" class="text-zinc-600">·</span>
-          <a href={site.links.npm} target="_blank" rel="noopener noreferrer" class="transition hover:text-zinc-100">
+          <a href={site.links.npm} target="_blank" rel="noopener noreferrer" class="tap transition hover:text-zinc-100">
             <span class="font-medium text-zinc-200 tabular-nums">{stats.downloadsLabel}</span> downloads
           </a>
           <span aria-hidden="true" class="text-zinc-600">·</span>
-          <a href={site.links.atlas} target="_blank" rel="noopener noreferrer" class="transition hover:text-zinc-100">
+          <a href={site.links.atlas} target="_blank" rel="noopener noreferrer" class="tap transition hover:text-zinc-100">
             compared in the agent-memory-atlas
           </a>
         </p>
@@ -71,7 +71,7 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
     <ul class="reveal mt-16 grid gap-px overflow-hidden rounded-xl border border-zinc-800 bg-zinc-800 md:grid-cols-3" style="animation-delay: 320ms">
       {commands.map((c) => (
         <li class="flex flex-col gap-2 bg-zinc-950 p-6">
-          <code class="font-mono text-[13px] text-acc-violet">{c.cmd}</code>
+          <code class="font-mono text-[13px] text-accent">{c.cmd}</code>
           <p class="text-[15px] leading-6 text-zinc-300">{c.body}</p>
         </li>
       ))}

@@ -33,8 +33,7 @@ const rows = homeFeatures.map((f) => {
 <section id="compare" class="relative border-t border-white/5">
   <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
     <div class="max-w-2xl">
-      <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Compare</p>
-      <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
+      <h2 class="text-3xl leading-tight sm:text-4xl">
         <span class="text-gradient">{compare.heading}</span>
       </h2>
       <p class="mt-5 text-lg leading-relaxed text-zinc-400" data-reveal>{compare.body}</p>
@@ -54,13 +53,13 @@ const rows = homeFeatures.map((f) => {
                 Feature
               </th>
               {systems.map((s) => (
-                <th scope="col" class:list={['px-2 py-3 text-center align-bottom font-sans text-[13px] font-semibold leading-tight', s.self ? 'bg-acc-violet/5' : '']}>
+                <th scope="col" class:list={['px-2 py-3 text-center align-bottom font-sans text-[13px] font-semibold leading-tight', s.self ? 'bg-accent/5' : '']}>
                   <a
                     href={s.href}
                     target="_blank"
                     rel="noopener noreferrer"
                     class:list={[
-                      'underline-offset-4 transition hover:underline',
+                      'tap underline-offset-4 transition hover:underline',
                       s.self ? 'text-gradient' : 'text-zinc-300 hover:text-zinc-100',
                     ]}
                   >{s.name}</a>
@@ -82,7 +81,7 @@ const rows = homeFeatures.map((f) => {
                     class:list={[
                       'px-2 py-3 text-center align-middle text-[13px] leading-snug',
                       cellTone(c),
-                      ci === 0 ? 'bg-acc-violet/5 font-medium' : '',
+                      ci === 0 ? 'bg-accent/5 font-medium' : '',
                     ]}
                   >{c}</td>
                 ))}
@@ -92,11 +91,9 @@ const rows = homeFeatures.map((f) => {
         </table>
       </div>
     </div>
-    <p class="mt-2 font-mono text-xs text-zinc-400 lg:hidden">{compare.scrollCue} →</p>
 
     <div class="mt-5 max-w-3xl space-y-1.5 text-sm leading-relaxed text-zinc-400" data-reveal>
       {compare.notes.map((n) => <p>{n}</p>)}
-      <p class="pt-3 text-zinc-300">{comparison.closing}</p>
       <p class="pt-1">
         <a href={compare.sourceHref} target="_blank" rel="noopener noreferrer" class="link">{compare.sourceLabel} →</a>
       </p>

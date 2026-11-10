@@ -1,11 +1,13 @@
 ---
+import { slug } from '../lib/slug';
 // One titled block of long-form copy; `alt` shades every other section, as on the home page.
+// The default id drops a "(checked 2026-09-28)" suffix so a date never lands in an anchor.
 interface Props {
   title: string;
   id?: string;
   alt?: boolean;
 }
-const { title, id, alt = false } = Astro.props;
+const { title, id = slug(title.replace(/\s*\([^)]*\)/g, '')), alt = false } = Astro.props;
 ---
 
 <section id={id} class:list={['relative border-t border-white/5', alt && 'bg-white/[0.02]']}>

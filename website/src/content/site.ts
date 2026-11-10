@@ -101,7 +101,6 @@ export const commands = [
 ] as const;
 
 export const problem = {
-  kicker: 'The problem',
   heading: 'Most AI memory saves everything and searches later.',
   body: [
     "That's storage with semantic search bolted on. It's why your agent kept hitting the same deploy bug last week. And the week before.",
@@ -186,7 +185,6 @@ export const compare = {
   body: 'How hippo compares with nine other memory tools on the features that define a memory lifecycle.',
   sourceHref: `${REPO}#comparison`,
   sourceLabel: 'Every feature, with sources and check dates, on GitHub',
-  scrollCue: 'scroll for more tools',
   // Short forms of the README footnotes; the long ones stay on GitHub and the vs pages.
   notes: [
     '* LongMemEval retrieval recall at 5. "Any" counts a hit when one answer session is in the top 5, "all" only when every one is. gbrain leads on "all".',
@@ -194,15 +192,11 @@ export const compare = {
   ],
 } as const;
 
-/** README.md's Comparison table, parsed at build by readme.ts, plus the site's own closing line. */
-export const comparison = {
-  ...readmeComparison,
-  closing: 'Most of the others save everything and search it later, or build a knowledge graph. Hippo learns what is wrong and stops repeating it.',
-} as const;
+/** README.md's Comparison table, parsed at build by readme.ts. */
+export const comparison = readmeComparison;
 
 /** Get started = quickstart + the zero-config auto-install differentiator. */
 export const getStarted = {
-  kicker: 'Get started',
   heading: 'Zero config. It wires itself in.',
   body: 'Install it, run init in your repo, and hippo detects your agent framework and patches the right config file. Next session, your agent just uses it.',
   notice: 'Package installation alone does not enable automatic preservation on every agent. Complete the documented setup and required host trust; capture and compaction coverage depend on the integration.',
@@ -216,7 +210,6 @@ export const getStarted = {
 
 /** Local-first / privacy. Every receipt sourced verbatim to README (L46/L57/L58). */
 export const localFirst = {
-  kicker: 'Local-first',
   points: [
     { stat: '0', label: 'outbound HTTP', body: 'Proven by a globalThis.fetch spy that throws on call, across the 1000-event ingestion smoke. Not a hardcoded zero. The default recall path makes no network call either; opt-in features such as the Jev reranker, the LLM reranker and the API embedders do.' },
     { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store with markdown mirrors you can read, grep, and commit. No cloud and no account. One default to know: hippo sleep sends text to Anthropic for fact extraction when ANTHROPIC_API_KEY is set, and one config line turns that off.' },

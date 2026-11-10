@@ -54,7 +54,7 @@ const mechanisms = [
 <Base title={title} description={description} crumb="How it works" published="2026-09-28">
   <Nav />
   <main id="main">
-    <PageIntro eyebrow="How it works">
+    <PageIntro>
       <Fragment slot="title">How hippo decides what your agent <span class="text-gradient">forgets</span></Fragment>
       <p>
         Every memory has a strength. It fades on a half-life, grows each time the memory is recalled, and drops when you
@@ -68,7 +68,7 @@ const mechanisms = [
       </p>
     </PageIntro>
 
-    <HowItWorks eyebrow={false} />
+    <HowItWorks />
 
     <Section title="Each mechanism, with what was measured" alt>
       {mechanisms.map((m) => (

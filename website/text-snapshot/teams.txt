@@ -1,0 +1,52 @@
+hippo for teams: memory your platform team can approve
+Skip to content ~/hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+N install
+Home
+Quickstart
+How it works
+Benchmarks
+FAQ
+Teams
+Compare
+Docs
+Enterprise vN · in development · pilots open The memory layer your platform team can approve.
+The commercial edition is planned; its private repository is a scaffold, not a released enterprise product. One plugin turns on shared memory for every agent seat. It runs inside your network, recalls only what each developer can already see, and logs every write. No usage beacon, nothing sent home.
+Ask about a N-week pilot Security policy
+How it deploys
+Claude Code
+Copilot
+Cursor
+Codex
+MCP over OAuth, signed in as the developer
+YOUR NETWORK
+hippo server Postgres · Helm · SSO · audit log
+GitHub
+GitLab
+Jira
+Slack
+Today: the MIT core, the HTTP server with tenants, API keys and an audit log, and GitHub and Slack connectors. Postgres, Helm, SSO and more sources are in development.
+in development Recall respects access
+A memory learned in a private repository only reaches developers who can open that repository.
+in development Leads approve what spreads
+A lesson moves from one repository to a team, or to the whole company, only after a tech lead approves it.
+shipped Every write is on the record
+An audit log of who stored, recalled, changed or forgot what. Keys scoped to tenants and roles.
+Measured on your work, against a holdout.
+For four weeks, a random share of sessions runs without memory. Both groups work on the same days, with the same people and models, so a model price change or a quiet week cannot fake a saving. The numbers come from your agent’s own telemetry, computed inside your network.
+If there is no difference, the report says so. We publish our own losses too.
+Cost per merged PR from your agent’s own billing telemetry
+Read tokens per session the share spent re-reading files
+Repeat-error rate the same failure seen again in a later session
+Guardrails reverts, rejected reviews and CI failures must not rise
+with hippo vs holdout · N% interval · your result
+~/hippo
+Agents
+Claude CodeCursorCodexMCP server Compare
+hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicense (MIT)
+hippo-memory vN · MIT · built by kitfunso
