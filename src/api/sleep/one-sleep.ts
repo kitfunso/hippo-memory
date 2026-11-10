@@ -41,7 +41,7 @@ export function sleepWasRefused(result: SleepAnswer): result is AutoSleepRefused
 }
 
 /** Runs `run` holding the store's claim; a held claim gives `refused(since)` and runs nothing. A dry
- * run writes nothing and takes no claim, and a store without claim methods runs unguarded. */
+ * run consolidates nothing, so it takes no claim, and a store without claim methods runs unguarded. */
 export async function oneSleepPerStore<R, F>(
   { consolidation }: { readonly consolidation: Consolidation },
   dryRun: boolean,
