@@ -41,8 +41,9 @@ export async function handleSleep({
   await sleepStore({ hippoRoot: root, tenantId, args, flags });
 }
 
-/** Sleeps one store; with `--log-file` it also tees its output to that file. */
-export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+/** Sleeps one store; with `--log-file` it also tees its output to that file. True when another
+ * sleep held the store's claim, so this one consolidated nothing. */
+export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext): Promise<boolean> {
   // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the
   // SessionStart hook can re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;
@@ -64,6 +65,7 @@ export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext)
   try {
     const refused = await runSleepCommand(hippoRoot, tenantId, flags);
     if (logFile && !refused) console.log('[hippo] sleep complete');
+    return refused;
   } catch (err) {
     if (logFile) printError(`[hippo] sleep failed: ${errorMessage(err)}`);
     throw err;

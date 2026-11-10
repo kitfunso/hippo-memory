@@ -213,8 +213,9 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   log: (line: string, opts?: { startFresh?: boolean; fields?: LogFields }) => void;
   /** Where the re-read count's lines wait for sleep. */
   held: HeldLog;
-  /** Sleeps the folder's own store; reports its own failure. */
-  sleep: () => Promise<void>;
+  /** Sleeps the folder's own store; reports its own failure. True when another sleep held the
+   * store's claim, so this one consolidated nothing. */
+  sleep: () => Promise<boolean | void>;
   /** Imports the session's agent notes into the global store, for a folder that does not sleep
    * here. */
   importAgentNotes: () => Promise<void>;
@@ -274,7 +275,10 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
     await w.importAgentNotes();
     return;
   }
-  if (w.mode !== 'turn' || !w.sessionId) return w.sleep();
+  if (w.mode !== 'turn' || !w.sessionId) {
+    await w.sleep();
+    return;
+  }
   // Each line starts the log afresh, as a sleep does.
   const prefix = `turn close, session ${w.sessionId}`;
   try {
@@ -289,8 +293,12 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
       w.log(`${prefix}: skip sleep, ${why}`, { startFresh: true });
       return;
     }
-    await w.sleep();
-    w.log(`${prefix}: ran sleep at ${count} new memories (threshold ${threshold})`);
+    const refused = await w.sleep();
+    w.log(
+      refused
+        ? `${prefix}: skip sleep, a sleep is already running`
+        : `${prefix}: ran sleep at ${count} new memories (threshold ${threshold})`,
+    );
   } catch (err) {
     w.log(`${prefix}: sleep check failed: ${errorMessage(err)}`, {
       startFresh: true,

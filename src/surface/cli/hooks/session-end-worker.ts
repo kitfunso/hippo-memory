@@ -112,12 +112,13 @@ async function sleepFolderStore(
   tenantId: string,
   flags: CliFlags,
   closeLogFile: string | null,
-): Promise<void> {
+): Promise<boolean> {
   try {
-    await (await import('../sleep.js')).sleepStore({ hippoRoot, tenantId, args: [], flags });
+    return await (await import('../sleep.js')).sleepStore({ hippoRoot, tenantId, args: [], flags });
   } catch (err) {
     // sleepStore writes its own failure line only once its log tee is open.
     reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);
+    return false;
   }
 }
 

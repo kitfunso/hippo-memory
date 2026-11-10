@@ -111,6 +111,12 @@ describe('sessionEndWork', () => {
     expect(lines).toContain('turn close, session s1: ran sleep at 0 new memories (threshold 0)');
   });
 
+  it('a turn close whose sleep was refused by a running sleep logs the skip and not a run', async () => {
+    await sessionEndWork(withAutoSleep(0), work({ mode: 'turn', sleep: async () => true }));
+    expect(lines).toContain('turn close, session s1: skip sleep, a sleep is already running');
+    expect(lines.some((l) => l.includes('ran sleep'))).toBe(false);
+  });
+
   it('a turn close with no new turns captures nothing and keeps the cursor', async () => {
     const cursor = {
       after: () => [],
