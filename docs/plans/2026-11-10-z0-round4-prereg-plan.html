@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Z0 Round 4 Plan</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+<header>
+  <h1>Z0 Round 4 Cheaper-Model Pre-registration</h1>
+  <doc-changes new="4"></doc-changes>
+  <doc-note tone="info"><strong>Scope</strong> This episode writes the prereg, this plan, a decision record and a changelog fragment. A later episode builds the code that prereg items 1 to 12 need on a new branch <code>z0/r4</code>, cut from round 3's run tree <code>04835462b</code>. On 10 Nov the founder approved the pilot and $2,140.00 in all. A whole-run check after the pilot asks again before batch 1 if the run does not fit. No session runs before the freeze.</doc-note>
+  <details class="thread"><summary>Why · 4 requests</summary>
+    <doc-quote via="prompt" from="the user">remember our goals, we need to prove hippo help with token cost and efficiency</doc-quote>
+    <doc-quote via="prompt" from="the user">we need to show that hippo can reduce token cost or improve efficiency, has this done it?</doc-quote>
+    <doc-quote via="prompt" from="the user">Have you thought about how Hippo can reduce token costs by doing the same task but with a cheaper model? They're literally doing the completely same task with less repeated mistakes and able to achieve the same goal with a cheaper model. That will clearly show that Hippo is helpful, right?</doc-quote>
+    <doc-quote via="prompt" from="the user">“The trap is that a cheaper model can win on its own.” This should not be an issue as cheaper models often take more tokens to complete tasks, go do round of research to validate this and see if this is worth adding to our goals</doc-quote>
+  </details>
+</header>
+<main>
+<doc-plan>
+
+  <doc-claim>
+    <p>Round 4 tells if Sonnet with hippo does the work of Opus for less.</p>
+    <doc-mock frame="terminal" title="z0-analyze, round 4 · sketch" w="560"><template><span class="dim">></span> node z0-analyze.mjs --round 4 ...
+<b>test pair      measure              estimate  bar         verdict</b>
+T1   S2 vs S1  first-apply repeats  n [n, n]  win         n
+T2   S2 vs O1  cost per solve, R+N  n [n, n]  high < 1    n
+               resolve diff, R+N    n [n, n]  low > -0.03 n
+               first-apply repeats  n [n, n]  high < 0.15 n
+T3   S2 vs S5  first-apply repeats  n [n, n]  win         n
+<span class="dim">T2 and T3 share a closed test, and run only if T1 wins</span>
+<span class="dim">reported: S2/S1 cost ratio, R+N, and its split by kind</span>
+<span class="dim">reported: S1 vs O1, the three T2 lines, no verdict</span>
+<span class="dim">reported: each arm, first and later apply repeats</span>
+<span class="dim">reported: O1 vs round 3 A1; S4 vs S0 per family</span>
+<span class="dim">n = filled by the run</span></template></doc-mock>
+    <doc-claim>
+      <p>Six arms run, and only O1 runs on Opus.</p>
+      <doc-code title="arms · sketch" lang="text" wrap>
+<script type="text/plain">
+O1  Opus 5.5    built-in memory                       3 seeds  the reference
+S1  Sonnet 5.5  built-in memory                       3 seeds  Sonnet alone
+S2  Sonnet 5.5  built-in memory and hippo             3 seeds  under test
+S5  Sonnet 5.5  built-in memory and sham hippo        3 seeds  capture commands off, as A5
+S0  Sonnet 5.5  no memory                             2 seeds  G2 control, as A0
+S4  Sonnet 5.5  taught rules in CLAUDE.md             2 seeds  G2 control, as A4
+The seed rule can raise O1, S1, S2 and S5 to 9 seeds, as in round 3.
+Base prereg line 72 (one model for every Claude Code arm) is amended for this round only.
+</script>
+      </doc-code>
+      <doc-ask id="opushippo">
+        <p>Does round 4 also run Opus with hippo, as arm O2?</p>
+        <label><input type="radio" name="opushippo" value="no" checked> No <small>round 3 already read hippo on Opus</small></label>
+        <label><input type="radio" name="opushippo" value="o2"> Yes, O2 at 3 seeds <small>repeats round 3's H1 test; about $385 (A2's $385.21)</small></label>
+      </doc-ask>
+    </doc-claim>
+    <doc-claim>
+      <p>T1 runs first, and T2 and T3 then share a closed test at 0.05.</p>
+      <doc-code title="tests · sketch" lang="text" wrap>
+<script type="text/plain">
+Hypothesis (goal 4): at the same pinned effort, Sonnet 5.5 with hippo matches Opus 5.5 with
+built-in memory on tasks solved and repeat mistakes, at a lower cost per solved task, and makes
+fewer repeat mistakes than Sonnet 5.5 alone.
+T1  S2 against S1 on the first-apply repeat rate. Round 3's H1 test, unchanged: two codings,
+    the 15-point full-win line, the tie band, the family on one seed as the unit. T1 runs alone at 0.05.
+If T1 wins, T2 and T3 run as a closed test at 0.05 (two-sided p, first threshold 0.025). The joint null
+falls only when a test wins at its level at 0.025, so a loss never opens it. With no level lowered and no
+loss, this is Holm. If T1 does not win, neither gets a verdict. T1 passes its full level on only when it
+wins: a serial gatekeeper.
+T2  S2 against O1. An intersection-union test: all three parts must pass.
+    (a) cost per solved task over sets R+N, each arm at its own model's prices. The high bound is below 1.
+    (b) resolve difference over sets R+N, harmT's estimator (z0-hypotheses.mjs:151-152) on the cells
+        of part (a): the low bound is above -0.03.
+    (c) first-apply repeat difference, under both codings: the high bound is below +0.15.
+    Each bound comes from the two-sided interval at the part's own level: 97.5% or 95%, wider if lowered.
+    (b)'s estimand (harmT): repositories count equally, each (family, seed) cell once inside one (additive fit
+    if cells are missing); not each task.
+    T2 reports pass or no pass, never a loss.
+    The record prints T2's p (the largest one-sided part p, doubled, capped at 1); it decides nothing.
+    Part (a): each (repo, family, seed) cell sums cost C and solves S. R = (sum C_t x sum S_c) / (sum C_c x sum S_t).
+    The spread comes from v = C_t/mean(C_t) - C_c/mean(C_c) - S_t/mean(S_t) + S_c/mean(S_c), the linear form
+    of fixedRepositoryRatioT (repository-t.ts:401-413) with two more sums, on the log scale. R pools the observed
+    cells, so each repository takes plainWeights (repository-t.ts:281-288), the coefficients of its cell mean,
+    also for an incomplete table, times (n_r/N)^2 in place of the 1/G^2 of varianceOf (:357-383).
+    A set N task is a family of one (taskUnits, z0-hypotheses.mjs:116).
+    A cell with no solve is valid. Zero total solves in either arm gives no estimate, and T2 does not pass.
+T3  S2 against S5 on the first-apply repeat rate, as T1. Round 3 result line 44 asks for it.
+H4 carries over on S2 against S1. G2 reads S4 against S0. G1, G3, G4 and G5 carry over.
+Round 3's H3 was a cost per task (ratioT, z0-hypotheses.mjs:138); T2 uses cost per solved task.
+</script>
+      </doc-code>
+      <doc-ask id="margins">
+        <p>How close to O1 must S2 be in T2?</p>
+        <label><input type="radio" name="margins" value="3-15" checked> Resolve 3 points, repeats 15 points <small>a quarter of round 3's 57 to 60 points (unblind.stdout:29)</small></label>
+        <label><input type="radio" name="margins" value="3-10"> Resolve 3 points, repeats 10 points <small>stricter; lower power at the same seeds</small></label>
+      </doc-ask>
+      <doc-note tone="warn"><strong>Power is an assumption</strong> The Sizer stage computes it on round 3's same-model spreads, and batch 1 measures it (claim 2.2). An early sizing pass kept no script, so the page gives none of its figures.</doc-note>
+    </doc-claim>
+    <doc-claim>
+      <p>The cost claim stands only when hippo beats Sonnet alone.</p>
+      <doc-code title="rules for the result doc · sketch" lang="text" wrap>
+<script type="text/plain">
+T1 wins, T2 passes: "At <effort> effort and at list prices on <asOf>, Sonnet 5.5 with hippo solved these
+                     tasks at <ratio> of the cost per solved task of Opus 5.5 with built-in memory. Its intervals
+                     ruled out more than 3 points fewer tasks solved and more than 15 points more first-apply
+                     repeats, and hippo cut Sonnet's first-apply repeats by <d> points."
+                     Beside it: the ratio at the Opus 5.5 row for both arms (no price gap), H3 (S2 against S1,
+                     no verdict), S2 against S1 cost per solved task (no verdict) and the O1 drift line.
+                     "Solved" means part (b)'s difference: repositories count equally, and each
+                     (family, seed) cell counts once inside one (additive fit if cells are missing). The pooled task difference is printed beside it, with no verdict;
+                     below -0.03 the headline adds "counted per task, it solved <x> points fewer".
+S1 against O1 runs the same three-part test, at the same estimators and seeds as T2, each part at the level
+  of the same S2 part (its level at 0.025 when T1 does not win). No verdict;
+  exploratory, it can only narrow the headline. S1 passes too: "In an exploratory read, Sonnet alone also
+  stayed inside the Opus bars on these tasks",
+  and hippo gets no part of the cost result. S1 does not pass: "In an exploratory read, Sonnet alone did not pass the same test.
+  This read does not test whether hippo made the difference."
+T1 wins, T2 does not pass: "hippo cuts Sonnet's repeat mistakes, but this run did not show that Sonnet with hippo
+                   meets the Opus bar."
+T1 does not win: T2 and T3 are not reached. The doc gives their estimates with no verdict and makes no cost claim.
+"hippo's lessons" only if T3 wins. T3 fails: base prereg line 148, "installing hippo changed behaviour,
+  and this run cannot say its lessons did".
+A ratio whose interval holds 1 is "no change shown". Every headline names the effort the run used.
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Round 4 reruns the 29 repositories of round 3 on its frozen tree.</p>
+    <doc-code title="inputs · sketch" lang="text" wrap>
+<script type="text/plain">
+Tree      z0/r4, cut from 04835462b (z0/r3-cleanclaude): round 3's frozen build cb992a079 (hippo 1.71.0 with later changes ported, not a release),
+          runner fixes 0a0066195 and 04835462b, plus the code that prereg items 1 to 12 need, then one new freeze tag, z0-r4-freeze-1.
+Inputs    the 29 repositories of round 3's final read (C:/z0-runs/scored/r3-final-read.sh lines 8-15),
+          with their families, set N tasks and the fixed G5 checkers.
+Order     each sequence keeps round 3's task order, apart from hu3, q133, q14 and q256:
+          drawOrder (lessons.mjs:221-233) redraws theirs after the family drop. The arm rotation is new.
+          The O1 drift line pairs O1 with round 3's A1 by task id on the 25 unchanged repositories, at the
+          seeds both ran: O1 minus A1 on resolve, first-apply repeats (both codings) and cost per solved task
+          at the Opus row, each with a 95% interval and no verdict. A resolve interval wholly below 0 or a
+          repeat interval wholly above 0 adds a note to the headline.
+Screen    none: round 3 screened these families on Opus. G2 on Sonnet is the positive control,
+          and the result reports S4 against S0 for each family.
+Holds     Amendment B in full: the hook-cancel hold rule, now on the apply sessions of S2 and S5 in place
+          of A2 and A5; cancelled hooks by arm and event in each record; the sensitivity read without them.
+          The box check carries over. Per-task installs add load: the hold rule and G4 are the guards.
+</script>
+    </doc-code>
+    <doc-ask id="inputs">
+      <p>What does round 4 run on?</p>
+      <label><input type="radio" name="inputs" value="reuse" checked> The 29 round 3 repositories, frozen tree <small>no new author step or screen; same hippo build</small></label>
+      <label><input type="radio" name="inputs" value="new"> New families and the hippo build on master <small>tests current hippo; round 3 estimated about $790 for that step</small></label>
+    </doc-ask>
+    <div data-if="inputs=new"><doc-note tone="warn">Master lacks the round 3 runner, for example the item 5a env allowlist. Then the runner and analyzer must move onto master first, and claim 2.1 goes.</doc-note></div>
+    <doc-claim>
+      <p>Only leak records, never arm results, remove a family.</p>
+      <doc-code title="reuse rule · sketch" lang="text" wrap>
+<script type="text/plain">
+Every repository in round 3's final read comes back, with its families and set N tasks.
+Four families leave tasks-run.json before the run: hu3-f2, q133-f2, q14-f3 and q256-f1.
+They hold the lessons that round 3's G3 record lists as leaked (z0-scored-set-record.md:657).
+The rule drops a whole family: the runner finds a leak before the session (task.mjs:495-501),
+and a later lesson can supersede the leaked one (q133-f2-l2 supersedes q133-f2-l1).
+The pins file holds the new sha256 of each changed tasks file.
+Amendment E becomes a standing rule: a sequence-seed that leaks reruns once, in the arms planned at that seed.
+A second leak stays leaked. G3 keeps its bar (z0-gates.mjs:49-51): at most 5% of planned
+sequence-seeds, counted after the reruns. The first-run count is reported beside it.
+The hippo build stays at cb992a079, so no hippo change saw these families.
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>Batch 1 runs 10 repositories and reads power before the rest.</p>
+      <doc-code title="batch 1 rule · sketch" lang="text" wrap>
+<script type="text/plain">
+Batch 1: Python 3 random.Random(20261110).sample(sorted(keys), 10) over the 29 keys, drawn before any session:
+  q12, q14, q140, q145, q184, q190, q212, q222, q226, q238. The draw reads no result.
+A batch is a set of repositories. In the code, "wave 2" means seeds 4 and up (ab-run.mjs:95-97).
+The blind gate block of batch 1 prints G1 to G5 for each arm. A G2 or a G4 fail stops the run: G2 is the
+  first read on Sonnet of families that round 3 screened on Opus. For each test and each T2 part it prints
+  the variance parts (family, seed, residual) of its cell values with their upper bounds (spreadComponents,
+  z0-size-sim.mjs:73) and its missing share. Part (a): item 3's v. Part (b): cell resolve differences.
+  No mean and no sign.
+  It also stops on a count that already fails its full-run bar: a G1 run-level fail (z0-gates.mjs:10-27),
+  off-pin voids above 5% of all planned positions, or G3 leaks above 5% of all planned sequence-seeds (:48-51).
+After the Level check on batch 1's spreads, the power read uses each test's final level.
+The power read projects each test to the 29 repositories at batch 1's spreads, at the seed count that its
+  own seed rule gives on those spreads. Each test and each T2 part is simulated on its own with round 3's
+  repeatRun (z0-size-sim.mjs:124) on its own cell values: repeats for T1, T3 and (c), v for (a), resolve
+  differences for (b). The family part carries the dependence of a family's tasks; v holds cost and solves.
+  Two changes: real cell counts per repository, and part (a) scored as the analyzer scores v (pooled mean,
+  item 3's variance). Effects: (a) log(0.5 x r), (b) 0 and -0.01. H4 keeps harmRun (:200) on set N.
+  2,000 draws, seed 20261110, cellSeed.
+  Own power: T1 wins under both codings at 0.05; T3 at 0.025; each T2 part at 0.025.
+  Under both codings: the joint win share from the shared draws (the codings differ only on not-applicable
+  lessons; batch 1 prints that share), with P(win, one) + P(win, other) - 1 beside it.
+  The stops read the shared-draw joint. Its error goes both ways, so a stop can come early or late. It never makes a win.
+  Batch 1 prints only d, the units that differ between the codings, and n, the units present (round 3: 1 in 148; batch 1: 1 in 47 for A2 vs A1, 0 in 47 for A2 vs A5; r3-coding-units.mjs).
+  A power figure guides a stop and never enters a verdict.
+  Each figure is conditional on the run reaching the test's seed count, printed beside its projected spend.
+  Each figure and bound is a Monte Carlo estimate, printed with its simulation error.
+  Lower bounds with no dependence model: P(T1 and T2) >= P(T1) + P(a) + P(b) + P(c) - 3, and
+  P(T1 and T3) >= P(T1) + P(T3) - 1. Beside T3: round 3's A2 against A5, 0.009 [-0.052, 0.070].
+Assumed true effects: T1 and T3 at 15 points. T2 at S2 equal to O1 on resolve and repeats,
+at a cost per solved task of 0.5 x r with r from the pilot, and again at resolve -0.01.
+If T1 power is below 0.8, the run stops. If T1 passes but T3's or any T2 part's power is below 0.8, the founder
+picks between going on, with the figures stated, and a stop. The bounds do not trigger it. A stop gives no claim.
+Batch 2 runs the other 19 repositories at base seeds.
+The seed rule then reads all 29 at base seeds, as z0-seed-rule.mjs:103 reads base seeds only.
+  Every test and T2 part: H1's standard-error rule (repeatSeeds, z0-seed-rule.mjs:69) on its own cell
+    values, the fewest seeds from 3 to 9 at which seedsNeeded (z0-size-sim.mjs:90) predicts SE <= m / z.
+    T1, T3, (c): m 0.15, z 3.5. (a), (b): z 3.08 (power 0.8 at the first threshold, 97.5%); (b) m 0.03;
+    (a) m log(1 / 0.9) = 0.105, fixed before the freeze, so the rule does not depend on r.
+    For (a) the count is an approximation: seedsNeeded weights repositories equally.
+  H4: H4's power rule (harmSeeds, z0-seed-rule.mjs:87), as round 3.
+  O1, S1, S2 and S5 run the largest count. Each test and each T2 part reads seeds 1 to its own count,
+  so the shared count never changes the data of a test. S0 and S4 stay at 2.
+A test that 9 seeds cannot size runs at 9, and the result states its power (round 3's --on-miss cap).
+Part (a) on a miss takes the fewest seeds from 3 to 9 whose predicted SE is at most 1.1 times the 9-seed SE.
+After a stop, the next step is a new-family round with the author step and screen of round 3.
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Each arm runs and pays for one pinned model at one effort.</p>
+    <doc-mock frame="terminal" title="G1 lines, round 4 · sketch" w="480"><template><b>G1</b> off-pin  n of n positions voided, tails in  <span class="g">pass</span>
+<span class="dim">           bar: at most 5% (the pilot needs 0)</span>
+<b>G1</b> envKeys  all in the allowlist, pins included  <span class="g">pass</span>
+<b>cost</b>       each side priced at its own arm's model
+<span class="dim">n = filled by the run</span></template></doc-mock>
+    <doc-ask id="effort">
+      <p>Which effort does every arm run at?</p>
+      <label><input type="radio" name="effort" value="medium" checked> Medium <small>the Claude Code default for both models</small></label>
+      <label><input type="radio" name="effort" value="high"> High <small>more tokens; Anthropic says the saving per task shrinks</small></label>
+      <label><input type="radio" name="effort" value="pilot"> The pilot picks <small>high if Sonnet at high uses under 1.6 times Opus tokens</small></label>
+    </doc-ask>
+    <div data-if="effort=pilot"><doc-note tone="info">The pilot also runs O1 and S1 at high, at an extra cost. Under 1.6 times the tokens, Sonnet costs under 0.8 of Opus, so T2 keeps room. The rule reads no hippo arm. EFFORT then moves from arms.mjs into the pins file.</doc-note></div>
+    <doc-claim>
+      <p>claudeArgs takes the model from the arm table, not the run.</p>
+      <doc-calls title="one session" ref="04835462b" caption="pinMismatches compares String values (pins.mjs:33), so each pin stays a flat string.">
+<script type="text/plain">
+~ claudeArgs(ctx, run)                          @ scripts/token-eval/turns.mjs:45 -- --model ARM_TABLE[run.arm].model
+~ openContext(opts)                             @ scripts/token-eval/runs.mjs:108 -- one warm-up per model, in the env of a real arm
+- flag('--model')                               @ scripts/token-eval/ab-run.mjs:305 -- removed
+~ claudePinned(ctx)                             @ scripts/token-eval/pins.mjs:41 -- one flat key per arm model, the effort, the launcher hashes
+~ step record                                   @ scripts/token-eval/task.mjs:61 -- the model of the arm
+</script>
+      </doc-calls>
+      <doc-claim at="scripts/token-eval/turns.mjs:45">
+        <p><b>turns.mjs:45</b> · claudeArgs()</p>
+        <doc-code src="scripts/token-eval/turns.mjs" lines="45-50" ref="04835462b" hl="47">
+          <doc-pin line="47" tone="warn" title="One model for every arm">ctx.model comes from the --model flag of the run.</doc-pin>
+        </doc-code>
+      </doc-claim>
+    </doc-claim>
+    <doc-claim>
+      <p>armEnv sets the pins, and the G1 allowlist admits them.</p>
+      <doc-code diff file="scripts/token-eval/arms.mjs" wrap>
+<script type="text/plain">
+@@ -21,2 +21,3 @@
+-// The keys armEnv sets itself: a --pass-env copy would silently override the arm (and a second PATH key on Windows).
++// The keys the runner sets (armEnv, or the task env for VIRTUAL_ENV and PIP_CONSTRAINT): a --pass-env copy would silently override them (and a second PATH key on Windows).
+-const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
++const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH',
++  'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE', 'VIRTUAL_ENV', 'PIP_CONSTRAINT'];
+@@ -40,1 +41,1 @@
+-  'VIRTUAL_ENV', 'PYTHONUTF8', 'PYTHONIOENCODING',
++  'PYTHONUTF8', 'PYTHONIOENCODING',
+@@ -84,4 +85,8 @@
+   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = NO_AUTO_MEMORY.has(arm) ? '1' : '0';
++  const { model } = ARM_TABLE[arm];
++  env.CLAUDE_CODE_EFFORT_LEVEL = EFFORT;
++  env.CLAUDE_CODE_SUBAGENT_MODEL = model;
++  env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE = '1';
+   env.HIPPO_AGENT_MEMORY_TOOLS = 'claude-code,codex';
+   env.DISABLE_AUTOUPDATER = '1';
+   env.EVAL_SEED = String(dirs.seed);
+</script>
+        <doc-pin line="23" tone="info" title="ENV_ALLOWLIST starts from RUNNER_KEYS">arms.mjs:43, so G1 admits these keys; --pass-env of them now throws.</doc-pin>
+        <doc-pin line="87" tone="info" title="Wins over every other effort source">The env var outranks --effort and settings, per the Claude Code docs.</doc-pin>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>A request off the pinned model or effort voids its cell.</p>
+      <doc-code title="G1 model · sketch" lang="js" wrap>
+<script type="text/plain">
+// The proxy log holds request entries {method, url, body}, response entries {url, status} and
+// error entries {url, error} (proxy.mjs:17, :21, :25). G1 reads request entries only.
+const isRequest = (e) => 'method' in e;
+const pathOf = (e) => e.url.split('?')[0];
+const isMessages = (e) => e.method === 'POST' && pathOf(e) === '/v1/messages';
+// Round 3's logs hold POST /v1/messages, POST /v1/messages/count_tokens
+// (a model and no output_config) and HEAD /api/hello with an empty body (prereg item 6).
+const KNOWN = new Set(['/v1/messages', '/v1/messages/count_tokens']);
+const offModel = (e, arm) => e.body !== '' && parsed(e)?.model !== ARM_TABLE[arm].model;
+const offEndpoint = (e) => e.body !== '' && !KNOWN.has(pathOf(e));
+const offEffort = (e) => isMessages(e) && parsed(e)?.output_config?.effort !== EFFORT;
+const offPin = (log, arm) => log.filter(isRequest).some((e) => offModel(e, arm) || offEndpoint(e) || offEffort(e));
+// Coverage: each attempt needs a log with at least one isMessages entry. A missing log or a body that
+// does not parse (parsed returns undefined) counts as off-pin.
+// An off-pin attempt can change memory and the work tree later positions read, so it voids its position
+// and the rest of its (sequence, seed) in every arm, as retryVoids does (z0-filters.mjs:63-70).
+// G4 does not count these voids (z0-gates.mjs:54-63), so G1 gets a new bar, built like hookVoided:
+// off-pin voided positions, tails included, at most 5% of planned positions.
+// The pilot must show 0 off-pin requests.
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The price file keys each row by model id, not by tool.</p>
+      <doc-schema id="prices" lang="json" diff title="prices.json" caption="Green is proposed. Each row comes from the price page on the freeze day.">
+<script type="text/plain">
+ {
+-  "asOf": "2026-10-11",
+-  "claude-code": { "model": "claude-opus-5-5", "inputPerMTok": 4, "cacheWritePerMTok": 8, "cacheReadPerMTok": 0.2, "outputPerMTok": 20 },
++  "asOf": "<freeze day>",
++  "models": {
++    "claude-opus-5-5":   { "inputPerMTok": 4, "cacheWritePerMTok": 8, "cacheReadPerMTok": 0.2, "outputPerMTok": 20 },
++    "claude-sonnet-5-5": { "inputPerMTok": 2, "cacheWritePerMTok": 4, "cacheReadPerMTok": 0.1, "outputPerMTok": 10 }
++  },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing; 1h cache write rate"
+ }
+</script>
+      </doc-schema>
+    </doc-claim>
+    <doc-claim>
+      <p>Each side of a pair costs the row of its own arm model.</p>
+      <doc-calls title="every price reader" ref="04835462b" caption="Today taskUnits prices both arms of a pair with one row.">
+<script type="text/plain">
+~ costOf(r, prices)                             @ scripts/token-eval/z0-hypotheses.mjs:33 -- the row of ARM_TABLE[r.arm].model
+
+~ perArm cost per resolve                       @ scripts/token-eval/z0-hypotheses.mjs:262 -- the row of the arm, not prices[r.tool]
+
+~ slotTable mean cost                           @ scripts/token-eval/z0-hypotheses.mjs:292 -- the row of the arm, not prices[r.tool]
+
+~ taskUnits(scored, armT, armC, prices, keep)   @ scripts/token-eval/z0-hypotheses.mjs:112 -- one row for each side
+
+~ H3 and T2 units                               @ scripts/token-eval/z0-hypotheses.mjs:204 -- passes the table, not prices['claude-code']
+
+~ H3 split                                      @ scripts/token-eval/z0-hypotheses.mjs:357 -- passes the table
+
+~ harmDesign units                              @ scripts/token-eval/z0-seed-rule.mjs:90 -- passes the table
+
+~ H4 calibration                                @ scripts/token-eval/z0-size.mjs:142 -- passes the table
+
+~ perRecordUsage(records, prices)               @ scripts/token-eval/z0-size.mjs:185 -- the row of the arm
+
+~ price check                                   @ scripts/token-eval/z0-analyze.mjs:114 -- a row for each arm model
+</script>
+      </doc-calls>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The uv command of one agent cannot reach the venv of another task.</p>
+    <doc-calls title="one Python task" ref="04835462b" caption="armEnv runs once per run (runs.mjs:126), so the venv needs a task env on top of run.env.">
+<script type="text/plain">
+~ flag('--venv')                                @ scripts/token-eval/ab-run.mjs:305 -- s4-run.ps1 sets it for the python toolchain only
+~ runDirs(outDir, seq, arm, seed)               @ scripts/token-eval/homes.mjs:14 -- names <run root>/venv, one folder per task position in it
+~ bounds(ctx, run, step, ownIds)                @ scripts/token-eval/readcheck.mjs:204 -- adds <run root>/venv/<step.position>, the current task's venv, and its -boot sibling to the own folders
+~ once()                                        @ scripts/token-eval/task.mjs:85 -- deletes and remakes the task's venv before each setup, then a task env with VIRTUAL_ENV and PATH
+~ checks                                        @ scripts/token-eval/task.mjs:154 -- take the task env, as setup at :85 and tests at :384 do
+~ runSession(ctx, run, t, reset)                @ scripts/token-eval/turns.mjs:111 -- passes env: the task env
+~ resumeSession(ctx, run, t, ...)               @ scripts/token-eval/turns.mjs:139 -- passes env: the task env
+  untilNotLimited(ctx, run, t, ...)             @ scripts/token-eval/turns.mjs:86 -- unchanged; its env defaults to run.env
+~ step record                                   @ scripts/token-eval/task.mjs:311 -- envKeys are the keys of the task env
+~ runTask meta                                  @ scripts/token-eval/task.mjs:472 -- envKeys are the keys of the task env
+~ scratchPaths(out, g)                          @ scripts/token-eval/regrade.mjs:88 -- <scratch root>/venv/<position>; entries run one at a time (:383)
+~ regradeCell setup                             @ scripts/token-eval/regrade.mjs:164 -- python -m venv before setup, removed after
+~ envKeyCheck(records, entries, ...)            @ scripts/token-eval/regrade.mjs:319 -- finds VIRTUAL_ENV and PIP_CONSTRAINT in the cell env
+</script>
+    </doc-calls>
+    <doc-claim at="scripts/token-eval/task.mjs:85">
+      <p>The setup of each task runs in a venv made for that task.</p>
+      <doc-code src="scripts/token-eval/task.mjs" lines="85-93" ref="04835462b" hl="85">
+        <doc-pin line="85" tone="warn" title="Setup runs each task">Today it fills the one venv the launcher shares.</doc-pin>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>A new launcher drops the shared venv and the --model flag.</p>
+      <doc-code title="C:/z0-runs/scored/s4-run.ps1 · sketch" lang="text" wrap>
+<script type="text/plain">
+s4-run.ps1 is a copy of s3x-run.ps1 with these changes:
+  line 14: no python -m venv "$Out/venv"; the python toolchain passes --venv instead.
+  line 16: no --model claude-opus-5-5; the arm table names each model.
+  line 25: --pass-env skips VIRTUAL_ENV, which is now a runner key.
+s4-regrade.ps1 is a copy of s3x-regrade.ps1 that passes no VIRTUAL_ENV.
+Both launchers pass the pinned poetry folder and the PIP_CONSTRAINT file, which sit outside every --out folder.
+The other 22 repositories get no --venv, no venv folder and no VIRTUAL_ENV.
+s3x-env.ps1 stays as it is, because its hash is in round 3's author lock (Amendment A).
+Its PATH entry {work}\venv\Scripts then names no folder, and the task env puts the task venv first.
+s4-run.ps1 names a pinned poetry 2.5.1 folder; the runner puts its Scripts after the task venv's Scripts on PATH,
+so q255's bare poetry install finds poetry and installs into the task venv. The pins file holds its version.
+q255's set R setups pip install an unpinned poetry in a -boot venv; the runner sets PIP_CONSTRAINT (poetry==2.5.1)
+in each task env that gets VIRTUAL_ENV, which pins it there. Both names join RUNNER_KEYS; VIRTUAL_ENV leaves TOOLCHAIN_ENV.
+Each task gets a new venv at <run root>/venv/<position>, made with python -m venv before setup.
+once() deletes and remakes it before each setup, so a setup retry and a usage-limit reset start empty.
+G1 counts the current task's folder as an own folder of the session (readcheck.mjs:204, :231, :233).
+After each task, the runner removes that folder and its -boot sibling, which q255's setup makes.
+A failed remove is logged and never stops the run. The next task uses a new folder, so nothing carries over.
+The pins file holds the sha256 of both launchers.
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The scored run waits for a pilot and the whole-run check.</p>
+    <doc-code title="budget, list price on the subscriptions · sketch" lang="text" wrap>
+<script type="text/plain">
+Basis: round 3's recorded spend, the sum of costUsd over every record of every attempt, kept, aborted or set aside:
+  A1 $386.45, A2 $385.21, A5 $373.42, A0 $314.94, A4 $256.74, total $1,716.76.
+  It leaves out unrecorded warm-ups and deleted cut-off resumes, so it is a lower bound.
+  The scored records of the final read cost $1,464.81, so failed, voided and rerun records add about 17% (1,716.76 / 1,464.81).
+  python -I docs/evals/z0-r4/r3-total-spend.py C:/z0-runs/scored/r3run
+  node docs/evals/z0-r4/r3-scored-cost.mjs --analyzer <checkout of 04835462b>
+Sonnet 5.5 rates are half of the Opus 5.5 rates in all four columns (price page, 10 Nov 2026).
+r = Sonnet usage priced at the Opus row over Opus usage at that row, same tasks (claim 5.2). The larger of S1, S2;
+  the record names its arm, and r stays an assumption until batch 1's ledger.
+  O1                 386.45
+  S1 + S2 + S5     1,145.08 x 0.5 x r
+  S0 + S4            571.67 x 0.5 x r
+With the $40 pilot:   r = 1: about $1,280.   r = 1.5: about $1,710.   r = 2: about $2,140.
+Batch 1 (round 3 spend $519.20 on its 10 repositories): about $380 at r = 1, $640 at r = 2.
+Ceiling, r = 2 and 9 seeds on O1, S1, S2 and S5: about $5,210.
+  python -I docs/evals/z0-r4/r4-projection.py C:/z0-runs/scored/r3run: 1,284.83, 1,714.02, 2,143.21, 5,206.29; batch 1 376.34, 635.94
+Both run low for q145, which lost 143 of 156 records in round 3 ($7.62 against $61.38 on q140): roughly $36 to $61 more.
+q256 lost 24 records to the same break: about $8 at round 3's $0.34 a record, before the 0.5 x r scale.
+Whole-run check after the pilot, at $2,140.00 and 5 seeds: fits up to r = 0.79 (3 seeds: 1.45).
+  At r = 1 it needs $1,641.63 at 3 seeds and $2,464.81 at 5 seeds (r4-projection.py, the whole-run lines).
+These figures are at medium effort. O2 adds about $385 (A2's $385.21, r3-total-spend.py).
+Ledger: costUsd of every record (no costUsd: priced from its transcript at each message's own model; round 3's 545 had none: 370 leaks, 175 setup; r3-null-cost.py),
+  every cut-off attempt, warm-ups at their saved total_cost_usd (runs.mjs:111-115), the smoke and the pilot. The total only, never by arm, before the unblind.
+  A cut-off first session keeps its transcript under its own id (turns.mjs:114). restoreWork deletes the new
+  transcripts of a cut-off resume (turns.mjs:164-179), so the runner first copies them to <out>/cutoffs/, where
+  G1 voids any session that reads them (readcheck.mjs:231). New messages are priced once per id (task.mjs:271).
+  costUsd is Claude Code's total_cost_usd, which prices each model used (task.mjs:277). Transcript usage takes
+  the row of each message's own model (message.model); a model with no row stops the ledger until its row is added.
+Admission: a run that stops partway is never analysed, so spend is checked before each batch, not inside it.
+  Batch 1, batch 2 and each seed raise start only if ledger + 1.25 x projection is at most the approved figure.
+  Batch 1 also needs the whole-run check: ledger + 1.25 x (batch 1 + batch 2 + q145's gap + the seed raise
+  to 5 seeds, the largest count the rules give on round 3's records, r3-seed-count.mjs) at the pilot's r. If it fails, the founder
+  is asked before batch 1; without a raise that fits, the run stops with no claim after the pilot.
+  After batch 1, the projection is scaled by batch 1's own spend (no pilot) over its projection.
+  A batch can still run over. These are list-price usage on the subscriptions, not a bill; overruns are reported.
+  Batch 2's admission also counts the raise that batch 1's seed rule implies. If it does not fit, the run stops
+  before batch 2 with no claim, unless the founder raises the figure. A raise that does not fit after batch 2
+  goes as far as the figure holds. A test that reaches its own count reads it as planned; a test that does not
+  gets no verdict (it enters the closed test with p = 1). The budget only removes verdicts, never changes a test's data.
+After the unblind: each arm's recorded spend per paired solve. If S2's is not below O1's, the T2 headline says
+  the saving holds on the scored records only, and gives the figure with discarded and rerun work.
+The whole-run check prints r, the projection, and T2 power at r on round 3's spreads (an assumption).
+It also prints the projection at that r at 5 seeds and at 9 seeds.
+If either arm's r is 1.9 or more, it names that arm: on the pilot tasks its cost per task is
+  0.95 of Opus's or more before any saving.
+If it passes and no r is 1.9 or more, the 10 Nov yes covers batch 1, batch 2 and the seed raises.
+  Otherwise the founder gets this output as the question. Batch 1's stop rules still apply.
+</script>
+    </doc-code>
+    <doc-ask id="budget">
+      <p>Which yes did the founder give on 10 Nov?</p>
+      <label><input type="radio" name="budget" value="figure" checked> The pilot and $2,140.00 in all <small>"go, approved"; asked again if the check fails or an r is 1.9+</small></label>
+      <label><input type="radio" name="budget" value="all"> Pilot and scored run, up to the ceiling <small>no second stop; about $5,210 at most</small></label>
+    </doc-ask>
+    <doc-claim>
+      <p>Each stage closes on a named check before the next starts.</p>
+      <doc-code title="stages and checks · sketch" lang="text" wrap>
+<script type="text/plain">
+Arm table        A test fails on any arm code outside arms.mjs: a quoted code, startsWith('A')
+                 or ('X'), arm[0], or an A0-A5 or X1-X4 object key. A test fails G2 when S4 or S0 is missing.
+Round 4 corpus   A synthetic corpus with every round 4 arm goes through z0-analyze, z0-size and z0-seed-rule.
+                 The check fails on any empty, n/a or A-coded line, and on an arm with no ratesBySinceTeach
+                 or seed-rule entry. It finds an arm site that no text search finds.
+Plan dry run     A dry plan of round 4 for seeds 1 to 9 lists every arm with its seed count (ab-run.mjs:64,
+                 :72, :246), and the 4 edited tasks files draw an order for every seed.
+Analyzer         On round 3's 35 runs, the r3 config prints round 3's H1, H3, H4, attribution and G1 to G5
+                 exactly as r3-final/unblind.stdout, apart from the source-hash block.
+Pricing          A unit test prices an S2/O1 pair at two rows. On round 3 records, every cost value in stdout
+                 and in the --out JSON stays the same.
+Cost per solve   A unit test checks R and v on a hand-made table, a cell with 0 solves and 0 total solves.
+                 With equal solves on both sides, R equals fixedRepositoryRatioT's ratio; with equal cells
+                 per repository and complete tables, the weighted variance equals varianceOf's. With a missing
+                 cell and unequal repository sizes, it equals the direct sum over n_rf, n_rs and N, and the
+                 variance over 20,000 simulated tables agrees within 5%.
+Verdict rule     New code (holmAdjust and verdict take one level, eval-stats.ts:335, :374). A unit test on
+                 hand-made p values covers each branch: levels per test and per T2 part, a T3 loss that does not
+                 open the joint null, a T2 pass that does, p = 1 for no verdict, T2 as pass or no pass, the T1 gate,
+                 a T3 opener at a lowered level, a T3 loss after a T2 pass, a one-coding T3 win that opens
+                 nothing, part (c) under both codings with no loss, the harmful-side print, and Holm's
+                 verdicts when no level is lowered and no test loses.
+G1 pins          A unit test feeds G1 request, response and error entries, count_tokens, HEAD /api/hello,
+                 /v1/messages with and without a query, an unknown endpoint with a body, a bad body and a
+                 missing log, and checks each verdict.
+                 An off-pin attempt at position 5 voids positions 5 and up of its (sequence, seed), all arms.
+Level check      Each test's size, as round 3's levelCheck (z0-size-sim.mjs:257) checked H1: T1 under both
+                 codings at 0.05; T3 and each T2 part at 0.025 and 0.05 (a at R = 1, b at -0.03, c at +0.15).
+                 Item 10's generator; own seed rule in the loop, and every fixed count from 3 to 9 seeds;
+                 point and upper spreads; (a)'s rule itself with its fixed m and miss branch, at R = 1; for all but (a), a 0/1
+                 case (binaryRun, :232, as round 3's :265), for (b) at 0.9 and 0.5 and
+                 0.03 lower in the treatment; 20,000 draws a case. A resampled case runs item 3's real estimator
+                 on real cells of a same-model pair: families drawn with replacement in each repository, arms swapped
+                 per family with probability 1/2, so the true ratio is 1; for (b), 0.03 is taken from each cell's
+                 resolve difference, so the estimate sits at the bound. Pair: round 3's A2 and A1, then
+                 batch 1's S2 and S1, at their seeds (3 at most): it tests the estimator, not the seed rule.
+                 Before the freeze the other cases use round 3's spreads (A2 vs A5
+                 for T3, A2 vs A1 for the rest). Before batch 2: again on batch 1's spreads, before any test is read.
+                 Levels: each test's level at each threshold is the largest, up to the threshold, in 0.001 steps, at which every cell's
+                 measured size is at or below the threshold itself; intervals widen to match; the record states it.
+                 Each test keeps the lower of its pre-freeze and batch 1 levels. Below 0.8 x threshold flags a broken
+                 design, after a run of that cell at 100,000 draws: the stage stays open before the freeze;
+                 before batch 2 the run stops, no claim. The repeat-rate rule sits near 0.022 at 0.025 (floor 0.020; r3-level25.mjs).
+                 T2 wins at a threshold when each part wins at its own level.
+                 The adaptive seed rule inflates the size a little at 29 repositories.
+                 The family claim covers false wins; for T1 and T3, a loss under either coding is reported (:394).
+                 The check tests the premise of the family argument (each size at most its threshold) under
+                 its generators and cases. It cannot prove it for every way the real data can differ.
+                 If each size is at most its threshold, false wins stay at about 0.05 or less (the family figure
+                 carries about 0.002 of simulation error) under any dependence:
+                 T1 is a fixed-sequence gate, the closed test holds under any dependence, and an IUT or a
+                 both-codings win needs each part. Batch 1 only lowers levels or removes verdicts, so the run
+                 wins only where it also wins at the pre-freeze levels, which the pre-freeze check measures.
+Sizer            New code in scripts/token-eval, so dist/ keeps its hash: the T1, T2 parts, T3 and H4 power, the two lower
+                 bounds and the seed rule for T1, T2 and T3 (harmGate keeps 1.10 and -0.05, eval-stats.ts:411-414).
+                 The generator gives back the variance parts it was drawn at, within 5% or 2% of the total variance,
+                 from the unclamped mean squares (pointSpreads clamps at 0, z0-size-sim.mjs:64).
+Ledger           A resume cut off at a plan limit: the runner copies its transcripts before restoreWork, and the
+                 ledger prices its new messages once. A cut-off first session keeps its own ids and is priced once.
+                 A session that reads <out>/cutoffs is void.
+Arm environment  A smoke session in each arm records envKeys inside the allowlist, the pins included.
+                 It runs on the tag, after the freeze and before the pilot, on a dev task. Its spend goes in the ledger.
+                 A smoke fail follows the pilot rules below; a fail for another cause uses the second tag.
+Venv             A unit test stubs the spawn: every spawn of one task (setup, session, resume, checks, tests)
+                 gets one VIRTUAL_ENV, unique to the task, and PIP_CONSTRAINT. Two tasks of one Python run: a package from uv pip install in the first imports there
+                 and is gone in the second. A non-Python run has no VIRTUAL_ENV or PIP_CONSTRAINT.
+                 Regrades of one q255 set R and one set N cell from a stubbed run the check makes pass and give
+                 the run's checker verdicts and acceptance. A setup retry and a reset start from an empty venv.
+                 q255-a1's bare poetry install passes in a new task venv, with the pinned poetry Scripts on PATH;
+                 q255-f1-teach's boot install, in the task env the runner builds, leaves poetry 2.5.1.
+                 G1: a read in the current task's venv or its -boot sibling passes; a read in any other venv is void.
+                 The check prints the setup time of each task.
+Freeze           One tag on z0/r4, z0-r4-freeze-1 (z0-r4-freeze-2 only under the pilot rule). dist rebuilt from the tag in a clean checkout has round 3's hash
+                 97ba0e9b.... The pins file names each arm's model, the effort, the Claude Code version,
+                 the poetry version, the tasks files with their checker trees (one manifest hash), the PIP_CONSTRAINT file
+                 and the launcher hashes. Before the launch and each regrade, the pins check makes the manifest
+                 and hashes the PIP_CONSTRAINT file and the launchers again. It reads the pinned poetry's version.
+Pilot            claim 5.2.     Batch 1: claim 2.2.     Scored run: G1 to G5 pass; hook voids under 5%.
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The pilot reads r and makes sure each pin acts.</p>
+      <doc-code title="pilot · sketch" lang="text" wrap>
+<script type="text/plain">
+Dev families only: 2 repositories of 18 positions each, O1, S1 and S2 at 1 seed: 108 task sessions
+(2 x 18 x 3) on the frozen tag. At round 3's $0.34 per record: $24.84 at r = 1, $37.25 at r = 2; budget $40.
+Checks: 0 requests off the pinned model or effort, and every attempt has a request log (claim 3.3).
+        One dev task at low and at high effort on each model: the output tokens move the expected way.
+        Two tasks of one Python run: a package from uv pip install in the first imports there and is gone in the second, and in setup
+        python -c "import sys; print(sys.prefix)" prints the venv of that task.
+        Cancelled hooks for each arm.
+        The envKeys of each arm sit inside the allowlist.
+        Each record's costUsd equals its usage priced at its model's row within 0.1%, as round 3's 4,596 did (r3-costusd.mjs: 0 of 4,596 outside).
+The pilot reads r for S1 and S2: the arm's usage priced at the Opus row over O1's at the same row. Every
+Sonnet price is half the Opus price, so the arm costs 0.5 x r of O1 at any token mix. The larger r counts,
+and the record names its arm. The pilot runs 2 dev repositories, so r stays an assumption until batch 1.
+On the freeze day the price reader checks that each Sonnet rate is half the Opus rate in its column. If one
+is not, the freeze stops, and an amendment puts k (the arm's usage at the Sonnet row over the same usage at
+the Opus row) in place of 0.5 before the pilot, also inside the 1.9 cut and 'the larger r'. The amended
+cut is a cost ratio: k x r = 0.95.
+The pilot reports invalid and timeout cells per model with no stop: at 18 positions, one cell is 5.6 points.
+G4 for each arm is read in the blind gate block of batch 1 (claim 2.2).
+If a pin does not act in the pinned Claude Code version (2.1.288), the newest version that passes is pinned.
+The arm environment smoke and the whole pilot run again on it (r and costUsd included), and an amendment
+records it before batch 1. The tag and the dist hash do not change.
+Any other pilot failure, a pin that needs code included: fix the harness, rerun every stage check but the smoke, tag
+z0-r4-freeze-2 in place of z0-r4-freeze-1, run the smoke on it, record an amendment and run a second pilot. Both pilots go in
+the ledger, and the whole-run check uses the last pilot's r. The freeze-1 pilot counts once, however many
+version reruns it takes; the freeze-2 pilot is the second. A second failure for another cause stops the run.
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim aux="shared">
+    <p>Shared: one arm table drives every arm site.</p>
+    <doc-schema id="armtable" lang="js" title="ARM_TABLE in arms.mjs · sketch" caption="Round 3 rows stay, so the regression check and the drift line read round 3 records.">
+<script type="text/plain">
+export const EFFORT = 'medium';  // the decision on claim 3
+const opus = 'claude-opus-5-5', sonnet = 'claude-sonnet-5-5';
+export const ARM_TABLE = {
+  A0: { model: opus, memory: 'none' },     A1: { model: opus, memory: 'builtin' },
+  A2: { model: opus, memory: 'hippo' },    A4: { model: opus, memory: 'taught' },
+  A5: { model: opus, memory: 'sham' },     O1: { model: opus, memory: 'builtin' },
+  S1: { model: sonnet, memory: 'builtin' }, S2: { model: sonnet, memory: 'hippo' },
+  S5: { model: sonnet, memory: 'sham' },    S0: { model: sonnet, memory: 'none' },
+  S4: { model: sonnet, memory: 'taught' },
+};
+export const ROUNDS = {
+  r3: { arms: ['A0', 'A1', 'A2', 'A4', 'A5'], tests: R3_TESTS },
+  r4: { arms: ['O1', 'S1', 'S2', 'S5', 'S0', 'S4'], seeds: { O1: 3, S1: 3, S2: 3, S5: 3, S0: 2, S4: 2 }, tests: R4_TESTS },
+};
+// Readers on 04835462b: arms.mjs:7-12; runs.mjs:108, :127; task.mjs:24, :97; readcheck.mjs:12;
+// homes.mjs:128; z0-filters.mjs:8; z0-records.mjs:6-12, :82, :136; z0-gates.mjs:41-44;
+// z0-hypotheses.mjs:202-208, :247-250, :342, :357-375; z0-analyze.mjs:200, :222;
+// z0-size.mjs:140-142, :187, :200, :226, :319; z0-seed-rule.mjs:90, :103-113; ab-run.mjs:64, :72, :246.
+// screen.mjs:8, :34-36, :47 and z0-author.mjs:57 take the r3 rows by name; round 4 runs neither.
+// The Round 4 corpus check (claim 5.1) finds any reader this list misses.
+// memory gives NO_AUTO_MEMORY, HIPPO_ARMS, CARRY_ARMS, CAPTURE_ARMS, FLOOR_ARMS, RESTORED_ARMS, the shim mode and the taught write.
+</script>
+    </doc-schema>
+  </doc-claim>
+
+  <doc-claim aux="scope">
+    <p>Not changing: the hippo build, round 3 results, H1 to H4 rules, paid runs.</p>
+    <ul>
+      <li>The hippo build stays at round 3's frozen build cb992a079 (hippo 1.71.0 with later changes ported), so the result describes that build, not a release and not master.</li>
+      <li>Round 3's records, analyzer and verdicts stay as they are. The O1 drift line and the regression check only read them.</li>
+      <li>H1 to H4 rules carry over unless a claim above changes them. Round 4 has no Codex arm.</li>
+      <li>This episode changes no harness code. The harness changes get their own episode, tests and freeze.</li>
+      <li>The decision record names the reuse of round 3 families, the G3 rule and the test order.</li>
+    </ul>
+  </doc-claim>
+
+</doc-plan>
+</main>
+</body></html>
