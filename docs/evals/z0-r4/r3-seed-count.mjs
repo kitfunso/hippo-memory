@@ -45,13 +45,14 @@ const m = (f) => sum(cells.map(f)) / cells.length;
 const [mCt, mCc, mSt, mSc] = [m((x) => x.Ct), m((x) => x.Cc), m((x) => x.St), m((x) => x.Sc)];
 const v = cells.map((x) => ({ repo: x.repo, family: x.family, seed: x.seed, value: x.Ct / mCt - x.Cc / mCc - x.St / mSt + x.Sc / mSc }));
 const b = cells.map((x) => ({ repo: x.repo, family: x.family, seed: x.seed, value: (x.St - x.Sc) / x.n }));
-// Part (a) at m 0.105, the smallest of r3-parta-se's four m and so its largest count; on a miss, the fewest seeds from 3 to the cap within 1.1 times the cap's SE (prereg item 10).
-let a = sized(v, 0.105, 3.08);
+// Part (a) at item 10's fixed m, log(1 / 0.9); on a miss, the fewest seeds from 3 to the cap within 1.1 times the cap's SE (prereg item 10).
+const M_A = Math.log(1 / 0.9);
+let a = sized(v, M_A, 3.08);
 if (a.k === null) {
   const limit = 1.1 * a.se(CAP);
   a = { ...a, bar: limit, barName: 'miss limit 1.1 x se(9)', n: Array.from({ length: CAP - SEEDS + 1 }, (_, i) => i + SEEDS).find((n) => a.se(n) <= limit) };
 }
-console.log(`T2 part (a) A2/A1: cells ${cells.length} repos ${a.repos} m 0.105 ${fmt(a)} seeds ${a.n}`);
+console.log(`T2 part (a) A2/A1: cells ${cells.length} repos ${a.repos} m ${M_A.toFixed(5)} ${fmt(a)} seeds ${a.n}`);
 const pb = sized(b, 0.03, 3.08);
 console.log(`T2 part (b) A2/A1: cells ${cells.length} repos ${pb.repos} m 0.03 ${fmt(pb)} seeds ${pb.k ?? `over ${CAP}`}`);
 counts.push(a.n, pb.n);

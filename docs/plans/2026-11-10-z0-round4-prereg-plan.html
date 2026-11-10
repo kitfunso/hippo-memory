@@ -523,7 +523,7 @@ Ledger           A resume cut off at a plan limit: the runner copies its transcr
                  A session that reads <out>/cutoffs is void.
 Arm environment  A smoke session in each arm records envKeys inside the allowlist, the pins included.
 Venv             A unit test stubs the spawn: every spawn of one task (setup, session, resume, checks, tests)
-                 gets one VIRTUAL_ENV, unique to the task. Two tasks of one Python run: a uv add in the first is
+                 gets one VIRTUAL_ENV, unique to the task. Two tasks of one Python run: a uv pip install in the first is
                  gone in the second. A non-Python run has no VIRTUAL_ENV. A regrade of one Python cell passes and
                  gives the run's checker verdicts and acceptance. A setup retry and a reset start from an empty venv.
                  q255-a1's bare poetry install passes in a new task venv, with the pinned poetry folder on PATH.
@@ -544,7 +544,7 @@ Dev families only: 2 repositories of 18 positions each, O1, S1 and S2 at 1 seed:
 (2 x 18 x 3) on the frozen tag. At round 3's $0.34 per record: $24.84 at r = 1, $37.25 at r = 2; budget $40.
 Checks: 0 requests off the pinned model or effort, and every attempt has a request log (claim 3.3).
         One dev task at low and at high effort on each model: the output tokens move the expected way.
-        Two tasks of one Python run: a uv add in the first is gone in the second, and in setup
+        Two tasks of one Python run: a uv pip install in the first is gone in the second, and in setup
         python -c "import sys; print(sys.prefix)" prints the venv of that task.
         Cancelled hooks for each arm.
         The envKeys of each arm sit inside the allowlist.
