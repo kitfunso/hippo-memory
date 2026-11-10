@@ -1,0 +1,142 @@
+# Z0 round 3 cost by task kind: where hippo's cost goes
+
+Date: 9 Nov 2026. Exploratory read of round 3's scored records, not a scored run. It makes no model calls and costs
+nothing. Script:
+`node scripts/token-eval/z0-cost-by-kind.mjs --analyzer <checkout of 04835462b>` (add `--json` for one JSON object).
+The script imports the frozen round 3 analyzer (commit `04835462b` on `origin/z0/r3-cleanclaude`, pinned in
+`C:/z0-runs/scored/pins-r3c.json`), because that analyzer is not on master. All figures below come from one run on
+Node v24.13.0.
+
+## Answer
+
+Hippo costs 3.9% more than sham hippo over sets R and N: A2/A5 is 1.039 [1.008, 1.070], p 0.013, which is $12.41
+on $320.38 (all seeds). Sham hippo drops hippo's capture hooks and turns `remember`, `capture`, `learn` and `outcome` into no-ops (base
+prereg line 83). So A2 minus A5
+measures hippo's capture and its import of Claude Code's own memory notes together, with all that follows from them
+(base prereg line 93). No capture model call is in these dollars: hippo's LLM extraction is off (base prereg line
+76), and the cost counts session tokens only (`costOf`, frozen `z0-hypotheses.mjs:33`). Teach tasks carry $7.42 of
+the $12.41: A2/A5 teach is 1.068 [1.011, 1.129], p 0.021. This read does not show how the captured or imported
+content raises the cost.
+
+Against built-in memory alone, hippo shows no cost change: A2/A1 is 1.006 [0.964, 1.049] over sets R and N,
+$333.00 against $331.10. This is round 3's H3. The interval admits a change from about 4% down to 5% up. Of the
+four kinds, only teach excludes 1, at 1.054 [1.0005, 1.111], p 0.048, which is $5.97 more. That is one borderline
+cell of 35, with p not adjusted, and on seeds 1 and 2 the same cell is 1.031 [0.964, 1.102].
+
+A4 shows about 7% cost headroom on Opus, and hippo shows no saving on the same seeds. A4, the taught rule written
+straight into `CLAUDE.md`, costs 0.928 [0.888, 0.969] of built-in memory, p 0.001, $16.60 less on $229.10 (seeds 1
+and 2). On the same seeds hippo is 1.003 [0.957, 1.050], an interval that still admits a saving of up to about 4%.
+A4 also runs with auto memory off (base prereg line 82), so its 7% mixes the delivered rule with the absence of
+built-in memory (see Limits). Base prereg line 192 asks "how much memory value is still on the table?" For cost,
+A4's answer is about 7%, with that mix.
+
+The read can see what memory is worth. With no memory, A0 costs 1.156 [1.093, 1.223] of built-in memory over sets
+R and N (seeds 1 and 2). On later applies the no-memory arm costs 1.821 [1.574, 2.107], $27.79 more, and resolves
+16.7 points fewer tasks. So missing memory shows up as a higher cost on the apply tasks.
+
+## The first apply shows no change
+
+On the first apply, the point estimates of hippo and sham hippo are both below built-in memory, but both intervals
+cross 1:
+A2/A1 0.834 [0.664, 1.047], A5/A1 0.829 [0.682, 1.008]. Compared directly, A2/A5 is 1.005 [0.871, 1.160]. So the
+data does not show a first-apply saving, and it does not say whether hippo's lessons or its seeded block cause
+any part of it.
+
+## What the script does
+
+1. It checks the sha256 of the 10 analyzer sources and of every input (35 runs, 35 plans, prices, grading, drop
+   list) against the hashes in `C:/z0-runs/scored/r3-final/unblind.json`. Grading and drop list default to the
+   copies in `docs/evals/z0-r3/`, because the report's own paths name a deleted worktree. The 10 sources are the list
+   that round 3's report recorded. The analyzer also loads `arms.mjs` and `exec.mjs`, which no figure here uses, and
+   neither is hashed.
+2. It runs the analyzer's own `loadInputs`, `filterRecords`, `taskUnits` and `harmT`, at the Opus 5.5 list prices
+   of the `claude-code` block in the prices file.
+3. It stops unless three lines of round 3's report come out exact in the six fields it compares (estimate,
+   low, high, se, df and p): H3 1.006 [0.964, 1.049],
+   maintainer-only H3 0.995 [0.948, 1.044], and H4 (set N cost ratio 1.009 [0.978, 1.040] and resolve difference).
+   It also stops unless its own A2/A1 cells for sets R and N and for set N equal H3 and H4, so the cell code is
+   held to round 3's numbers too.
+4. It prints 35 cells: seven arm pairs, each over sets R and N and over four kinds. The kinds are teach, first
+   apply, later apply (the second apply and after) and set N. It stops if the four kinds do not sum to sets R and
+   N, or if the two arms of a pair disagree on a task's set, kind or apply slot.
+
+A0 and A4 ran two seeds (base prereg line 124), so their pairs use seeds 1 and 2 only. To compare like with like,
+the script also prints A2/A1 and A5/A1 on seeds 1 and 2.
+
+## Cells
+
+Cost is the ratio of the arm's summed cost to the control's, with the fixed-repository t interval. Dollars are the
+summed costs at list price. Resolve is the difference in round 3's resolved flag (acceptance passed, every lesson
+check passed, no timeout), so on set R it includes lesson compliance.
+
+| Pair | Seeds | Kind | Units | Cost ratio [95% CI] | p | $ arm | $ control | $ diff | Resolve diff [95% CI] |
+|---|---|---|---|---|---|---|---|---|---|
+| A2/A1 | all | sets R+N | 995 | 1.006 [0.964, 1.049] | 0.791 | 333.00 | 331.10 | +1.90 | +0.005 [-0.007, +0.017] |
+| A2/A1 | all | teach | 189 | 1.054 [1.0005, 1.111] | 0.048 | 116.09 | 110.12 | +5.97 | +0.017 [-0.012, +0.046] |
+| A2/A1 | all | first apply | 148 | 0.834 [0.664, 1.047] | 0.112 | 40.66 | 48.77 | -8.12 | +0.042 [-0.008, +0.091] |
+| A2/A1 | all | later apply | 184 | 1.062 [0.977, 1.153] | 0.150 | 51.51 | 48.52 | +2.99 | +0.003 [-0.047, +0.053] |
+| A2/A1 | all | set N | 474 | 1.009 [0.978, 1.040] | 0.584 | 124.74 | 123.69 | +1.06 | 0.000 |
+| A5/A1 | all | sets R+N | 995 | 0.968 [0.933, 1.005] | 0.087 | 320.55 | 331.10 | -10.56 | +0.009 [-0.001, +0.019] |
+| A5/A1 | all | teach | 189 | 0.987 [0.943, 1.033] | 0.559 | 108.67 | 110.12 | -1.45 | -0.003 [-0.033, +0.028] |
+| A5/A1 | all | first apply | 148 | 0.829 [0.682, 1.008] | 0.060 | 40.45 | 48.77 | -8.32 | +0.045 [-0.015, +0.104] |
+| A5/A1 | all | later apply | 184 | 0.982 [0.899, 1.073] | 0.682 | 47.66 | 48.52 | -0.86 | +0.025 [-0.021, +0.072] |
+| A5/A1 | all | set N | 474 | 1.001 [0.971, 1.032] | 0.969 | 123.77 | 123.69 | +0.07 | +0.006 |
+| A2/A5 | all | sets R+N | 994 | 1.039 [1.008, 1.070] | 0.013 | 332.79 | 320.38 | +12.41 | -0.004 [-0.013, +0.006] |
+| A2/A5 | all | teach | 189 | 1.068 [1.011, 1.129] | 0.021 | 116.09 | 108.67 | +7.42 | +0.020 [-0.016, +0.056] |
+| A2/A5 | all | first apply | 148 | 1.005 [0.871, 1.160] | 0.944 | 40.66 | 40.45 | +0.20 | -0.003 [-0.026, +0.020] |
+| A2/A5 | all | later apply | 184 | 1.081 [0.982, 1.190] | 0.109 | 51.51 | 47.66 | +3.85 | -0.022 [-0.074, +0.029] |
+| A2/A5 | all | set N | 473 | 1.008 [0.974, 1.043] | 0.659 | 124.54 | 123.60 | +0.94 | -0.006 |
+| A4/A1 | 1-2 | sets R+N | 677 | 0.928 [0.888, 0.969] | 0.001 | 212.50 | 229.10 | -16.60 | +0.010 [-0.005, +0.024] |
+| A4/A1 | 1-2 | teach | 129 | 0.924 [0.865, 0.988] | 0.022 | 71.64 | 77.49 | -5.85 | +0.013 [-0.023, +0.049] |
+| A4/A1 | 1-2 | first apply | 101 | 0.773 [0.566, 1.056] | 0.077 | 26.06 | 33.70 | -7.64 | +0.057 [-0.006, +0.119] |
+| A4/A1 | 1-2 | later apply | 123 | 0.928 [0.806, 1.068] | 0.281 | 31.41 | 33.86 | -2.44 | +0.040 [+0.007, +0.074] |
+| A4/A1 | 1-2 | set N | 324 | 0.992 [0.959, 1.026] | 0.648 | 83.40 | 84.05 | -0.66 | 0.000 |
+| A0/A1 | 1-2 | sets R+N | 674 | 1.156 [1.093, 1.223] | <0.001 | 264.28 | 228.55 | +35.74 | -0.024 [-0.045, -0.004] |
+| A0/A1 | 1-2 | teach | 129 | 0.970 [0.900, 1.046] | 0.410 | 75.19 | 77.49 | -2.30 | +0.016 [-0.032, +0.064] |
+| A0/A1 | 1-2 | first apply | 101 | 1.364 [1.066, 1.746] | 0.017 | 45.97 | 33.70 | +12.27 | -0.235 [-0.346, -0.124] |
+| A0/A1 | 1-2 | later apply | 123 | 1.821 [1.574, 2.107] | <0.001 | 61.65 | 33.86 | +27.79 | -0.167 [-0.278, -0.056] |
+| A0/A1 | 1-2 | set N | 321 | 0.976 [0.938, 1.016] | 0.228 | 81.48 | 83.50 | -2.02 | +0.003 |
+| A2/A1 | 1-2 | sets R+N | 676 | 1.003 [0.957, 1.050] | 0.905 | 229.55 | 228.91 | +0.65 | +0.010 [-0.003, +0.022] |
+| A2/A1 | 1-2 | teach | 129 | 1.031 [0.964, 1.102] | 0.356 | 79.89 | 77.49 | +2.41 | +0.029 [0.000, +0.057] |
+| A2/A1 | 1-2 | first apply | 101 | 0.835 [0.661, 1.055] | 0.123 | 28.14 | 33.70 | -5.56 | +0.039 [-0.005, +0.082] |
+| A2/A1 | 1-2 | later apply | 123 | 1.068 [0.955, 1.195] | 0.236 | 36.17 | 33.86 | +2.32 | 0.000 [-0.047, +0.047] |
+| A2/A1 | 1-2 | set N | 323 | 1.018 [0.985, 1.052] | 0.293 | 85.35 | 83.87 | +1.48 | +0.006 |
+| A5/A1 | 1-2 | sets R+N | 675 | 0.960 [0.920, 1.002] | 0.061 | 219.65 | 228.74 | -9.09 | +0.010 [-0.002, +0.022] |
+| A5/A1 | 1-2 | teach | 129 | 0.975 [0.922, 1.031] | 0.342 | 75.55 | 77.49 | -1.94 | -0.009 [-0.044, +0.027] |
+| A5/A1 | 1-2 | first apply | 101 | 0.837 [0.678, 1.033] | 0.094 | 28.21 | 33.70 | -5.48 | +0.048 [-0.020, +0.115] |
+| A5/A1 | 1-2 | later apply | 123 | 0.963 [0.862, 1.077] | 0.498 | 32.62 | 33.86 | -1.24 | +0.033 [-0.038, +0.103] |
+| A5/A1 | 1-2 | set N | 322 | 0.995 [0.963, 1.028] | 0.757 | 83.27 | 83.70 | -0.43 | +0.006 |
+
+The set N resolve intervals are left out of this table; `--json` prints them.
+
+## Limits
+
+- **Exploratory.** 35 cells with p not adjusted. At p below 0.05, about 2 of 35 cells pass by chance alone.
+- **One model.** Every arm ran on `claude-opus-5-5` (`pins-r3c.json`). This read says nothing about a cheaper model.
+- **A4 is two changes at once.** A4 is A0 plus the taught rule, so its auto memory is off (base prereg line 82). Its
+  saving mixes a delivered lesson with no built-in memory overhead. A0/A1 teach, 0.970 [0.900, 1.046], shows no
+  change, so this read cannot split the two.
+- **Two-seed pairs.** A0 and A4 have seeds 1 and 2 only, and their cells are the thinnest (101 to 129 units on set
+  R kinds).
+- **Positions differ a little across pairs.** Each pair is matched, but different pairs sit on nearly the same
+  positions, not identical ones (677 units for A4/A1, 676 for A2/A1 on seeds 1 and 2).
+- **List prices.** Costs use the Opus 5.5 list prices in the round 3 prices file, not a bill.
+- **One build.** A2 and A5 ran hippo at `04835462b` (`pins-r3c.json`, `hippoCommit`), an unmerged round 3 build
+  with LLM extraction off. Released hippo can capture differently.
+
+## What this means for round 4
+
+These are hypotheses for round 4 to test, not results of this read.
+
+- **What A2 adds over A5 is the first cost to explain.** It is 3.9%, and teach tasks carry 60% of those dollars
+  ($7.42 of $12.41). The source can be the captured lessons, the imported notes or what the agent does with either.
+  Round 4 must find which one before it changes capture.
+- **Delivery can be worth more.** A4 shows about 7% on Opus, but A4 mixes its rule with no auto memory. An arm
+  with the rule and auto memory on can split the two. The size of hippo's injected block looks small next to that, on two point estimates. The hook
+  diet replay put its longest exclude list at about 1.5% of an A2 session's cost
+  (`2026-11-09-z0-round3-hook-diet-replay.md` line 12). Removing all of hippo's injected text moved round 2's
+  Amendment 9 pooled ratio from 1.00 to about 0.985 (`2026-11-02-z0-round3-prereg.md` line 12).
+- **A cheaper model needs its own control.** A cheaper model costs less per token on its own, so a test of hippo on
+  Sonnet against built-in memory on Opus must also run Sonnet with built-in memory alone. A0/A1 shows that missing
+  memory costs most on the apply tasks. A weaker model can repeat a mistake more often, so a delivered lesson can
+  have more to save there.

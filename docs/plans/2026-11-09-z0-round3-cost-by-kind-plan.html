@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Z0 Round 3 Cost Split</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+<header>
+  <h1>Round 3 Cost by Task Kind in Z0</h1>
+  <doc-changes new="6" changed="0"></doc-changes>
+  <doc-note tone="info"><strong>Analyzer</strong> the frozen round 3 analyzer is commit 04835462b on origin/z0/r3-cleanclaude. It is not on master.</doc-note>
+  <details class="thread"><summary>Why · 1 request</summary>
+    <doc-quote via="prompt" from="the user">remember our goals, we need to prove hippo help with token cost and efficiency</doc-quote>
+  </details>
+</header>
+<main>
+<doc-plan>
+
+  <doc-claim>
+    <p>A maintainer can rerun the round 3 cost split with one command.</p>
+    <doc-mock frame="terminal" title="z0-cost-by-kind" w="600"><template><span class="dim">></span> node scripts/token-eval/z0-cost-by-kind.mjs --analyzer C:/wt/r3c
+<b>analyzer</b> 04835462b clean  10 sources match unblind.json  node v24.13.0
+<b>inputs</b> 35 runs, 35 plans, prices, grading, drop list: all match
+<b>self-check</b> H3 1.0057 [0.9639, 1.0493] and maintainer-only H3 0.9945: exact
+<b>exploratory</b> 35 cells (7 pairs by 5 kinds), p not adjusted
+pair            kind         units  ratio  low    high   p      $t      $c      $diff  resolve
+A2/A5           sets R+N     994    1.039  1.008  1.070  0.013  n       n       +12.41 n
+A2/A5           teach        n      n      n      n      n      n       n       +7.42  n
+A4/A1 s1-2      sets R+N     677    0.928  0.888  0.969  0.001  n       n       n      n
+A2/A1 s1-2      sets R+N     676    1.003  0.957  1.050  n      n       n       n      n
+<span class="dim">n = filled by the run; shown values come from the scratch read and the critic probe</span></template></doc-mock>
+    <doc-claim>
+      <p>The script runs the frozen analyzer from a checkout of 04835462b.</p>
+      <doc-calls title="one read" caption="Only the analyzer calls compute; the script adds the filters, the pairs and the dollar sums.">
+<script type="text/plain">
++ **runCli**(argv)                                    @ scripts/token-eval/z0-cost-by-kind.mjs:1
++   **parseArgs**(argv)                               @ scripts/token-eval/z0-cost-by-kind.mjs:1 -- flags in claim 1.2
++   **checkSources**(analyzer, hashes)                @ scripts/token-eval/z0-cost-by-kind.mjs:1 -- sha256 of 10 files
++   **inputArgs**(hashes, files)                      @ scripts/token-eval/z0-cost-by-kind.mjs:1 -- 73 inputs, each sha256
++   loadInputs(args, cwd)                             -- frozen r3c scripts/token-eval/z0-analyze.mjs:101
++   filterRecords(records, planCells, opts)           -- frozen r3c scripts/token-eval/z0-filters.mjs:82
++   **selfCheck**(api, f, prices, report)             @ scripts/token-eval/z0-cost-by-kind.mjs:1 -- H3 and maintainer-only H3
++   **costByKind**(api, f, prices)                    @ scripts/token-eval/z0-cost-by-kind.mjs:1 -- 35 cells
++     taskUnits(scored, armT, armC, prices, keep)     -- frozen r3c scripts/token-eval/z0-hypotheses.mjs:112
++     harmT(units, {})                                -- frozen r3c scripts/token-eval/z0-hypotheses.mjs:148, cost ratio and resolve difference
+</script>
+      </doc-calls>
+      <doc-ask id="analyzer">
+        <p>Where does the script get the frozen analyzer?</p>
+        <label><input type="radio" name="analyzer" value="path" checked> From a checkout given by --analyzer <small>no copy; hashes prove the files</small></label>
+        <label><input type="radio" name="analyzer" value="vendor"> Copy the 6 frozen files into the repo <small>second analyzer on master; claim 1.3 goes</small></label>
+      </doc-ask>
+    </doc-claim>
+    <doc-claim>
+      <p>Every input has a flag, and the defaults need no edit.</p>
+      <doc-code title="flags · sketch" lang="text">
+<script type="text/plain">
+--analyzer DIR   required; root of a built checkout of 04835462b; path.resolve once
+--report FILE    default C:/z0-runs/scored/r3-final/unblind.json (hashes, H3, maintainer-only H3)
+--grading FILE   default docs/evals/z0-r3/grading.json under the script's repo (sha256 91db0471)
+--drop-list FILE default docs/evals/z0-r3/drop-list.json under the script's repo (sha256 e65c99d7)
+--json           one JSON report on stdout
+-h, --help       usage
+The report's own grading and drop-list paths point at a deleted worktree, so the script never reads them.
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The script stops when a file differs from the hash round 3 recorded.</p>
+      <doc-code title="error text · sketch" lang="text">
+<script type="text/plain">
+z0-cost-by-kind: dist/eval/eval-stats.js under --analyzer C:/wt/r3c has sha256 1f2e...,
+  unblind.json recorded a5b06d32...; check out 04835462b there, then run npm ci and npm run build
+z0-cost-by-kind: --grading C:/x/grading.json has sha256 77aa..., unblind.json recorded 91db0471...;
+  pass the grading file round 3 read (docs/evals/z0-r3/grading.json)
+</script>
+      </doc-code>
+    </doc-claim>
+    <doc-claim>
+      <p>The four kinds split sets R and N with no overlap and no gap.</p>
+      <doc-code title="kind filters · sketch" lang="js">
+<script type="text/plain">
+// taskUnits' keep reads only the hippo-arm task, so the script asserts both sides agree on set, kind and applyIndex.
+export const KINDS = {
+  teach: (r) => r.set === 'R' && r.kind === 'teach',
+  'first apply': (r) => r.set === 'R' && r.kind === 'apply' && r.applyIndex === 1,
+  'later apply': (r) => r.set === 'R' && r.kind === 'apply' && r.applyIndex > 1,
+  'set N': (r) => r.set === 'N',
+};
+// For each pair, the units of the four kinds must sum to the units of sets R+N, or the read stops.
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The read stops unless it gives round 3's H3 and H4 lines exactly.</p>
+    <doc-code title="self-check · sketch" lang="js">
+<script type="text/plain">
+const FIELDS = ['estimate', 'low', 'high', 'se', 'df', 'p'];
+const checks = [
+  ['H3', inSets('R', 'N'), report.hypotheses.H3],
+  ['maintainer-only H3', (r) => inSets('R', 'N')(r) && maintainer(r), report.reported.maintainerOnly.H3],
+];
+// H4 also pins the harmT path: costRatio and resolveDiff on A2/A1 set N against report.hypotheses.H4.
+// On a miss, print got and want per field and process.version, so a float drift under another Node reads apart from a data drift.
+</script>
+    </doc-code>
+    <doc-ask id="match">
+      <p>How close must the self-check match be?</p>
+      <label><input type="radio" name="match" value="exact" checked> Exact, every field <small>same code and inputs give the same doubles</small></label>
+      <label><input type="radio" name="match" value="tol"> Within 1e-12 <small>survives a different float path; hides a real drift less well</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Each cell compares matched pairs and shows dollars and solved tasks.</p>
+    <doc-code title="pairs and row · sketch" lang="js">
+<script type="text/plain">
+// A0 and A4 are two-seed arms (z0-records.mjs:9); pairTasks keeps seeds 1-2 for them (z0-filters.mjs:118),
+// so A2 and A5 also get cells on seeds 1-2 only, through a keep that adds r.seed <= 2.
+export const PAIRS = [
+  ['A2', 'A1', 'all'], ['A5', 'A1', 'all'], ['A2', 'A5', 'all'],
+  ['A4', 'A1', 's1-2'], ['A0', 'A1', 's1-2'], ['A2', 'A1', 's1-2'], ['A5', 'A1', 's1-2'],
+];
+// Row: pair, seeds, kind, units, ratio fields from harmT(...).costRatio,
+// dollarsT = sum(u.t.cost), dollarsC = sum(u.c.cost), dollarsDiff, resolve = harmT(...).resolveDiff.
+// A cell with too few repositories gives NaN fields; it prints n/a and the read goes on.
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The results doc states only what a printed row shows.</p>
+    <doc-code title="docs/evals/2026-11-09-z0-round3-cost-by-kind.md · rules for the Answer" lang="markdown">
+<script type="text/plain">
+The orchestrator writes the Answer after the run, from its JSON output.
+Each number in the Answer cites its row: pair, seeds and kind.
+A ratio whose interval crosses 1 is "no change shown", never a drop or a rise.
+Attribution between A2 and A5 comes from the A2/A5 cells only.
+A dollar share comes from the dollar columns.
+"resolve" is the round 3 resolved flag: acceptance passed, every lesson check passed, no timeout.
+Cells of different pairs sit on nearly the same positions, not identical ones (677 against 676).
+A4 is the cost headroom of a lesson that reaches the model, on seeds 1-2 (prereg 192).
+A0/A1 shows that the cost read can see the value of memory.
+The doc labels the 35 cells exploratory, with p not adjusted.
+</script>
+    </doc-code>
+    <doc-ask id="interval">
+      <p>Which interval does the doc report?</p>
+      <label><input type="radio" name="interval" value="t" checked> The fixed-repository t interval only <small>the interval of H3's headline line</small></label>
+      <label><input type="radio" name="interval" value="both"> Also the bootstrap, 10,000 draws <small>slower; a second interval on each cell</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim aux="shared">
+    <p>Shared: the exports of the new script.</p>
+    <doc-code title="exports of z0-cost-by-kind.mjs · sketch" lang="ts">
+<script type="text/plain">
+export const KINDS: Record<string, (r: Z0Record) => boolean>;
+export const PAIRS: [arm: string, control: string, seeds: 'all' | 's1-2'][];
+export function sha256File(file: string): string;
+export function checkSources(analyzer: string, hashes: Hash[]): void;
+export function inputArgs(hashes: Hash[], files: { grading: string; dropList: string }): AnalyzerArgs;
+export function fieldsOff(got: Ratio, want: Ratio): string[];
+export function selfCheck(api: AnalyzerApi, f: Filtered, prices: Prices, report: Report): void;
+export function costByKind(api: AnalyzerApi, f: Filtered, prices: Prices): Row[];
+export function formatText(rep: Output): string;
+export function parseArgs(argv: string[]): Args;
+export function runCli(argv: string[]): Promise<{ code: number; stdout: string; stderr: string }>;
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim aux="scope">
+    <p>Not changing: hippo src, the analyzer on master, the round 3 results, or any paid run.</p>
+    <ul>
+      <li>A unit test pins the kind filters, the pairs, the hash check, fieldsOff and the n/a print. A process test drives the CLI with --report over a stub analyzer and a stub report.</li>
+      <li>The round 4 prereg is the next episode. It also takes the cheaper-model test the user asked about.</li>
+      <li>A changelog fragment names the new script.</li>
+    </ul>
+  </doc-claim>
+
+</doc-plan>
+</main>
+</body></html>
