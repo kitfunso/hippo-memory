@@ -133,7 +133,7 @@ async function recordDecision(
   try {
     return await objectCreate(ctx, 'decision', write, shellFolder());
   } catch (e) {
-    // The save is whole or nothing, so the user needs to know a retry cannot duplicate.
+    // True only while the save is whole or nothing: a throw after its commit would break this claim.
     if (supersedes) printError(NOT_RECORDED);
     throw e;
   }

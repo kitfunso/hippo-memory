@@ -126,13 +126,14 @@ describe('HTTP /v1/decisions (decision first-class object)', () => {
       } finally {
         closeHippoDb(db);
       }
+      const auditBefore = count('audit_log');
       const res = await supersede(first.id, 'use sqlite');
       expect(res.status).toBe(500);
       const listed = await jsonAs<{ decisions: Decision[] }>(
         await fetch(`${handle.url}/v1/decisions`, { headers: authHeaders(apiKey) }),
       );
       expect(listed.decisions).toEqual([first]);
-      expect([count('decisions'), count('memories')]).toEqual([1, 1]);
+      expect([count('decisions'), count('memories'), count('audit_log')]).toEqual([1, 1, auditBefore]);
       expect(memory(first.memoryId)).toMatchObject({ confidence: 'verified' });
     },
   );
