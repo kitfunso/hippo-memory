@@ -62,6 +62,11 @@ jobs:
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/checks/check-manifest-versions.mjs
       - run: node scripts/checks/check-graph-writes.mjs
+      # The publish gate refuses a tagged commit with an unfolded fragment, and a PR's merge ref can hold one its fold never saw.
+      - name: A version bump folds every changelog fragment
+        run: |
+          parent="$(git show HEAD^1:package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')"
+          if [ "$parent" != "$(node -p "require('./package.json').version")" ]; then node scripts/changelog-fragments.mjs check; fi
       # Layer order and reach from layers.json and runtime cycles between src folders (dependency-cruiser). Size limits
       # and the name, env, exit and CLI boundary rules are oxlint rules, so the lint ratchet above holds them.
       - name: Import rules

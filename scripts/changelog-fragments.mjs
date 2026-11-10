@@ -19,12 +19,19 @@ const fragments = existsSync(DIR)
       .sort()
   : [];
 
+function hasSection(changelog, version) {
+  return new RegExp(`^## ${version.replace(/\./g, '\\.')}(?![\\w.-])`, 'm').test(changelog);
+}
+
 function check() {
   if (fragments.length > 0) {
-    fail(
-      `changelog.d/ still holds ${fragments.length} unfolded fragment(s): ${fragments.join(', ')}.\n` +
-        'Fix: run `node scripts/changelog-fragments.mjs fold` after the version bump and commit the result.',
-    );
+    const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+    // fold refuses a version that has a section, so a fragment merged in after the fold is moved by hand.
+    const fix = hasSection(readFileSync('CHANGELOG.md', 'utf8'), version)
+      ? `Fix: CHANGELOG.md already has a ## ${version} section, so these came in after the fold. ` +
+        'Move their entries under its ### headings, delete the files and commit.'
+      : 'Fix: run `node scripts/changelog-fragments.mjs fold` after the version bump and commit the result.';
+    fail(`changelog.d/ still holds ${fragments.length} unfolded fragment(s): ${fragments.join(', ')}.\n${fix}`);
   }
   console.log('changelog.d/ holds no unfolded fragments. OK.');
 }
@@ -51,7 +58,7 @@ function fold(date) {
   if (fragments.length === 0) fail('fold: changelog.d/ holds no fragments.');
   const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
   const changelog = readFileSync('CHANGELOG.md', 'utf8');
-  if (new RegExp(`^## ${version.replace(/\./g, '\\.')}(?![\\w.-])`, 'm').test(changelog)) {
+  if (hasSection(changelog, version)) {
     fail(`fold: CHANGELOG.md already has a ## ${version} section.`);
   }
   const sections = readSections();
