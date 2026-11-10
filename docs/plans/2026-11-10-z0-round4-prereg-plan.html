@@ -262,7 +262,7 @@ After a stop, the next step is a new-family round with the author step and scree
 <script type="text/plain">
 @@ -21,2 +21,3 @@
 -// The keys armEnv sets itself: a --pass-env copy would silently override the arm (and a second PATH key on Windows).
-+// The keys the runner sets (armEnv, or the task env for VIRTUAL_ENV and PIP_CONSTRAINT): a --pass-env copy would silently override them.
++// The keys the runner sets (armEnv, or the task env for VIRTUAL_ENV and PIP_CONSTRAINT): a --pass-env copy would silently override them (and a second PATH key on Windows).
 -const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
 +const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH',
 +  'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE', 'VIRTUAL_ENV', 'PIP_CONSTRAINT'];
@@ -535,7 +535,7 @@ Arm environment  A smoke session in each arm records envKeys inside the allowlis
 Venv             A unit test stubs the spawn: every spawn of one task (setup, session, resume, checks, tests)
                  gets one VIRTUAL_ENV, unique to the task, and PIP_CONSTRAINT. Two tasks of one Python run: a package from uv pip install in the first imports there
                  and is gone in the second. A non-Python run has no VIRTUAL_ENV or PIP_CONSTRAINT.
-                 Regrades of one q255 set R and one set N cell from a run the check makes pass and give
+                 Regrades of one q255 set R and one set N cell from a stubbed run the check makes pass and give
                  the run's checker verdicts and acceptance. A setup retry and a reset start from an empty venv.
                  q255-a1's bare poetry install passes in a new task venv, with the pinned poetry Scripts on PATH;
                  q255-f1-teach's boot install, in the task env the runner builds, leaves poetry 2.5.1.
@@ -545,7 +545,7 @@ Freeze           One tag on z0/r4, z0-r4-freeze-1 (z0-r4-freeze-2 only under the
                  97ba0e9b.... The pins file names each arm's model, the effort, the Claude Code version,
                  the poetry version, the tasks files with their checker trees (one manifest hash), the PIP_CONSTRAINT file
                  and the launcher hashes. Before the launch and each regrade, the pins check makes the manifest
-                 and hashes the PIP_CONSTRAINT file and the launchers again.
+                 and hashes the PIP_CONSTRAINT file and the launchers again. It reads the pinned poetry's version.
 Pilot            claim 5.2.     Batch 1: claim 2.2.     Scored run: G1 to G5 pass; hook voids under 5%.
 </script>
       </doc-code>
