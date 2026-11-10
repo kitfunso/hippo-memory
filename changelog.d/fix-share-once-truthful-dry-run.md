@@ -1,0 +1,4 @@
+### Fixed
+
+- **`hippo sleep --dry-run` no longer counts a merge the real sleep refuses.** When you had rejected the merged text of a cluster, the preview said it would merge the cluster and the real sleep skipped it. The preview now reads rejected values as the real sleep does, shows the same skipped-merge warning, and names the rows whose rejected text the real sleep would retire. It still writes no refusal row. A store with no rejected value prints the same preview as before.
+- **`hippo share <id>` no longer writes a second global copy of text the global store already holds.** The command (and the MCP share tool) now prints `Already shared: the global store holds this text as [<id>].` and exits 0, as `hippo share --auto` already skipped such rows. `--force` still only skips the transfer-score check. The check counts your tenant's global rows, so another tenant's identical text is not a copy for you.
