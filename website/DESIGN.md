@@ -83,7 +83,9 @@ active nav item, the wordmark links home, visible focus (accent-light outline), 
 prefers-reduced-motion handling, 44px touch targets. `scroll-padding-top` on
 html keeps focus and anchor targets clear of the sticky header (WCAG 2.4.11), so
 sections carry no `scroll-mt`. A scroll container that overflows and holds no
-link joins the tab order (Base.astro), so a keyboard can scroll it.
+link joins the tab order (Base.astro), so a keyboard can scroll it. Print and
+"Save as PDF" use dark ink on white with no nav chips, copy buttons or background
+canvas (the `@media print` block in global.css).
 
 ## Comparison surfaces
 
