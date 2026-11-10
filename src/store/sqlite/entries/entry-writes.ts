@@ -7,7 +7,6 @@ import {
   type DatabaseSyncLike,
   type DbGrant,
   withWriteScope,
-  isSqliteBusy,
 } from '../../../db/index.js';
 import { rethrowIfStoreBlocked } from '../../../base/util/store-blocked.js';
 import {
@@ -43,7 +42,7 @@ import { bindHandleClock } from '../runtime/handle-clock.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../../../base/ports/store/agent-import.js';
 import type { StrengthenOptions } from '../../../base/ports/store/recall-writes.js';
-import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
+import { archiveRawMemory, markMirrorCleaned, type ArchiveOptions } from './raw-archive.js';
 import { assertWriteRight, readerReaches, targetReader } from '../../../base/scope/recall-scope.js';
 import { recordTraceOutcome } from '../recall/recall-trace.js';
 import type {
@@ -749,17 +748,5 @@ function cleanArchivedMirrors(db: DatabaseSyncLike, files: StoreFiles, id: strin
     );
     return;
   }
-  try {
-    cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-      files.clock().toISOString(),
-      id,
-    );
-  } catch (err) {
-    if (!isSqliteBusy(err)) throw err;
-    log.warnThenDebug(
-      'archive-mirror-stamp-busy',
-      `archived ${id}; the store was busy, so the mirror reaper will re-check it on the next open`,
-      errorFields(err),
-    );
-  }
+  markMirrorCleaned(db, id, files.clock().toISOString());
 }

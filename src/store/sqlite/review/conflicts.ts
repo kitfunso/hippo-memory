@@ -6,7 +6,7 @@ import {
   rejectionDigest,
   normalizeValueForRejection,
 } from '../../../base/records/rejection-digest.js';
-import { archiveRawMemory } from '../entries/raw-archive.js';
+import { archiveRawMemory, markMirrorCleaned } from '../entries/raw-archive.js';
 import {
   MEMORY_CONFLICT_COLUMNS,
   type MemoryConflictRow,
@@ -697,12 +697,7 @@ function purgeRemovedLoserMirrors(
     // which the cleanupArchivedMirrors reaper never scans.
     const purge = { id: removedId, isRaw, logPrefix: 'resolveConflict' };
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, purge);
-    if (mirrorOk && isRaw) {
-      cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-        handleStamp(db),
-        removedId,
-      );
-    }
+    if (mirrorOk && isRaw) markMirrorCleaned(db, removedId, handleStamp(db));
   }
 }
 
