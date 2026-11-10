@@ -11,6 +11,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { sleepResultLines } from '../../src/surface/cli/sleep-render.js';
 
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 const DROP_ENV = ['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TENANT', 'HIPPO_HOME'];
@@ -154,5 +155,22 @@ describe('cli sleep golden output', () => {
 
   it.each(CASES)('$name', async (c) => {
     expect(await run(c)).toMatchSnapshot();
+  });
+});
+
+describe('sleepResultLines for a refused sleep', () => {
+  it('prints the one already-running line and no results', () => {
+    const lines = sleepResultLines({
+      active: 0,
+      removed: 0,
+      mergedEpisodic: 0,
+      newSemantic: 0,
+      dryRun: false,
+      alreadyRunning: { since: '2026-11-10T09:30:00.000Z' },
+    });
+
+    expect(lines).toEqual([
+      'A sleep is already running on this store (since 2026-11-10T09:30:00.000Z), so this one skipped consolidation.',
+    ]);
   });
 });

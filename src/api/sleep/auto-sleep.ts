@@ -7,13 +7,23 @@ import { logPhaseFailures, type ConsolidationResult } from '../../domain/consoli
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { strengthOf, type Context, type ContextWith } from '../types.js';
 import { withDetached } from '../detached.js';
+import {
+  oneSleepPerStore,
+  refusedAutoSleep,
+  sleepWasRefused,
+  type AutoSleepRefused,
+} from './one-sleep.js';
 
 /**
  * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes
  * one that runs it off its event loop, in a child process; stdio passes one that runs it in its
  * own.
  */
-export type AutoSleepRunner = () => Promise<void>;
+export type AutoSleepRunner = () => Promise<void | AutoSleepRefused>;
+
+// Long enough that a host skips the minutes another process spends on its sleep, short enough that
+// the next due write after it ends is not left waiting.
+const REFUSED_BACKOFF_MS = 60_000;
 
 export interface AutoSleepDue {
   enabled: boolean;
@@ -45,7 +55,7 @@ export async function autoSleepAfterWrite(
   const host = ctx.callers?.autoSleep;
   const { tenantId, config } = ctx;
   if (host === undefined || !config.autoSleep.enabled || tenantId !== host.hostTenantId) return;
-  if (host.latch.held) return;
+  if (host.latch.held || ctx.infra.clock().getTime() < (host.latch.notBefore ?? 0)) return;
   // Held from the count on, so two writes landing together never both start a sleep.
   host.latch.held = true;
   let due = false;
@@ -64,6 +74,11 @@ export async function autoSleepAfterWrite(
   // it. A failure is logged here once, with the tenant.
   const sleep = host
     .run()
+    .then((outcome) => {
+      if (sleepWasRefused(outcome)) {
+        host.latch.notBefore = ctx.infra.clock().getTime() + REFUSED_BACKOFF_MS;
+      }
+    })
     .catch((err) => {
       log.error(
         `auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`,
@@ -83,15 +98,27 @@ export async function autoSleepConsolidate(
     ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance' | 'vectors'>,
     'store' | 'config' | 'tenantId' | 'infra'
   >,
-): Promise<ConsolidationResult> {
+): Promise<ConsolidationResult | AutoSleepRefused> {
   const { store, config, tenantId, infra } = ctx;
-  const result = await runConsolidation(store, {
-    config,
-    tenantId,
-    llm: infra.llm,
-    now: infra.clock(),
-    strength: strengthOf(ctx),
-  });
+  const result = await oneSleepPerStore(
+    store,
+    false,
+    () =>
+      runConsolidation(store, {
+        config,
+        tenantId,
+        llm: infra.llm,
+        now: infra.clock(),
+        strength: strengthOf(ctx),
+      }),
+    refusedAutoSleep,
+  );
+  if (sleepWasRefused(result)) {
+    log.info(
+      `auto-sleep: skipped, a sleep is already running (since ${result.alreadyRunning.since})`,
+    );
+    return result;
+  }
   logPhaseFailures(result);
   return result;
 }

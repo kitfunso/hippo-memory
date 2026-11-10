@@ -110,7 +110,18 @@ export interface Consolidation {
   /** Marks the tenant's pending graph work up to `maxId` processed; returns how many rows it
    * marked. */
   markGraphDrained(tenantId: string, maxId: number): Promise<number>;
+  /** Takes the right to run a sleep on this store; `held` says another sleep has it and since
+   * when. One holder at a time across processes, and a holder that dies frees it. Optional: a
+   * store without it runs its sleeps unguarded. */
+  claimSleep?(): Promise<SleepClaim>;
+  /** Gives back a claim this store took; a claim not taken, or already given back, is a no-op. */
+  releaseSleep?(): Promise<void>;
 }
+
+/** The answer to `claimSleep`: `since` is the ISO time the holder took it. */
+export type SleepClaim =
+  | { readonly kind: 'taken' }
+  | { readonly kind: 'held'; readonly since: string };
 
 /** What each Consolidation method does to the store; every adapter honours it. */
 export const CONSOLIDATION_EFFECTS = {
@@ -132,6 +143,8 @@ export const CONSOLIDATION_EFFECTS = {
   duplicateCandidates: 'read',
   dirtyGraphTenants: 'read',
   markGraphDrained: 'write',
+  claimSleep: 'write',
+  releaseSleep: 'write',
 } as const satisfies MethodEffects<Consolidation>;
 
 export interface SleepBegin {

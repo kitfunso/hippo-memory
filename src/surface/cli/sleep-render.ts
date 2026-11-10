@@ -5,12 +5,19 @@ import type * as api from '../../api/index.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
 import { plural } from '../../base/util/format.js';
 import { sleepEventLines } from '../render/sleep-events.js';
+import { sleepWasRefused } from '../../api/sleep/one-sleep.js';
 
 /**
  * The lines `hippo sleep` prints for an api.sleep result; pure, so the snapshot tests read them
  * without a console spy.
  */
 export function sleepResultLines(result: api.SleepResult): string[] {
+  if (sleepWasRefused(result)) {
+    return [
+      `A sleep is already running on this store (since ${result.alreadyRunning.since}), ` +
+        'so this one skipped consolidation.',
+    ];
+  }
   return [
     ...sleepCountLines(result),
     ...(result.dryRun ? ['\n(dry run  - nothing written)'] : []),

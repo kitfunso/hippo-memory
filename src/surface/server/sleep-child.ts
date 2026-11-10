@@ -4,6 +4,7 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { sleepWholeStore } from '../../api/sleep/sleep.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
+import { sleepWasRefused } from '../../api/sleep/one-sleep.js';
 import { rootInfra } from '../../infra/ports.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';
@@ -57,9 +58,9 @@ function sleepJob(
 }
 
 /** A sleep that changed the store saves its vector graph file, so a store whose server holds no
- * graph gets one. */
-async function saveGraphAfter(job: SleepMessage): Promise<void> {
-  if (job.kind !== 'sleep' || job.opts.dryRun) return;
+ * graph gets one; a refused sleep changed nothing. */
+async function saveGraphAfter(job: SleepMessage, result: JobResult): Promise<void> {
+  if (job.kind !== 'sleep' || job.opts.dryRun || sleepWasRefused(result)) return;
   const { maxVectors } = loadConfig(job.hippoRoot).vectorGraph;
   await saveVectorGraphFile(job.hippoRoot, { maxVectors, deadline: job.deadline - EXIT_MARGIN_MS });
 }
@@ -100,7 +101,7 @@ process.once('message', (message) => {
       const code = await sendReply(reply);
       // After the reply, so the sleep's caller never waits on the build; the server's queue waits
       // for the exit.
-      if (reply.ok) await saveGraphAfter(job);
+      if (reply.ok) await saveGraphAfter(job, reply.result);
       return code;
     })
     .catch((err) => {
