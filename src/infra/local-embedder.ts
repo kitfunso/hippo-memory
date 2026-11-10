@@ -76,6 +76,12 @@ const INSTALLED_TRANSFORMERS: LocalTransformers = {
   load: () => importTransformers<TransformersModule>(),
 };
 
+// Sharing the model-load backoff is deliberate: one window, one attempt.
+const INSTALL_RECHECK_MS = MODEL_LOAD_POLICY.backoffMs;
+
+/** A package that is missing is asked about again once `retryAt` (epoch ms) has passed. */
+type Availability = { readonly kind: 'yes' } | { readonly kind: 'no'; readonly retryAt: number };
+
 export interface LocalEmbedder {
   isAvailable(): boolean;
   /** Throws, with the reason, when the model's pipeline cannot load: a provider-level failure,
@@ -90,12 +96,20 @@ export interface LocalEmbedder {
 export function createLocalEmbedder(
   transformers: LocalTransformers = INSTALLED_TRANSFORMERS,
 ): LocalEmbedder {
-  let available: boolean | null = null;
+  let state: Availability = { kind: 'no', retryAt: 0 };
   const gates = new Map<string, FetchGate>();
   const pipelines = createModelLoads<EmbeddingPipeline>(MODEL_LOAD_POLICY, warnLoadFailure);
   const load = (model: string): Promise<EmbeddingPipeline> =>
     pipelines.load(model, () => createPipeline(transformers, model, gates));
-  const isAvailable = (): boolean => (available ??= transformers.installed());
+  const isAvailable = (): boolean => {
+    if (state.kind === 'yes') return true;
+    const now = Date.now();
+    if (now < state.retryAt) return false;
+    state = transformers.installed()
+      ? { kind: 'yes' }
+      : { kind: 'no', retryAt: now + INSTALL_RECHECK_MS };
+    return state.kind === 'yes';
+  };
   return {
     isAvailable,
     requirePipeline: (model, signal) =>

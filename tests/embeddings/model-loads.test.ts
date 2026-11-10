@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { createModelLoads, MODEL_LOAD_POLICY } from '../../src/infra/transformers.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
+import { createLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { embedQueryBy } from '../../src/domain/search/vector.js';
 import { loadConfig } from '../../src/host/config-file.js';
 
@@ -171,5 +172,69 @@ describe('the local embedding model under a recall deadline', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/^\[hippo\] warn: .*getaddrinfo ENOTFOUND huggingface\.co.*errorClass=TypeError/);
     expect(pipeline).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('local embedder availability', () => {
+  /** An embedder over a stand-in package whose installed answer the test flips by hand. */
+  function embedderOver(initiallyInstalled: boolean) {
+    const state = { installed: initiallyInstalled };
+    const installed = vi.fn(() => state.installed);
+    const pipeline = async () => async (): Promise<{ data: number[] }> => ({ data: [1, 0] });
+    const load = vi.fn(async () => ({ name: 'stand-in', mod: { pipeline } }));
+    return { state, installed, load, embedder: createLocalEmbedder({ installed, load }) };
+  }
+  const later = (ms: number): void => {
+    vi.setSystemTime(Date.now() + ms);
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+
+  it('turns available once the package is installed and one window has passed, with no restart', async () => {
+    const { state, embedder } = embedderOver(false);
+    expect(embedder.isAvailable()).toBe(false);
+
+    state.installed = true;
+    later(MODEL_LOAD_POLICY.backoffMs);
+
+    expect(embedder.isAvailable()).toBe(true);
+    expect(await embedder.embed('x', MODEL)).toEqual([1, 0]);
+  });
+
+  it('does not ask again inside the window, and asks once the window ends', async () => {
+    const { installed, load, embedder } = embedderOver(false);
+    expect(embedder.isAvailable()).toBe(false);
+
+    later(MODEL_LOAD_POLICY.backoffMs - 1);
+    for (let i = 0; i < 3; i++) {
+      expect(embedder.isAvailable()).toBe(false);
+      expect(await embedder.embed('x', MODEL)).toEqual([]);
+    }
+    expect(installed).toHaveBeenCalledTimes(1);
+    expect(load).not.toHaveBeenCalled();
+
+    later(1);
+    embedder.isAvailable();
+    expect(installed).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a true answer for the life of the embedder', () => {
+    const { state, installed, embedder } = embedderOver(true);
+    expect(embedder.isAvailable()).toBe(true);
+
+    state.installed = false;
+    later(10 * MODEL_LOAD_POLICY.backoffMs);
+
+    expect(embedder.isAvailable()).toBe(true);
+    expect(installed).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers [] without loading a model while the package is missing', async () => {
+    const { load, embedder } = embedderOver(false);
+    expect(embedder.isAvailable()).toBe(false);
+    expect(await embedder.embed('x', MODEL)).toEqual([]);
+    expect(load).not.toHaveBeenCalled();
   });
 });

@@ -19,9 +19,12 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import childProcess, { ChildProcess } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { rmSync } from 'node:fs';
-import { remember } from '../../src/api/index.js';
+import { adminActor, remember, type Context } from '../../src/api/index.js';
 import type { ServerHandle } from '../../src/server.js';
+import { createSleepQueue } from '../../src/surface/server/sleep-offload.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -295,4 +298,116 @@ describe('POST /v1/sleep', () => {
       expect((await postSleep()).status).toBe(200);
     },
   );
+});
+
+describe("the sleep child's end", () => {
+  const deadlineText = 'sleep did not finish within 1000 ms and was stopped; the next sleep carries on from there';
+  const result = { dryRun: false };
+  // SAFETY: the sleep queue reads only tenantId and actor from the context.
+  const ctx = { tenantId: 'default', actor: adminActor('test') } as Context;
+
+  // The queue spawns its child one microtask after sleep(), so the first await lets the fake be listened to.
+  async function startSleep() {
+    const child = Object.assign(new ChildProcess(), { send: vi.fn(), kill: vi.fn() });
+    vi.spyOn(childProcess, 'spawn').mockReturnValue(child);
+    syncBuiltinESMExports();
+    vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', '1000');
+    vi.useFakeTimers();
+    const queue = createSleepQueue('no-root', true);
+    const answer = queue.sleep(ctx, {});
+    await Promise.resolve();
+    expect(child.send).toHaveBeenCalledTimes(1);
+    return { child, queue, answer };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    syncBuiltinESMExports();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it('fails with the failure reply it was sent, stack included, when the child then closes', async () => {
+    const { child, answer } = await startSleep();
+    child.emit('message', {
+      ok: false,
+      busy: false,
+      message: 'disk is full',
+      stack: 'Error: disk is full\n    at child',
+    });
+    child.emit('close', 1, null);
+    await expect(answer).rejects.toMatchObject({ message: 'disk is full', stack: 'Error: disk is full\n    at child' });
+  });
+
+  it('fails with the not-a-sleep-result text when the child sent something else and then closes', async () => {
+    const { child, answer } = await startSleep();
+    child.emit('message', { hello: 'world' });
+    child.emit('close', 0, null);
+    await expect(answer).rejects.toMatchObject({
+      message: 'sleep process sent a reply that is not a sleep result (code 0, signal null)',
+    });
+  });
+
+  it('fails with the ended-without-an-answer text when the child closes without a message', async () => {
+    const { child, answer } = await startSleep();
+    child.emit('close', 1, null);
+    await expect(answer).rejects.toMatchObject({
+      message: 'sleep process ended without an answer (code 1, signal null)',
+    });
+  });
+
+  it('answers 504 when the deadline passes after a failure reply, the deadline first', async () => {
+    const { child, answer } = await startSleep();
+    child.emit('message', { ok: false, busy: false, message: 'disk is full' });
+    vi.advanceTimersByTime(1000);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    child.emit('close', null, 'SIGKILL');
+    await expect(answer).rejects.toMatchObject({ status: 504, message: deadlineText });
+  });
+
+  it('answers 504 when the deadline passes after a malformed message, the deadline first', async () => {
+    const { child, answer } = await startSleep();
+    child.emit('message', { hello: 'world' });
+    vi.advanceTimersByTime(1000);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    child.emit('close', null, 'SIGKILL');
+    await expect(answer).rejects.toMatchObject({ status: 504, message: deadlineText });
+  });
+
+  it('keeps an ok reply when the deadline passes after it, still stops the child, and settles', async () => {
+    const { child, queue, answer } = await startSleep();
+    child.emit('message', { ok: true, result });
+    vi.advanceTimersByTime(1000);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    child.emit('close', null, 'SIGKILL');
+    await expect(answer).resolves.toEqual(result);
+    await expect(queue.settled()).resolves.toBeUndefined();
+  });
+
+  it('keeps an ok reply that arrives after the deadline killed the child', async () => {
+    const { child, answer } = await startSleep();
+    vi.advanceTimersByTime(1000);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    child.emit('message', { ok: true, result });
+    child.emit('close', null, 'SIGKILL');
+    await expect(answer).resolves.toEqual(result);
+  });
+
+  it('answers 504 when a failure reply arrives after the deadline killed the child, the deadline first', async () => {
+    const { child, answer } = await startSleep();
+    vi.advanceTimersByTime(1000);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    child.emit('message', { ok: false, busy: false, message: 'disk is full' });
+    child.emit('close', null, 'SIGKILL');
+    await expect(answer).rejects.toMatchObject({ status: 504, message: deadlineText });
+  });
+
+  it('answers 504 when a malformed message arrives after the deadline killed the child, the deadline first', async () => {
+    const { child, answer } = await startSleep();
+    vi.advanceTimersByTime(1000);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    child.emit('message', { hello: 'world' });
+    child.emit('close', null, 'SIGKILL');
+    await expect(answer).rejects.toMatchObject({ status: 504, message: deadlineText });
+  });
 });

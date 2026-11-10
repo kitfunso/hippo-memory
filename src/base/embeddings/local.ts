@@ -47,11 +47,9 @@ function entryUrl(name: string): string | null {
   return viaRequire === undefined ? null : pathToFileURL(viaRequire).href;
 }
 
-let installed: boolean | undefined;
-
-/** Check (synchronously) if @xenova/transformers or @huggingface/transformers is installed. */
+/** Whether @xenova/transformers or @huggingface/transformers is installed, resolved afresh on every call. */
 export function isEmbeddingAvailable(): boolean {
-  return (installed ??= resolveTransformersPackage() !== null);
+  return resolveTransformersPackage() !== null;
 }
 
 export function resolveEmbeddingModel(
