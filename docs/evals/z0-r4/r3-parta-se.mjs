@@ -8,6 +8,8 @@ const { pooledComponents } = await load('dist/eval/repository-t.js');
 const s = scoredNoDrop().filter((r) => r.seed <= 3);
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const CAP = 9;
+// Item 10's fixed m for part (a).
+const M_A = Math.log(1 / 0.9);
 for (const [t, c] of [['A2', 'A1'], ['A0', 'A1'], ['A4', 'A1']]) {
   const u = api.taskUnits(s, t, c, prices, api.inSets('R', 'N'));
   const g = new Map();
@@ -20,7 +22,7 @@ for (const [t, c] of [['A2', 'A1'], ['A0', 'A1'], ['A4', 'A1']]) {
   const b = cells.map((x) => ({ repo: x.repo, family: x.family, seed: x.seed, value: (x.St - x.Sc) / x.n }));
   const R = (sum(cells.map((x) => x.Ct)) * sum(cells.map((x) => x.Sc))) / (sum(cells.map((x) => x.Cc)) * sum(cells.map((x) => x.St)));
   const out = { pair: `${t}/${c}`, cells: cells.length, R: +R.toFixed(4) };
-  for (const [name, units, ms] of [['a', v, [0.105, Math.log(2), Math.log(2 / 1.5), Math.log(2 / 1.8)]], ['b', b, [0.03]]]) {
+  for (const [name, units, ms] of [['a', v, [M_A, Math.log(2), Math.log(2 / 1.5), Math.log(2 / 1.8)]], ['b', b, [0.03]]]) {
     const sc = spreadComponents(units, 0.2);
     out[name] = { fam: +sc.family.toFixed(5), seq: +sc.sequence.toFixed(5), noise: +sc.noise.toFixed(5),
       seeds: ms.map((mm) => [+mm.toFixed(3), seedsNeeded(units, mm, { cap: CAP, targetZ: 3.08 })]),
@@ -28,12 +30,12 @@ for (const [t, c] of [['A2', 'A1'], ['A0', 'A1'], ['A4', 'A1']]) {
   }
   const p = pooledComponents(v); const fam = Math.max(0, (p.F - p.E) / p.sBar), seq = Math.max(0, (p.Q - p.E) / p.kBar), noi = p.E;
   const se = (n) => Math.sqrt(p.repos.reduce((a, r) => a + fam / r.k + seq / n + noi / (r.k * n), 0) / p.repos.length ** 2);
-  out.aSE = [3, 4, 9, 50].map((n) => [n, +se(n).toFixed(4)]); out.bar = +(0.105 / 3.08).toFixed(4); out.G = p.repos.length; out.meanK = +(p.repos.reduce((a, r) => a + r.k, 0) / p.repos.length).toFixed(2);
+  out.aSE = [3, 4, 9, 50].map((n) => [n, +se(n).toFixed(4)]); out.bar = +(M_A / 3.08).toFixed(4); out.G = p.repos.length; out.meanK = +(p.repos.reduce((a, r) => a + r.k, 0) / p.repos.length).toFixed(2);
   console.log(JSON.stringify(out));
   // Part (a)'s miss branch (prereg item 10): the fewest seeds from 3 to the cap whose predicted SE is within 1.1 times the cap's.
   const [limit, hit] = [1.1 * se(CAP), out.a.seeds[0][1]];
   const pick = Array.from({ length: CAP - 2 }, (_, i) => i + 3).find((n) => se(n) <= limit);
   console.log(hit === null
     ? `${t}/${c} miss branch: ${pick} seeds (${se(pick).toFixed(4)} <= 1.1 x ${se(CAP).toFixed(4)} = ${limit.toFixed(4)}); the cap gives ${CAP}`
-    : `${t}/${c} no miss at m 0.105: the rule gives ${hit} seeds`);
+    : `${t}/${c} no miss at m ${M_A.toFixed(5)}: the rule gives ${hit} seeds`);
 }
