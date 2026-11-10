@@ -25,7 +25,8 @@ exact in every compared field before it prints anything new.
 ## Alternatives considered
 - Copy the frozen analyzer files onto master: a second analyzer on master that drifts from the live one.
 - Merge round 3's analyzer branch (135 commits not on master, `git rev-list --count origin/master..04835462b`) to master: a large merge to support one read.
-- Rebuild the read on master's analyzer: master differs in 9 of 10 sources, so H3 would not reproduce.
+- Rebuild the read on master's analyzer: master differs in 9 of 10 sources, so it is not the code
+  that produced round 3, and no one has checked that it gives the same H3.
 
 ## Consequences
 - The real read needs a local checkout of `04835462b` and `C:/z0-runs`. CI runs only the stub-analyzer tests.
