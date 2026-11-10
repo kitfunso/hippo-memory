@@ -1,7 +1,7 @@
 /** Z0 analyzer, part 4 of 6: validity gates G1-G5 (prereg 154-166). Each returns `pass` plus the numbers it read.
  * A failed gate makes the run invalid; a half or gate whose arms were not planned is "not run" (reading 11). */
 
-import { envAllowSet } from './arms.mjs';
+import { DESIGNS, envAllowSet } from './arms.mjs';
 import { CODINGS, NOT_RUN, bothCodings, codexApply, firstApplyR } from './z0-hypotheses.mjs';
 
 export const OPERATOR_CANARY = 'operator-canary';
@@ -35,13 +35,18 @@ function g2Half(filtered, armT, armC, keep, required, opts) {
   return { status: ok ? 'pass' : 'fail', required, pass: ok, ...est };
 }
 
-/** G2: the Claude Code half is required whenever H1 or H3 runs, the Codex half whenever H2 runs. */
+const G2_KEEP = { claudeCode: firstApplyR, codex: codexApply };
+
+/** G2 from the design's halves: a half runs when its taught and control arms are planned, and is required when every arm its tests need is planned; a null half is not run and not required. */
 export function g2(filtered, opts) {
   const planned = new Set(filtered.arms);
-  const ccNeeded = planned.has('A1') && planned.has('A2');
-  const codexNeeded = planned.has('X2') && planned.has('X3');
-  const claudeCode = g2Half(filtered, 'A4', 'A0', firstApplyR, ccNeeded, opts);
-  const codex = g2Half(filtered, 'X4', 'X1', codexApply, codexNeeded, opts);
+  const halves = (opts.design ?? DESIGNS.r3).g2;
+  /** @param {'claudeCode' | 'codex'} name @returns {ReturnType<typeof g2Half>} */
+  const half = (name) => {
+    const h = halves[name];
+    return h === null ? { status: NOT_RUN, required: false, pass: true } : g2Half(filtered, h.taught, h.control, G2_KEEP[name], h.needs.every((a) => planned.has(a)), opts);
+  };
+  const [claudeCode, codex] = [half('claudeCode'), half('codex')];
   return { pass: claudeCode.pass && codex.pass, claudeCode, codex };
 }
 

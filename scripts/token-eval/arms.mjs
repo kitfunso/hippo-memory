@@ -1,17 +1,268 @@
-// Z0 arms (docs/evals/2026-09-29-z0-built-in-memory-prereg.md, "Arms"): settings, environment, PATH and the hippo shims.
+// Z0 arms (docs/evals/2026-09-29-z0-built-in-memory-prereg.md "Arms"; round 4 prereg item 1): the arm table, the designs, settings, environment, PATH and the hippo shims.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, pathKey } from './exec.mjs';
 
-export const X_ARMS = ['X1', 'X2', 'X3', 'X4'];
-export const ARMS = ['A0', 'A1', 'A2', 'A4', 'A5', ...X_ARMS];
+export const OPUS_MODEL = 'claude-opus-5-5';
+export const SONNET_MODEL = 'claude-sonnet-5-5';
+const CODEX_MODEL = 'gpt-5.6-sol';
+
+const own = (object, key) => Object.hasOwn(object, key);
+const isString = (v) => v !== undefined && v !== null && v.constructor === String;
+const isBool = (v) => v === true || v === false;
+const isObject = (v) => v !== undefined && v !== null && v.constructor === Object;
+const isCodeList = (v) => Array.isArray(v) && v.every(isString);
+const isPair = (v) => isCodeList(v) && v.length === 2;
+
+function deepFreeze(x) {
+  if (x === null || x === undefined || Object(x) !== x) return x;
+  for (const v of Object.values(x)) deepFreeze(v);
+  return Object.freeze(x);
+}
+
+const oneOf = (...values) => ({ text: values.map(String).join(', '), test: (v) => values.includes(v) });
+const nullOr = (...values) => ({ text: `null, ${values.join(', ')}`, test: (v) => v === null || values.includes(v) });
+// The fields a round 4 row may change from its round 3 twin; every other field is copied.
+const OWN_FIELDS = ['round', 'twin', 'model', 'pinKey', 'effort', 'group'];
+export const EFFORTS = Object.freeze(['low', 'medium', 'high']);
+const ROW_FIELDS = {
+  round: oneOf('r3', 'r4'),
+  twin: { text: 'null or an arm code', test: (v) => v === null || isString(v) },
+  tool: oneOf('claude-code', 'codex'),
+  model: { text: 'a model id', test: (v) => isString(v) && v.length > 0 },
+  pinKey: oneOf('model', 'codexModel', 'modelOpus', 'modelSonnet'),
+  effort: nullOr('medium'),
+  set: oneOf('RN', 'X'),
+  seeds: oneOf(2, 3),
+  group: oneOf('A', 'X', 'O', 'S'),
+  autoMemory: { text: 'a boolean', test: isBool },
+  carry: { text: 'a boolean', test: isBool },
+  capture: { text: 'a boolean', test: isBool },
+  seedRule: { text: 'a boolean', test: isBool },
+  shim: nullOr('real', 'sham'),
+  taught: nullOr('claude-md', 'x4-block'),
+  stub: nullOr('x3'),
+};
+const ROW_NAMES = Object.keys(ROW_FIELDS);
+// The arm-literal scanner reads a code as one of these letters and a digit, so a code of another shape would escape it.
+const ARM_CODE = /^[AXOS][0-9]$/;
+
+/** Stops, naming the row and field, on a missing, extra or out-of-domain field, or a round 4 row that differs from its twin outside its own fields. */
+export function checkTable(table) {
+  for (const [code, r] of Object.entries(table)) {
+    if (!ARM_CODE.test(code)) throw new Error(`ARM_TABLE ${code}: an arm code is A, X, O or S and one digit`);
+    for (const f of ROW_NAMES) if (!own(r, f)) throw new Error(`ARM_TABLE ${code}: field ${f} is missing`);
+    for (const f of Object.keys(r)) if (!own(ROW_FIELDS, f)) throw new Error(`ARM_TABLE ${code}: field ${f} is not a table field`);
+    for (const f of ROW_NAMES) if (!ROW_FIELDS[f].test(r[f])) throw new Error(`ARM_TABLE ${code}.${f}: ${JSON.stringify(r[f])} is outside ${ROW_FIELDS[f].text}`);
+    if ((r.round === 'r3') !== (r.twin === null)) throw new Error(`ARM_TABLE ${code}.twin: a round 3 row has no twin and a round 4 row names one`);
+    if (r.twin === null) continue;
+    if (!own(table, r.twin) || table[r.twin].round !== 'r3') throw new Error(`ARM_TABLE ${code}.twin: ${r.twin} is not a round 3 row`);
+    for (const f of ROW_NAMES.filter((n) => !OWN_FIELDS.includes(n))) {
+      if (r[f] !== table[r.twin][f]) throw new Error(`ARM_TABLE ${code}.${f}: ${JSON.stringify(r[f])} but its twin ${r.twin} holds ${JSON.stringify(table[r.twin][f])}`);
+    }
+  }
+}
+
+const row = (fields) => ({
+  round: 'r3', twin: null, tool: 'claude-code', model: OPUS_MODEL, pinKey: 'model', effort: null, set: 'RN', seeds: 3, group: 'A',
+  autoMemory: true, carry: false, capture: false, seedRule: false, shim: null, taught: null, stub: null, ...fields,
+});
+const codexRow = (fields) => row({ tool: 'codex', model: CODEX_MODEL, pinKey: 'codexModel', set: 'X', group: 'X', carry: true, ...fields });
+// arm-table:start
+const R3_ROWS = {
+  A0: row({ seeds: 2, autoMemory: false }),
+  A1: row({ carry: true, seedRule: true }),
+  A2: row({ carry: true, capture: true, seedRule: true, shim: 'real' }),
+  A4: row({ seeds: 2, autoMemory: false, taught: 'claude-md' }),
+  A5: row({ carry: true, seedRule: true, shim: 'sham' }),
+  X1: codexRow({}),
+  X2: codexRow({ capture: true, seedRule: true, shim: 'real' }),
+  X3: codexRow({ seedRule: true, stub: 'x3' }),
+  X4: codexRow({ seeds: 2, taught: 'x4-block' }),
+};
+const twinOf = (twin, fields) => ({ ...R3_ROWS[twin], round: 'r4', twin, effort: 'medium', ...fields });
+const R4_ROWS = {
+  O1: twinOf('A1', { model: OPUS_MODEL, pinKey: 'modelOpus', group: 'O' }),
+  S1: twinOf('A1', { model: SONNET_MODEL, pinKey: 'modelSonnet', group: 'S' }),
+  S2: twinOf('A2', { model: SONNET_MODEL, pinKey: 'modelSonnet', group: 'S' }),
+  S5: twinOf('A5', { model: SONNET_MODEL, pinKey: 'modelSonnet', group: 'S' }),
+  S0: twinOf('A0', { model: SONNET_MODEL, pinKey: 'modelSonnet', group: 'S' }),
+  S4: twinOf('A4', { model: SONNET_MODEL, pinKey: 'modelSonnet', group: 'S' }),
+};
+// arm-table:end
+export const ARM_TABLE = deepFreeze({ ...R3_ROWS, ...R4_ROWS });
+checkTable(ARM_TABLE);
+
+export const ALL_ARMS = Object.freeze(Object.keys(ARM_TABLE));
+const armsWhere = (test) => new Set(ALL_ARMS.filter((a) => test(ARM_TABLE[a])));
+// The sets span both rounds; a list that code iterates, prints or pairs comes from a design.
+export const NO_AUTO_MEMORY = armsWhere((r) => !r.autoMemory);
+export const RESTORED_ARMS = armsWhere((r) => !r.autoMemory);
+export const FLOOR_ARMS = armsWhere((r) => !r.autoMemory);
+export const HIPPO_ARMS = armsWhere((r) => r.shim !== null);
+export const CODEX_HIPPO_ARMS = armsWhere((r) => r.tool === 'codex' && r.shim === 'real');
+export const CARRY_ARMS = armsWhere((r) => r.carry);
+export const CAPTURE_ARMS = armsWhere((r) => r.capture);
+export const TWO_SEED_ARMS = armsWhere((r) => r.seeds === 2);
+export const RULE_ARMS = armsWhere((r) => r.seedRule);
+
+/** The codes of one round whose boolean field is set, for the messages that name them. */
+export const roundArms = (round, field) => ALL_ARMS.filter((a) => ARM_TABLE[a].round === round && ARM_TABLE[a][field]);
+export const joinCodes = (codes) => (codes.length < 2 ? codes.join('') : `${codes.slice(0, -1).join(', ')} and ${codes.at(-1)}`);
+
+const CODES = Object.freeze(Object.fromEntries(ALL_ARMS.map((a) => [a, a])));
+const { A0, A1, A2, A4, A5, X1, X2, X3, X4, O1, S0, S1, S2, S4, S5 } = CODES;
+
+// A design names arms by these bare constants, so a misspelled code is an undeclared name at load.
+export const DESIGNS = deepFreeze({
+  r3: {
+    arms: [A0, A1, A2, A4, A5, X1, X2, X3, X4],
+    noMemory: A0,
+    sets: ['R', 'N', 'X'],
+    hookHold: [A2, A5],
+    tests: { H1: [A2, A1], H2: [X2, X3], H3: [A2, A1], H4: [A2, A1] },
+    pairs: { attribution: [A2, A5], A1vA0: [A1, A0], A4vA1: [A4, A1], X2vX1: [X2, X1] },
+    reported: ['A1vA0', 'A4vA1', 'X2vX1', 'H1', 'H2', 'H3'],
+    seedRule: [{ arms: [A1, A2, A5], tests: ['H1', 'H4'] }, { arms: [X2, X3], tests: ['H2'] }],
+    g2: { claudeCode: { taught: A4, control: A0, needs: [A1, A2] }, codex: { taught: X4, control: X1, needs: [X2, X3] } },
+    screen: { control: A0, taught: A4 },
+    drift: null,
+    prices: 'tool',
+    dropFamilies: [],
+    maxSeed: null,
+  },
+  r4: {
+    arms: [O1, S0, S1, S2, S4, S5],
+    noMemory: S0,
+    sets: ['R', 'N'],
+    hookHold: [S2, S5],
+    tests: { T1: [S2, S1], T2a: [S2, O1], T2b: [S2, O1], T2c: [S2, O1], T3: [S2, S5], H4: [S2, S1] },
+    pairs: { H1: [S2, S1], H3: [S2, S1], S1vO1: [S1, O1], S1vS0: [S1, S0], S4vS1: [S4, S1], resampled: [S2, S1] },
+    reported: ['S1vS0', 'S4vS1', 'H1', 'H3'],
+    seedRule: [{ arms: [O1, S1, S2, S5], tests: ['T1', 'T2a', 'T2b', 'T2c', 'T3', 'H4'] }],
+    g2: { claudeCode: { taught: S4, control: S0, needs: [S1, S2] }, codex: null },
+    screen: null,
+    drift: { arm: O1, against: A1, design: 'r3' },
+    prices: 'model',
+    dropFamilies: [],
+    maxSeed: null,
+  },
+  'r4-on-r3': {
+    arms: [A0, A1, A2, A4, A5],
+    noMemory: A0,
+    sets: ['R', 'N'],
+    hookHold: [A2, A5],
+    tests: { T1: [A2, A1], T2a: [A2, A1], T2b: [A2, A1], T2c: [A2, A1], H4: [A2, A1], T3: [A2, A5], T2aMiss: [A0, A1] },
+    pairs: { resampled: [A2, A1] },
+    reported: [],
+    seedRule: [],
+    g2: { claudeCode: null, codex: null },
+    screen: null,
+    drift: null,
+    prices: 'model',
+    dropFamilies: ['hu3-f2', 'q133-f2', 'q14-f3', 'q256-f1'],
+    maxSeed: 3,
+  },
+});
+
+const DESIGN_FIELDS = {
+  arms: isCodeList, noMemory: isString, sets: isCodeList, hookHold: isCodeList, reported: isCodeList, dropFamilies: isCodeList,
+  tests: (v) => isObject(v) && Object.values(v).every(isPair),
+  pairs: (v) => isObject(v) && Object.values(v).every(isPair),
+  seedRule: (v) => Array.isArray(v) && v.every((g) => isObject(g) && isCodeList(g.arms) && isCodeList(g.tests)),
+  g2: (v) => isObject(v) && ['claudeCode', 'codex'].every((h) => own(v, h) && (v[h] === null || (isObject(v[h]) && isString(v[h].taught) && isString(v[h].control) && isCodeList(v[h].needs)))),
+  screen: (v) => v === null || (isObject(v) && isString(v.control) && isString(v.taught)),
+  drift: (v) => v === null || (isObject(v) && isString(v.arm) && isString(v.against) && isString(v.design)),
+  prices: (v) => v === 'tool' || v === 'model',
+  maxSeed: (v) => v === null || (Number.isInteger(v) && v >= 1),
+};
+
+/** Every arm code a design names, as [field, code]; the `arms` field itself is the planned list. */
+function codeRefs(d) {
+  const halves = ['claudeCode', 'codex'].map((h) => d.g2[h]).filter((h) => h !== null);
+  return [
+    ['noMemory', d.noMemory],
+    ...d.hookHold.map((c) => ['hookHold', c]),
+    ...Object.values(d.tests).flat().map((c) => ['tests', c]),
+    ...Object.values(d.pairs).flat().map((c) => ['pairs', c]),
+    ...d.seedRule.flatMap((g) => g.arms.map((c) => ['seedRule', c])),
+    ...halves.flatMap((h) => [h.taught, h.control, ...h.needs].map((c) => ['g2', c])),
+    ...(d.screen === null ? [] : [['screen', d.screen.control], ['screen', d.screen.taught]]),
+    ...(d.drift === null ? [] : [['drift', d.drift.arm]]),
+  ];
+}
+
+function checkArms(d, table, fail) {
+  for (const c of d.arms) if (!own(table, c)) fail('arms', `${c} is not an ARM_TABLE code`);
+  for (const [field, c] of codeRefs(d)) {
+    if (!own(table, c)) fail(field, `${c} is not an ARM_TABLE code`);
+    else if (!d.arms.includes(c)) fail(field, `${c} is not in the design's arms`);
+  }
+  for (const [pairName, pair] of [...Object.entries(d.tests), ...Object.entries(d.pairs)]) {
+    if (pair[0] === pair[1]) fail(own(d.tests, pairName) ? 'tests' : 'pairs', `${pairName} holds ${pair[0]} twice`);
+  }
+}
+
+function checkNames(d, table, designs, fail) {
+  for (const t of Object.keys(d.tests)) if (own(d.pairs, t)) fail('pairs', `${t} is in both tests and pairs`);
+  for (const n of d.reported) if (!own(d.tests, n) && !own(d.pairs, n)) fail('reported', `${n} is in neither tests nor pairs`);
+  const grouped = new Set();
+  for (const g of d.seedRule) {
+    for (const t of g.tests) if (!own(d.tests, t) && !own(d.pairs, t)) fail('seedRule', `test ${t} is in neither tests nor pairs`);
+    for (const c of g.arms) {
+      if (grouped.has(c)) fail('seedRule', `${c} is in two seed-rule groups`);
+      grouped.add(c);
+    }
+  }
+  const wanted = d.arms.filter((c) => own(table, c) && table[c].seedRule);
+  if (d.seedRule.length > 0 && (grouped.size !== wanted.length || wanted.some((c) => !grouped.has(c)))) {
+    fail('seedRule', `its groups cover ${[...grouped].join(', ')} but the arms whose row has seedRule are ${wanted.join(', ')}`);
+  }
+  if (d.drift === null) return;
+  if (!own(designs, d.drift.design)) fail('drift', `design ${d.drift.design} is not a design`);
+  else if (!designs[d.drift.design].arms.includes(d.drift.against)) fail('drift', `${d.drift.against} is not in the arms of design ${d.drift.design}`);
+}
+
+/** Stops, naming the design and the field, on a field that is missing, extra or of the wrong type, a code outside the table or the design, or a test, pair, group or drift that does not hold together. */
+export function checkDesigns(designs = DESIGNS, table = ARM_TABLE) {
+  for (const [name, d] of Object.entries(designs)) {
+    const fail = (field, message) => {
+      throw new Error(`DESIGNS.${name}.${field}: ${message}`);
+    };
+    for (const f of Object.keys(DESIGN_FIELDS)) if (!own(d, f)) fail(f, 'the field is missing');
+    for (const f of Object.keys(d)) if (!own(DESIGN_FIELDS, f)) fail(f, 'the field is not a design field');
+    for (const f of Object.keys(DESIGN_FIELDS)) if (!DESIGN_FIELDS[f](d[f])) fail(f, 'the value has the wrong type');
+    checkArms(d, table, fail);
+    checkNames(d, table, designs, fail);
+  }
+}
+checkDesigns();
+
+export const designByName = (name) => {
+  if (!own(DESIGNS, name)) throw new Error(`unknown design ${name}; known: ${Object.keys(DESIGNS).join(', ')}`);
+  return DESIGNS[name];
+};
+
+export const designName = (design) => Object.keys(DESIGNS).find((k) => DESIGNS[k] === design) ?? `(${design.arms.join(', ')})`;
+
+/** Whether the design names a test or pair; a sizing read of a design without one reports it not planned, where `pairOf` stops. */
+export const hasPair = (design, name) => own(design.tests, name) || own(design.pairs, name);
+
+/** The [treat, control] of a test or pair by name; an unknown name stops, naming the design. */
+export function pairOf(design, name) {
+  if (own(design.tests, name)) return design.tests[name];
+  if (own(design.pairs, name)) return design.pairs[name];
+  throw new Error(`design ${designName(design)} has no test or pair named ${name}`);
+}
+
+// Round 3's lists, as views of its design: ARMS is the round 3 arms, and the two set lists split it.
+export const ARMS = DESIGNS.r3.arms;
+export const RN_ARMS = Object.freeze(ARMS.filter((a) => ARM_TABLE[a].set === 'RN'));
+export const X_ARMS = Object.freeze(ARMS.filter((a) => ARM_TABLE[a].set === 'X'));
 // Prereg "Seeds": A0's, A4's and X4's gates need a large effect, so they run two.
-export const ARM_SEEDS = { A0: 2, A1: 3, A2: 3, A4: 2, A5: 3, X1: 3, X2: 3, X3: 3, X4: 2 };
-const NO_AUTO_MEMORY = new Set(['A0', 'A4']);
-export const HIPPO_ARMS = new Set(['A2', 'A5', 'X2']);
-export const CARRY_ARMS = new Set(['A1', 'A2', 'A5', ...X_ARMS]);
+export const ARM_SEEDS = Object.freeze(Object.fromEntries(ARMS.map((a) => [a, ARM_TABLE[a].seeds])));
 /** The set an arm runs: X arms run only set X sequences, the A arms only R and N. */
-export const armSet = (arm) => (X_ARMS.includes(arm) ? 'X' : 'RN');
+export const armSet = (arm) => (own(ARM_TABLE, arm) && ARM_TABLE[arm].set === 'X' ? 'X' : 'RN');
 export const TOKEN_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
 
 const CAPTURE_EVENTS = ['SessionEnd', 'PreCompact', 'PostCompact', 'PostToolUseFailure'];
@@ -19,7 +270,10 @@ const LAUNCHERS = ['hippo', 'hippo.cmd', 'hippo.ps1', 'hippo.exe', 'hippo.bat'];
 const REQUIRED_TOOLS = ['node', 'npm', 'npx', 'git'];
 const SHAM_COMMANDS = ['remember', 'capture', 'learn', 'outcome'];
 // The keys armEnv sets itself: a --pass-env copy would silently override the arm (and a second PATH key on Windows).
-const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
+const RUNNER_KEYS = [
+  'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH',
+  'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE',
+];
 // Round 3 prereg item 5a: system names the agent and shells need, as round 2's records carried them. Left out on purpose: provider, CLAUDE_*, AWS_*, CODEX_*, HIPPO_*, OPENAI_*
 // and ANTHROPIC_* names, parent session ids (a child would log under the parent's id), and NoDefaultCurrentDirectoryInExePath (cmd.exe then misses a checkout's gradlew.bat).
 const SYSTEM_ENV = [
@@ -45,17 +299,21 @@ export const ENV_ALLOWLIST = Object.freeze([...RUNNER_KEYS, ...SYSTEM_ENV, ...TO
 export const SECRET_SHAPED = /TOKEN|SECRET|PASSW|API_KEY|_KEY$|DSN|CREDENTIAL|ACCOUNT_ID/i;
 export const envAllowSet = (list = ENV_ALLOWLIST) => new Set(list.map((name) => name.toUpperCase()));
 
+const rowOf = (arm) => {
+  if (!own(ARM_TABLE, arm)) throw new Error(`unknown arm ${arm}; known: ${ALL_ARMS.join(', ')}`);
+  return ARM_TABLE[arm];
+};
+
 /** The `--settings` file for an arm; `hippoSettings` is what hippo's installer writes for Claude Code. */
 export function armSettings(arm, hippoSettings) {
-  if (NO_AUTO_MEMORY.has(arm)) return { autoMemoryEnabled: false };
-  // Each X arm's Claude teach is the A arm it copies: X2 is A2, the rest are A1.
-  if (arm === 'A1' || arm === 'X1' || arm === 'X3' || arm === 'X4') return {};
-  if (arm === 'A2' || arm === 'X2') return hippoSettings;
-  if (arm === 'A5') {
+  const r = rowOf(arm);
+  if (!r.autoMemory) return { autoMemoryEnabled: false };
+  if (r.shim === 'real') return hippoSettings;
+  if (r.shim === 'sham') {
     const hooks = Object.fromEntries(Object.entries(hippoSettings.hooks ?? {}).filter(([event]) => !CAPTURE_EVENTS.includes(event)));
     return { ...hippoSettings, hooks };
   }
-  throw new Error(`unknown arm ${arm}; known: ${ARMS.join(', ')}`);
+  return {};
 }
 
 function getKey(env, name) {
@@ -67,12 +325,14 @@ function getKey(env, name) {
  * @param {string} arm
  * @param {any} dirs
  * @param {Record<string, string | undefined>} baseEnv
- * @param {{passEnv?: string[], allowlist?: readonly string[]}} [options] `allowlist` is for tests
+ * @param {{passEnv?: string[], allowlist?: readonly string[], effort?: string}} [options] `allowlist` is for tests; `effort` replaces the row's effort
  * @returns {Record<string, string | undefined>} */
-export function armEnv(arm, dirs, baseEnv, { passEnv = [], allowlist = ENV_ALLOWLIST } = {}) {
-  if (!ARMS.includes(arm)) throw new Error(`unknown arm ${arm}; known: ${ARMS.join(', ')}`);
+export function armEnv(arm, dirs, baseEnv, { passEnv = [], allowlist = ENV_ALLOWLIST, effort = undefined } = {}) {
+  const r = rowOf(arm);
   const reserved = passEnv.find((name) => RUNNER_KEYS.includes(name.toUpperCase()));
   if (reserved !== undefined) throw new Error(`--pass-env ${reserved}: the runner sets ${reserved.toUpperCase()} itself per arm, so it cannot be passed through`);
+  if (effort !== undefined && r.effort === null) throw new Error(`arm ${arm} runs with no effort setting, so effort ${effort} cannot replace it`);
+  if (effort !== undefined && !EFFORTS.includes(effort)) throw new Error(`effort ${effort} is not one of ${EFFORTS.join(', ')}`);
   const allowed = envAllowSet(allowlist);
   // The runner's own keys are set below, so a base copy under another case would leave two keys.
   const env = Object.fromEntries(Object.entries(baseEnv).filter(([k]) => allowed.has(k.toUpperCase()) && !RUNNER_KEYS.includes(k.toUpperCase())));
@@ -81,10 +341,15 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [], allowlist = ENV_ALLOW
   env.CLAUDE_CONFIG_DIR = dirs.claudeConfig;
   env.CODEX_HOME = dirs.codexHome;
   env.HIPPO_HOME = dirs.hippoHome;
-  env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = NO_AUTO_MEMORY.has(arm) ? '1' : '0';
+  env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = r.autoMemory ? '0' : '1';
   env.HIPPO_AGENT_MEMORY_TOOLS = 'claude-code,codex';
   env.DISABLE_AUTOUPDATER = '1';
   env.EVAL_SEED = String(dirs.seed);
+  if (r.effort !== null) {
+    env.CLAUDE_CODE_EFFORT_LEVEL = effort ?? r.effort;
+    env.CLAUDE_CODE_SUBAGENT_MODEL = r.model;
+    env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE = '1';
+  }
   for (const name of passEnv) {
     const value = getKey(baseEnv, name);
     if (value !== undefined) env[name] = value;
@@ -95,6 +360,13 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [], allowlist = ENV_ALLOW
   const secret = Object.keys(env).find((k) => k.toUpperCase() !== TOKEN_KEY && SECRET_SHAPED.test(k));
   if (secret !== undefined) throw new Error(`armEnv: ${secret} looks like a secret and would reach the session; remove it from ENV_ALLOWLIST in scripts/token-eval/arms.mjs (or from --pass-env)`);
   return env;
+}
+
+/** The warm-up call's env and argv: the design's no-memory arm with the subagent model set to `model`, and `--model` as an argv flag, since it is no env name. */
+export function warmupEnv(design, model, dirs, baseEnv, options = {}) {
+  const env = armEnv(design.noMemory, dirs, baseEnv, options);
+  env.CLAUDE_CODE_SUBAGENT_MODEL = model;
+  return { env, args: ['--model', model] };
 }
 
 /** The env for setup, tests, init and the homes check: no OAuth token, and (unless keepBin) no run `bin/` on PATH. */

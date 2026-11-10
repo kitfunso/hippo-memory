@@ -1,0 +1,79 @@
+/** Z0 price rows (round 4 prereg item 7): a record is priced at its tool's row under round 3, and at its arm's model row under round 4.
+ * A price file holds `claude-code` and `codex` rows (round 3), or a `models` block, or top-level rows whose `model` field names the model. */
+
+import { addUsage, priceUsage } from '../../dist/eval/eval-stats.js';
+import { ARM_TABLE, DESIGNS, OPUS_MODEL, SONNET_MODEL } from './arms.mjs';
+import { cellKey, isString, locationOf } from './z0-records.mjs';
+
+export const PRICE_FIELDS = ['inputPerMTok', 'cacheWritePerMTok', 'cacheReadPerMTok', 'outputPerMTok'];
+const HALF_TOLERANCE = 1e-9;
+
+const own = (object, key) => Object.hasOwn(object, key);
+const isObject = (v) => v !== undefined && v !== null && v.constructor === Object;
+const isPrices = (p) => p !== undefined && p !== null && PRICE_FIELDS.every((f) => Number.isFinite(p[f]) && p[f] >= 0);
+const priced = (usage, row) => (row === null ? Number.NaN : priceUsage(usage, row));
+
+function modelRow(prices, model) {
+  if (prices.models !== undefined) return own(prices.models, model) ? prices.models[model] : null;
+  return Object.values(prices).find((p) => isObject(p) && p.model === model && isPrices(p)) ?? null;
+}
+
+/** The price row of one record, or null when a round 3 file has no row for its tool; round 4 stops on a record it cannot price.
+ * @param {any} prices
+ * @param {any} record
+ * @param {{design?: any, rowModel?: string, file?: string}} [options] `rowModel` prices every record at that model's row */
+export function priceRow(prices, record, { design = DESIGNS.r3, rowModel = undefined, file = undefined } = {}) {
+  if (design.prices === 'tool') return own(prices, record.tool) ? prices[record.tool] : null;
+  const where = locationOf(record) ?? cellKey(record);
+  if (!own(ARM_TABLE, record.arm)) throw new Error(`${where}: arm ${record.arm} is not an arm of the arm table`);
+  const arm = ARM_TABLE[record.arm];
+  if (record.tool !== arm.tool) throw new Error(`${where}: tool ${record.tool} but arm ${record.arm} runs ${arm.tool}; a design that prices by model holds Claude Code arms only`);
+  const model = rowModel ?? arm.model;
+  const row = modelRow(prices, model);
+  if (row === null) throw new Error(`no price row for model ${model} (arm ${record.arm}) in ${file ?? 'the price file'}; add its row from the price page and record it in an amendment (prereg item 7)`);
+  return row;
+}
+
+/** A record's whole usage priced at its row; NaN when a round 3 file has no row for its tool, so a report prints n/a. */
+export const costOf = (record, prices, opts = {}) => priced(addUsage(record.usage.firstSession, record.usage.extra), priceRow(prices, record, opts));
+
+/** One part of a record's usage (`usage.firstSession` or `usage.extra`) priced at the record's own row. */
+export const partCost = (usage, record, prices, opts = {}) => priced(usage, priceRow(prices, record, opts));
+
+/** The rows of a by-model file keyed by model id: the `models` block, else each top-level row that names its model. */
+function modelRows(prices, file) {
+  if (prices.models !== undefined) {
+    if (!isObject(prices.models)) throw new Error(`${file}: "models" must be an object with one price row per model id`);
+    for (const [id, p] of Object.entries(prices.models)) if (!isPrices(p)) throw new Error(`${file}: models.${id} needs ${PRICE_FIELDS.join(', ')}`);
+    return new Map(Object.entries(prices.models));
+  }
+  const rows = new Map();
+  for (const [key, p] of Object.entries(prices)) {
+    // A top-level string, such as asOf, is no row.
+    if (!isObject(p)) continue;
+    if (!isPrices(p)) throw new Error(`${file}: "${key}" needs ${PRICE_FIELDS.join(', ')}`);
+    if (isString(p.model)) rows.set(p.model, p);
+  }
+  return rows;
+}
+
+/** Stops, naming the file, when the price file cannot price the design: a missing tool row, a model with no row, or a Sonnet 5.5 rate that is not half the Opus 5.5 rate. */
+export function checkPrices(prices, file, design = DESIGNS.r3) {
+  if (design.prices === 'tool') {
+    if (!isObject(prices) || !isPrices(prices['claude-code']) || !(prices.codex === undefined || isPrices(prices.codex))) {
+      throw new Error(`${file}: needs "claude-code" (and optionally "codex") with ${PRICE_FIELDS.join(', ')}`);
+    }
+    return;
+  }
+  const rows = modelRows(prices, file);
+  for (const model of new Set([...design.arms.map((a) => ARM_TABLE[a].model), OPUS_MODEL])) {
+    if (!rows.has(model)) throw new Error(`${file}: no price row for model ${model}; add its row from the price page and record it in an amendment (prereg item 7)`);
+  }
+  const [opus, sonnet] = [rows.get(OPUS_MODEL), rows.get(SONNET_MODEL)];
+  if (sonnet === undefined) return;
+  for (const column of PRICE_FIELDS) {
+    if (Math.abs(sonnet[column] - opus[column] / 2) > HALF_TOLERANCE) {
+      throw new Error(`${file}: ${column} is ${sonnet[column]} for ${SONNET_MODEL} and ${opus[column]} for ${OPUS_MODEL}, not half; the freeze stops; an amendment sets k (prereg item 7)`);
+    }
+  }
+}

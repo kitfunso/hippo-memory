@@ -2,10 +2,12 @@
  * one Holm procedure per coding over H1 and H2, attribution, reported estimates. The repeat-mistake rate reads each lesson's
  * `first` verdict only (prereg 151); H3 and H4 read Claude Code records only. */
 
-import { addUsage, combineCodings, harmGate, holmAdjust, priceUsage, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
+import { combineCodings, harmGate, holmAdjust, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
 import { fixedRepositoryRatioT, fixedRepositoryT, repositoryT } from '../../dist/eval/repository-t.js';
-import { pairTasks } from './z0-filters.mjs';
-import { TWO_SEED_ARMS, positionKey, runKey } from './z0-records.mjs';
+import { ARM_TABLE, DESIGNS, TWO_SEED_ARMS, pairOf } from './arms.mjs';
+import { pairTasks, withoutRuns } from './z0-filters.mjs';
+import { costOf, partCost } from './z0-prices.mjs';
+import { positionKey } from './z0-records.mjs';
 
 export const CODINGS = ['violation', 'excluded'];
 /** The primary family (Amendment 1): H3 is reported beside it with no verdict. */
@@ -30,7 +32,6 @@ export const firstApplyR = (r) => r.set === 'R' && r.applyIndex === 1;
 export const codexApply = (r) => r.set === 'X' && r.tool === 'codex';
 export const maintainer = (r) => r.lessonSource !== 'template';
 export const byCoding = (fn) => Object.fromEntries(CODINGS.map((c) => [c, fn(c)]));
-const costOf = (r, prices) => priceUsage(addUsage(r.usage.firstSession, r.usage.extra), prices);
 
 /** Share of a task's lessons failed on the first attempt; `na` is a fail under `violation` and dropped under `excluded`. */
 export function shareFail(r, coding) {
@@ -108,9 +109,11 @@ export function repeatMistake(scored, armT, armC, coding, opts, keep) {
 
 export const bothCodings = (scored, armT, armC, opts, keep) => byCoding((c) => repeatMistake(scored, armT, armC, c, opts, keep));
 
-/** One unit per paired Claude Code task; a no-lesson task is a family of one keyed by its task id. */
-export function taskUnits(scored, armT, armC, prices, keep) {
-  const side = (r) => ({ cost: costOf(r, prices), first: priceUsage(r.usage.firstSession, prices), extra: priceUsage(r.usage.extra, prices), resolved: r.resolved ? 1 : 0 });
+/** One unit per paired Claude Code task; a no-lesson task is a family of one keyed by its task id. Each side is priced at its own record's row of the whole price file. */
+export function taskUnits(scored, armT, armC, prices, keep, opts = {}) {
+  const side = (r) => ({
+    cost: costOf(r, prices, opts), first: partCost(r.usage.firstSession, r, prices, opts), extra: partCost(r.usage.extra, r, prices, opts), resolved: r.resolved ? 1 : 0,
+  });
   return pairTasks(scored, armT, armC)
     .filter(({ t, c }) => t.tool === 'claude-code' && c.tool === 'claude-code' && keep(t))
     .map(({ t, c }) => ({ repo: t.repo, family: t.familyId ?? `task ${t.taskId}`, seed: t.seed, set: t.set, t: side(t), c: side(c) }));
@@ -199,13 +202,15 @@ const plannedArms = (filtered) => {
 export function computeHypotheses(filtered, prices, opts) {
   const s = filtered.scored;
   const runs = plannedArms(filtered);
-  const h1 = runs('A1', 'A2') ? bothCodings(s, 'A2', 'A1', opts, firstApplyR) : null;
-  const h2 = runs('X2', 'X3') ? bothCodings(s, 'X2', 'X3', opts, codexApply) : null;
-  const units = runs('A1', 'A2') ? taskUnits(s, 'A2', 'A1', prices['claude-code'], inSets('R', 'N')) : null;
+  const design = opts.design ?? DESIGNS.r3;
+  const [h1Pair, h2Pair, h3Pair, attributionPair] = ['H1', 'H2', 'H3', 'attribution'].map((name) => pairOf(design, name));
+  const h1 = runs(...h1Pair) ? bothCodings(s, ...h1Pair, opts, firstApplyR) : null;
+  const h2 = runs(...h2Pair) ? bothCodings(s, ...h2Pair, opts, codexApply) : null;
+  const units = runs(...h3Pair) ? taskUnits(s, ...h3Pair, prices, inSets('R', 'N'), opts) : null;
   const h3 = units && ratioT(units, 'cost', opts);
   const h4 = harmGateOf(units, filtered.sets.includes('N'), opts);
   const verdicts = holmVerdicts(byCoding((c) => ({ H1: h1?.[c] ?? null, H2: h2?.[c] ?? null })));
-  const attribution = h1 ? attributionOf(verdicts.H1.final.verdict, runs('A5') ? bothCodings(s, 'A2', 'A5', opts, firstApplyR) : null) : NOT_RUN;
+  const attribution = h1 ? attributionOf(verdicts.H1.final.verdict, runs(...attributionPair) ? bothCodings(s, ...attributionPair, opts, firstApplyR) : null) : NOT_RUN;
   const h3Block = h3 && {
     ...h3,
     firstSession: ratioT(units, 'first', opts),
@@ -240,14 +245,15 @@ export function spearman(xs, ys) {
   return sxx === 0 || syy === 0 ? Number.NaN : sxy / Math.sqrt(sxx * syy);
 }
 
-/** Per family, the A2-minus-A1 difference (mean over seeds) against mean wordOverlap; families are the resampled blocks. */
+/** Per family, the H1 pair's difference (mean over seeds) against mean wordOverlap; families are the resampled blocks. */
 function overlapCorrelation(s, opts, coding) {
+  const h1Pair = pairOf(opts.design ?? DESIGNS.r3, 'H1');
   const overlap = new Map();
   for (const r of s) {
-    if ((r.arm === 'A2' || r.arm === 'A1') && r.set === 'R' && r.wordOverlap !== undefined) overlap.set(r.familyId, [...(overlap.get(r.familyId) ?? []), r.wordOverlap]);
+    if (h1Pair.includes(r.arm) && r.set === 'R' && r.wordOverlap !== undefined) overlap.set(r.familyId, [...(overlap.get(r.familyId) ?? []), r.wordOverlap]);
   }
   const fams = new Map();
-  for (const u of repeatMistakeUnits(s, 'A2', 'A1', coding, firstApplyR).units) {
+  for (const u of repeatMistakeUnits(s, ...h1Pair, coding, firstApplyR).units) {
     if (overlap.has(u.family)) fams.set(u.family, { repo: u.repo, family: u.family, diffs: [...(fams.get(u.family)?.diffs ?? []), u.value] });
   }
   const units = [...fams.values()].map((f) => ({ repo: f.repo, family: f.family, diff: mean(f.diffs), overlap: mean(overlap.get(f.family)) }));
@@ -259,7 +265,7 @@ function perArm(s, arms, prices, opts) {
   return Object.fromEntries(arms.map((arm) => {
     const mine = s.filter((r) => r.arm === arm);
     const family = (r) => r.familyId ?? `task ${r.taskId}`;
-    const units = mine.map((r) => ({ repo: r.repo, family: family(r), resolved: r.resolved ? 1 : 0, cost: prices[r.tool] ? costOf(r, prices[r.tool]) : Number.NaN }));
+    const units = mine.map((r) => ({ repo: r.repo, family: family(r), resolved: r.resolved ? 1 : 0, cost: costOf(r, prices, opts) }));
     const stale = mine.filter((r) => r.afterReversal === true)
       .flatMap((r) => r.lessons.filter((l) => l.staleFollow !== null).map((l) => ({ repo: r.repo, family: family(r), stale: l.staleFollow ? 1 : 0 })));
     const boot = (us, stat) => (us.length === 0 ? NA : twoLevelBootstrap(blocks(us), stat, { ...opts, nullValue: 0 }));
@@ -280,7 +286,7 @@ export function rotationSlots(records) {
   return (r) => orders.get(positionKey(r)).indexOf(r.order) + 1;
 }
 
-function slotTable(records, s, prices) {
+function slotTable(records, s, prices, opts) {
   const slotOf = rotationSlots(records);
   const cells = new Map();
   for (const r of s) {
@@ -289,7 +295,8 @@ function slotTable(records, s, prices) {
     cell.n++;
     const f = shareFail(r, 'violation');
     if (f !== null) cell.fails.push(f);
-    if (prices[r.tool]) cell.costs.push(costOf(r, prices[r.tool]));
+    const cost = costOf(r, prices, opts);
+    if (!Number.isNaN(cost)) cell.costs.push(cost);
     cells.set(key, cell);
   }
   const avg = (xs) => (xs.length === 0 ? null : mean(xs));
@@ -319,8 +326,6 @@ export const SINCE_TEACH = [
   ['10+', (r) => r.tasksSinceTeach >= 10],
 ];
 
-export const withoutRuns = (records, runs) => records.filter((r) => !runs.has(runKey(r.sequence, r.seed)));
-
 /** One arm's own repeat-mistake rate, unpaired and over all its seeds; a unit is a (repo, family, seed) mean, as in H1. */
 export function armRate(s, arm, coding, keep, opts) {
   const groups = new Map();
@@ -339,7 +344,7 @@ export function armRate(s, arm, coding, keep, opts) {
 /** Prereg 198 asks for the rate itself by tasks since teach; the A2-minus-A1 difference sits beside it in `bySinceTeach`.
  * Two-seed arms rate fewer seeds (124), so each rate carries the seeds it read. */
 function ratesBySinceTeach(s, arms, opts) {
-  const rn = arms.filter((a) => a.startsWith('A'));
+  const rn = arms.filter((a) => ARM_TABLE[a].tool === 'claude-code');
   return Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => {
     const keep = (r) => r.set === 'R' && inBucket(r);
     return [name, Object.fromEntries(rn.map((arm) => {
@@ -353,30 +358,32 @@ function ratesBySinceTeach(s, arms, opts) {
 export function computeReported(records, filtered, prices, opts) {
   const s = filtered.scored;
   const runs = plannedArms(filtered);
-  const pair = (rs, t, c, keep) => (runs(t, c) ? bothCodings(rs, t, c, opts, keep) : NOT_RUN);
-  const h3 = (rs, keep) => (runs('A1', 'A2') ? ratioT(taskUnits(rs, 'A2', 'A1', prices['claude-code'], keep), 'cost', opts) : NOT_RUN);
+  const design = opts.design ?? DESIGNS.r3;
+  const [h1, h2, h3Pair, a1vA0, a4vA1, x2vX1] = ['H1', 'H2', 'H3', 'A1vA0', 'A4vA1', 'X2vX1'].map((name) => pairOf(design, name));
+  const pair = (rs, arms, keep) => (runs(...arms) ? bothCodings(rs, ...arms, opts, keep) : NOT_RUN);
+  const h3 = (rs, keep) => (runs(...h3Pair) ? ratioT(taskUnits(rs, ...h3Pair, prices, keep, opts), 'cost', opts) : NOT_RUN);
   const noUnion = withoutRuns(s, filtered.carryUnion);
   return {
-    A1vA0: pair(s, 'A1', 'A0', firstApplyR),
-    A4vA1: pair(s, 'A4', 'A1', firstApplyR),
-    X2vX1: pair(s, 'X2', 'X1', codexApply),
+    A1vA0: pair(s, a1vA0, firstApplyR),
+    A4vA1: pair(s, a4vA1, firstApplyR),
+    X2vX1: pair(s, x2vX1, codexApply),
     perArm: perArm(s, filtered.arms, prices, opts),
     maintainerOnly: {
-      H1: pair(s, 'A2', 'A1', (r) => firstApplyR(r) && maintainer(r)),
-      H2: pair(s, 'X2', 'X3', (r) => codexApply(r) && maintainer(r)),
+      H1: pair(s, h1, (r) => firstApplyR(r) && maintainer(r)),
+      H2: pair(s, h2, (r) => codexApply(r) && maintainer(r)),
       H3: h3(s, (r) => inSets('R', 'N')(r) && maintainer(r)),
     },
-    allApplies: { H1: pair(s, 'A2', 'A1', inSets('R')) },
-    bySinceTeach: Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => [name, pair(s, 'A2', 'A1', (r) => r.set === 'R' && inBucket(r))])),
+    allApplies: { H1: pair(s, h1, inSets('R')) },
+    bySinceTeach: Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => [name, pair(s, h1, (r) => r.set === 'R' && inBucket(r))])),
     ratesBySinceTeach: ratesBySinceTeach(s, filtered.arms, opts),
-    wordOverlap: runs('A1', 'A2') ? byCoding((c) => overlapCorrelation(s, opts, c)) : NOT_RUN,
+    wordOverlap: runs(...h1) ? byCoding((c) => overlapCorrelation(s, opts, c)) : NOT_RUN,
     sensitivity: {
       carryUnionRuns: filtered.carryUnion.size,
-      H1: pair(noUnion, 'A2', 'A1', firstApplyR),
+      H1: pair(noUnion, h1, firstApplyR),
       H3: h3(noUnion, inSets('R', 'N')),
       retryVoidedPositions: filtered.retryVoided.positions,
     },
-    rotation: slotTable(records, s, prices),
+    rotation: slotTable(records, s, prices, opts),
     chain: chainRates(s),
   };
 }

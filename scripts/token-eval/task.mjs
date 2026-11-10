@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { sh } from './exec.mjs';
-import { HIPPO_ARMS, CARRY_ARMS, childEnv } from './arms.mjs';
+import { ARM_TABLE, CAPTURE_ARMS, CARRY_ARMS, CODEX_HIPPO_ARMS, HIPPO_ARMS, childEnv } from './arms.mjs';
 import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, commitInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import {
@@ -16,12 +16,10 @@ import { saveGrading, surfaceText } from './grading.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
 import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './surfaces.mjs';
 import { deliveryHits, sessionVoid, byPrecedence, foldPath, under } from './readcheck.mjs';
-import { followedOf } from './z0-records.mjs';
+import { SCHEMA, followedOf } from './z0-records.mjs';
 import { CODEX_DRIVER, driverOf, codexSession, codexPricing, codexVoid, codexFields, shownAtStartCodex, writeX4Block, sweepCell, wrapperWait } from './codex-task.mjs';
 import { installHippoCodex } from './codex-install.mjs';
 
-// The arms whose teach cells record what hippo captured (prereg 182).
-const CAPTURE_ARMS = new Set(['A2', 'X2']);
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
 const NOT_STAGED = { carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null };
 const ZERO_USAGE = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
@@ -57,7 +55,7 @@ function newSessionIds(run, before) {
 function baseFields(ctx, run, step) {
   const { t, role } = step;
   const base = {
-    schema: 'z0-record/1', set: role.set, tool: step.driver.tool, repo: run.s.repo, taskId: t.id, cluster: run.s.cluster, sequence: run.s.id,
+    schema: SCHEMA, set: role.set, tool: step.driver.tool, repo: run.s.repo, taskId: t.id, cluster: run.s.cluster, sequence: run.s.id,
     position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: step.driver === CODEX_DRIVER ? ctx.codexModel : ctx.model, claudeVersion: ctx.claudeVersion, ...ctx.hippoBuild,
     startedAt: new Date().toISOString(), baseCommit: null, kind: role.kind, familyId: role.familyId, lessonSource: role.lessonSource,
     applyIndex: role.applyIndex, afterReversal: role.afterReversal, tasksSinceTeach: role.tasksSinceTeach,
@@ -94,12 +92,12 @@ function stageTask(ctx, run, step) {
   if (setup && setup.status !== 0) return { commit, setup, failed: true };
   // Setup's own writes are part of the baseline, so they are never counted as the agent's and never carried.
   const baseline = instructionSnapshot(work);
-  if (run.arm === 'A4' && run.taught.length) fs.appendFileSync(path.join(work, 'CLAUDE.md'), memoryText(run.taught));
+  if (ARM_TABLE[run.arm].taught === 'claude-md' && run.taught.length) fs.appendFileSync(path.join(work, 'CLAUDE.md'), memoryText(run.taught));
   // Init waits for the first step whose setup passed, so a skipped first task cannot leave A2/A5 without hippo.
   if (HIPPO_ARMS.has(run.arm) && !run.initDone) {
     hippoInit(run, ctx.fakeHome);
     // X2 only: hippo's Codex hooks and wrapper go onto the run's own launcher, once (E6 plan D7).
-    if (run.arm === 'X2') installHippoCodex(ctx, run);
+    if (CODEX_HIPPO_ARMS.has(run.arm)) installHippoCodex(ctx, run);
     run.initDone = true;
   }
   const carry = CARRY_ARMS.has(run.arm) ? applyInstructions(work, run.changes, baseline, path.join(ctx.outDir, 'tmp')) : NO_CARRY;
@@ -370,14 +368,14 @@ async function runTurns(ctx, run, step, stage, base) {
   // Before the end hooks and the hidden tests, so the final tree is the agent's alone.
   if (!stage.fault) stage.finalPost = guarded(run, t, stage, () => stateCommit(work, stage.pre));
   await settle(ctx, run, t.id, 'end');
-  if (step.driver === CODEX_DRIVER && run.arm === 'X2') session.wrapper = await wrapperWait(ctx, run, t.id, session.threadId, session.priorLog);
+  if (step.driver === CODEX_DRIVER && CODEX_HIPPO_ARMS.has(run.arm)) session.wrapper = await wrapperWait(ctx, run, t.id, session.threadId, session.priorLog);
   snapshotSurfaces(ctx, run, 'end', step);
   if (HIPPO_ARMS.has(run.arm)) stage.injected = hippoEnd(ctx, run, step, stage, sessionIds);
   guarded(run, t, stage, () => noteWorktrees(ctx, run, step));
   // Reading 8: A4 and X4 hold a lesson only once its teach resume delivered it; X4's block goes in before the delta, so it carries (plan D9).
   if (step.role.kind === 'teach' && turns?.delivered) {
     run.taught = withTaught(run.taught, turns.lesson);
-    if (run.arm === 'X4') base.x4Block = writeX4Block(work, run.taught);
+    if (ARM_TABLE[run.arm].taught === 'x4-block') base.x4Block = writeX4Block(work, run.taught);
   }
   if (CARRY_ARMS.has(run.arm)) run.changes = instructionDelta(stage.baseline, instructionSnapshot(work));
   writeHiddenTests(run.cached, work, t);

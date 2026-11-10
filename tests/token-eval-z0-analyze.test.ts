@@ -2,7 +2,8 @@
  * The records are synthetic: they test the contract, filters and arithmetic, never hippo. CLI tests: token-eval-z0-analyze-cli.test.ts. */
 import { describe, it, expect } from 'vitest';
 import { addUsage, holmAdjust, priceUsage, verdict } from '../dist/eval/eval-stats.js';
-import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus, validateRecord } from '../scripts/token-eval/z0-records.mjs';
+import { RN_ARMS } from '../scripts/token-eval/arms.mjs';
+import { parseZ0Records, parsePlan, validateCorpus, validateRecord } from '../scripts/token-eval/z0-records.mjs';
 import { filterRecords, pairTasks } from '../scripts/token-eval/z0-filters.mjs';
 import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, armRate, bothCodings, codexApply, computeHypotheses, firstApplyR, harmT, holmVerdicts, inSets, repeatMistake, repeatT, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
 import { g3, g4, g5 } from '../scripts/token-eval/z0-gates.mjs';

@@ -2,14 +2,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
-import { HIPPO_ARMS } from './arms.mjs';
+import { FLOOR_ARMS, HIPPO_ARMS } from './arms.mjs';
 import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment, SHELL_TOOLS } from './records.mjs';
 import { requestBodies } from './proxy.mjs';
 
 /** Void reasons in precedence order: the record's `void` is the first one hit. */
 export const VOID_ORDER = ['operator-canary', 'read', 'auto-memory', 'user-instructions', 'hippo-text'];
 const ENV_KEYS = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP'];
-const FLOOR_ARMS = new Set(['A0', 'A4']);
 const HIPPO_MARK = '<!-- hippo:start -->';
 const HOME_PAIR = { HOME: 'USERPROFILE', USERPROFILE: 'HOME' };
 const ENV_FORM = /\$\{?\w+\}?|\$env:\w+|%\w+%/i;

@@ -7,8 +7,6 @@ import { incompleteBeta, lnGamma, pooledComponents } from '../../dist/eval/repos
 import { CODINGS, SPECS, byCoding, harmT, mean, repeatT, sum } from './z0-hypotheses.mjs';
 import { SEED_CAP } from './z0-records.mjs';
 
-// One number for the rule's cap and the record contract's.
-export { SEED_CAP };
 /** Seeds in the first wave; the seed rule may add more up to SEED_CAP. */
 export const SEEDS = 3;
 /** The seed rule aims for a standard error of at most the minimum effect over this. */

@@ -6,24 +6,26 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { SEALED, blindView, inputHashes, loadOrCreateKey, unblindRefusal } from './z0-blind.mjs';
-import { filterRecords } from './z0-filters.mjs';
+import { DESIGNS, designByName } from './arms.mjs';
+import { SEALED, blindView, inputHashes, loadOrCreateKey, sha256, unblindRefusal } from './z0-blind.mjs';
+import { filteredInput, readVoids } from './z0-filters.mjs';
 import { computeGates } from './z0-gates.mjs';
 import { NOT_RUN, computeHypotheses, computeReported } from './z0-hypotheses.mjs';
-import { ALL_ARMS, isString, parsePlan, parseZ0Records, validateCorpus } from './z0-records.mjs';
+import { checkPrices } from './z0-prices.mjs';
+import { isString, parsePlan, parseZ0Records } from './z0-records.mjs';
 
 export const ITERATIONS = 10_000;
 export const SEED = 1;
 export const ABANDONED = 'abandoned';
 export const NOT_ANALYSED = 'not analysed: the run is abandoned (prereg 114)';
-const USAGE = 'usage: z0-analyze.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--grading FILE] [--drop-list FILE] [--key FILE] [--unblind] [--seed N --iterations N] [--out FILE]';
+const USAGE = 'usage: z0-analyze.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--grading FILE] [--drop-list FILE] [--off-pin FILE ...] [--key FILE] [--unblind] [--seed N --iterations N] [--out FILE]';
 const SINGLE = new Map([['--prices', 'prices'], ['--grading', 'grading'], ['--drop-list', 'dropList'], ['--key', 'key'], ['--out', 'out'], ['--seed', 'seed'], ['--iterations', 'iterations']]);
-const PRICE_FIELDS = ['inputPerMTok', 'cacheWritePerMTok', 'cacheReadPerMTok', 'outputPerMTok'];
+const REPEATED = new Map([['--runs', 'runs'], ['--plan', 'plan'], ['--off-pin', 'offPin']]);
 
-/** Registered arms and sets the plan left out (reading 11), both read from the plan; "not run" must not read as the registered design. */
-export function unplannedDesign(filtered) {
-  const arms = ALL_ARMS.filter((a) => !filtered.arms.includes(a));
-  const sets = ['R', 'N', 'X'].filter((s) => !filtered.sets.includes(s)).map((s) => `set ${s}`);
+/** The design's arms and sets the plan left out (reading 11), both read from the plan; "not run" must not read as the registered design. */
+export function unplannedDesign(filtered, design = DESIGNS.r3) {
+  const arms = design.arms.filter((a) => !filtered.arms.includes(a));
+  const sets = design.sets.filter((s) => !filtered.sets.includes(s)).map((s) => `set ${s}`);
   return [...arms, ...sets];
 }
 
@@ -35,26 +37,26 @@ const noRefuse = () => {
  * An abandoned run is never analysed (114): no gates, no hypotheses, and its codes stay closed. */
 export function analyzeZ0(records, opts) {
   const refuse = opts.refuse ?? noRefuse;
-  const { unchecked } = validateCorpus(records, opts.planCells);
-  const filtered = filterRecords(records, opts.planCells, { grading: opts.grading ?? null, dropList: opts.dropList ?? null });
-  const unplanned = unplannedDesign(filtered);
+  const design = opts.design ?? DESIGNS.r3;
+  const { filtered, unchecked, records: kept } = filteredInput(records, opts.planCells, opts, { dropAbandoned: false });
+  const unplanned = unplannedDesign(filtered, design);
   if (filtered.abandoned.length > 0) {
     const refusal = opts.unblind ? 'the run is abandoned and never analysed (prereg 114), so its codes stay closed' : null;
     return { status: ABANDONED, unchecked, filtered, unplanned, gates: null, refusal, hypotheses: null, reported: null };
   }
-  const stat = { iterations: opts.iterations ?? ITERATIONS, seed: opts.seed ?? SEED };
-  const gates = computeGates(records, filtered, opts.grading ?? null, stat);
+  const stat = { iterations: opts.iterations ?? ITERATIONS, seed: opts.seed ?? SEED, design };
+  const gates = computeGates(kept, filtered, opts.grading ?? null, stat);
   const refusal = opts.unblind ? refuse(gates) : null;
   const open = opts.unblind === true && refusal === null && gates.pass;
   return {
     status: gates.pass ? 'valid' : 'invalid', unchecked, filtered, unplanned, gates, refusal,
     hypotheses: open ? computeHypotheses(filtered, opts.prices, stat) : null,
-    reported: open ? computeReported(records, filtered, opts.prices, stat) : null,
+    reported: open ? computeReported(kept, filtered, opts.prices, stat) : null,
   };
 }
 
 export function parseArgs(argv) {
-  const args = { runs: [], plan: [], prices: null, grading: null, dropList: null, key: null, out: null, seed: null, iterations: null, unblind: false, help: false };
+  const args = { runs: [], plan: [], offPin: [], prices: null, grading: null, dropList: null, key: null, out: null, seed: null, iterations: null, unblind: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     if (flag === '--help' || flag === '-h') return { ...args, help: true };
@@ -64,7 +66,7 @@ export function parseArgs(argv) {
     }
     const value = argv[++i];
     if (!isString(value) || value.startsWith('--')) throw new Error(`${flag} needs a value\n${USAGE}`);
-    if (flag === '--runs' || flag === '--plan') args[flag.slice(2)].push(value);
+    if (REPEATED.has(flag)) args[REPEATED.get(flag)].push(value);
     else if (!SINGLE.has(flag)) throw new Error(`unknown flag ${flag}\n${USAGE}`);
     else if (args[SINGLE.get(flag)] !== null) throw new Error(`${flag} given twice`);
     else args[SINGLE.get(flag)] = value;
@@ -95,13 +97,13 @@ const isUnit = (v) => Number.isFinite(v) && v >= 0 && v <= 1;
 const isCi = (v) => v === null || (Array.isArray(v) && v.length === 2 && v.every(isUnit) && v[0] <= v[1]);
 const isTable = (t, s) => ['yesYes', 'yesNo', 'noYes', 'noNo'].every((k) => isCount(t?.[k])) && t.yesYes + t.yesNo + t.noYes + t.noNo === s.n && t.yesYes + t.noNo === s.agree;
 const isStoredSample = (s) => s !== null && isCount(s.n) && isCount(s.agree) && s.agree <= s.n && isRate(s.agreement) && isRate(s.kappa) && isCi(s.ci95) && isTable(s.table, s);
-const isPrices = (p) => p !== undefined && p !== null && PRICE_FIELDS.every((f) => Number.isFinite(p[f]) && p[f] >= 0);
 
 /** Reads every input file and rejects a malformed one by name; records keep their file and line. */
 export function loadInputs(args, cwd) {
   // Checked before the blind key is written, so a bad --out leaves nothing behind.
   const outDir = args.out === null ? null : path.dirname(path.resolve(cwd, args.out));
   if (outDir !== null && !fs.existsSync(outDir)) throw new Error(`--out ${args.out}: folder ${outDir} does not exist`);
+  const design = isString(args.design) ? designByName(args.design) : DESIGNS.r3;
   const records = [];
   const warnings = [];
   for (const f of args.runs) {
@@ -110,10 +112,11 @@ export function loadInputs(args, cwd) {
     warnings.push(...parsed.warnings);
   }
   const planCells = args.plan.flatMap((f) => parsePlan(fs.readFileSync(path.resolve(cwd, f), 'utf8'), f));
-  const prices = readJson(cwd, args.prices);
-  if (!isPrices(prices['claude-code']) || !(prices.codex === undefined || isPrices(prices.codex))) {
-    throw new Error(`${args.prices}: needs "claude-code" (and optionally "codex") with ${PRICE_FIELDS.join(', ')}`);
-  }
+  // A price-free caller, such as the leak list, passes no --prices and reads no price file.
+  const prices = isString(args.prices) ? readJson(cwd, args.prices) : null;
+  if (prices !== null) checkPrices(prices, args.prices, design);
+  const runHashes = args.runs.map((f) => sha256(path.resolve(cwd, f)));
+  const voids = (args.offPin ?? []).flatMap((f) => readVoids(f, { cwd, runHashes }));
   const grading = args.grading === null ? null : readJson(cwd, args.grading);
   if (grading !== null && !(isNames(grading.flippedLessons) && isCount(grading.acceptanceFlips) && isCount(grading.readerSample?.n) && isCount(grading.readerSample?.disagreements))) {
     throw new Error(`${args.grading}: needs flippedLessons (strings), acceptanceFlips and readerSample { n, disagreements } (integers)`);
@@ -128,7 +131,7 @@ export function loadInputs(args, cwd) {
   if (dropList?.hookVoids !== undefined && !(Array.isArray(dropList.hookVoids) && dropList.hookVoids.every(isPosition))) {
     throw new Error(`${args.dropList}: hookVoids needs { sequence (string), seed and position (integers) } entries`);
   }
-  return { records, warnings, planCells, prices, grading, dropList };
+  return { records, warnings, planCells, prices, grading, dropList, voids, design };
 }
 
 /** The report object; blind mode keys every per-arm figure by code and carries no outcome by arm. */

@@ -1,11 +1,12 @@
-/** Z0 analyzer, part 2 of 6: G4 counts, abandoned tails, drops, retry and G1 voids, G3 leaks, untaught applies, pairing.
+/** Z0 analyzer, part 2 of 6: G4 counts, abandoned tails, drops, retry, off-pin and G1 voids, G3 leaks, untaught applies, pairing.
  * Order is the plan's: counts are taken before any removal, so a void or leak cannot hide a crash cluster.
  * Every removal is paired: a cell or (sequence, seed) leaves every arm at once. */
 
-import { TWO_SEED_ARMS, armRunKey, cellKey, isInvalid, isLeak, positionKey, resolvedOf, runKey, untaughtApplies } from './z0-records.mjs';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
-// Their only carried surface is the instruction files E1 restores before a retry.
-const RESTORED_ARMS = new Set(['A0', 'A4']);
+import { DESIGNS, RESTORED_ARMS, TWO_SEED_ARMS, designName } from './arms.mjs';
+import { OFFPIN_SCHEMA, armRunKey, cellKey, isInvalid, isLeak, isString, locationOf, positionKey, resolvedOf, runKey, untaughtApplies, validateCorpus } from './z0-records.mjs';
 
 const label = (sequence, seed) => `${sequence} seed ${seed}`;
 
@@ -71,6 +72,50 @@ export function retryVoids(records) {
   return from;
 }
 
+const isCount = (v) => Number.isInteger(v) && v >= 0;
+const isName = (v) => isString(v) && v.length > 0;
+
+/** An off-pin file's voids, each tagged with its file and index. `runHashes`, when given, are the sha256 of every runs file the read loads:
+ * a `runs` entry outside them stops the read, so a leaked run's void never voids its rerun.
+ * @param {string} file @param {{cwd?: string, runHashes?: string[] | null}} [options] */
+export function readVoids(file, { cwd = process.cwd(), runHashes = null } = {}) {
+  const text = fs.readFileSync(path.resolve(cwd, file), 'utf8');
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`${file}: not JSON (${e.message})`);
+  }
+  if (body === null || body === undefined || body.schema !== OFFPIN_SCHEMA) throw new Error(`${file}: schema must be "${OFFPIN_SCHEMA}"`);
+  if (!Array.isArray(body.runs) || !body.runs.every((r) => r !== null && isName(r.dir) && isName(r.file) && isName(r.sha256))) throw new Error(`${file}: runs must be a list of { dir, file, sha256 }`);
+  if (!Array.isArray(body.voids)) throw new Error(`${file}: voids must be a list of { sequence, seed, arm, position, sessionId, reason }`);
+  if (runHashes !== null) {
+    const stray = body.runs.findIndex((r) => !runHashes.includes(r.sha256));
+    if (stray >= 0) throw new Error(`${file}: runs[${stray}] (${body.runs[stray].file}, sha256 ${body.runs[stray].sha256}) is not a runs file this read loads; pass the runs file the off-pin file was written for`);
+  }
+  return body.voids.map((v, index) => {
+    const bad = [['sequence', isName(v?.sequence)], ['seed', Number.isInteger(v?.seed) && v.seed >= 1], ['arm', isName(v?.arm)], ['position', isCount(v?.position)],
+      ['sessionId', v?.sessionId === null || isName(v?.sessionId)], ['reason', isName(v?.reason)]].find(([, ok]) => !ok);
+    if (bad !== undefined) throw new Error(`${file} void ${index}: ${bad[0]} is missing or not valid`);
+    return { ...v, file, index };
+  });
+}
+
+/** Per (sequence, seed), the first position an off-pin void reaches: its own, and the rest of the run in every arm. */
+function voidStarts(voids) {
+  const from = new Map();
+  for (const v of voids) from.set(runKey(v.sequence, v.seed), Math.min(from.get(runKey(v.sequence, v.seed)) ?? Infinity, v.position));
+  return from;
+}
+
+/** The (sequence, seed, position)s of `planCells` the voids reach, and their share of all planned positions. */
+export function offPinReach(voids, planCells) {
+  const from = voidStarts(voids);
+  const reached = new Set(planCells.filter((c) => c.position >= (from.get(runKey(c.sequence, c.seed)) ?? Infinity)).map(positionKey));
+  const planned = new Set(planCells.map(positionKey));
+  return { positions: reached.size, share: planned.size === 0 ? 0 : reached.size / planned.size };
+}
+
 const canonical = (a, b) => a.sequence.localeCompare(b.sequence) || a.seed - b.seed || a.position - b.position || a.arm.localeCompare(b.arm);
 
 /** Filters 0-6 in the plan's order: the step-0 counts, the lists the report prints, and `scored`, the
@@ -78,13 +123,15 @@ const canonical = (a, b) => a.sequence.localeCompare(b.sequence) || a.seed - b.s
  * Abandoned runs are listed, not removed: analyzeZ0 stops on any abandoned run before gates or statistics (114).
  * @param {any[]} records
  * @param {any[]} planCells
- * @param {{grading?: object | null, dropList?: object | null}} [options] */
-export function filterRecords(records, planCells, { grading = null, dropList = null } = {}) {
+ * @param {{grading?: object | null, dropList?: object | null, voids?: any[]}} [options] `voids` are checked off-pin voids (readVoids) */
+export function filterRecords(records, planCells, { grading = null, dropList = null, voids = [] } = {}) {
   const tail = abandonedTail(records, planCells);
   const { arms, counts } = countCells(records, planCells, tail);
   const plannedRuns = new Set(planCells.map((c) => runKey(c.sequence, c.seed)));
   const abandoned = abandonedRuns(records, planCells, tail);
   const retryFrom = retryVoids(records);
+  const offPinFrom = voidStarts(voids);
+  const offPinned = (r) => r.position >= (offPinFrom.get(runKey(r.sequence, r.seed)) ?? Infinity);
   // A failed hippo start or prompt hook (hook-check.mjs reads it from the transcripts) left its arm without hippo's text there.
   const hookVoided = new Set((dropList?.hookVoids ?? []).map(positionKey));
   const voided = new Set([...records.filter((r) => r.void !== null).map(positionKey), ...hookVoided]);
@@ -95,7 +142,7 @@ export function filterRecords(records, planCells, { grading = null, dropList = n
   const retryVoided = new Set(planCells.filter(retried).map(positionKey)).size;
   const scored = applyDrops(records, grading, dropList).filter((r) => {
     const run = runKey(r.sequence, r.seed);
-    return !leaked.has(run) && !voided.has(positionKey(r)) && !retried(r) && !untaught.has(positionKey(r)) && !isInvalid(r) && !isLeak(r);
+    return !leaked.has(run) && !voided.has(positionKey(r)) && !retried(r) && !offPinned(r) && !untaught.has(positionKey(r)) && !isInvalid(r) && !isLeak(r);
   });
   const carryUnion = new Set(records.filter((r) => r.carryUnionMerges > 0).map((r) => runKey(r.sequence, r.seed)));
   return {
@@ -109,9 +156,53 @@ export function filterRecords(records, planCells, { grading = null, dropList = n
     retryVoided: { positions: retryVoided, share: plannedPositions.size === 0 ? 0 : retryVoided / plannedPositions.size },
     untaughtApplyDrops: untaught.size,
     hookVoided: { positions: hookVoided.size, share: plannedPositions.size === 0 ? 0 : hookVoided.size / plannedPositions.size },
+    offPinVoided: offPinReach(voids, planCells),
     carryUnion,
     scored: scored.sort(canonical),
   };
+}
+
+export const withoutRuns = (records, runs) => records.filter((r) => !runs.has(runKey(r.sequence, r.seed)));
+
+/** The inputs `filterRecords` reads; a new filter input is one edit here. */
+export const FILTER_KEYS = ['grading', 'dropList', 'voids', 'design'];
+
+/** The filter inputs of `x`, with the design's dropped families added to the drop list's `droppedFamilies` (applyDrops reads them from there). */
+export function filterOpts(x) {
+  const out = Object.fromEntries(FILTER_KEYS.filter((k) => x[k] !== undefined).map((k) => [k, x[k]]));
+  const extra = (x.design ?? DESIGNS.r3).dropFamilies;
+  if (extra.length > 0) out.dropList = { droppedLessons: [], ...x.dropList, droppedFamilies: [...new Set([...(x.dropList?.droppedFamilies ?? []), ...extra])] };
+  return out;
+}
+
+function checkVoids(voids, planCells) {
+  const planned = new Set(planCells.map(cellKey));
+  for (const v of voids) if (!planned.has(cellKey(v))) throw new Error(`${v.file} void ${v.index}: cell ${cellKey(v)} is not in any plan file`);
+}
+
+function checkDesignArms(design, records, planCells) {
+  const name = designName(design);
+  for (const [what, items] of [['record', records], ['plan cell', planCells]]) {
+    const stray = items.find((x) => !design.arms.includes(x.arm));
+    if (stray !== undefined) throw new Error(`${locationOf(stray) ?? cellKey(stray)}: ${what} arm ${stray.arm} is not in design ${name}; pass the design that holds it`);
+  }
+}
+
+/** The one path from parsed inputs to filtered records. It checks the voids against the whole plan, drops seeds above the design's `maxSeed`,
+ * validates the corpus and the design's arms, and calls `filterRecords` with the design's families dropped. With `dropAbandoned` it leaves
+ * abandoned runs out of the filter; the returned `records` and `planCells` stay whole, so counts taken before filtering do not move.
+ * @param {any[]} records @param {any[]} planCells @param {any} opts the FILTER_KEYS inputs @param {{dropAbandoned: boolean}} mode */
+export function filteredInput(records, planCells, opts, { dropAbandoned }) {
+  const design = opts.design ?? DESIGNS.r3;
+  checkVoids(opts.voids ?? [], planCells);
+  const under = (x) => design.maxSeed === null || x.seed <= design.maxSeed;
+  const [kept, cells, voids] = [records.filter(under), planCells.filter(under), (opts.voids ?? []).filter(under)];
+  const { unchecked } = validateCorpus(kept, cells);
+  checkDesignArms(design, kept, cells);
+  const abandoned = abandonedRuns(kept, cells);
+  const [inRecords, inCells] = dropAbandoned ? [withoutRuns(kept, abandoned), withoutRuns(cells, abandoned)] : [kept, cells];
+  const filtered = { ...filterRecords(inRecords, inCells, filterOpts({ ...opts, voids })), offPinVoided: offPinReach(voids, cells) };
+  return { filtered, abandoned, unchecked, records: kept, planCells: cells };
 }
 
 /** Step 7: (sequence, seed, position) pairs where both arms have a scoreable record; seeds 1-2 when a two-seed arm is in (124). */

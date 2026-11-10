@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { sha256 } from './regrade.mjs';
 import { READER_HIDDEN } from './workspace.mjs';
-import { ALL_ARMS } from './z0-records.mjs';
+import { ALL_ARMS } from './arms.mjs';
 
 const win = process.platform === 'win32';
 const Z95 = 1.959963984540054;

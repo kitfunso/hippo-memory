@@ -1,6 +1,7 @@
 /** Synthetic Z0 records plus the matching plan, with per-arm knobs, for the analyzer tests.
  * Draws are keyed on (arm, sequence, seed, position), so one arm's knob never moves another arm's draws. */
 import { seededRandom } from '../../dist/eval/eval-stats.js';
+import { ARM_TABLE, CAPTURE_ARMS, DESIGNS } from '../../scripts/token-eval/arms.mjs';
 
 type Check = 'pass' | 'fail' | 'na';
 type Kind = 'teach' | 'apply' | 'no-lesson';
@@ -45,16 +46,38 @@ export interface Knobs {
   readonly cost?: number | ((slot: Slot) => number);
 }
 
+export type Design = (typeof DESIGNS)[keyof typeof DESIGNS];
+type Row = { tool: string; seeds: number };
+// SAFETY: every ARM_TABLE row carries tool and seeds; the cast only widens its literal keys to string.
+const ROWS = ARM_TABLE as Readonly<Record<string, Row>>;
+
 export interface GenOpts {
+  readonly design?: Design;
   readonly arms?: readonly string[];
   readonly knobs?: Readonly<Partial<Record<string, Knobs>>>;
   readonly repos?: number;
 }
 
-export const ARMS = ['A0', 'A1', 'A2', 'A4', 'A5', 'X1', 'X2', 'X3', 'X4'];
+export const ARMS: string[] = [...DESIGNS.r3.arms];
 export const PRICES = { 'claude-code': { inputPerMTok: 3, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3, outputPerMTok: 15 } };
-const TWO_SEED = new Set(['A0', 'A4', 'X4']);
-const DEFAULT_FAIL = new Map([['A0', 0.6], ['A4', 0.05], ['X1', 0.6], ['X4', 0.05]]);
+// Fixture rates, not the price page's: a Sonnet 5.5 row at exactly half of each Opus 5.5 rate, as checkPrices requires.
+export const PRICES_BY_MODEL = {
+  models: {
+    'claude-opus-5-5': { inputPerMTok: 5, cacheWritePerMTok: 6.25, cacheReadPerMTok: 0.5, outputPerMTok: 25 },
+    'claude-sonnet-5-5': { inputPerMTok: 2.5, cacheWritePerMTok: 3.125, cacheReadPerMTok: 0.25, outputPerMTok: 12.5 },
+  },
+};
+
+/** A design's G2 halves set its control and taught arms' failure rates; every other arm draws 0.5 unless a knob says otherwise. */
+function defaultFail(design: Design): Map<string, number> {
+  const rates = new Map<string, number>();
+  for (const half of [design.g2.claudeCode, design.g2.codex]) {
+    if (half === null) continue;
+    rates.set(half.control, 0.6);
+    rates.set(half.taught, 0.05);
+  }
+  return rates;
+}
 const BASE: Usage = { inputTokens: 2_000, cacheWriteTokens: 8_000, cacheReadTokens: 100_000, outputTokens: 3_000 };
 
 // T teach, A apply, R reversal teach, N no-lesson; family 3 reverses.
@@ -94,9 +117,9 @@ const scale = (u: Usage, m: number): Usage => ({
   cacheReadTokens: Math.round(u.cacheReadTokens * m), outputTokens: Math.round(u.outputTokens * m),
 });
 
-function record(arm: string, repo: string, sequence: string, seed: number, slot: Slot, knobs: Knobs, order: number): Z0Record {
+function record(arm: string, repo: string, sequence: string, seed: number, slot: Slot, knobs: Knobs, order: number, rates: ReadonlyMap<string, number>): Z0Record {
   const rand = seededRandom(hash(`${arm}|${sequence}|${seed}|${slot.position}`));
-  const fail = (slot.kind === 'teach' ? knobs.teachFail : undefined) ?? knobs.fail ?? DEFAULT_FAIL.get(arm) ?? 0.5;
+  const fail = (slot.kind === 'teach' ? knobs.teachFail : undefined) ?? knobs.fail ?? rates.get(arm) ?? 0.5;
   const na = knobs.na ?? 0;
   const u = rand();
   const first: Check = u < na ? 'na' : u < na + fail ? 'fail' : 'pass';
@@ -117,28 +140,30 @@ function record(arm: string, repo: string, sequence: string, seed: number, slot:
   };
   if (slot.kind === 'apply') {
     r.wordOverlap = 0.1 * ((slot.family ?? 0) + 1);
-    r.chain = { stored: true, shown: true, followed: first === 'pass', captured: arm === 'A2' || arm === 'X2' ? true : null };
+    r.chain = { stored: true, shown: true, followed: first === 'pass', captured: CAPTURE_ARMS.has(arm) ? true : null };
   }
   return r;
 }
 
 /** 6 repos x 3 seeds; sets R and N share one sequence per repo and set X has its own, 36 (sequence, seed) runs. */
 export function generate(opts: GenOpts = {}): Generated {
-  const arms = opts.arms ?? ARMS;
+  const design = opts.design ?? DESIGNS.r3;
+  const arms: readonly string[] = opts.arms ?? design.arms;
+  const rates = defaultFail(design);
   const records: Z0Record[] = [];
   for (let i = 1; i <= (opts.repos ?? 6); i++) {
     const repo = `repo${i}`;
     const runs = [
-      { sequence: `rn-${repo}`, layout: slots(RN_LAYOUT, 'R', `rn-${repo}`), armSet: arms.filter((a) => a.startsWith('A')) },
-      { sequence: `x-${repo}`, layout: slots(RN_LAYOUT.filter(([c]) => c !== 'N'), 'X', `x-${repo}`), armSet: arms.filter((a) => a.startsWith('X')) },
+      { sequence: `rn-${repo}`, layout: slots(RN_LAYOUT, 'R', `rn-${repo}`), armSet: arms.filter((a) => ROWS[a].tool === 'claude-code') },
+      { sequence: `x-${repo}`, layout: slots(RN_LAYOUT.filter(([c]) => c !== 'N'), 'X', `x-${repo}`), armSet: arms.filter((a) => ROWS[a].tool === 'codex') },
     ];
     for (const { sequence, layout, armSet } of runs) {
       for (let seed = 1; seed <= 3; seed++) {
         for (const slot of layout) {
           armSet.forEach((arm, k) => {
-            if (seed === 3 && TWO_SEED.has(arm)) return;
+            if (seed === 3 && ROWS[arm].seeds === 2) return;
             const order = seed * 1_000_000 + slot.position * 1_000 + i * 10 + ((k + slot.position) % armSet.length);
-            records.push(record(arm, repo, sequence, seed, slot, opts.knobs?.[arm] ?? {}, order));
+            records.push(record(arm, repo, sequence, seed, slot, opts.knobs?.[arm] ?? {}, order, rates));
           });
         }
       }

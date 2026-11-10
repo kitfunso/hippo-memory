@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { armEnv } from './arms.mjs';
+import { DESIGNS, armEnv } from './arms.mjs';
 import { spawnTree } from './exec.mjs';
 import { startLogProxy, requestBodies } from './proxy.mjs';
 
@@ -54,7 +54,7 @@ export async function runAuthor({ work, prompt, out, model = null, claudeBin = '
   const settings = path.join(out, 'settings.json');
   fs.writeFileSync(settings, JSON.stringify({ autoMemoryEnabled: false }));
   // A0's env (no provider keys but the plan login, no hippo on PATH, auto memory off) minus the arm keys an author has no use for, which name hippo.
-  const env = Object.fromEntries(Object.entries(armEnv('A0', dirs, baseEnv)).filter(([k]) => !AUTHOR_UNSET.includes(k)));
+  const env = Object.fromEntries(Object.entries(armEnv(DESIGNS.r3.noMemory, dirs, baseEnv)).filter(([k]) => !AUTHOR_UNSET.includes(k)));
   const log = path.join(out, 'requests.jsonl');
   const args = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', '--settings', `"${settings}"`, '--permission-mode', 'bypassPermissions', ...(model ? ['--model', model] : [])];
   const proxy = await startLogProxy(log, { upstream });

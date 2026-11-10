@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, sh, cloneFresh } from './exec.mjs';
-import { HIPPO_ARMS, armSettings, armEnv, armSet, childEnv, writeHippoShim, startupTools } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, HIPPO_ARMS, armSettings, armEnv, armSet, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs } from './homes.mjs';
 import { stubBaseCommit, assertNoInstructionLinks, STUB_CLAUDE_MD, X3_STUB } from './workspace.mjs';
 import { codexContext, writeCodexHome } from './codex.mjs';
@@ -105,7 +105,7 @@ export async function openContext(opts) {
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
   const warmDir = path.join(outDir, 'warmup');
-  const warmEnv = armEnv('A0', { ...runDirs(warmDir, '', '', 0), claudeConfig: path.join(warmDir, 'claude-config') }, process.env, { passEnv });
+  const warmEnv = armEnv(DESIGNS.r3.noMemory, { ...runDirs(warmDir, '', '', 0), claudeConfig: path.join(warmDir, 'claude-config') }, process.env, { passEnv });
   ctx.claudeVersion = sh(`${claude} --version`, outDir, warmEnv).stdout.trim() || null;
   refuseOffPins(opts.pins, claudePinned(ctx), ctx);
   if (warmup) {
@@ -124,7 +124,7 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
   const dirs = runDirs(ctx.outDir, name, arm, seed);
   freshRunDirs(dirs);
   const env = armEnv(arm, dirs, process.env, { passEnv: ctx.passEnv });
-  if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, ctx.fakeHome, arm === 'A5' ? 'sham' : 'real');
+  if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, ctx.fakeHome, ARM_TABLE[arm].shim);
   const settingsFile = path.join(ctx.outDir, 'settings', `${name}-${arm}-seed${seed}.json`);
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));

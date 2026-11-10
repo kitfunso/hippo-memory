@@ -2,14 +2,22 @@
  * Spec: docs/evals/2026-09-29-z0-built-in-memory-prereg.md, field table in docs/evals/2026-10-03-z0-analyzer.md.
  * A bad record rejects with its file and line; nothing is defaulted. */
 
+import { ARM_TABLE, CAPTURE_ARMS, joinCodes, roundArms } from './arms.mjs';
+
 export const SCHEMA = 'z0-record/1';
-export const RN_ARMS = ['A0', 'A1', 'A2', 'A4', 'A5'];
-export const X_ARMS = ['X1', 'X2', 'X3', 'X4'];
-export const ALL_ARMS = [...RN_ARMS, ...X_ARMS];
-export const TWO_SEED_ARMS = new Set(['A0', 'A4', 'X4']);
 // Amendment 2 item 5: only the arms the seed rule sizes may run a seed above 3, up to SEED_CAP.
 export const SEED_CAP = 9;
-export const RULE_ARMS = new Set(['A1', 'A2', 'A5', 'X2', 'X3']);
+// Every file schema lives here, so a reader never waits on its writer's module.
+export const OFFPIN_SCHEMA = 'z0-offpin/1';
+export const SEED_RULE_SCHEMA_R3 = 'z0-seed-rule/1';
+export const SEED_RULE_SCHEMA = 'z0-seed-rule/2';
+export const LEVELS_SCHEMA = 'z0-levels/1';
+export const SPEND_BASIS_SCHEMA = 'z0-spend-basis/1';
+export const LEAKS_SCHEMA = 'z0-leaks/1';
+export const MERGE_SCHEMA = 'z0-merge/1';
+export const PILOT_SCHEMA = 'z0-pilot/1';
+export const SEED_PREVIEW_SCHEMA = 'z0-seed-preview/1';
+export const FAKE_KNOBS_SCHEMA = 'z0-fake-knobs/1';
 
 const SETS = new Set(['R', 'N', 'X']);
 const KINDS = new Set(['teach', 'apply', 'no-lesson']);
@@ -77,9 +85,10 @@ function checkLessons(r, crashed) {
 function checkSlot(x) {
   check(SETS.has(x.set), 'set must be R, N or X');
   check(Number.isInteger(x.seed) && x.seed >= 1 && x.seed <= SEED_CAP, `seed must be an integer from 1 to ${SEED_CAP}`);
-  check((x.set === 'X' ? X_ARMS : RN_ARMS).includes(x.arm), `arm ${x.arm} is not an arm of set ${x.set}`);
-  check(!(x.seed > 2 && TWO_SEED_ARMS.has(x.arm)), `seed ${x.seed} is not run for ${x.arm} (prereg 124)`);
-  check(!(x.seed > 3 && !RULE_ARMS.has(x.arm)), `seed ${x.seed} is not run for ${x.arm}: only A1, A2, A5, X2 and X3 take seeds above 3 (Amendment 2 item 5)`);
+  const arm = Object.hasOwn(ARM_TABLE, x.arm) ? ARM_TABLE[x.arm] : null;
+  check(arm !== null && arm.set === (x.set === 'X' ? 'X' : 'RN'), `arm ${x.arm} is not an arm of set ${x.set}`);
+  check(!(x.seed > 2 && arm.seeds === 2), `seed ${x.seed} is not run for ${x.arm} (prereg 124)`);
+  check(!(x.seed > 3 && !arm.seedRule), `seed ${x.seed} is not run for ${x.arm}: only ${joinCodes(roundArms(arm.round, 'seedRule'))} take seeds above 3 (Amendment 2 item 5)`);
   check(KINDS.has(x.kind), 'kind must be teach, apply or no-lesson');
   check(x.kind !== 'no-lesson' || x.set === 'N', 'kind no-lesson appears only in set N');
   check(x.kind === 'no-lesson' ? x.familyId === null : isName(x.familyId), 'familyId is a string for teach and apply, null for no-lesson');
@@ -133,7 +142,7 @@ function checkOutcome(r, crashed) {
   if (r.chain === undefined) return;
   check(isPlainObject(r.chain), 'chain must be an object when present');
   for (const f of CHAIN_FIELDS) check(r.chain[f] === null || isBool(r.chain[f]), `chain.${f} must be boolean or null`);
-  check(r.chain.captured === null || r.arm === 'A2' || r.arm === 'X2', 'chain.captured is set only for A2 and X2');
+  check(r.chain.captured === null || CAPTURE_ARMS.has(r.arm), `chain.captured is set only for ${joinCodes(roundArms(ARM_TABLE[r.arm].round, 'capture'))}`);
 }
 
 /** Per-record contract; returns warnings. Any invalid record, a leak included, may null its usage, work counts

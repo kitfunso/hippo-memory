@@ -5,12 +5,13 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ARMS, ARM_SEEDS, TOKEN_KEY, armSet } from './arms.mjs';
+import { ARMS, ARM_SEEDS, CODEX_HIPPO_ARMS, TOKEN_KEY, armSet } from './arms.mjs';
 import { assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { validateFamilies, drawOrder, taskRoles } from './lessons.mjs';
 import { openContext, cacheTaskRepos } from './runs.mjs';
 import { assertNoPhraseLeaks } from './leaks.mjs';
 import { runSteps } from './task.mjs';
+import { SEED_CAP } from './z0-records.mjs';
 import { planScreen, screenLines, runScreen, SCREEN_ARMS } from './screen.mjs';
 import { parseHookTrust } from './codex.mjs';
 import { finishCodex } from './codex-task.mjs';
@@ -62,10 +63,9 @@ function assertArmsPair(spec, arms) {
 
 // --seeds only lowers a count: E7 refuses an A0 or A4 seed past the prereg's two (prereg 122-124).
 const seedCap = (seeds) => (arm) => Math.min(seeds ?? ARM_SEEDS[arm], ARM_SEEDS[arm]);
-// Wave 2 (Amendment 2 item 5) runs seeds 4 up to the seed rule's count; 9 is SEED_CAP in z0-records.mjs, which the tests tie to this.
+// Wave 2 (Amendment 2 item 5) runs seeds 4 up to the seed rule's count.
 const WAVE_1_SEEDS = 3;
 const WAVE_2_FIRST_SEED = WAVE_1_SEEDS + 1;
-const WAVE_2_MAX_SEEDS = 9;
 
 /** Every session in execution order, `{ seed, position, arm, sequence, taskId, t, role }`: position-major, each arm set's order rotated by position + seed.
  * `firstSeed` 4 plans wave 2; rotation and drawn order key on the real seed number, so a seed's cells match a plan that started at 1. */
@@ -115,7 +115,7 @@ function readSeedRule(file, arms) {
   for (const arm of arms) {
     if (!Object.hasOwn(seeds, arm)) throw new Error(`arm ${arm} is not listed in the seed rule's seeds (${Object.keys(seeds).join(', ')}); pass --arms with arms the rule lists`);
     const n = seeds[arm];
-    if (!Number.isInteger(n) || n < WAVE_1_SEEDS || n > WAVE_2_MAX_SEEDS) throw new Error(`--seed-rule ${file}: ${arm} needs a seed count from ${WAVE_1_SEEDS} to ${WAVE_2_MAX_SEEDS}, got ${JSON.stringify(n)}`);
+    if (!Number.isInteger(n) || n < WAVE_1_SEEDS || n > SEED_CAP) throw new Error(`--seed-rule ${file}: ${arm} needs a seed count from ${WAVE_1_SEEDS} to ${SEED_CAP}, got ${JSON.stringify(n)}`);
     counts[arm] = n;
   }
   return { counts, sha256: createHash('sha256').update(bytes).digest('hex') };
@@ -147,7 +147,7 @@ export function codexPreflight(arms, mode, { codexModel = null, codexHookTrust =
   if (mode !== 'real' || !arms.some((a) => armSet(a) === 'X')) return;
   if (!codexModel) throw new Error('an X arm runs Codex: pass --codex-model, so every record names the model it ran');
   // An untrusted X2 runs hippo's hooks never, so its cells would test only the wrapper and must not reach the data.
-  if (arms.includes('X2') && parseHookTrust(codexHookTrust).kind === 'none') throw new Error('X2 with --codex-hook-trust none: Codex would never run hippo\'s hooks. Pass the trust from the smoke report (flag, or file:<path>)');
+  if (arms.some((a) => CODEX_HIPPO_ARMS.has(a)) && parseHookTrust(codexHookTrust).kind === 'none') throw new Error('X2 with --codex-hook-trust none: Codex would never run hippo\'s hooks. Pass the trust from the smoke report (flag, or file:<path>)');
 }
 
 /** Run the whole plan in lockstep. Returns the records written; `progress.last` names the last completed step. */
@@ -197,7 +197,7 @@ function orderReport(steps) {
   return lines;
 }
 
-const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N | --seed-rule FILE] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--pins FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
+const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms ' + ARMS.join(',') + '] [--seeds N | --seed-rule FILE] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--pins FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
 const CODEX_FLAGS = { codexBin: '--codex-bin', codexModel: '--codex-model', codexAuth: '--codex-auth', codexHookTrust: '--codex-hook-trust', codexMemoryWait: '--codex-memory-wait', codexMemories: '--codex-memories', codexWrapperWaitMs: '--codex-wrapper-wait-ms' };
 
 /** The arms a run uses: the named ones, else every arm the tasks file has a sequence for; a screen's are always A0 and A4 (prereg 68), so an X arm named with it is refused. */
@@ -297,7 +297,7 @@ async function main() {
   if (mode === 'dry') return dryRun(args, steps);
   const dirName = (st) => st.runName ?? st.sequence.id;
   const runs = [...new Map(steps.map((st) => [`${dirName(st)}|${st.arm}|${st.seed}`, { seq: dirName(st), arm: st.arm, seed: st.seed }])).values()];
-  checkHomes({ outDir: out, runs, passEnv, install: arms.includes('X2') ? checkInstaller(codexOpts.codexBin) : null });
+  checkHomes({ outDir: out, runs, passEnv, install: arms.some((a) => CODEX_HIPPO_ARMS.has(a)) ? checkInstaller(codexOpts.codexBin) : null });
   console.log(`Homes check passed for ${runs.length} runs.`);
   if (mode === 'check') return;
   const progress = { last: 'none' };

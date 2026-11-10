@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO, HIPPO_JS, sh, git, pathKey } from './exec.mjs';
-import { HIPPO_ARMS, armEnv, childEnv, writeHippoShim, which } from './arms.mjs';
+import { ARM_TABLE, CODEX_HIPPO_ARMS, HIPPO_ARMS, armEnv, childEnv, writeHippoShim, which } from './arms.mjs';
 
 const win = process.platform === 'win32';
 const samePath = (a, b) => (win ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
@@ -125,9 +125,9 @@ function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell, in
   try {
     git(['init', '--quiet'], dirs.work);
     const env = armEnv(arm, dirs, baseEnv, { passEnv });
-    if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, outDir, arm === 'A5' ? 'sham' : 'real');
+    if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, outDir, ARM_TABLE[arm].shim);
     // X2's Codex install adds hooks.json and a wrapper home, and hippo runs under that home too, so the importer is checked from both.
-    const x2 = arm === 'X2' && install;
+    const x2 = CODEX_HIPPO_ARMS.has(arm) && install;
     if (x2) install({ s: { id: seq }, arm, seed, dirs, env });
     for (const home of x2 ? [outDir, dirs.home] : [outDir]) {
       const r = sh(`"${process.execPath}" "${HIPPO_JS}" import --agents --dry-run`, dirs.work, { ...childEnv(env), HOME: home, USERPROFILE: home });

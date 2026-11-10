@@ -111,7 +111,7 @@ describe('X arm settings and env (test 3)', () => {
   it('gives X1, X3 and X4 auto memory on and X2 the hippo settings', () => {
     for (const arm of ['X1', 'X3', 'X4']) expect(armSettings(arm, hippo), arm).toEqual({});
     expect(armSettings('X2', hippo)).toEqual(hippo);
-    expect([...HIPPO_ARMS].sort()).toEqual(['A2', 'A5', 'X2']);
+    expect([...HIPPO_ARMS].sort()).toEqual(['A2', 'A5', 'S2', 'S5', 'X2']);
     for (const arm of ['X1', 'X2', 'X3', 'X4']) expect(CARRY_ARMS.has(arm), arm).toBe(true);
   });
 

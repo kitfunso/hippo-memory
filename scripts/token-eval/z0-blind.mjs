@@ -7,12 +7,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ALL_ARMS } from './z0-records.mjs';
+import { ALL_ARMS } from './arms.mjs';
+import { checkerFiles } from './checker-identity.mjs';
+import { treeHash } from './pins.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
-export const MODULES = ['records', 'filters', 'hypotheses', 'gates', 'blind', 'analyze'].map((m) => `scripts/token-eval/z0-${m}.mjs`)
-  .concat(['eval-stats', 'repository-t'].flatMap((m) => [`src/eval/${m}.ts`, `dist/eval/${m}.js`]));
+const DEFAULT_ENTRY = 'scripts/token-eval/z0-analyze.mjs';
+const STAT_SOURCES = ['src/eval/eval-stats.ts', 'src/eval/repository-t.ts'];
 export const SEALED = 'hypotheses sealed until unblinded';
 const ARM_WORD = new RegExp(`\\b(${ALL_ARMS.join('|')})\\b`, 'g');
 
@@ -94,14 +96,32 @@ export function unblindRefusal(args, gates, cwd) {
 
 export const sha256 = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
-/** sha256 of every input, labelled as given on argv, and of the analyzer and statistics sources, labelled repo-relative. */
-export function inputHashes(args, cwd) {
+/** One repo-relative source row per file the entry loads, followed through every relative import (so arms.mjs, exec.mjs and the dist files join with no list to edit). */
+export function sourceRows(entry) {
+  const real = fs.realpathSync(path.resolve(REPO, entry));
+  const [repo, dir] = [fs.realpathSync(REPO), path.dirname(real)];
+  return checkerFiles(real).map(([label, hash]) => ({
+    role: 'source', file: path.relative(repo, label === '' ? real : path.resolve(dir, label)).split(path.sep).join('/'), sha256: hash,
+  }));
+}
+
+const inputRow = (cwd, role, file) => ({ role, file, sha256: sha256(path.resolve(cwd, file)) });
+const extraRow = (cwd, role, file) => {
+  const abs = path.resolve(cwd, file);
+  return fs.statSync(abs).isDirectory() ? { role, file, sha256: treeHash(abs), tree: true } : inputRow(cwd, role, file);
+};
+
+/** sha256 of every input, labelled as given on argv, then the `extra` [role, path] pairs (a folder hashes as a tree), then the entry's sources, labelled repo-relative.
+ * @param {any} args @param {string} cwd @param {{entry?: string, extra?: string[][]}} [options] */
+export function inputHashes(args, cwd, { entry = DEFAULT_ENTRY, extra = [] } = {}) {
   const inputs = [
     ...args.runs.map((f) => ['runs', f]), ...args.plan.map((f) => ['plan', f]), ['prices', args.prices],
-    ['grading', args.grading], ['drop-list', args.dropList],
-  ].filter(([, f]) => f !== null);
+    ['grading', args.grading], ['drop-list', args.dropList], ...(args.offPin ?? []).map((f) => ['off-pin', f]),
+  ].filter(([, f]) => f !== null && f !== undefined);
   return [
-    ...inputs.map(([role, f]) => ({ role, file: f, sha256: sha256(path.resolve(cwd, f)) })),
-    ...MODULES.map((m) => ({ role: 'source', file: m, sha256: sha256(path.join(REPO, m)) })),
+    ...inputs.map(([role, f]) => inputRow(cwd, role, f)),
+    ...extra.map(([role, f]) => extraRow(cwd, role, f)),
+    ...sourceRows(entry),
+    ...STAT_SOURCES.map((m) => ({ role: 'source', file: m, sha256: sha256(path.join(REPO, m)) })),
   ];
 }

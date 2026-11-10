@@ -5,8 +5,9 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { RN_ARMS, parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
-import { pooledVoids } from '../scripts/token-eval/z0-blind.mjs';
+import { RN_ARMS } from '../scripts/token-eval/arms.mjs';
+import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
+import { pooledVoids, sourceRows } from '../scripts/token-eval/z0-blind.mjs';
 import { analyzeZ0, runCli } from '../scripts/token-eval/z0-analyze.mjs';
 import { ARMS, GRADING, PRICES, at, generate, jsonl, type Generated } from './fixtures/z0-gen.js';
 
@@ -54,7 +55,9 @@ describe('Z0 CLI and blind mode', () => {
       const file = h.role === 'source' ? path.join(repo, h.file) : path.join(dir, h.file);
       expect(h.sha256).toBe(createHash('sha256').update(fs.readFileSync(file)).digest('hex'));
     }
-    expect(report.hashes.map((h: { role: string }) => h.role).filter((r: string) => r === 'source')).toHaveLength(10);
+    const sources = report.hashes.filter((h: { role: string }) => h.role === 'source').map((h: { file: string }) => h.file);
+    expect(sources).toEqual([...sourceRows('scripts/token-eval/z0-analyze.mjs').map((r) => r.file), 'src/eval/eval-stats.ts', 'src/eval/repository-t.ts']);
+    expect(sources).toEqual(expect.arrayContaining(['scripts/token-eval/arms.mjs', 'scripts/token-eval/exec.mjs']));
     fs.writeFileSync(path.join(dir, 'z0-blind-key.json'), JSON.stringify({ codes: { A0: 'K1', A1: 'K2' } }));
     expect(run()).toMatchObject({ code: 1, stderr: expect.stringMatching(/another arm set/) });
   });

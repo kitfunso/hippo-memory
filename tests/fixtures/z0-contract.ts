@@ -1,6 +1,8 @@
 // A local copy of the Z0 analyzer's `z0-record/1` contract: the field table and its two cross-checks.
 // Written from the analyzer's record contract so these runner tests fail if the runner drifts from it.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { ARM_TABLE } from '../../scripts/token-eval/arms.mjs';
+
 export interface Z0Usage { inputTokens: number; cacheWriteTokens: number; cacheReadTokens: number; outputTokens: number }
 export interface Z0Lesson { lessonId: string; first: string; final: string; staleFollow: boolean | null }
 export interface Z0Chain { stored: boolean | null; shown: boolean | null; followed: boolean | null; captured: boolean | null }
@@ -20,8 +22,10 @@ export interface Z0Record extends Z0PlanCell {
   baseCommit?: string | null; sessionId: string | null; resumeSessionId: string | null; transcriptFound: boolean; hippo: object | null; agentError: string | null;
 }
 
-const RN_ARMS = ['A0', 'A1', 'A2', 'A4', 'A5'];
-const TWO_SEED_ARMS = new Set(['A0', 'A4']);
+// SAFETY: every ARM_TABLE row carries set, seeds and capture; the cast only widens its literal keys to string.
+const ROWS = ARM_TABLE as Readonly<Record<string, { set: string; seeds: number; capture: boolean }>>;
+const RN_ARMS = Object.keys(ROWS).filter((a) => ROWS[a].set === 'RN');
+const TWO_SEED_ARMS = new Set(Object.keys(ROWS).filter((a) => ROWS[a].seeds === 2 && ROWS[a].set === 'RN'));
 const KINDS = new Set(['teach', 'apply', 'no-lesson']);
 const CHECKS = new Set(['pass', 'fail', 'na']);
 const SOURCES = new Set(['maintainer', 'template']);
@@ -99,7 +103,7 @@ function checkOutcome(r: Z0Record, crashed: boolean) {
   if (r.chain === undefined) return;
   check(isPlain(r.chain), 'chain must be an object when present');
   for (const f of CHAIN_FIELDS) check(r.chain[f] === null || isBool(r.chain[f]), `chain.${f} must be boolean or null`);
-  check(r.chain.captured === null || r.arm === 'A2' || r.arm === 'X2', 'chain.captured is set only for A2 and X2');
+  check(r.chain.captured === null || ROWS[r.arm].capture, 'chain.captured is set only for a capture arm');
 }
 
 /** Throws with the field name on the first breach of the per-record contract. */

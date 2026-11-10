@@ -1,11 +1,13 @@
 // Z0 family screen (prereg 66-68): A0 runs each family's teach and screen tasks, A4 the screen task with the rule written in.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { DESIGNS } from './arms.mjs';
 import { openContext } from './runs.mjs';
 import { runSteps } from './task.mjs';
 
 const SCREEN_SEEDS = [1, 2];
-export const SCREEN_ARMS = ['A0', 'A4'];
+const SCREEN = DESIGNS.r3.screen;
+export const SCREEN_ARMS = [SCREEN.control, SCREEN.taught];
 const A0_OF = 4;
 const A4_OF = 2;
 
@@ -31,9 +33,9 @@ export function planScreen(spec) {
     const screenTask = { ...family.screen, kind: 'screen', familyId: family.id, lessonId: root.id };
     const cell = { sequence, role, runName: `screen-${family.id}` };
     for (const seed of SCREEN_SEEDS) {
-      steps.push({ ...cell, seed, arm: 'A0', position: 0, taskId: teach.id, t: teach });
-      steps.push({ ...cell, seed, arm: 'A0', position: 1, taskId: screenTask.id, t: screenTask });
-      steps.push({ ...cell, seed, arm: 'A4', position: 0, taskId: screenTask.id, t: screenTask, taught: [root] });
+      steps.push({ ...cell, seed, arm: SCREEN.control, position: 0, taskId: teach.id, t: teach });
+      steps.push({ ...cell, seed, arm: SCREEN.control, position: 1, taskId: screenTask.id, t: screenTask });
+      steps.push({ ...cell, seed, arm: SCREEN.taught, position: 0, taskId: screenTask.id, t: screenTask, taught: [root] });
     }
   }
   return steps;
@@ -44,7 +46,7 @@ export function screenVerdicts(records, spec) {
   const rows = screenFamilies(spec).map(({ family }) => {
     const mine = records.filter((r) => r.familyId === family.id);
     const count = (arm, verdict) => mine.filter((r) => r.arm === arm && r.lessons[0]?.first === verdict).length;
-    const row = { familyId: family.id, a0Breaks: count('A0', 'fail'), a0Of: A0_OF, a4Follows: count('A4', 'pass'), a4Of: A4_OF };
+    const row = { familyId: family.id, a0Breaks: count(SCREEN.control, 'fail'), a0Of: A0_OF, a4Follows: count(SCREEN.taught, 'pass'), a4Of: A4_OF };
     const bad = mine.find((r) => r.invalid || r.void);
     // An invalid, void or missing screen session leaves the family undecided, never kept by default.
     if (bad) return { ...row, verdict: 'undecided', reason: `${bad.taskId} ${bad.arm} seed${bad.seed}: ${bad.invalid ? `invalid ${bad.invalid}` : `void ${bad.void}`}` };

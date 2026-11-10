@@ -7,25 +7,24 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { addUsage, priceUsage } from '../../dist/eval/eval-stats.js';
+import { ARM_TABLE, DESIGNS, TWO_SEED_ARMS, designName, hasPair, pairOf } from './arms.mjs';
 import { loadInputs } from './z0-analyze.mjs';
-import { inputHashes, sha256 } from './z0-blind.mjs';
-import { abandonedRuns, filterRecords } from './z0-filters.mjs';
-import { CODINGS, byCoding, codexApply, firstApplyR, inSets, mean, repeatMistakeUnits, sum, taskUnits, withoutRuns } from './z0-hypotheses.mjs';
-import { TWO_SEED_ARMS, isString, validateCorpus } from './z0-records.mjs';
+import { inputHashes } from './z0-blind.mjs';
+import { filterOpts, filteredInput, withoutRuns } from './z0-filters.mjs';
+import { CODINGS, byCoding, codexApply, firstApplyR, inSets, mean, repeatMistakeUnits, sum, taskUnits } from './z0-hypotheses.mjs';
+import { costOf } from './z0-prices.mjs';
+import { SEED_CAP, isString } from './z0-records.mjs';
 import { SEEDS, clopperPearsonUpper, confirmSize, harmSizer, levelCheck, repeatSizer, smallestPassing, spreadComponents } from './z0-size-sim.mjs';
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const SOURCES = ['scripts/token-eval/z0-size.mjs', 'scripts/token-eval/z0-size-sim.mjs'];
 const TOOLS = ['claude-code', 'codex'];
 // SHORTCUT: placeholder quotas in list-price dollars a day, not measured; S9 passes the screen's measured usage per plan window (D7).
 export const QUOTA_USD_PER_DAY = { 'claude-code': 300, codex: 100 };
 export const DEFAULTS = {
   repos: [5, 8, 10, 12, 15, 20], effects: [0.15, 0.2, 0.25], power: 0.8, sims: 2_000, seed: 1,
   searchSims: 200, maxFamilies: 60, maxFamiliesPerRepo: 4, maxNTasks: 600, spreadBound: 0.8,
-  seedCap: 9, targetZ: 3.5, onMiss: 'cap', levelSims: 20_000,
+  seedCap: SEED_CAP, targetZ: 3.5, onMiss: 'cap', levelSims: 20_000,
 };
-const USAGE = 'usage: z0-size.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--drop-list FILE] '
+const USAGE = 'usage: z0-size.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--grading FILE] [--drop-list FILE] [--off-pin FILE ...] '
   + '[--repos 5,8,10,12,15,20] [--effects 0.15,0.2,0.25] [--power 0.8] [--sims 2000] [--seed 1] '
   + '[--search-sims 200] [--max-families 60] [--max-families-per-repo 4] [--max-n-tasks 600] [--spread-bound 0.8] '
   + '[--seed-cap 9] [--target-z 3.5] [--on-miss stop|cap] [--level-sims 20000] '
@@ -50,9 +49,10 @@ const oneOf = (flag, values) => (v) => {
   if (!values.includes(v)) throw new Error(`${flag} must be one of ${values.join(', ')}, got ${v}`);
   return v;
 };
+const REPEATED = new Map([['--runs', 'runs'], ['--plan', 'plan'], ['--off-pin', 'offPin']]);
 const list = (parse) => (v) => v.split(',').map(parse);
 const FLAGS = new Map([
-  ['--prices', ['prices', String]], ['--drop-list', ['dropList', String]], ['--out', ['out', String]],
+  ['--prices', ['prices', String]], ['--grading', ['grading', String]], ['--drop-list', ['dropList', String]], ['--out', ['out', String]],
   ['--repos', ['repos', list(integer('--repos', 2))]], ['--effects', ['effects', list(fraction('--effects'))]],
   ['--power', ['power', fraction('--power')]], ['--sims', ['sims', integer('--sims', 1)]],
   ['--seed', ['seed', integer('--seed', 1)]], ['--search-sims', ['searchSims', integer('--search-sims', 1)]],
@@ -67,14 +67,14 @@ const FLAGS = new Map([
 
 /** @param {string[]} argv */
 export function parseArgs(argv) {
-  const args = { runs: [], plan: [], prices: null, dropList: null, grading: null, out: null, claudeQuota: null, codexQuota: null, help: false, ...DEFAULTS };
+  const args = { runs: [], plan: [], offPin: [], prices: null, dropList: null, grading: null, out: null, claudeQuota: null, codexQuota: null, help: false, ...DEFAULTS };
   const given = new Set();
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     if (flag === '--help' || flag === '-h') return { ...args, help: true };
     const value = argv[++i];
     if (!isString(value) || value.startsWith('--')) throw new Error(`${flag} needs a value\n${USAGE}`);
-    if (flag === '--runs' || flag === '--plan') args[flag.slice(2)].push(value);
+    if (REPEATED.has(flag)) args[REPEATED.get(flag)].push(value);
     else if (!FLAGS.has(flag)) throw new Error(`unknown flag ${flag}\n${USAGE}`);
     else if (given.has(flag)) throw new Error(`${flag} given twice`);
     else {
@@ -132,14 +132,16 @@ function harmCalibration(units, bound) {
 }
 
 /** The spreads each sized hypothesis needs, from the records the analyzer would score. H3 carries no verdict, so it sets no size. */
-export function calibrate(filtered, prices, bound) {
+export function calibrate(filtered, prices, bound, opts = {}) {
   const s = filtered.scored;
-  const planned = (...arms) => arms.every((a) => filtered.arms.includes(a));
-  const notPlanned = (arms) => ({ reason: `${arms} not in the calibration plan` });
+  const design = opts.design ?? DESIGNS.r3;
+  const [h1, h2, h4] = ['H1', 'H2', 'H4'].map((name) => (hasPair(design, name) ? pairOf(design, name) : null));
+  const planned = (pair) => pair !== null && pair.every((a) => filtered.arms.includes(a));
+  const notPlanned = (name, pair) => ({ reason: pair === null ? `design ${designName(design)} has no ${name}` : `${[...pair].sort().join(', ')} not in the calibration plan` });
   return {
-    H1: planned('A1', 'A2') ? repeatCalibration(s, 'A2', 'A1', firstApplyR, bound) : notPlanned('A1, A2'),
-    H2: planned('X2', 'X3') ? repeatCalibration(s, 'X2', 'X3', codexApply, bound) : notPlanned('X2, X3'),
-    H4: planned('A1', 'A2') ? harmCalibration(taskUnits(s, 'A2', 'A1', prices['claude-code'], inSets('N')), bound) : notPlanned('A1, A2'),
+    H1: planned(h1) ? repeatCalibration(s, ...h1, firstApplyR, bound) : notPlanned('H1', h1),
+    H2: planned(h2) ? repeatCalibration(s, ...h2, codexApply, bound) : notPlanned('H2', h2),
+    H4: planned(h4) ? harmCalibration(taskUnits(s, ...h4, prices, inSets('N'), opts), bound) : notPlanned('H4', h4),
   };
 }
 
@@ -170,7 +172,7 @@ export function planLayout(planCells) {
 
 /** Mean sessions and list-price dollars per record by arm and kind, pooled per arm prefix as a fallback.
  * A session is the first one plus each teach or correction resume; a tool with no prices costs NaN. */
-export function perRecordUsage(records, prices) {
+export function perRecordUsage(records, prices, opts = {}) {
   const cells = new Map();
   const add = (key, r, sessions, usd) => {
     const cell = cells.get(key) ?? { records: 0, sessions: 0, usd: Object.fromEntries(TOOLS.map((t) => [t, 0])) };
@@ -182,9 +184,9 @@ export function perRecordUsage(records, prices) {
   for (const r of records) {
     if (r.usage === null) continue;
     const sessions = 1 + (r.teachTurns ?? 0) + (r.correctionTurns ?? 0);
-    const usd = prices[r.tool] ? priceUsage(addUsage(r.usage.firstSession, r.usage.extra), prices[r.tool]) : Number.NaN;
+    const usd = costOf(r, prices, opts);
     add(`${r.arm}/${r.kind}`, r, sessions, usd);
-    add(`${r.arm[0]}*/${r.kind}`, r, sessions, usd);
+    add(`${ARM_TABLE[r.arm].group}*/${r.kind}`, r, sessions, usd);
   }
   return Object.fromEntries([...cells].map(([k, c]) => [k, {
     records: c.records, sessions: c.sessions / c.records, usd: Object.fromEntries(Object.entries(c.usd).map(([t, v]) => [t, v / c.records])),
@@ -197,7 +199,7 @@ export function designUsage(design, layout, arms, table, seedsOf) {
   const tally = { sessions: 0, usd: Object.fromEntries(TOOLS.map((t) => [t, 0])), fallbacks: [] };
   const add = (arm, kind, perRepo) => {
     if (perRepo === 0) return;
-    const rate = table[`${arm}/${kind}`] ?? table[`${arm[0]}*/${kind}`];
+    const rate = table[`${arm}/${kind}`] ?? table[`${ARM_TABLE[arm].group}*/${kind}`];
     if (!table[`${arm}/${kind}`]) tally.fallbacks.push(`${arm}/${kind}`);
     const n = perRepo * design.repos * seedsOf(arm);
     tally.sessions += n * (rate?.sessions ?? Number.NaN);
@@ -223,10 +225,11 @@ function sized(search, repos, unit) {
   return 'boundsPower' in search ? { ...size, boundsPower: search.boundsPower } : size;
 }
 
-const RULE_ARMS = { H1: ['A1', 'A2', 'A5'], H2: ['X2', 'X3'] };
-const seedsFor = (h1, h2) => (arm) => {
+// A seed-rule group runs the seeds of its own search, in the design's group order; any other arm runs wave 1's seeds.
+const seedsFor = (groups, perGroup) => (arm) => {
   if (TWO_SEED_ARMS.has(arm)) return 2;
-  return RULE_ARMS.H1.includes(arm) ? h1 : RULE_ARMS.H2.includes(arm) ? h2 : SEEDS;
+  const i = groups.findIndex((g) => g.arms.includes(arm));
+  return i < 0 ? SEEDS : perGroup[i] ?? SEEDS;
 };
 
 /** One grid row: each hypothesis's smallest size at this many repositories, the sets they imply, and their usage. */
@@ -239,8 +242,8 @@ function gridRow(ctx, repos, m) {
   const setR = h1.n;
   const lessonPerRepo = setR * (layout.R.teachPerFamily + layout.R.applyPerFamily);
   const design = { repos, setR, setN: Math.max(h4.n, Math.round(lessonPerRepo * layout.R.noLessonRatio)), setX: h2 ? h2.n : 0 };
-  const use = designUsage(design, layout, arms, table, seedsFor(Math.max(h1.result.meanSeeds, SEEDS), h2 ? h2.result.meanSeeds : SEEDS));
-  const atCap = designUsage(design, layout, arms, table, seedsFor(ctx.seedCap, h2 ? ctx.seedCap : SEEDS));
+  const use = designUsage(design, layout, arms, table, seedsFor(ctx.seedRule, [Math.max(h1.result.meanSeeds, SEEDS), h2 ? h2.result.meanSeeds : SEEDS]));
+  const atCap = designUsage(design, layout, arms, table, seedsFor(ctx.seedRule, [ctx.seedCap, h2 ? ctx.seedCap : SEEDS]));
   const daysOf = (u) => Object.fromEntries(TOOLS.map((t) => [t, u.usd[t] / quota[t].usdPerDay]));
   const holdsAtBounds = (h) => h === undefined || (h.boundsPower !== null && passesPower(ctx.power)(h.boundsPower));
   return {
@@ -310,18 +313,16 @@ function levelOf(cal, chosen, m, opts) {
 /** Calibration estimates, then per minimum effect the grid rows and the chosen one. Abandoned runs are left out and listed.
  * @param {any[]} records @param {any[]} planCells @param {any} prices @param {any} opts */
 export function sizeZ0(records, planCells, prices, opts) {
-  validateCorpus(records, planCells);
-  const abandoned = abandonedRuns(records, planCells);
-  const kept = withoutRuns(planCells, abandoned);
-  const filtered = filterRecords(withoutRuns(records, abandoned), kept, { dropList: opts.dropList ?? null });
-  const cal = calibrate(filtered, prices, opts.spreadBound);
-  const layout = planLayout(planCells);
-  const arms = { rn: filtered.arms.filter((a) => a.startsWith('A')), x: layout.X ? filtered.arms.filter((a) => a.startsWith('X')) : [] };
-  const table = perRecordUsage(withoutRuns(records, abandoned), prices);
+  const { filtered, abandoned, records: counted, planCells: cells } = filteredInput(records, planCells, opts, { dropAbandoned: true });
+  const cal = calibrate(filtered, prices, opts.spreadBound, opts);
+  const layout = planLayout(cells);
+  const byTool = (tool) => filtered.arms.filter((a) => ARM_TABLE[a].tool === tool);
+  const arms = { rn: byTool('claude-code'), x: layout.X ? byTool('codex') : [] };
+  const table = perRecordUsage(withoutRuns(counted, abandoned), prices, opts);
   const unavailable = Object.entries(cal).filter(([h, c]) => c.reason !== undefined && !(h === 'H2' && layout.X === null)).map(([h, c]) => `${h}: ${c.reason}`);
   const ctx = {
     searches: searchesOf(cal, layout, opts), layout, arms, table, quota: opts.quota, power: opts.power, seedCap: opts.seedCap,
-    available: unavailable.length === 0 && layout.R !== null,
+    seedRule: (opts.design ?? DESIGNS.r3).seedRule, available: unavailable.length === 0 && layout.R !== null,
   };
   const effects = opts.effects.map((m) => {
     const rows = opts.repos.map((repos) => gridRow(ctx, repos, m));
@@ -331,7 +332,7 @@ export function sizeZ0(records, planCells, prices, opts) {
   const strip = (c) => Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'sim' && k !== 'simUpper'));
   return {
     calibration: {
-      records: records.length, scored: filtered.scored.length, abandoned: [...abandoned.values()].sort(),
+      records: counted.length, scored: filtered.scored.length, abandoned: [...abandoned.values()].sort(),
       ...Object.fromEntries(Object.entries(cal).map(([h, c]) => [h, strip(c)])), plan: layout, perRecord: table,
     },
     unavailable, effects,
@@ -364,8 +365,8 @@ export function runCli(argv, cwd = process.cwd()) {
       codex: { usdPerDay: args.codexQuota ?? QUOTA_USD_PER_DAY.codex, source: args.codexQuota === null ? 'default assumption' : 'flag' },
     };
     const settings = { ...Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, args[k]])), firstWave: SEEDS, holmLevel: 0.05 / 2, quota };
-    const sizing = sizeZ0(inputs.records, inputs.planCells, inputs.prices, { ...settings, dropList: inputs.dropList });
-    const hashes = [...inputHashes(args, cwd), ...SOURCES.map((f) => ({ role: 'source', file: f, sha256: sha256(path.join(REPO, f)) }))];
+    const sizing = sizeZ0(inputs.records, inputs.planCells, inputs.prices, { ...settings, ...filterOpts(inputs) });
+    const hashes = inputHashes(args, cwd, { entry: 'scripts/token-eval/z0-size.mjs' });
     report = { schema: 'z0-size/1', settings, inputs: hashes, warnings: inputs.warnings, ...sizing, notes: NOTES };
   } catch (e) {
     return fail(e.message);

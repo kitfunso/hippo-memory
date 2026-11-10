@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { git, gitSpawn } from './exec.mjs';
-import { HIPPO_ARMS } from './arms.mjs';
+import { ARM_TABLE, HIPPO_ARMS } from './arms.mjs';
 import { agentGit } from './checks.mjs';
 
 export const STUB_CLAUDE_MD = '# Instructions for coding agents working in this repository.\n';
@@ -184,10 +184,10 @@ function emptyWorkspace(workDir, arm) {
   }
 }
 
-export const stubTextOf = (arm) => (arm === 'X3' ? X3_STUB : STUB_CLAUDE_MD);
+export const stubTextOf = (arm) => (ARM_TABLE[arm].stub === 'x3' ? X3_STUB : STUB_CLAUDE_MD);
 
 /** X3's stub ref sits beside the plain one, since git refuses a ref that is also a ref dir (E6 plan R12, R22). */
-export const stubRefOf = (sequenceId, t, arm) => `refs/${arm === 'X3' ? 'eval-x3' : 'eval'}/${sequenceId}/${t.id}`;
+export const stubRefOf = (sequenceId, t, arm) => `refs/${ARM_TABLE[arm].stub === 'x3' ? 'eval-x3' : 'eval'}/${sequenceId}/${t.id}`;
 
 /** Move the workspace to a task's stub base without its future, in a new .git that fetches only that commit's history. */
 export function checkoutBase(cacheDir, workDir, sequenceId, t, arm) {
