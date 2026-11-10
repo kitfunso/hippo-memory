@@ -351,7 +351,7 @@ describe('failures are counted and set aside', () => {
     expect(listing()).toEqual([]);
   });
 
-  it('EPERM on the claim unlink after the record logs the duplicate risk', async () => {
+  it('EPERM on the claim unlink after the record is logged and the claim stays', async () => {
     put(`${A}.a0.json`, 's1');
     const faulty = withFs({
       unlinkSync: (file) => {
@@ -363,8 +363,10 @@ describe('failures are counted and set aside', () => {
     expect(await replay(importer, faulty)).toBe(1);
     expect(seen).toEqual(['s1']);
     expect(logs).toEqual([
-      `spool file ${A}.a0.json saved; its claim could not be removed (EPERM); it will be imported again`,
+      `spool file ${A}.a0.json saved; its claim could not be removed (EPERM); ` +
+        'a later import reuses the saved record',
     ]);
+    expect(listing().filter((name) => name.startsWith(`${A}.a0.claim-`))).toHaveLength(1);
   });
 });
 

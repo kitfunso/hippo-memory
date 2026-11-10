@@ -87,7 +87,7 @@ export async function importFile(options: ImportFileOptions): Promise<FileOutcom
   };
   let failure: StepFailure | null;
   try {
-    failure = await importOne(spooled, markRecorded);
+    failure = await importOne({ ...spooled, importKey: entry.stem }, markRecorded);
   } catch (err) {
     failure = { busy: isStoreBusy(err), message: errorMessage(err), fields: errorFields(err) };
   }

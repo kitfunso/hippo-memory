@@ -19,6 +19,7 @@ import {
   stalledSummarizedRows,
 } from './compaction-rows.js';
 import {
+  compactionByRequest,
   compactionOrigin,
   markSnapshotSaved,
   markSummarized,
@@ -30,6 +31,7 @@ import {
   type ItemContext,
   type Log,
 } from './compactions-record.js';
+import { spoolRequestId } from './spool-request-id.js';
 import { answered, bound, type Bodies } from '../runtime/bound.js';
 import { type Handles, type OnHandle, type StoreFiles, waitingOpener } from '../runtime/open.js';
 import type {
@@ -192,11 +194,20 @@ function recordSpooled(
   files: StoreFiles,
   spooled: SpooledSummary,
 ): RecordedCompaction {
-  const { id, sessionId, originProject, cwd, items } = recordSummary(db, files, spooled.tenantId, {
-    meta: spooled.payload,
-    text: spooled.text,
-    at: spooled.at,
-  });
+  const { tenantId, payload, importKey } = spooled;
+  const requestId = importKey === undefined ? undefined : spoolRequestId(importKey);
+  const earlier =
+    requestId === undefined
+      ? null
+      : compactionByRequest(db, { tenantId, requestId, sessionId: payload.sessionId });
+  const { id, sessionId, originProject, cwd, items } =
+    earlier ??
+    recordSummary(db, files, tenantId, {
+      meta: payload,
+      text: spooled.text,
+      at: spooled.at,
+      caller: { requestId },
+    });
   return { id, sessionId, originProject, cwd, items };
 }
 
