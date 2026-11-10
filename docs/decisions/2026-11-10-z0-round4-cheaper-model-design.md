@@ -28,6 +28,7 @@ lower cost per solved task."
 - S1 against O1 runs the same test with no verdict. It can only narrow the headline.
 - Reuse round 3's 29 repositories on its frozen tree, minus the 4 leaked families, dropped whole.
 - Budget on round 3's recorded spend, a lower bound, checked before each batch, never inside one.
+- The founder approved $2,140.00 in all. A whole-run check after the pilot asks again before batch 1 if the run does not fit.
 - Each test reads seeds 1 to its own seed count, so the count the arms run never changes a test's data.
 - Part (a)'s seed rule uses a fixed m of log(1 / 0.9), so the rule that runs does not depend on the pilot.
   On a miss it takes the fewest seeds whose predicted SE is at most 1.1 times the 9-seed SE, so a large family
@@ -45,7 +46,7 @@ lower cost per solved task."
 - Test S2 against O1 alone: a win cannot tell hippo's part from Sonnet's lower price.
 - New families on master's hippo build: tests current hippo, but needs a new author step and screen (round 3 estimated about $790).
 - Drop only the leaked lessons: a later lesson supersedes a leaked one (`q133-f2-l2`), so chains break.
-- Add an Opus-with-hippo arm (O2): repeats round 3's H1 test for about $385 more.
+- Add an Opus-with-hippo arm (O2): repeats round 3's H1 test for about $385 more (A2's $385.21, `r3-total-spend.py`).
 
 ## Consequences
 - The result describes round 3's frozen build `cb992a079` (hippo 1.71.0 with later changes ported), not a release and not master.

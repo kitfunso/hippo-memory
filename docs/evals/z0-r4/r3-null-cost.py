@@ -1,8 +1,9 @@
-"""Price round 3 records that have usage but no costUsd, at the Opus 5.5 rows of prices.json.
-Usage: python -I docs/evals/z0-r4/r3-null-cost.py ROOT [--manifest FILE]
+"""Price round 3 records that have usage but no costUsd, at the claude-code row of round 3's prices file.
+Usage: python -I docs/evals/z0-r4/r3-null-cost.py ROOT [--manifest FILE] [--prices FILE]
 Stops unless ROOT's runs files match the manifest."""
 import argparse
 import collections
+import hashlib
 import json
 import pathlib
 import sys
@@ -10,10 +11,14 @@ import sys
 sys.path.append(str(pathlib.Path(__file__).resolve().parent))
 import r3_manifest  # noqa: E402
 
-P = {'inputTokens': 4, 'outputTokens': 20, 'cacheCreationInputTokens': 8, 'cacheReadInputTokens': 0.2}
 ap = argparse.ArgumentParser()
 r3_manifest.add_flags(ap)
+ap.add_argument('--prices', type=pathlib.Path, default=pathlib.Path('C:/z0-runs/s7/prices.json'))
 args = ap.parse_args()
+row = json.loads(args.prices.read_text(encoding='utf-8'))['claude-code']
+P = {'inputTokens': row['inputPerMTok'], 'outputTokens': row['outputPerMTok'],
+     'cacheCreationInputTokens': row['cacheWritePerMTok'], 'cacheReadInputTokens': row['cacheReadPerMTok']}
+print('prices', args.prices, 'sha256', hashlib.sha256(args.prices.read_bytes()).hexdigest()[:12], row['model'])
 
 key_seen = None
 with_usage = collections.Counter()

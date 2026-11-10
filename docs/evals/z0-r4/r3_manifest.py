@@ -20,6 +20,8 @@ def _digests(root):
 
 
 def write(root, manifest):
+    if manifest.exists():
+        sys.exit(f'{manifest} exists; pass --manifest with a new path to write another')
     _, digests = _digests(root)
     entries = [{'file': name, 'sha256': digests[name]} for name in sorted(digests)]
     body = {'root': root.as_posix(), 'written': datetime.date.today().isoformat(), 'files': entries}

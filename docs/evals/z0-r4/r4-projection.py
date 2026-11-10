@@ -1,4 +1,4 @@
-"""Project round 4's list-price spend (USD) from round 3's recorded spend: the budget, the ceiling, batch 1, the pilot and the q145 gap.
+"""Project round 4's list-price spend (USD) from round 3's recorded spend: the budget, the ceiling, batch 1, the pilot, the q145 gap and the whole-run check.
 Usage: python -I docs/evals/z0-r4/r4-projection.py ROOT [--manifest FILE]
 Stops unless ROOT's runs files match the manifest."""
 import argparse
@@ -65,3 +65,21 @@ for r in (1, 2):
     show(f'q145 gap projected at r={r}, no pilot', project(gap, r))
 for q in ('q145', 'q140'):
     show(f'{q} total', sum(by_sequence[q].values()))
+
+# Item 12's whole-run check before batch 1, at the approved figure of decision 5.
+APPROVED = 2140.0
+MARGIN = 1.25
+
+
+def whole_run(r, seeds):
+    """Spend after the pilot: the whole run at r with q145's gap, O1, S1, S2 and S5 at `seeds` seeds."""
+    s = {k: seeds / 3 for k in CEILING}
+    return project(basis, r, 0.0, s) + project(gap, r, 0.0, s)
+
+
+for seeds in (3, 4, 5, 6):
+    fits = [i / 100 for i in range(50, 301) if PILOT_BUDGET + MARGIN * whole_run(i / 100, seeds) <= APPROVED]
+    print(f'whole-run check at {APPROVED:.2f}, {seeds} seeds: fits up to r={max(fits) if fits else "none from 0.5"}')
+for r in (1, 2):
+    need = [f'{PILOT_BUDGET + MARGIN * whole_run(r, n):.2f}' for n in (3, 5)]
+    print(f'figure the whole-run check needs at r={r}, 3 and 5 seeds: {need[0]}, {need[1]}')
