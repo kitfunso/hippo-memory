@@ -16,7 +16,7 @@ lower cost per solved task."
 - Sonnet 5.5 list prices are half of Opus 5.5 prices, so Sonnet alone can pass a cost bar with no help from hippo.
 - Round 3's prereg put candidate-family sessions before its tag at about $790 (round 3 prereg line 47).
 - Four round 3 families leaked (`z0-scored-set-record.md:657`); the runner finds a leak before each session.
-- Round 3's recorded list-price spend over every record and attempt was $1,716.76, 17% over the paired analysis cost. It leaves out unrecorded warm-ups and deleted cut-off resumes.
+- Round 3's recorded list-price spend over every record and attempt was $1,716.76, 17% over the $1,464.81 cost of the 4,345 scored records of the final read. It leaves out unrecorded warm-ups and deleted cut-off resumes.
 
 ## Decision
 - Arms O1 (Opus, built-in), S1, S2 (hippo), S5 (sham), S0 and S4 (Sonnet controls), all at one pinned effort.

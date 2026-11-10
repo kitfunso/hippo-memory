@@ -1,38 +1,28 @@
 """Sum round 3's list-price spend over every record of every run attempt, kept or not, by arm and folder kind.
-Usage: python -I docs/evals/z0-r4/r3-total-spend.py C:/z0-runs/scored/r3run [--sequences q12,q14,...]"""
-import collections
-import json
+Usage: python -I docs/evals/z0-r4/r3-total-spend.py ROOT [--sequences q12,q14,...] [--manifest FILE] [--write-manifest]
+Stops unless ROOT's runs files match the manifest; --write-manifest writes it, once, when a round's folder is frozen."""
+import argparse
 import pathlib
 import sys
 
-root = pathlib.Path(sys.argv[1])
-only = None
-if '--sequences' in sys.argv:
-    only = set(sys.argv[sys.argv.index('--sequences') + 1].split(','))
-files = sorted(root.glob('*/run/runs.jsonl'))
-by_arm = collections.Counter()
-by_kind = collections.Counter()
-n_arm = collections.Counter()
-seen = set()
-for f in files:
-    run = f.parent.parent.name
-    kind = 'kept' if run.split('.')[0] == run else 'aborted'
-    if run == 'gr3-w1':
-        kind = 'set-aside'
-    with f.open(encoding='utf-8') as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            r = json.loads(line)
-            seen.add(r.get('sequence'))
-            if only is not None and r.get('sequence') not in only:
-                continue
-            cost = r.get('costUsd')
-            if not isinstance(cost, (int, float)):
-                continue
-            by_arm[r.get('arm')] += cost
-            n_arm[r.get('arm')] += 1
-            by_kind[kind] += cost
+sys.path.append(str(pathlib.Path(__file__).resolve().parent))
+import r3_manifest  # noqa: E402
+import r3_spend  # noqa: E402
+
+ap = argparse.ArgumentParser()
+r3_manifest.add_flags(ap)
+ap.add_argument('--sequences')
+ap.add_argument('--write-manifest', action='store_true')
+args = ap.parse_args()
+
+if args.write_manifest:
+    r3_manifest.write(args.root, args.manifest)
+    sys.exit(0)
+
+only = None if args.sequences is None else set(args.sequences.split(','))
+files = r3_manifest.checked_files(args.root, args.manifest)
+rows, seen = r3_spend.load(files)
+by_arm, n_arm, by_kind = r3_spend.totals(rows, only)
 if only is not None and not only <= seen:
     sys.exit(f'no records for sequences {sorted(only - seen)}')
 print('files', len(files), 'sequences', 'all' if only is None else ','.join(sorted(only)))

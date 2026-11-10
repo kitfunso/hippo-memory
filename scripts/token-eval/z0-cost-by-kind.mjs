@@ -12,9 +12,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isString } from './z0-records.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DEFAULT_REPORT = 'C:/z0-runs/scored/r3-final/unblind.json';
-const DEFAULT_GRADING = path.resolve(REPO, 'docs/evals/z0-r3/grading.json');
-const DEFAULT_DROP_LIST = path.resolve(REPO, 'docs/evals/z0-r3/drop-list.json');
+export const DEFAULT_REPORT = 'C:/z0-runs/scored/r3-final/unblind.json';
+export const DEFAULT_GRADING = path.resolve(REPO, 'docs/evals/z0-r3/grading.json');
+export const DEFAULT_DROP_LIST = path.resolve(REPO, 'docs/evals/z0-r3/drop-list.json');
 const USAGE = 'usage: z0-cost-by-kind.mjs --analyzer DIR [--report FILE] [--grading FILE] [--drop-list FILE] [--json]';
 const VALUE_FLAGS = { '--analyzer': ['analyzer', 'folder'], '--report': ['report', 'file'], '--grading': ['grading', 'file'], '--drop-list': ['dropList', 'file'] };
 const REBUILD = 'check out 04835462b at --analyzer, then run npm ci and npm run build there';
@@ -226,7 +226,8 @@ function readReport(file) {
   return report;
 }
 
-export async function readCostByKind(args) {
+// The one way into a frozen round 3 read: it returns only after every hash matches and H3 and H4 come out exact.
+export async function openFrozenRead(args) {
   const analyzer = path.resolve(args.analyzer);
   if (!fs.existsSync(analyzer) || !fs.statSync(analyzer).isDirectory()) throw new Error(`no folder at --analyzer ${analyzer}; pass the root of a built checkout of 04835462b`);
   const report = readReport(args.report);
@@ -237,6 +238,11 @@ export async function readCostByKind(args) {
   const f = api.filterRecords(inputs.records, inputs.planCells, { grading: inputs.grading, dropList: inputs.dropList });
   const prices = inputs.prices['claude-code'];
   const checks = selfCheck(api, f, prices, report);
+  return { analyzer, report, sources, analyzerArgs, api, inputs, f, prices, checks };
+}
+
+export async function readCostByKind(args) {
+  const { analyzer, sources, analyzerArgs, api, f, prices, checks } = await openFrozenRead(args);
   const rows = costByKind(api, f, prices);
   checkCells(rows, checks);
   return {
