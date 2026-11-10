@@ -1,4 +1,4 @@
-// What `hippo remember`, `hippo supersede` and `hippo trace record` store, count, audit and print with no server.
+// What `hippo remember`, `hippo supersede`, `hippo trace record` and `hippo share` store, count, audit and print with no server.
 // One case per verb spawns the built CLI; the rest run it in process.
 import { describe, expect, it } from 'vitest';
 import { reject, remember, adminActor } from '../../src/api/index.js';
@@ -292,5 +292,25 @@ describe('hippo trace record (built CLI, no server)', () => {
       stderr: 'Invalid outcome: "unknown". Must be one of: success, failure, partial.\n',
     });
     expect(s.rows()).toEqual([]);
+  });
+});
+
+describe('hippo share (built CLI, no server)', () => {
+  it('a second share of the same text writes nothing and says it is already shared', async () => {
+    const s = new Store({ global: true, spawned: true });
+    await s.run('remember', TEXT);
+    const id = s.lastId();
+
+    const first = await s.run('share', id, '--force');
+    const [copy] = s.rows('global');
+    const second = await s.run('share', id, '--force');
+
+    expect(first).toMatchObject({ status: 0, stdout: expect.stringContaining(`Shared [${String(copy!['id'])}]`) });
+    expect(second).toEqual({
+      status: 0,
+      stdout: `Already shared: the global store holds this text as [${String(copy!['id'])}].\n`,
+      stderr: '',
+    });
+    expect(s.rows('global').map((r) => r['content'])).toEqual([TEXT]);
   });
 });

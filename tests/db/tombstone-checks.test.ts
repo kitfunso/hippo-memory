@@ -1,4 +1,4 @@
-// Sleep's tombstone checks answer per tenant, write their refusal rows through the store, and do nothing under a dry run.
+// Sleep's tombstone checks answer per tenant and write their refusal rows through the store; a dry run answers the same and writes nothing.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -57,6 +57,8 @@ const refusal = (targetId: string): AppendAuditOptions => ({
 
 const tombstoneChecks = (root: string, dryRun: boolean) => checksOver(sqliteStore(root), dryRun);
 
+const fileSet = (root: string): string[] => fs.readdirSync(root, { recursive: true }).map(String).sort();
+
 describe('tombstoneChecks', () => {
   it('finds a tombstone only under the tenant that rejected the value, and writes the refusal row', async () => {
     const root = storeWithTombstone();
@@ -70,12 +72,18 @@ describe('tombstoneChecks', () => {
     ]);
   });
 
-  it('under a dry run finds nothing, writes nothing and never opens the store', async () => {
+  it('under a dry run finds the tombstone but writes no audit row and no file', async () => {
     const root = storeWithTombstone();
-    const checks = tombstoneChecks(path.join(root, 'no-store-here'), true);
-    expect(await checks.find('ta', DIGEST)).toBeNull();
+    const files = fileSet(root);
+    const checks = tombstoneChecks(root, true);
+    expect((await checks.find('ta', DIGEST))?.reason).toBe('leaked');
+    expect(await checks.find('tb', DIGEST)).toBeNull();
+    const asked = [DIGEST, rejectionDigest('another value')];
+    expect([...(await checks.rejectedAmong('ta', asked))]).toEqual([DIGEST]);
     await checks.audit(refusal('m1'));
-    expect(fs.existsSync(path.join(root, 'no-store-here'))).toBe(false);
+    await checks.auditOrCount(refusal('m2'));
+    expect(refusals(root, 'ta')).toEqual([]);
+    expect(fileSet(root)).toEqual(files);
   });
 
   it('an unused set of checks never opens the store', () => {

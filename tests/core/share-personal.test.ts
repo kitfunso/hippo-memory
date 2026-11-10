@@ -7,7 +7,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { autoShare, shareMemory, transferScore } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import { sharingStores } from '../_helpers/sharing-stores.js';
+import { sharedEntry, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -25,7 +25,7 @@ function globalContents(): string[] {
   return loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
 }
 
-async function refusal(fn: () => Promise<MemoryEntry | null>): Promise<BadRequestError> {
+async function refusal(fn: () => Promise<object>): Promise<BadRequestError> {
   try {
     await fn();
   } catch (e) {
@@ -76,13 +76,13 @@ describe('share and promote refuse personal rows', () => {
       `Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`,
     );
     expect(
-      (
+      sharedEntry(
         await shareMemory(...sharingStores(hippoRoot), team.id, {
           embed: TEST_RUN,
           detached: TEST_DETACHED,
           tenantId: 'default',
-        })
-      )?.content,
+        }),
+      ).content,
     ).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });

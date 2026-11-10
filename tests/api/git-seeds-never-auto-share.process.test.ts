@@ -19,7 +19,7 @@ import { getGlobalRoot } from '../../src/host/global-store.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { sharingStores } from '../_helpers/sharing-stores.js';
+import { sharedEntry, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -84,13 +84,13 @@ describe('git-learned rows and the global store', () => {
 
   it('a hand-run share of a git-learned row still copies it', async () => {
     expect(
-      (
+      sharedEntry(
         await shareMemory(...sharingStores(hippoRoot), seed.id, {
           embed: TEST_RUN,
           detached: TEST_DETACHED,
           tenantId: 'default',
-        })
-      )?.content,
+        }),
+      ).content,
     ).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
   });

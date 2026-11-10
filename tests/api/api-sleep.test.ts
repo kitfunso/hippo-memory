@@ -19,8 +19,13 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
+import { readdirSync } from 'node:fs';
+import { Layer } from '../../src/base/memory/entry.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
+import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { remember, sleepWholeStore, contextGet } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { cwdProject } from '../_helpers/api-ctx.js';
@@ -32,7 +37,7 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-const { apiCtx } = sessionPerTest();
+const { apiCtx, writeEntry } = sessionPerTest();
 
 // The 'consolidate' audit op's metadata is always the flat scalar phase-counter
 // object built at the appendAuditEvent call site for that op in src/api/index.ts --
@@ -174,5 +179,91 @@ describe('api.sleep', () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe('api.sleep dry run over a merge', () => {
+  const OLDER = 'migrate the billing database before the next release window';
+  const NEWER = `${OLDER} with full backups enabled`;
+  const ROLLUP = `[Consolidated from 2 related memories, newest first]
+
+- ${NEWER}
+- ${OLDER}`;
+  const admin = (home: string): FullContext => apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+
+  /** A store holding the two look-alikes, with the rollup's text rejected or not. */
+  function pairStore(rejected: boolean): string {
+    const { home, restore } = tmpHome();
+    restore();
+    const earlier = new Date(Date.now() - 60_000).toISOString();
+    writeEntry(home, { ...createMemory(OLDER, { layer: Layer.Episodic }), created: earlier });
+    writeEntry(home, createMemory(NEWER, { layer: Layer.Episodic }));
+    if (!rejected) return home;
+    const db = openHippoDb(home);
+    try {
+      insertRejectedValue(db, {
+        tenantId: 'default',
+        digest: rejectionDigest(ROLLUP),
+        reason: 'pre-rejected merge rollup',
+        rejectedBy: 'test',
+        rejectedAt: new Date().toISOString(),
+        normalizedChars: normalizeValueForRejection(ROLLUP).length,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+    return home;
+  }
+
+  /** What a sleep could change in a store: rows, audit rows and files. */
+  function snapshot(home: string) {
+    const db = openHippoDb(home);
+    try {
+      const count = (sql: string): number => Number(db.prepare(sql).get()?.n);
+      return {
+        memories: count('SELECT COUNT(*) AS n FROM memories'),
+        audit: count('SELECT COUNT(*) AS n FROM audit_log'),
+        consolidate: count("SELECT COUNT(*) AS n FROM audit_log WHERE op = 'consolidate'"),
+        refusals: count("SELECT COUNT(*) AS n FROM audit_log WHERE op = 'reject_refusal'"),
+        files: readdirSync(home, { recursive: true }).map(String).sort(),
+      };
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  const mergedEvents = (result: { events?: readonly { kind: string }[] }) =>
+    (result.events ?? []).filter((e) => e.kind === 'merged');
+
+  it('refuses a merge whose text is rejected as the real run does, and writes no refusal row', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    onTestFinished(() => stderr.mockRestore());
+    const warnings = () => stderr.mock.calls.filter(([line]) => String(line).includes('skipped 1 merge(s)')).length;
+    const dry = pairStore(true);
+    const real = pairStore(true);
+    const before = snapshot(dry);
+
+    const preview = await sleepWholeStore(admin(dry), { dryRun: true, noShare: true });
+    const after = snapshot(dry);
+    const actual = await sleepWholeStore(admin(real), { dryRun: false, noShare: true });
+
+    expect(preview.mergedEpisodic).toBe(0);
+    expect(mergedEvents(preview)).toEqual([]);
+    expect([preview.mergedEpisodic, preview.newSemantic]).toEqual([actual.mergedEpisodic, actual.newSemantic]);
+    expect(warnings()).toBe(2);
+    // The one new audit row is the sleep summary every dry run writes; the refusal is counted and not stored.
+    expect(after).toEqual({ ...before, audit: before.audit + 1, consolidate: before.consolidate + 1 });
+    expect(snapshot(real).refusals).toBe(1);
+  });
+
+  it('still counts a merge no rejected value refuses', async () => {
+    const home = pairStore(false);
+    const before = snapshot(home);
+
+    const preview = await sleepWholeStore(admin(home), { dryRun: true, noShare: true });
+
+    expect(preview.mergedEpisodic).toBe(2);
+    expect(mergedEvents(preview)).toMatchObject([{ count: 2 }]);
+    expect(snapshot(home)).toEqual({ ...before, audit: before.audit + 1, consolidate: before.consolidate + 1 });
   });
 });

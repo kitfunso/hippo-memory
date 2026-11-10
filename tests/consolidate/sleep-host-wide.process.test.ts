@@ -557,8 +557,8 @@ describe('one sleep over three tenants', () => {
       dryRun: true,
       removed: 3,
       removedIds: BY_NAME.map((t) => idOf(t, 10)),
-      // A preview does not check the refusal, so globex's cluster counts too.
-      merged: 9,
+      // A preview checks the refusal as the real sleep does, so globex's refused cluster does not count.
+      merged: 6,
       semanticCreated: 0,
       promotedTraces: 0,
       physicsSimulated: 0,
@@ -571,7 +571,7 @@ describe('one sleep over three tenants', () => {
       ...faded('removed', 10),
       `replayed 5 memories: ${[idOf('globex', 1), idOf('globex', 3), idOf('acme', 12), idOf('default', 15), idOf('globex', 7)].join(', ')}`,
       ...RETIRED.map((t, i) => `${idOf(t, 15)} held a retired text, ${minted('sem', i + 1)} holds the rest`),
-      ...TENANTS.map(() => MERGED_LINE),
+      ...CLUSTERED.map(() => MERGED_LINE),
     ]);
   });
 });

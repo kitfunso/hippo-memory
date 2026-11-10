@@ -1,16 +1,19 @@
-// autoShare over a store larger than one page: the same picks, skips and writes as one whole read gave.
+// autoShare over a store larger than one page: the same picks, skips and writes as one whole read gave; and a hand-run share
+// of a text the global store already holds.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { autoShare } from '../../src/domain/sharing/share.js';
+import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { autoShare, shareMemory, type ShareOutcome } from '../../src/domain/sharing/share.js';
+import { BadRequestError } from '../../src/base/errors/api-errors.js';
+import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { mergedText } from '../../src/base/util/same-text.js';
+import { duplicateKey, mergedText } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { writeEntry, loadAllEntries, loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
@@ -131,5 +134,109 @@ describe('autoShare across pages', () => {
     const global = loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
     expect(global).toEqual(expect.arrayContaining(shared.map((e) => e.content)));
     expect(await autoShare(...stores, { embed: TEST_RUN, detached: TEST_DETACHED, tenantId: 'default' })).toEqual([]);
+  });
+});
+
+describe('shareMemory of a text the global store already holds', () => {
+  const HELD = text('already shared by hand');
+  const LOW_SCORE_TAGS = ['file-path', 'config'];
+
+  const share = (id: string, { force = false, tenantId = 'default' } = {}): Promise<ShareOutcome> =>
+    shareMemory(...sharingStores(root), id, {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+      skipEmbed: true,
+      force,
+      tenantId,
+    });
+
+  function localRow(content: string, extra: Partial<CreateMemoryOptions> = {}): string {
+    const entry = createMemory(content, { tenantId: 'default', ...extra });
+    writeEntry(root, entry);
+    return entry.id;
+  }
+
+  /** Every global row of any tenant or scope that holds this text. */
+  const globalCopies = (content: string): MemoryEntry[] =>
+    loadEveryTenantEntries(getGlobalRoot()).filter((e) => duplicateKey(e.content) === duplicateKey(content));
+
+  it('a second share of the same row writes nothing, even forced, and names the first copy', async () => {
+    const id = localRow(HELD);
+
+    const first = await share(id);
+    const second = await share(id, { force: true });
+
+    const copies = globalCopies(HELD);
+    expect(copies).toHaveLength(1);
+    expect(first).toEqual({ kind: 'shared', entry: expect.objectContaining({ id: copies[0]!.id, content: HELD }) });
+    expect(second).toEqual({ kind: 'already-shared', existingId: copies[0]!.id });
+  });
+
+  it('text equal apart from spacing counts as the same', async () => {
+    const first = localRow(HELD);
+    const spaced = localRow(`  ${HELD.replace(/ /g, ' \n  ')}\n`);
+
+    await share(first);
+    const second = await share(spaced);
+
+    expect(globalCopies(HELD)).toHaveLength(1);
+    expect(second).toEqual({ kind: 'already-shared', existingId: globalCopies(HELD)[0]!.id });
+  });
+
+  it('a low-score row reports already-shared when its text is held and low-score when it is not', async () => {
+    const heldCopy = createMemory(HELD, { tenantId: 'default' });
+    writeEntry(getGlobalRoot(), heldCopy);
+    const heldRow = localRow(HELD, { tags: LOW_SCORE_TAGS });
+    const freshRow = localRow(text('project only'), { tags: LOW_SCORE_TAGS });
+
+    expect(await share(heldRow)).toEqual({ kind: 'already-shared', existingId: heldCopy.id });
+    expect(await share(freshRow)).toEqual({ kind: 'low-score' });
+    expect(loadEveryTenantEntries(getGlobalRoot()).map((e) => e.id)).toEqual([heldCopy.id]);
+  });
+
+  it("another tenant's global copy does not block a share", async () => {
+    writeEntry(getGlobalRoot(), createMemory(HELD, { tenantId: 'other' }));
+    const id = localRow(HELD);
+
+    expect(await share(id)).toEqual({ kind: 'shared', entry: expect.objectContaining({ content: HELD }) });
+    expect(
+      globalCopies(HELD)
+        .map((e) => e.tenantId)
+        .sort(),
+    ).toEqual(['default', 'other']);
+  });
+
+  it("the caller's own global copy is the existing id", async () => {
+    const own = createMemory(HELD, { tenantId: 'default' });
+    writeEntry(getGlobalRoot(), own);
+
+    expect(await share(localRow(HELD))).toEqual({ kind: 'already-shared', existingId: own.id });
+    expect(globalCopies(HELD)).toHaveLength(1);
+  });
+
+  const SECRET = 'aws creds AKIAIOSFODNN7EXAMPLE for the deploy user';
+  const VETOED: ReadonlyArray<[string, string, Partial<CreateMemoryOptions>]> = [
+    ['a secret row', SECRET, {}],
+    ['a quarantined row', HELD, { scope: quarantineScopeFor(null) }],
+    ['a personal row', HELD, { scope: 'personal:private:alice' }],
+  ];
+
+  it.each(VETOED)('%s whose text is held still throws its refusal', async (_label, content, extra) => {
+    writeEntry(getGlobalRoot(), createMemory(content, { tenantId: 'default' }));
+    const id = localRow(content, extra);
+
+    await expect(share(id, { force: true })).rejects.toBeInstanceOf(BadRequestError);
+    expect(globalCopies(content)).toHaveLength(1);
+  });
+
+  // The default scope filter hides a connector-private copy, so its row is not seen as held.
+  it('residual: a second share of a connector-private row writes a second global row', async () => {
+    const id = localRow(HELD, { scope: 'slack:private:C123' });
+
+    await share(id);
+    const second = await share(id);
+
+    expect(second.kind).toBe('shared');
+    expect(globalCopies(HELD)).toHaveLength(2);
   });
 });
