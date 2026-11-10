@@ -390,6 +390,7 @@ export type {
   IncidentOpen,
   IncidentOpenRefusal,
   IncidentResolve,
+  SaveRefusal,
   PoliciesInForceQuery,
   SkillsByNameQuery,
   Objects,

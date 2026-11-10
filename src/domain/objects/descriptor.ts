@@ -33,6 +33,8 @@ export interface ObjectDraft<K extends SavableKind> {
   readonly supersedesId: number | undefined;
   /** What changed; stored only on a versioned successor. */
   readonly changeSummary?: string;
+  /** A decision only: a memory the save also weakens, beside the one the replaced row mirrors. */
+  readonly weakensMemoryId?: string;
   /** Read once the checks pass, so one instant stamps everything the save writes. */
   readonly at: string;
 }

@@ -15,8 +15,8 @@ import type { ObjectRequest } from './kind-routes.js';
 
 const TEXT: RequiredStringRule = { max: MAX_SHORT_FIELD_LEN };
 
-// The HTTP surface has no legacy --supersedes <memory-id> constraint, so it supersedes by table id
-// and never weakens a memory mirror.
+// The HTTP surface supersedes by table id; the store weakens the replaced decision's memory in the
+// same save.
 function supersededId(body: Record<string, JsonValue>): number | undefined {
   const raw = body['supersedesDecisionId'];
   if (raw === undefined || raw === null) return undefined;

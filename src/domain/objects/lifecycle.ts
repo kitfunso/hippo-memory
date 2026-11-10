@@ -4,7 +4,12 @@
 // the list status are checked first, so a bad request fails before a store is asked.
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
-import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+import {
+  BadRequestError,
+  ConflictError,
+  memoryNotFoundText,
+  NotFoundError,
+} from '../../base/errors/api-errors.js';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import {
   isObjectRefusal,
@@ -13,7 +18,13 @@ import {
   type ObjectRefusal,
   type SavableKind,
 } from '../../base/records/object-types.js';
-import type { ObjectClose, ObjectListQuery, Objects, ObjectSave } from '../../base/ports/store.js';
+import type {
+  ObjectClose,
+  ObjectListQuery,
+  Objects,
+  ObjectSave,
+  SaveRefusal,
+} from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type {
   ObjectDescriptor,
@@ -170,18 +181,23 @@ function objectSave<K extends SavableKind>(
     fields: draft.fields,
     supersedesId: draft.supersedesId,
     changeSummary: draft.changeSummary,
+    weakensMemoryId: draft.weakensMemoryId,
     actor: site.actor,
     at: draft.at,
   };
+}
+
+function isSaveRefusal<T extends object>(written: T | SaveRefusal): written is SaveRefusal {
+  return 'refused' in written;
 }
 
 function saved<K extends SavableKind, W>(
   d: SavableDescriptor<K, W>,
   tenantId: string,
   replaced: number | undefined,
-  written: ObjectByKind[K] | ObjectRefusal,
+  written: ObjectByKind[K] | SaveRefusal,
 ): ObjectByKind[K] {
-  if (!isObjectRefusal(written)) return written;
+  if (!isSaveRefusal(written)) return written;
   switch (written.refused) {
     case 'missing':
       throw new NotFoundError(
@@ -197,6 +213,8 @@ function saved<K extends SavableKind, W>(
       );
     case 'vanished':
       throw new Error(`failed to reload saved ${d.label} row`);
+    case 'memory_missing':
+      throw new NotFoundError(memoryNotFoundText(written.memoryId));
   }
 }
 

@@ -8,7 +8,8 @@
  * 3. saveDecision without context: bare memory content, has_context false
  * 4. loadDecisions status filter; status 'active' excludes non-active
  * 5. resolveActiveDecisionIdByMemory (row id first-class, null legacy/superseded)
- * 6. weakenSupersededMemory halves the replaced memory's half-life once, however often it runs
+ * 6. a superseding saveDecision weakens the replaced memory in the same write and halves its half-life once,
+ *    however often it is weakened; a named memory that is missing or another tenant's refuses the whole save
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -19,12 +20,13 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import {
   loadDecisions,
   resolveActiveDecisionIdByMemory,
-  weakenSupersededMemory,
+  type SaveDecisionOptions,
   DECISION,
 } from '../../src/domain/objects/decisions.js';
-import { ConflictError } from '../../src/base/errors/api-errors.js';
+import { ConflictError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { deleteEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
@@ -32,7 +34,7 @@ import { saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-const { writeEntry, readEntry, objectsAt, sqliteStore } = sessionPerTest();
+const { writeEntry, readEntry, objectsAt } = sessionPerTest();
 
 /**
  * Typed wrappers around DatabaseSyncLike's untyped get/all and JSON.parse.
@@ -222,42 +224,135 @@ describe('decisions store (first-class object)', () => {
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', sup.memoryId!)).toBeNull();
   });
 
-  it('weakening a memory a decision replaced twice halves its half-life once', async () => {
-    const old = createMemory('use Postgres', {
+  const save = (opts: SaveDecisionOptions, tenantId = 'default') =>
+    saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, opts);
+  const plainMemory = (tags: string[], tenantId = 'default') =>
+    createMemory('use Postgres', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: ['decision'],
-      source: 'decision',
-      tenantId: 'default',
-    });
-    writeEntry(home, old);
-    const { entryWrites } = sqliteStore(home);
-
-    await weakenSupersededMemory(entryWrites, old);
-    const first = readEntry(home, old.id)!;
-    await weakenSupersededMemory(entryWrites, first);
-    const second = readEntry(home, old.id)!;
-
-    expect(first.halfLifeDays).toBe(Math.floor(old.halfLifeDays / 2));
-    expect(second.halfLifeDays).toBe(first.halfLifeDays);
-    expect(second.confidence).toBe('stale');
-    expect(second.tags.filter((tag) => tag === 'superseded')).toHaveLength(1);
-  });
-
-  it('weakening a fresh verified memory that already carries the superseded tag halves it once', async () => {
-    const copied = createMemory('use Postgres', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: ['decision', 'superseded'],
+      tags,
       confidence: 'verified',
       source: 'decision',
-      tenantId: 'default',
+      tenantId,
     });
+  const lastAuditId = () => {
+    const db = openHippoDb(home);
+    try {
+      return getRow<{ id: number }>(db, 'SELECT MAX(id) AS id FROM audit_log').id;
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+  const counts = () => ['decisions', 'memories', 'audit_log'].map((table) => countRows(home, table));
+
+  it('a superseding save weakens the replaced memory once, and weakening it again halves nothing more', async () => {
+    const first = await save({ decisionText: 'use Postgres' });
+    const before = readEntry(home, first.memoryId!)!;
+
+    await save({ decisionText: 'use SQLite', supersedesDecisionId: first.id });
+    const weakened = readEntry(home, first.memoryId!)!;
+    await save({ decisionText: 'use DuckDB', weakensMemoryId: first.memoryId! });
+    const again = readEntry(home, first.memoryId!)!;
+
+    expect(weakened.halfLifeDays).toBe(Math.floor(before.halfLifeDays / 2));
+    expect(again.halfLifeDays).toBe(weakened.halfLifeDays);
+    expect(again.confidence).toBe('stale');
+    expect(again.tags.filter((tag) => tag === 'superseded')).toHaveLength(1);
+  });
+
+  it('a fresh verified memory that already carries the superseded tag is halved once when a save names it', async () => {
+    const copied = plainMemory(['decision', 'superseded']);
     writeEntry(home, copied);
 
-    await weakenSupersededMemory(sqliteStore(home).entryWrites, copied);
+    await save({ decisionText: 'use SQLite', weakensMemoryId: copied.id });
     const weakened = readEntry(home, copied.id)!;
 
     expect(weakened.halfLifeDays).toBe(Math.floor(copied.halfLifeDays / 2));
     expect(weakened.confidence).toBe('stale');
     expect(weakened.tags.filter((tag) => tag === 'superseded')).toHaveLength(1);
+  });
+
+  it('a named memory is weakened in the save, its remember row after the new mirror remember row', async () => {
+    const old = plainMemory(['billing']);
+    writeEntry(home, old);
+    const mark = lastAuditId();
+
+    const saved = await save({ decisionText: 'use SQLite', weakensMemoryId: old.id });
+
+    const db = openHippoDb(home);
+    try {
+      const rows = allRows<{ op: string; target_id: string }>(
+        db,
+        `SELECT op, target_id FROM audit_log WHERE id > ? ORDER BY id`,
+        mark,
+      );
+      expect(rows).toEqual([
+        { op: 'decision_create', target_id: String(saved.id) },
+        { op: 'remember', target_id: saved.memoryId },
+        { op: 'remember', target_id: old.id },
+      ]);
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(readEntry(home, old.id)).toMatchObject({ confidence: 'stale', tags: ['billing', 'superseded'] });
+  });
+
+  it('a decision whose mirror memory was deleted still supersedes, and the memory stays gone', async () => {
+    const first = await save({ decisionText: 'use Postgres' });
+    expect(deleteEntry(home, first.memoryId!)).toBe(true);
+
+    const second = await save({ decisionText: 'use SQLite', supersedesDecisionId: first.id });
+
+    expect(second.status).toBe('active');
+    expect(countRows(home, 'memories')).toBe(1);
+    expect((await loadDecisions(objectsAt(home), 'default', { status: 'superseded' })).map((d) => d.id)).toEqual([
+      first.id,
+    ]);
+  });
+
+  it('a decision with no mirror memory id still supersedes and weakens nothing', async () => {
+    const first = await save({ decisionText: 'use Postgres' });
+    const before = readEntry(home, first.memoryId!)!;
+    const db = openHippoDb(home);
+    try {
+      db.prepare('UPDATE decisions SET memory_id = NULL WHERE id = ?').run(first.id);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    await save({ decisionText: 'use SQLite', supersedesDecisionId: first.id });
+
+    expect(readEntry(home, first.memoryId!)).toMatchObject({
+      confidence: before.confidence,
+      halfLifeDays: before.halfLifeDays,
+      tags: before.tags,
+    });
+    expect((await loadDecisions(objectsAt(home), 'default', { status: 'superseded' })).map((d) => d.id)).toEqual([
+      first.id,
+    ]);
+  });
+
+  it('a named memory that does not exist refuses the whole save and writes nothing', async () => {
+    const first = await save({ decisionText: 'use Postgres' });
+    const before = counts();
+
+    const refused = save({ decisionText: 'use SQLite', supersedesDecisionId: first.id, weakensMemoryId: 'mem_absent' });
+
+    await expect(refused).rejects.toThrow(new NotFoundError('memory not found: mem_absent'));
+    expect(counts()).toEqual(before);
+    expect((await loadDecisions(objectsAt(home), 'default', { status: 'active' })).map((d) => d.id)).toEqual([
+      first.id,
+    ]);
+  });
+
+  it("another tenant's memory named by a save refuses it and is left as it was", async () => {
+    const foreign = plainMemory(['decision'], 'other-tenant');
+    writeEntry(home, foreign);
+    const before = counts();
+
+    const refused = save({ decisionText: 'use SQLite', weakensMemoryId: foreign.id });
+
+    await expect(refused).rejects.toThrow(new NotFoundError(`memory not found: ${foreign.id}`));
+    expect(counts()).toEqual(before);
+    expect(readEntry(home, foreign.id)).toMatchObject({ confidence: 'verified', halfLifeDays: foreign.halfLifeDays });
   });
 });

@@ -1,14 +1,10 @@
 // What only one typed-object kind does: an incident's open and resolve, the policies in force at a
 // date, the skills export, a brief built from its repo's receipts, and the memory a new decision
 // replaces.
-import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { Incident, Policy, ProjectBrief } from '../../base/records/object-types.js';
 import { MAX_CUSTOMER_LEN, MAX_NOTE_LEN } from '../../domain/objects/customer-notes.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
-import {
-  resolveActiveDecisionIdByMemory,
-  weakenSupersededMemory,
-} from '../../domain/objects/decisions.js';
+import { resolveActiveDecisionIdByMemory } from '../../domain/objects/decisions.js';
 import {
   openIncident,
   resolveOpenIncident,
@@ -29,7 +25,7 @@ import {
   MAX_SKILL_TRIGGER_LEN,
   skillsMarkdown,
 } from '../../domain/objects/skills.js';
-import type { Context, ContextWith } from '../types.js';
+import type { ContextWith } from '../types.js';
 import { saveSiteOf, taggedFrom, type WriteOrigin } from './objects.js';
 
 export type { BriefDigest } from '../../domain/objects/project-briefs.js';
@@ -119,9 +115,4 @@ export function decisionIdByMemory(
   memoryId: string,
 ): Promise<number | null> {
   return resolveActiveDecisionIdByMemory(ctx.store.objects, ctx.tenantId, memoryId);
-}
-
-/** Weakens the memory a new decision replaces, once that decision has saved. */
-export function decisionMemoryWeaken(ctx: Context, entry: MemoryEntry): Promise<void> {
-  return weakenSupersededMemory(ctx.store.entryWrites, entry, ctx.actor.subject);
 }

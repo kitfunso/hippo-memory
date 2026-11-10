@@ -14,7 +14,13 @@ import type {
   ObjectRefusal,
   SavableKind,
 } from '../../src/base/records/object-types.js';
-import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/base/ports/store.js';
+import type {
+  IncidentOpen,
+  IncidentOpenRefusal,
+  ObjectListQuery,
+  ObjectSave,
+  SaveRefusal,
+} from '../../src/base/ports/store.js';
 import {
   runOnFixture,
   seedTwoTenants,
@@ -144,6 +150,7 @@ type Value =
   | AnyObject[]
   | number[]
   | ObjectRefusal
+  | SaveRefusal
   | IncidentOpenRefusal
   | MirrorView[]
   | BriefReceipt[]

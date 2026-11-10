@@ -39,6 +39,25 @@ sessionPerTest();
 useObjectsConformance();
 
 describe.each(CASES)('Objects, the $kind kind', (c) => {
+  // A decision's supersede also weakens the replaced row's mirror: a `superseded` tag and one more remember row.
+  const weakens = c.kind === 'decision';
+  const weakened = (d: ReturnType<typeof saving>) =>
+    weakens ? { ...mirrorView(c, d), tags: [...mirrorView(c, d).tags, 'superseded'] } : mirrorView(c, d);
+  /** The rows saving `next` over row `replaced` appends from audit id `nth`, then the remember row of the weakened `prior` mirror. */
+  const replacing = (
+    nth: number,
+    ids: { replaced: number; id: number },
+    next: ReturnType<typeof saving>,
+    prior: ReturnType<typeof saving>,
+  ) => [
+    superseded(c, nth, ids.replaced, ids.id, next, ids.id),
+    created(c, nth + 1, ids.id, next, ids.id),
+    remembered(nth + 2, next),
+    ...(weakens
+      ? [auditRow(nth + 3, next.save.at, 'remember', prior.save.mirror.id, { kind: 'distilled', scope: null })]
+      : []),
+  ];
+
   it('lists nothing, then the one row a save made, and reads it only inside its tenant; the create row sits ahead of the remember row', async () => {
     const first = saving(c, 1, { changeSummary: 'a first version keeps none' });
     const side = await conforms([
@@ -101,17 +120,13 @@ describe.each(CASES)('Objects, the $kind kind', (c) => {
       { value: rows[0] },
       { value: rows[1] },
       { value: rows[2] },
-      { value: [mirrorView(c, first), mirrorView(c, second), mirrorView(c, third)] },
+      { value: [weakened(first), weakened(second), mirrorView(c, third)] },
     ]);
     expect(added(side)).toEqual([
       created(c, 0, 1, first),
       remembered(1, first),
-      superseded(c, 2, 1, 2, second, 2),
-      created(c, 3, 2, second, 2),
-      remembered(4, second),
-      superseded(c, 5, 2, 3, third, 3),
-      created(c, 6, 3, third, 3),
-      remembered(7, third),
+      ...replacing(2, { replaced: 1, id: 2 }, second, first),
+      ...replacing(weakens ? 6 : 5, { replaced: 2, id: 3 }, third, second),
     ]);
   });
 
@@ -155,6 +170,7 @@ describe.each(CASES)('Objects, the $kind kind', (c) => {
       supersedeOp(c.kind),
       createOp(c.kind),
       'remember',
+      ...(weakens ? ['remember'] : []),
       createOp(c.kind),
       'remember',
       closeOp(c.kind),
@@ -193,7 +209,8 @@ describe.each(CASES)('Objects, the $kind kind', (c) => {
       { value: closed },
       { value: rowOf(c, 3, third) },
     ]);
-    expect(added(side).slice(7)).toEqual([auditRow(7, T3, closeOp(c.kind), '2', { [c.idKey]: 2 })]);
+    const before = weakens ? 8 : 7;
+    expect(added(side).slice(before)).toEqual([auditRow(before, T3, closeOp(c.kind), '2', { [c.idKey]: 2 })]);
   });
 
   /** Ids 1 to 8, id 5 in the other tenant: three instants each shared by two of the tenant's rows, then 1 closed and 2 superseded by 8. Odd ids hold the alpha filter value. */
@@ -276,5 +293,37 @@ describe.each(CASES)('Objects, the $kind kind', (c) => {
       { value: [4, 3, 2, 1] },
       { value: [5] },
     ]);
+  });
+});
+
+describe('Objects, a decision that names a memory to weaken', () => {
+  const decision = CASES.find((c) => c.kind === 'decision')!;
+  const naming = (d: ReturnType<typeof saving>, memoryId: string) => ({
+    ...d,
+    save: { ...d.save, weakensMemoryId: memoryId },
+  });
+
+  it("a memory the tenant does not hold, absent or another tenant's, is refused as memory_missing and keeps no mirror, row or audit row", async () => {
+    const first = saving(decision, 1);
+    const foreign = saving(decision, 2, { tenantId: TENANT_B });
+    const absent = naming(saving(decision, 3, { at: T2 }), 'mem_absent');
+    const crossed = naming(saving(decision, 4, { at: T2 }), foreign.save.mirror.id);
+    const side = await conforms([
+      save(decision, first),
+      save(decision, foreign),
+      save(decision, absent),
+      save(decision, crossed),
+      mirrorsOf([absent, crossed]),
+      ids('decision', { limit: 10 }),
+      ids('decision', { limit: 10 }, TENANT_B),
+    ]);
+    expect(side.outcomes.slice(2)).toEqual([
+      { value: { refused: 'memory_missing', memoryId: 'mem_absent' } },
+      { value: { refused: 'memory_missing', memoryId: foreign.save.mirror.id } },
+      { value: [] },
+      { value: [1] },
+      { value: [2] },
+    ]);
+    expect(added(side).map((e) => e.op)).toEqual(['decision_create', 'remember', 'decision_create', 'remember']);
   });
 });

@@ -347,6 +347,8 @@ interface SaveRule<K extends SavableKind> {
   readonly createKeys: (fields: ObjectFields[K], version: number) => JsonObject;
   /** Keys the supersede row stores after its own. */
   readonly supersedeKeys?: (fields: ObjectFields[K]) => JsonObject;
+  /** The save also weakens the replaced row's mirror and the memory it names. */
+  readonly weakensPredecessor?: true;
 }
 
 export const hasText = (text: string | null | undefined): boolean =>
@@ -361,7 +363,11 @@ const refreshKeys = (f: ObjectFields['project_brief']): JsonObject =>
 type SaveRules = { readonly [K in SavableKind]: SaveRule<K> };
 
 export const SAVE_RULES: SaveRules = {
-  decision: { versioned: false, createKeys: (f) => ({ has_context: hasText(f.context) }) },
+  decision: {
+    versioned: false,
+    createKeys: (f) => ({ has_context: hasText(f.context) }),
+    weakensPredecessor: true,
+  },
   process: {
     versioned: true,
     createKeys: (f, version) => ({
