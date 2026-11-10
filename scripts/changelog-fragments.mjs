@@ -20,7 +20,7 @@ const fragments = existsSync(DIR)
   : [];
 
 function hasSection(changelog, version) {
-  return new RegExp(`^## ${version.replace(/\./g, '\\.')}(?![\\w.-])`, 'm').test(changelog);
+  return new RegExp(`^## ${version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w.-])`, 'm').test(changelog);
 }
 
 function check() {
