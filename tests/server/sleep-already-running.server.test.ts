@@ -11,6 +11,7 @@ import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, seedVectorRows } from '../_helpers/vector-rows.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
@@ -67,7 +68,7 @@ async function postSleep(): Promise<Response> {
   });
 }
 
-describe('POST /v1/sleep while another sleep holds the claim', () => {
+describe.skipIf(needsHippoDb('sleep'))('POST /v1/sleep while another sleep holds the claim', () => {
   it('answers 200 with nothing done and saves no vector graph file', async () => {
     holdClaim();
 
