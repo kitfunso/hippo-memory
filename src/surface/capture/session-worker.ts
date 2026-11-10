@@ -82,25 +82,30 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   }
 }
 
+type TakeFailed = { readonly kind: 'failed'; readonly err: unknown };
+type Take =
+  | { readonly kind: 'took'; readonly mode: WorkerMode }
+  | { readonly kind: 'empty' }
+  | TakeFailed;
+
 /** Takes the queued request by renaming it, so one queued while this reads it lands in a fresh
  * file. */
-function takeQueued(queued: string): WorkerMode | null {
+function takeQueued(queued: string): Take {
   const taken = `${queued}.${process.pid}`;
   try {
     fs.renameSync(queued, taken);
   } catch (err) {
     // ENOENT means nothing is queued; any other refusal leaves the request queued for the next
     // round, but is told.
-    if (errorCode(err) !== 'ENOENT') {
-      logger.warn(
-        `session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`,
-        errorFields(err),
-      );
-    }
-    return null;
+    if (errorCode(err) === 'ENOENT') return { kind: 'empty' };
+    logger.warn(
+      `session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+    return { kind: 'failed', err };
   }
   try {
-    return fs.readFileSync(taken, 'utf8') === 'full' ? 'full' : 'turn';
+    return { kind: 'took', mode: fs.readFileSync(taken, 'utf8') === 'full' ? 'full' : 'turn' };
   } finally {
     fs.rmSync(taken, { force: true });
   }
@@ -109,34 +114,64 @@ function takeQueued(queued: string): WorkerMode | null {
 // Rounds in which takeQueued took nothing: such a request stays queued for the next worker instead of spinning here.
 const MAX_ROUNDS = 5;
 
+function queuedKind(queued: string): string {
+  try {
+    return fs.readFileSync(queued, 'utf8') === 'full' ? 'full' : 'turn';
+  } catch (err) {
+    logger.debug(`session worker: cannot read ${queued}: ${errorMessage(err)}`, errorFields(err));
+    return 'unreadable';
+  }
+}
+
+function reportGaveUp(queued: string, lastFailed: TakeFailed | null, gaveUp?: LineLog): void {
+  const lastTake =
+    lastFailed === null
+      ? 'none: the request was queued again each round'
+      : errorMessage(lastFailed.err);
+  const line =
+    `session worker: gave up after ${MAX_ROUNDS} rounds with the ${queuedKind(queued)} request ` +
+    `still queued in ${queued}; ` +
+    `last take error: ${lastTake}`;
+  logger.warn(line, lastFailed === null ? undefined : errorFields(lastFailed.err));
+  gaveUp?.(line);
+}
+
 /** Runs `work` unless a live worker holds this session, which then runs the request after its
- * own so the last reply is never dropped. */
+ * own so the last reply is never dropped. A detached worker's stderr goes nowhere, so `gaveUp`
+ * is where it leaves the line saying it stopped with the request still queued. */
 export async function runSessionWorker(
   sessionId: string | null,
   mode: WorkerMode,
   work: (mode: WorkerMode) => Promise<void>,
+  gaveUp?: LineLog,
 ): Promise<void> {
   const files = sessionStateFiles(sessionId);
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
   let idleRounds = 0;
+  let lastFailed: TakeFailed | null = null;
   for (let take = takeFileLock(files.lock); take.kind !== 'held'; take = takeFileLock(files.lock)) {
     if (take.kind === 'unusable') {
       warnUnusableLockOnce(files.lock, take.cause);
       return work(mode);
     }
     let ran = false;
+    let next: Take = { kind: 'empty' };
     try {
-      for (let next = takeQueued(files.queued); next !== null; next = takeQueued(files.queued)) {
+      for (next = takeQueued(files.queued); next.kind === 'took'; next = takeQueued(files.queued)) {
         ran = true;
-        await work(next);
+        await work(next.mode);
       }
     } finally {
       take.lock.release();
     }
+    if (next.kind === 'failed') lastFailed = next;
     // A taker that found the lock held left its request queued, so look again after every release.
     if (!fs.existsSync(files.queued)) return;
-    if (!ran && ++idleRounds >= MAX_ROUNDS) return;
+    if (!ran && ++idleRounds >= MAX_ROUNDS) {
+      reportGaveUp(files.queued, lastFailed, gaveUp);
+      return;
+    }
   }
 }
 

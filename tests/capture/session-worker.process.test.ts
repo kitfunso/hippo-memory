@@ -12,6 +12,10 @@ import {
   turnsAfter,
   type WorkerMode,
 } from '../../src/surface/capture/session-worker.js';
+import { handleSessionEndWorker } from '../../src/surface/cli/hooks/session-end-worker.js';
+import { handleLastSleep } from '../../src/surface/cli/last-sleep.js';
+import type { CommandContext } from '../../src/surface/cli/flag-values.js';
+import type { LineLog } from '../../src/base/util/log.js';
 import type { StatFn } from '../../src/host/file-lock.js';
 import type { SessionTurn } from '../../src/surface/capture/transcript.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
@@ -63,6 +67,22 @@ function recorder(): Recorder {
   };
 }
 
+/** A give-up writer that keeps what it is given. */
+function giveUps() {
+  const lines: string[] = [];
+  const gaveUp: LineLog = (line) => {
+    lines.push(line);
+  };
+  return { lines, gaveUp };
+}
+
+/** A folder where takeQueued renames the request to makes every take fail. */
+function blockTake(): void {
+  const blocked = file(`.queued.${process.pid}`);
+  fs.mkdirSync(blocked);
+  fs.writeFileSync(path.join(blocked, 'keep'), '');
+}
+
 describe('runSessionWorker', () => {
   it('runs the request once and leaves no lock or queued file behind', async () => {
     const { runs, work } = recorder();
@@ -108,37 +128,80 @@ describe('runSessionWorker', () => {
     // The first work call leaves a request that cannot be taken (a folder in the rename target's place).
     const blocked = file(`.queued.${process.pid}`);
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const gave = giveUps();
     try {
-      await runSessionWorker(ID, 'turn', async () => {
-        fs.mkdirSync(blocked);
-        fs.writeFileSync(path.join(blocked, 'keep'), '');
-        fs.writeFileSync(file('.queued'), 'turn');
-      });
+      await runSessionWorker(
+        ID,
+        'turn',
+        async () => {
+          fs.mkdirSync(blocked);
+          fs.writeFileSync(path.join(blocked, 'keep'), '');
+          fs.writeFileSync(file('.queued'), 'turn');
+        },
+        gave.gaveUp,
+      );
       const lines = write.mock.calls
         .map((c) => String(c[0]))
         .filter((m) => m.includes('cannot take the queued request'));
       // One failed take in the round that ran work, then five idle rounds.
       expect(lines).toHaveLength(6);
+      expect(gave.lines).toHaveLength(1);
     } finally {
       write.mockRestore();
     }
   });
 
-  it('looks at the queue again after a release even when it ran nothing, and stops after five rounds', async () => {
-    // A folder where takeQueued renames the request to makes every take fail: ran stays false and the request stays queued.
-    fs.mkdirSync(file(`.queued.${process.pid}`));
-    fs.writeFileSync(path.join(file(`.queued.${process.pid}`), 'keep'), '');
+  it('looks at the queue again after a release even when it ran nothing, stops after five rounds and says so once', async () => {
+    // Every take fails: ran stays false and the request stays queued.
+    blockTake();
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const gave = giveUps();
     try {
       const { runs, work } = recorder();
-      await runSessionWorker(ID, 'turn', work);
+      await runSessionWorker(ID, 'turn', work, gave.gaveUp);
       expect(runs).toEqual([]);
-      const lines = write.mock.calls
-        .map((c) => String(c[0]))
-        .filter((m) => m.includes('cannot take the queued request'));
-      expect(lines).toHaveLength(5);
+      const stderr = write.mock.calls.map((c) => String(c[0]));
+      expect(stderr.filter((m) => m.includes('cannot take the queued request'))).toHaveLength(5);
+      expect(gave.lines).toHaveLength(1);
+      const [line] = gave.lines;
+      expect(line).toContain(file('.queued'));
+      expect(line).toContain('with the turn request still queued');
+      expect(line).toContain('gave up after 5 rounds');
+      expect(line).toMatch(/last take error: (?!none)\S/);
+      expect(fs.existsSync(file('.queued'))).toBe(true);
+      expect(stderr.filter((m) => m.includes('gave up after'))).toHaveLength(1);
     } finally {
       write.mockRestore();
+    }
+  });
+
+  it('writes no give-up line for a request that is served, even one queued while the work ran', async () => {
+    const gave = giveUps();
+    const runs: WorkerMode[] = [];
+    await runSessionWorker(
+      ID,
+      'turn',
+      async (mode) => {
+        if (runs.length === 0) fs.writeFileSync(file('.queued'), 'turn', { flag: 'wx' });
+        runs.push(mode);
+      },
+      gave.gaveUp,
+    );
+    expect(runs).toEqual(['turn', 'turn']);
+    expect(gave.lines).toEqual([]);
+  });
+
+  it('writes no give-up line when another worker holds the lock: that worker serves the request', async () => {
+    const holder = await holdInChild(file('.lock.db'));
+    try {
+      const gave = giveUps();
+      const { runs, work } = recorder();
+      await runSessionWorker(ID, 'turn', work, gave.gaveUp);
+      expect(runs).toEqual([]);
+      expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('turn');
+      expect(gave.lines).toEqual([]);
+    } finally {
+      await kill(holder);
     }
   });
 
@@ -214,6 +277,52 @@ describe('runSessionWorker', () => {
       }),
     ).rejects.toThrow('boom');
     expect(left()).toEqual([]);
+  });
+});
+
+describe('a detached worker that gives up', () => {
+  it('leaves one stamped line in its session log, which last-sleep prints without counting it as a problem', async () => {
+    blockTake();
+    const logFile = path.join(fake.home, 'logs', 'worker.log');
+    const hippoRoot = path.join(fake.home, 'store');
+    const ctx: CommandContext = {
+      hippoRoot,
+      tenantId: 'default',
+      args: [],
+      flags: { 'log-file': logFile, 'session-id': ID },
+    };
+    const stderr: string[] = [];
+    const errors: string[] = [];
+    try {
+      vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+        stderr.push(String(chunk));
+        return true;
+      });
+      await handleSessionEndWorker(ctx);
+      const logged = fs
+        .readFileSync(logFile, 'utf8')
+        .split('\n')
+        .filter((l) => l !== '');
+      expect(logged).toHaveLength(1);
+      expect(logged[0]).toMatch(/^\[hippo\] \d{4}-\d\d-\d\dT[\d:.]+Z session worker: gave up after 5 rounds/);
+      expect(logged[0]).toContain(file('.queued'));
+
+      stderr.length = 0;
+      const stdout: string[] = [];
+      vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      });
+      vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+        errors.push(args.map(String).join(' '));
+      });
+      handleLastSleep({ hippoRoot, flags: { path: logFile, keep: true } }, 'terminal');
+      expect(stderr.join('')).toContain('session worker: gave up after 5 rounds');
+      expect([...stderr, ...errors].filter((m) => m.includes('Hippo: '))).toEqual([]);
+      expect(stdout).toEqual([]);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 

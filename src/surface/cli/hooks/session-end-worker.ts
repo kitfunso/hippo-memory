@@ -43,6 +43,7 @@ export async function handleSessionEndWorker({
     stringFlag(flags, 'session-id') ?? null,
     boolFlag(flags, 'turn') ? 'turn' : 'full',
     (mode) => sessionEndWork(hippoRoot, tenantId, flags, mode),
+    (line, opts) => appendSessionEndCloseLog(stringFlag(flags, 'log-file') ?? null, line, opts),
   );
 }
 

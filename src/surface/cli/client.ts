@@ -89,9 +89,26 @@ export class MalformedReplyError extends Error {
   constructor(
     readonly route: string,
     detail: string,
+    cause?: unknown,
   ) {
-    super(`the hippo server's reply to ${route} was not the expected JSON object (${detail})`);
+    super(
+      `the hippo server's reply to ${route} was not the expected JSON object (${detail})`,
+      cause === undefined ? undefined : { cause },
+    );
     this.name = 'MalformedReplyError';
+  }
+}
+
+/** A 2xx body under the cap: the plain Errors `readCappedJson` throws become a MalformedReplyError,
+ * and a transport error keeps its class. */
+async function readReplyBody(res: Response, route: string): Promise<JsonValue> {
+  try {
+    return await readCappedJson(res, MAX_REPLY_BYTES);
+  } catch (err) {
+    if (err instanceof Error && err.constructor === Error) {
+      throw new MalformedReplyError(route, err.message, err);
+    }
+    throw err;
   }
 }
 
@@ -104,7 +121,7 @@ async function readReply<T>(
   route: string,
   guard?: (body: { [key: string]: JsonValue }) => boolean,
 ): Promise<T> {
-  const body = await readCappedJson(res, MAX_REPLY_BYTES);
+  const body = await readReplyBody(res, route);
   if (!isJsonObject(body)) {
     throw new MalformedReplyError(
       route,
@@ -224,10 +241,9 @@ export async function nearestIds(
   return reply.ids;
 }
 
-/**
- * 'never-sent': connection never opened, safe to replay locally. 'delivery-unknown': the request
- * was on the wire and may have committed, so never replay a write. 'none': not a transport
- * failure. */
+/** 'never-sent': the connection never opened, so a write replays locally. 'none': the server answered
+ * with an error, or the request could not be built. 'delivery-unknown': the default for every error
+ * not listed, as the request may have committed, so a write is never replayed. */
 export type TransportFailure = 'none' | 'never-sent' | 'delivery-unknown';
 
 /**
@@ -241,26 +257,51 @@ function transportCode(err: Error): string {
   return isObjectLike(cause) && 'code' in cause ? String(cause.code) : '';
 }
 
+const SOCKET_CODES: ReadonlySet<string> = new Set([
+  'ECONNRESET',
+  'ECONNABORTED',
+  'EPIPE',
+  'UND_ERR_SOCKET',
+]);
+
+/** A request that was on the wire when it failed: a dead socket, a fetch TypeError (no code means no
+ * known syscall) or a server gone quiet. */
+function diedOnTheWire(err: Error): boolean {
+  return (
+    SOCKET_CODES.has(transportCode(err)) || err instanceof TypeError || err.name === 'TimeoutError'
+  );
+}
+
 export function classifyTransportFailure(err: Error): TransportFailure {
-  // The server answered, so the transport worked, whatever the message says.
-  if (err instanceof HttpResponseError) return 'none';
+  // The server answered, or encodeURIComponent threw before any request existed.
+  if (err instanceof HttpResponseError || err instanceof URIError) return 'none';
   const code = transportCode(err);
   // Connect-phase failures: no request bytes ever left the client, so a stale pidfile can be healed
   // and the call replayed on the direct path.
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'never-sent';
-  // The socket died mid-exchange.
-  if (
-    code === 'ECONNRESET' ||
-    code === 'ECONNABORTED' ||
-    code === 'EPIPE' ||
-    code === 'UND_ERR_SOCKET'
-  ) {
-    return 'delivery-unknown';
+  // Any other error may have committed: only the two classes above are known not to have.
+  return 'delivery-unknown';
+}
+
+const WRITE_MAY_HAVE_LANDED = 'so the write may already have been applied. Not retrying locally.';
+
+/** The syscall code or the class name of an error hippo does not know, never its message, which a
+ * foreign library may fill with the request's headers. */
+function unrecognisedDetail(err: Error): string {
+  const code = transportCode(err);
+  const name = err.constructor.name;
+  const detail = /^[A-Z0-9_]+$/.test(code) ? code : name === 'Error' ? '' : name;
+  return detail === '' ? '' : ` (${detail})`;
+}
+
+/** What the user reads when a write may have landed and is not replayed. */
+export function deliveryUnknownReason(err: Error, url: string): string {
+  if (err instanceof MalformedReplyError) {
+    return `${url} answered, but its reply could not be read, ${WRITE_MAY_HAVE_LANDED}`;
   }
-  // Fetch rejects every network failure as a TypeError, with a cause only when the syscall is
-  // known, so no code means the conservative answer.
-  if (err instanceof TypeError) return 'delivery-unknown';
-  // The request was sent and the server went quiet, so it may have committed.
-  if (err.name === 'TimeoutError') return 'delivery-unknown';
-  return 'none';
+  if (diedOnTheWire(err)) {
+    return `the connection to ${url} dropped or timed out mid-request, ${WRITE_MAY_HAVE_LANDED}`;
+  }
+  const unrecognised = `failed in a way hippo does not recognise${unrecognisedDetail(err)}`;
+  return `the request to ${url} ${unrecognised}, ${WRITE_MAY_HAVE_LANDED}`;
 }

@@ -274,10 +274,12 @@ async function sendOrFallBack<T>(
     const failure = client.classifyTransportFailure(err);
     if (failure === 'none') return call.refused(err);
     if (failure === 'delivery-unknown') {
-      fail(
-        `hippo: the connection to ${server.url} dropped or timed out mid-request, so the write may already have been ` +
-          'applied. Not retrying locally. Check with `hippo recall` before running this again.',
+      log.debug(
+        'a served write may have landed, so it is not replayed on the store',
+        errorFields(err),
       );
+      const reason = client.deliveryUnknownReason(err, server.url);
+      fail(`hippo: ${reason} Check with \`hippo recall\` before running this again.`);
     }
     failIfServerRequired('the server pidfile was stale (connection refused)');
     log.warn('stale server pidfile detected, falling back to direct mode', errorFields(err));
