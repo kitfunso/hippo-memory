@@ -87,4 +87,19 @@ describe('changelog-fragments.mjs', () => {
     });
     withFixture({}, ({ run }) => expect(run('check').status).toBe(0));
   });
+
+  it('check tells a fragment that came in after the fold from one never folded', () => {
+    withFixture({ 'fix-c.md': '### Fixed\n\n- C.\n' }, ({ run }) => {
+      expect(run('check').stderr).toContain('run `node scripts/changelog-fragments.mjs fold`');
+    });
+    withFixture(
+      { 'fix-c.md': '### Fixed\n\n- C.\n' },
+      ({ run }) => {
+        const r = run('check');
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('already has a ## 2.0.0 section, so these came in after the fold');
+      },
+      '# Changelog\n\n## 2.0.0 - 2026-09-01\n\n- Done.\n',
+    );
+  });
 });

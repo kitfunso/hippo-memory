@@ -25,4 +25,5 @@ top of `CHANGELOG.md`, merges every fragment under shared headings (Added, Chang
 Fixed, Security and Documentation first, then any other heading in the order seen),
 and deletes the fragments. `prepublishOnly` runs
 `node scripts/changelog-fragments.mjs check` and refuses to publish while a fragment
-is still here.
+is still here. CI runs the same check on any commit that changes the version, so a
+release PR fails when master gains a fragment after its fold.

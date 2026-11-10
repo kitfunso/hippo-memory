@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.5.1 - 2026-11-10
+
+### Added
+
+- **Z0 cost by task kind (`scripts/token-eval/z0-cost-by-kind.mjs`).** One free, local command reruns the frozen round 3 analyzer's cost ratio on teach, first apply, later apply and set N tasks for seven arm pairs, with the dollars and the resolve difference beside each ratio, and stops unless the analyzer files, the inputs and round 3's H3 and H4 lines match the recorded hashes and numbers exactly.
+
+### Changed
+
+- **3.5.1 ships everything in 3.5.0, which was tagged but never published to npm.** The 3.5.0 publish stopped because a pull request merged after the release was cut left a changelog fragment unfolded. Upgrading from 3.4.0 brings every entry in this section and in the 3.5.0 section below. CI now runs the fragment check on any commit that changes the package version, so a release pull request fails on a stray fragment before it is tagged.
+
 ## 3.5.0 - 2026-11-10
 
 ### Added
