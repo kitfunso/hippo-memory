@@ -16,7 +16,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { sharingStores } from '../_helpers/sharing-stores.js';
+import { sharedEntry, sharingStores } from '../_helpers/sharing-stores.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { localIndex } from '../_helpers/cli-stores.js';
@@ -112,17 +112,18 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     });
     writeEntry(localRoot, entry);
 
-    const shared = await shareMemory(...sharingStores(localRoot), entry.id, {
-      embed: TEST_RUN,
-      detached: TEST_DETACHED,
-      tenantId: 'default',
-      force: true,
-    });
-    expect(shared).not.toBeNull();
-    expect(shared!.id).toMatch(/^g_/);
+    const shared = sharedEntry(
+      await shareMemory(...sharingStores(localRoot), entry.id, {
+        embed: TEST_RUN,
+        detached: TEST_DETACHED,
+        tenantId: 'default',
+        force: true,
+      }),
+    );
+    expect(shared.id).toMatch(/^g_/);
 
     const index = loadEmbeddingIndex(globalRoot);
-    expect(index[shared!.id]).toBeUndefined();
+    expect(index[shared.id]).toBeUndefined();
   });
 
   it('autoShare succeeds and writes no embedding index entry (skipEmbed + batch embedAll no-op)', async () => {

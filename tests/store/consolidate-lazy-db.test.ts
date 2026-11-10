@@ -96,7 +96,7 @@ describe('consolidateDb lazy open', () => {
 
     const result = await consolidate(home, { dryRun: true });
     // Dry-run previews the merge without writing (the tombstone checks
-    // answer null under a dry run before they ever reach the store).
+    // read under a dry run and write no row).
     expect(result.dryRun).toBe(true);
     expect(loadAllEntries(home, 'default')).toHaveLength(2);
   });

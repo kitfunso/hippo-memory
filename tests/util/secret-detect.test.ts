@@ -15,7 +15,7 @@ import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { contextGet } from '../../src/api/index.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
-import { sharingStores } from '../_helpers/sharing-stores.js';
+import { sharedEntry, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -304,14 +304,16 @@ describe('producer + sync vetoes (real stores)', () => {
   it('shareMemory stamps the canonical origin on the global copy', async () => {
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
-    const globalCopy = await shareMemory(...sharingStores(projA), row.id, {
-      embed: TEST_RUN,
-      detached: TEST_DETACHED,
-      tenantId: 'default',
-      force: true,
-    });
-    expect(globalCopy?.originProject).toBe('proj-a');
-    expect(globalCopy?.source).toMatch(/^shared:proj-a:/);
+    const globalCopy = sharedEntry(
+      await shareMemory(...sharingStores(projA), row.id, {
+        embed: TEST_RUN,
+        detached: TEST_DETACHED,
+        tenantId: 'default',
+        force: true,
+      }),
+    );
+    expect(globalCopy.originProject).toBe('proj-a');
+    expect(globalCopy.source).toMatch(/^shared:proj-a:/);
   });
 
   it('syncGlobalToLocal skips secrets and other-project rows, preserves origin on copies', async () => {

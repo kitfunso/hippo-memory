@@ -13,10 +13,10 @@ import { originFromSource } from '../../src/host/project-identity.js';
 import { projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { saveCompaction } from '../../src/surface/capture/compaction-record.js';
-import { COMPACTION_MEMORY_TAG } from '../../src/base/memory/entry.js';
+import { COMPACTION_MEMORY_TAG, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { summaryWith } from '../_helpers/compaction-hooks.js';
-import { sharingStores } from '../_helpers/sharing-stores.js';
+import { sharedEntry, sharingStores } from '../_helpers/sharing-stores.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
@@ -60,6 +60,11 @@ function layouts(flagged: boolean): readonly Layout[] {
     { store: a, folderStamp: '' },
     { store: b, folderStamp: 'team' },
   ];
+}
+
+/** A NULL-origin row with its own text per folder: a share of a text the global store holds writes nothing. */
+function rowToShare(store: string): MemoryEntry {
+  return { ...createMemory(`the runbook index lives in the wiki of ${path.basename(store)}`), originProject: null };
 }
 
 function originOf(store: string, id: string): string | null | undefined {
@@ -117,16 +122,20 @@ describe('shared store origin stamp', () => {
       expect(originOf(getGlobalRoot(), promoted.id)).toBeNull();
       expect(promoted.source.startsWith('shared::')).toBe(true);
       expect(originFromSource(promoted.source)).toBeNull();
-      const shared = await shareMemory(...sharingStores(store), entry.id, {
-        embed: TEST_RUN,
-        detached: TEST_DETACHED,
-        tenantId: 'default',
-        force: true,
-        skipEmbed: true,
-      });
-      expect(shared?.source.startsWith('shared::')).toBe(true);
-      expect(originFromSource(shared?.source)).toBeNull();
-      expect(originOf(getGlobalRoot(), shared?.id ?? '')).toBeNull();
+      const toShare = rowToShare(store);
+      writeEntry(store, toShare);
+      const shared = sharedEntry(
+        await shareMemory(...sharingStores(store), toShare.id, {
+          embed: TEST_RUN,
+          detached: TEST_DETACHED,
+          tenantId: 'default',
+          force: true,
+          skipEmbed: true,
+        }),
+      );
+      expect(shared.source.startsWith('shared::')).toBe(true);
+      expect(originFromSource(shared.source)).toBeNull();
+      expect(originOf(getGlobalRoot(), shared.id)).toBeNull();
     }
   });
 
@@ -137,16 +146,20 @@ describe('shared store origin stamp', () => {
       const promoted = await copyToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBe(folderStamp);
       expect(promoted.source).toBe(`promoted:${store}`);
-      const shared = await shareMemory(...sharingStores(store), entry.id, {
-        embed: TEST_RUN,
-        detached: TEST_DETACHED,
-        tenantId: 'default',
-        force: true,
-        skipEmbed: true,
-      });
+      const toShare = rowToShare(store);
+      writeEntry(store, toShare);
+      const shared = sharedEntry(
+        await shareMemory(...sharingStores(store), toShare.id, {
+          embed: TEST_RUN,
+          detached: TEST_DETACHED,
+          tenantId: 'default',
+          force: true,
+          skipEmbed: true,
+        }),
+      );
       const label = folderStamp === '' ? path.basename(path.dirname(store)) : folderStamp;
-      expect(shared?.source.startsWith(`shared:${label}:`)).toBe(true);
-      expect(shared?.originProject).toBe(folderStamp);
+      expect(shared.source.startsWith(`shared:${label}:`)).toBe(true);
+      expect(shared.originProject).toBe(folderStamp);
     }
   });
 

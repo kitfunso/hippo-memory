@@ -5,7 +5,7 @@
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { ALL_TENANTS } from '../base/util/tenant.js';
 import { syncGlobalToLocal } from '../domain/sharing/global-sync.js';
-import { autoShare, listPeers, shareMemory } from '../domain/sharing/share.js';
+import { autoShare, listPeers, shareMemory, type ShareOutcome } from '../domain/sharing/share.js';
 import { globalTargetOf } from './infra.js';
 import { withDetached } from './detached.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
@@ -32,13 +32,13 @@ function requireGlobalTarget(
   return target;
 }
 
-/** Copies one of the caller's memories to the global store; null when its transfer score is too
- * low and `force` is off. */
+/** Copies one of the caller's memories to the global store unless its transfer score is too low
+ * and `force` is off, or the caller's global rows already hold its text. */
 export async function shareToGlobal(
   ctx: ContextWith<'folderFiles'>,
   id: string,
   opts: { readonly force: boolean },
-): Promise<MemoryEntry | null> {
+): Promise<ShareOutcome> {
   const target = requireGlobalTarget(ctx, 'share');
   const options = { force: opts.force, tenantId: ctx.tenantId, embed: ctx.infra };
   return withDetached(ctx, (detached) => shareMemory(ctx, target, id, { ...options, detached }));

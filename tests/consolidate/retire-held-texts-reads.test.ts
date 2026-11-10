@@ -1,6 +1,8 @@
 // Sleep's retired-text check asks the store which held texts each tenant rejected once per tenant per page, so a
 // store of many merged rows costs the same few reads as one of a few, and a tenant's rejection still binds only it.
+// A dry run asks too, so it names the rows a real sleep retires.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cpSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -8,10 +10,11 @@ import { normalizeValueForRejection, rejectionDigest } from '../../src/base/reco
 import { mergedText } from '../../src/base/util/same-text.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
+import type { ConsolidationResult } from '../../src/domain/consolidate/run.js';
 import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 
@@ -80,6 +83,16 @@ function seeded(perTenant: number): Seeded {
   return { root, acmeMerged: acmeMerged.sort() };
 }
 
+function sleepOn(store: Parameters<typeof runConsolidation>[0], root: string, dryRun = false) {
+  return runConsolidation(store, {
+    strength: PRODUCTION_STRENGTH,
+    now: NOW,
+    config: loadConfig(root),
+    tenantId: 'default',
+    dryRun,
+  });
+}
+
 async function sleepCountingAsks(perTenant: number): Promise<SleepAsks> {
   const { root, acmeMerged } = seeded(perTenant);
   const local = sqliteStore(root);
@@ -94,12 +107,7 @@ async function sleepCountingAsks(perTenant: number): Promise<SleepAsks> {
       },
     },
   };
-  const result = await runConsolidation(store, {
-    strength: PRODUCTION_STRENGTH,
-    now: NOW,
-    config: loadConfig(root),
-    tenantId: 'default',
-  });
+  const result = await sleepOn(store, root);
   const retired = detailLines(result).flatMap((line) => RETIRED.exec(line)?.[1] ?? []);
   return { root, asks: asks.sort(), retired: retired.sort(), acmeMerged };
 }
@@ -110,5 +118,73 @@ describe("sleep's retired-text check", () => {
     expect(asks).toEqual([...TENANTS]);
     expect(retired).toEqual(acmeMerged);
     expect(retired).toHaveLength(n);
+  });
+});
+
+// The same store twice, one to preview and one to sleep, so each run starts from the same rows.
+function copyOf(root: string): string {
+  const copy = makeRoot('retire-held-copy');
+  cpSync(root, copy, { recursive: true });
+  return copy;
+}
+
+const retirements = (result: ConsolidationResult) =>
+  result.events.flatMap((e) => (e.kind === 'retiredText' ? [{ id: e.id, successorId: e.successorId }] : []));
+const rowIds = (root: string): string[] => loadEveryTenantEntries(root).map((e) => e.id);
+
+describe("a dry run's retired-text check", () => {
+  it('names the rows a real sleep retires and whether each keeps a successor, and writes nothing', async () => {
+    const { root, acmeMerged } = seeded(1);
+    const copy = copyOf(root);
+    const before = rowIds(root);
+
+    const preview = await sleepOn(sqliteStore(root), root, true);
+    const actual = await sleepOn(sqliteStore(copy), copy);
+
+    const named = (result: ConsolidationResult) =>
+      retirements(result).map(({ id, successorId }) => [id, successorId !== null]);
+    expect(named(actual)).toEqual([[acmeMerged[0], true]]);
+    expect(named(preview)).toEqual(named(actual));
+    expect(rowIds(root).sort()).toEqual(before.sort());
+    // A successor is a new row with a new id, so a preview's names no row.
+    expect(rowIds(copy)).toContain(retirements(actual)[0].successorId);
+    expect(rowIds(root)).not.toContain(retirements(preview)[0].successorId);
+  });
+
+  it('reports the merges a dry run and a real sleep make once a retired text frees its source', async () => {
+    const [first, second, third] = texts(0);
+    const at = { baseHalfLifeDays: 30, layer: Layer.Episodic };
+    const [a, b, c] = [first, second, third].map((text) => createMemory(text, at));
+    const lookAlike = createMemory('the billing export 0 lands every hour', at);
+    const rollup = createMemory(mergedText(HEADER, texts(0)), {
+      ...at,
+      layer: Layer.Semantic,
+      source: 'consolidation',
+    });
+    const root = makeRoot('retire-held-frees-source');
+    writeEntriesTogether(root, [a, b, c, lookAlike, { ...rollup, parents: [a.id, b.id, c.id] }]);
+    const db = openHippoDb(root);
+    try {
+      insertRejectedValue(db, {
+        tenantId: 'default',
+        digest: rejectionDigest(second),
+        reason: 'test',
+        rejectedBy: 'test',
+        rejectedAt: NOW.toISOString(),
+        normalizedChars: normalizeValueForRejection(second).length,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+    const copy = copyOf(root);
+
+    const preview = await sleepOn(sqliteStore(root), root, true);
+    const actual = await sleepOn(sqliteStore(copy), copy);
+
+    // A real sleep swaps in the rollup's successor, which frees the rejected text's source to merge with its look-alike;
+    // a dry run keeps the old rollup, so its merge count can fall short of the real one.
+    console.log(`merged episodic: dry run ${preview.merged}, real sleep ${actual.merged}`);
+    expect(retirements(actual).map((r) => r.id)).toEqual([rollup.id]);
+    expect(preview.merged).toBeLessThanOrEqual(actual.merged);
   });
 });

@@ -72,8 +72,8 @@ describe('a host-built global target without embedderFor', () => {
       tags: ['error'],
     });
     writeEntry(hippoRoot, entry);
-    const copy = await shareToGlobal(ctx, entry.id, { force: true });
-    expect(copy).not.toBeNull();
+    const outcome = await shareToGlobal(ctx, entry.id, { force: true });
+    expect(outcome.kind).toBe('shared');
     await vi.waitFor(() => expect(embedded.some((t) => t.includes(entry.content))).toBe(true));
   });
 });

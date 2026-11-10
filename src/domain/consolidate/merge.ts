@@ -170,8 +170,8 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
 /** Returns how many clusters were skipped because their merged text matches a rejected value. */
 export async function mergePass(run: SleepRun): Promise<number> {
   const used = new Set<string>();
-  // The rejection guard reuses the run's tombstone checks; a dry-run never reaches
-  // batchWriteAndDelete's guard bypass, so it has nothing to protect there.
+  // The rejection guard reuses the run's tombstone checks; a dry run reads them too, so it counts a
+  // refused cluster as refused though it never reaches batchWriteAndDelete's guard bypass.
   let mergesSkippedRejected = 0;
   for (const bucket of (await partitionMergeCandidates(run)).values()) {
     const { ids, lengths } = bucket;
@@ -232,10 +232,10 @@ async function mergeCluster({
 
   // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below
   // runs under the partition's tenant, the one every cluster member shares and the row will land
-  // in.
-  const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run);
+  // in. A dry run builds it too, so it refuses the cluster a real run would.
+  const semantic = semanticSummary(mergedContent, cluster, partition, run);
 
-  if (semantic && (await mergeRejected({ run, semantic, cluster, related, used }))) return false;
+  if (await mergeRejected({ run, semantic, cluster, related, used })) return false;
 
   for (const e of cluster) used.add(e.id);
   result.merged += cluster.length;
@@ -246,7 +246,7 @@ async function mergeCluster({
     preview: mergedContent.slice(0, MERGE_DETAIL_PREVIEW_CHARS),
   });
 
-  if (!dryRun && semantic) {
+  if (!dryRun) {
     run.pendingWrites.push(semantic);
     run.units.push([semantic.id, ...cluster.map((e) => e.id)]);
     result.semanticCreated++;

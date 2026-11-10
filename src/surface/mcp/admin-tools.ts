@@ -118,8 +118,11 @@ export async function runShareTool({ args, ctx, store }: LocalToolCall): Promise
   // The share reads the id in the caller's tenant only, so tenant A cannot copy tenant B's row to
   // the global store.
   const shared = await shareToGlobal({ ...apiCtx, store }, shareId, { force });
-  if (!shared) return 'Transfer score too low. Use force=true to override.';
-  return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
+  if (shared.kind === 'low-score') return 'Transfer score too low. Use force=true to override.';
+  if (shared.kind === 'already-shared') {
+    return `Already shared: the global store holds this text as [${shared.existingId}].`;
+  }
+  return `Shared [${shared.entry.id}] to global store. Source: ${shared.entry.source}`;
 }
 
 export async function runPeersTool({ ctx }: LocalToolCall): Promise<string> {

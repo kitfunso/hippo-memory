@@ -25,7 +25,7 @@ import {
   type EmbedRun,
 } from '../search/embed-memories.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
-import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
@@ -41,8 +41,8 @@ import type {
   StoreHome,
   StoreWith,
 } from '../../base/ports/store.js';
-import type { EntryCursor } from '../../base/ports/store/types.js';
-import type { Captures } from '../../base/ports/store/capture.js';
+import type { EntryCursor, HeldText } from '../../base/ports/store/types.js';
+import type { Captures, TextsHoldingOptions } from '../../base/ports/store/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
@@ -156,11 +156,19 @@ export function transferScore(entry: MemoryEntry): number {
   return Math.min(1, Math.max(0, score));
 }
 
-/** Share a memory to the global store with attribution (source enriched with project path and timestamp).
- *  Returns the new entry, or null if the transfer score is too low. */
+/** What a hand-run share did: wrote a copy, left a row below the transfer score alone, or found
+ * the global store already holding its text (`existingId` is that row). */
+export type ShareOutcome =
+  | { readonly kind: 'shared'; readonly entry: MemoryEntry }
+  | { readonly kind: 'low-score' }
+  | { readonly kind: 'already-shared'; readonly existingId: string };
+
+/** Share a memory to the global store with attribution (source enriched with project path and
+ *  timestamp). Writes nothing when the global store holds the text, `force` or not; throws when the
+ *  row may not be shared. */
 export async function shareMemory(
   local: { readonly store: StoreWith<'folderFiles'> },
-  global: ConfiguredFolder<SharingStore & StoreWith<'vectors' | 'vectorWrites'>>,
+  global: ConfiguredFolder<SharingStore & StoreWith<'vectors' | 'vectorWrites' | 'captures'>>,
   id: string,
   options: {
     force?: boolean;
@@ -169,18 +177,26 @@ export async function shareMemory(
     embed: EmbedRun;
     detached: DetachedWork;
   },
-): Promise<MemoryEntry | null> {
+): Promise<ShareOutcome> {
   // Tenant A cannot share tenant B's memory to global: the read finds no row of another tenant.
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
+  // Built first because it throws for a row that may not be shared, ahead of the held-text answer.
   const globalEntry = toGlobalEntry(
     await local.store.folderFiles.home(),
     entry,
-    options.force === true,
     options.embed.clock(),
   );
-  if (!globalEntry) return null;
+
+  // The caller's tenant and the default scope filter, not autoShare's whole-store view: a copy
+  // carries its row's tenant, so another tenant's twin is no copy of this row and must stay unnamed.
+  const held = await heldGlobalTexts(global.store.captures, [entry.content], options.tenantId);
+  const twin = held.get(duplicateKey(entry.content));
+  if (twin?.id !== undefined) return { kind: 'already-shared', existingId: twin.id };
+
+  const lowScore = transferScore(entry) < SHARE_MIN_SCORE && options.force !== true;
+  if (lowScore) return { kind: 'low-score' };
 
   await global.store.entryWrites.writeEntry({ entry: globalEntry, actor: CLI_ACTOR });
 
@@ -198,21 +214,12 @@ export async function shareMemory(
     embedMemoryDetached(target, globalEntry, options.detached);
   }
 
-  return globalEntry;
+  return { kind: 'shared', entry: globalEntry };
 }
 
-/** The global copy of a local row, or null when its transfer score is too low and `force` is
- * off; throws when the row may not be shared. */
-function toGlobalEntry(
-  local: StoreHome,
-  entry: MemoryEntry,
-  force: boolean,
-  now: Date,
-): MemoryEntry | null {
+/** The global copy of a local row; throws when the row may not be shared. */
+function toGlobalEntry(local: StoreHome, entry: MemoryEntry, now: Date): MemoryEntry {
   assertShareable(entry, entry.id);
-
-  const score = transferScore(entry);
-  if (score < SHARE_MIN_SCORE && !force) return null;
 
   // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which
   // originFromSource reads as no project.
@@ -330,7 +337,7 @@ function clearsShareRules(
  * secret. */
 function isNewAndClean(
   entry: MemoryEntry,
-  globalKeys: ReadonlySet<string>,
+  globalKeys: ReadonlyMap<string, HeldText>,
   stats: AutoShareStats | undefined,
 ): boolean {
   // Skip if already shared (same text apart from spacing)
@@ -366,6 +373,26 @@ async function* autoSharePages(
   } while (after !== null);
 }
 
+/** Each text key `texts` have that a row in the global store holds, with the first such row;
+ * `tenantId` and `opts` pick which rows count. */
+async function heldGlobalTexts(
+  captures: Captures,
+  texts: readonly string[],
+  tenantId: TenantId,
+  opts?: TextsHoldingOptions,
+): Promise<Map<string, HeldText>> {
+  const rows = await captures.textsHolding(
+    tenantId,
+    texts.filter((text) => duplicateKey(text) !== ''),
+    opts,
+  );
+  const held = new Map<string, HeldText>();
+  for (const row of rows) {
+    for (const key of heldTextKeys(row)) if (!held.has(key)) held.set(key, row);
+  }
+  return held;
+}
+
 /** The page's rows that share. The global store, the union of every tenant, is asked only for
  * the rows that may hold a page row's text. */
 async function pageCandidates(
@@ -376,11 +403,13 @@ async function pageCandidates(
 ): Promise<MemoryEntry[]> {
   const scored = page.filter((entry) => clearsShareRules(entry, minScore, stats));
   if (scored.length === 0) return [];
-  const texts = scored.map((entry) => entry.content).filter((text) => duplicateKey(text) !== '');
-  const globalKeys = storedTextKeys(
-    await to.textsHolding(ALL_TENANTS, texts, { everyScope: true }),
+  const held = await heldGlobalTexts(
+    to,
+    scored.map((entry) => entry.content),
+    ALL_TENANTS,
+    { everyScope: true },
   );
-  return scored.filter((entry) => isNewAndClean(entry, globalKeys, stats));
+  return scored.filter((entry) => isNewAndClean(entry, held, stats));
 }
 
 /** Writes one page of candidates in one transaction; returns the copies written and how many a
@@ -391,7 +420,7 @@ async function sharePage(
   page: readonly MemoryEntry[],
   now: Date,
 ) {
-  const copies = page.flatMap((entry) => toGlobalEntry(local, entry, true, now) ?? []);
+  const copies = page.map((entry) => toGlobalEntry(local, entry, now));
   const written = new Set(await to.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
   const shared = copies.filter((copy) => written.has(copy.id));
   return { shared, refused: copies.length - shared.length };

@@ -65,9 +65,11 @@ export async function handleShare({
     const force = boolFlag(flags, 'force');
     const ctx = cliApiContext(hippoRoot, tenantId);
     const result = await api.shareToGlobal(ctx, shareId, { force });
-    if (result) {
-      console.log(`Shared [${result.id}] to global store.`);
-      console.log(`  Source: ${result.source}`);
+    if (result.kind === 'shared') {
+      console.log(`Shared [${result.entry.id}] to global store.`);
+      console.log(`  Source: ${result.entry.source}`);
+    } else if (result.kind === 'already-shared') {
+      console.log(`Already shared: the global store holds this text as [${result.existingId}].`);
     } else {
       const entry = await memoryGet(ctx, shareId);
       if (entry) {

@@ -13,7 +13,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
-import { sharingStores } from '../_helpers/sharing-stores.js';
+import { sharedEntry, sharingStores } from '../_helpers/sharing-stores.js';
 import { readEntry, replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
@@ -130,14 +130,15 @@ describe('schema v60', () => {
     const global = makeRoot('v60-share-global');
     const held = entry('m_held', { conflictsWith: ['m_peer'] });
     writeEntriesTogether(local, [held]);
-    const copy = await shareMemory(...sharingStores(local, global), held.id, {
-      embed: TEST_RUN,
-      detached: TEST_DETACHED,
-      tenantId: 'default',
-      force: true,
-      skipEmbed: true,
-    });
-    if (copy === null) throw new Error('force should share the row');
+    const copy = sharedEntry(
+      await shareMemory(...sharingStores(local, global), held.id, {
+        embed: TEST_RUN,
+        detached: TEST_DETACHED,
+        tenantId: 'default',
+        force: true,
+        skipEmbed: true,
+      }),
+    );
     expect(withDb(global, refsOf)).toEqual({ [copy.id]: '["m_peer"]' });
     replaceDetectedConflicts(global, []);
     expect(withDb(global, refsOf)).toEqual({});
