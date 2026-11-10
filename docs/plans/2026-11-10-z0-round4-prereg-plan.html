@@ -92,9 +92,9 @@ Round 3's H3 was a cost per task (ratioT, z0-hypotheses.mjs:138); T2 uses cost p
       <doc-ask id="margins">
         <p>How close to O1 must S2 be in T2?</p>
         <label><input type="radio" name="margins" value="3-15" checked> Resolve 3 points, repeats 15 points <small>a quarter of the 62-point effect of built-in memory</small></label>
-        <label><input type="radio" name="margins" value="3-10"> Resolve 3 points, repeats 10 points <small>stricter; the planning pass gave power 0.42 to 0.55</small></label>
+        <label><input type="radio" name="margins" value="3-10"> Resolve 3 points, repeats 10 points <small>stricter; lower power at the same seeds</small></label>
       </doc-ask>
-      <doc-note tone="warn"><strong>Power is an assumption</strong> A sizing pass during planning, on round 3's same-model spreads, gave power 0.82 to 0.89, and 0.23 to 0.34 at twice the spread. The Sizer stage computes it again, and batch 1 measures it (claim 2.2).</doc-note>
+      <doc-note tone="warn"><strong>Power is an assumption</strong> The Sizer stage computes it on round 3's same-model spreads, and batch 1 measures it (claim 2.2). An early sizing pass kept no script, so the page gives none of its figures.</doc-note>
     </doc-claim>
     <doc-claim>
       <p>The cost claim stands only when hippo beats Sonnet alone.</p>
@@ -401,15 +401,15 @@ The pins file holds the sha256 of both launchers.
 Basis: round 3's recorded spend, the sum of costUsd over every record of every attempt, kept, aborted or set aside:
   A1 $386.45, A2 $385.21, A5 $373.42, A0 $314.94, A4 $256.74, total $1,716.76.
   It leaves out unrecorded warm-ups and deleted cut-off resumes, so it is a lower bound.
-  The paired analysis cost is $1,461.43, so failed, voided and rerun records add about 17%.
-  python -I <scratchpad>/r3-total-spend.py C:/z0-runs/scored/r3run
+  The scored records of the final read cost $1,464.81, so failed, voided and rerun records add about 17%.
+  python -I docs/evals/z0-r4/r3-total-spend.py C:/z0-runs/scored/r3run
 Sonnet 5.5 rates are half of the Opus 5.5 rates in all four columns (price page, 10 Nov 2026).
 r = Sonnet usage priced at the Opus row over Opus usage at that row, same tasks (claim 5.2). The larger of S1, S2;
   the record names its arm, and r stays an assumption until batch 1's ledger.
   O1                 386.45
   S1 + S2 + S5     1,145.08 x 0.5 x r
   S0 + S4            571.68 x 0.5 x r
-With the $40 pilot:   r = 1: about $1,290.   r = 1.5: about $1,710.   r = 2: about $2,140.
+With the $40 pilot:   r = 1: about $1,280.   r = 1.5: about $1,710.   r = 2: about $2,140.
 Batch 1 (round 3 spend $519.20 on its 10 repositories): about $380 at r = 1, $640 at r = 2.
 Ceiling, r = 2 and 9 seeds on O1, S1, S2 and S5: about $5,210.
 These figures are at medium effort. O2 adds about $385.
