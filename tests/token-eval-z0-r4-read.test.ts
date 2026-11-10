@@ -1,17 +1,19 @@
 // Round 4 prereg items 6 and 7: analyze, size and the seed rule read a corpus through the one filter path, so a flip and an off-pin void act the same in all three.
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { DESIGNS, OPUS_MODEL } from '../scripts/token-eval/arms.mjs';
 import { analyzeZ0, loadInputs, parseArgs as parseAnalyze, runCli as analyzeCli } from '../scripts/token-eval/z0-analyze.mjs';
+import * as blind from '../scripts/token-eval/z0-blind.mjs';
 import { filterOpts, filteredInput } from '../scripts/token-eval/z0-filters.mjs';
 import { computeGates } from '../scripts/token-eval/z0-gates.mjs';
 import { NOT_RUN, bothCodings, firstApplyR, taskUnits } from '../scripts/token-eval/z0-hypotheses.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { DEFAULTS, QUOTA_USD_PER_DAY, calibrate, parseArgs as parseSize, perRecordUsage, runCli as sizeCli, sizeZ0 } from '../scripts/token-eval/z0-size.mjs';
-import { runCli as seedRuleCli } from '../scripts/token-eval/z0-seed-rule.mjs';
-import { GRADING, PRICES, generate, jsonl, planOf, type Z0Record } from './fixtures/z0-gen.js';
+import { runCli as seedRuleCli, seedRule } from '../scripts/token-eval/z0-seed-rule.mjs';
+import { GRADING, PRICES, PRICES_BY_MODEL, generate, jsonl, planOf, type Z0Record } from './fixtures/z0-gen.js';
 
 vi.setConfig({ testTimeout: 180_000 });
 
@@ -24,13 +26,15 @@ const dirWith = (files: Record<string, string>) => {
 };
 // Parsed records carry their file and line as a symbol key; two corpora written apart differ there, so compare the plain data.
 const plain = <T>(x: T): T => JSON.parse(JSON.stringify(x));
+// An off-pin file names the runs file it was written for, by its sha256.
+const runsEntry = (runsText: string) => [{ dir: 'r1', file: 'runs.jsonl', sha256: createHash('sha256').update(runsText).digest('hex') }];
 const withoutInputs = (json: string) => Object.fromEntries(Object.entries(JSON.parse(json)).filter(([k]) => k !== 'inputs'));
 
 describe('a grading flip and an off-pin void against a drop list and hand-voided records', () => {
   const LESSON = 'rn-repo1-f1-L1';
   const BASE = generate();
   const cut = (r: Z0Record) => r.sequence === 'rn-repo2' && r.seed === 2 && r.position >= 9;
-  const voidFile = JSON.stringify({ schema: 'z0-offpin/1', runs: [], voids: [{ sequence: 'rn-repo2', seed: 2, arm: 'A1', position: 9, sessionId: null, reason: 'cut-off attempt' }] });
+  const voidFile = JSON.stringify({ schema: 'z0-offpin/1', runs: runsEntry(jsonl(BASE.records)), voids: [{ sequence: 'rn-repo2', seed: 2, arm: 'A1', position: 9, sessionId: null, reason: 'cut-off attempt' }] });
   const common = { 'plan.json': JSON.stringify(BASE.plan), 'prices.json': JSON.stringify(PRICES) };
   const flipped = dirWith({ ...common, 'runs.jsonl': jsonl(BASE.records), 'grading.json': JSON.stringify({ ...GRADING, flippedLessons: [LESSON] }), 'off-pin.json': voidFile });
   const byHand = dirWith({
@@ -65,10 +69,14 @@ describe('a grading flip and an off-pin void against a drop list and hand-voided
     expect(calibration.records).toBe(BASE.records.length);
     expect(calibration.perRecord).toEqual(JSON.parse(JSON.stringify(perRecordUsage(parse(BASE.records), PRICES))));
     expect(calibration.scored).toBe(BASE.records.length - BASE.records.filter(cut).length);
-    const ruleArgs = ['--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--sims', '20'];
-    const [ruleA, ruleB] = [seedRuleCli([...ruleArgs, ...FLAGS.flipped], flipped), seedRuleCli([...ruleArgs, ...FLAGS.byHand], byHand)];
-    expect([ruleA.code, ruleA.stderr, ruleB.code, ruleB.stderr]).toEqual([0, '', 0, '']);
+    // At --minimum-effect 0.25 H1 sizes below the cap; a count at the cap would be the same with or without the filter inputs.
+    const ruleArgs = ['--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--sims', '20', '--minimum-effect', '0.25'];
+    const [ruleA, ruleB, ruleNone] = [seedRuleCli([...ruleArgs, ...FLAGS.flipped], flipped), seedRuleCli([...ruleArgs, ...FLAGS.byHand], byHand), seedRuleCli(ruleArgs, flipped)];
+    expect([ruleA.code, ruleA.stderr, ruleB.code, ruleB.stderr, ruleNone.code, ruleNone.stderr]).toEqual([0, '', 0, '', 0, '']);
+    const sized = JSON.parse(ruleA.stdout);
+    expect(sized.perHypothesis.H1).toBeLessThan(sized.settings.cap);
     expect(withoutInputs(ruleA.stdout)).toEqual(withoutInputs(ruleB.stdout));
+    expect(withoutInputs(ruleNone.stdout)).not.toEqual(withoutInputs(ruleB.stdout));
   });
 });
 
@@ -138,7 +146,7 @@ describe('loadInputs and the three CLIs', () => {
   const files = (extra: Record<string, string> = {}) => dirWith({ 'runs.jsonl': jsonl(g.records), 'plan.json': JSON.stringify(g.plan), ...extra });
   interface Entry { runs: string[]; plan: string[]; offPin: string[]; prices: string | null; grading: string | null; dropList: string | null; out: string | null }
   const entry = (extra: Partial<Entry>): Entry => ({ runs: ['runs.jsonl'], plan: ['plan.json'], offPin: [], prices: null, grading: null, dropList: null, out: null, ...extra });
-  const offPin = (v: { sequence: string; seed: number; position: number }) => JSON.stringify({ schema: 'z0-offpin/1', runs: [], voids: [{ arm: 'A1', sessionId: null, reason: 'cut', ...v }] });
+  const offPin = (v: { sequence: string; seed: number; position: number }, runs = runsEntry(jsonl(g.records))) => JSON.stringify({ schema: 'z0-offpin/1', runs, voids: [{ arm: 'A1', sessionId: null, reason: 'cut', ...v }] });
 
   it('returns prices null when no price file is given, and reads none', () => {
     const dir = files();
@@ -154,6 +162,36 @@ describe('loadInputs and the three CLIs', () => {
     expect(analysis.filtered.offPinVoided.positions).toBe(14 + 9);
   });
 
+  it('stops on an off-pin file with a void and an empty runs list, naming the file', () => {
+    const dir = files({ 'empty.json': offPin({ sequence: 'rn-repo1', seed: 1, position: 4 }, []) });
+    expect(() => loadInputs(entry({ offPin: ['empty.json'] }), dir)).toThrow(/empty\.json: it lists voids but its runs is empty/);
+  });
+
+  it('hashes the runs files for the off-pin binding only when an --off-pin file is given', () => {
+    const dir = files({ 'a.json': offPin({ sequence: 'rn-repo1', seed: 1, position: 4 }) });
+    const hashed = vi.spyOn(blind, 'sha256');
+    try {
+      loadInputs(entry({}), dir);
+      expect(hashed).not.toHaveBeenCalled();
+      loadInputs(entry({ offPin: ['a.json'] }), dir);
+      expect(hashed).toHaveBeenCalledTimes(1);
+    } finally {
+      hashed.mockRestore();
+    }
+  });
+
+  it('exits 1 with the message and writes no blind key when hashing the inputs fails', () => {
+    const dir = files({ 'prices.json': JSON.stringify(PRICES) });
+    const argv = ['--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json'];
+    const hashes = vi.spyOn(blind, 'inputHashes').mockImplementationOnce(() => { throw new Error('cannot read src/eval/eval-stats.ts'); });
+    const failed = analyzeCli(argv, dir);
+    hashes.mockRestore();
+    expect([failed.code, failed.stdout, failed.stderr]).toEqual([1, '', 'cannot read src/eval/eval-stats.ts\n']);
+    expect(fs.existsSync(path.join(dir, 'z0-blind-key.json'))).toBe(false);
+    expect(analyzeCli(argv, dir).code).toBe(0);
+    expect(fs.existsSync(path.join(dir, 'z0-blind-key.json'))).toBe(true);
+  });
+
   it('exits 1 with the usage in each CLI when --prices is missing', () => {
     const dir = files();
     const argv = ['--runs', 'runs.jsonl', '--plan', 'plan.json'];
@@ -162,5 +200,19 @@ describe('loadInputs and the three CLIs', () => {
       expect([name, r.code, r.stdout]).toEqual([name, 1, '']);
       expect(r.stderr, name).toContain(`usage: ${name}.mjs`);
     }
+  });
+});
+
+describe('the seed rule on a design with a test it cannot size', () => {
+  const SETTINGS = { minimumEffect: 0.15, targetZ: 3.5, cap: 9, onMiss: 'cap', power: 0.8, sims: 20, seed: 1, bound: 0.8, firstWave: 3 };
+
+  it('stops under r4 on the first T2 part, naming it and saying part B sizes it', () => {
+    const g = generate({ design: DESIGNS.r4 });
+    expect(() => seedRule(parse(g.records), g.plan, PRICES_BY_MODEL, { ...SETTINGS, design: DESIGNS.r4 })).toThrow(/^T2a: design r4 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
+  });
+
+  it('stops under r4-on-r3, whose rule names no test, rather than returning no seeds', () => {
+    const g = generate({ arms: ['A0', 'A1', 'A2', 'A4', 'A5'] });
+    expect(() => seedRule(parse(g.records), g.plan, PRICES, { ...SETTINGS, design: DESIGNS['r4-on-r3'] })).toThrow(/^design r4-on-r3 names no test in its seed rule, so the rule has nothing to size$/);
   });
 });

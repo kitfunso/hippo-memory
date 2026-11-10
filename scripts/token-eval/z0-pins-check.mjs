@@ -77,8 +77,11 @@ function parseArgs(argv) {
     }
     const value = argv[++i];
     if (value === undefined || value.startsWith('--')) throw new Error(`${a} needs a value\n${USAGE}`);
-    if (a === '--set') args.set.push(value);
-    else if (!FLAGS.has(a)) throw new Error(`unknown flag ${a}\n${USAGE}`);
+    if (a === '--set') {
+      // A sha256: key is each role's own file hash; a --set value would be written unchecked.
+      if (value.startsWith('sha256:')) throw new Error(`--set ${value.split('=')[0]}: a sha256: key is written from its <role>=<path> argument, so --set cannot name one`);
+      args.set.push(value);
+    } else if (!FLAGS.has(a)) throw new Error(`unknown flag ${a}\n${USAGE}`);
     else if (args[FLAGS.get(a)] !== null) throw new Error(`${a} given twice`);
     else args[FLAGS.get(a)] = value;
   }
@@ -136,6 +139,8 @@ export function runCli(argv, cwd = process.cwd()) {
       return { code: 0, stdout: `wrote ${path.join(dir, MANIFEST)}: ${filesUnder(dir).length} files\n`, stderr: '' };
     }
     const states = args.roles.map((r) => roleState(r, cwd));
+    const twice = states.find((s, i) => states.findIndex((t) => t.role === s.role) !== i);
+    if (twice !== undefined) throw new Error(`role ${twice.role} is given twice; a role names one file or folder\n${USAGE}`);
     if (args.pins !== null) {
       const problems = checkPins(args, cwd, states);
       if (problems.length > 0) return { code: 3, stdout: '', stderr: `${problems.join('\n')}\n` };

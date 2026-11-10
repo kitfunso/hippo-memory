@@ -25,6 +25,8 @@ const write = (...extra: string[]) => runCli(['--write', 'pins.json', '--checkou
 beforeEach(() => {
   work = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-r4-pins-'));
   checkout = path.join(work, 'hippo');
+  // The real repo's .gitignore drops dist/, so a changed build file leaves `git status` clean.
+  put(checkout, '.gitignore', 'dist/\n');
   put(checkout, 'dist/a.js', 'a');
   put(checkout, 'dist/sub/b.js', 'b');
   put(checkout, 'src.ts', 's');
@@ -82,15 +84,20 @@ describe('--pins', () => {
     expect(lines(r)).toEqual([expect.stringMatching(/^PINS: seam: .*seam\.sh does not exist$/)]);
   });
 
-  it('exits 3 on a dirty checkout, and on a changed file under dist/ with the dist hash named', () => {
+  it('exits 3 on a dirty checkout', () => {
     put(checkout, 'src.ts', 'changed');
     expect(lines(check())).toEqual([expect.stringMatching(/^PINS: the hippo checkout .* has changes beyond its commit/)]);
     git(checkout, 'checkout', '-q', '--', 'src.ts');
     expect(check().code).toBe(0);
+  });
+
+  it('exits 3 on a changed file under an ignored dist/ while git stays clean, and only the dist hash line fires', () => {
+    expect(git(checkout, 'ls-files', 'dist')).toBe('');
     put(checkout, 'dist/sub/b.js', 'B');
+    expect(git(checkout, 'status', '--porcelain')).toBe('');
     const r = check();
     expect(r.code).toBe(3);
-    expect(lines(r)).toEqual([expect.stringMatching(/^PINS: hippoDistHash is pinned [0-9a-f]{64}, this run has [0-9a-f]{64}$/), expect.stringMatching(/^PINS: the hippo checkout/)]);
+    expect(lines(r)).toEqual([expect.stringMatching(/^PINS: hippoDistHash is pinned [0-9a-f]{64}, this run has [0-9a-f]{64}$/)]);
   });
 
   it('exits 3 on another HEAD, naming the pinned and the current commit', () => {
@@ -170,6 +177,26 @@ describe('--write', () => {
       expect(fs.readFileSync(path.join(work, f), 'utf8').endsWith('}\n'), f).toBe(true);
       expect(runCli(['--pins', f, '--checkout', checkout, ...roles()], work).code, f).toBe(0);
     }
+  });
+
+  it('exits 1, naming the role, on a role given twice, and writes nothing', () => {
+    const before = fs.readFileSync(path.join(work, 'pins.json'), 'utf8');
+    for (const extra of [['seam=seam.sh'], ['tree:seam=tasks']]) {
+      const r = write(...extra);
+      expect([r.code, r.stdout], extra.join(' ')).toEqual([1, '']);
+      expect(r.stderr).toMatch(/^role seam is given twice; a role names one file or folder\n/);
+    }
+    expect(fs.readFileSync(path.join(work, 'pins.json'), 'utf8')).toBe(before);
+    const checked = check('seam=seam.sh');
+    expect([checked.code, checked.stderr]).toEqual([1, expect.stringMatching(/^role seam is given twice/)]);
+  });
+
+  it('exits 1, naming the key, on --set of a sha256: key, and writes nothing', () => {
+    const before = fs.readFileSync(path.join(work, 'pins.json'), 'utf8');
+    const r = write('--set', `sha256:seam=${'0'.repeat(64)}`);
+    expect([r.code, r.stdout]).toEqual([1, '']);
+    expect(r.stderr).toMatch(/^--set sha256:seam: a sha256: key is written from its <role>=<path> argument/);
+    expect(fs.readFileSync(path.join(work, 'pins.json'), 'utf8')).toBe(before);
   });
 
   it('lists the three files it wrote and exits 1 on a bad --set pair', () => {

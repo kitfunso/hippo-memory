@@ -75,10 +75,11 @@ export function retryVoids(records) {
 const isCount = (v) => Number.isInteger(v) && v >= 0;
 const isName = (v) => isString(v) && v.length > 0;
 
-/** An off-pin file's voids, each tagged with its file and index. `runHashes`, when given, are the sha256 of every runs file the read loads:
- * a `runs` entry outside them stops the read, so a leaked run's void never voids its rerun.
- * @param {string} file @param {{cwd?: string, runHashes?: string[] | null}} [options] */
-export function readVoids(file, { cwd = process.cwd(), runHashes = null } = {}) {
+/** An off-pin file's voids, each tagged with its file and index. `runHashes` are the sha256 of every runs file the read loads and are required:
+ * a `runs` entry outside them stops the read, so a leaked run's void never voids its rerun, and voids with no `runs` entry are refused.
+ * @param {string} file @param {{cwd?: string, runHashes: string[]}} options */
+export function readVoids(file, { cwd = process.cwd(), runHashes }) {
+  if (!Array.isArray(runHashes)) throw new Error(`${file}: runHashes is required, the sha256 of each runs file the read loads`);
   const text = fs.readFileSync(path.resolve(cwd, file), 'utf8');
   let body;
   try {
@@ -89,10 +90,9 @@ export function readVoids(file, { cwd = process.cwd(), runHashes = null } = {}) 
   if (body === null || body === undefined || body.schema !== OFFPIN_SCHEMA) throw new Error(`${file}: schema must be "${OFFPIN_SCHEMA}"`);
   if (!Array.isArray(body.runs) || !body.runs.every((r) => r !== null && isName(r.dir) && isName(r.file) && isName(r.sha256))) throw new Error(`${file}: runs must be a list of { dir, file, sha256 }`);
   if (!Array.isArray(body.voids)) throw new Error(`${file}: voids must be a list of { sequence, seed, arm, position, sessionId, reason }`);
-  if (runHashes !== null) {
-    const stray = body.runs.findIndex((r) => !runHashes.includes(r.sha256));
-    if (stray >= 0) throw new Error(`${file}: runs[${stray}] (${body.runs[stray].file}, sha256 ${body.runs[stray].sha256}) is not a runs file this read loads; pass the runs file the off-pin file was written for`);
-  }
+  if (body.voids.length > 0 && body.runs.length === 0) throw new Error(`${file}: it lists voids but its runs is empty; name the runs file the voids were written for`);
+  const stray = body.runs.findIndex((r) => !runHashes.includes(r.sha256));
+  if (stray >= 0) throw new Error(`${file}: runs[${stray}] (${body.runs[stray].file}, sha256 ${body.runs[stray].sha256}) is not a runs file this read loads; pass the runs file the off-pin file was written for`);
   return body.voids.map((v, index) => {
     const bad = [['sequence', isName(v?.sequence)], ['seed', Number.isInteger(v?.seed) && v.seed >= 1], ['arm', isName(v?.arm)], ['position', isCount(v?.position)],
       ['sessionId', v?.sessionId === null || isName(v?.sessionId)], ['reason', isName(v?.reason)]].find(([, ok]) => !ok);

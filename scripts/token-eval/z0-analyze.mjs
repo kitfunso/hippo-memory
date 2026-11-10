@@ -115,8 +115,10 @@ export function loadInputs(args, cwd) {
   // A price-free caller, such as the leak list, passes no --prices and reads no price file.
   const prices = isString(args.prices) ? readJson(cwd, args.prices) : null;
   if (prices !== null) checkPrices(prices, args.prices, design);
-  const runHashes = args.runs.map((f) => sha256(path.resolve(cwd, f)));
-  const voids = (args.offPin ?? []).flatMap((f) => readVoids(f, { cwd, runHashes }));
+  const offPin = args.offPin ?? [];
+  // An off-pin file binds to the runs files this read loads; with none given no runs file is hashed here.
+  const runHashes = offPin.length === 0 ? [] : args.runs.map((f) => sha256(path.resolve(cwd, f)));
+  const voids = offPin.flatMap((f) => readVoids(f, { cwd, runHashes }));
   const grading = args.grading === null ? null : readJson(cwd, args.grading);
   if (grading !== null && !(isNames(grading.flippedLessons) && isCount(grading.acceptanceFlips) && isCount(grading.readerSample?.n) && isCount(grading.readerSample?.disagreements))) {
     throw new Error(`${args.grading}: needs flippedLessons (strings), acceptanceFlips and readerSample { n, disagreements } (integers)`);
@@ -212,9 +214,10 @@ function hypothesisLines(h) {
   return lines;
 }
 
-function reportedLines(rep) {
+function reportedLines(rep, design) {
   const lines = ['reported, no verdicts:'];
-  for (const k of ['A1vA0', 'A4vA1', 'X2vX1']) lines.push(`  ${k}: ${pairText(rep[k])}`);
+  // A reported test (H1 to H3) prints in the lines below, so only the names that hold a block of their own print here.
+  for (const k of design.reported.filter((name) => Object.hasOwn(rep, name))) lines.push(`  ${k}: ${pairText(rep[k])}`);
   for (const [arm, a] of Object.entries(rep.perArm)) lines.push(`  ${arm}: ${a.tasks} tasks, resolve ${est(a.resolveRate)}, cost per resolved ${est(a.costPerResolved)}, stale-follow ${est(a.staleFollow)}`);
   lines.push(`  maintainer only: H1 ${pairText(rep.maintainerOnly.H1)}; H2 ${pairText(rep.maintainerOnly.H2)}; H3 ${est(rep.maintainerOnly.H3)}`);
   lines.push(`  all applies: H1 ${pairText(rep.allApplies.H1)}`);
@@ -232,7 +235,7 @@ function reportedLines(rep) {
   return lines;
 }
 
-export function renderText(r) {
+export function renderText(r, design = DESIGNS.r3) {
   const lines = [`Z0 analysis, ${r.mode}${r.ofRecord ? '' : ` (not of record: ${r.iterations} resamples, seed ${r.seed})`}`, `status: ${r.status}`];
   if (r.designNotRun.length > 0) lines.push(`design not fully run: ${r.designNotRun.join(', ')} not planned`);
   lines.push(`abandoned: ${r.abandoned.length === 0 ? 'none' : r.abandoned.join(', ')}`);
@@ -256,7 +259,7 @@ export function renderText(r) {
   if (s) lines.push(`stored sample (179): agreement ${f3(s.agreement)} [${f3(s.ci95?.[0])}, ${f3(s.ci95?.[1])}], kappa ${f3(s.kappa)}, n ${s.n}`);
   if (r.gates !== null) lines.push(r.invalid.length === 0 ? 'valid: every gate passes' : `invalid: ${r.invalid.join(', ')}`);
   if (isString(r.hypotheses)) lines.push(r.hypotheses);
-  else lines.push(...hypothesisLines(r.hypotheses), ...reportedLines(r.reported));
+  else lines.push(...hypothesisLines(r.hypotheses), ...reportedLines(r.reported, design));
   lines.push('sha256:', ...r.hashes.map((h) => `  ${h.sha256}  ${h.role} ${h.file}`));
   return `${lines.join('\n')}\n`;
 }
@@ -267,6 +270,7 @@ export function runCli(argv, cwd = process.cwd()) {
   let args;
   let inputs;
   let analysis;
+  let hashes;
   let codes = null;
   try {
     args = parseArgs(argv);
@@ -274,17 +278,19 @@ export function runCli(argv, cwd = process.cwd()) {
     inputs = loadInputs(args, cwd);
     analysis = analyzeZ0(inputs.records, { ...inputs, iterations: args.iterations ?? ITERATIONS, seed: args.seed ?? SEED, unblind: args.unblind, refuse: (gates) => unblindRefusal(args, gates, cwd) });
     if (analysis.refusal !== null) return fail(2, `unblind refused: ${analysis.refusal}`);
+    // Before the blind key is written, so a failed hash leaves no key behind.
+    hashes = inputHashes(args, cwd);
     if (!args.unblind) codes = loadOrCreateKey(args.key === null ? path.join(path.dirname(path.resolve(cwd, args.runs[0])), 'z0-blind-key.json') : path.resolve(cwd, args.key), analysis.filtered.arms);
   } catch (e) {
     return fail(1, e.message);
   }
-  const report = buildReport(analysis, inputs, args, codes, inputHashes(args, cwd));
+  const report = buildReport(analysis, inputs, args, codes, hashes);
   try {
     if (args.out !== null) fs.writeFileSync(path.resolve(cwd, args.out), `${JSON.stringify(report, null, 2)}\n`);
   } catch (e) {
     return fail(1, `--out ${args.out}: ${e.message}`);
   }
-  return { code: 0, stdout: renderText(report), stderr: '' };
+  return { code: 0, stdout: renderText(report, inputs.design), stderr: '' };
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

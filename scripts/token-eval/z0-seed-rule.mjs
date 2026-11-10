@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { pooledComponents } from '../../dist/eval/repository-t.js';
-import { ARM_TABLE, DESIGNS, pairOf } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, designName, pairOf } from './arms.mjs';
 import { loadInputs } from './z0-analyze.mjs';
 import { inputHashes } from './z0-blind.mjs';
 import { filterOpts, filteredInput } from './z0-filters.mjs';
@@ -18,6 +18,8 @@ import { calibrate } from './z0-size.mjs';
 import { SEEDS, TARGET_Z, harmSizer, seedsNeeded } from './z0-size-sim.mjs';
 
 const HARM_TEST = 'H4';
+// The tests that share H1's repeat-mistake rule; the T2 parts get their own rules in part B (prereg line 80).
+const REPEAT_TESTS = ['H1', 'H2', 'T1', 'T3'];
 const DEFAULTS = { minimumEffect: 0.15, targetZ: TARGET_Z, cap: SEED_CAP, onMiss: 'cap', power: 0.8, sims: 2_000, seed: 1, bound: 0.8 };
 const STOP_NOTE = 'the run stops after wave 1 and scores nothing; size the next run with z0-size.mjs on these records as calibration (prereg line 215)';
 const USAGE = 'usage: z0-seed-rule.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--grading FILE] [--drop-list FILE] [--off-pin FILE ...] '
@@ -103,11 +105,15 @@ export function seedRule(records, planCells, prices, opts) {
   if (filtered.scored.some((r) => r.seed > SEEDS)) throw new Error(`the rule reads wave 1 only: a scored record has a seed above ${SEEDS}`);
   // The first group is the primary family and always runs; a later group runs only when all its arms are planned.
   const groups = design.seedRule.filter((g, i) => i === 0 || g.arms.every((a) => filtered.arms.includes(a)));
+  const named = groups.flatMap((g) => g.tests);
+  const unsized = named.find((name) => name !== HARM_TEST && !REPEAT_TESTS.includes(name));
+  if (unsized !== undefined) throw new Error(`${unsized}: design ${designName(design)} names it in its seed rule, but the rule sizes only ${[...REPEAT_TESTS, HARM_TEST].join(', ')}; part B sizes ${unsized} with its own rule`);
+  if (named.length === 0) throw new Error(`design ${designName(design)} names no test in its seed rule, so the rule has nothing to size`);
   const repeat = (name) => {
     const pair = pairOf(design, name);
     return repeatSeeds(name, filtered.scored, pair, ARM_TABLE[pair[0]].tool === 'codex' ? codexApply : firstApplyR, opts);
   };
-  const perHypothesis = Object.fromEntries(groups.flatMap((g) => g.tests).sort().map((name) => [name, name === HARM_TEST ? harmSeeds(filtered, prices, opts) : repeat(name)]));
+  const perHypothesis = Object.fromEntries(named.sort().map((name) => [name, name === HARM_TEST ? harmSeeds(filtered, prices, opts) : repeat(name)]));
   const short = Object.entries(perHypothesis).filter(([, n]) => n === null).map(([h]) => `${h} needs more than ${opts.cap} seeds`);
   if (short.length > 0 && opts.onMiss !== 'cap') return { seeds: null, perHypothesis, stop: true, reasons: [...short, STOP_NOTE] };
   const at = (n) => n ?? opts.cap;

@@ -8,9 +8,10 @@ import {
 import { runDirs } from '../scripts/token-eval/homes.mjs';
 import { pooledVoids } from '../scripts/token-eval/z0-blind.mjs';
 import { blindLeaks } from '../scripts/token-eval/g5-draw.mjs';
-import { unplannedDesign } from '../scripts/token-eval/z0-analyze.mjs';
+import { analyzeZ0, buildReport, renderText, unplannedDesign } from '../scripts/token-eval/z0-analyze.mjs';
 import { filterRecords } from '../scripts/token-eval/z0-filters.mjs';
-import { generate } from './fixtures/z0-gen.js';
+import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
+import { GRADING, PRICES, generate, jsonl } from './fixtures/z0-gen.js';
 
 const R3 = ['A0', 'A1', 'A2', 'A4', 'A5', 'X1', 'X2', 'X3', 'X4'];
 const R4 = ['O1', 'S1', 'S2', 'S5', 'S0', 'S4'];
@@ -28,6 +29,27 @@ interface DesignCopy {
 }
 type DesignsCopy = Record<'r3' | 'r4' | 'r4-on-r3', DesignCopy>;
 const rows: Readonly<TableCopy> = ARM_TABLE;
+// Round 3's table rows and design, written out: an edit that moves round 3's read fails here.
+const R3_ROWS = {
+  A0: { round: 'r3', twin: null, tool: 'claude-code', model: 'claude-opus-5-5', pinKey: 'model', effort: null, set: 'RN', seeds: 2, group: 'A', autoMemory: false, carry: false, capture: false, seedRule: false, shim: null, taught: null, stub: null },
+  A1: { round: 'r3', twin: null, tool: 'claude-code', model: 'claude-opus-5-5', pinKey: 'model', effort: null, set: 'RN', seeds: 3, group: 'A', autoMemory: true, carry: true, capture: false, seedRule: true, shim: null, taught: null, stub: null },
+  A2: { round: 'r3', twin: null, tool: 'claude-code', model: 'claude-opus-5-5', pinKey: 'model', effort: null, set: 'RN', seeds: 3, group: 'A', autoMemory: true, carry: true, capture: true, seedRule: true, shim: 'real', taught: null, stub: null },
+  A4: { round: 'r3', twin: null, tool: 'claude-code', model: 'claude-opus-5-5', pinKey: 'model', effort: null, set: 'RN', seeds: 2, group: 'A', autoMemory: false, carry: false, capture: false, seedRule: false, shim: null, taught: 'claude-md', stub: null },
+  A5: { round: 'r3', twin: null, tool: 'claude-code', model: 'claude-opus-5-5', pinKey: 'model', effort: null, set: 'RN', seeds: 3, group: 'A', autoMemory: true, carry: true, capture: false, seedRule: true, shim: 'sham', taught: null, stub: null },
+  X1: { round: 'r3', twin: null, tool: 'codex', model: 'gpt-5.6-sol', pinKey: 'codexModel', effort: null, set: 'X', seeds: 3, group: 'X', autoMemory: true, carry: true, capture: false, seedRule: false, shim: null, taught: null, stub: null },
+  X2: { round: 'r3', twin: null, tool: 'codex', model: 'gpt-5.6-sol', pinKey: 'codexModel', effort: null, set: 'X', seeds: 3, group: 'X', autoMemory: true, carry: true, capture: true, seedRule: true, shim: 'real', taught: null, stub: null },
+  X3: { round: 'r3', twin: null, tool: 'codex', model: 'gpt-5.6-sol', pinKey: 'codexModel', effort: null, set: 'X', seeds: 3, group: 'X', autoMemory: true, carry: true, capture: false, seedRule: true, shim: null, taught: null, stub: 'x3' },
+  X4: { round: 'r3', twin: null, tool: 'codex', model: 'gpt-5.6-sol', pinKey: 'codexModel', effort: null, set: 'X', seeds: 2, group: 'X', autoMemory: true, carry: true, capture: false, seedRule: false, shim: null, taught: 'x4-block', stub: null },
+};
+const R3_DESIGN = {
+  arms: ['A0', 'A1', 'A2', 'A4', 'A5', 'X1', 'X2', 'X3', 'X4'], noMemory: 'A0', sets: ['R', 'N', 'X'], hookHold: ['A2', 'A5'],
+  tests: { H1: ['A2', 'A1'], H2: ['X2', 'X3'], H3: ['A2', 'A1'], H4: ['A2', 'A1'] },
+  pairs: { attribution: ['A2', 'A5'], A1vA0: ['A1', 'A0'], A4vA1: ['A4', 'A1'], X2vX1: ['X2', 'X1'] },
+  reported: ['A1vA0', 'A4vA1', 'X2vX1', 'H1', 'H2', 'H3'],
+  seedRule: [{ arms: ['A1', 'A2', 'A5'], tests: ['H1', 'H4'] }, { arms: ['X2', 'X3'], tests: ['H2'] }],
+  g2: { claudeCode: { taught: 'A4', control: 'A0', needs: ['A1', 'A2'] }, codex: { taught: 'X4', control: 'X1', needs: ['X2', 'X3'] } },
+  screen: { control: 'A0', taught: 'A4' }, drift: null, prices: 'tool', dropFamilies: [], maxSeed: null,
+};
 const dirs = { ...runDirs('unused-out-dir', 'seqA', 'A1', 1), seed: 1 };
 const base = { PATH: `/usr/bin${delimiter}/bin`, TEMP: '/tmp', JAVA_HOME: '/jdk' };
 const KEYS = ['CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE'];
@@ -36,6 +58,11 @@ describe('the arm table', () => {
   it('holds the nine round 3 arms and the six round 4 arms, frozen', () => {
     expect([...ALL_ARMS]).toEqual([...R3, ...R4]);
     expect(Object.isFrozen(ARM_TABLE) && Object.isFrozen(rows.S1) && Object.isFrozen(DESIGNS.r4.tests)).toBe(true);
+  });
+
+  it('holds each of the nine round 3 rows exactly as the literal above', () => {
+    expect(Object.keys(R3_ROWS)).toEqual(R3);
+    for (const [code, row] of Object.entries(R3_ROWS)) expect(rows[code], code).toEqual(row);
   });
 
   it('gives each round 4 row its twin outside the six own fields', () => {
@@ -79,6 +106,10 @@ describe('the designs', () => {
     expect(() => designByName('r5')).toThrow(/unknown design r5; known: r3, r4, r4-on-r3/);
   });
 
+  it('holds DESIGNS.r3 exactly as the literal above', () => {
+    expect(DESIGNS.r3).toEqual(R3_DESIGN);
+  });
+
   it('holds the prereg pairs: r3 as today, r4 with T1 to T3 and H4 in one seed-rule group', () => {
     expect([DESIGNS.r3.tests.H1, DESIGNS.r3.tests.H2, DESIGNS.r3.pairs.attribution]).toEqual([['A2', 'A1'], ['X2', 'X3'], ['A2', 'A5']]);
     expect(DESIGNS.r3.seedRule).toEqual([{ arms: ['A1', 'A2', 'A5'], tests: ['H1', 'H4'] }, { arms: ['X2', 'X3'], tests: ['H2'] }]);
@@ -102,12 +133,29 @@ describe('the designs', () => {
       ['a g2 half arm outside the design', (d) => { d.r4.g2.claudeCode!.taught = 'A4'; }, /DESIGNS\.r4\.g2: A4 is not in the design's arms/],
       ['a drift against an arm its design lacks', (d) => { d.r4.drift!.against = 'S1'; }, /DESIGNS\.r4\.drift: S1 is not in the arms of design r3/],
       ['a drift to no design', (d) => { d.r4.drift!.design = 'r9'; }, /DESIGNS\.r4\.drift: design r9 is not a design/],
+      ['an arm in two seed-rule groups', (d) => { d.r3.seedRule[1]!.arms.push('A1'); }, /DESIGNS\.r3\.seedRule: A1 is in two seed-rule groups/],
+      ['a drift arm outside the design\'s arms', (d) => { d.r4.drift!.arm = 'A1'; }, /DESIGNS\.r4\.drift: A1 is not in the design's arms/],
+      ['a no-memory arm outside the design', (d) => { d.r4.noMemory = 'A0'; }, /DESIGNS\.r4\.noMemory: A0 is not in the design's arms/],
+      ['a hook-hold arm outside the design', (d) => { d.r4.hookHold.push('A0'); }, /DESIGNS\.r4\.hookHold: A0 is not in the design's arms/],
+      ['a pair arm outside the design', (d) => { d.r4.pairs.S1vS0 = ['S1', 'A0']; }, /DESIGNS\.r4\.pairs: A0 is not in the design's arms/],
+      ['a seed-rule arm outside the design', (d) => { d.r4.seedRule[0]!.arms.push('A0'); }, /DESIGNS\.r4\.seedRule: A0 is not in the design's arms/],
+      ['a screen arm outside the design', (d) => { d.r4.screen = { control: 'A0', taught: 'S4' }; }, /DESIGNS\.r4\.screen: A0 is not in the design's arms/],
     ];
     for (const [what, change, message] of breaks) {
       const copy: DesignsCopy = JSON.parse(JSON.stringify(DESIGNS));
       change(copy);
       expect(() => checkDesigns(copy), what).toThrow(message);
     }
+  });
+
+  it('prints the reported pair lines from the design\'s reported list', () => {
+    const g = generate();
+    const analysis = analyzeZ0(parseZ0Records(jsonl(g.records), 'runs.jsonl').records, { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, refuse: () => null, iterations: 200, seed: 1 });
+    const report = buildReport(analysis, { warnings: [] }, {}, null, []);
+    const names = ['A1vA0', 'A4vA1', 'X2vX1'];
+    const printed = (text: string) => text.split('\n').filter((l) => names.some((n) => l.startsWith(`  ${n}: `))).map((l) => l.slice(2, l.indexOf(':')));
+    expect(printed(renderText(report))).toEqual(names);
+    expect(printed(renderText(report, { ...DESIGNS.r3, reported: ['X2vX1', 'H1', 'A1vA0'] }))).toEqual(['X2vX1', 'A1vA0']);
   });
 
   it('reads a pair by name from tests or pairs and stops on an unknown name', () => {
@@ -186,20 +234,20 @@ describe('arm settings and env for the round 4 arms', () => {
   it('builds the warm-up call from the design\'s no-memory arm with --model as an argv flag', () => {
     const warm = warmupEnv(DESIGNS.r4, OPUS_MODEL, dirs, base);
     expect(warm.args).toEqual(['--model', OPUS_MODEL]);
-    expect([warm.env.CLAUDE_CODE_SUBAGENT_MODEL, warm.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, warm.env.CLAUDE_CODE_EFFORT_LEVEL]).toEqual([OPUS_MODEL, '1', 'medium']);
-    expect(warmupEnv(DESIGNS.r3, OPUS_MODEL, dirs, base).env).not.toHaveProperty('CLAUDE_CODE_EFFORT_LEVEL');
+    expect([warm.env.CLAUDE_CODE_SUBAGENT_MODEL, warm.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, warm.env.CLAUDE_CODE_EFFORT_LEVEL, warm.env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE]).toEqual([OPUS_MODEL, '1', 'medium', '1']);
+    // Round 3's warm-up set no subagent model, so its env is armEnv's, key for key.
+    const r3 = warmupEnv(DESIGNS.r3, OPUS_MODEL, dirs, base);
+    expect(r3.env).toEqual(armEnv(DESIGNS.r3.noMemory, dirs, base));
+    expect(r3.args).toEqual(['--model', OPUS_MODEL]);
   });
 });
 
 describe('the blind read of round 4 codes', () => {
   it('redacts O1 and S0 to S5 from void reasons and flags each as a leak', () => {
     const reasons = R4.map((a) => `${a} read the transcript`);
-    const pooled = pooledVoids({
-      O1: { voids: 1, voidReasons: { [reasons[0]!]: 1 } }, S0: { voids: 1, voidReasons: { [reasons[4]!]: 1 } },
-      S1: { voids: 1, voidReasons: { [reasons[1]!]: 1 } }, S5: { voids: 1, voidReasons: { [reasons[3]!]: 1 } },
-    });
+    const pooled = pooledVoids(Object.fromEntries(R4.map((a, i) => [a, { voids: 1, voidReasons: { [reasons[i]!]: 1 } }])));
     expect(JSON.stringify(pooled)).not.toMatch(/\b[OS][0-9]\b/);
-    expect(pooled).toMatchObject({ total: 4, reasons: { '* read the transcript': 4 } });
+    expect(pooled).toMatchObject({ total: 6, reasons: { '* read the transcript': 6 } });
     for (const a of R4) expect(blindLeaks(`the ${a} arm`, []), a).toEqual([a]);
     expect(blindLeaks('the S10 arm and OS1', [])).toEqual([]);
   });

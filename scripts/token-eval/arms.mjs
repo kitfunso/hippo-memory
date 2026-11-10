@@ -362,10 +362,11 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [], allowlist = ENV_ALLOW
   return env;
 }
 
-/** The warm-up call's env and argv: the design's no-memory arm with the subagent model set to `model`, and `--model` as an argv flag, since it is no env name. */
+/** The warm-up call's env and argv: the design's no-memory arm with the subagent model set to `model` when its row has an effort, and `--model` as an argv flag, since it is no env name. */
 export function warmupEnv(design, model, dirs, baseEnv, options = {}) {
   const env = armEnv(design.noMemory, dirs, baseEnv, options);
-  env.CLAUDE_CODE_SUBAGENT_MODEL = model;
+  // Round 3's warm-up set no subagent model, so a row with no effort keeps armEnv's env as it is.
+  if (rowOf(design.noMemory).effort !== null) env.CLAUDE_CODE_SUBAGENT_MODEL = model;
   return { env, args: ['--model', model] };
 }
 

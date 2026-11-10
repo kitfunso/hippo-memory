@@ -22,7 +22,12 @@ const inRun = (r: { sequence: string; seed: number }, sequence: string, seed: nu
 
 interface RunsEntry { dir: string; file: string; sha256: string }
 
-function offPinFile(dir: string, voids: LooseVoid[], runs: RunsEntry[] = [], schema = 'z0-offpin/1', name = 'off-pin.json'): string {
+// Every off-pin file names the runs file the read loads, as readVoids requires.
+const RUNS_SHA = sha(jsonl(BASE.records));
+const RUNS: RunsEntry[] = [{ dir: 'r1', file: 'runs.jsonl', sha256: RUNS_SHA }];
+const load = (file: string, dir: string) => readVoids(file, { cwd: dir, runHashes: [RUNS_SHA] });
+
+function offPinFile(dir: string, voids: LooseVoid[], runs: RunsEntry[] = RUNS, schema = 'z0-offpin/1', name = 'off-pin.json'): string {
   fs.writeFileSync(path.join(dir, name), JSON.stringify({ schema, runs, voids }));
   return name;
 }
@@ -30,23 +35,22 @@ function offPinFile(dir: string, voids: LooseVoid[], runs: RunsEntry[] = [], sch
 describe('readVoids', () => {
   it('tags each void with its file and index and reads the voids of a file whose runs entry is loaded', () => {
     const dir = tmp();
-    const runsText = jsonl(BASE.records);
-    const file = offPinFile(dir, [VOID, { ...VOID, seed: 1, position: 3, sessionId: 'cut-off-1' }], [{ dir: 'r1', file: 'runs.jsonl', sha256: sha(runsText) }]);
-    const voids = readVoids(file, { cwd: dir, runHashes: [sha(runsText)] });
+    const file = offPinFile(dir, [VOID, { ...VOID, seed: 1, position: 3, sessionId: 'cut-off-1' }]);
+    const voids = load(file, dir);
     expect(voids.map((v: { file: string; index: number }) => [v.file, v.index])).toEqual([[file, 0], [file, 1]]);
     expect(voids[1]).toMatchObject({ sequence: 'rn-repo2', seed: 1, position: 3, sessionId: 'cut-off-1' });
   });
 
   it('stops on another schema, a file that is no JSON, and a void with a missing or bad field, naming the index', () => {
     const dir = tmp();
-    expect(() => readVoids(offPinFile(dir, [VOID], [], 'z0-offpin/2'), { cwd: dir })).toThrow(/off-pin\.json: schema must be "z0-offpin\/1"/);
+    expect(() => load(offPinFile(dir, [VOID], RUNS, 'z0-offpin/2'), dir)).toThrow(/off-pin\.json: schema must be "z0-offpin\/1"/);
     fs.writeFileSync(path.join(dir, 'bad.json'), '{ nope');
-    expect(() => readVoids('bad.json', { cwd: dir })).toThrow(/bad\.json: not JSON/);
+    expect(() => load('bad.json', dir)).toThrow(/bad\.json: not JSON/);
     for (const field of ['sequence', 'seed', 'arm', 'position', 'reason']) {
       const void1 = { ...VOID, [field]: undefined };
-      expect(() => readVoids(offPinFile(dir, [VOID, void1]), { cwd: dir }), field).toThrow(new RegExp(`off-pin\\.json void 1: ${field} is missing or not valid`));
+      expect(() => load(offPinFile(dir, [VOID, void1]), dir), field).toThrow(new RegExp(`off-pin\\.json void 1: ${field} is missing or not valid`));
     }
-    expect(() => readVoids(offPinFile(dir, [{ ...VOID, sessionId: 7 }]), { cwd: dir })).toThrow(/void 0: sessionId is missing or not valid/);
+    expect(() => load(offPinFile(dir, [{ ...VOID, sessionId: 7 }]), dir)).toThrow(/void 0: sessionId is missing or not valid/);
   });
 
   it('stops on a runs entry the read does not load, naming the file and the entry', () => {
@@ -54,14 +58,22 @@ describe('readVoids', () => {
     const leaked = { dir: 'r1', file: 'leaked-runs.jsonl', sha256: sha('leaked') };
     const file = offPinFile(dir, [VOID], [leaked]);
     expect(() => readVoids(file, { cwd: dir, runHashes: [sha('merged')] })).toThrow(/off-pin\.json: runs\[0\] \(leaked-runs\.jsonl, sha256 [0-9a-f]{64}\) is not a runs file this read loads/);
-    expect(readVoids(file, { cwd: dir })).toHaveLength(1);
+  });
+
+  it('cannot be read without the loaded runs hashes, and refuses voids with an empty runs list, naming the file', () => {
+    const dir = tmp();
+    const file = offPinFile(dir, [VOID]);
+    // @ts-expect-error runHashes is required
+    expect(() => readVoids(file, { cwd: dir })).toThrow(/off-pin\.json: runHashes is required/);
+    expect(() => load(offPinFile(dir, [VOID], []), dir)).toThrow(/off-pin\.json: it lists voids but its runs is empty/);
+    expect(load(offPinFile(dir, [], []), dir)).toEqual([]);
   });
 });
 
 describe('off-pin voids in filteredInput', () => {
   const voidsOf = (...extra: LooseVoid[]) => {
     const dir = tmp();
-    return readVoids(offPinFile(dir, [VOID, ...extra]), { cwd: dir });
+    return load(offPinFile(dir, [VOID, ...extra]), dir);
   };
 
   it('stops on a void at a cell no plan file holds, naming its file and index', () => {
@@ -74,7 +86,7 @@ describe('off-pin voids in filteredInput', () => {
     const { records, plan } = fresh();
     const scoredWith = (sessionId: string | null) => {
       const dir = tmp();
-      const voids = readVoids(offPinFile(dir, [{ ...VOID, sessionId }]), { cwd: dir });
+      const voids = load(offPinFile(dir, [{ ...VOID, sessionId }]), dir);
       return filteredInput(parse(records), plan, { voids }, { dropAbandoned: false }).filtered;
     };
     const none = filteredInput(parse(records), plan, {}, { dropAbandoned: false }).filtered;
@@ -92,7 +104,7 @@ describe('off-pin voids in filteredInput', () => {
     const { records, plan } = fresh();
     const cut = records.filter((r) => !(inRun(r, 'rn-repo5', 2) && r.position >= 8));
     const dir = tmp();
-    const voids = readVoids(offPinFile(dir, [{ ...VOID, sequence: 'rn-repo5', position: 12 }]), { cwd: dir });
+    const voids = load(offPinFile(dir, [{ ...VOID, sequence: 'rn-repo5', position: 12 }]), dir);
     const [withDrop, noDrop] = [true, false].map((dropAbandoned) => filteredInput(parse(cut), plan, { voids }, { dropAbandoned }));
     expect(noDrop!.filtered.offPinVoided.positions).toBe(6);
     expect(withDrop!.filtered.offPinVoided).toEqual(noDrop!.filtered.offPinVoided);
@@ -136,7 +148,7 @@ describe('an off-pin void on seed 4 under DESIGNS["r4-on-r3"]', () => {
   const plan = planOf(records);
   const voidsAt = (position: number) => {
     const dir = tmp();
-    return readVoids(offPinFile(dir, [{ ...VOID, seed: 4, position }]), { cwd: dir });
+    return load(offPinFile(dir, [{ ...VOID, seed: 4, position }]), dir);
   };
   const run = (design: typeof DESIGN, voids: unknown[] = []) => filteredInput(parse(records), plan, { design, voids }, { dropAbandoned: false }).filtered;
   const plain = <T>(x: T): T => JSON.parse(JSON.stringify(x));
