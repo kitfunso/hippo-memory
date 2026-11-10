@@ -1,0 +1,3 @@
+### Documentation
+
+- **Z0 round 4 pre-registration (`docs/evals/2026-11-10-z0-round4-prereg.md`).** Round 4 tests whether Sonnet 5.5 with hippo matches Opus 5.5 with built-in memory on tasks solved and repeat mistakes at a lower cost per solved task, with Sonnet alone as the gate that keeps a cheaper model from winning on its own. It reruns round 3's 29 repositories on a new branch cut from round 3's frozen tree plus the harness changes in its items 5 to 8: one pinned model and effort per arm, a G1 check of every request, prices keyed by model, and one venv for each Python task. No session runs before the founder approves the pilot budget, and no scored session runs before the founder approves the scored budget.
