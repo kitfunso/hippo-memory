@@ -112,9 +112,11 @@ export function runCli(argv, cwd = process.cwd()) {
     const kept = keptLines(runsFile, leaked);
     // parsePlan refuses an empty plan, so a first run that leaked whole keeps no runs, plan or off-pin file; the manifest alone carries its counts.
     const whole = leaked.size === planned.size;
+    // Gone before any write in both branches, so a cut-off merge never leaves an old manifest beside new files.
+    fs.rmSync(path.join(out, 'merge.json'), { force: true });
     if (whole) {
-      // An earlier merge into this folder left files the read set would read beside the manifest; merge.json goes too, so an interrupted run leaves no manifest.
-      for (const name of ['merge.json', 'runs.jsonl', 'plan.json', 'off-pin.json']) fs.rmSync(path.join(out, name), { force: true });
+      // An earlier merge into this folder left files the read set would read beside the manifest.
+      for (const name of ['runs.jsonl', 'plan.json', 'off-pin.json']) fs.rmSync(path.join(out, name), { force: true });
     } else {
       const runsOut = path.join(out, 'runs.jsonl');
       writeFileAtomic(runsOut, kept.map((l) => `${l}\n`).join(''));

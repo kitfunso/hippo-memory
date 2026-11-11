@@ -102,6 +102,18 @@ describe('z0-merge on a synthetic round 4 first run (prereg item 9)', () => {
     expect(readMergeManifest(path.join(earlier.out, 'merge.json'))).toMatchObject({ first: { sha256: sha(path.join(whole.first, 'runs.jsonl')) }, firstRun: { plannedSequenceSeeds: 1, leakedSequenceSeeds: 1 } });
   });
 
+  it('removes merge.json before it writes anything, so a cut-off partial merge never leaves an old manifest beside new files', () => {
+    const earlier = scene({ firstSeeds: [2] });
+    expect(merge(earlier.argv)).toMatchObject({ code: 0 });
+    expect(fs.readdirSync(earlier.out)).toEqual(['merge.json']);
+    // A directory where off-pin.json belongs fails the third write, after runs.jsonl and plan.json are in place.
+    fs.mkdirSync(path.join(earlier.out, 'off-pin.json'));
+    const partial = scene();
+    expect(merge([...partial.argv.slice(0, -1), earlier.out])).toMatchObject({ code: 1 });
+    expect(fs.existsSync(path.join(earlier.out, 'merge.json'))).toBe(false);
+    expect(fs.existsSync(path.join(earlier.out, 'runs.jsonl'))).toBe(true);
+  });
+
   it('refuses a rerun folder that holds another seed, a leak with no rerun, a stray rerun and a leak list for another runs file', () => {
     const wrong = scene({ rerunSeeds: [2, 3] });
     expect(merge(wrong.argv)).toMatchObject({ code: 1, stderr: expect.stringContaining('holds seeds other than 2') });

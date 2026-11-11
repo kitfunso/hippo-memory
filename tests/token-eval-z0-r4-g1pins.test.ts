@@ -75,29 +75,37 @@ interface Folder { attempts: Entry[]; logs: Map<string, string | null> }
 interface Raw { attempts?: Entry[]; drop?: string[]; logs?: Record<string, string | null>; noAttemptsFile?: boolean }
 
 interface Rec extends Z0Record { sessionId: string | null; envKeys: string[] }
-/** The record the runner writes with no session: `invalidRecord` sets `sessionId` null and `invalid` to the reason (setup, leak, ancestor-instructions); null leaves `invalid` null too. */
+/** The record a pre-session branch writes (setup, leak, ancestor-instructions): `invalidRecord` sets `sessionId` null and `invalid` to the reason, and `surfaceRestored` is never set; null leaves `invalid` null too. */
 const NO_SESSION = { 'S2#1#2': 'setup' };
 
 /** One out folder: records, plan and the clean raw folders (one on-pin session attempt and log per Claude Code record that ran a session); `raw` changes a seed folder, null leaves it out.
- * `noSession` (by `<arm>#<seed>#<position>`) makes those records session-less, as the runner writes them; with no argument the folder holds one setup failure. */
-function outFolder(opts: { seeds?: number[]; raw?: Record<string, Raw | null>; envKeys?: Record<string, string[]>; noRaw?: boolean; noSession?: Record<string, string | null> } = {}) {
+ * `noSession` (by `<arm>#<seed>#<position>`) makes those records pre-session ones, as the runner writes them; with no argument the folder holds one setup failure.
+ * `noResult` makes a session that ran with no id: `sessionRecord` sets `surfaceRestored` and an `invalid` reason (no-result, no-transcript, workspace) but `sessionId` is null. */
+function outFolder(opts: { seeds?: number[]; raw?: Record<string, Raw | null>; envKeys?: Record<string, string[]>; noRaw?: boolean; noSession?: Record<string, string | null>; noResult?: Record<string, string> } = {}) {
   const out = tmp('z0-g1pins-');
   const all = generate({ design: DESIGNS.r4, repos: 1 });
   const keep = (x: { seed: number }) => (opts.seeds ?? [1, 2, 3]).includes(x.seed);
-  const records = all.records.filter(keep).map((r): Rec => ({ ...r, sessionId: `s-${r.arm}-${r.seed}-${r.position}`, envKeys: opts.envKeys?.[`${r.arm}#${r.seed}#${r.position}`] ?? ['PATH', 'PIP_CONSTRAINT'] }));
+  const records = all.records.filter(keep).map((r): Rec => ({ ...r, sessionId: `s-${r.arm}-${r.seed}-${r.position}`, surfaceRestored: true, envKeys: opts.envKeys?.[`${r.arm}#${r.seed}#${r.position}`] ?? ['PATH', 'PIP_CONSTRAINT'] }));
   for (const [cell, reason] of Object.entries(opts.noSession ?? NO_SESSION)) {
     const r = records.find((x) => `${x.arm}#${x.seed}#${x.position}` === cell);
     if (r === undefined && opts.noSession === undefined) continue;
     if (r === undefined) throw new Error(`no record at ${cell}`);
     r.sessionId = null;
+    delete r.surfaceRestored;
     if (reason !== null) crash(r, reason);
     if (reason === 'leak') r.leak = true;
+  }
+  for (const [cell, reason] of Object.entries(opts.noResult ?? {})) {
+    const r = records.find((x) => `${x.arm}#${x.seed}#${x.position}` === cell);
+    if (r === undefined) throw new Error(`no record at ${cell}`);
+    r.sessionId = null;
+    crash(r, reason);
   }
   fs.writeFileSync(path.join(out, 'runs.jsonl'), jsonl(records));
   fs.writeFileSync(path.join(out, 'plan.json'), JSON.stringify(all.plan.filter(keep)));
   const folders = new Map<string, Folder>();
   const noAttempts = new Set<string>();
-  for (const r of records.filter((x) => ARM_TABLE[x.arm].tool === 'claude-code' && x.sessionId !== null)) {
+  for (const r of records.filter((x) => ARM_TABLE[x.arm].tool === 'claude-code' && x.surfaceRestored === true)) {
     const folder: Folder = folders.get(`${r.sequence}/${r.arm}/seed${r.seed}`) ?? { attempts: [], logs: new Map() };
     const a = attempt(r.taskId, 'session', 1, r.sessionId);
     folder.attempts.push(a);
@@ -185,9 +193,9 @@ describe('g1-pins on a run folder', () => {
   });
 
   describe('a record with no evidence of its log (the report fails closed)', () => {
-    // A record with no session (the fixture's setup failure) has no log to miss, so it is never in the expected voids.
-    const noLog = (records: { arm: string; seed: number; position: number; sessionId: string | null }[], arm: string, seed: number) => records
-      .filter((r) => r.arm === arm && r.seed === seed && r.sessionId !== null).map((r) => ({ sequence: 'rn-repo1', seed, arm, position: r.position, sessionId: r.sessionId, reason: 'no log' })).sort((a, b) => a.position - b.position);
+    // A pre-session record (the fixture's setup failure) has no surfaceRestored and no log to miss, so it is never in the expected voids.
+    const noLog = (records: { arm: string; seed: number; position: number; sessionId: string | null; surfaceRestored?: boolean }[], arm: string, seed: number) => records
+      .filter((r) => r.arm === arm && r.seed === seed && r.surfaceRestored === true).map((r) => ({ sequence: 'rn-repo1', seed, arm, position: r.position, sessionId: r.sessionId, reason: 'no log' })).sort((a, b) => a.position - b.position);
     const voidsOf = (raw: Record<string, Raw | null>) => {
       const { out, records } = outFolder({ raw });
       expect(run(out, offPinOf(out))).toMatchObject({ code: 0 });
@@ -227,11 +235,15 @@ describe('g1-pins on a run folder', () => {
     });
   });
 
-  describe('a record the runner wrote with no session (sessionId null, invalid set)', () => {
+  describe('a record a pre-session branch wrote (no surfaceRestored, invalid set)', () => {
     it('gives no void for a setup failure, a leak, the later cells of a leaked run and an ancestor-instructions record, which have no attempt and no log', () => {
       const cells = { 'S2#1#2': 'setup', 'S2#1#3': 'leak', 'S2#1#4': 'leak', 'S2#1#5': 'leak', 'O1#2#2': 'ancestor-instructions', 'S1#3#3': 'setup' };
       const { out, records } = outFolder({ noSession: cells });
-      for (const cell of Object.keys(cells)) expect(records.find((r) => `${r.arm}#${r.seed}#${r.position}` === cell), cell).toMatchObject({ sessionId: null });
+      for (const cell of Object.keys(cells)) {
+        const record = records.find((r) => `${r.arm}#${r.seed}#${r.position}` === cell);
+        expect(record, cell).toMatchObject({ sessionId: null });
+        expect(record?.surfaceRestored, cell).toBeUndefined();
+      }
       expect(run(out, offPinOf(out), ['--strict'])).toMatchObject({ code: 0, stdout: 'off-pin 0\nenv-outside 0\n' });
       expect(readJson(offPinOf(out)).voids).toEqual([]);
     });
@@ -242,11 +254,42 @@ describe('g1-pins on a run folder', () => {
       expect(readJson(offPinOf(out)).voids).toEqual([expect.objectContaining({ arm: 'S2', seed: 1, position: 5, reason: 'no log' })]);
     });
 
-    it('stops with exit 1, naming the file and line, on a record with no sessionId and no invalid reason', () => {
+    it('stops with exit 1, naming the file and line, on a record with no surfaceRestored and no invalid reason, with or without a sessionId', () => {
       const { out, records } = outFolder({ noSession: { 'S2#1#2': null } });
       const line = records.findIndex((r) => r.arm === 'S2' && r.seed === 1 && r.position === 2) + 1;
-      expect(run(out, offPinOf(out))).toMatchObject({ code: 1, stderr: expect.stringContaining(`${path.join(out, 'runs.jsonl')} line ${line}: a S2 record has no sessionId and no invalid reason`) });
+      expect(run(out, offPinOf(out))).toMatchObject({ code: 1, stderr: expect.stringContaining(`${path.join(out, 'runs.jsonl')} line ${line}: a S2 record has no surfaceRestored and no invalid reason`) });
       expect(fs.existsSync(offPinOf(out))).toBe(false);
+      const withId = outFolder();
+      const runsFile = path.join(withId.out, 'runs.jsonl');
+      const target = withId.records.findIndex((r) => ARM_TABLE[r.arm].tool === 'claude-code' && r.surfaceRestored === true);
+      const edited = fs.readFileSync(runsFile, 'utf8').split('\n').map((l, i) => (i === target ? JSON.stringify({ ...JSON.parse(l), surfaceRestored: undefined }) : l));
+      fs.writeFileSync(runsFile, edited.join('\n'));
+      expect(run(withId.out, offPinOf(withId.out))).toMatchObject({ code: 1, stderr: expect.stringContaining(`${runsFile} line ${target + 1}: a ${withId.records[target]!.arm} record has no surfaceRestored and no invalid reason`) });
+    });
+  });
+
+  describe('a session that ran and has no id (surfaceRestored set, sessionId null, invalid no-result, no-transcript or workspace)', () => {
+    const REASONS = ['no-result', 'no-transcript', 'workspace'];
+    const ran = (reason: string, raw: Record<string, Raw | null>) => outFolder({ noResult: { 'S2#1#4': reason }, raw });
+
+    it.each(REASONS)('gives one `no log` void, with a null sessionId, for an %s record with no session attempt', (reason) => {
+      const { out, records } = ran(reason, { 'rn-repo1/S2/seed1': { drop: ['rn-repo1-t4.session'] } });
+      expect(records.find((r) => r.arm === 'S2' && r.seed === 1 && r.position === 4)).toMatchObject({ sessionId: null, surfaceRestored: true, invalid: reason });
+      expect(run(out, offPinOf(out))).toMatchObject({ code: 0, stdout: 'off-pin 1\nenv-outside 0\n' });
+      expect(readJson(offPinOf(out)).voids).toEqual([{ sequence: 'rn-repo1', seed: 1, arm: 'S2', position: 4, sessionId: null, reason: 'no log' }]);
+    });
+
+    it('gives no void for such a record whose session attempt and log are there, matched by task', () => {
+      const { out } = ran('no-result', {});
+      expect(run(out, offPinOf(out), ['--strict'])).toMatchObject({ code: 0, stdout: 'off-pin 0\nenv-outside 0\n' });
+    });
+
+    it('voids it in a seed with no raw folder, beside a setup failure that it skips', () => {
+      const { out } = ran('no-transcript', { 'rn-repo1/S2/seed1': null });
+      run(out, offPinOf(out));
+      const positions = readJson(offPinOf(out)).voids.map((v: { position: number }) => v.position);
+      expect(positions).toContain(4);
+      expect(positions).not.toContain(2);
     });
   });
 

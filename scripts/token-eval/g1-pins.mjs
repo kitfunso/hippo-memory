@@ -90,21 +90,24 @@ function runVoids(out, pins, pinsFile, positionOf) {
   return voids;
 }
 
-/** A void for each Claude Code record that ran a session (it has a `sessionId`) and whose seed folder names no session attempt for its task: no request log to read.
- * A record with no session and an `invalid` reason (setup, leak, ancestor-instructions) is skipped, since its own `invalid` removes it; with neither, the runner did not write it. */
+const isBool = (v) => v === true || v === false;
+
+/** A void for each Claude Code record that ran a session and whose seed folder names no session attempt for its task: no request log to read.
+ * A session ran when the record carries `surfaceRestored`, which every `sessionRecord` sets (task.mjs:310), whatever its `sessionId`: a session with no result or no transcript has none.
+ * A record without it and with an `invalid` reason is one of the four pre-session branches (setup, leak, ancestor-instructions) and is skipped; with neither, the runner did not write it. */
 function unloggedVoids(out, records, runsFile) {
   const attempts = new Map();
   const voids = [];
   records.forEach((r, i) => {
     if (!Object.hasOwn(ARM_TABLE, r.arm)) throw new Error(`${runsFile} line ${i + 1}: unknown arm ${r.arm}`);
     if (ARM_TABLE[r.arm].tool !== 'claude-code') return;
-    if ((r.sessionId ?? null) === null) {
-      if ((r.invalid ?? null) === null) throw new Error(`${runsFile} line ${i + 1}: a ${r.arm} record has no sessionId and no invalid reason`);
+    if (!isBool(r.surfaceRestored)) {
+      if ((r.invalid ?? null) === null) throw new Error(`${runsFile} line ${i + 1}: a ${r.arm} record has no surfaceRestored and no invalid reason`);
       return;
     }
     const dir = path.join(out, 'raw', r.sequence, r.arm, `seed${r.seed}`);
     if (!attempts.has(dir)) attempts.set(dir, attemptsOf(dir));
-    if (!attempts.get(dir).some((a) => a.taskId === r.taskId && a.kind === 'session')) voids.push({ sequence: r.sequence, seed: r.seed, arm: r.arm, position: r.position, sessionId: r.sessionId, reason: 'no log' });
+    if (!attempts.get(dir).some((a) => a.taskId === r.taskId && a.kind === 'session')) voids.push({ sequence: r.sequence, seed: r.seed, arm: r.arm, position: r.position, sessionId: r.sessionId ?? null, reason: 'no log' });
   });
   return voids;
 }
