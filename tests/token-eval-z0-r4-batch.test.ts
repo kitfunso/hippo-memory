@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { DESIGNS } from '../scripts/token-eval/arms.mjs';
 import { gitBash } from '../scripts/token-eval/homes.mjs';
 import { callRecord, pathForm, runCli, unitRecord } from '../scripts/token-eval/z0-unit-record.mjs';
-import { CHECKOUT, COST, Case, WARM, fwd, isAlive, json, killTree, lines, put, read, sleep, stopCases, until, within, type Knobs, type Run, type Started } from './fixtures/z0-batch/harness.js';
+import { CHECKOUT, COST, Case, WARM, fwd, isAlive, json, keepDir, killTree, lines, put, read, sleep, stopCases, until, within, type Knobs, type Run, type Started } from './fixtures/z0-batch/harness.js';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
 import { cli, sealedKey, synthOut, type Cell } from './fixtures/z0-g5.js';
 import { generate, planOf } from './fixtures/z0-gen.js';
@@ -726,7 +726,10 @@ const only = process.env.Z0_BATCH_ONLY?.split(',');
 
 describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs Windows processes, PowerShell 5.1 and Git Bash)', () => {
   const started = Date.now();
+  let keep: string | undefined;
   beforeAll(() => {
+    // A refused keep folder fails the run before any scenario starts, and leaves keep unset so teardown copies nothing.
+    keep = keepDir(process.env.Z0_BATCH_KEEP);
     for (const [k, s] of Object.entries(runs)) if (!only || only.includes(k)) s.start();
   });
   afterAll(async () => {
@@ -735,15 +738,23 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
     const pending = Promise.allSettled(Object.values(runs).flatMap((s) => s.pending()));
     const unsettled = await within(pending, 60_000, 'the scenarios to settle once teardown stopped their processes').then(() => '', (e: Error) => e.message);
     const left = await stopCases(cases, 30_000);
+    const errors = [unsettled, ...[...left].map(([base, pids]) => `${base} still has pids ${pids.join(' ')} after teardown`)].filter((m) => m !== '');
+    const attempt = (what: string, fn: () => void) => {
+      try {
+        fn();
+      } catch (err) {
+        errors.push(`${what}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
     // Global teardown removes the run's temp root (_real-store-guard.ts), so a diagnosis run copies each case folder, batch log and all, out first.
-    const keep = process.env.Z0_BATCH_KEEP;
+    const into = keep;
     for (const c of cases) {
-      if (keep) fs.cpSync(c.base, path.join(keep, path.basename(c.base)), { recursive: true });
-      if (!left.has(c.base)) c.remove();
+      if (into) attempt(`the copy of ${c.base} to ${into}`, () => fs.cpSync(c.base, path.join(into, path.basename(c.base)), { recursive: true }));
+      if (!left.has(c.base)) attempt(`the removal of ${c.base}`, () => c.remove());
     }
-    if (process.env.Z0_BATCH_TIME) fs.writeFileSync(process.env.Z0_BATCH_TIME, `${Math.round((Date.now() - started) / 1000)} s\n`);
-    const alive = [...left].map(([base, pids]) => `${base} still has pids ${pids.join(' ')} after teardown`);
-    if (unsettled !== '' || alive.length > 0) throw new Error([unsettled, ...alive].filter((m) => m !== '').join('; '));
+    const time = process.env.Z0_BATCH_TIME;
+    if (time) attempt('the time file', () => fs.writeFileSync(time, `${Math.round((Date.now() - started) / 1000)} s\n`));
+    if (errors.length > 0) throw new Error(errors.join('; '));
   }, 240_000);
   const last = (r: Run) => r.last;
 

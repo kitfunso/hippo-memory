@@ -37,10 +37,12 @@ describe('cleanup and a hung fake grandchild\'s pid file', () => {
     expect({ exitCode: other.exitCode, signalCode: other.signalCode }).toEqual({ exitCode: null, signalCode: null });
   });
 
-  it('a grandchild.pid whose process has exited is never signalled', async () => {
+  it('a grandchild.pid whose process has exited is never signalled, and no other process is killed in its place', async () => {
     const { out } = isolate('pid-gone');
     const gone = node('');
     await exited(gone);
+    // On Windows no pid reaches process.kill, so a live node that names no folder of the test shows that no fallback, such as a kill by image name, ran instead.
+    const bystander = node('setInterval(() => {}, 1000)');
     writeFileSync(join(out, 'grandchild.pid'), String(gone.pid));
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
     try {
@@ -49,6 +51,8 @@ describe('cleanup and a hung fake grandchild\'s pid file', () => {
     } finally {
       kill.mockRestore();
     }
+    await Promise.race([exited(bystander), sleep(2000)]);
+    expect({ exitCode: bystander.exitCode, signalCode: bystander.signalCode }).toEqual({ exitCode: null, signalCode: null });
   });
 
   it('a live grandchild whose command line names the out folder, as the fakes\' tick does, is stopped', async () => {

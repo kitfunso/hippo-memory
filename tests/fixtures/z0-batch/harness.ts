@@ -1,5 +1,5 @@
 // Set-up for the s4-batch.sh tests: a dry root, a "scored" folder holding the real scripts beside the stubs, fixture runs the stub runner replays, and a spawned batch.
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess, type SpawnSyncReturns } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -60,9 +60,37 @@ export async function within<T>(p: Promise<T>, ms: number, what: string): Promis
 
 export const isAlive = (pid: number) => spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' }).stdout.includes(`"${pid}"`);
 /** Tree-kills a child this test spawned whose exit Node has not seen, so its handle is still open and its pid is still its own; one already gone is left alone. */
-export function killTree(child: ChildProcess) {
+export function killTree(child: ChildProcess, taskkill: (args: string[]) => SpawnSyncReturns<string> = (args) => spawnSync('taskkill', args, { encoding: 'utf8', timeout: 60_000, windowsHide: true })) {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)], { encoding: 'utf8' });
+  const r = taskkill(['/T', '/F', '/PID', String(child.pid)]);
+  // A process of the tree that exits during the kill is taskkill's "not found" or "no running instance"; any other error, or none on a failed exit, is a real failure.
+  const stderr = (r.stderr ?? '').trim();
+  const errs = stderr.split(/^(?=ERROR:)/m).filter((block) => block.trim() !== '' && !/not found|no running instance/i.test(block));
+  if (r.error || (r.status !== 0 && (errs.length > 0 || stderr === ''))) throw new Error(`taskkill of the tree of ${child.pid} failed: exit ${r.status} ${r.error?.message ?? stderr}`);
+}
+
+/** Resolves `p` through any junction in the part that exists, so a link under the temp folder cannot point a keep folder elsewhere. */
+function realPath(p: string): string {
+  const abs = path.resolve(p);
+  if (fs.existsSync(abs)) return fs.realpathSync.native(abs);
+  const up = path.dirname(abs);
+  return up === abs ? abs : path.join(realPath(up), path.basename(abs));
+}
+
+/** The Z0_BATCH_KEEP folder a diagnosis run copies case folders into, or undefined; one not strictly under the real temp folder, inside this run's temp root (global teardown removes it) or under C:/z0-runs is refused. */
+export function keepDir(keep: string | undefined): string | undefined {
+  if (!keep) return undefined;
+  const at = realPath(keep).toLowerCase();
+  const under = (root: string) => {
+    const rel = path.relative(realPath(root).toLowerCase(), at);
+    return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  };
+  const realTmp = process.env.HIPPO_TEST_REAL_TMP;
+  const runTmp = process.env.HIPPO_TEST_TMP_RUN;
+  if (!path.isAbsolute(keep) || !realTmp || !under(realTmp) || (runTmp && under(runTmp)) || under('C:/z0-runs')) {
+    throw new Error(`Z0_BATCH_KEEP=${keep} is refused: a keep folder is an absolute path under the real temp folder ${realTmp ?? '(HIPPO_TEST_REAL_TMP is unset)'}, outside this run's temp root ${runTmp ?? ''} and C:/z0-runs`);
+  }
+  return realPath(keep);
 }
 
 export interface FxOpts { key: string; seeds: number[]; leaks?: number[]; tag?: string }
