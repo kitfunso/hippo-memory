@@ -2,13 +2,15 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, sh, cloneFresh } from './exec.mjs';
-import { ARM_TABLE, DESIGNS, HIPPO_ARMS, armSettings, armEnv, armSet, childEnv, writeHippoShim, startupTools } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, HIPPO_ARMS, allowlistOf, armSettings, armEnv, armSet, childEnv, claudeModelOf, warmupEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs } from './homes.mjs';
 import { stubBaseCommit, assertNoInstructionLinks, STUB_CLAUDE_MD, X3_STUB } from './workspace.mjs';
 import { codexContext, writeCodexHome } from './codex.mjs';
 import { lessonIndex } from './lessons.mjs';
 import { assertNoPhraseInStub } from './leaks.mjs';
 import { hippoBuild, refuseOffPins, claudePinned, codexPinned } from './pins.mjs';
+import { writeFileAtomic } from './atomic-write.mjs';
+import { lastJson } from './records.mjs';
 
 // Loading or validating a tasks file never needs dist/; only a real run does.
 let hippoLib = null;
@@ -88,7 +90,44 @@ export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
   }
 }
 
-/** The shared context of a run or a screen: tools, limits, the lesson index, the cached repos, the Claude version, one warm-up call. */
+/** The warm-up calls: round 3 one on the --model flag; round 4 one per distinct model of the run's arms, in arm order, each in its own config dir.
+ * Each entry holds the call's env, its `--model` args and the dir it runs in. */
+function warmupCalls(ctx, effort) {
+  const base = path.join(ctx.outDir, 'warmup');
+  const dirsAt = (warmDir) => ({ ...runDirs(warmDir, '', '', 0), claudeConfig: path.join(warmDir, 'claude-config') });
+  if (ctx.design !== DESIGNS.r4) {
+    const env = armEnv(DESIGNS.r3.noMemory, dirsAt(base), process.env, { passEnv: ctx.passEnv });
+    return [{ model: null, warmDir: base, env, args: ctx.model ? ['--model', ctx.model] : [] }];
+  }
+  const models = [...new Set(ctx.arms.map((arm) => claudeModelOf(ctx.design, arm, null)))];
+  if (!models.length) throw new Error('a round 4 run needs at least one arm');
+  return models.map((model) => {
+    const warmDir = path.join(base, model);
+    return { model, warmDir, ...warmupEnv(ctx.design, model, dirsAt(warmDir), process.env, { passEnv: ctx.passEnv, effort, allowlist: allowlistOf(ctx.design) }) };
+  });
+}
+
+/** One unrecorded call per entry, so the first recorded run does not alone pay the cold prompt-cache write.
+ * Round 4 leaves warmups/<model>.start.json before the call and <model>.json after it, which the spend ledger reads. */
+function warmUp(ctx, claude, calls) {
+  for (const w of calls) {
+    fs.mkdirSync(w.env.CLAUDE_CONFIG_DIR, { recursive: true });
+    const command = `${claude} ${['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', ...w.args].join(' ')}`;
+    if (w.model === null) {
+      sh(command, w.warmDir, w.env, 10 * 60_000, 'Reply with the single word OK.');
+      continue;
+    }
+    const file = (suffix) => path.join(ctx.outDir, 'warmups', `${w.model}${suffix}`);
+    writeFileAtomic(file('.start.json'), `${JSON.stringify({ model: w.model, configDir: w.env.CLAUDE_CONFIG_DIR })}\n`);
+    const r = sh(command, w.warmDir, w.env, 10 * 60_000, 'Reply with the single word OK.');
+    const result = lastJson(r.stdout);
+    // Written on a failure too: the call may have spent before it died.
+    writeFileAtomic(file('.json'), `${JSON.stringify({ model: w.model, status: r.status, total_cost_usd: result?.total_cost_usd ?? null, result })}\n`);
+    if (r.status !== 0 || !result) throw new Error(`warm-up for ${w.model} failed (exit ${r.status})`);
+  }
+}
+
+/** The shared context of a run or a screen: tools, limits, the lesson index, the cached repos, the Claude version, the warm-up calls. */
 export async function openContext(opts) {
   await loadHippo();
   const { spec, outDir, claudeBin = 'claude', warmup = true, passEnv = [] } = opts;
@@ -101,19 +140,16 @@ export async function openContext(opts) {
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 8 * 96, log: opts.log ?? console.log,
     lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
     ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'), canaries: opts.canaries ?? [], foreignDirs: [], leakedRuns: new Map(),
-    operatorEnv: { ...process.env }, hippoBuild: hippoBuild(), tokenSchedule: opts.tokenSchedule ?? null, tokenVar: opts.tokenVar ?? null, token: null, readToken: opts.readToken ?? null,
+    operatorEnv: { ...process.env }, hippoBuild: opts.hippoBuild ?? hippoBuild(), tokenSchedule: opts.tokenSchedule ?? null, tokenVar: opts.tokenVar ?? null, token: null, readToken: opts.readToken ?? null,
+    design: opts.design ?? DESIGNS.r3, arms: opts.arms ?? [], upstream: opts.upstream ?? null,
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
-  const warmDir = path.join(outDir, 'warmup');
-  const warmEnv = armEnv(DESIGNS.r3.noMemory, { ...runDirs(warmDir, '', '', 0), claudeConfig: path.join(warmDir, 'claude-config') }, process.env, { passEnv });
-  ctx.claudeVersion = sh(`${claude} --version`, outDir, warmEnv).stdout.trim() || null;
+  const calls = warmupCalls(ctx, opts.effort);
+  // The effort every spawn and the pins use: round 4's --effort, else its table's, read back from the env the call gets.
+  if (ctx.design === DESIGNS.r4) ctx.effort = calls[0].env.CLAUDE_CODE_EFFORT_LEVEL;
+  ctx.claudeVersion = sh(`${claude} --version`, outDir, calls[0].env).stdout.trim() || null;
   refuseOffPins(opts.pins, claudePinned(ctx), ctx);
-  if (warmup) {
-    // One unrecorded call, so the first recorded run does not alone pay the cold prompt-cache write.
-    fs.mkdirSync(warmEnv.CLAUDE_CONFIG_DIR, { recursive: true });
-    const warmArgs = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', ...(ctx.model ? ['--model', ctx.model] : [])];
-    sh(`${claude} ${warmArgs.join(' ')}`, warmDir, warmEnv, 10 * 60_000, 'Reply with the single word OK.');
-  }
+  if (warmup) warmUp(ctx, claude, calls);
   // Last, so a refused step above leaves no login copy; runAll closes the vault in its catch and after runSteps, and a screen never opens it.
   if ((opts.arms ?? []).some((a) => armSet(a) === 'X')) Object.assign(ctx, codexContext(opts, process.env, (tools) => refuseOffPins(opts.pins, codexPinned(tools), ctx)));
   return ctx;
@@ -123,7 +159,7 @@ export async function openContext(opts) {
 export function startRun(ctx, s, arm, seed, name = s.id) {
   const dirs = runDirs(ctx.outDir, name, arm, seed);
   freshRunDirs(dirs);
-  const env = armEnv(arm, dirs, process.env, { passEnv: ctx.passEnv });
+  const env = armEnv(arm, dirs, process.env, { passEnv: ctx.passEnv, effort: ctx.effort, allowlist: allowlistOf(ctx.design) });
   if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, ctx.fakeHome, ARM_TABLE[arm].shim);
   const settingsFile = path.join(ctx.outDir, 'settings', `${name}-${arm}-seed${seed}.json`);
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });

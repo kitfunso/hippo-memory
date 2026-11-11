@@ -207,7 +207,8 @@ describe('the sets and views read from the table', () => {
   it('keep each DESIGNS.r3 view equal to today\'s iterated list', () => {
     expect([...ARMS]).toEqual(R3);
     expect([[...RN_ARMS], [...X_ARMS]]).toEqual([['A0', 'A1', 'A2', 'A4', 'A5'], ['X1', 'X2', 'X3', 'X4']]);
-    expect(ARM_SEEDS).toEqual({ A0: 2, A1: 3, A2: 3, A4: 2, A5: 3, X1: 3, X2: 3, X3: 3, X4: 2 });
+    // Slice 2a: ARM_SEEDS holds every row, so the round 4 arms find their seed cap.
+    expect(ARM_SEEDS).toEqual({ A0: 2, A1: 3, A2: 3, A4: 2, A5: 3, X1: 3, X2: 3, X3: 3, X4: 2, O1: 3, S1: 3, S2: 3, S5: 3, S0: 2, S4: 2 });
     expect([armSet('A1'), armSet('X3'), armSet('S1'), armSet('A9')]).toEqual(['RN', 'X', 'RN', 'RN']);
     expect([roundArms('r4', 'seedRule'), roundArms('r3', 'capture')]).toEqual([['O1', 'S1', 'S2', 'S5'], ['A2', 'X2']]);
     expect([joinCodes(['A2', 'X2']), joinCodes(['A1', 'A2', 'A5', 'X2', 'X3']), joinCodes(['S2'])]).toEqual(['A2 and X2', 'A1, A2, A5, X2 and X3', 'S2']);

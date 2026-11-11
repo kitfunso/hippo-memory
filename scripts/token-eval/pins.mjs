@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { REPO, git } from './exec.mjs';
+import { ARM_TABLE, DESIGNS, claudeModelOf } from './arms.mjs';
 import { claudeVersionToken } from '../z7-sidechain-lib.mjs';
 
 /** sha256 over every file under dir: relative path, size and bytes, in path order. */
@@ -36,10 +37,15 @@ export function pinMismatches(pins, actual) {
   return bad;
 }
 
-/** What --pins compares before any session spends usage; Claude Code's version is its leading token, so "2.1.288 (Claude Code)" pins as 2.1.288. */
-export const claudePinned = (ctx) => ({
-  claudeVersion: claudeVersionToken(ctx.claudeVersion), model: ctx.model, hippoCommit: ctx.hippoBuild.hippoCommit, hippoDistHash: ctx.hippoBuild.hippoDistHash,
-});
+/** What --pins compares before any session spends usage; Claude Code's version is its leading token, so "2.1.288 (Claude Code)" pins as 2.1.288.
+ * Round 4 pins the effort and one model key per model the run's arms use (the arm table names them), not the --model flag. */
+export function claudePinned(ctx) {
+  const { hippoCommit, hippoDistHash } = ctx.hippoBuild;
+  const claudeVersion = claudeVersionToken(ctx.claudeVersion);
+  if (ctx.design !== DESIGNS.r4) return { claudeVersion, model: ctx.model, hippoCommit, hippoDistHash };
+  const models = Object.fromEntries(ctx.arms.map((arm) => [ARM_TABLE[arm].pinKey, claudeModelOf(ctx.design, arm, ctx.model)]));
+  return { claudeVersion, effort: ctx.effort, hippoCommit, hippoDistHash, ...models };
+}
 
 /** Checked once the Codex version is known and before its login vault opens. */
 export const codexPinned = (tools) => ({ codexVersion: tools.codexVersion, codexModel: tools.codexModel });

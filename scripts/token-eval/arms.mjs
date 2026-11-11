@@ -259,8 +259,8 @@ export function pairOf(design, name) {
 export const ARMS = DESIGNS.r3.arms;
 export const RN_ARMS = Object.freeze(ARMS.filter((a) => ARM_TABLE[a].set === 'RN'));
 export const X_ARMS = Object.freeze(ARMS.filter((a) => ARM_TABLE[a].set === 'X'));
-// Prereg "Seeds": A0's, A4's and X4's gates need a large effect, so they run two.
-export const ARM_SEEDS = Object.freeze(Object.fromEntries(ARMS.map((a) => [a, ARM_TABLE[a].seeds])));
+// Prereg "Seeds": A0's, A4's and X4's gates need a large effect, so they run two. Every row has its count, so a round 4 arm finds its seed cap too.
+export const ARM_SEEDS = Object.freeze(Object.fromEntries(ALL_ARMS.map((a) => [a, ARM_TABLE[a].seeds])));
 /** The set an arm runs: X arms run only set X sequences, the A arms only R and N. */
 export const armSet = (arm) => (own(ARM_TABLE, arm) && ARM_TABLE[arm].set === 'X' ? 'X' : 'RN');
 export const TOKEN_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
@@ -308,6 +308,9 @@ const rowOf = (arm) => {
   if (!own(ARM_TABLE, arm)) throw new Error(`unknown arm ${arm}; known: ${ALL_ARMS.join(', ')}`);
   return ARM_TABLE[arm];
 };
+
+/** The model a Claude Code session runs: round 4's arm table names it (prereg item 5), round 3 takes the --model flag. */
+export const claudeModelOf = (design, arm, flagModel) => (design === DESIGNS.r4 ? rowOf(arm).model : flagModel);
 
 /** The `--settings` file for an arm; `hippoSettings` is what hippo's installer writes for Claude Code. */
 export function armSettings(arm, hippoSettings) {

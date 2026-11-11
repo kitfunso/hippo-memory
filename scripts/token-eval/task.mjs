@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { sh } from './exec.mjs';
-import { ARM_TABLE, CAPTURE_ARMS, CARRY_ARMS, CODEX_HIPPO_ARMS, HIPPO_ARMS, childEnv } from './arms.mjs';
+import { ARM_TABLE, CAPTURE_ARMS, CARRY_ARMS, CODEX_HIPPO_ARMS, HIPPO_ARMS, childEnv, claudeModelOf } from './arms.mjs';
 import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, commitInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import {
@@ -56,7 +56,7 @@ function baseFields(ctx, run, step) {
   const { t, role } = step;
   const base = {
     schema: SCHEMA, set: role.set, tool: step.driver.tool, repo: run.s.repo, taskId: t.id, cluster: run.s.cluster, sequence: run.s.id,
-    position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: step.driver === CODEX_DRIVER ? ctx.codexModel : ctx.model, claudeVersion: ctx.claudeVersion, ...ctx.hippoBuild,
+    position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: step.driver === CODEX_DRIVER ? ctx.codexModel : claudeModelOf(ctx.design, run.arm, ctx.model), claudeVersion: ctx.claudeVersion, ...ctx.hippoBuild,
     startedAt: new Date().toISOString(), baseCommit: null, kind: role.kind, familyId: role.familyId, lessonSource: role.lessonSource,
     applyIndex: role.applyIndex, afterReversal: role.afterReversal, tasksSinceTeach: role.tasksSinceTeach,
   };

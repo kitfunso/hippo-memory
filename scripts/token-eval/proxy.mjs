@@ -30,6 +30,11 @@ export function startLogProxy(logFile, { port = 0, upstream = 'https://api.anthr
       up.end(body);
     });
   });
+  return listenLocal(server, port);
+}
+
+/** Listen on 127.0.0.1; `close` drops open connections first, so a kept-alive client cannot hold it open. */
+function listenLocal(server, port) {
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, '127.0.0.1', () => resolve({
@@ -40,6 +45,20 @@ export function startLogProxy(logFile, { port = 0, upstream = 'https://api.anthr
       }),
     }));
   });
+}
+
+/** An upstream that answers 200 to every request and appends `{url, status}` to `logFile`, so a fake agent's run never reaches api.anthropic.com.
+ * @returns {Promise<{url: string, close: () => Promise<void>}>} */
+export function startStubUpstream(logFile) {
+  const server = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      fs.appendFileSync(logFile, `${JSON.stringify({ url: req.url, status: 200 })}\n`);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{}');
+    });
+  });
+  return listenLocal(server, 0);
 }
 
 /** The request bodies in a proxy log; a missing file is a session that sent nothing. */
