@@ -6,7 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'nod
 import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { BATCH1, BATCH2 } from './_helpers/z0-r4-spend.js';
-import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type World } from './fixtures/z0-drive/harness.js';
+import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type Started, type World } from './fixtures/z0-drive/harness.js';
 import { killOwnTree } from './fixtures/kill-own.js';
 
 // A case's afterEach scans for its processes up to 20 times, far past the eval config's 30 s hookTimeout.
@@ -111,6 +111,10 @@ const ready = (name: string, ...done: string[]) => {
   return c;
 };
 const wait = (what: string, test: () => boolean) => until(what, test, 120_000);
+/** A held stub runner gives up by itself after this many seconds, so a test that never releases it cannot hang forever. */
+const HELD = { Z0_STUB_HOLD_S: '120' };
+/** True once the output of a started call holds a line that matches. */
+const sawLine = (s: Started, line: RegExp) => line.test(read(s.outFile).replace(/\r/g, ''));
 
 describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and the round 4 poetry folder', () => {
   it('1. --print gives each step\'s command lines, runs nothing, logs nothing, and runs beside a live driver', async () => {
@@ -434,13 +438,16 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
   it('16. a smoke whose launcher is killed after run pid while its runner finishes: the driver waits on the scan, then reads the finished folder', async () => {
     const c = mk('launcher-killed');
     const unit = `${c.root}/smoke/w1`;
-    c.knob('w1', { fixture: w.fx, plan: w.plan, endMs: 10_000 });
-    const s = c.start('smoke');
+    // The runner stays up until the test releases it, so a slow box cannot end it before the checks below.
+    const release = `${c.root}/release-runner.txt`;
+    c.knob('w1', { fixture: w.fx, plan: w.plan, release });
+    const s = c.start('smoke', [], { env: HELD });
     await wait('the runner', () => c.runnerPids('smoke').length === 1 && c.log().some((l) => l.startsWith('launch w1 pid ')));
     const [launcher, runner] = [c.launcherPid('w1'), c.runnerPids('smoke')[0]!];
     c.kill(launcher);
     await sleep(2500);
     expect([isAlive(launcher), isAlive(runner), c.stubCalls('g1-pins').length]).toEqual([false, true, 0]);
+    put(release, '');
     const r = await s.done;
     expect(r.code, r.out).toBe(0);
     expect([isAlive(runner), existsSync(`${unit}/run/exit.txt`), lines(`${unit}/run.log`).some((l) => l.startsWith('Records: '))]).toEqual([false, false, true]);
@@ -506,21 +513,25 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
   }, 600_000);
 
   it('19. a driver killed mid-phase, mid-batch or with a finished runner that hangs: the next call waits on the scan, launches nothing twice and runs the step', async () => {
-    const pilot = async (name: string, knob: Knob) => {
+    const pilot = async (name: string, knob: (root: string) => Knob) => {
       const c = mk(name);
       await c.doneUnit(`${c.root}/smoke/w1`);
       c.plant({ step: 'smoke', exit: 0 });
-      c.knob('k1-p1', { fixture: w.fx, plan: w.plan, ...knob });
+      c.knob('k1-p1', { fixture: w.fx, plan: w.plan, ...knob(c.root) });
       return c;
     };
-    const live = await pilot('kill-live', { endMs: 8000 });
-    const first = live.start('1');
+    // The runner stays up until the test has seen the next driver wait on it, so a slow restart cannot outlast it.
+    const live = await pilot('kill-live', (root) => ({ release: `${root}/release-runner.txt` }));
+    const first = live.start('1', [], { env: HELD });
     await wait('the pilot runner', () => live.runnerPids('pilot').length === 1);
     const runner = live.runnerPids('pilot')[0]!;
     killOwnTree(first.child);
     await first.done;
     expect(isAlive(runner)).toBe(true);
-    const again = await live.run('1');
+    const restartedLive = live.start('1');
+    await wait('the next driver waiting on the runner', () => sawLine(restartedLive, new RegExp(`^DRIVE: waiting for ${runner} ab-run$`, 'm')));
+    put(`${live.root}/release-runner.txt`, '');
+    const again = await restartedLive.done;
     expect(again.code, again.out).toBe(0);
     expect(again.lines).toContain(`DRIVE: waiting for ${runner} ab-run`);
     expect(live.launcherCalls(`${live.root}/pilot/k1-p1`)).toEqual(['plan', 'launch']);
@@ -528,19 +539,24 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(live.admits().map((a) => [a.units, a.cap, a.capSpend, a.admitted])).toEqual([[['k1-p1', 'k2-p1', 'low-p1', 'high-p1'], 40, 0, true], [['k2-p1', 'low-p1', 'high-p1'], 40, 1, true]]);
 
     const batch = ready('kill-batch', '2');
-    batch.script('s4-batch', [{ make: [`${batch.root}/batch1/q12-w1/run`], hangMs: 8000 }, {}]);
+    // The batch holds until the test has seen the next driver wait on it, so a slow restart cannot outlast it.
+    const release = `${batch.root}/release-batch.txt`;
+    batch.script('s4-batch', [{ make: [`${batch.root}/batch1/q12-w1/run`], holdUntil: release }, {}]);
     const running = batch.start('3');
     await wait('the batch', () => batch.stubCalls('s4-batch').length === 1);
     // The child of start() is Git's bash.exe wrapper; the driver proper is the pid its call line names, and killing only that leaves its fork and the batch alive.
     batch.kill(batch.driverPid());
     await running.done;
-    const next = await batch.run('3');
+    const restarted = batch.start('3');
+    await wait('the next driver waiting on the batch', () => sawLine(restarted, /^DRIVE: waiting for \d+ s4-batch$/m));
+    put(release, '');
+    const next = await restarted.done;
     expect(next.code, next.out).toBe(0);
     expect(next.lines.filter((l) => /^DRIVE: waiting for \d+ s4-batch$/.test(l)).length).toBeGreaterThan(0);
     expect(batch.admits()).toHaveLength(1);
     expect(stubArgv(batch, 's4-batch')).toHaveLength(2);
 
-    const hung = await pilot('kill-hang', { hang: true });
+    const hung = await pilot('kill-hang', () => ({ hang: true }));
     const third = hung.start('1');
     await wait('the Records line', () => lines(`${hung.root}/pilot/k1-p1/run.log`).some((l) => l.startsWith('Records: ')));
     const hang = hung.runnerPids('pilot')[0]!;
@@ -568,10 +584,14 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     await first.done;
 
     const o = ready('orphan-batch', '3');
-    o.script('s4-batch', [{ hangMs: 8000 }]);
+    const free = `${o.root}/release-batch.txt`;
+    o.script('s4-batch', [{ holdUntil: free }]);
     o.orphan(`${o.scored}/s4-batch.sh`, ['1', o.checkout, o.root, '--poll', '1']);
     await wait('the orphan batch', () => o.stubCalls('s4-batch').length === 1);
-    const after = await o.run('4');
+    const waiting = o.start('4');
+    await wait('the driver waiting on the orphan batch', () => sawLine(waiting, /^DRIVE: waiting for \d+ s4-batch$/m));
+    put(free, '');
+    const after = await waiting.done;
     expect(after.code, after.out).toBe(0);
     expect(after.lines.filter((l) => /^DRIVE: waiting for \d+ s4-batch$/.test(l)).length).toBeGreaterThan(0);
     expect(o.entries().at(-1)).toEqual(o.entry({ step: '4', exit: 0 }));
@@ -778,16 +798,21 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     c.writePins({ claudeVersion: '9.9.10' });
     const at2 = (step: string) => c.entries().filter((e) => e.step === step && e.attempt === 2);
 
+    // Each runner stays up until the test has seen the next driver wait on it, so a slow box cannot end it first.
     const smoke = `${c.root}/smoke/w2`;
-    c.knob('w2', { fixture: w.fx, plan: w.plan, endMs: 10_000 });
-    const first = c.start('smoke', ['--attempt', '2']);
+    const freeSmoke = `${c.root}/release-smoke.txt`;
+    c.knob('w2', { fixture: w.fx, plan: w.plan, release: freeSmoke });
+    const first = c.start('smoke', ['--attempt', '2'], { env: HELD });
     await wait('the smoke runner', () => c.runnerPids('smoke').length === 1);
     const runner = c.runnerPids('smoke')[0]!;
     killOwnTree(first.child);
     await first.done;
     // The killed call left its folder and its runner, and logged no outcome.
     expect([existsSync(`${smoke}/run`), isAlive(runner), at2('smoke')]).toEqual([true, true, []]);
-    const again = await c.run('smoke', ['--attempt', '2']);
+    const restartedSmoke = c.start('smoke', ['--attempt', '2']);
+    await wait('the next smoke waiting on the runner', () => sawLine(restartedSmoke, new RegExp(`^DRIVE: waiting for ${runner} ab-run$`, 'm')));
+    put(freeSmoke, '');
+    const again = await restartedSmoke.done;
     expect(again.code, again.out).toBe(0);
     expect([c.launches(), c.launcherCalls(smoke), c.admits().map((a) => [a.attempt, a.units])]).toEqual([['w2'], ['plan', 'launch'], [[2, ['w2']]]]);
     expect(at2('smoke')).toEqual([c.entry({ step: 'smoke', attempt: 2, exit: 0, claudeVersion: '9.9.10' })]);
@@ -796,13 +821,18 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(c.starts()).toEqual([started, started]);
 
     const pilot = `${c.root}/pilot/k1-p2`;
-    c.knob('k1-p2', { fixture: w.fx, plan: w.plan, endMs: 10_000 });
-    const second = c.start('1', ['--attempt', '2']);
+    const freePilot = `${c.root}/release-pilot.txt`;
+    c.knob('k1-p2', { fixture: w.fx, plan: w.plan, release: freePilot });
+    const second = c.start('1', ['--attempt', '2'], { env: HELD });
     await wait('the pilot runner', () => c.runnerPids('pilot').length === 1);
+    const pilotRunner = c.runnerPids('pilot')[0]!;
     killOwnTree(second.child);
     await second.done;
-    expect([existsSync(`${pilot}/run`), at2('1')]).toEqual([true, []]);
-    const resumed = await c.run('1', ['--attempt', '2']);
+    expect([existsSync(`${pilot}/run`), isAlive(pilotRunner), at2('1')]).toEqual([true, true, []]);
+    const restartedPilot = c.start('1', ['--attempt', '2']);
+    await wait('the next step 1 waiting on the runner', () => sawLine(restartedPilot, new RegExp(`^DRIVE: waiting for ${pilotRunner} ab-run$`, 'm')));
+    put(freePilot, '');
+    const resumed = await restartedPilot.done;
     expect(resumed.code, resumed.out).toBe(0);
     expect(c.launcherCalls(pilot)).toEqual(['plan', 'launch']);
     expect(c.launches().filter((l) => l.startsWith('k1-p2'))).toEqual(['k1-p2']);

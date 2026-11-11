@@ -1,5 +1,5 @@
 // One stub, copied under each stubbed CLI name and run by the stub s4-batch.sh and s4-read.sh: it logs its argv, then acts on the next item of $Z0_STUB_KNOBS/cli-<name>.json.
-// An item is { exit, stdout, stderr, write: { <file>: <text> }, make: [<folder>], hangMs }; the list is used one item per call and its last item stays.
+// An item is { exit, stdout, stderr, write: { <file>: <text> }, make: [<folder>], hangMs, holdUntil, holdMaxMs }; the list is used one item per call and its last item stays.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -19,4 +19,9 @@ for (const folder of knob.make ?? []) fs.mkdirSync(folder, { recursive: true });
 if (knob.stdout) process.stdout.write(`${knob.stdout}\n`);
 if (knob.stderr) process.stderr.write(`${knob.stderr}\n`);
 if (knob.hangMs) await new Promise((resolve) => setTimeout(resolve, knob.hangMs));
+// holdUntil is a file the test writes to let the stub go on, so a slow box cannot outlast a fixed hang; holdMaxMs (default 120 s) ends the wait of a test that never writes it.
+if (knob.holdUntil) {
+  const stop = Date.now() + (knob.holdMaxMs ?? 120_000);
+  while (!fs.existsSync(knob.holdUntil) && Date.now() < stop) await new Promise((resolve) => setTimeout(resolve, 100));
+}
 process.exitCode = knob.exit ?? 0;

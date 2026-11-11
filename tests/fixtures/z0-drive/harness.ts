@@ -32,12 +32,13 @@ export interface Entry {
   claudeVersion: string | null; question: string | null; figure: number | null; stop: boolean | null; kind: string | null; failedStep: string | null; spent: string | null;
 }
 export interface Run { code: number | null; out: string; lines: string[]; last: string }
-export interface Started { child: ReturnType<typeof spawn>; done: Promise<Run> }
+/** `outFile` is where the call writes its output, for a test that waits on a line before the call ends. */
+export interface Started { child: ReturnType<typeof spawn>; done: Promise<Run>; outFile: string }
 export interface StubCall { cli: string; argv: string[] }
 /** One item of a stub CLI's list; the list is used one item per call and its last item stays. */
-export interface CliKnob { exit?: number; stdout?: string; stderr?: string; write?: Record<string, string>; make?: string[]; hangMs?: number }
+export interface CliKnob { exit?: number; stdout?: string; stderr?: string; write?: Record<string, string>; make?: string[]; hangMs?: number; holdUntil?: string; holdMaxMs?: number }
 /** A stub runner's knob, read by the stub `ab-run.mjs` from the name of its folder. */
-export interface Knob { fixture?: string; plan?: string; records?: number; printRecords?: boolean; exit?: number; startMs?: number; endMs?: number; hang?: boolean; launchExit?: number }
+export interface Knob { fixture?: string; plan?: string; records?: number; printRecords?: boolean; exit?: number; startMs?: number; endMs?: number; hang?: boolean; launchExit?: number; release?: string }
 /** One line of budget-log.jsonl: the admit lines carry the unit names and the verdict. */
 export interface BudgetLine { kind: string; step?: string; units?: string[]; admitted?: boolean; reason?: string | null; approved?: number; attempt?: number; ledgerBefore?: number; maxSeed?: number; cap?: number; capSpend?: number; projection?: number }
 export interface PilotJson { schema: string; attempt: number; tag: string; r: Record<string, number>; rArm: string; rMax: number; flag19: boolean; ledgerTotal: number; pilotSpend: number; checks: Record<string, string> }
@@ -224,7 +225,7 @@ export class DriveCase {
       const all = text === '' ? [] : text.split('\n');
       resolve({ code, out: text, lines: all, last: all.at(-1) ?? '' });
     }));
-    return { child, done };
+    return { child, done, outFile: out };
   }
   run(step: string, extra: string[] = [], o: Parameters<DriveCase['start']>[2] = {}) { return this.start(step, extra, o).done; }
 
