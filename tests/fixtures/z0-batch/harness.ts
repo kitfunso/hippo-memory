@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { ARM_TABLE, DESIGNS } from '../../../scripts/token-eval/arms.mjs';
 import { gitBash } from '../../../scripts/token-eval/homes.mjs';
+import { PILOT_CHECKS } from '../../../scripts/token-eval/z0-budget.mjs';
 import { BASIS, BATCH2_SEQ, MEAN, SEQ } from '../../_helpers/z0-r4-spend.js';
 import { PRICES_BY_MODEL, generate, planOf, type Z0Record } from '../z0-gen.js';
 import { replay } from './ab-run.mjs';
@@ -101,7 +102,7 @@ export class Case {
     put(`${this.base}/repos.json`, JSON.stringify(Object.fromEntries([...o.keys1, ...keys2].map((k, i) => [k, { toolchain: i % 2 === 0 ? 'node' : 'python' }]))));
     put(`${this.root}/pins-r4.json`, JSON.stringify({ ...PINS, batch1Keys: o.keys1.join(','), batch2Keys: keys2.join(','), wholeRunSeeds: '5', claudeVersion: '2.1.288' }));
     put(`${this.root}/spend-basis.json`, JSON.stringify({ schema: 'z0-spend-basis/1', basisByArm: BASIS, bySequence: { ...SEQ, ...BATCH2_SEQ }, meanPerRecord: MEAN }));
-    put(`${this.root}/pilot.json`, JSON.stringify({ schema: 'z0-pilot/1', attempt: 1, tag: 'z0-r4-freeze-1', r: { S1: 1, S2: 1 }, rArm: 'S2', rMax: 1, flag19: false, ledgerTotal: 40, pilotSpend: 36.5, checks: {} }));
+    put(`${this.root}/pilot.json`, JSON.stringify({ schema: 'z0-pilot/1', attempt: 1, tag: 'z0-r4-freeze-1', r: { S1: 1, S2: 1 }, rArm: 'S2', rMax: 1, flag19: false, ledgerTotal: 40, pilotSpend: 36.5, checks: Object.fromEntries(PILOT_CHECKS.map((id) => [id, 'pass'])) }));
     put(`${this.root}/prices.json`, JSON.stringify(PRICES_BY_MODEL));
     // A dry root: the only kind that may set Z0_REPOS_FILE.
     put(`${this.root}/DRYRUN`, '');
