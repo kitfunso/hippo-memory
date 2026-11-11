@@ -1,6 +1,7 @@
 // Z0 prereg 179: the hand-labelled stored sample that checks the key-phrase judgement of `chain.stored`, with agreement and kappa.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { readSealed, writeFileAtomic } from './atomic-write.mjs';
 import { holds } from './leaks.mjs';
 import { cellKey, isBool, isInvalid, isLeak, parseZ0Records } from './z0-records.mjs';
 import { listGrades } from './regrade.mjs';
@@ -14,10 +15,7 @@ const YES_NO = ['yes', 'no'];
 const keyFile = (out) => path.join(out, 'g5', 'sealed', 'stored.key.json');
 const scoreFile = (out) => path.join(out, 'g5', 'sealed', 'stored.score.json');
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
-const writeJson = (file, value) => {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
-};
+const writeJson = (file, value) => writeFileAtomic(file, `${JSON.stringify(value, null, 2)}\n`);
 
 /** Best-effort blinding: headers become `=== part N`, config parts go, `hippo` becomes `[tool]`, run paths become `<run>`. */
 export function blindSurfaces(text, redact) {
@@ -55,7 +53,7 @@ const unitText = (u) => [
 /** Draw the stored sample: n/2 judged yes and n/2 judged no, a shortfall moved to the other, each in seeded order. */
 export function drawStored(out, { tasksFile, runsFile, seed, n = 30, aliases = [] }) {
   if (fs.existsSync(keyFile(out))) {
-    const key = readJson(keyFile(out));
+    const key = readSealed(keyFile(out));
     if (key.seed !== seed || key.n !== n) throw new Error(`the stored sample was drawn with --seed ${key.seed} --n ${key.n}; it is drawn once`);
     return `stored sample: already drawn, ${key.units.length} units in ${path.join(out, 'g5', 'stored')}\n`;
   }
@@ -85,11 +83,11 @@ export function drawStored(out, { tasksFile, runsFile, seed, n = 30, aliases = [
 /** Score the labels: agreement with its Wilson interval, kappa and the 2x2 table; per-stratum agreement stays under sealed/. */
 export function scoreStored(out, labelsFile) {
   if (!fs.existsSync(keyFile(out))) throw new Error('the stored sample is not drawn');
-  const key = readJson(keyFile(out));
+  const key = readSealed(keyFile(out));
   const labels = parseLabels(fs.readFileSync(labelsFile, 'utf8'), key.units.map((u) => u.file), YES_NO);
   if (fs.existsSync(scoreFile(out))) {
     // A scored sample is final: new labels after seeing the score would be a reroll of the reported agreement.
-    const old = readJson(scoreFile(out));
+    const old = readSealed(scoreFile(out));
     if (key.units.some((u) => old.labels[u.file] !== labels.get(u.file))) throw new Error('the stored sample is already scored with other labels; a scored sample is final');
     return `stored sample: ${old.agree} of ${old.n} labels agree with the key-phrase judgement\n`;
   }

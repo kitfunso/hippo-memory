@@ -1,6 +1,7 @@
 // Z0 G5 (prereg 166): the arm-blind reader sample of (diff, verdict) pairs, drawn in rounds, labelled by hand, then scored.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { readSealed, writeFileAtomic } from './atomic-write.mjs';
 import { git } from './exec.mjs';
 import { agentGit } from './checks.mjs';
 import { readerDiff } from './grading.mjs';
@@ -14,10 +15,7 @@ const sealed = (out, name) => path.join(out, 'g5', 'sealed', name);
 const keyFile = (out, k) => sealed(out, `reader-r${k}.key.json`);
 const scoreFile = (out, k) => sealed(out, `reader-r${k}.score.json`);
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
-const writeJson = (file, value) => {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
-};
+const writeJson = (file, value) => writeFileAtomic(file, `${JSON.stringify(value, null, 2)}\n`);
 export const fileIds = (prefix, count) => Array.from({ length: count }, (_, i) => `${prefix}${String(i + 1).padStart(Math.max(2, String(count).length), '0')}`);
 
 /** The task prompts and lesson rules a reader needs, read from the tasks file the run used (validated by the run). */
@@ -160,7 +158,7 @@ export function assertCheckersJudged(out, pairs, whose = 'the current') {
 }
 
 function existingDraw(out, round, args) {
-  const key = readJson(keyFile(out, round));
+  const key = readSealed(keyFile(out, round));
   if (key.seed !== args.seed || key.n !== args.n) throw new Error(`reader round ${round} was drawn with --seed ${key.seed} --n ${key.n}; draw a new round instead of redrawing this one`);
   return `reader round ${round}: already drawn, ${key.pairs.length} pairs in ${path.join(out, 'g5', `reader-r${round}`)}\n`;
 }
@@ -202,11 +200,11 @@ export function drawReader(out, { tasksFile, seed, n = 30, round = 1, flipErrors
 /** Score round K: a disagreement is a label that differs from the round's verdict; counts per stratum stay under sealed/. */
 export function scoreReader(out, round, labelsFile) {
   if (!fs.existsSync(keyFile(out, round))) throw new Error(`reader round ${round} is not drawn`);
-  const key = readJson(keyFile(out, round));
+  const key = readSealed(keyFile(out, round));
   const labels = parseLabels(fs.readFileSync(labelsFile, 'utf8'), key.pairs.map((p) => p.file), VERDICTS);
   if (fs.existsSync(scoreFile(out, round))) {
     // A scored round is final: new labels after seeing the score would be a reroll of G5.
-    const old = readJson(scoreFile(out, round));
+    const old = readSealed(scoreFile(out, round));
     if (key.pairs.some((p) => old.labels[p.file] !== labels.get(p.file))) throw new Error(`reader round ${round} is already scored with other labels; a scored round is final`);
     return `reader round ${round}: ${old.disagreements} of ${old.n} labels disagree\n`;
   }
