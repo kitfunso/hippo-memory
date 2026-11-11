@@ -177,6 +177,12 @@ export const planOf = (records: readonly Z0Record[]): PlanCell[] => records.map(
   sequence: r.sequence, seed: r.seed, position: r.position, arm: r.arm, set: r.set, kind: r.kind, familyId: r.familyId, taskId: r.taskId, repo: r.repo,
 }));
 
+/** `n` whole-plan files for a design, one repository each: `whole-1.json` holds repo1's plan cells, `whole-2.json` repo2's, and so on. */
+export const wholePlanFiles = (design: Design, n: number): Record<string, string> => {
+  const all = planOf(generate({ design, repos: n }).records);
+  return Object.fromEntries(Array.from({ length: n }, (_, i) => [`whole-${i + 1}.json`, JSON.stringify(all.filter((c) => c.repo === `repo${i + 1}`))]));
+};
+
 export const jsonl = (records: readonly Z0Record[]): string => records.map((r) => JSON.stringify(r)).join('\n');
 
 export const GRADING = { flippedLessons: [], acceptanceFlips: 0, readerSample: { n: 30, disagreements: 0 } };

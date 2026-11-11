@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterAll } from 'vitest';
 import { DESIGNS, OPUS_MODEL } from '../scripts/token-eval/arms.mjs';
 import { analyzeZ0, loadInputs, parseArgs as parseAnalyze, runCli as analyzeCli } from '../scripts/token-eval/z0-analyze.mjs';
 import * as blind from '../scripts/token-eval/z0-blind.mjs';
@@ -20,8 +20,13 @@ vi.setConfig({ testTimeout: 180_000 });
 
 const parse = (recs: readonly Z0Record[]) => parseZ0Records(jsonl(recs), 'runs.jsonl').records;
 const STAT = { iterations: 200, seed: 1 };
+const made: string[] = [];
+afterAll(() => {
+  for (const dir of made) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+});
 const dirWith = (files: Record<string, string>) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-r4-read-'));
+  made.push(dir);
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text);
   return dir;
 };

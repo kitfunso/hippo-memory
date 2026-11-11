@@ -3,27 +3,32 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterAll } from 'vitest';
 import { DESIGNS } from '../scripts/token-eval/arms.mjs';
 import { analyzeZ0, buildReport, loadInputs, parseArgs as parseAnalyze, renderText } from '../scripts/token-eval/z0-analyze.mjs';
 import { BLOCK_SCHEMA, testLines } from '../scripts/token-eval/z0-batch1-block.mjs';
 import { filterOpts, filteredInput } from '../scripts/token-eval/z0-filters.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { runCli as sizeCli } from '../scripts/token-eval/z0-size.mjs';
-import { GRADING, PRICES_BY_MODEL, crash, generate, jsonl, planOf, type Z0Record } from './fixtures/z0-gen.js';
+import { GRADING, PRICES_BY_MODEL, crash, generate, jsonl, planOf, wholePlanFiles, type Z0Record } from './fixtures/z0-gen.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
 const ARM_WORD = /\b(O1|S0|S1|S2|S4|S5)\b/;
 const sha = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const posix = (p: string) => p.replace(/\\/g, '/');
-const one = planOf(generate({ design: DESIGNS.r4, repos: 1 }).records);
+const WHOLE_FILES = wholePlanFiles(DESIGNS.r4, 8);
+const made: string[] = [];
+afterAll(() => {
+  for (const dir of made) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+});
 
 interface Batch { records: Z0Record[]; plan?: Z0Record[]; voids?: { sequence: string; seed: number; position: number }[]; whole?: number }
 
 /** A batch folder: runs, plan, off-pin, grading, drop list, prices, the whole-plan files, and a read-set file naming the first three. */
 function folder({ records, plan = records, voids = [], whole = 8 }: Batch) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-r4-block-'));
+  made.push(dir);
   const put = (name: string, text: string) => fs.writeFileSync(path.join(dir, name), text);
   put('runs.jsonl', jsonl(records));
   put('plan.json', JSON.stringify(planOf(plan)));
@@ -32,7 +37,7 @@ function folder({ records, plan = records, voids = [], whole = 8 }: Batch) {
   put('grading.json', JSON.stringify(GRADING));
   put('drop-list.json', JSON.stringify({ droppedLessons: [], droppedFamilies: [], hookVoids: [] }));
   put('prices.json', JSON.stringify(PRICES_BY_MODEL));
-  for (let i = 1; i <= whole; i++) put(`whole-${i}.json`, JSON.stringify(one));
+  for (let i = 1; i <= whole; i++) put(`whole-${i}.json`, WHOLE_FILES[`whole-${i}.json`]!);
   put('read-set.txt', `--runs ${posix(path.join(dir, 'runs.jsonl'))} --plan ${posix(path.join(dir, 'plan.json'))} --off-pin ${posix(path.join(dir, 'off-pin.json'))}\n`);
   return dir;
 }
@@ -74,6 +79,12 @@ describe('the batch 1 block on a clean synthetic batch', () => {
     for (const t of ['T1', 'T3', 'T2a', 'T2b', 'T2c', 'H4']) expect(run.stdout, t).toMatch(new RegExp(`^${t}: .*family [\\d.]+ \\(upper [\\d.]+\\), seed [\\d.]+ \\(upper [\\d.]+\\), residual [\\d.]+ \\(upper [\\d.]+\\); missing [\\d.]+% of planned cells`, 'm'));
     for (const t of ['T1', 'T3', 'T2c']) expect(run.stdout, t).toMatch(new RegExp(`^${t}: .*not applicable [\\d.]+; \\d+ of \\d+ family units`, 'm'));
     for (const t of ['T2a', 'T2b', 'H4']) expect(run.stdout, t).not.toMatch(new RegExp(`^${t}: .*not applicable`, 'm'));
+  });
+
+  it('prints both codings\' parts for T1, T3 and part (c), and one set of parts for the rest', () => {
+    const parts = String.raw`family [\d.]+ \(upper [\d.]+\), seed [\d.]+ \(upper [\d.]+\), residual [\d.]+ \(upper [\d.]+\)`;
+    for (const t of ['T1', 'T3', 'T2c']) expect(run.stdout, t).toMatch(new RegExp(`^${t}: violation ${parts}; excluded ${parts}; missing [\\d.]+% of planned cells; not applicable`, 'm'));
+    for (const t of ['T2a', 'T2b', 'H4']) expect(run.stdout, t).toMatch(new RegExp(`^${t}: ${parts}; missing`, 'm'));
   });
 
   it('prints the same K codes on a second run, since --key is reused', () => {
@@ -177,6 +188,22 @@ describe('the batch 1 block stops', () => {
     const run = sizeCli(argvOf(), folder({ records, plan }));
     expect([run.code, run.stdout]).toEqual([1, '']);
     expect(run.stderr).toMatch(/abandoned/);
+  });
+
+  it('removes an earlier attempt\'s block.json before it reads, so an exit 1 leaves none', () => {
+    const plan = clean();
+    const records = plan.filter((r) => !(r.sequence === 'rn-repo1' && r.seed === 1 && r.arm === 'S1' && r.position >= 10));
+    const stale = JSON.stringify({ schema: BLOCK_SCHEMA, stops: [] });
+    const abandoned = folder({ records, plan });
+    fs.writeFileSync(path.join(abandoned, 'block.json'), stale);
+    const [run, noWhole] = [sizeCli(argvOf(), abandoned), sizeCli(argvOf(0), abandoned)];
+    expect([run.code, noWhole.code]).toEqual([1, 1]);
+    expect(run.stderr).toMatch(/abandoned/);
+    expect(fs.existsSync(path.join(abandoned, 'block.json'))).toBe(false);
+    const missing = folder({ records: clean() });
+    fs.writeFileSync(path.join(missing, 'block.json'), stale);
+    expect(sizeCli(argvOf(0), missing).code).toBe(1);
+    expect(fs.existsSync(path.join(missing, 'block.json'))).toBe(false);
   });
 
   it('exits 1, naming the flag, when --key or --out is missing', () => {

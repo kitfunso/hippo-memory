@@ -4,18 +4,18 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterAll } from 'vitest';
 import { seededRandom } from '../dist/eval/eval-stats.js';
 import { ARM_TABLE, DESIGNS } from '../scripts/token-eval/arms.mjs';
 import { sourceRows } from '../scripts/token-eval/z0-blind.mjs';
 import { filterOpts } from '../scripts/token-eval/z0-filters.mjs';
 import { LEVELS_SCHEMA, SEED_PREVIEW_SCHEMA, parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { runCli as seedRuleCli, seedRule } from '../scripts/token-eval/z0-seed-rule.mjs';
-import { R4_SEED, levelCheckR4, powerStop, prepareR4, testSeeds } from '../scripts/token-eval/z0-size-r4.mjs';
+import { R4_SEED, figureOf, headCommit, levelCheckR4, levelOf, powerStop, prepareR4, testSeeds } from '../scripts/token-eval/z0-size-r4.mjs';
 import { binaryRun, levelCells, predictedSe, repeatRun, seedsNeeded } from '../scripts/token-eval/z0-size-sim.mjs';
 import { runCli as sizeCli } from '../scripts/token-eval/z0-size.mjs';
 import { THRESHOLDS, minLevels } from '../scripts/token-eval/z0-verdict-r4.mjs';
-import { PRICES, PRICES_BY_MODEL, generate, jsonl, planOf, type Z0Record } from './fixtures/z0-gen.js';
+import { PRICES, PRICES_BY_MODEL, generate, jsonl, wholePlanFiles, type Z0Record } from './fixtures/z0-gen.js';
 
 // Each `it` runs 20 to 50 draws per case; a shared runner can be slow, so the limit is a minute.
 vi.setConfig({ testTimeout: 60_000 });
@@ -23,8 +23,17 @@ vi.setConfig({ testTimeout: 60_000 });
 type Unit = { repo: string; family: string; seed: number; value: number };
 const R3_ARMS = [...DESIGNS['r4-on-r3'].arms];
 const parse = (recs: readonly Z0Record[]) => parseZ0Records(jsonl(recs), 'runs.jsonl').records;
+const made: string[] = [];
+afterAll(() => {
+  for (const dir of made) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+});
+const tmp = (prefix: string) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  made.push(dir);
+  return dir;
+};
 const dirWith = (files: Record<string, string>) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-r4-size-'));
+  const dir = tmp('z0-r4-size-');
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text);
   return dir;
 };
@@ -70,10 +79,13 @@ describe('the round 4 sizer on a generated round 3 batch', () => {
   const DESIGN = DESIGNS['r4-on-r3'];
   const g = generate({ arms: R3_ARMS });
   const prepared = () => prepareR4(parse(g.records), g.plan, PRICES_BY_MODEL, { ...filterOpts({ design: DESIGN }), spreadBound: 0.8 });
-  const planted = (bad: (test: string, setting: string, sims: number) => number[] | null, calls: { test: string; sims: number; cases?: string[]; label?: string }[] = []) => (spec: any) => {
+  const planted = (
+    bad: (test: string, setting: string, sims: number) => number[] | null, calls: { test: string; sims: number; cases?: string[]; label?: string }[] = [],
+    noEstimate: (test: string, setting: string, sims: number) => number = () => 0,
+  ) => (spec: any) => {
     calls.push({ test: spec.test, sims: spec.sims, cases: spec.cases, label: spec.label });
     // The real case names, from a 2-draw run, with the planted p values in place of the draws.
-    return levelCells({ ...spec, sims: 2 }).map((c: { setting: string }) => ({ setting: c.setting, ps: bad(spec.test, c.setting, spec.sims) ?? Array.from({ length: spec.sims }, () => 1), noEstimate: 0 }));
+    return levelCells({ ...spec, sims: 2 }).map((c: { setting: string }) => ({ setting: c.setting, ps: bad(spec.test, c.setting, spec.sims) ?? Array.from({ length: spec.sims }, () => 1), noEstimate: noEstimate(spec.test, c.setting, spec.sims) }));
   };
   const OPTS = { levelSims: 20, source: 'pre-freeze', commit: null, inputs: [] };
 
@@ -145,6 +157,44 @@ describe('the round 4 sizer on a generated round 3 batch', () => {
     expect([file.floorFlags, code, calls.filter((c) => c.test === 'T1').length]).toEqual([[], 0, 1]);
   });
 
+  it('reads every threshold of a test from the cells its last floor rerun left, so a later rerun moves an earlier level', () => {
+    // T3 at 20 draws: A has 2 p values at 0.001 (under the 0.025 floor), B has 2 at 0.03 (under the 0.05 floor only). B's 100-draw rerun has 3 at 0.01, under the 0.025 floor.
+    const bad = (test: string, setting: string, sims: number) => {
+      if (test !== 'T3') return null;
+      if (setting === 'rule at point (violation)') return Array.from({ length: sims }, (_, i) => (sims === 20 && i < 2 ? 0.001 : 1));
+      if (setting === 'rule at upper (violation)') return Array.from({ length: sims }, (_, i) => (i < (sims === 20 ? 2 : 3) ? (sims === 20 ? 0.03 : 0.01) : 1));
+      return null;
+    };
+    const { file, code } = levelCheckR4(prepared(), OPTS, planted(bad));
+    const entry = file.levels.T3['0.025'];
+    expect([entry.level, entry.setBy]).toEqual([0.01, 'rule at upper (violation)']);
+    expect(file.levels.T3['0.05'].level).toBe(0.05);
+    expect(file.floorFlags).toEqual([{ test: 'T3', threshold: '0.025', level: 0.01, setBy: 'rule at upper (violation)', draws: 100 }]);
+    expect(code).toBe(3);
+  });
+
+  it('checks every test\'s spec before the first draw, so a bad T2b calibration spends no draw', () => {
+    const p = prepared();
+    p.tests.T2b.cal.sim.excluded.noise = Number.NaN;
+    const calls: { test: string; sims: number }[] = [];
+    expect(() => levelCheckR4(p, OPTS, planted(() => null, calls))).toThrow(/^levelCells T2b: spec\.calPoint needs a calibration under both coding keys/);
+    expect(calls).toEqual([]);
+  });
+
+  it('prints the draw count of the cell with the most no-estimate draws, which a floor rerun makes 5 times the rest', () => {
+    const bad = (test: string, _setting: string, sims: number) => (test === 'T1' ? Array.from({ length: sims }, (_, i) => (i < 0.1 * sims ? 0.002 : 1)) : null);
+    const noEstimate = (test: string, setting: string) => (test === 'T1' && setting === 'rule at point (violation)' ? 3 : 0);
+    const { lines } = levelCheckR4(prepared(), OPTS, planted(bad, [], noEstimate));
+    expect(lineOf(lines.join('\n'), /^T1 0\.05:/)).toMatch(/most no-estimate draws in a cell 3 of 100$/);
+    expect(lineOf(lines.join('\n'), /^T3 0\.025:/)).toMatch(/most no-estimate draws in a cell 0 of 20$/);
+  });
+
+  it('prints why no commit was recorded', () => {
+    const [bare, dirty] = [{ ...OPTS }, { ...OPTS, commitWhy: 'scripts/token-eval has uncommitted changes' }];
+    expect(levelCheckR4(prepared(), bare, planted(() => null)).lines[0]).toBe('commit not recorded: git rev-parse HEAD failed');
+    expect(levelCheckR4(prepared(), dirty, planted(() => null)).lines[0]).toBe('commit not recorded: scripts/token-eval has uncommitted changes');
+  });
+
   it('prints each pre-freeze level, the new one and the lower, for a pre-freeze file read with --pre-levels', () => {
     const pre = levelCheckR4(prepared(), OPTS, planted(() => null)).file;
     const low = { ...pre, levels: { ...pre.levels, T1: { '0.05': { ...pre.levels.T1['0.05'], level: 0.03 } } } };
@@ -156,7 +206,7 @@ describe('the round 4 sizer on a generated round 3 batch', () => {
 describe('--check-levels in a scratch copy of the harness', () => {
   const REPO = path.resolve(__dirname, '..');
   const scratch = () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-r4-levels-'));
+    const root = tmp('z0-r4-levels-');
     for (const dir of ['scripts/token-eval', 'scripts/lib']) fs.cpSync(path.join(REPO, dir), path.join(root, dir), { recursive: true });
     fs.copyFileSync(path.join(REPO, 'scripts/z7-sidechain-lib.mjs'), path.join(root, 'scripts/z7-sidechain-lib.mjs'));
     fs.mkdirSync(path.join(root, 'dist/eval'), { recursive: true });
@@ -283,6 +333,18 @@ describe('seedRule on generated batches', () => {
     expect(Object.keys(got.seeds).sort()).toEqual([...ruleArms].sort());
   });
 
+  it('scores a test that left the rule at the count it will run, not with the rule in the loop', () => {
+    const design = DESIGNS['r4-on-r3'];
+    const g = generate({ arms: R3_ARMS, knobs: { A2: { fail: 0.5 }, A1: { fail: 0.5 } } });
+    const opts = { ...SETTINGS, sims: 200, design, costRatio: 1.5 };
+    const got = seedRule(parse(g.records), g.plan, PRICES_BY_MODEL, opts);
+    const p = prepareR4(parse(g.records), g.plan, PRICES_BY_MODEL, { ...opts, spreadBound: opts.bound, noLayout: true });
+    expect([got.perTest.T3.branch, got.perTest.T3.seeds]).toEqual(['cap', 9]);
+    const at = (seeds?: number) => figureOf(p.tests.T3, 'T3', { sims: 200, level: levelOf(null, 'T3'), read: 'seed rule', effect: -0.15, exact: false, seeds }).joint;
+    expect(at(undefined)).not.toBe(at(9));
+    expect(got.perTest.T3.power).toBe(at(9));
+  });
+
   it('refuses a stop on a miss under round 4, where a miss runs at the cap', () => {
     const g = generate({ arms: R3_ARMS });
     expect(() => seedRule(parse(g.records), g.plan, PRICES_BY_MODEL, { ...SETTINGS, onMiss: 'stop', design: DESIGNS['r4-on-r3'] })).toThrow(/a miss runs at the cap \(prereg item 10\)/);
@@ -300,11 +362,8 @@ describe('seedRule on generated batches', () => {
 
 describe('a whole plan', () => {
   const batch = generate({ design: DESIGNS.r4, repos: 10 });
-  const one = planOf(generate({ design: DESIGNS.r4, repos: 1 }).records);
-  const files = {
-    'runs.jsonl': jsonl(batch.records), 'plan.json': JSON.stringify(batch.plan), 'prices.json': JSON.stringify(PRICES_BY_MODEL),
-    ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`whole-${i + 1}.json`, JSON.stringify(one)])),
-  };
+  const whole = wholePlanFiles(DESIGNS.r4, 8);
+  const files = { 'runs.jsonl': jsonl(batch.records), 'plan.json': JSON.stringify(batch.plan), 'prices.json': JSON.stringify(PRICES_BY_MODEL), ...whole };
   const dir = dirWith(files);
   const WHOLE = Array.from({ length: 8 }, (_, i) => ['--whole-plan', `whole-${i + 1}.json`]).flat();
   const BASE = ['--design', 'r4', '--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--sims', '20', '--level-sims', '20'];
@@ -343,10 +402,16 @@ describe('a whole plan', () => {
   });
 
   it('stops on a whole-plan file that holds two repositories, naming the file', () => {
-    const two = JSON.stringify([...one, ...planOf(generate({ design: DESIGNS.r4, repos: 2 }).records).filter((c) => c.repo === 'repo2')]);
+    const two = JSON.stringify([...JSON.parse(whole['whole-1.json']!), ...JSON.parse(whole['whole-2.json']!)]);
     const bad = dirWith({ ...files, 'whole-3.json': two });
     const run = sizeCli([...BASE, ...WHOLE, '--seed-rule-preview', '--out', 'p.json'], bad);
     expect([run.code, run.stderr]).toEqual([1, '--whole-plan whole-3.json: holds 2 repositories, and a file is one repository\n']);
+  });
+
+  it('stops on two whole-plan files that name one repository, naming both files', () => {
+    const twice = dirWith({ ...files, 'whole-5.json': whole['whole-2.json']! });
+    const run = sizeCli([...BASE, ...WHOLE, '--seed-rule-preview', '--out', 'p.json'], twice);
+    expect([run.code, run.stderr]).toEqual([1, '--whole-plan whole-5.json: repository repo2 is also in whole-2.json, and a repository is one file\n']);
   });
 });
 
@@ -372,7 +437,6 @@ describe('the power read', () => {
   });
 
   const batch = generate({ design: DESIGNS.r4, repos: 10 });
-  const one = planOf(generate({ design: DESIGNS.r4, repos: 1 }).records);
   const levelsOf = (source: string) => {
     const g = generate({ arms: R3_ARMS });
     const prepared = prepareR4(parse(g.records), g.plan, PRICES_BY_MODEL, { ...filterOpts({ design: DESIGNS['r4-on-r3'] }), spreadBound: 0.8 });
@@ -382,7 +446,7 @@ describe('the power read', () => {
   const files = {
     'runs.jsonl': jsonl(batch.records), 'plan.json': JSON.stringify(batch.plan), 'prices.json': JSON.stringify(PRICES_BY_MODEL),
     'pre.json': JSON.stringify(levelsOf('pre-freeze')), 'b1.json': JSON.stringify(levelsOf('batch-1')),
-    ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`whole-${i + 1}.json`, JSON.stringify(one)])),
+    ...wholePlanFiles(DESIGNS.r4, 8),
   };
   const dir = dirWith(files);
   const WHOLE = Array.from({ length: 8 }, (_, i) => ['--whole-plan', `whole-${i + 1}.json`]).flat();
@@ -419,6 +483,39 @@ describe('the power read', () => {
       const settings = JSON.parse(fs.readFileSync(path.join(dir, `power-${r}.json`), 'utf8')).settings;
       expect(settings.costRatio).toBe(Number(r));
       expect(Math.abs(settings.partAEffect - effect)).toBeLessThan(1e-12);
+    }
+  });
+
+  const ERR = String.raw`\(\+/- \d\.\d{3}\)`;
+
+  it('prints a simulation error beside each per-coding share, P(one) + P(other) - 1 and both bounds', () => {
+    const run = sizeCli([...POWER, '--cost-ratio', '1', '--out', 'err.json'], dir);
+    expect([0, 3, 4], run.stderr).toContain(run.code);
+    for (const t of ['T1', 'T3']) {
+      const shares = String.raw`: violation \d\.\d{3} ${ERR}, excluded \d\.\d{3} ${ERR}, both \d\.\d{3} ${ERR}, P\(one\) \+ P\(other\) - 1 -?\d\.\d{3} ${ERR}; figure`;
+      expect(lineOf(run.stdout, new RegExp(`^${t} power`)), t).toMatch(new RegExp(shares));
+    }
+    expect(run.stdout).toMatch(new RegExp(String.raw`^bound T1 \+ T2a \+ T2b \+ T2c - 3: -?\d\.\d{3} ${ERR}$`, 'm'));
+    expect(run.stdout).toMatch(new RegExp(String.raw`^bound T1 \+ T3 - 1: -?\d\.\d{3} ${ERR}$`, 'm'));
+    const { figs, bounds } = JSON.parse(fs.readFileSync(path.join(dir, 'err.json'), 'utf8')).power;
+    const quadrature = (...parts: { simError: number }[]) => Math.sqrt(parts.reduce((s, f) => s + f.simError ** 2, 0));
+    expect(bounds.twoError).toBeCloseTo(quadrature(figs.T1, figs.T3), 12);
+    expect(bounds.fourError).toBeCloseTo(quadrature(figs.T1, figs.T2a, figs.T2b, figs.T2c), 12);
+  });
+
+  it('takes the error of P(one) + P(other) - 1 from its own per-draw indicator, twice a binomial error when the codings always agree', () => {
+    const cal = { scale: 1, loss: 0, family: 0.01, sequence: 0.005, noise: 0.2 };
+    const reading = { cal: { sim: { violation: cal, excluded: cal } }, layout: Array.from({ length: 6 }, (_, i) => ({ repo: `r${i}`, k: 4 })), codings: ['violation', 'excluded'], score: 'repeat' };
+    const f = figureOf(reading, 'T1', { sims: 400, level: 0.05, read: 'x', effect: -0.1, exact: false, seeds: 3 });
+    expect([f.perCoding.violation, f.perCoding.excluded]).toEqual([0.325, 0.325]);
+    expect(f.frechetError).toBeCloseTo(2 * f.perCodingError.violation!, 12);
+    expect(f.frechetError).not.toBeCloseTo(Math.SQRT2 * f.perCodingError.violation!, 3);
+  });
+
+  it('names the levels count for --level-check and --seed-rule-preview given one --levels file under r4, before any read', () => {
+    for (const mode of ['--level-check', '--seed-rule-preview']) {
+      const run = sizeCli([...HEAD.slice(0, -1), mode, '--out', 'o.json', '--levels', 'pre.json'], dir);
+      expect([mode, run.code, run.stderr], mode).toEqual([mode, 1, '--levels: round 4 reads two levels files, the pre-freeze one and the batch-1 one (prereg Level check); got 1\n']);
     }
   });
 
@@ -480,6 +577,19 @@ describe('round 3 and the round 4 flags', () => {
     expect([seed.code, seed.stderr]).toEqual([1, 'round 4 draws use seed 20261110 (prereg item 10)\n']);
   });
 
+  it('refuses the round 3 seed settings under round 4, naming the flag, in the sizer and in the seed rule', () => {
+    const named = (flag: string) => `${flag}: round 3 only; round 4 sizes its seeds by the fixed rules of prereg item 10\n`;
+    for (const [flag, value] of [['--seed-cap', '5'], ['--target-z', '3']] as const) {
+      const run = sizeCli([...base, '--design', 'r4-on-r3', flag, value], dir);
+      expect([flag, run.code, run.stderr]).toEqual([flag, 1, named(flag)]);
+    }
+    for (const [flag, value] of [['--cap', '5'], ['--target-z', '3'], ['--minimum-effect', '0.2']] as const) {
+      const run = seedRuleCli([...base, '--design', 'r4-on-r3', flag, value], dir);
+      expect([flag, run.code, run.stderr]).toEqual([flag, 1, named(flag)]);
+    }
+    expect(seedRuleCli([...base, '--cap', '5', '--target-z', '3', '--minimum-effect', '0.2'], dir).code).toBe(0);
+  });
+
   it('allows one mode at a time', () => {
     const run = sizeCli([...base, '--design', 'r4-on-r3', '--power', '--level-check'], dir);
     expect([run.code, run.stderr]).toEqual([1, 'one mode at a time: --power, --level-check\n']);
@@ -495,5 +605,40 @@ describe('round 3 and the round 4 flags', () => {
     expect(run.stdout).not.toMatch(/^H[12] /m);
     expect(lineOf(run.stdout, /^T2a /)).toContain('power n/a: needs --cost-ratio');
     expect(lineOf(run.stdout, /^T2aMiss /)).toMatch(/^T2aMiss .*at 3 seeds [\d.]+.*at 9 seeds [\d.]+.*bar [\d.]+.*seeds \d \((rule|miss)\)/);
+  });
+
+  it('prints a simulation error beside the sizer\'s power and its bounds', () => {
+    const g3 = generate({ arms: R3_ARMS });
+    const d = dirWith({ 'runs.jsonl': jsonl(g3.records), 'plan.json': JSON.stringify(g3.plan), 'prices.json': JSON.stringify(PRICES_BY_MODEL) });
+    const run = sizeCli(['--design', 'r4-on-r3', '--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--sims', '20', '--cost-ratio', '1'], d);
+    expect([run.code, run.stderr]).toEqual([0, '']);
+    const err = String.raw`\(\+/- \d\.\d{3}\)`;
+    for (const t of ['T1', 'T2a', 'T2b', 'T2c', 'T3', 'H4']) expect(lineOf(run.stdout, new RegExp(`^${t} `)), t).toMatch(new RegExp(String.raw`; power \d\.\d{3} ${err}$`));
+    expect(run.stdout).toMatch(new RegExp(String.raw`^bound T1 \+ T2a \+ T2b \+ T2c - 3: -?\d\.\d{3} ${err}$`, 'm'));
+    expect(run.stdout).toMatch(new RegExp(String.raw`^bound T1 \+ T3 - 1: -?\d\.\d{3} ${err}$`, 'm'));
+  });
+});
+
+describe('the commit a levels file records', () => {
+  const git = (cwd: string, ...argv: string[]) => spawnSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...argv], { cwd, encoding: 'utf8' });
+
+  it('is null, with the reason, when the folder holds an uncommitted change or git has no repository', () => {
+    const root = tmp('z0-r4-head-');
+    const sub = path.join(root, 'scripts', 'token-eval');
+    fs.mkdirSync(sub, { recursive: true });
+    fs.writeFileSync(path.join(sub, 'a.mjs'), 'export const a = 1;\n');
+    expect(headCommit(root)).toEqual({ commit: null, why: 'git rev-parse HEAD failed' });
+    git(root, 'init');
+    git(root, 'add', '.');
+    git(root, 'commit', '-m', 'one');
+    const head = git(root, 'rev-parse', 'HEAD').stdout.trim();
+    expect(headCommit(sub)).toEqual({ commit: head, why: null });
+    fs.writeFileSync(path.join(root, 'elsewhere.txt'), 'x\n');
+    expect(headCommit(sub)).toEqual({ commit: head, why: null });
+    fs.writeFileSync(path.join(sub, 'a.mjs'), 'export const a = 2;\n');
+    expect(headCommit(sub)).toEqual({ commit: null, why: 'scripts/token-eval has uncommitted changes' });
+    fs.writeFileSync(path.join(sub, 'a.mjs'), 'export const a = 1;\n');
+    fs.writeFileSync(path.join(sub, 'new.mjs'), 'export const b = 1;\n');
+    expect(headCommit(sub)).toEqual({ commit: null, why: 'scripts/token-eval has uncommitted changes' });
   });
 });

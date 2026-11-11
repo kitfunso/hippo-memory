@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { seededRandom } from '../../dist/eval/eval-stats.js';
-import { ARM_TABLE, DESIGNS, designName, hasPair, isRound4Design, pairOf } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, designName, hasPair, isRound4Design as isRealR4, pairOf } from './arms.mjs';
 import { sourceRows } from './z0-blind.mjs';
 import { cellValues, costCells, partBValues } from './z0-cost-solved.mjs';
 import { filterOpts, filteredInput, withoutRuns } from './z0-filters.mjs';
@@ -109,9 +109,9 @@ export function harmSeeds(filtered, prices, opts) {
   return null;
 }
 
-/** A design with a T1 is a round 4 design (`r4` or `r4-on-r3`); `isRound4Design` is true for the real `r4` alone.
+/** A design that names a T1 is a round 4 design (`r4` or `r4-on-r3`); `isRealR4` (arms.mjs's `isRound4Design`) is true for the real `r4` alone.
  * @param {any} design */
-export const isRoundFour = (design) => hasPair(design, 'T1');
+export const namesT1 = (design) => hasPair(design, 'T1');
 
 /* ------------------------------------------------------------------------------------------------------ seed rules */
 
@@ -189,10 +189,14 @@ export const repoCount = (planCells) => new Set(planCells.map(repoOf)).size;
 
 /** The whole-plan files, each one repository's plan cells. @param {string[]} files @param {string} cwd @returns {{file: string, cells: any[]}[]} */
 export function readWholePlans(files, cwd) {
+  const seen = new Map();
   return files.map((file) => {
     const cells = parsePlan(fs.readFileSync(path.resolve(cwd, file), 'utf8'), file);
     const n = repoCount(cells);
     if (n !== 1) throw new Error(`--whole-plan ${file}: holds ${n} repositories, and a file is one repository`);
+    const repo = repoOf(cells[0]);
+    if (seen.has(repo)) throw new Error(`--whole-plan ${file}: repository ${repo} is also in ${seen.get(repo)}, and a repository is one file`);
+    seen.set(repo, file);
     return { file, cells };
   });
 }
@@ -260,10 +264,10 @@ export function prepareR4(records, planCells, prices, opts) {
   // Round 4 sizes set N at the whole plan's repositories and mean tasks; round 3's read sizes it at the units' own.
   const harmRows = rowsOf(pairs.H4).filter((r) => r.tasks > 0);
   const harmUnits = () => harmDesign(taskUnits(scored, ...pairs.H4, prices, inSets('N'), { design }));
-  tests.H4 = { name: HARM_TEST, pair: pairs.H4, cal: harm, lists: [], design: isRound4Design(design) && harmRows.length > 0 ? { repos: harmRows.length, tasks: Math.round(mean(harmRows.map((r) => r.tasks))) } : harmUnits() };
+  tests.H4 = { name: HARM_TEST, pair: pairs.H4, cal: harm, lists: [], design: isRealR4(design) && harmRows.length > 0 ? { repos: harmRows.length, tasks: Math.round(mean(harmRows.map((r) => r.tasks))) } : harmUnits() };
   return {
     design, bound, filtered, prices, scored, tests, wholeRun: wholePlans.length > 0,
-    ruleLayout: isRound4Design(design) && opts.noLayout !== true, miss: missReading(records, planCells, prices, opts, bound),
+    ruleLayout: isRealR4(design) && opts.noLayout !== true, miss: missReading(records, planCells, prices, opts, bound),
     usable: withoutRuns(counted, abandoned), records: counted.length, abandoned: [...abandoned.values()].sort(), repos: tests.T1.layout.length,
   };
 }
@@ -313,20 +317,30 @@ function effectFor(name, costRatio) {
 }
 
 /** Power of one test: `sims` draws at `effect`, each scored by `scoreTest` at the test's null and `level`; the rule runs in each draw, or `seeds` are fixed.
- * @returns {{level: number, sims: number, perCoding: Record<string, number>, joint: number, frechet: number | null, simError: number}} */
-function figureOf(reading, name, { sims, level, read, effect, exact, seeds }) {
+ * The codings share draws, so P(one) + P(other) - 1 takes the per-draw sd of its own indicator, not a binomial error.
+ * @returns {{level: number, sims: number, perCoding: Record<string, number>, perCodingError: Record<string, number>, joint: number, frechet: number | null, frechetError: number | null, simError: number}} */
+export function figureOf(reading, name, { sims, level, read, effect, exact, seeds }) {
   const rand = seededRandom(cellSeed(R4_SEED, 'power', name, read));
   const [rule, layout] = [seeds === undefined ? ruleOf(name) : null, reading.layout];
   const wins = reading.codings.map(() => 0);
-  let joint = 0;
+  let [joint, gap, gapSquares] = [0, 0, 0];
   for (let i = 0; i < sims; i++) {
     const { stat } = repeatRun(reading.cal.sim, { layout, seeds }, effect, rand, rule, { score: reading.score, exact });
     const won = reading.codings.map((c) => (stat?.[c] ? scoreTest(stat[c], { ...T_NULLS[name], level }).win : false));
     won.forEach((w, j) => { wins[j] += Number(w); });
     joint += Number(won.every(Boolean));
+    const d = won.length === 2 ? sum(won.map(Number)) - 1 : 0;
+    gap += d;
+    gapSquares += d * d;
   }
+  const binomial = (p) => Math.sqrt(p * (1 - p) / sims);
   const perCoding = Object.fromEntries(reading.codings.map((c, j) => [c, wins[j] / sims]));
-  return { level, sims, perCoding, joint: joint / sims, frechet: reading.codings.length === 2 ? sum(Object.values(perCoding)) - 1 : null, simError: Math.sqrt((joint / sims) * (1 - joint / sims) / sims) };
+  const perCodingError = Object.fromEntries(Object.entries(perCoding).map(([c, p]) => [c, binomial(p)]));
+  const two = reading.codings.length === 2;
+  return {
+    level, sims, perCoding, perCodingError, joint: joint / sims, frechet: two ? sum(Object.values(perCoding)) - 1 : null,
+    frechetError: two ? Math.sqrt(Math.max(0, gapSquares / sims - (gap / sims) ** 2) / sims) : null, simError: binomial(joint / sims),
+  };
 }
 
 /** The power figures of a read: T1 and T3 under the rule; T2's parts under the rule, or at 3, 3 and 5 seeds when `wholeRun`; part (a) only with a cost ratio.
@@ -339,7 +353,10 @@ export function powerFigures(p, o) {
   const second = o.second ? one('T2b', { read: 'second', effect: -0.01 }) : null;
   const four = figs.T2a === null ? null : figs.T1.joint + figs.T2a.joint + figs.T2b.joint + figs.T2c.joint - 3;
   const count = Object.values(figs).filter((f) => f !== null).length + (second === null ? 0 : 1);
-  return { figs, second, bounds: { four, two: figs.T1.joint + figs.T3.joint - 1 }, ms: Math.round((Date.now() - t0) / count / (o.sims / 1000)), partAEffect: o.costRatio === null ? null : Math.log(0.5 * o.costRatio) };
+  // Each test draws on its own cellSeed, so the bounds' parts are independent and their errors add in quadrature.
+  const spread = (...parts) => Math.sqrt(sum(parts.map((f) => f.simError ** 2)));
+  const bounds = { four, two: figs.T1.joint + figs.T3.joint - 1, fourError: four === null ? null : spread(figs.T1, figs.T2a, figs.T2b, figs.T2c), twoError: spread(figs.T1, figs.T3) };
+  return { figs, second, bounds, ms: Math.round((Date.now() - t0) / count / (o.sims / 1000)), partAEffect: o.costRatio === null ? null : Math.log(0.5 * o.costRatio) };
 }
 
 /** Exit 3 and `STOP: T1 power <p>` when T1's figure is under 0.8; else exit 4 and a `FOUNDER` line for each of T3 and the T2 parts under it; a null figure is skipped.
@@ -355,8 +372,12 @@ const figureLine = (prefix, f) => {
   const ci = `(+/- ${f3(f.simError)})`;
   const [head, tail] = [`${prefix} at level ${f3(f.level)}`, `; figure ${f3(f.joint)}`];
   if (f.frechet === null) return `${head}: ${f3(f.joint)} ${ci}${tail}`;
-  return `${head}: ${Object.entries(f.perCoding).map(([c, v]) => `${c} ${f3(v)}`).join(', ')}, both ${f3(f.joint)} ${ci}, P(one) + P(other) - 1 ${f3(f.frechet)}${tail}`;
+  const shares = Object.entries(f.perCoding).map(([c, v]) => `${c} ${f3(v)} (+/- ${f3(f.perCodingError[c])})`);
+  return `${head}: ${shares.join(', ')}, both ${f3(f.joint)} ${ci}, P(one) + P(other) - 1 ${f3(f.frechet)} (+/- ${f3(f.frechetError)})${tail}`;
 };
+
+/** A bound's line: its figure and its simulation error, or the flag a missing figure needs. */
+const boundLine = (label, value, error) => `bound ${label}: ${value === null ? 'n/a: needs --cost-ratio' : `${f3(value)} (+/- ${f3(error)})`}`;
 
 /** The lines of a power read, in the plan's order; `beside` prints under T3 and `spend` under the bounds. Round 3's whole-run T2 read has no stop.
  * @param {any} read @param {{wholeRun: boolean, beside: string | null, spend: string | null}} o @returns {{lines: string[], code: number}} */
@@ -366,7 +387,7 @@ export function powerLines(read, o) {
   const lines = [figureLine('T1 power', figs.T1), figureLine('T3 power', figs.T3), ...(o.beside === null ? [] : [o.beside]), ...(o.wholeRun ? ["assumption: round 3's same-model spreads (prereg item 12)"] : [])];
   for (const t of T2) lines.push(figs[t] === null ? `${t} power n/a: needs --cost-ratio` : figureLine(o.wholeRun ? `${t} at ${t === 'T2c' ? 5 : 3} seeds: power` : `${t} power`, figs[t]));
   if (second !== null) lines.push(figureLine('T2 second read, T2b at -0.01: power', second));
-  lines.push(`bound T1 + T2a + T2b + T2c - 3: ${bounds.four === null ? 'n/a: needs --cost-ratio' : f3(bounds.four)}`, `bound T1 + T3 - 1: ${f3(bounds.two)}`);
+  lines.push(boundLine('T1 + T2a + T2b + T2c - 3', bounds.four, bounds.fourError), boundLine('T1 + T3 - 1', bounds.two, bounds.twoError));
   if (o.spend !== null) lines.push(o.spend);
   const stop = o.wholeRun ? { code: 0, lines: [] } : powerStop(Object.fromEntries(['T1', 'T3', ...T2].map((t) => [t, figs[t] === null ? null : Number(f3(figs[t].joint))])));
   return { lines: [...lines, ...stop.lines, `POWER MS ${read.ms}`], code: stop.code };
@@ -378,7 +399,7 @@ export function powerLines(read, o) {
 export function seedRuleR4(records, planCells, prices, opts) {
   const design = opts.design;
   if (opts.onMiss === 'stop') throw new Error('--on-miss stop: a miss runs at the cap (prereg item 10)');
-  const real = isRound4Design(design);
+  const real = isRealR4(design);
   if (real && !(Number.isFinite(opts.costRatio) && opts.levels)) throw new Error('seedRule: round 4 needs opts.costRatio and opts.levels, the power of a test that misses the rule');
   const p = prepareR4(records, planCells, prices, { ...opts, spreadBound: opts.bound, noLayout: true });
   if (p.scored.some((r) => r.seed > SEEDS)) throw new Error(`the rule reads wave 1 only: a scored record has a seed above ${SEEDS}`);
@@ -388,7 +409,7 @@ export function seedRuleR4(records, planCells, prices, opts) {
   for (const [name, r] of Object.entries(perTest)) {
     let power = null;
     if (r.branch !== 'rule' && name === HARM_TEST) power = harmPower(p, r.seeds, opts.sims);
-    else if (r.branch !== 'rule' && (name !== 'T2a' || costRatio !== null)) power = figureOf(p.tests[name], name, { sims: opts.sims, level: levelOf(levels, name), read: 'seed rule', ...effectFor(name, costRatio) }).joint;
+    else if (r.branch !== 'rule' && (name !== 'T2a' || costRatio !== null)) power = figureOf(p.tests[name], name, { sims: opts.sims, level: levelOf(levels, name), read: 'seed rule', ...effectFor(name, costRatio), seeds: r.seeds }).joint;
     Object.assign(r, { power, powerLevel: levels === null ? 'nominal' : 'levels' });
   }
   return { design: designName(design), perTest, ...countsOf(p, perTest), reasons: Object.entries(perTest).filter(([, r]) => r.branch !== 'rule').map(([n, r]) => missReason(n, r)), stop: false };
@@ -402,6 +423,7 @@ export function sizeR4(p, opts) {
   for (const [name, r] of Object.entries(tests)) {
     const fig = read.figs[name];
     r.power = fig === undefined ? harmPower(p, r.seeds, opts.sims) : fig?.joint ?? null;
+    r.powerError = fig === undefined ? Math.sqrt(r.power * (1 - r.power) / opts.sims) : fig?.simError ?? null;
   }
   let miss = null;
   if (p.miss !== null) {
@@ -417,13 +439,13 @@ export function sizeLines(sized) {
   const { tests } = sized;
   for (const name of ['T1', 'T2a', 'T2b', 'T2c', 'T3', 'H4']) {
     const r = tests[name];
-    const power = r.power === null ? 'power n/a: needs --cost-ratio' : `power ${f3(r.power)}`;
+    const power = r.power === null ? 'power n/a: needs --cost-ratio' : `power ${f3(r.power)} (+/- ${f3(r.powerError)})`;
     const errors = r.predictedSE === null ? '' : `, error at ${r.seeds} seeds ${f4(r.predictedSE.atCount)}, at ${SEED_CAP} seeds ${f4(r.predictedSE.at9)}`;
     lines.push(`${name} seeds ${r.seeds} (${r.branch})${errors}; ${power}`);
   }
   const m = sized.miss;
   if (m !== null) lines.push(`T2aMiss error at 3 seeds ${f4(m.errorAt3)}, at ${SEED_CAP} seeds ${f4(m.errorAt9)}, bar ${f4(m.bar)}; seeds ${m.seeds} (${m.branch})`);
-  lines.push(`bound T1 + T2a + T2b + T2c - 3: ${sized.bounds.four === null ? 'n/a: needs --cost-ratio' : f3(sized.bounds.four)}`, `bound T1 + T3 - 1: ${f3(sized.bounds.two)}`);
+  lines.push(boundLine('T1 + T2a + T2b + T2c - 3', sized.bounds.four, sized.bounds.fourError), boundLine('T1 + T3 - 1', sized.bounds.two, sized.bounds.twoError));
   return lines;
 }
 
@@ -453,7 +475,7 @@ function levelGroups(p, name) {
 
 /** The Level check of every test (prereg :112): cells from `levelCells`, levels from `levelSearch` at each threshold, a rerun at 5 times the draws of every cell
  * over the threshold at the floor (0.8 times it), and a flag when a level stays under the floor. `cellsFor` is a seam for a planted cell source.
- * @param {any} p @param {{levelSims: number, source: string, commit: string | null, inputs: any[], pre?: any}} opts @param {(spec: any) => any[]} [cellsFor]
+ * @param {any} p @param {{levelSims: number, source: string, commit: string | null, commitWhy?: string | null, inputs: any[], pre?: any}} opts @param {(spec: any) => any[]} [cellsFor]
  * @returns {{file: any, lines: string[], code: number}} */
 export function levelCheckR4(p, opts, cellsFor = levelCells) {
   const sources = sourceRows(LEVEL_ENTRY);
@@ -462,31 +484,42 @@ export function levelCheckR4(p, opts, cellsFor = levelCells) {
     minLevels(opts.pre, { schema: LEVELS_SCHEMA, source: 'batch-1', commit: opts.pre.commit, sources, levels: opts.pre.levels }, () => {});
   }
   const t0 = Date.now();
-  const lines = [`commit ${opts.commit ?? 'not recorded: git rev-parse HEAD failed'}`];
+  const lines = [`commit ${opts.commit ?? `not recorded: ${opts.commitWhy ?? 'git rev-parse HEAD failed'}`}`];
   const [levels, floorFlags] = [{}, []];
+  const groupsOf = Object.fromEntries(Object.keys(THRESHOLDS).map((name) => [name, levelGroups(p, name)]));
+  // A bad T2a or T2b spec must fail before T1 spends its draws, so every group's spec is checked first (zero draws, always the real `levelCells`).
+  for (const groups of Object.values(groupsOf)) for (const g of groups) levelCells({ ...g.spec, sims: 0 });
   let drawn = 0;
   for (const name of Object.keys(THRESHOLDS)) {
-    const groups = levelGroups(p, name);
+    const groups = groupsOf[name];
     const run = (gi, sims, label, cases) => cellsFor({ ...groups[gi].spec, sims, label, cases })
       .map((c) => { drawn += c.ps.length; return { ...c, group: gi, caseName: caseOf(c.setting), setting: c.setting + groups[gi].suffix }; });
     let cells = groups.flatMap((g, gi) => run(gi, opts.levelSims, g.spec.label, g.spec.cases));
-    levels[name] = {};
-    for (const t of THRESHOLDS[name]) {
-      const [threshold, floor] = [Number(t), 0.8 * Number(t) - EPS];
-      let found = levelSearch(cells, threshold);
-      const over = cells.filter((c) => c.ps.length < 5 * opts.levelSims && share(c.ps, (x) => x < floor) > threshold);
-      if (found.level < floor && over.length > 0) {
+    // Every floor rerun finishes before any threshold's entry is read, so no level rests on cells a later rerun replaced; a rerun cell is never rerun again.
+    for (let rerun = true; rerun;) {
+      rerun = false;
+      for (const t of THRESHOLDS[name]) {
+        const [threshold, floor] = [Number(t), 0.8 * Number(t) - EPS];
+        const over = cells.filter((c) => c.ps.length < 5 * opts.levelSims && share(c.ps, (x) => x < floor) > threshold);
+        if (over.length === 0 || levelSearch(cells, threshold).level >= floor) continue;
         for (const [gi, g] of groups.entries()) {
           const names = [...new Set(over.filter((c) => c.group === gi).map((c) => c.caseName))];
           if (names.length === 0) continue;
           const fresh = run(gi, 5 * opts.levelSims, `${g.spec.label} floor`, names);
           cells = [...cells.filter((c) => !(c.group === gi && names.includes(c.caseName))), ...fresh];
         }
-        found = levelSearch(cells, threshold);
+        rerun = true;
       }
+    }
+    levels[name] = {};
+    for (const t of THRESHOLDS[name]) {
+      const [threshold, floor] = [Number(t), 0.8 * Number(t) - EPS];
+      const found = levelSearch(cells, threshold);
       const largest = Math.max(...found.cells.map((c) => c.size));
+      // The cell with the most no-estimate draws names its own draw count, since a rerun cell holds 5 times the draws of the rest.
+      const noEstimateCell = cells.reduce((a, c) => (c.noEstimate > a.noEstimate || (c.noEstimate === a.noEstimate && c.ps.length > a.ps.length) ? c : a));
       levels[name][t] = { level: found.level, setBy: found.setBy.setting, sizeAtLevel: found.setBy.sizeAtLevel, simErrorAtLevel: found.setBy.simErrorAtLevel, largestAtLevel: largest, cells: found.cells };
-      lines.push(`${name} ${t}: level ${f3(found.level)}, set by ${found.setBy.setting}, size at level ${f3(found.setBy.sizeAtLevel)} (+/- ${f3(found.setBy.simErrorAtLevel)}), largest at level ${f3(largest)}, most no-estimate draws in a cell ${Math.max(...cells.map((c) => c.noEstimate))} of ${opts.levelSims}`);
+      lines.push(`${name} ${t}: level ${f3(found.level)}, set by ${found.setBy.setting}, size at level ${f3(found.setBy.sizeAtLevel)} (+/- ${f3(found.setBy.simErrorAtLevel)}), largest at level ${f3(largest)}, most no-estimate draws in a cell ${noEstimateCell.noEstimate} of ${noEstimateCell.ps.length}`);
       if (opts.pre !== undefined) {
         const was = opts.pre.levels[name][t].level;
         lines.push(`${name} ${t} levels: pre-freeze ${f3(was)}, ${opts.source} ${f3(found.level)}, lower ${f3(Math.min(was, found.level))}`);
@@ -510,10 +543,15 @@ export function checkLevelFlags(name, n, required) {
   throw new Error(name === 'r4' ? `--levels: round 4 reads two levels files, the pre-freeze one and the batch-1 one (prereg Level check); got ${n}` : `--levels: ${name} reads at most one levels file, got ${n}`);
 }
 
-/** `git rev-parse HEAD` of the checkout this file sits in, or null. */
-export function headCommit() {
-  const got = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: path.dirname(fileURLToPath(import.meta.url)), encoding: 'utf8', windowsHide: true });
-  return got.status === 0 ? got.stdout.trim() : null;
+/** `git rev-parse HEAD` of the checkout `dir` (this file's folder) sits in. `commit` is null, with `why`, when git fails or the folder holds uncommitted changes,
+ * since HEAD then names code the draws did not run on. @param {string} [dir] @returns {{commit: string | null, why: string | null}} */
+export function headCommit(dir = path.dirname(fileURLToPath(import.meta.url))) {
+  const git = (...argv) => spawnSync('git', argv, { cwd: dir, encoding: 'utf8', windowsHide: true });
+  const [head, status] = [git('rev-parse', 'HEAD'), git('status', '--porcelain', '--', '.')];
+  if (head.status !== 0) return { commit: null, why: 'git rev-parse HEAD failed' };
+  if (status.status !== 0) return { commit: null, why: 'git status failed' };
+  if (status.stdout.trim() !== '') return { commit: null, why: 'scripts/token-eval has uncommitted changes' };
+  return { commit: head.stdout.trim(), why: null };
 }
 
 /** Levels files read from disk, each with its `file` path; a file that is not a levels file stops with its name. @param {string[]} files @param {string} cwd @returns {any[]} */
@@ -534,7 +572,7 @@ export function readLevelFiles(files, cwd) {
  * @param {any} design @param {any[]} loaded @param {(m: string) => void} log */
 export function levelsFor(design, loaded, log) {
   if (loaded.length === 0) return null;
-  if (!isRound4Design(design)) return loaded[0].levels;
+  if (!isRealR4(design)) return loaded[0].levels;
   const [pre, batch1] = loaded[0].source === 'batch-1' ? [loaded[1], loaded[0]] : [loaded[0], loaded[1]];
   return minLevels(pre, batch1, log);
 }

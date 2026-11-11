@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ARM_TABLE, DESIGNS, TWO_SEED_ARMS, designByName, isRound4Design } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, TWO_SEED_ARMS, designByName, isRound4Design as isRealR4 } from './arms.mjs';
 import { writeFileAtomic } from './atomic-write.mjs';
 import { loadInputs } from './z0-analyze.mjs';
 import { runBlock } from './z0-batch1-block.mjs';
@@ -20,7 +20,7 @@ import { costOf } from './z0-prices.mjs';
 import { readReadSet } from './z0-read-set.mjs';
 import { SEED_CAP, SEED_PREVIEW_SCHEMA, isString } from './z0-records.mjs';
 import {
-  R4_SEED, calibrate, checkLevelFlags, checkLevels, headCommit, isRoundFour, levelCheckR4, levelsFor, powerFigures, powerLines, prepareR4, previewR4, r3Attribution, readLevelFiles, readWholePlans,
+  R4_SEED, calibrate, checkLevelFlags, checkLevels, headCommit, levelCheckR4, levelsFor, namesT1, powerFigures, powerLines, prepareR4, previewR4, r3Attribution, readLevelFiles, readWholePlans,
   repoCount, sizeLines, sizeR4,
 } from './z0-size-r4.mjs';
 import { SEEDS, confirmSize, harmSizer, levelCheck, repeatSizer, smallestPassing } from './z0-size-sim.mjs';
@@ -89,22 +89,25 @@ const FLAGS = new Map([
 const MODES = new Map([['--power', 'power'], ['--level-check', 'level-check'], ['--batch1-block', 'batch1-block'], ['--seed-rule-preview', 'seed-rule-preview'], ['--check-levels', 'check-levels']]);
 const BARE = new Set(['--level-check', '--batch1-block', '--seed-rule-preview']);
 const ROUND_FOUR_FLAGS = new Set(['--whole-plan', '--levels', '--read-set', '--pre-levels', '--cost-ratio', '--spend-basis', '--r3-unblind', '--key']);
+// Round 4's seed rules are fixed by prereg item 10, so a value for these would be recorded in settings and never used.
+const ROUND_THREE_FLAGS = ['--seed-cap', '--target-z'];
 const FLAG_OF = { costRatio: '--cost-ratio', out: '--out', key: '--key' };
 const NEEDS = { power: ['costRatio'], 'level-check': ['out'], 'seed-rule-preview': ['out'], 'batch1-block': ['key', 'out'] };
 
 /** The round 4 rules of a parsed argv: round 3 takes none of its flags or modes, one mode runs, and each mode names the flags it needs. */
 function checkRoundFour(args, { given, used, modes }) {
   const design = designByName(args.design);
-  if (!isRoundFour(design) && used.length > 0) throw new Error(`${used[0]}: round 4 only`);
+  if (!namesT1(design) && used.length > 0) throw new Error(`${used[0]}: round 4 only`);
   if (modes.length > 1) throw new Error(`one mode at a time: ${modes.join(', ')}`);
   args.mode = modes.length === 0 ? null : MODES.get(modes[0]);
-  if (isRoundFour(design) && given.has('--seed')) throw new Error(`round 4 draws use seed ${R4_SEED} (prereg item 10)`);
+  if (namesT1(design) && given.has('--seed')) throw new Error(`round 4 draws use seed ${R4_SEED} (prereg item 10)`);
+  for (const flag of ROUND_THREE_FLAGS) if (namesT1(design) && given.has(flag)) throw new Error(`${flag}: round 3 only; round 4 sizes its seeds by the fixed rules of prereg item 10`);
   if (args.mode === 'check-levels') return;
   if (args.readSet === null && (args.runs.length === 0 || args.plan.length === 0)) throw new Error(USAGE);
   for (const k of NEEDS[args.mode] ?? []) if (args[k] === null) throw new Error(`${modes[0]} needs ${FLAG_OF[k]}`);
   if (args.preLevels !== null && args.mode !== 'level-check') throw new Error('--pre-levels needs --level-check');
-  if (args.mode === 'batch1-block' && !isRound4Design(design)) throw new Error('--batch1-block: design r4 only');
-  if (isRoundFour(design) && (args.mode === 'power' || args.mode === null)) checkLevelFlags(args.design, args.levels.length, args.mode === 'power');
+  if (args.mode === 'batch1-block' && !isRealR4(design)) throw new Error('--batch1-block: design r4 only');
+  if (namesT1(design) && args.mode !== 'batch1-block') checkLevelFlags(args.design, args.levels.length, args.mode === 'power');
 }
 
 /** @param {string[]} argv @returns {any} */
@@ -312,7 +315,7 @@ function levelOf(cal, chosen, m, opts) {
  * @param {any[]} records @param {any[]} planCells @param {any} prices @param {any} opts */
 export function sizeZ0(records, planCells, prices, opts) {
   const design = opts.design ?? DESIGNS.r3;
-  if (isRoundFour(design)) return sizeReport(prepareR4(records, planCells, prices, opts), opts);
+  if (namesT1(design)) return sizeReport(prepareR4(records, planCells, prices, opts), opts);
   const { filtered, abandoned, records: counted, planCells: cells } = filteredInput(records, planCells, opts, { dropAbandoned: true });
   const cal = calibrate(filtered, prices, opts.spreadBound, opts);
   const layout = planLayout(cells);
@@ -402,14 +405,15 @@ function previewMode(args, p, opts, cwd) {
 function levelMode(args, p, opts, cwd, real, hashes) {
   const pre = args.preLevels === null ? {} : { pre: readLevelFiles([args.preLevels], cwd)[0] };
   const inputs = hashes().filter((r) => r.role !== 'source');
-  const { file, lines, code } = levelCheckR4(p, { levelSims: opts.levelSims, source: real ? 'batch-1' : 'pre-freeze', commit: headCommit(), inputs, ...pre });
+  const { commit, why } = headCommit();
+  const { file, lines, code } = levelCheckR4(p, { levelSims: opts.levelSims, source: real ? 'batch-1' : 'pre-freeze', commit, commitWhy: why, inputs, ...pre });
   return { lines, code, file };
 }
 
 /** The round 4 modes of one read: they print text, headed by the layout's repository count, and `--out` takes the mode's JSON file.
  * @param {any} args @param {any} inputs `loadInputs`' result @param {string} cwd @param {any} settings @returns {{code: number, stdout: string, stderr: string}} */
 function runRoundFour(args, inputs, cwd, settings) {
-  const real = isRound4Design(inputs.design);
+  const real = isRealR4(inputs.design);
   if (real && args.mode !== null && args.wholePlan.length === 0) throw new Error(`batch 1 holds ${repoCount(inputs.planCells)} repositories; pass --whole-plan so the counts are the whole run's`);
   const wholePlans = readWholePlans(args.wholePlan, cwd);
   if (args.mode === 'batch1-block') {
@@ -451,6 +455,7 @@ export function runCli(argv, cwd = process.cwd()) {
   try {
     args = parseArgs(argv);
     if (args.help) return { code: 0, stdout: `${USAGE}\n`, stderr: '' };
+    if (args.mode === 'batch1-block') fs.rmSync(path.resolve(cwd, args.out), { force: true });
     if (args.mode === 'check-levels') {
       const { code, lines } = checkLevels(args.checkLevels, cwd);
       return { code, stdout: `${lines.join('\n')}\n`, stderr: '' };
@@ -465,7 +470,7 @@ export function runCli(argv, cwd = process.cwd()) {
       ...Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, args[k]])), firstWave: SEEDS, holmLevel: 0.05 / 2, quota,
       design: args.design, wholePlan: args.wholePlan.length === 0 ? null : args.wholePlan, preLevels: args.preLevels, costRatio: args.costRatio, spendBasis: args.spendBasis,
     };
-    if (isRoundFour(inputs.design)) return runRoundFour(args, inputs, cwd, settings);
+    if (namesT1(inputs.design)) return runRoundFour(args, inputs, cwd, settings);
     const sizing = sizeZ0(inputs.records, inputs.planCells, inputs.prices, { ...settings, ...filterOpts(inputs) });
     const hashes = inputHashes(args, cwd, { entry: ENTRY });
     report = { schema: 'z0-size/1', settings, inputs: hashes, warnings: inputs.warnings, ...sizing, notes: NOTES };

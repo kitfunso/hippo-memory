@@ -8,14 +8,14 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { pooledComponents } from '../../dist/eval/repository-t.js';
-import { ARM_TABLE, DESIGNS, designByName, designName, isRound4Design, pairOf } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, designByName, designName, isRound4Design as isRealR4, pairOf } from './arms.mjs';
 import { loadInputs } from './z0-analyze.mjs';
 import { inputHashes } from './z0-blind.mjs';
 import { filterOpts, filteredInput } from './z0-filters.mjs';
 import { CODINGS, codexApply, firstApplyR, repeatMistakeUnits } from './z0-hypotheses.mjs';
 import { SEED_CAP, SEED_RULE_SCHEMA, SEED_RULE_SCHEMA_R3, isString } from './z0-records.mjs';
 import { HARM_TEST, expandReadSet, extraRows } from './z0-size.mjs';
-import { R4_SEED, checkLevelFlags, harmSeeds, isRoundFour, levelsFor, readLevelFiles, seedRuleR4 } from './z0-size-r4.mjs';
+import { R4_SEED, checkLevelFlags, harmSeeds, levelsFor, namesT1, readLevelFiles, seedRuleR4 } from './z0-size-r4.mjs';
 import { SEEDS, TARGET_Z, seedsNeeded } from './z0-size-sim.mjs';
 
 const DEFAULTS = { minimumEffect: 0.15, targetZ: TARGET_Z, cap: SEED_CAP, onMiss: 'cap', power: 0.8, sims: 2_000, seed: 1, bound: 0.8 };
@@ -33,6 +33,8 @@ const integer = (flag, min) => number(flag, (n) => Number.isInteger(n) && n >= m
 const fraction = (flag) => number(flag, (n) => n > 0 && n < 1, 'between 0 and 1');
 const REPEATED = new Map([['--runs', 'runs'], ['--plan', 'plan'], ['--off-pin', 'offPin'], ['--levels', 'levels']]);
 const ROUND_FOUR_FLAGS = new Set(['--read-set', '--cost-ratio', '--levels']);
+// Round 4's seed rules are fixed by prereg item 10, so a value for these would be recorded in settings and never used.
+const ROUND_THREE_FLAGS = ['--minimum-effect', '--target-z', '--cap'];
 const designArg = (v) => {
   designByName(v);
   return v;
@@ -53,12 +55,13 @@ const FLAGS = new Map([
 /** Round 3 takes none of the round 4 flags; round 4 draws use one seed; `r4` needs the cost ratio and both levels files, `r4-on-r3` takes at most one. */
 function checkRoundFour(args, given, used) {
   const design = designByName(args.design);
-  if (!isRoundFour(design)) {
+  if (!namesT1(design)) {
     if (used.length > 0) throw new Error(`${used[0]}: round 4 only`);
     return;
   }
   if (given.has('--seed')) throw new Error(`round 4 draws use seed ${R4_SEED} (prereg item 10)`);
-  if (isRound4Design(design) && args.costRatio === null) throw new Error('--cost-ratio is required under round 4');
+  for (const flag of ROUND_THREE_FLAGS) if (given.has(flag)) throw new Error(`${flag}: round 3 only; round 4 sizes its seeds by the fixed rules of prereg item 10`);
+  if (isRealR4(design) && args.costRatio === null) throw new Error('--cost-ratio is required under round 4');
   checkLevelFlags(args.design, args.levels.length, true);
 }
 
@@ -101,7 +104,7 @@ function repeatSeeds(name, scored, [armT, armC], keep, opts) {
  * @param {any[]} records @param {any[]} planCells @param {any} prices @param {any} opts @returns {any} */
 export function seedRule(records, planCells, prices, opts) {
   const design = opts.design ?? DESIGNS.r3;
-  if (isRoundFour(design)) return seedRuleR4(records, planCells, prices, opts);
+  if (namesT1(design)) return seedRuleR4(records, planCells, prices, opts);
   const { filtered } = filteredInput(records, planCells, opts, { dropAbandoned: true });
   if (filtered.scored.some((r) => r.seed > SEEDS)) throw new Error(`the rule reads wave 1 only: a scored record has a seed above ${SEEDS}`);
   // The first group is the primary family and always runs; a later group runs only when all its arms are planned.
@@ -137,7 +140,7 @@ export function runCli(argv, cwd = process.cwd()) {
     if (args.help) return { code: 0, stdout: `${USAGE}\n`, stderr: '' };
     if (args.readSet !== null) expandReadSet(args, cwd);
     const inputs = loadInputs(args, cwd);
-    const round4 = isRoundFour(inputs.design);
+    const round4 = namesT1(inputs.design);
     const settings = { ...Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, args[k]])), firstWave: SEEDS, design: args.design, costRatio: args.costRatio };
     const shown = round4 ? { ...settings, seed: R4_SEED, levels: args.levels } : settings;
     const levels = round4 ? levelsFor(inputs.design, readLevelFiles(args.levels, cwd), (m) => notes.push(m)) : null;

@@ -28,25 +28,27 @@ function codingGap(lists) {
   return { d: [...all].filter((k) => maps.some((m) => !m.has(k)) || maps[0].get(k) !== maps[1].get(k)).length, n: all.size };
 }
 
-/** One line per sized test, in the order T1, T3, H4, T2a, T2b, T2c: the family, seed and residual parts of its cell values with their one-sided upper bounds, and the
- * share of its planned cells missing; T1, T3 and part (c) add the not-applicable rate and the family units the two codings split on. Each line reads the pair as a set,
- * so swapping its two arms leaves it unchanged. @param {any} filtered @param {any[]} planCells @param {any} prices @param {any} design @param {number} bound
+/** One line per sized test, in the order T1, T3, H4, T2a, T2b, T2c: the family, seed and residual parts of its cell values (each coding's, for T1, T3 and part (c)) with
+ * their one-sided upper bounds, and the share of its planned cells missing; T1, T3 and part (c) add the not-applicable rate and the family units the two codings split on.
+ * Each line reads the pair as a set, so swapping its two arms leaves it unchanged. @param {any} filtered @param {any[]} planCells @param {any} prices @param {any} design @param {number} bound
  * @param {Set<string>} [dropped] families the plan cells leave out, the design's by default @returns {string[]} */
 export function testLines(filtered, planCells, prices, design, bound, dropped = new Set(design.dropFamilies)) {
   const [scored, cells] = [filtered.scored, planCells.filter((c) => !dropped.has(c.familyId))];
-  const line = (name, units, planned, extra = '') => {
-    const c = spreadComponents(units, bound);
-    if (c === null) return `${name}: no repository can be fitted; it needs 2 families and 2 seeds in one`;
-    const parts = [['family', c.family, c.upper.family], ['seed', c.sequence, c.upper.sequence], ['residual', c.noise, c.upper.noise]];
-    const miss = `${(100 * missingShare(planned, units.length)).toFixed(1)}%`;
-    return `${name}: ${parts.map(([label, at, upper]) => `${label} ${f4(at)} (upper ${f4(upper)})`).join(', ')}; missing ${miss} of planned cells${extra}`;
+  const line = (name, lists, planned, extra = '') => {
+    const found = lists.map((units) => spreadComponents(units, bound));
+    if (found.includes(null)) return `${name}: no repository can be fitted; it needs 2 families and 2 seeds in one`;
+    const parts = (c) => [['family', c.family, c.upper.family], ['seed', c.sequence, c.upper.sequence], ['residual', c.noise, c.upper.noise]]
+      .map(([label, at, upper]) => `${label} ${f4(at)} (upper ${f4(upper)})`).join(', ');
+    const spreads = found.map((c, i) => (lists.length === 1 ? parts(c) : `${CODINGS[i]} ${parts(c)}`)).join('; ');
+    const miss = `${(100 * missingShare(planned, lists[0].length)).toFixed(1)}%`;
+    return `${name}: ${spreads}; missing ${miss} of planned cells${extra}`;
   };
   const repeat = (name) => {
     const pair = pairOf(design, name);
     const keep = ARM_TABLE[pair[0]].tool === 'codex' ? codexApply : firstApplyR;
     const lists = CODINGS.map((c) => repeatMistakeUnits(scored, ...pair, c, keep).units);
     const { d, n } = codingGap(lists);
-    return line(name, lists[0], plannedCells(cells, pair, ['R'], 'apply'), `; not applicable ${f3(naRate(scored, ...pair, keep))}; ${d} of ${n} family units`);
+    return line(name, lists, plannedCells(cells, pair, ['R'], 'apply'), `; not applicable ${f3(naRate(scored, ...pair, keep))}; ${d} of ${n} family units`);
   };
   const part = (name) => {
     const pair = pairOf(design, name);
@@ -54,11 +56,11 @@ export function testLines(filtered, planCells, prices, design, bound, dropped = 
     const costs = name === 'T2a' ? costCells(scored, pair, prices, keep, { design }) : [];
     const values = cellValues(costs);
     const units = name === 'T2a' ? costs.map((c, i) => ({ repo: c.repo, family: c.family, seed: c.seed, value: values[i] })) : partBValues(scored, pair, keep);
-    return line(name, units, plannedCells(cells, pair, ['R', 'N']));
+    return line(name, [units], plannedCells(cells, pair, ['R', 'N']));
   };
   const pair = pairOf(design, 'H4');
   const harm = taskUnits(scored, ...pair, prices, inSets('N'), { design }).filter((u) => u.t.cost > 0 && u.c.cost > 0).map((u) => ({ repo: u.repo, family: u.family, seed: u.seed, value: Math.log(u.t.cost / u.c.cost) }));
-  return [repeat('T1'), repeat('T3'), line('H4', harm, plannedCells(cells, pair, ['N'])), part('T2a'), part('T2b'), repeat('T2c')];
+  return [repeat('T1'), repeat('T3'), line('H4', [harm], plannedCells(cells, pair, ['N'])), part('T2a'), part('T2b'), repeat('T2c')];
 }
 
 /** The stops of a batch, each `{ id, line }`, in the plan's order: a G1 run-level cause, G2, G4, then the off-pin and G3 bars over the whole plan. */
