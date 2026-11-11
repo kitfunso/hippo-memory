@@ -8,12 +8,13 @@ import { ARM_TABLE } from '../../scripts/token-eval/arms.mjs';
 import { runDirs } from '../../scripts/token-eval/homes.mjs';
 import { runCli as leaks } from '../../scripts/token-eval/z0-leaks.mjs';
 import { runCli as merge } from '../../scripts/token-eval/z0-merge.mjs';
-import { jsonl, planOf, type Z0Record } from './z0-gen.js';
+import { jsonl, planOf, type Generated, type Z0Record } from './z0-gen.js';
 import { r4Corpus } from './z0-r4-corpus.js';
 import { KEYS, PINS, PRICES4, R4, drift, levelsFile, loose, raise, seedRule } from './z0-r4-read.js';
 
-/** `pairs` is the reader pairs of each G5 folder (8 gives 40 or more in all, which G5 passes); `raiseTo` lays out a raise to that seed; `abandoned` cuts rn-repo2's first run short of its plan. */
-export interface ReadRootOpts { readonly pairs?: number; readonly raiseTo?: number; readonly abandoned?: boolean }
+/** `pairs` is the reader pairs of each G5 folder (8 gives 40 or more in all, which G5 passes); `raiseTo` lays out a raise to that seed; `abandoned` cuts rn-repo2's first run short of its plan;
+ * `hookCancels` gives that many S2 positions of seed 1 a cancelled prompt hook, which the drop list voids and the blind read, taking no drop list, does not see. */
+export interface ReadRootOpts { readonly pairs?: number; readonly raiseTo?: number; readonly abandoned?: boolean; readonly hookCancels?: number }
 
 const roots: string[] = [];
 export const cleanUpRoots = (): void => {
@@ -68,7 +69,12 @@ function resultsRepo(dir: string): void {
 export function readRoot(opts: ReadRootOpts = {}): string {
   const root = posix(fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'z0-read-'))));
   roots.push(root);
-  const g = r4Corpus();
+  const base = r4Corpus();
+  let cancels = opts.hookCancels ?? 0;
+  const g: Generated = opts.hookCancels === undefined ? base : {
+    ...base,
+    records: base.records.map((r) => (r.arm === 'S2' && r.seed === 1 ? { ...r, sessionId: `s-${r.sequence}-${r.position}`, hookCancels: cancels-- > 0 ? { UserPromptSubmit: 1 } : {} } : r)),
+  };
   const pairs = opts.pairs ?? 8;
   const seedCount = opts.raiseTo ?? 3;
   const of = (key: string, ...seeds: number[]): Z0Record[] => g.records.filter((r) => r.sequence === key && seeds.includes(r.seed));
@@ -77,6 +83,8 @@ export function readRoot(opts: ReadRootOpts = {}): string {
   putJson(`${root}/prices.json`, PRICES4);
   for (const source of ['pre-freeze', 'batch-1']) putJson(`${root}/levels/${source}.json`, levelsFile(source, 0.999));
   putJson(`${root}/seed-rule.json`, seedRule(seedCount));
+  // Batch 1's block writes the key; the read takes it as an input.
+  putJson(`${root}/blind-key.json`, { codes: Object.fromEntries(R4.arms.map((arm: string, i: number) => [arm, `K${i + 1}`])) });
   const d = drift();
   put(`${root}/r3drift/dr.jsonl`, `${jsonl(d.records)}\n`);
   put(`${root}/r3drift/dp.json`, JSON.stringify(d.plan));

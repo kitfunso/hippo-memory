@@ -15,7 +15,7 @@ form=${form%/}
 CHECKOUT=$(cygpath -m "$CHECKOUT")
 CHECKOUT=${CHECKOUT%/}
 export Z0_CHECKOUT=$CHECKOUT
-. "$HERE/s4-units.sh"
+. "$HERE/s4-units.sh" || die "READ FAILED: source exit $?: $HERE/s4-units.sh"
 CLI=$CHECKOUT/scripts/token-eval R=$ROOT/read E=$ROOT/results/docs/evals/z0-r4
 
 last_line() { tr -d '\r' | grep -v '^[[:space:]]*$' | tail -n 1; }
@@ -39,7 +39,7 @@ git_try() {
 need() { [ -e "$1" ] || die "READ: $1 is missing"; }
 
 # Every input is checked before the first command runs.
-for f in pins-r4.json prices.json levels/pre-freeze.json levels/batch-1.json seed-rule.json drift-inputs.txt; do need "$ROOT/$f"; done
+for f in pins-r4.json prices.json levels/pre-freeze.json levels/batch-1.json seed-rule.json blind-key.json drift-inputs.txt; do need "$ROOT/$f"; done
 DRIFT=() n=0
 declare -A SEEN
 re='^--runs ([^ ]+) --plan ([^ ]+)$'
@@ -96,7 +96,7 @@ mkdir -p "$E" || die "READ FAILED: mkdir exit $?: $E"
 for f in grading.json drop-list.json; do
   cmp -s "$R/$f" "$E/$f" || try cp cp "$R/$f" "$E/$f"
 done
-git_try status --porcelain -- docs/evals/z0-r4
+git_try status --porcelain -- docs/evals/z0-r4/grading.json docs/evals/z0-r4/drop-list.json
 if grep -qE '^[ MADRCU?!]{2} ' <<< "$OUT"; then
   git_try add -- docs/evals/z0-r4/grading.json docs/evals/z0-r4/drop-list.json
   git_try commit -q -m "z0 r4: grading and drop list for the read" -- docs/evals/z0-r4/grading.json docs/evals/z0-r4/drop-list.json
@@ -115,14 +115,20 @@ analyze() {
   die "READ FAILED: z0-analyze exit $rc: ${line:-$(last_line < "$R/$name.stdout")}"
 }
 
+# Only the unblind takes the drop list, so it can be invalid after a valid blind read.
+verdict() {
+  local name=$1 status list
+  status=$(grep -E '^  "status": "[a-z]+",?$' "$R/$name.json" | head -n 1 | cut -d'"' -f4)
+  [ -n "$status" ] || die "READ FAILED: z0-analyze exit 0: $R/$name.json holds no top-level status line"
+  if [ "$status" = invalid ]; then
+    list=$(grep -m 1 '^invalid: ' "$R/$name.stdout" | cut -c10-)
+    die "READ INVALID: ${list:-$status}" 3
+  fi
+  [ "$status" = valid ] || die "READ INVALID: $status" 3
+}
+
 analyze blind
-status=$(grep -E '^  "status": "[a-z]+",?$' "$R/blind.json" | head -n 1 | cut -d'"' -f4)
-[ -n "$status" ] || die "READ FAILED: z0-analyze exit 0: $R/blind.json holds no top-level status line"
-if [ "$status" = invalid ]; then
-  list=$(grep -m 1 '^invalid: ' "$R/blind.stdout" | cut -c10-)
-  die "READ INVALID: ${list:-$status}" 3
-fi
-[ "$status" = valid ] || die "READ INVALID: $status" 3
+verdict blind
 [ -n "$UNBLIND" ] || die "READ BLIND: valid" 0
 
 # Every original, attempt, rerun and raise folder that holds the out mark, failed attempts included; no smoke, pilot, effort or merged folder.
@@ -131,4 +137,5 @@ for d in "$ROOT"/batch1/*/run "$ROOT"/batch2/*/run "$ROOT"/raise/*/run; do
   if [ -e "$d/runs.jsonl" ] || [ -e "$d/plan.json" ] || [ -e "$d/warmups" ] || [ -e "$d/ABANDONED" ]; then LEDGER+=(--ledger-runs "$d"); fi
 done
 analyze unblind --unblind --drop-list "$E/drop-list.json" "${LEDGER[@]}"
+verdict unblind
 die "READ UNBLIND: valid" 0
