@@ -733,12 +733,14 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
     // Teardown releases every hold and kills every case's processes before it waits on any scenario, and each wait has a bound.
     await stopCases(cases, 60_000);
     const pending = Promise.allSettled(Object.values(runs).flatMap((s) => s.pending()));
-    const settled = await within(pending, 60_000, 'the scenarios to settle once teardown stopped their processes').then((r) => ({ failed: r.some((x) => x.status === 'rejected'), unsettled: '' }), (e: Error) => ({ failed: true, unsettled: e.message }));
-    const { unsettled } = settled;
+    const unsettled = await within(pending, 60_000, 'the scenarios to settle once teardown stopped their processes').then(() => '', (e: Error) => e.message);
     const left = await stopCases(cases, 30_000);
-    // A failed scenario's batch log is the only record of what its batch did, so every folder stays for diagnosis.
-    if (settled.failed) console.warn(`a scenario failed; kept the case folders: ${cases.map((c) => c.base).join(' ')}`);
-    else for (const c of cases) if (!left.has(c.base)) c.remove();
+    // Global teardown removes the run's temp root (_real-store-guard.ts), so a diagnosis run copies each case folder, batch log and all, out first.
+    const keep = process.env.Z0_BATCH_KEEP;
+    for (const c of cases) {
+      if (keep) fs.cpSync(c.base, path.join(keep, path.basename(c.base)), { recursive: true });
+      if (!left.has(c.base)) c.remove();
+    }
     if (process.env.Z0_BATCH_TIME) fs.writeFileSync(process.env.Z0_BATCH_TIME, `${Math.round((Date.now() - started) / 1000)} s\n`);
     const alive = [...left].map(([base, pids]) => `${base} still has pids ${pids.join(' ')} after teardown`);
     if (unsettled !== '' || alive.length > 0) throw new Error([unsettled, ...alive].filter((m) => m !== '').join('; '));
