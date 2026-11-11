@@ -49,8 +49,8 @@ const warmups = (root: Root, costs: Record<string, number>): string => {
 };
 
 interface Call { step: string; approved?: string; ledger?: string; attempt?: string; extra?: readonly string[] }
-const admit = (root: Root, c: Call) => runCli(['admit', '--step', c.step, '--attempt', c.attempt ?? '1', '--approved', c.approved ?? '2000', '--ledger-total', c.ledger ?? '0',
-  '--spend-basis', root.basis, '--pins', root.pins, '--log', root.log, ...(c.extra ?? [])]);
+const admit = (root: Root, c: Call, now?: () => Date) => runCli(['admit', '--step', c.step, '--attempt', c.attempt ?? '1', '--approved', c.approved ?? '2000', '--ledger-total', c.ledger ?? '0',
+  '--spend-basis', root.basis, '--pins', root.pins, '--log', root.log, ...(c.extra ?? [])], undefined, now);
 const goFigure = (root: Root, figure: string) => runCli(['founder-go', '--question', 'figure', '--figure', figure, '--words', 'raise it', '--log', root.log]);
 const units = (root: Root, sub: string, keys: readonly string[], tail = 'w1') => keys.flatMap((k) => ['--units', path.join(root.dir, sub, `${k}-${tail}`)]);
 const gapOf = sequenceGap(SEQ, BATCH1);
@@ -492,47 +492,56 @@ describe('admit: the seed raise', () => {
     expect(entries(root)[0]!.projection).toBeCloseTo(want, 9);
   });
 
-  it('seals max-seed before it writes the mark: a seal that cannot be written leaves no mark', () => {
-    const root = makeRoot();
-    const args = seedArgs(root, 5);
-    fs.writeFileSync(path.join(root.dir, 'blocker'), 'a file where the seal\'s folder should be');
-    args[args.indexOf('--seal') + 1] = path.join(root.dir, 'blocker', 'max-seed.json');
-    expect(admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: args }).code).toBe(1);
-    expect(fs.existsSync(path.join(root.dir, 'raise', 'ADMITTED'))).toBe(false);
-  });
-
-  it('resumes from a seal whose mark write failed: exits as the seal says, writes the mark and leaves the seal bytes alone', () => {
-    const root = makeRoot();
-    const [p5, p6, seal, blocker] = [raiseTo(5, 9), raiseTo(6, 9), path.join(root.dir, 'raise', 'max-seed.json'), path.join(root.dir, 'blocker')];
-    const args = seedArgs(root, 9);
-    args[args.indexOf('--mark') + 1] = path.join(blocker, 'ADMITTED');
-    fs.writeFileSync(blocker, 'a file where the mark\'s folder should be');
-    expect(admit(root, { step: 'seeds', approved: cents(100 + 1.25 * ((p5 + p6) / 2)), ledger: '100', extra: args }).code).toBe(1);
-    const bytes = fs.readFileSync(seal);
-    expect(JSON.parse(bytes.toString('utf8'))).toEqual({ maxSeed: 5, count: 9 });
+  /** A first seeds admit whose seal write fails after its mark landed, then the cause removed: the args and the seal path to retry with. */
+  const failedSeal = (root: Root) => {
+    const [args, blocker] = [seedArgs(root, 9), path.join(root.dir, 'blocker')];
+    args[args.indexOf('--seal') + 1] = path.join(blocker, 'max-seed.json');
+    fs.writeFileSync(blocker, 'a file where the seal\'s folder should be');
+    expect(admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: args }, () => new Date('2026-11-11T00:00:00Z')).code).toBe(1);
+    expect(fs.existsSync(path.join(root.dir, 'raise', 'ADMITTED'))).toBe(true);
     fs.rmSync(blocker);
-    expect([9, 8, 7, 6].find((j) => 100 + 1.25 * raiseTo(j, 9) <= 2140)).toBeGreaterThan(5);
-    const retry = admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: args });
+    return { args, seal: path.join(blocker, 'max-seed.json') };
+  };
+
+  it('runs a fresh check on a retry after a failed seal write: the lower figure seals a lower j and the mark is rewritten', () => {
+    const root = makeRoot();
+    const { args, seal } = failedSeal(root);
+    const firstJ = [9, 8, 7, 6, 5, 4].find((j) => 100 + 1.25 * raiseTo(j, 9) <= 2140);
+    expect(firstJ).toBeGreaterThan(5);
+    const retry = admit(root, { step: 'seeds', attempt: '2', approved: cents(100 + 1.25 * ((raiseTo(5, 9) + raiseTo(6, 9)) / 2)), ledger: '100', extra: args }, () => new Date('2026-11-11T01:00:00Z'));
     expect([retry.code, retry.stderr]).toEqual([6, expect.stringContaining('CAP: max-seed 5 of 9')]);
-    expect(fs.readFileSync(seal).equals(bytes)).toBe(true);
-    expect(JSON.parse(fs.readFileSync(path.join(blocker, 'ADMITTED'), 'utf8'))).toMatchObject({ step: 'seeds', attempt: 1 });
-    expect(entries(root).map((e) => [e.maxSeed, e.reason])).toEqual([[5, 'cap'], [5, 'cap']]);
-    expect(entries(root)[1]!.projection).toBeCloseTo(p5, 9);
+    expect(readSealed(seal)).toEqual({ maxSeed: 5, count: 9 });
+    expect(JSON.parse(fs.readFileSync(path.join(root.dir, 'raise', 'ADMITTED'), 'utf8'))).toEqual({ step: 'seeds', attempt: 2, at: '2026-11-11T01:00:00.000Z' });
+    expect(entries(root).map((e) => [e.attempt, e.maxSeed])).toEqual([[1, firstJ], [2, 5]]);
   });
 
-  it('still exits 1 for a seal with no mark when a unit holds run/, and names a seal that is no usable max-seed file', () => {
+  it('seals 3 and exits 6 on a retry whose figure affords no j above 3, as a first admit at that figure would', () => {
     const root = makeRoot();
-    const [args, seal] = [seedArgs(root, 5), path.join(root.dir, 'raise', 'max-seed.json')];
-    writeJson(seal, { maxSeed: 5, count: 5 });
+    const { args, seal } = failedSeal(root);
+    expect(100 + 1.25 * raiseTo(4, 9)).toBeGreaterThan(300);
+    const retry = admit(root, { step: 'seeds', attempt: '2', approved: '300', ledger: '100', extra: args });
+    const fresh = makeRoot();
+    const first = admit(fresh, { step: 'seeds', approved: '300', ledger: '100', extra: seedArgs(fresh, 9) });
+    expect([retry.code, retry.stderr]).toEqual([first.code, first.stderr]);
+    expect([retry.code, retry.stderr]).toEqual([6, expect.stringContaining('CAP: max-seed 3 of 9')]);
+    expect(readSealed(seal)).toEqual({ maxSeed: 3, count: 9 });
+    expect(last(root)).toMatchObject({ attempt: 2, maxSeed: 3, admitted: false, reason: 'cap' });
+  });
+
+  it('exits 1 for a raise that started: a seal with or without a mark, or a unit holding run/', () => {
+    const root = makeRoot();
+    const [args, seal, mark] = [seedArgs(root, 5), path.join(root.dir, 'raise', 'max-seed.json'), path.join(root.dir, 'raise', 'ADMITTED')];
+    const call = (extra: readonly string[]) => admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: [...args, ...extra] });
     fs.mkdirSync(path.join(root.dir, 'u', 'q12-w1', 'run'), { recursive: true });
-    const started = admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: [...args, '--units', path.join(root.dir, 'u', 'q12-w1')] });
-    expect([started.code, started.stderr]).toEqual([1, expect.stringContaining('has started')]);
-    for (const [body, said] of [['{not json', `${seal}: sealed file does not parse`], ['{"maxSeed":2,"count":5}', `${seal}: sealed max-seed file holds no whole maxSeed and count`]]) {
-      fs.writeFileSync(seal, body!);
-      const r = admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: args });
-      expect([r.code, r.stderr]).toEqual([1, expect.stringContaining(said!)]);
-    }
-    expect([fs.existsSync(path.join(root.dir, 'raise', 'ADMITTED')), entries(root)]).toEqual([false, []]);
+    const unit = call(['--units', path.join(root.dir, 'u', 'q12-w1')]);
+    writeJson(seal, { maxSeed: 5, count: 5 });
+    const bare = call([]);
+    writeJson(mark, {});
+    const marked = call([]);
+    expect([unit, bare, marked].map((r) => r.code)).toEqual([1, 1, 1]);
+    expect([unit, bare, marked].map((r) => r.stderr.includes('has started'))).toEqual([true, true, true]);
+    expect(bare.stderr).toContain(`${seal} exists; the raise has started`);
+    expect(entries(root)).toEqual([]);
   });
 
   it('refuses a seed rule with no count for a rule arm, and a seeds step with no --seal', () => {

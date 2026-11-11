@@ -321,33 +321,22 @@ const PLANNERS = {
   },
 };
 
-/** The raise: j falls from the rule's largest count until the check passes, else 3 (the base count), whatever the ledger. A `sealed` cap from an earlier call replaces the search. */
-function raisePlan(args, cwd, ctx, sealed) {
+/** The raise: j falls from the rule's largest count until the check passes, else 3 (the base count), whatever the ledger. */
+function raisePlan(args, cwd, ctx) {
   const [basis, pins, pilot] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd)), readPilot(filePath(args, '--pilot', cwd))];
   const rule = readSchema(filePath(args, '--seed-rule', cwd), 'seed rule', SEED_RULE_SCHEMA);
   const counts = ruleCounts(rule.seeds, 'seed rule', args.flags.get('--seed-rule'));
-  const [scale, k] = [readScale(filePath(args, '--scale', cwd)), sealed === null ? Math.max(...Object.values(counts)) : sealed.count];
+  const [scale, k] = [readScale(filePath(args, '--scale', cwd)), Math.max(...Object.values(counts))];
   const gapByArm = sequenceGap(basis.bySequence, listOf(pins, 'batch1Keys'));
   const at = (j) => projectSpend({ basisByArm: basis.basisByArm, gapByArm, r: pilot.rMax, seedsByArm: raiseSeeds(counts, j), scale });
-  let j = sealed === null ? BASE_SEEDS : sealed.maxSeed;
-  for (let tryJ = k; sealed === null && tryJ > BASE_SEEDS; tryJ--) {
+  let j = BASE_SEEDS;
+  for (let tryJ = k; tryJ > BASE_SEEDS; tryJ--) {
     if (admissionOk({ ledger: ctx.ledger, projection: at(tryJ), margin: GATE_MARGIN, figure: ctx.approved, cap: null, capSpend: 0 })) {
       j = tryJ;
       break;
     }
   }
   return { projection: at(j), margin: GATE_MARGIN, cap: null, capSpend: 0, scale, figure: true, maxSeed: j, count: k };
-}
-
-/** The sealed raise cap, null when absent; one that parses but holds no usable counts was changed by hand, like one that does not parse. */
-function readSeal(file) {
-  const sealed = readSealed(file);
-  if (sealed === null) return null;
-  const { maxSeed, count } = sealed;
-  if (![maxSeed, count].every(Number.isInteger) || maxSeed < BASE_SEEDS || maxSeed > count || count > SEED_CAP) {
-    throw new Error(`${file}: sealed max-seed file holds no whole maxSeed and count with ${BASE_SEEDS} <= maxSeed <= count <= ${SEED_CAP}; the harness never rebuilds it`);
-  }
-  return { maxSeed, count };
 }
 
 /** The arms of the pilot's r at the flag, as [arm, r] pairs. The pilot file's flag19 must say the same, or the file was changed by hand. */
@@ -392,15 +381,13 @@ function admit(args, cwd, now) {
   const [units, seal] = [listFlag(args, '--units').map((u) => path.resolve(cwd, u)), step === 'seeds' ? need(args, '--seal') : optional(args, '--seal')];
   const mark = ['batch-1', 'batch-2', 'seeds'].includes(step) ? filePath(args, '--mark', cwd) : null;
   const sealFile = seal === null ? null : path.resolve(cwd, seal);
-  // A seal with no mark and no unit run is a raise admit cut off between its two writes: it resumes from the seal, which stays as it is.
-  const sealed = step === 'seeds' && !fs.existsSync(mark) ? readSeal(sealFile) : null;
-  checkNotStarted(units, sealed === null ? sealFile : null, SCOPES[step]);
+  checkNotStarted(units, sealFile, SCOPES[step]);
   const entries = readLog(log);
   const named = yesGos(entries, 'figure').some((e) => e.figure >= approved);
   if (approved > APPROVED_FIGURE && !named) throw new Error(`--approved ${need(args, '--approved')} is above $${APPROVED_FIGURE.toLocaleString('en-US')}.00 and no founder go names it`);
 
   const ctx = { entries, attempt, ledger, approved };
-  const plan = step === 'seeds' ? raisePlan(args, cwd, ctx, sealed) : PLANNERS[step](args, cwd, ctx);
+  const plan = step === 'seeds' ? raisePlan(args, cwd, ctx) : PLANNERS[step](args, cwd, ctx);
   const check = { ledger, projection: plan.projection, margin: plan.margin, figure: plan.figure ? approved : null, cap: plan.cap, capSpend: plan.capSpend };
   let reason = refusalOf(check);
   if (reason === null && step === 'whole-run' && plan.hot.length > 0) reason = 'r';
@@ -414,9 +401,9 @@ function admit(args, cwd, now) {
   appendJsonLine(log, entry);
   const lines = plan.lines ?? [];
   if (sealedSeeds) {
-    // The seal goes first: a mark that outlives a failed seal write would let a driver start on a cap nothing recorded.
-    if (sealed === null) writeFileAtomic(sealFile, `${JSON.stringify({ maxSeed: plan.maxSeed, count: plan.count })}\n`);
+    // The seal marks the raise as started, so it goes last: a kill between the writes leaves no seal, and the retry runs a fresh check.
     writeMark(mark, entry);
+    writeFileAtomic(sealFile, `${JSON.stringify({ maxSeed: plan.maxSeed, count: plan.count })}\n`);
     return reason === null ? answer(0, `max-seed ${plan.count}`) : answer(6, '', `CAP: max-seed ${plan.maxSeed} of ${plan.count}`);
   }
   if (reason !== null) {
