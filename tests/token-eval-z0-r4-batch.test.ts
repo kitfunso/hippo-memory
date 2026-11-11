@@ -180,6 +180,21 @@ describe('z0-unit-record keys, arms, max-seed, labels, seeds and toolchain', () 
     expect(runCli(['toolchain', 'q14', `${dir}/repos.json`]).stdout).toBe('python\n');
     expect(runCli(['toolchain', 'bad', `${dir}/repos.json`])).toMatchObject({ code: 1, stderr: expect.stringContaining('bad has no toolchain name') });
   });
+
+  it('reads the sealed files a call leaves: a call that seals none, a missing file, one that does not parse, and grading needing all four', () => {
+    const dir = fwd(tmp('z0-sealed-'));
+    const sealed = `${dir}/run/g5/sealed`;
+    expect(runCli(['sealed', dir, 'regrade']).stdout).toBe(`sealed ok ${dir} regrade\n`);
+    expect(runCli(['sealed', dir, 'stored-draw'])).toMatchObject({ code: 1, stderr: expect.stringContaining('stored.key.json: sealed file is missing; call stored-draw seals it') });
+    put(`${sealed}/stored.key.json`, '{"units": ["u1"]}');
+    expect(runCli(['sealed', dir, 'stored-draw']).stdout).toBe(`sealed ok ${dir} stored-draw\n`);
+    put(`${sealed}/stored.score.json`, '{"labels": ');
+    expect(runCli(['sealed', dir, 'stored-score'])).toMatchObject({ code: 1, stderr: expect.stringContaining('stored.score.json: sealed file does not parse') });
+    put(`${sealed}/stored.score.json`, '{"labels": {}}');
+    expect(runCli(['sealed', dir, 'stored-score']).stdout).toBe(`sealed ok ${dir} stored-score\n`);
+    expect(runCli(['sealed', dir, 'grading'])).toMatchObject({ code: 1, stderr: expect.stringContaining('reader-r1.key.json: sealed file is missing; call grading seals it') });
+    expect(runCli(['sealed', dir, 'nope'])).toMatchObject({ code: 1 });
+  });
 });
 
 /* ------------------------------------------------------------------------------------------------ s4-batch.sh */
@@ -478,7 +493,7 @@ const S = async () => {
 
 const Q = async () => {
   const c = track(new Case({ name: 'Q', keys1: ['qa1'], admit: false }));
-  const bashRun = (args: string[]) => spawnSync(gitBash(process.env, []), [`${c.scored}/s4-batch.sh`, ...args], { env: c.env(), encoding: 'utf8', cwd: c.base });
+  const bashRun = (args: string[], env: Record<string, string> = {}) => spawnSync(gitBash(process.env, []), [`${c.scored}/s4-batch.sh`, ...args], { env: c.env(env), encoding: 'utf8', cwd: c.base });
   const ok = [c.n, CHECKOUT, c.root];
   const fake = `${c.base}/knobs.json`;
   put(fake, '{}');
@@ -491,9 +506,121 @@ const Q = async () => {
   const usage = ['--poll', '--poll abc', '--poll 0', '--fake', '--fake nope.json', '--bogus 1'].map((a) => bashRun([...ok, ...a.split(' ')]));
   const badN = bashRun(['9', CHECKOUT, c.root]);
   const emptyFake = bashRun([...ok, '--fake', '']);
+  fs.rmSync(`${c.root}/DRYRUN`);
+  const notDry = bashRun(ok);
+  put(`${c.root}/DRYRUN`, '');
+  // A single quote cannot reach the script through bash.exe's own argument parsing, so the file name here holds a space; the script's pattern covers both.
+  const quoted = `${c.base}/fake knobs.json`;
+  put(quoted, '{}');
+  const refused = {
+    relative: bashRun([c.n, CHECKOUT, 'rel/root']),
+    root: bashRun([c.n, CHECKOUT, 'C:/a b/root']),
+    checkout: bashRun([c.n, 'C:/a b/checkout', c.root]),
+    fake: bashRun([...ok, '--fake', quoted]),
+    grace: bashRun(ok, { Z0_GRACE_S: 'abc' }),
+  };
   const launcher = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-File', `${c.scored}/s4-run.ps1`, '-Checkout', CHECKOUT, '-Root', c.root, '-Batch', '1', '-Key', 'qa1', '-Folder', c.dir('qa1-w1')], { encoding: 'utf8', input: '', cwd: c.base });
   const regradeLauncher = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-File', `${c.scored}/s4-regrade.ps1`, '-Checkout', CHECKOUT, '-Root', c.root, '-Key', 'qa1', '-Folder', c.dir('qa1-w1'), '-Call', 'regrade'], { encoding: 'utf8', input: '', cwd: c.base });
-  return { c, noAdmit, regraded, slashed, posix, usage, badN, emptyFake, launcher, regradeLauncher, launchedAny: fs.existsSync(`${c.dir('qa1-w1')}/launcher-args.json`), fake };
+  return { c, noAdmit, regraded, slashed, posix, usage, badN, emptyFake, notDry, quoted, refused, launcher, regradeLauncher, launchedAny: fs.existsSync(`${c.dir('qa1-w1')}/launcher-args.json`), fake };
+};
+
+const TWO = ['q145', 'q14'];
+/** A case of the two keys with every unit folder finished and every G5 call done, so a batch on it runs only its checks and its end phase. */
+async function finished(name: string) {
+  const c = track(new Case({ name, keys1: TWO }));
+  for (const k of TWO) c.g5Done(await c.plant(`${k}-w1`, KEY_FX(c, k)));
+  return c;
+}
+
+/** A write that cannot land stops the batch with a named line: a directory sits where END, and where a marker, belongs. */
+const E = async () => {
+  const end = await finished('E1');
+  fs.mkdirSync(`${end.root}/batch1/END`, { recursive: true });
+  const endRun = await end.run();
+  const mark = track(new Case({ name: 'E2', keys1: TWO }));
+  await mark.plant('q145-w1', KEY_FX(mark, 'q145'));
+  fs.mkdirSync(`${mark.dir('done')}/q145-w1`, { recursive: true });
+  return { end, endRun, mark, markRun: await mark.run() };
+};
+
+/** A resume over completed G5 calls reads their sealed files: one folder of each kind of damage. */
+const Sl = async () => {
+  const damaged = async (name: string, damage: (sealed: string) => void) => {
+    const c = await finished(name);
+    damage(`${c.dir('q145-w1')}/run/g5/sealed`);
+    return { c, r: await c.run() };
+  };
+  return {
+    key: await damaged('Sl1', (s) => put(`${s}/stored.key.json`, '{"units": ["u1", ')),
+    score: await damaged('Sl2', (s) => put(`${s}/stored.score.json`, '{"labels": {')),
+    missing: await damaged('Sl3', (s) => fs.rmSync(`${s}/reader-r1.score.json`)),
+  };
+};
+
+/** Score calls with no record and a torn temp beside each missing score file: the temp is no record, so both calls run and write the files whole. */
+const Pt = async () => {
+  const c = await finished('Pt');
+  const dir = c.dir('q145-w1');
+  const sealed = `${dir}/run/g5/sealed`;
+  for (const f of ['reader-r1.score.json', 'stored.score.json']) fs.rmSync(`${sealed}/${f}`);
+  for (const call of ['reader-score', 'stored-score', 'grading']) fs.rmSync(`${dir}/g5-${call}.log`);
+  put(`${sealed}/reader-r1.score.json.tmp-5`, '{"round": 1, "n"');
+  put(`${sealed}/stored.score.json.tmp-5`, '{"labels"');
+  return { c, r: await c.run(), sealed };
+};
+
+/** A runner that wrote every planned record with no Records: line and exit 0 is done by its records. */
+const Pb = async () => {
+  const c = track(new Case({ name: 'Pb', keys1: ['pa'] }));
+  c.knob('pa-w1', { fixture: KEY_FX(c, 'pa'), printRecords: false, exit: 0, endMs: 3000, regrade: { exit: 1 } });
+  return { c, r: await c.run() };
+};
+
+/** A runner one record short that exits 0 is failed, and its retry is the next attempt folder. */
+const Pr = async () => {
+  const c = track(new Case({ name: 'Pr', keys1: ['pc'] }));
+  const fx = KEY_FX(c, 'pc');
+  c.knob('pc-w1', { fixture: fx, records: c.size(fx) - 1, printRecords: false, exit: 0 });
+  c.knob('pc-w1-a2', { fixture: fx, regrade: { exit: 1 } });
+  const first = await c.run();
+  return { c, first, second: await c.run() };
+};
+
+/** The launcher killed after Start-Process and before its pids.txt line, then the batch killed and restarted. */
+const Pd = async () => {
+  const c = track(new Case({ name: 'Pd', keys1: ['pb'] }));
+  c.knob('pb-w1', { fixture: KEY_FX(c, 'pb'), pidsDelayS: 60, endMs: 15_000, regrade: { exit: 1 } });
+  const s = c.start();
+  await until('the runner log', () => fs.existsSync(`${c.dir('pb-w1')}/run.log`) && c.log().some((l) => l.startsWith('launch pb-w1 pid ')));
+  await sleep(1500);
+  const launcher = c.launcherPid('pb-w1');
+  kill(launcher);
+  await sleep(1000);
+  kill(s.child.pid!, true);
+  await s.done;
+  const pidsLines = c.runnerPids().length;
+  return { c, pidsLines, r: await c.run(), launcher };
+};
+
+/** A launch that gives no pid: a directory sits where start.out goes, so the shell cannot open it, and a launch.txt of an earlier launch is in the folder. */
+const Ql = async () => {
+  const c = track(new Case({ name: 'Ql', keys1: ['xa'] }));
+  c.knob('xa-w1', { fixture: KEY_FX(c, 'xa') });
+  put(`${c.dir('xa-w1')}/launch.txt`, 'box check failed: left by an earlier launch\n');
+  fs.mkdirSync(`${c.dir('xa-w1')}/start.out`, { recursive: true });
+  return { c, r: await c.run() };
+};
+
+/** A checkout whose z0-unit-record refuses `arms rerun` (a first run's plan that lost a seed between z0-leaks and the launch) over the real CLIs the batch calls before it. */
+const Zr = async () => {
+  const c = track(new Case({ name: 'Zr', keys1: ['za'] }));
+  await c.plant('za-w1', KEY_FX(c, 'za', [1, 2, 3], { leaks: [2] }));
+  const co = `${c.base}/co`;
+  for (const cli of ['z0-leaks', 'z0-hookhold', 'z0-unit-record']) {
+    const refuse = cli === 'z0-unit-record' ? "if (process.argv[2] === 'arms' && process.argv[3] === 'rerun') { console.error('arms refused on purpose'); process.exit(1); }\n" : '';
+    put(`${co}/scripts/token-eval/${cli}.mjs`, `import { spawnSync } from 'node:child_process';\n${refuse}process.exit(spawnSync(process.execPath, [${JSON.stringify(`${CHECKOUT}/scripts/token-eval/${cli}.mjs`)}, ...process.argv.slice(2)], { stdio: 'inherit' }).status ?? 1);\n`);
+  }
+  return { c, r: await c.start([], {}, c.root, c.n, co).done };
 };
 
 /* -------------------------------------------------------------------------------------------- the scenarios run together */
@@ -519,7 +646,8 @@ function lazy<T>(fn: () => Promise<T>) {
   };
 }
 const runs = { A: lazy(A), B: lazy(B), H: lazy(H), BX: lazy(BX), K: lazy(K), L: lazy(L), G: lazy(G), G2: lazy(G2), T: lazy(T), D: lazy(D), Z: lazy(Z), R: lazy(R), RN: lazy(RN), Pq: lazy(Pq), Pf: lazy(Pf),
-  W1: lazy(W1), W2: lazy(W2), W3: lazy(W3), W4: lazy(W4), W5a: lazy(W5a), W5b: lazy(W5b), S: lazy(S), Q: lazy(Q) };
+  W1: lazy(W1), W2: lazy(W2), W3: lazy(W3), W4: lazy(W4), W5a: lazy(W5a), W5b: lazy(W5b), S: lazy(S), Q: lazy(Q),
+  E: lazy(E), Sl: lazy(Sl), Pt: lazy(Pt), Pb: lazy(Pb), Pr: lazy(Pr), Pd: lazy(Pd), Ql: lazy(Ql), Zr: lazy(Zr) };
 const only = process.env.Z0_BATCH_ONLY?.split(',');
 
 describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs Windows processes, PowerShell 5.1 and Git Bash)', () => {
@@ -562,6 +690,35 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
         expect(r.status).toBe(1);
         expect(r.stdout.trim()).toBe('usage: s4-batch.sh <1|2|raise> <checkout> <root> [--poll <s>] [--fake <knobs>]');
       }
+    });
+
+    it('Z0_REPOS_FILE on a root with no DRYRUN file exits 1 naming the variable, and on a dry root the batch logs the repos file it used [W3-4]', async () => {
+      const { notDry, c } = await runs.Q.get();
+      expect(notDry.status).toBe(1);
+      expect(notDry.stdout.trim()).toBe(`BATCH 1: Z0_REPOS_FILE is set, but ${c.root} holds no DRYRUN file; only a dry root may use it`);
+      const b = await runs.Pb.get();
+      expect(b.c.log().filter((l) => l.startsWith('repos file '))).toEqual([`repos file ${b.c.base}/repos.json`]);
+    });
+
+    it('a relative root exits 1 asking for an absolute one, so two spellings of one root cannot both run', async () => {
+      const { refused } = await runs.Q.get();
+      expect(refused.relative.status).toBe(1);
+      expect(refused.relative.stdout.trim()).toBe('BATCH 1: root rel/root must be an absolute path such as C:/z0-runs/r4');
+    });
+
+    it('a root, a checkout or a --fake file holding a space or a single quote exits 1 with a named line before any launcher command is built', async () => {
+      const { refused, quoted } = await runs.Q.get();
+      const carry = 'holds a space or a single quote, which the launcher command cannot carry';
+      expect([refused.root.status, refused.checkout.status, refused.fake.status]).toEqual([1, 1, 1]);
+      expect(refused.root.stdout.trim()).toBe(`BATCH 1: root C:/a b/root ${carry}`);
+      expect(refused.checkout.stdout.trim()).toBe(`BATCH 1: checkout C:/a b/checkout ${carry}`);
+      expect(refused.fake.stdout.trim()).toBe(`BATCH 1: --fake ${quoted} ${carry}`);
+    });
+
+    it('a Z0_GRACE_S that is not a whole number exits 1 naming the variable, since a hung runner would never be stopped', async () => {
+      const { refused } = await runs.Q.get();
+      expect(refused.grace.status).toBe(1);
+      expect(refused.grace.stdout.trim()).toBe('BATCH 1: Z0_GRACE_S abc must be a whole number of seconds');
     });
 
     it('the stub launchers refuse a call without -Toolchain', async () => {
@@ -713,6 +870,51 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
       expect(survived.launchers).toEqual([true, true]);
     });
 
+    it('a launcher killed after Start-Process and before its pids.txt line, then the batch killed and restarted: it waits for the runner, launches none again and writes the marker from the Records: line [IO1, UP3-1]', async () => {
+      const { c, pidsLines, r, launcher } = await runs.Pd.get();
+      expect(pidsLines).toBe(0);
+      expect(c.launches()).toEqual(['pb-w1']);
+      expect(c.log().some((l) => l.startsWith('wait for ') && l.includes('pb-w1'))).toBe(true);
+      expect(lines(`${c.dir('pb-w1')}/run.log`).some((l) => l.startsWith('Records: '))).toBe(true);
+      expect(c.marker('pb-w1')).toBe('pb-w1\n');
+      expect(r).toMatchObject({ code: 1, last: 'BATCH 1 REGRADE FAILED: pb-w1 regrade stub regrade failed on purpose' });
+      expect(isAlive(launcher)).toBe(false);
+    });
+
+    it('every planned record written, no Records: line and exit 0: done by its records, with no -a2 folder [UP3-1]', async () => {
+      const { c, r } = await runs.Pb.get();
+      expect(lines(`${c.dir('pa-w1')}/run.log`).some((l) => l.startsWith('Records: '))).toBe(false);
+      expect(c.marker('pa-w1')).toBe('pa-w1\n');
+      expect(fs.existsSync(c.dir('pa-w1-a2'))).toBe(false);
+      expect(c.launches()).toEqual(['pa-w1']);
+      expect(r).toMatchObject({ code: 1, last: 'BATCH 1 REGRADE FAILED: pa-w1 regrade stub regrade failed on purpose' });
+    });
+
+    it('one record short and exit 0 with no Records: line: failed, and the step again retries it in <k>-w1-a2/ [UP3-1]', async () => {
+      const { c, first, second } = await runs.Pr.get();
+      expect(first).toMatchObject({ code: 3, last: 'BATCH 1 FAILED: pc-w1 runner exit 0' });
+      expect(c.launches()).toEqual(['pc-w1', 'pc-w1-a2']);
+      expect(c.flags('pc-w1-a2')).toMatchObject({ Retry: '2' });
+      expect(c.marker('pc-w1')).toBe('pc-w1-a2\n');
+      expect(second).toMatchObject({ code: 1, last: 'BATCH 1 REGRADE FAILED: pc-w1-a2 regrade stub regrade failed on purpose' });
+    });
+
+    it('a Start-Process that gives no pid exits 1 with BATCH 1 LAUNCH FAILED and its error text, never the launch.txt of an earlier launch [IO2]', async () => {
+      const { c, r } = await runs.Ql.get();
+      expect(r.code).toBe(1);
+      expect(r.last).toBe('BATCH 1 LAUNCH FAILED: xa-w1 Start-Process gave no pid: no error text');
+      expect(r.out).not.toContain('earlier launch');
+      expect(c.launches()).toEqual([]);
+      expect(fs.existsSync(`${c.dir('xa-w1')}/launch.txt`)).toBe(false);
+      expect(fs.existsSync(`${c.dir('xa-w1')}/launcher-args.json`)).toBe(false);
+    });
+
+    it('a z0-unit-record arms refusal stops the batch with its line, and no launcher gets an empty -Arms', async () => {
+      const { c, r } = await runs.Zr.get();
+      expect(r).toMatchObject({ code: 1, last: 'BATCH 1: arms refused on purpose' });
+      expect(c.launches()).toEqual([]);
+    });
+
     it('a regrade stub that exits 1 gives BATCH 1 REGRADE FAILED: <k> regrade <line>, exit 1, and the step again reruns it [WP2-2]', async () => {
       const { c, third, fourth } = await runs.K.get();
       expect(third).toMatchObject({ code: 1, last: 'BATCH 1 REGRADE FAILED: ka-w1 regrade stub regrade failed on purpose' });
@@ -829,6 +1031,44 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
       expect(afterCall2.q145w1).toBe('q145-w1\n');
       expect(fs.existsSync(`${c.dir('q14-w1-a2')}/g5-reader-draw.stub.json`)).toBe(true);
       for (const n of folders) expect(json(`${c.dir(n)}/run/grading.json`)).toMatchObject({ g5: { readerRound: 1 } });
+    });
+
+    it('a torn temp beside a missing score file is no record: both score calls run and write the files whole [UP2-1, TP2-2]', async () => {
+      const { c, r, sealed } = await runs.Pt.get();
+      expect(r).toMatchObject({ code: 0, out: 'BATCH 1 DONE: 2 runs, 0 reruns, 2 regrades' });
+      expect(at(c, 'call reader-score q145-w1 ')).toBeGreaterThan(-1);
+      expect(at(c, 'call stored-score q145-w1 ')).toBeGreaterThan(-1);
+      for (const f of ['reader-r1.score.json', 'stored.score.json']) expect(json(`${sealed}/${f}`)).toHaveProperty('labels');
+    });
+
+    it('a resume over completed G5 calls reads their sealed files: a malformed stored.key.json, a malformed stored.score.json and a missing reader score each stop it, with no END and exit 1 [UP2-2]', async () => {
+      const { key, score, missing } = await runs.Sl.get();
+      const sealed = (call: string, file: string, why: string) => new RegExp(`^BATCH 1 SEALED FAILED: q145-w1 ${call} .*${file}: ${why}$`);
+      const broken = 'sealed file does not parse; the harness never rebuilds it';
+      expect(key.r.last).toMatch(sealed('stored-draw', 'stored\\.key\\.json', broken));
+      expect(score.r.last).toMatch(sealed('stored-score', 'stored\\.score\\.json', broken));
+      expect(missing.r.last).toMatch(sealed('reader-score', 'reader-r1\\.score\\.json', 'sealed file is missing; call reader-score seals it'));
+      for (const { c, r } of [key, score, missing]) {
+        expect(r.code).toBe(1);
+        expect(r.out).not.toContain('DONE');
+        expect(fs.existsSync(`${c.root}/batch1/END`)).toBe(false);
+      }
+    });
+
+    it('an END that cannot be written exits 1 with BATCH 1 END FAILED: write END exit 1, prints no DONE and leaves no END file or temp [GO4]', async () => {
+      const { end, endRun } = await runs.E.get();
+      expect(endRun).toMatchObject({ code: 1, last: 'BATCH 1 END FAILED: write END exit 1' });
+      expect(endRun.out).not.toContain('DONE');
+      expect(fs.statSync(`${end.root}/batch1/END`).isDirectory()).toBe(true);
+      expect(fs.readdirSync(`${end.root}/batch1/END`)).toEqual([]);
+      expect(fs.readdirSync(`${end.root}/batch1`).filter((n) => n.startsWith('END.tmp-'))).toEqual([]);
+    });
+
+    it('a marker that cannot be written exits 1 with BATCH 1 MARKER FAILED, logs no marker line and launches none [UP2-1]', async () => {
+      const { mark, markRun } = await runs.E.get();
+      expect(markRun).toMatchObject({ code: 1, last: 'BATCH 1 MARKER FAILED: write q145-w1 exit 1' });
+      expect(mark.log().some((l) => l.startsWith('marker q145-w1 '))).toBe(false);
+      expect(mark.launches()).toEqual([]);
     });
 
     it('END is written last and whole: a planted END.tmp- is replaced, and the rerun writes the same end-phase files [GO4]', async () => {

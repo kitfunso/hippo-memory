@@ -14,6 +14,7 @@ import { cellKey, parsePlan } from './z0-records.mjs';
 const USAGE = [
   'usage: z0-unit-record.mjs unit FOLDER',
   '       z0-unit-record.mjs call FOLDER regrade|reader-draw|stored-draw|reader-score|stored-score|grading',
+  '       z0-unit-record.mjs sealed FOLDER regrade|reader-draw|stored-draw|reader-score|stored-score|grading',
   '       z0-unit-record.mjs keys ROOT 1|2|raise',
   '       z0-unit-record.mjs arms first 1|2|raise',
   '       z0-unit-record.mjs arms rerun FOLDER SEED',
@@ -34,6 +35,16 @@ const SUMMARIES = {
   'reader-score': new RegExp(`^reader round 1: ${num} of ${num} labels disagree$`),
   'stored-score': new RegExp(`^stored sample: ${num} of ${num} labels agree with the key-phrase judgement$`),
   grading: new RegExp(`^wrote .+: ${num} flipped lessons, ${num} acceptance flips$`),
+};
+
+// The sealed files each G5 call leaves under `<folder>/run/g5/sealed`: reader-sample.mjs:15-16, stored-sample.mjs:15-16.
+const SEALED = {
+  regrade: [],
+  'reader-draw': ['reader-r1.key.json'],
+  'stored-draw': ['stored.key.json'],
+  'reader-score': ['reader-r1.key.json', 'reader-r1.score.json'],
+  'stored-score': ['stored.key.json', 'stored.score.json'],
+  grading: ['reader-r1.key.json', 'reader-r1.score.json', 'stored.key.json', 'stored.score.json'],
 };
 
 const bad = (message) => new Error(`${message}\n${USAGE}`);
@@ -95,6 +106,15 @@ export function callRecord(folder, call) {
   return `record done ${folder} ${call}`;
 }
 
+/** @returns {string} `sealed ok <folder> <call>`; a sealed file of the call that is absent or does not parse throws, naming it (Record model: sealed files are never rebuilt). */
+export function sealedLine(folder, call) {
+  for (const name of SEALED[call]) {
+    const file = path.join(folder, 'run', 'g5', 'sealed', name);
+    if (readSealed(file) === null) throw new Error(`${file}: sealed file is missing; call ${call} seals it`);
+  }
+  return `sealed ok ${folder} ${call}\n`;
+}
+
 function keysLines(root, which) {
   const file = path.join(root, 'pins-r4.json');
   const pins = readJson(file);
@@ -141,6 +161,7 @@ function toolchainLine(key, file) {
 const COMMANDS = {
   unit: (a) => (a.length === 1 ? `${unitRecord(a[0])}\n` : null),
   call: (a) => (a.length === 2 && Object.hasOwn(SUMMARIES, a[1]) ? `${callRecord(a[0], a[1])}\n` : null),
+  sealed: (a) => (a.length === 2 && Object.hasOwn(SEALED, a[1]) ? sealedLine(a[0], a[1]) : null),
   keys: (a) => (a.length === 2 && Object.hasOwn(KEY_FIELDS, a[1]) ? keysLines(a[0], a[1]) : null),
   arms: (a) => armsLine(a),
   'max-seed': (a) => (a.length === 1 ? maxSeedLine(a[0]) : null),

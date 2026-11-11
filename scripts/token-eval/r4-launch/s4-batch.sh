@@ -20,6 +20,7 @@ while [ $# -gt 0 ]; do
 done
 BOX_WAIT=${Z0_BOX_WAIT_S:-60}
 [[ $BOX_WAIT =~ ^[0-9]+$ ]] || usage
+REPOS=${Z0_REPOS_FILE:-C:/eval-authors/r3-repos.json}
 BDIR=$ROOT/$B
 declare -A ENTRY TC
 
@@ -29,25 +30,50 @@ die() { echo "$1"; [ -d "$BDIR" ] && say "$1"; exit "${2:-1}"; }
 form=$(cygpath -m "$ROOT")
 form=${form%/}
 [ "$ROOT" = "$form" ] || die "BATCH $N: root $ROOT must be written as $form"
+[[ $ROOT =~ ^[A-Za-z]:/ ]] || die "BATCH $N: root $ROOT must be an absolute path such as C:/z0-runs/r4"
 CHECKOUT=$(cygpath -m "$CHECKOUT")
 CHECKOUT=${CHECKOUT%/}
 export Z0_CHECKOUT=$CHECKOUT
+# The launcher command holds these inside single quotes, so a space or a quote in one would split or break its argv.
+plain() { [[ $2 != *[\ \']* ]] || die "BATCH $N: $1 $2 holds a space or a single quote, which the launcher command cannot carry"; }
+plain root "$ROOT"
+plain checkout "$CHECKOUT"
+plain 'script folder' "$HERE"
+[ -z "$FAKE" ] || plain --fake "$FAKE"
+[[ ${Z0_GRACE_S:-600} =~ ^[0-9]+$ ]] || die "BATCH $N: Z0_GRACE_S ${Z0_GRACE_S} must be a whole number of seconds"
+# Z0_REPOS_FILE swaps the toolchain table, so only a dry root may use it, as -BoxCheck is dry only.
+[ -z "${Z0_REPOS_FILE:-}" ] || [ -f "$ROOT/DRYRUN" ] || die "BATCH $N: Z0_REPOS_FILE is set, but $ROOT holds no DRYRUN file; only a dry root may use it"
 [ -f "$CHECKOUT/scripts/token-eval/z0-unit-record.mjs" ] || die "BATCH $N: $CHECKOUT holds no scripts/token-eval/z0-unit-record.mjs"
 . "$HERE/s4-units.sh"
 
-# Writes `<text>` and a line feed to `<file>` whole: older temps removed, a temp of this process, then a rename.
+# Writes `<text>` and a line feed to `<file>` whole: older temps removed, a temp of this process, then a rename tried five times 0.5 s apart (a busy destination); returns 1 when it never lands.
 write_whole() {
-  rm -f "$1".tmp-*
-  printf '%s\n' "$2" > "$1.tmp-$$" && mv -f "$1.tmp-$$" "$1"
+  local try
+  rm -f "$1".tmp-* 2> /dev/null
+  printf '%s\n' "$2" > "$1.tmp-$$" 2> /dev/null || return 1
+  for try in 1 2 3 4 5; do
+    mv -fT "$1.tmp-$$" "$1" 2> /dev/null && return 0
+    sleep 0.5
+  done
+  rm -f "$1.tmp-$$" 2> /dev/null
+  return 1
+}
+# A whole write whose failure stops the batch with a named line: no DONE prints without its END, and no marker logs without its file.
+write_or_die() {
+  local what=$1 rc
+  write_whole "$2" "$3"
+  rc=$?
+  [ "$rc" = 0 ] || die "BATCH $N $what FAILED: write ${2##*/} exit $rc"
 }
 # A marker that exists is left as it is.
 write_marker() {
   [ -f "$BDIR/done/$1" ] && return 0
-  mkdir -p "$BDIR/done"
-  write_whole "$BDIR/done/$1" "$2"
+  mkdir -p "$BDIR/done" 2> /dev/null
+  write_or_die MARKER "$BDIR/done/$1" "$2"
   say "marker $1 $2"
 }
 last_line() { LAST=$(tr -d '\r' < "$1" 2> /dev/null | grep -v '^[[:space:]]*$' | tail -n 1); }
+first_line() { LAST=$(tr -d '\r' < "$1" 2> /dev/null | grep -v '^[[:space:]]*$' | head -n 1); }
 scan() { units_scan || die "BATCH $N: process scan failed: $UNITS_ERR"; }
 
 # Runs one CLI of the checkout, logging argv, exit code and last line; its output is CMD_OUT and its exit code CMD_RC.
@@ -75,11 +101,12 @@ state_of() {
 }
 toolchain_of() {
   [ -n "${TC[$1]}" ] && return 0
-  TC[$1]=$(ur toolchain "$1" ${Z0_REPOS_FILE:+"$Z0_REPOS_FILE"} 2>&1 < /dev/null) || die "BATCH $N: ${TC[$1]%%$'\n'*}"
+  TC[$1]=$(ur toolchain "$1" "$REPOS" 2>&1 < /dev/null) || die "BATCH $N: ${TC[$1]%%$'\n'*}"
 }
 
 # ------------------------------------------------------------------------------------------------ start
 [ -f "$BDIR/ADMITTED" ] || die "BATCH $N: no ADMITTED; run it through s4-drive.sh"
+say "repos file $REPOS"
 if [ "$N" = raise ]; then
   [ -f "$ROOT/raise/max-seed.json" ] || die "BATCH raise: no raise/max-seed.json; run step 6 through s4-drive.sh"
   out=$(ur max-seed "$ROOT" 2>&1) || die "BATCH raise: ${out%%$'\n'*}"
@@ -94,13 +121,16 @@ line=$(batch_lines "$ROOT" | head -n 1)
 [ -z "$line" ] || die "BATCH $N: s4-batch.sh ${line%% *} already runs on $ROOT"
 if [ "$N" = raise ] && [ "$MAXSEED" -le 3 ]; then
   [ -f "$ROOT/seed-rule.json" ] || die "BATCH raise: $ROOT/seed-rule.json is missing"
-  write_whole "$ROOT/raise/NONE" "$(sha256sum "$ROOT/seed-rule.json" | cut -d' ' -f1)"
-  write_whole "$BDIR/END" 'BATCH raise DONE: 0 runs'
+  write_or_die NONE "$ROOT/raise/NONE" "$(sha256sum "$ROOT/seed-rule.json" | cut -d' ' -f1)"
+  write_or_die END "$BDIR/END" 'BATCH raise DONE: 0 runs'
   die 'BATCH raise DONE: 0 runs' 0
 fi
 out=$(ur keys "$ROOT" "$N" 2>&1) || die "BATCH $N: ${out%%$'\n'*}"
 readarray -t KEYS <<< "$out"
-ARMS_FIRST=$(ur arms first "$N")
+# The arms line of one `z0-unit-record arms` call in ARMS_OUT; a failure stops the batch with that tool's line, never an empty -Arms.
+arms_of() { ARMS_OUT=$(ur arms "$@" 2>&1 < /dev/null) || die "BATCH $N: ${ARMS_OUT%%$'\n'*}"; }
+arms_of first "$N"
+ARMS_FIRST=$ARMS_OUT
 
 # ------------------------------------------------------------------------------------------------ phase start
 wait_quiet() {
@@ -190,10 +220,11 @@ unit_flags() {
   case $folder in *-a[23]) FLAGS+=(-Retry "${folder##*-a}") ;; esac
   [ -z "$FAKE" ] || FLAGS+=(-FakeAgent "$FAKE")
   if [ "$kind" = first ]; then
-    if [ "$N" = raise ]; then FLAGS+=(-Arms "$(ur arms first raise)" -SeedRule "$ROOT/seed-rule.json" -MaxSeed "$MAXSEED"); else FLAGS+=(-Arms "$ARMS_FIRST" -Seeds 3); fi
+    if [ "$N" = raise ]; then arms_of first raise; FLAGS+=(-Arms "$ARMS_OUT" -SeedRule "$ROOT/seed-rule.json" -MaxSeed "$MAXSEED"); else FLAGS+=(-Arms "$ARMS_FIRST" -Seeds 3); fi
   else
     first=$BDIR/$(< "$BDIR/done/$k-w$W")
-    FLAGS+=(-Arms "$(ur arms rerun "$first" "$seed")" -OnlySeed "$seed")
+    arms_of rerun "$first" "$seed"
+    FLAGS+=(-Arms "$ARMS_OUT" -OnlySeed "$seed")
     [ "$N" != raise ] || FLAGS+=(-SeedRule "$ROOT/seed-rule.json" -MaxSeed "$MAXSEED")
   fi
 }
@@ -205,11 +236,17 @@ launch_unit() {
   toolchain_of "$k"
   unit_flags "$kind" "$k" "$folder" "$seed"
   mkdir -p "$folder"
+  # A launch.txt left by an earlier launch must never read as this one's output.
+  rm -f "$folder/launch.txt" "$folder/launch.err" "$folder/start.out" "$folder/start.err" 2> /dev/null
   for a in "${FLAGS[@]}"; do lit+=",'$a'"; done
   # The pid comes back through a file, not a pipe: the launcher inherits this call's handles, and a pipe stays open until it ends.
   powershell -NoProfile -Command "\$p = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','$HERE/s4-run.ps1'$lit -RedirectStandardOutput '$folder/launch.txt' -RedirectStandardError '$folder/launch.err' -WindowStyle Hidden -PassThru; \$p.Id" < /dev/null > "$folder/start.out" 2> "$folder/start.err"
-  pid=$(tr -d '\r\n' < "$folder/start.out")
-  say "launch ${folder##*/} pid ${pid:-none} ${FLAGS[*]}"
+  pid=$(tr -d '\r\n' < "$folder/start.out" 2> /dev/null)
+  if ! [[ $pid =~ ^[0-9]+$ ]]; then
+    first_line "$folder/start.err"
+    die "BATCH $N LAUNCH FAILED: ${folder##*/} Start-Process gave no pid: ${LAST:-no error text}"
+  fi
+  say "launch ${folder##*/} pid $pid ${FLAGS[*]}"
   ENTRY[$folder]=$1
   LIVE+=("$folder")
   case " ${PHASE_UNITS[*]} " in *" $folder "*) ;; *) PHASE_UNITS+=("$folder") ;; esac
@@ -307,16 +344,27 @@ g5_wait() {
   done
 }
 
+# A call taken as done must have its sealed files read through readSealed (Record model): a missing or changed one stops the batch.
+g5_sealed() {
+  local out
+  out=$(ur sealed "$1" "$2" 2>&1 < /dev/null) || die "BATCH $N SEALED FAILED: ${1##*/} $2 ${out%%$'\n'*}"
+}
+
 # One G5 call on one folder: wait for its processes, remove a stale lock, skip a done call, run s4-regrade.ps1 in the foreground, then read the log.
+# A draw whose key exists but whose call has no record was killed between the two: it is skipped, and the score call reads the key.
 g5_call() {
-  local folder=$1 k=$2 call=$3 name=${1##*/} lock=$1/run/g5/regrade.lock tries=0 out rc rec s held
+  local folder=$1 k=$2 call=$3 name=${1##*/} lock=$1/run/g5/regrade.lock tries=0 out rc rec s held key=''
   case $call in
-    reader-draw) [ -f "$folder/run/g5/sealed/reader-r1.key.json" ] && return 0 ;;
-    stored-draw) [ -f "$folder/run/g5/sealed/stored.key.json" ] && return 0 ;;
+    reader-draw) key=$folder/run/g5/sealed/reader-r1.key.json ;;
+    stored-draw) key=$folder/run/g5/sealed/stored.key.json ;;
   esac
+  if [ -n "$key" ] && [ -f "$key" ]; then
+    [[ $(ur call "$folder" "$call") == "record done "* ]] && g5_sealed "$folder" "$call"
+    return 0
+  fi
   toolchain_of "$k"
   while :; do
-    [[ $(ur call "$folder" "$call") == "record done "* ]] && return 0
+    if [[ $(ur call "$folder" "$call") == "record done "* ]]; then g5_sealed "$folder" "$call"; return 0; fi
     g5_wait "$folder"
     if [ -f "$lock" ]; then
       held=$(tr -dc '0-9' < "$lock")
@@ -324,7 +372,7 @@ g5_call() {
       say "$name stale regrade lock $held removed"
     fi
     s=$(call_state "$folder" "$call") || die "BATCH $N: ${s#"call error $folder $call "}"
-    [[ $s == "call done "* ]] && return 0
+    if [[ $s == "call done "* ]]; then g5_sealed "$folder" "$call"; return 0; fi
     powershell -NoProfile -ExecutionPolicy Bypass -File "$HERE/s4-regrade.ps1" -Checkout "$CHECKOUT" -Root "$ROOT" -Key "$k" -Toolchain "${TC[$k]}" -Folder "$folder" -Call "$call" < /dev/null > "$folder/g5-$call.launch.txt" 2>&1
     rc=$?
     last_line "$folder/g5-$call.launch.txt"
@@ -332,7 +380,7 @@ g5_call() {
     say "call $call $name launcher exit $rc: $out"
     g5_wait "$folder"
     s=$(call_state "$folder" "$call") || die "BATCH $N: ${s#"call error $folder $call "}"
-    [[ $s == "call done "* ]] && return 0
+    if [[ $s == "call done "* ]]; then g5_sealed "$folder" "$call"; return 0; fi
     rec=$(ur call "$folder" "$call" 2>&1 < /dev/null)
     if [ "$call" = regrade ] && [[ $rec == *" error-rows "* ]]; then
       tries=$((tries + 1))
@@ -402,7 +450,7 @@ end_phase() {
   [ "$N" != 1 ] || end_scale
   for i in "${!G5_DIR[@]}"; do [[ $(ur call "${G5_DIR[$i]}" grading 2> /dev/null) == "record done "* ]] && regrades=$((regrades + 1)); done
   line="BATCH $N DONE: ${#KEYS[@]} runs, $RERUNS reruns, $regrades regrades"
-  write_whole "$BDIR/END" "$line"
+  write_or_die END "$BDIR/END" "$line"
   die "$line" 0
 }
 

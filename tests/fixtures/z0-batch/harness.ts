@@ -103,6 +103,8 @@ export class Case {
     put(`${this.root}/spend-basis.json`, JSON.stringify({ schema: 'z0-spend-basis/1', basisByArm: BASIS, bySequence: { ...SEQ, ...BATCH2_SEQ }, meanPerRecord: MEAN }));
     put(`${this.root}/pilot.json`, JSON.stringify({ schema: 'z0-pilot/1', attempt: 1, tag: 'z0-r4-freeze-1', r: { S1: 1, S2: 1 }, rArm: 'S2', rMax: 1, flag19: false, ledgerTotal: 40, pilotSpend: 36.5, checks: {} }));
     put(`${this.root}/prices.json`, JSON.stringify(PRICES_BY_MODEL));
+    // A dry root: the only kind that may set Z0_REPOS_FILE.
+    put(`${this.root}/DRYRUN`, '');
     if (o.admit !== false) put(`${this.root}/${this.b}/ADMITTED`, 'admitted\n');
     if (o.width !== undefined) put(`${this.root}/width.txt`, `${o.width}\n`);
   }
@@ -132,6 +134,7 @@ export class Case {
     put(`${g5}/sealed/reader-r1.key.json`, JSON.stringify({ pairs: [{ file: 'p1', which: 'first', verdict: 'pass' }, { file: 'p2', which: 'final', verdict: 'fail' }] }));
     put(`${g5}/sealed/reader-r1.score.json`, JSON.stringify({ labels: { p1: 'pass', p2: 'fail' } }));
     put(`${g5}/sealed/stored.key.json`, JSON.stringify({ units: ['u1', 'u2'] }));
+    put(`${g5}/sealed/stored.score.json`, JSON.stringify({ labels: { u1: 'yes', u2: 'no' } }));
     put(`${g5}/reader-r1/labels.tsv`, '# id\tlabel (stub)\tnote\np1\tpass\t\np2\tfail\t\n');
     put(`${g5}/stored/labels.tsv`, '# id\tlabel (stub)\tnote\nu1\tyes\t\nu2\tno\t\n');
     put(`${dir}/run/grading.json`, `${JSON.stringify({ g5: { readerRound: 1 }, readerSample: { n: 2, disagreements: 0 }, flippedLessons: [], acceptanceFlips: 0 })}\n`);
@@ -152,10 +155,10 @@ export class Case {
   }
 
   /** One s4-batch.sh call; output goes to a file so no pipe stays open behind a runner. */
-  start(extra: string[] = [], env: Record<string, string> = {}, root = this.root, n: string = this.n): Started {
+  start(extra: string[] = [], env: Record<string, string> = {}, root = this.root, n: string = this.n, checkout = CHECKOUT): Started {
     const out = `${this.base}/out-${++this.calls}.txt`;
     const fd = fs.openSync(out, 'w');
-    const child = spawn(gitBash(process.env, []), [`${this.scored}/s4-batch.sh`, n, CHECKOUT, root, '--poll', '1', ...extra], { env: this.env(env), stdio: ['ignore', fd, fd], windowsHide: true, cwd: this.base });
+    const child = spawn(gitBash(process.env, []), [`${this.scored}/s4-batch.sh`, n, checkout, root, '--poll', '1', ...extra], { env: this.env(env), stdio: ['ignore', fd, fd], windowsHide: true, cwd: this.base });
     fs.closeSync(fd);
     this.track(child.pid!);
     const done = new Promise<Run>((resolve) => child.on('exit', (code) => {
