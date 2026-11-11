@@ -40,10 +40,15 @@ const transcript = (out: string, id: string, rows: readonly Line[], cell: Cell =
 const subagent = (out: string, id: string, rows: readonly Line[]) => put(path.join(home(out), 'projects', '-work', id, 'subagents', 'agent-a1.jsonl'), jsonl(rows));
 const attemptsFile = (out: string, rows: readonly Attempt[], cell: Cell = CELL, tail = '') => put(path.join(out, 'raw', cell.seq, cell.arm, `seed${cell.seed}`, 'attempts.jsonl'), jsonl(rows) + tail);
 const runsFile = (out: string, rows: readonly Rec[], tail = '') => put(path.join(out, 'runs.jsonl'), jsonl(rows) + tail);
-const cutoff = (out: string, name: string, meta: { taskId: string; attempt: number; sessionId: string; sizesBefore: Record<string, number> }, files: Record<string, readonly Line[]>) => {
-  const dir = path.join(out, 'cutoffs', CELL.seq, CELL.arm, `seed${CELL.seed}`, name);
-  put(path.join(dir, 'attempt.json'), JSON.stringify(meta));
+const cutoff = (out: string, name: string, meta: { taskId: string; attempt: number; sessionId: string; sizesBefore: Record<string, number> } | null, files: Record<string, readonly Line[]>, cell: Cell = CELL) => {
+  const dir = path.join(out, 'cutoffs', cell.seq, cell.arm, `seed${cell.seed}`, name);
+  if (meta !== null) put(path.join(dir, 'attempt.json'), JSON.stringify(meta));
   for (const [id, rows] of Object.entries(files)) put(path.join(dir, 'claude-config', rel(id)), jsonl(rows));
+};
+const warmup = (out: string, model: string, rows: readonly Line[], result: { status: number; total_cost_usd: number | null } | null) => {
+  put(path.join(out, 'warmups', `${model}.start.json`), JSON.stringify({ model, configDir: path.join(out, 'warmup', model) }));
+  put(path.join(out, 'warmup', model, 'projects', '-w', 'w.jsonl'), jsonl(rows));
+  if (result !== null) put(path.join(out, 'warmups', `${model}.json`), JSON.stringify({ model, ...result, result: null }));
 };
 const folder = (name: string) => path.join(work, name);
 const pricesPath = () => {
@@ -70,18 +75,26 @@ describe('the pricing half: records, attempts and message ids', () => {
     expect([r.code, lastLine(r)]).toEqual([0, `LEDGER ${(4 + OPUS_100K).toFixed(2)}`]);
   });
 
-  it('adds only the messages of a cut-off resume copy past sizesBefore, each at its own model row and once per id', () => {
+  it('adds the messages of a cut-off resume copy once per id, each at its own model row, and not the head its record covers', () => {
     const out = folder('a');
-    const head = [say('ghost', OPUS_MODEL, 100_000), say('h1', OPUS_MODEL, 100_000)];
+    const head = [say('h1', OPUS_MODEL, 100_000)];
     const tail = [say('c1', SONNET_MODEL, 100_000), say('c1', SONNET_MODEL, 100_000), say('c2', OPUS_MODEL, 200_000)];
     const sizesBefore = { [rel('S1')]: bytes(head) };
     runsFile(out, [record({ costUsd: 10, resumeSessionId: 'S1' })]);
     attemptsFile(out, [attempt({}), attempt({ kind: 'resume', attempt: 1, sizesBefore }), attempt({ kind: 'resume', attempt: 2, sizesBefore })]);
-    transcript(out, 'S1', [head[1]!]);
+    transcript(out, 'S1', head);
     cutoff(out, '1-1', { taskId: 't1', attempt: 1, sessionId: 'S1', sizesBefore }, { S1: [...head, ...tail] });
     const r = cli([out]);
-    // The head id `ghost` is in no live file, so only the offset keeps it out; the id check alone would price it.
     expect(lastLine(r)).toBe(`LEDGER ${(10 + SONNET_100K + 2 * OPUS_100K).toFixed(2)}`);
+  });
+
+  it('prices a cut-off copy that has no attempt.json, since a kill can land between the copy and that file', () => {
+    const out = folder('a');
+    runsFile(out, [record({ costUsd: 4 })]);
+    attemptsFile(out, [attempt({})]);
+    transcript(out, 'S1', [say('h1', OPUS_MODEL, 100_000)]);
+    cutoff(out, '1-1', null, { S1: [say('h1', OPUS_MODEL, 100_000), say('c1', SONNET_MODEL, 100_000)] });
+    expect(lastLine(cli([out]))).toBe(`LEDGER ${(4 + SONNET_100K).toFixed(2)}`);
   });
 
   it('prices a record with a null costUsd from its transcripts at each message\'s own model', () => {
@@ -158,7 +171,7 @@ describe('the pricing half: records, attempts and message ids', () => {
     expect(lastLine(cli([out]))).toBe(`LEDGER ${(4 + OPUS_100K).toFixed(2)}`);
   });
 
-  it('skips a torn last line of attempts.jsonl, so the session it names is no attempt', () => {
+  it('skips a torn last line of attempts.jsonl without a stop, and the sweep still prices the session that line names', () => {
     const out = folder('a');
     runsFile(out, [record()]);
     const torn = JSON.stringify(attempt({ taskId: 't2', sessionId: 'S2' })).slice(0, 50);
@@ -166,7 +179,7 @@ describe('the pricing half: records, attempts and message ids', () => {
     transcript(out, 'S1', [say('a1', OPUS_MODEL, 100_000)]);
     transcript(out, 'S2', [say('b1', OPUS_MODEL, 100_000)]);
     const r = cli([out]);
-    expect([r.code, lastLine(r)]).toEqual([0, `LEDGER ${OPUS_100K.toFixed(2)}`]);
+    expect([r.code, lastLine(r)]).toEqual([0, `LEDGER ${(2 * OPUS_100K).toFixed(2)}`]);
   });
 
   it('stops with exit 1 on a line that is not JSON and is not the last one', () => {
@@ -191,15 +204,65 @@ describe('the pricing half: records, attempts and message ids', () => {
     expect(lastLine(cli([open]))).toBe(`LEDGER ${(6 + SONNET_100K).toFixed(2)}`);
   });
 
-  it('prices an uncovered resume from the live files past sizesBefore, and its forked file in full', () => {
+  it('prices a live forked resume that no record names in full, each id once [S2C-R1 a]', () => {
     const out = folder('a');
     const head = [say('h1', OPUS_MODEL, 100_000)];
     const sizesBefore = { [rel('S1')]: bytes(head) };
-    runsFile(out, [record({ resumeSessionId: 'F1' })]);
+    runsFile(out, []);
     attemptsFile(out, [attempt({}), attempt({ kind: 'resume', attempt: 1, sizesBefore })]);
     transcript(out, 'S1', [...head, say('r1', SONNET_MODEL, 100_000)]);
     transcript(out, 'F1', [...head, say('r2', SONNET_MODEL, 100_000)]);
     expect(lastLine(cli([out]))).toBe(`LEDGER ${(OPUS_100K + 2 * SONNET_100K).toFixed(2)}`);
+  });
+
+  it('gives a folder with its last record line torn the LEDGER it has whole, with a forked resume [S2C-R1 b]', () => {
+    const [whole, torn] = [folder('whole'), folder('torn')];
+    const head = [say('h1', OPUS_MODEL, 100_000)];
+    const sizesBefore = { [rel('S1')]: bytes(head) };
+    const rec = record({ resumeSessionId: 'F1' });
+    runsFile(whole, [rec]);
+    put(path.join(torn, 'runs.jsonl'), JSON.stringify(rec).slice(0, 60));
+    for (const out of [whole, torn]) {
+      attemptsFile(out, [attempt({}), attempt({ kind: 'resume', attempt: 1, sizesBefore })]);
+      transcript(out, 'S1', [...head, say('r1', SONNET_MODEL, 100_000)]);
+      transcript(out, 'F1', [...head, say('r2', SONNET_MODEL, 100_000)]);
+    }
+    const expected = `LEDGER ${(OPUS_100K + 2 * SONNET_100K).toFixed(2)}`;
+    expect([lastLine(cli([whole])), lastLine(cli([torn]))]).toEqual([expected, expected]);
+  });
+
+  it('counts a subagent file a resume made next to a covered session, since the session share ends at sizesBefore [S2C-R1 c]', () => {
+    const out = folder('a');
+    const head = [say('h1', OPUS_MODEL, 100_000)];
+    const sizesBefore = { [rel('S1')]: bytes(head) };
+    // Not covered: the record has no resumeSessionId, so the resume's work is no part of its figure.
+    runsFile(out, [record({ costUsd: 6 })]);
+    attemptsFile(out, [attempt({}), attempt({ kind: 'resume', attempt: 1, sizesBefore })]);
+    transcript(out, 'S1', [...head, say('r1', SONNET_MODEL, 100_000)]);
+    subagent(out, 'S1', [say('sub1', OPUS_MODEL, 100_000)]);
+    expect(lastLine(cli([out]))).toBe(`LEDGER ${(6 + SONNET_100K + OPUS_100K).toFixed(2)}`);
+  });
+
+  it('keeps the file a covered forked resume wrote out of the sweep: the record that names it pays for it', () => {
+    const out = folder('a');
+    const head = [say('h1', OPUS_MODEL, 100_000)];
+    const sizesBefore = { [rel('S1')]: bytes(head) };
+    runsFile(out, [record({ costUsd: 10, resumeSessionId: 'F1' })]);
+    attemptsFile(out, [attempt({}), attempt({ kind: 'resume', attempt: 1, sizesBefore })]);
+    transcript(out, 'S1', head);
+    transcript(out, 'F1', [...head, say('r2', SONNET_MODEL, 100_000)]);
+    expect(lastLine(cli([out]))).toBe('LEDGER 10.00');
+  });
+
+  it('keeps a covered resume\'s subagent file out of the sweep: the record pays for it', () => {
+    const out = folder('a');
+    const head = [say('h1', OPUS_MODEL, 100_000)];
+    const sizesBefore = { [rel('S1')]: bytes(head) };
+    runsFile(out, [record({ costUsd: 6, resumeSessionId: 'S1' })]);
+    attemptsFile(out, [attempt({}), attempt({ kind: 'resume', attempt: 1, sizesBefore })]);
+    transcript(out, 'S1', [...head, say('r1', SONNET_MODEL, 100_000)]);
+    subagent(out, 'S1', [say('sub1', OPUS_MODEL, 100_000)]);
+    expect(lastLine(cli([out]))).toBe('LEDGER 6.00');
   });
 
   it('prices no message whose four usage counts are zero, so a synthetic message needs no row', () => {
@@ -279,6 +342,28 @@ describe('arms, pilot folders and the spend basis', () => {
     expect(body.meanPerRecord).toBe(3);
   });
 
+  it('attributes a swept id to the arm of the cell folder it lives in, under runs/ and under cutoffs/', () => {
+    const out = folder('run');
+    const [s1, s2] = [{ ...CELL, arm: 'S1' }, { ...CELL, arm: 'S2' }];
+    runsFile(out, []);
+    transcript(out, 'L1', [say('l1', OPUS_MODEL, 100_000)], s1);
+    cutoff(out, '1-1', null, { L2: [say('l2', SONNET_MODEL, 100_000)] }, s2);
+    const [prices, design] = [PRICES_BY_MODEL, DESIGNS.r4];
+    expect(spendByArm({ runs: [out], prices, design })).toEqual({ O1: 0, S0: 0, S1: OPUS_100K, S2: SONNET_100K, S4: 0, S5: 0 });
+  });
+
+  it('prices the warm-ups of a folder with no record, no plan and an ABANDONED marker, as --run and as --pilot-run', () => {
+    const [run, killed, marker] = [folder('run'), folder('killed'), folder('marker')];
+    runsFile(run, [record({ costUsd: 4 })]);
+    warmup(killed, OPUS_MODEL, [say('w1', OPUS_MODEL, 100_000)], null);
+    put(path.join(killed, 'ABANDONED'), 'warm-up for claude-opus-5-5 failed (exit 1)\nlast completed: none\n');
+    put(path.join(marker, 'ABANDONED'), 'stopped\n');
+    expect(lastLine(cli([killed, run]))).toBe(`LEDGER ${(4 + OPUS_100K).toFixed(2)}`);
+    expect(lastLine(cli([run], '--pilot-run', killed))).toBe(`LEDGER ${(4 + OPUS_100K).toFixed(2)}`);
+    expect(lastLine(cli([run], '--pilot-run', marker))).toBe('LEDGER 4.00');
+    expect(spendByArm({ runs: [run, killed], prices: PRICES_BY_MODEL, design: DESIGNS.r4 }).O1).toBe(4);
+  });
+
   it('stops with exit 1 on a record whose arm is no arm of the design', () => {
     const run = build('run', [record({ arm: 'A1', costUsd: 1 })]);
     const r = cli([run], '--unblind');
@@ -288,13 +373,28 @@ describe('arms, pilot folders and the spend basis', () => {
 });
 
 describe('--design r3', () => {
-  it('sums numeric costUsd only: it prices no transcript and no warm-up, so a message with no row is no stop', () => {
+  const r3 = (arm: string, tool: string, costUsd: number | null) => record({ arm, tool, costUsd, taskId: `t-${arm}` }, { ...CELL, arm });
+
+  it('refuses a folder that holds a warmups folder or an attempts.jsonl, as --run or --pilot-run, since round 3 writes neither', () => {
+    const [run, warm, attempts] = [folder('run'), folder('warm'), folder('attempts')];
+    runsFile(run, [r3('A1', 'claude-code', 1)]);
+    warmup(warm, OPUS_MODEL, [say('w1', OPUS_MODEL, 100_000)], null);
+    runsFile(attempts, [r3('A1', 'claude-code', 1)]);
+    attemptsFile(attempts, [attempt({})], { ...CELL, arm: 'A1' });
+    const prices = pricesPath();
+    for (const [flag, bad] of [['--run', warm], ['--pilot-run', warm], ['--run', attempts], ['--pilot-run', attempts]]) {
+      const argv = flag === '--run' ? ['--prices', prices, '--run', bad] : ['--prices', prices, '--run', run, flag, bad];
+      const r = runCli(argv, work);
+      expect([r.code, r.stdout], `${flag} ${bad}`).toEqual([1, '']);
+      expect(r.stderr).toMatch(/round 3 never writes.*--design r4/);
+    }
+    expect(runCli(['--prices', prices, '--run', run], work).code).toBe(0);
+  });
+
+  it('sums numeric costUsd only: it prices no transcript, so a message with no row is no stop', () => {
     const out = folder('a');
-    const r3 = (arm: string, tool: string, costUsd: number | null) => record({ arm, tool, costUsd, taskId: `t-${arm}` }, { ...CELL, arm });
     runsFile(out, [r3('A1', 'claude-code', 1), r3('A2', 'claude-code', 2), r3('X2', 'codex', 4), r3('A0', 'claude-code', null)]);
-    attemptsFile(out, [attempt({ taskId: 't-A0' })], { ...CELL, arm: 'A0' });
     transcript(out, 'S1', [say('u1', 'claude-haiku-9', 100_000)], { ...CELL, arm: 'A0' });
-    put(path.join(out, 'warmups', 'x.json'), JSON.stringify({ model: 'x', status: 0, total_cost_usd: 99, result: 'ok' }));
     const basis = path.join(work, 'basis.json');
     const r = runCli(['--prices', pricesPath(), '--run', out, '--design', 'r3', '--unblind', '--spend-basis-out', basis], work);
     expect(r.code).toBe(0);
@@ -317,6 +417,20 @@ describe('the command line', () => {
       expect([r.code, r.stdout], argv.join(' ')).toEqual([1, '']);
       expect(r.stderr).toMatch(/usage: z0-ledger\.mjs/);
     }
+  });
+
+  it('exits 1 naming a folder given twice, by either flag and however its path is spelled', () => {
+    const [a, b] = [folder('a'), folder('b')];
+    runsFile(a, [record({ costUsd: 1 })]);
+    runsFile(b, [record({ costUsd: 2 })]);
+    const prices = pricesPath();
+    const again = path.join(a, '..', 'a');
+    for (const argv of [['--run', a, '--run', a], ['--run', a, '--pilot-run', again], ['--run', b, a, '--pilot-run', b]]) {
+      const r = runCli(['--prices', prices, '--design', 'r4', ...argv], work);
+      expect([r.code, r.stdout], argv.join(' ')).toEqual([1, '']);
+      expect(r.stderr).toMatch(/is given twice/);
+    }
+    expect(runCli(['--prices', prices, '--design', 'r4', '--run', a, '--pilot-run', b], work).code).toBe(0);
   });
 
   it('takes several folders after one --run, and runs as a script that prints LEDGER last and exits 3 on a stop', () => {

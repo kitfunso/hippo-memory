@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Z0 ledger (round 4 prereg item 12): the dollars a run has spent, from its records, attempts and warm-ups, so a killed session still counts.
+/** Z0 ledger (round 4 prereg item 12): the dollars a run has spent. A record's costUsd pays for what it covers; every other transcript on disk is swept and priced once, so a state nothing foresaw never counts as zero.
  * Exit 0 on a ledger, 1 on bad input (with the usage), 3 on a message the price file cannot price (one `STOP:` line). */
 
 import * as fs from 'node:fs';
@@ -19,6 +19,10 @@ const SINGLE = new Map([['--prices', 'prices'], ['--design', 'design'], ['--spen
 const LISTS = new Map([['--run', 'run'], ['--pilot-run', 'pilotRun']]);
 const KINDS = new Set(['session', 'resume']);
 const START = '.start.json';
+const NO_FILE = 'the price file';
+// Where a runner out folder keeps a cell, and what a folder may hold when a kill left it no record: a failed warm-up writes warmups/ and ABANDONED only.
+const CELL_ROOTS = ['raw', 'runs', 'cutoffs'];
+const OUT_MARKS = ['runs.jsonl', 'plan.json', 'warmups', 'ABANDONED'];
 
 /** A stop that exits 3, its message already a `STOP:` line. */
 class LedgerStop extends Error {}
@@ -26,7 +30,7 @@ class LedgerStop extends Error {}
 const subdirs = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort() : []);
 const sizeOf = (sizes, configDir, file) => {
   const key = path.relative(configDir, file).split(path.sep).join('/');
-  return sizes !== null && Object.hasOwn(sizes, key) ? sizes[key] : undefined;
+  return (sizes ?? null) !== null && Object.hasOwn(sizes, key) ? sizes[key] : undefined;
 };
 
 function readJson(file) {
@@ -126,7 +130,7 @@ function rowLookup(prices, file) {
 
 const rawDir = (cell) => path.join(cell.out, 'raw', cell.sequence, cell.arm, `seed${cell.seed}`);
 
-/** The cells of an out folder: those its records name and those its raw folder holds an attempts file for. */
+/** The cells of an out folder: those its records name and those any of its raw, runs or cutoffs folders holds, so a sweep can name the arm of a file it finds. */
 function cellsOf(out, records) {
   const cells = new Map();
   const cellAt = (sequence, arm, seed) => {
@@ -135,56 +139,46 @@ function cellsOf(out, records) {
     return cells.get(id);
   };
   for (const r of records) cellAt(r.sequence, r.arm, r.seed).records.push(r);
-  const raw = path.join(out, 'raw');
-  for (const sequence of subdirs(raw)) {
-    for (const arm of subdirs(path.join(raw, sequence))) {
-      for (const dir of subdirs(path.join(raw, sequence, arm))) if (/^seed\d+$/.test(dir)) cellAt(sequence, arm, Number(dir.slice(4)));
+  for (const top of CELL_ROOTS) {
+    const root = path.join(out, top);
+    for (const sequence of subdirs(root)) {
+      for (const arm of subdirs(path.join(root, sequence))) {
+        for (const dir of subdirs(path.join(root, sequence, arm))) if (/^seed\d+$/.test(dir)) cellAt(sequence, arm, Number(dir.slice(4)));
+      }
     }
   }
   return [...cells.values()];
 }
 
-/** The cut-off copies of a cell, each with its attempt.json; a kill between the copy and that file leaves the live files whole, so they price the attempt. */
-function copiesOf(cell) {
-  const root = path.join(cell.out, 'cutoffs', cell.sequence, cell.arm, `seed${cell.seed}`);
-  return subdirs(root).filter((name) => fs.existsSync(path.join(root, name, 'attempt.json')))
-    .map((name) => ({ ...readJson(path.join(root, name, 'attempt.json')), configDir: path.join(root, name, 'claude-config') }));
-}
-
-/** A cell's attempts grouped by task, each with the attempts its record covers. */
-function tasksOf(cell) {
-  const attempts = readJsonLines(path.join(rawDir(cell), 'attempts.jsonl'), checkAttempt);
-  const copies = copiesOf(cell);
-  return [...new Set(attempts.map((a) => a.taskId))].map((taskId) => {
-    const byKind = (kind) => attempts.filter((a) => a.taskId === taskId && a.kind === kind).sort((a, b) => a.attempt - b.attempt);
-    const [sessions, resumes] = [byKind('session'), byKind('resume')];
-    const records = cell.records.filter((r) => r.taskId === taskId);
-    const resumed = (r) => (r.resumeSessionId ?? null) !== null;
+/** The transcripts the records' costUsd already pays for. A covered session is its files up to sizesBefore, and a file a resume made is no part of it; a covered resume is its files past sizesBefore. */
+function coveredSegments(cell) {
+  const attempts = readJsonLines(path.join(rawDir(cell), 'attempts.jsonl'), checkAttempt).sort((a, b) => a.attempt - b.attempt);
+  const projects = path.join(cell.configDir, 'projects');
+  const resumed = (r) => (r.resumeSessionId ?? null) !== null;
+  return [...new Set(attempts.map((a) => a.taskId))].flatMap((taskId) => {
+    const [sessions, resumes] = ['session', 'resume'].map((kind) => attempts.filter((a) => a.taskId === taskId && a.kind === kind));
     // A numeric costUsd is session 1's result plus the resume's, and a null resumeSessionId means no resume finished.
-    const covered = [records.some((r) => Number.isFinite(r.costUsd)) ? sessions.at(-1) : undefined, records.some((r) => Number.isFinite(r.costUsd) && resumed(r)) ? resumes.at(-1) : undefined].filter((a) => a !== undefined);
-    return { sessions, resumes, covered, copies: copies.filter((c) => c.taskId === taskId), forkId: records.find(resumed)?.resumeSessionId ?? null };
+    const paid = cell.records.filter((r) => r.taskId === taskId && Number.isFinite(r.costUsd));
+    const [session, resume] = [paid.length > 0 ? sessions.at(-1) : undefined, paid.some(resumed) ? resumes.at(-1) : undefined];
+    const cut = resumes.find((r) => r.sessionId === session?.sessionId && (r.sizesBefore ?? null) !== null)?.sizesBefore ?? null;
+    const first = session === undefined ? [] : sessionFiles(projects, session.sessionId).flatMap((file) => {
+      if (cut === null) return [{ file }];
+      const to = sizeOf(cut, cell.configDir, file);
+      return to === undefined ? [] : [{ file, toBytes: to }];
+    });
+    if (resume === undefined) return first;
+    const second = sessionFiles(projects, resume.sessionId).map((file) => ({ file, fromBytes: sizeOf(resume.sizesBefore ?? null, cell.configDir, file) ?? 0 }));
+    // The attempts line names the resumed id only; a fork's new id is in the record that covers it.
+    const forkId = paid.find(resumed).resumeSessionId;
+    return [...first, ...second, ...(forkId === resume.sessionId ? [] : sessionFiles(projects, forkId).map((file) => ({ file })))];
   });
 }
 
-/** A session's share of each file ends where a resume of it began. */
-function sessionSegments(cell, task, a) {
-  const cap = (file) => task.resumes.filter((r) => r.sessionId === a.sessionId).map((r) => sizeOf(r.sizesBefore, cell.configDir, file)).find((n) => n !== undefined);
-  return sessionFiles(path.join(cell.configDir, 'projects'), a.sessionId).map((file) => ({ file, toBytes: cap(file) }));
-}
-
-/** A resume's share: past sizesBefore in its cut-off copy, else in the live files, plus the new file a forked last resume wrote. */
-function resumeSegments(cell, task, a) {
-  const projects = path.join(cell.configDir, 'projects');
-  const copy = task.copies.find((c) => c.attempt === a.attempt);
-  const [configDir, files] = copy === undefined ? [cell.configDir, sessionFiles(projects, a.sessionId)] : [copy.configDir, listTranscripts(path.join(copy.configDir, 'projects'))];
-  const sizes = a.sizesBefore ?? copy?.sizesBefore ?? null;
-  const own = files.map((file) => ({ file, fromBytes: sizeOf(sizes, configDir, file) ?? 0 }));
-  // The attempts line names the resumed id only; a fork's new id is in the record.
-  const forked = copy === undefined && a === task.resumes.at(-1) && task.forkId !== null && task.forkId !== a.sessionId;
-  return forked ? [...own, ...sessionFiles(projects, task.forkId).map((file) => ({ file }))] : own;
-}
-
-const segmentsOf = (cell, task, a) => (a.kind === 'session' ? sessionSegments(cell, task, a) : resumeSegments(cell, task, a));
+/** Every transcript on disk for a cell: its live claude-config and each cut-off copy, whether or not a record or an attempts line names it. */
+const sweepFiles = (cell) => [
+  ...listTranscripts(path.join(cell.configDir, 'projects')),
+  ...listTranscripts(path.join(cell.out, 'cutoffs', cell.sequence, cell.arm, `seed${cell.seed}`)),
+];
 
 /** A warm-up's result file adds its total_cost_usd when that is a number; a start file with no such result has its configDir's transcripts priced instead. */
 function warmupUsd(out, seen, rowOf, pricesFile) {
@@ -203,24 +197,46 @@ function warmupUsd(out, seen, rowOf, pricesFile) {
   return [...results.keys()].map(paid).filter(Number.isFinite).reduce((a, b) => a + b, 0) + priceMessages(pending, rowOf, pricesFile);
 }
 
-/** The entries of one out folder (records and priced attempts, each `{ sequence, arm, usd, tool }`) and its warm-up dollars. */
+/** Round 3 writes no warm-up file and no attempts line, so a folder that holds one was run under round 4 and read under the wrong --design. */
+function refuseRoundFourFiles(out) {
+  const raw = path.join(out, 'raw');
+  const attempts = fs.existsSync(raw) && fs.readdirSync(raw, { recursive: true }).some((f) => path.basename(f) === 'attempts.jsonl');
+  if (fs.existsSync(path.join(out, 'warmups')) || attempts) throw new Error(`${out}: holds a warmups folder or an attempts.jsonl, which round 3 never writes; pass --design r4 for a round 4 run`);
+}
+
+/** The entries of one out folder (records and swept transcripts, each `{ sequence, arm, usd, tool }`) and its warm-up dollars. */
 function readOut(out, design, rowOf, pricesFile) {
-  if (!fs.existsSync(path.join(out, 'runs.jsonl')) && !fs.existsSync(path.join(out, 'plan.json'))) throw new Error(`${out}: holds no runs.jsonl or plan.json; pass a runner --out folder`);
+  if (!OUT_MARKS.some((name) => fs.existsSync(path.join(out, name)))) throw new Error(`${out}: holds none of ${OUT_MARKS.join(', ')}; pass a runner --out folder`);
   const records = readJsonLines(path.join(out, 'runs.jsonl'), checkRecord);
   const entries = records.filter((r) => Number.isFinite(r.costUsd)).map((r) => ({ sequence: r.sequence, arm: r.arm, usd: r.costUsd, tool: r.tool ?? null }));
-  // A round 3 folder has no attempts and no warm-up files; its records' costUsd is the whole figure.
-  if (design.prices === 'tool') return { entries, warmups: 0 };
-  const cells = cellsOf(out, records).map((cell) => ({ cell, tasks: tasksOf(cell) }));
+  // A round 3 folder's records' costUsd is the whole figure.
+  if (design.prices === 'tool') {
+    refuseRoundFourFiles(out);
+    return { entries, warmups: 0 };
+  }
+  const cells = cellsOf(out, records);
   const seen = new Set();
-  for (const { cell, tasks } of cells) for (const t of tasks) for (const a of t.covered) addIds(seen, segmentsOf(cell, t, a));
-  for (const { cell, tasks } of cells) {
+  for (const cell of cells) addIds(seen, coveredSegments(cell));
+  // Every id still unseen is priced once wherever it lives, so a state no record or attempts line foresaw counts at worst twice, never zero.
+  for (const cell of cells) {
     const pending = new Map();
-    for (const t of tasks) for (const a of [...t.sessions, ...t.resumes]) if (!t.covered.includes(a)) collect(pending, seen, segmentsOf(cell, t, a));
+    collect(pending, seen, sweepFiles(cell).map((file) => ({ file })));
     const usd = priceMessages(pending, rowOf, pricesFile);
     if (usd > 0) entries.push({ sequence: cell.sequence, arm: cell.arm, usd, tool: null });
     for (const key of pending.keys()) seen.add(key);
   }
   return { entries, warmups: warmupUsd(out, seen, rowOf, pricesFile) };
+}
+
+const sameFolder = (p) => (process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p));
+
+/** A folder named twice, by either flag, would count its spend twice. */
+function refuseRepeats(folders) {
+  const seen = new Set();
+  for (const f of folders) {
+    if (seen.has(sameFolder(f))) throw new Error(`${path.resolve(f)} is given twice; --run and --pilot-run folders must each be named once`);
+    seen.add(sameFolder(f));
+  }
 }
 
 function tally(ledger, design, { sequence, arm, usd, tool }) {
@@ -236,7 +252,8 @@ function tally(ledger, design, { sequence, arm, usd, tool }) {
 }
 
 /** The one reader: `total` over `runs` and `pilotRuns`; `spend`, `bySequence` and `perRecord` over `runs` only, records and attempts, with no warm-up. */
-export function readLedger({ runs, pilotRuns = [], prices, design = DESIGNS.r3, pricesFile = 'the price file' }) {
+export function readLedger({ runs, pilotRuns = [], prices, design = DESIGNS.r3, pricesFile = NO_FILE }) {
+  refuseRepeats([...runs, ...pilotRuns]);
   const rowOf = rowLookup(prices, pricesFile);
   const ledger = { total: 0, spend: new Map(), bySequence: new Map(), perRecord: { n: 0, usd: 0 } };
   for (const [out, inBasis] of [...runs.map((o) => [o, true]), ...pilotRuns.map((o) => [o, false])]) {
@@ -256,7 +273,7 @@ const spendOf = (ledger, design) => Object.fromEntries(design.arms.map((a) => [a
 export const ledgerTotal = (options) => readLedger(options).total;
 
 /** Spend by arm over records and attempts of the run folders: no warm-up and no pilot folder (prereg item 4); every arm of the design, 0 where it has none. */
-export const spendByArm = ({ runs, prices, design = DESIGNS.r3, pricesFile }) => spendOf(readLedger({ runs, prices, design, pricesFile }), design);
+export const spendByArm = ({ runs, prices, design = DESIGNS.r3, pricesFile = NO_FILE }) => spendOf(readLedger({ runs, prices, design, pricesFile }), design);
 
 /** The `z0-spend-basis/1` body over the run folders; every sequence row lists every arm of basisByArm, since a reader takes its arms from the first row. */
 function basisOf(ledger, design) {
