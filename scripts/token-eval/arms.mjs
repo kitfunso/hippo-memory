@@ -301,7 +301,8 @@ export const envAllowSet = (list = ENV_ALLOWLIST) => new Set(list.map((name) => 
 const PIP_CONSTRAINT = 'PIP_CONSTRAINT';
 const R4_ALLOWLIST = Object.freeze([...ENV_ALLOWLIST, PIP_CONSTRAINT]);
 /** The names a design's sessions may start from: a round 4 design adds the task env's pip pin, so round 3's list and G1 do not move. */
-export const allowlistOf = (design) => (design.arms.some((a) => ARM_TABLE[a].round === 'r4') ? R4_ALLOWLIST : ENV_ALLOWLIST);
+export const isRound4Design = (design) => design.arms.some((a) => ARM_TABLE[a].round === 'r4');
+export const allowlistOf = (design) => (isRound4Design(design) ? R4_ALLOWLIST : ENV_ALLOWLIST);
 
 const rowOf = (arm) => {
   if (!own(ARM_TABLE, arm)) throw new Error(`unknown arm ${arm}; known: ${ALL_ARMS.join(', ')}`);

@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateTasks } from './ab-run.mjs';
+import { writeFileAtomic } from './atomic-write.mjs';
 import { parseZ0Records } from './z0-records.mjs';
 import { listGrades, runRegrade } from './regrade.mjs';
 import { flipsOf } from './g5-flips.mjs';
@@ -139,7 +140,7 @@ function gradingMode(args, out) {
   // Removed first, so a refused grading leaves no older file for the analyzer to read as this one's.
   fs.rmSync(file, { force: true });
   const grading = buildGrading(out, { flipErrors: args.flipErrors === true });
-  fs.writeFileSync(file, `${JSON.stringify(grading, null, 2)}\n`);
+  writeFileAtomic(file, `${JSON.stringify(grading, null, 2)}\n`);
   return `wrote ${file}: ${grading.flippedLessons.length} flipped lessons, ${grading.acceptanceFlips} acceptance flips\n`;
 }
 

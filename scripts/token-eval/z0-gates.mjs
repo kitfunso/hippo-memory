@@ -1,18 +1,21 @@
 /** Z0 analyzer, part 4 of 6: validity gates G1-G5 (prereg 154-166). Each returns `pass` plus the numbers it read.
  * A failed gate makes the run invalid; a half or gate whose arms were not planned is "not run" (reading 11). */
 
-import { DESIGNS, envAllowSet } from './arms.mjs';
+import { DESIGNS, allowlistOf, envAllowSet, isRound4Design } from './arms.mjs';
 import { CODINGS, NOT_RUN, bothCodings, codexApply, firstApplyR } from './z0-hypotheses.mjs';
 
 export const OPERATOR_CANARY = 'operator-canary';
 const EPS = 1e-9;
 
-/** G1 (reading 3): an operator canary, an `envKeys` name outside the arm env allowlist, or ANTHROPIC_API_KEY invalidates the run; other voids drop sessions, with per-arm shares printed. */
-export function g1(records, counts) {
+/** G1 (reading 3): an operator canary, an `envKeys` name outside the design's env allowlist, or ANTHROPIC_API_KEY invalidates the run; other voids drop sessions, with per-arm shares printed.
+ * With `offPinVoided` (the off-pin bar, item 6) the positions off-pin voids reach, tails included, must also be at most 5% of those planned.
+ * @param {any[]} records @param {Record<string, any>} counts @param {{design?: any, offPinVoided?: {positions: number, share: number}}} [options]
+ * @returns {{pass: boolean, operatorCanaries: number, envKeysOutside: Record<string, number>, anthropicApiKeyRecords: number, perArm: Record<string, {voids: number, share: number}>, offPinVoided?: {positions: number, share: number}, offPinPass?: boolean}} */
+export function g1(records, counts, { design, offPinVoided } = {}) {
   // Prereg 161: a canary anywhere fails the run, so one an apply's resume saw counts though it never sets that cell's void.
   const seen = (r) => r.void === OPERATOR_CANARY || (r.resumeVoidHits ?? []).some((h) => h.reason === OPERATOR_CANARY);
   const canaries = records.filter(seen).length;
-  const allowed = envAllowSet();
+  const allowed = envAllowSet(allowlistOf(design ?? DESIGNS.r3));
   const outside = new Map();
   let anthropicApiKeyRecords = 0;
   for (const r of records) {
@@ -22,7 +25,10 @@ export function g1(records, counts) {
   }
   const envKeysOutside = Object.fromEntries([...outside].sort(([a], [b]) => (a < b ? -1 : 1)));
   const perArm = Object.fromEntries(Object.entries(counts).map(([arm, c]) => [arm, { voids: c.voids, share: c.planned === 0 ? 0 : c.voids / c.planned }]));
-  return { pass: canaries === 0 && outside.size === 0 && anthropicApiKeyRecords === 0, operatorCanaries: canaries, envKeysOutside, anthropicApiKeyRecords, perArm };
+  const gate = { pass: canaries === 0 && outside.size === 0 && anthropicApiKeyRecords === 0, operatorCanaries: canaries, envKeysOutside, anthropicApiKeyRecords, perArm };
+  if (offPinVoided === undefined) return gate;
+  const offPinPass = offPinVoided.share <= 0.05 + EPS;
+  return { ...gate, pass: gate.pass && offPinPass, offPinVoided, offPinPass };
 }
 
 /** One G2 half: under both codings, estimate at most -0.30 and the CI's high below zero (reading 5).
@@ -50,9 +56,12 @@ export function g2(filtered, opts) {
   return { pass: claudeCode.pass && codex.pass, claudeCode, codex };
 }
 
-/** G3: leaked (sequence, seed)s at most 5% of those planned. */
-export function g3(leaked, plannedRuns) {
-  return { pass: leaked * 20 <= plannedRuns, leaked, plannedRuns, share: plannedRuns === 0 ? 0 : leaked / plannedRuns };
+/** G3: leaked (sequence, seed)s at most 5% of those planned. A `firstRun` count is printed beside it and does not move `pass`.
+ * @param {number} leaked @param {number} plannedRuns @param {{leakedSequenceSeeds: number, plannedRuns: number} | null} [firstRun]
+ * @returns {{pass: boolean, leaked: number, plannedRuns: number, share: number, firstRun?: {leakedSequenceSeeds: number, plannedRuns: number}}} */
+export function g3(leaked, plannedRuns, firstRun = null) {
+  const gate = { pass: leaked * 20 <= plannedRuns, leaked, plannedRuns, share: plannedRuns === 0 ? 0 : leaked / plannedRuns };
+  return firstRun === null ? gate : { ...gate, firstRun };
 }
 
 /** G4 from the step-0 counts: (invalid + missing) at most 5% per arm, at most 3 points between arms, and hook-voided positions at most 5%. */
@@ -78,12 +87,17 @@ export function g5(grading) {
   return { pass: true, status: 'pass', ...base };
 }
 
-/** Every gate, then `failed`, the names a report prints as "invalid: G<n>". */
+/** Every gate, then `failed`, the names a report prints as "invalid: G<n>". The off-pin bar and the first-run count are on under a round 4 design,
+ * with `opts.offPinGiven`, or with `opts.mergeManifests` (readMergeManifest results, whose leaked sequence-seed counts are summed); off, every gate keeps its round 3 keys. */
 export function computeGates(records, filtered, grading, opts) {
+  const design = opts.design ?? DESIGNS.r3;
+  const manifests = opts.mergeManifests ?? [];
+  const bar = isRound4Design(design) || opts.offPinGiven === true || manifests.length > 0;
+  const firstLeaked = manifests.reduce((n, m) => n + m.firstRun.leakedSequenceSeeds, 0);
   const gates = {
-    G1: g1(records, filtered.counts),
+    G1: g1(records, filtered.counts, bar ? { design, offPinVoided: filtered.offPinVoided } : { design }),
     G2: g2(filtered, opts),
-    G3: g3(filtered.leaked.length, filtered.plannedRuns),
+    G3: g3(filtered.leaked.length, filtered.plannedRuns, bar ? { leakedSequenceSeeds: firstLeaked, plannedRuns: filtered.plannedRuns } : null),
     G4: g4(filtered.counts, filtered.hookVoided),
     G5: g5(grading),
   };
