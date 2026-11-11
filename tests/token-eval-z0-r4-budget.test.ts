@@ -13,8 +13,9 @@ const RULE_ARMS = ['O1', 'S1', 'S2', 'S5'];
 /* ------------------------------------------------------------------------------------------------ the CLI */
 
 const sha = (file: string): string => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-interface PilotOver { r?: { S1: number; S2: number }; rArm?: string; rMax?: number | null; flag19?: boolean }
-const pilotFile = (over: PilotOver = {}) => ({ schema: 'z0-pilot/1', attempt: 1, tag: 'z0-r4-freeze-1', r: { S1: 1, S2: 1 }, rArm: 'S2', rMax: 1, flag19: false, ledgerTotal: 40, pilotSpend: 36.5, checks: {}, ...over });
+const PASSED = { 'off-pin': 'pass', effort: 'pass', venv: 'pass', 'env-keys': 'pass', 'cost-usd': 'pass', r: 'pass' };
+interface PilotOver { r?: { S1: number; S2: number }; rArm?: string; rMax?: number | null; flag19?: boolean; checks?: Record<string, string> }
+const pilotFile = (over: PilotOver = {}) => ({ schema: 'z0-pilot/1', attempt: 1, tag: 'z0-r4-freeze-1', r: { S1: 1, S2: 1 }, rArm: 'S2', rMax: 1, flag19: false, ledgerTotal: 40, pilotSpend: 36.5, checks: PASSED, ...over });
 const SPEND = { schema: 'z0-spend-basis/1', basisByArm: BASIS, bySequence: { ...SEQ, ...BATCH2_SEQ }, meanPerRecord: MEAN };
 const PINS = { batch1Keys: BATCH1.join(','), batch2Keys: BATCH2.join(','), wholeRunSeeds: '5', effort: 'medium', claudeVersion: '2.1.288' };
 const SLOW = { r: { S1: 0.3, S2: 0.3 }, rMax: 0.3 };
@@ -753,6 +754,10 @@ describe('usage errors', () => {
     expect(admit(noR, { step: 'whole-run', extra: ['--pilot', noR.pilot] }).stderr).toContain('rMax must be a number above 0');
     const failedR = runCli(['report', '--log', noR.log, '--ledger-total', '40', '--approved', '2140', '--pins', noR.pins, '--pilot', noR.pilot]);
     expect([failedR.code, failedR.stdout]).toEqual([0, expect.stringContaining('pilot: $36.50 against $40')]);
+    const failedCheck = makeRoot({ pilot: { checks: { ...PASSED, effort: 'fail' } } });
+    expect(admit(failedCheck, { step: 'whole-run', extra: ['--pilot', failedCheck.pilot] }).stderr).toContain('checks not passed: effort');
+    const noChecks = makeRoot({ pilot: { checks: {} } });
+    expect(admit(noChecks, { step: 'whole-run', extra: ['--pilot', noChecks.pilot] }).stderr).toContain('checks not passed: off-pin, effort, venv, env-keys, cost-usd, r');
   });
 });
 

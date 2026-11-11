@@ -129,10 +129,16 @@ export function readBasis(file) {
   return basis;
 }
 
-// A pilot whose r check failed has rMax null; report still prints it, every admit refuses it.
+/** The six checks z0-pilot writes; an admit reads a pilot only when every one passed. */
+export const PILOT_CHECKS = Object.freeze(['off-pin', 'effort', 'venv', 'env-keys', 'cost-usd', 'r']);
+
+// A failed pilot (rMax null, or any check not passed) still prints in report; every admit refuses it.
 function readPilot(file, { needR = true } = {}) {
   const pilot = readSchema(file, 'pilot', PILOT_SCHEMA);
-  if (needR && (!Number.isFinite(pilot.rMax) || pilot.rMax <= 0)) throw new Error(`pilot ${file}: rMax must be a number above 0`);
+  if (!needR) return pilot;
+  if (!Number.isFinite(pilot.rMax) || pilot.rMax <= 0) throw new Error(`pilot ${file}: rMax must be a number above 0`);
+  const failed = PILOT_CHECKS.filter((id) => pilot.checks?.[id] !== 'pass');
+  if (failed.length > 0) throw new Error(`pilot ${file}: checks not passed: ${failed.join(', ')}`);
   return pilot;
 }
 
