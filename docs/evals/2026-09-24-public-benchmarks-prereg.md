@@ -449,3 +449,23 @@ This note fixes revision 1 item 4 for eight benchmarks: BEAM (100K, 500K, 1M and
 - Unit: the persona that owns the store, 200 units, `cluster_boot`, 4,000 draws, seed 1. `python -I loaders/personamem_v2.py score` prints the same persona interval.
 - Deviations: the shuffle seed above; retrieval in place of the whole history; top-k 20.
 - Comparison: with the other arm of this run. The authors' models read the whole history, so no number here is comparable with theirs.
+
+### Amendment 6, dated notes 4 (2026-11-11, after the DMR primary was scored, before any full-chat answer): a full-chat ceiling arm on DMR
+
+This note adds one exploratory arm to DMR. The DMR primary of dated notes 1 was scored before this note: `hippo365` 61.2%, `bm25` 61.4%, difference -0.2 pp [-1.8, +1.4], read as matches. Nothing here changes that primary, its reading, or any other benchmark. The code commit is the commit that adds this note.
+
+**Why.** Published DMR results sit beside a full-conversation baseline from the same setup. The Zep paper (arXiv 2501.13956, Table 1, as recorded in `~/hippo-bench/competitors.json`) gives Zep 94.8% against full conversation 94.4% with gpt-4-turbo, and 98.2% against 98.0% with gpt-4o-mini. This run has no such baseline, so its absolute level cannot be read against theirs. A look at the scored answers, made after the primary and so exploratory, splits the `hippo365` misses in two:
+- The gold answer was among the 20 memories shown for 375 of the 495 primary questions, and 293 of those were judged correct. It was outside them for 109, and 6 of those were judged correct. "Among the memories" means that half or more of the gold answer's content words (3 or more letters, a short stop list removed) appear in the system prompt. This is a word-overlap check, not a hand read.
+- 127 `hippo365` answers were the prompt's `NO ANSWER`. The prompt never names the speaker the answerer is (`qa/loaders/dmr.py` lines 24 to 32), and a read of six refusals points to that as one cause.
+
+**Arm `full`** (`benchmarks/public/qa/harness.py --full-context`, `write_full`).
+- No store and no search. The memory list holds every non-empty turn of the row's five sessions, oldest first, one line per turn, in the form the server stores a turn: `Speaker N: text` (`hippo-mem0-server.mjs` `addChunk`, lines 77 to 82). Lines per question: 54 to 69, median 64.
+- Everything else is the registered DMR setup, unchanged: the loader `qa/loaders/dmr.py` (SHA-256 `d8022432850445e4c767febc62504cec418a3f37002ed149028bc664d8cfb010`, the same as the registered run's), its system text and question (`answer_prompt`), the answerer (`claude-sonnet-5`, medium), the judge prompt and gpt-5.6-sol at medium, and the ledger rules of revision 1 (3 asks, the first valid reply counts). The system text still says the excerpts are retrieved and best match first. It is kept word for word, so the memory list is the only difference between the arms.
+- Items: the 500 registered questions. The smoke items of dated notes 1 stay out of every line, so each line has 495 questions.
+- Output: `~/hippo-bench/results-r2/dmr-full/`, with its own call logs and its own blind judge key over one arm. `config.json` names the paired run.
+
+**Lines, all secondary and exploratory** (`harness.py` `full_lines`). The `full` accuracy over the 495. Then `hippo365` minus `full` and `bm25` minus `full`, paired by question, with each paired arm's correctness re-made from the registered run's own call logs. The unit is the question, as for DMR in dated notes 1, so `cluster_boot` equals `boot`: 4,000 draws, seed 1, 95%. The word printed after each interval only describes it. No reading is registered for these lines.
+
+**What this can show.** What showing 20 retrieved turns costs, against showing the whole chat, with this prompt, answerer and judge. It cannot show how hippo compares with the published systems, which used other models, gave the answerer a persona, and used their own prompts. If `full` also lands far below 94%, the cap is this harness's prompt, not retrieval.
+
+**Calls.** 500 answers on the main Claude login and about 500 verdicts through codex on the ChatGPT plan, with no paid API. They start after the LoCoMo and LongMemEval-S judges now in flight have ended, so codex stays at 8 calls or fewer at a time.

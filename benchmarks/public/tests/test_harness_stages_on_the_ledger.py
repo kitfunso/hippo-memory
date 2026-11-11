@@ -26,9 +26,12 @@ QS = [{"qid": f"q{i}", "user_id": f"u{i // 2}", "question": f"question {i}", "go
 def fake_loader() -> types.ModuleType:
     mod = types.ModuleType("loaders.fakebench")
     mod.NAME, mod.TOPK, mod.LICENCE, mod.DATA_FILES = "Fake", 5, "none", []
+    mod.__file__ = __file__  # setup hashes the loader file into config.json
     mod.questions = lambda: [dict(q) for q in QS]
     mod.answer_prompt = lambda q, mems: (f"system for {q['qid']}", f"{q['question']} with {len(mems)} memories")
     mod.judge = lambda q, answer: ("match", answer.strip() == q["gold"])
+    mod.conversations = lambda: [(f"u{i}", [{"role": "Speaker 1", "content": f" turn {i}a "}, {"role": "Speaker 2", "content": " "},
+                                            {"role": "Speaker 2", "content": f"turn {i}b"}]) for i in range(3)]
     return mod
 
 
@@ -49,7 +52,8 @@ def bench(tmp_path, monkeypatch):
     (out / "predicted" / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     (out / "questions.json").write_text(json.dumps({"qids": [q["qid"] for q in QS]}), encoding="utf-8")
     (out / "config.json").write_text(json.dumps({"limit": 0}), encoding="utf-8")
-    a = argparse.Namespace(stage="score", bench="fakebench", out=out, limit=0, slots=2, port_base=0, bonferroni=4)
+    a = argparse.Namespace(stage="score", bench="fakebench", out=out, limit=0, slots=2, port_base=0, bonferroni=4,
+                           full_context=None)
     mod, qs = harness.setup(a)
     return a, mod, qs
 
@@ -158,3 +162,35 @@ def test_h2h_primary_has_the_conversation_sensitivity_and_bonferroni_lines():
     assert lines[0].startswith("PRIMARY hippo365 - mem0 F1 all:") and "n=19 over 19 units" in lines[0]
     assert "n=20 over 20 units" in lines[1] and lines[2].startswith("  Bonferroni k=2, 97.50% interval:")
     assert "n=20 over 4 units" in h2h.paired(diff, ids, lambda q: q.split("_q")[0])
+
+
+def test_full_context_shows_the_whole_chat_and_scores_paired_with_the_registered_run(bench, tmp_path):
+    a, mod, qs = bench
+    full_log(a.out, {q["qid"]: "yes" for q in QS}, {**{q["qid"]: "yes" for q in QS}, "q0": "no"})
+    f = argparse.Namespace(stage="retrieve", bench="fakebench", out=tmp_path / "full", limit=0, slots=2, port_base=0,
+                           bonferroni=None, full_context=a.out)
+    mod, qs = harness.setup(f)
+    harness.stage_ingest_retrieve(f, mod, qs)
+    pred = json.loads(harness.pred_path(f.out, "full", "q2").read_text(encoding="utf-8"))
+    assert [r["memory"] for r in pred["results"]] == ["Speaker 1: turn 1a", "Speaker 2: turn 1b"]  # oldest first, blank dropped
+    assert (pred["returned"], pred["turns_visible"]) == (2, 3)
+    assert json.loads((f.out / "config.json").read_text(encoding="utf-8"))["pairs_with"] == str(a.out)
+    write_log(f.out / "calls-answer.jsonl", [rec(f"answer full {q['qid']}", f"{q['question']} with 2 memories",
+                                                 system=f"system for {q['qid']}", text="no" if q["qid"] == "q1" else "yes")
+                                             for q in QS])
+    f.stage = "score"
+    harness.stage_score(f, mod, qs)
+    text = (f.out / "score.txt").read_text(encoding="utf-8")
+    assert "the whole chat" in text and "full  accuracy  80.0  memories   2.0" in text and "PRIMARY" not in text
+    assert "secondary hippo365 (100.0 in the paired run) - full: +20.0 pp" in text and "n=5 over 3 units" in text
+    assert "secondary bm25 (80.0 in the paired run) - full:  +0.0 pp" in text
+    assert "smoke items left out of every primary: q5" in text
+
+
+@pytest.mark.parametrize("stage, same", [("ingest", False), ("retrieve", True)])
+def test_full_context_starts_at_retrieve_in_a_new_folder(tmp_path, monkeypatch, stage, same):
+    run = tmp_path if same else tmp_path / "registered"
+    monkeypatch.setattr(sys, "argv", ["harness.py", stage, "--bench", "fakebench", "--out", str(tmp_path),
+                                      "--full-context", str(run)])
+    with pytest.raises(SystemExit):
+        harness.main()

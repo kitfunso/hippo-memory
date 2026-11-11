@@ -2,6 +2,8 @@
 
 Stages, run in order, each resumable: ingest, retrieve, answer, judge, score.
   python -I harness.py <stage> --bench <loader> --out DIR [--limit N] [--slots 10] [--port-base 8921] [--bonferroni K]
+  --full-context RUN: the ceiling arm `full` (dated notes 4), every turn in the prompt and no store, stages retrieve to
+  score in a new --out, scored paired with the registered run in RUN.
 Each arm gets its own hippo-mem0-server on its own data dir under DIR. Answers are Claude Sonnet 5 at medium effort
 (claude_llm.Claude), verdicts gpt-5.6-sol at medium (codex_judge.CodexJudge) or a match, with the authors' prompts from
 the loader. A question asked mid-history is searched in a store that holds only the turns before it, so ingestion and
@@ -206,12 +208,16 @@ def run_arm(a: argparse.Namespace, mod, arm: str, port: int, qs_by_user: dict, c
 
 def setup(a: argparse.Namespace):
     mod = importlib.import_module(f"loaders.{a.bench}")
+    a.arms = {"full": "none"} if a.full_context else ARMS
     a.out.mkdir(parents=True, exist_ok=True)
     qfile = a.out / "questions.json"
-    if a.stage == "ingest":
+    if a.stage == "ingest" or (a.full_context and a.stage == "retrieve"):
         qs = mod.questions()
         if len({q["qid"] for q in qs}) != len(qs):
             sys.exit("loader gives duplicate qids")
+        if a.full_context:  # the ceiling arm asks exactly the paired run's questions, in its order
+            by_id = {q["qid"]: q for q in qs}
+            qs = [by_id[i] for i in load(a.full_context / "questions.json")["qids"]]
         if a.limit:
             if "smoke" not in {p.lower() for p in a.out.parts}:
                 sys.exit("--limit is for smoke runs: --out must sit under a folder named smoke")
@@ -222,9 +228,10 @@ def setup(a: argparse.Namespace):
         pkg = json.loads((REPO / "package.json").read_text(encoding="utf-8"))["version"]
         head = subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         cfg = {"bench": a.bench, "name": mod.NAME, "topk": mod.TOPK, "licence": mod.LICENCE, "limit": a.limit,
-               "arms": ARMS, "hippo_memory": pkg, "repo_head": head, "loader_sha256": sha_bytes(Path(mod.__file__).read_bytes()),
+               "arms": a.arms, "hippo_memory": pkg, "repo_head": head, "loader_sha256": sha_bytes(Path(mod.__file__).read_bytes()),
                "data_sha256": {p.name: sha_bytes(p.read_bytes()) for p in mod.DATA_FILES},
-               "answerer": "claude-sonnet-5 medium", "judge": "gpt-5.6-sol medium (llm items), match otherwise"}
+               "answerer": "claude-sonnet-5 medium", "judge": "gpt-5.6-sol medium (llm items), match otherwise",
+               **({"pairs_with": str(a.full_context)} if a.full_context else {})}
         qfile.write_text(json.dumps({"qids": [q["qid"] for q in qs]}), encoding="utf-8")
         (a.out / "config.json").write_text(json.dumps(cfg, indent=1), encoding="utf-8")
     elif not qfile.exists():
@@ -240,7 +247,22 @@ def by_user(qs: list[dict]) -> dict:
     return out
 
 
+def write_full(a: argparse.Namespace, mod, qs: list[dict]) -> None:
+    """The ceiling arm in place of a search: every non-empty turn the question may see, oldest first, in the form the
+    server stores a turn (hippo-mem0-server.mjs `addChunk`). No store and no model call."""
+    convs = dict(mod.conversations())
+    for q in qs:
+        seen = convs[q["user_id"]] if q["ask_after"] is None else convs[q["user_id"]][:q["ask_after"]]
+        res = [{"memory": f"{t['role']}: {t['content'].strip()}"} for t in seen if t["content"].strip()]
+        write_pred(a.out, "full", q, res, len(res), len(seen))
+    manifest = {"full": {q["qid"]: sha_bytes(pred_path(a.out, "full", q["qid"]).read_bytes()) for q in qs}}
+    (a.out / "predicted" / "manifest.json").write_text(json.dumps(manifest, indent=0), encoding="utf-8")
+    print(f"wrote the whole chat for {len(qs)} questions; manifest written")
+
+
 def stage_ingest_retrieve(a: argparse.Namespace, mod, qs: list[dict]) -> None:
+    if a.full_context:
+        return write_full(a, mod, qs)
     qu = by_user(qs)
     convs = {u: t for u, t in mod.conversations() if u in qu}
     if set(convs) != set(qu):
@@ -262,7 +284,7 @@ def prompts_of(a: argparse.Namespace, mod, qs: list[dict]) -> dict:
     if not mf.exists():
         sys.exit("no predicted/manifest.json; run the retrieve stage first")
     man, out = load(mf), {}
-    for arm in ARMS:
+    for arm in a.arms:
         for q in qs:
             raw = pred_path(a.out, arm, q["qid"]).read_bytes()
             if sha_bytes(raw) != man[arm][q["qid"]]:
@@ -396,8 +418,9 @@ def primary_ids(a: argparse.Namespace, mod, ids: list[str]) -> tuple[list[str], 
     return [i for i in ids if i not in smoke], f"smoke items left out of every primary: {', '.join(sorted(smoke)) or 'none'}"
 
 
-def stage_score(a: argparse.Namespace, mod, qs: list[dict]) -> None:
-    """Accuracy per arm and hippo365 minus bm25 over the store-owning unit, smoke items left out, exhausted ones listed."""
+def correct_of(a: argparse.Namespace, mod, qs: list[dict]) -> tuple[dict, dict, dict, dict, list[str]]:
+    """Each (arm, qid) as 1 or 0 from the call logs alone, with the answers, the llm and matched items and the listed
+    exhausted ones. Stops while an answer or verdict still has asks left."""
     answers = all_answers(a, mod, qs)
     llm, matched = llm_items(mod, qs, answers)
     correct = {k: 0.0 for k in answers}  # an exhausted answer or verdict scores wrong
@@ -409,21 +432,45 @@ def stage_score(a: argparse.Namespace, mod, qs: list[dict]) -> None:
         unsettled(got, "verdicts")
         correct.update({(key[j]["arm"], key[j]["qid"]): float(c.value) for j, c in got.items() if c.status == "valid"})
         listed += exhausted_lines(got, "verdicts")
+    return answers, correct, llm, matched, listed
+
+
+def full_lines(a: argparse.Namespace, mod, qs: list[dict], correct: dict, primary: list[str], unit: dict) -> list[str]:
+    """Dated notes 4: each arm of the paired run minus the ceiling arm, paired by question. All secondary."""
+    pair = argparse.Namespace(**{**vars(a), "out": a.full_context, "arms": ARMS})
+    if load(pair.out / "questions.json")["qids"] != [q["qid"] for q in qs]:
+        sys.exit(f"{pair.out} holds another question set than {a.out}")
+    theirs = correct_of(pair, mod, qs)[1]
+    out = []
+    for arm in ARMS:
+        acc = 100 * sum(theirs[(arm, i)] for i in primary) / len(primary)
+        diff = {i: theirs[(arm, i)] - correct[("full", i)] for i in primary}
+        out.append(f"secondary {arm} ({acc:.1f} in the paired run) - full: {paired(diff, primary, unit.get)}")
+    return out
+
+
+def stage_score(a: argparse.Namespace, mod, qs: list[dict]) -> None:
+    """Accuracy per arm and hippo365 minus bm25 over the store-owning unit, smoke items left out, exhausted ones listed;
+    with --full-context, the ceiling arm's accuracy and each paired arm minus it."""
+    answers, correct, llm, matched, listed = correct_of(a, mod, qs)
     cats, ids, unit = {q["qid"]: q["category"] for q in qs}, [q["qid"] for q in qs], units(qs)
     primary, note = primary_ids(a, mod, ids)
-    lines = [f"{mod.NAME}: {len(ids)} questions, {len(primary)} in the primary, top {mod.TOPK}, answers {len(answers)}, "
+    lines = [f"{mod.NAME}: {len(ids)} questions, {len(primary)} in the primary, {"the whole chat" if a.full_context else f"top {mod.TOPK}"}, answers {len(answers)}, "
              f"{len(llm)} judged by model, {len(matched)} by match"]
-    for arm in ARMS:
+    for arm in a.arms:
         rs = [answers[(arm, i)] for i in primary]
         toks = [r["tokens_in"] for r in rs if r["answer"] is not None]
         lines.append(f"{arm:>9}  accuracy {100 * sum(correct[(arm, i)] for i in primary) / len(primary):5.1f}  "
                      f"memories {sum(r['memories'] for r in rs) / len(rs):5.1f}  "
                      f"input tokens {sum(toks) / max(1, len(toks)):7.0f}")
-    diff = {i: correct[("hippo365", i)] - correct[("bm25", i)] for i in ids}
-    lines += primary_lines("hippo365 - bm25 all", diff, primary, ids, unit.get, a.bonferroni)
-    for c in sorted(set(cats.values())) if len(set(cats.values())) > 1 else []:
-        if sub := [i for i in primary if cats[i] == c]:
-            lines.append(f"secondary hippo365 - bm25 {c}: {paired(diff, sub, unit.get)}")
+    if a.full_context:
+        lines += full_lines(a, mod, qs, correct, primary, unit)
+    else:
+        diff = {i: correct[("hippo365", i)] - correct[("bm25", i)] for i in ids}
+        lines += primary_lines("hippo365 - bm25 all", diff, primary, ids, unit.get, a.bonferroni)
+        for c in sorted(set(cats.values())) if len(set(cats.values())) > 1 else []:
+            if sub := [i for i in primary if cats[i] == c]:
+                lines.append(f"secondary hippo365 - bm25 {c}: {paired(diff, sub, unit.get)}")
     lines += ["", note, *listed]
     text = "\n".join(lines)
     (a.out / "score.txt").write_text(text + "\n", encoding="utf-8")
@@ -439,7 +486,11 @@ def main() -> None:
     ap.add_argument("--slots", type=int, default=10)
     ap.add_argument("--port-base", type=int, default=8921, help="hippo arm here, bm25 on the next port")
     ap.add_argument("--bonferroni", type=int, metavar="K", help="score: also the primary's interval at 1 - 0.05/K")
+    ap.add_argument("--full-context", type=Path, metavar="RUN",
+                    help="the ceiling arm (dated notes 4): whole chat in the prompt, paired with the registered run RUN")
     a = ap.parse_args()
+    if a.full_context and (a.stage == "ingest" or a.full_context.resolve() == a.out.resolve()):
+        ap.error("--full-context starts at retrieve, in a new --out: the ceiling arm has no store")
     if a.bonferroni is not None and (a.stage != "score" or a.bonferroni < 1):
         ap.error("--bonferroni K needs the score stage and K of 1 or more")
     mod, qs = setup(a)
