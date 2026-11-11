@@ -7,7 +7,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { DESIGNS } from '../scripts/token-eval/arms.mjs';
 import { gitBash } from '../scripts/token-eval/homes.mjs';
 import { callRecord, pathForm, runCli, unitRecord } from '../scripts/token-eval/z0-unit-record.mjs';
-import { CHECKOUT, COST, Case, WARM, fwd, isAlive, json, kill, lines, put, read, sleep, until, type Knobs, type Run } from './fixtures/z0-batch/harness.js';
+import { CHECKOUT, COST, Case, WARM, fwd, isAlive, json, keepDir, lines, put, read, sleep, stopCases, until, within, type Knobs, type Run, type Started } from './fixtures/z0-batch/harness.js';
+import { killOwnTree } from './fixtures/kill-own.js';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
 import { cli, sealedKey, synthOut, type Cell } from './fixtures/z0-g5.js';
 import { generate, planOf } from './fixtures/z0-gen.js';
@@ -215,8 +216,56 @@ function liveRunner(c: Case, out: string, spell = out, knob: Knobs = { records: 
   c.knob(path.basename(folder), { fixture: KEY_FX(c, 'sx', [1]), ...knob });
   const child = spawn(process.execPath, [`${c.scored}/ab-run.mjs`, '--out', spell], { env: c.env(), stdio: ['ignore', fd, fd], windowsHide: true, cwd: c.base });
   fs.closeSync(fd);
-  c.track(child.pid!);
   return child.pid!;
+}
+
+/** Tree-kills a started batch (by Win32 parent links with a start-time check, so no other case's process that inherited a reused parent pid dies) and returns once the listing holds no s4-batch.sh line for its root, the condition a restart checks. */
+async function killBatch(c: Case, s: Started) {
+  killOwnTree(s.child);
+  const run = await within(s.done, 60_000, `killBatch: the tree-killed batch ${s.child.pid} to exit`);
+  // The Git Bash wrapper's exit is not its forks': one forked during the tree kill outlives it, and a restart rightly refuses while it lives.
+  await until(`killBatch: no s4-batch.sh line for ${c.root} after the tree kill`, () => {
+    const r = units(c, 'batch_lines', c.root);
+    return r.status === 0 && r.stdout === '';
+  }, 120_000);
+  return run;
+}
+
+/** Waits for a line of the batch's log past `from` that passes `test`, or for the batch to end without one; returns the line's index, or -1. */
+async function lineOf(c: Case, s: Started, from: number, what: string, test: (l: string) => boolean) {
+  let ended = false;
+  void s.done.then(() => { ended = true; });
+  let found = -1;
+  await until(what, () => {
+    found = c.log().findIndex((l, i) => i >= from && test(l));
+    return found >= 0 || ended;
+  });
+  return found;
+}
+
+/** Puts `release` once a line of the batch's log past `from` starts with `prefix` and names `name`, or once the batch ends without one, so held stubs last until that line on any box. */
+async function releaseOn(c: Case, s: Started, from: number, prefix: string, name: string, release: string): Promise<Run> {
+  await lineOf(c, s, from, `a "${prefix}" line naming ${name}`, (l) => l.startsWith(prefix) && l.includes(name));
+  put(release, '');
+  return s.done;
+}
+
+/** True once the held runner of unit folder `name` advances its beat file, so it is alive and held now; false after 30 s without. */
+async function heartbeat(c: Case, name: string) {
+  const file = `${c.dir(name)}/held.beat`;
+  const count = () => (fs.existsSync(file) ? Number(read(file) || Number.NaN) : 0);
+  let first = Number.NaN;
+  return until(`a heartbeat of ${name}`, () => {
+    const n = count();
+    if (Number.isNaN(first)) first = n;
+    else if (n > first) return true;
+    return false;
+  }, 30_000).then(() => true, () => false);
+}
+/** One batch started over held stubs, released once it logs a wait for `name`. */
+function startHeld(c: Case, name: string, release: string) {
+  const from = c.log().length;
+  return releaseOn(c, c.start(), from, 'wait for ', name, release);
 }
 
 /** A case that stops at the first `BATCH` line it does not name; every scenario below is one root, one story, and a few named assertions. */
@@ -282,53 +331,76 @@ const BX = async () => {
 
 const K = async () => {
   const c = track(new Case({ name: 'K', keys1: ['ka', 'kb'] }));
-  const body = (k: string, extra: Knobs = {}): Knobs => ({ fixture: KEY_FX(c, k), endMs: 20_000, ...extra });
+  const hold = { ka: c.hold('ka'), kb: c.hold('kb') };
+  const body = (k: 'ka' | 'kb', extra: Knobs = {}): Knobs => ({ fixture: KEY_FX(c, k), release: hold[k], ...extra });
   c.knob('ka-w1', body('ka', { regrade: { exit: 1 } }));
   c.knob('kb-w1', body('kb'));
   const first = c.start();
-  await until('both runners', () => c.runnerPids().length === 2);
+  let firstEnded = false;
+  void first.done.then(() => { firstEnded = true; });
+  await until('both runners', () => c.runnerPids().length === 2 || firstEnded).catch(() => undefined);
+  if (c.runnerPids().length < 2) {
+    const launch = (n: string) => `${n} launch: ${[...lines(`${c.dir(n)}/launch.txt`), ...lines(`${c.dir(n)}/launch.err`)].join(' | ')}`;
+    throw new Error(`K: pids.txt never held both runners; ${launch('ka-w1')}; ${launch('kb-w1')}; batch.log ends ${c.log().slice(-2).join(' | ')}`);
+  }
   const second = await c.run();
   const batchLines = units(c, 'batch_lines', c.root).stdout.split('\n').filter((l) => l !== '');
   const runners = c.runnerPids();
   const launchers = ['ka-w1', 'kb-w1'].map((n) => c.launcherPid(n));
-  kill(first.child.pid!, true);
-  const firstRun = await first.done;
+  const firstRun = await killBatch(c, first);
   const survived = { runners: runners.map(isAlive), launchers: launchers.map(isAlive) };
-  const third = await c.run();
+  const beating = [await heartbeat(c, 'ka-w1'), await heartbeat(c, 'kb-w1')];
+  // The restart waits on both held runners, then on kb alone once ka is released, and ends only after kb's release.
+  const from = c.log().length;
+  const restart = c.start();
+  const waitFor = (l: string) => l.startsWith('wait for ');
+  const both = await lineOf(c, restart, from, 'a wait naming ka-w1 and kb-w1', (l) => waitFor(l) && l.includes('ka-w1') && l.includes('kb-w1'));
+  put(hold.ka, '');
+  const kbOnly = await lineOf(c, restart, Math.max(both + 1, from), 'a wait naming kb-w1 alone', (l) => waitFor(l) && l.includes('kb-w1') && !l.includes('ka-w1'));
+  const midway = {
+    both: both >= 0, kbOnly: kbOnly >= 0, kaDone: lines(`${c.dir('ka-w1')}/run.log`).some((l) => l.startsWith('Records: ')),
+    running: restart.child.exitCode === null && restart.child.signalCode === null, markers: c.markers(), end: fs.existsSync(`${c.root}/batch1/END`),
+  };
+  put(hold.kb, '');
+  const third = await restart.done;
   c.knob('ka-w1', body('ka'));
   const fourth = await c.run();
-  return { c, first: firstRun, second, third, fourth, survived, batchLines, runners };
+  return { c, first: firstRun, second, third, fourth, survived, batchLines, runners, beating, midway };
 };
 
 const L = async () => {
   const c = track(new Case({ name: 'L', keys1: ['la', 'lb', 'lc'] }));
   c.knob('la-w1', { fixture: KEY_FX(c, 'la'), pins: 'once', regrade: { exit: 1 } });
-  c.knob('lb-w1', { fixture: KEY_FX(c, 'lb'), endMs: 8000 });
-  c.knob('lc-w1', { fixture: KEY_FX(c, 'lc'), exitDelayS: 20 });
+  const [releaseB, releaseC] = [c.hold('lb'), c.hold('lc')];
+  c.knob('lb-w1', { fixture: KEY_FX(c, 'lb'), release: releaseB });
+  c.knob('lc-w1', { fixture: KEY_FX(c, 'lc'), exitRelease: releaseC });
   const s = c.start();
   await until('the lb runner', () => c.runnerPids().length === 2 && c.log().some((l) => l.startsWith('launch lb-w1 pid ')));
-  kill(c.launcherPid('lb-w1'));
+  c.kill(c.launcherPid('lb-w1'));
+  put(releaseB, '');
   const first = await s.done;
   const exitFiles = ['la', 'lb', 'lc'].map((k) => fs.existsSync(`${c.dir(`${k}-w1`)}/run/exit.txt`));
-  const second = await c.run();
+  const second = await startHeld(c, 'lc-w1', releaseC);
   return { c, first, second, exitFiles, lcExit: lines(`${c.dir('lc-w1')}/run/exit.txt`) };
 };
 
 const G = async () => {
   const c = track(new Case({ name: 'G', keys1: ['ga', 'gb'], width: 1 }));
-  c.knob('ga-w1', { fixture: KEY_FX(c, 'ga'), hang: true, regrade: { exit: 1 } });
+  const release = c.hold('ga');
+  c.knob('ga-w1', { fixture: KEY_FX(c, 'ga'), hang: true, beatUntil: release, regrade: { exit: 1 } });
   c.knob('gb-w1', { fixture: KEY_FX(c, 'gb') });
-  const r = await c.run();
+  const r = await releaseOn(c, c.start(), 0, 'launch ', 'gb-w1', release);
   return { c, r, hangPid: c.runnerPids()[0] };
 };
 
 const G2 = async () => {
   const c = track(new Case({ name: 'G2', keys1: ['gc'] }));
-  c.knob('gc-w1', { fixture: KEY_FX(c, 'gc'), hang: true, regrade: { exit: 1 } });
+  const release = c.hold('gc');
+  c.knob('gc-w1', { fixture: KEY_FX(c, 'gc'), hang: true, beatUntil: release, regrade: { exit: 1 } });
   const s = c.start();
   await until('the Records line', () => lines(`${c.dir('gc-w1')}/run.log`).some((l) => l.startsWith('Records: ')));
-  kill(s.child.pid!, true);
-  await s.done;
+  await killBatch(c, s);
+  put(release, '');
   const stillAlive = isAlive(c.runnerPids()[0]);
   const r = await c.run();
   return { c, r, stillAlive, hangPid: c.runnerPids()[0] };
@@ -349,10 +421,11 @@ const D = async () => {
   await c.plant('d1-w1', fx.d1);
   await c.plant('d2-w1', fx.d2);
   await c.plant('df-w1', fx.df, 1);
-  const dl = liveRunner(c, `${c.dir('dl-w1')}/run`, `${c.dir('dl-w1')}/run`, { fixture: fx.dl, endMs: 8000 });
+  const release = c.hold('dl');
+  const dl = liveRunner(c, `${c.dir('dl-w1')}/run`, `${c.dir('dl-w1')}/run`, { fixture: fx.dl, release });
   c.knob('df-w1-a2', { fixture: fx.df, records: 1, exit: 2, printRecords: false });
   c.knob('dn-w1', { fixture: fx.dn, records: 1, exit: 2, printRecords: false });
-  const r = await c.run();
+  const r = await startHeld(c, 'dl-w1', release);
   return { c, r, dl };
 };
 
@@ -436,17 +509,21 @@ const W2 = async () => {
   const s = c.start();
   await until('the held lock', () => fs.existsSync(`${c.dir('wa-w1')}/run/g5/regrade.lock`) && lines(`${c.root}/batch1/regrade-pids.txt`).length === 1);
   const pid = Number(lines(`${c.root}/batch1/regrade-pids.txt`)[0].split(' ')[1]);
-  kill(pid);
+  c.kill(pid);
   const first = await s.done;
   const second = await c.run();
   return { c, first, second, pid };
 };
 const W3 = async () => {
-  const c = await wcase('W3', { regrade: { durationS: 8 } });
+  const c = await wcase('W3', {});
+  const release = c.hold('regrade');
+  c.knob('wa-w1', { regrade: { release } });
+  const from = c.log().length;
   const s = c.start();
-  await until('the regrade launcher', () => fs.existsSync(`${c.dir('wa-w1')}/g5-regrade.launcher.pid`));
-  kill(Number(read(`${c.dir('wa-w1')}/g5-regrade.launcher.pid`).trim()));
-  return { c, r: await s.done };
+  // The launcher writes its pid file before Start-Process, so the kill waits for the stub's regrade-pids.txt line.
+  await until('the regrade stub', () => callsOf(c, 'regrade') === 1);
+  c.kill(Number(read(`${c.dir('wa-w1')}/g5-regrade.launcher.pid`).trim()));
+  return { c, r: await releaseOn(c, s, from, 'wait for ', 'wa-w1', release) };
 };
 const W4 = async () => {
   const c = await wcase('W4', { 'reader-draw': { keyNoLine: true } });
@@ -478,10 +555,8 @@ const S = async () => {
   const a2 = liveRunner(c, out('sa-w1-a2'));
   const upper = liveRunner(c, out('sb-w1'), `${root.toUpperCase().replace(/\//g, '\\')}\\batch1\\sb-w1\\run`);
   const wrapperFolder = c.dir('sc-w1');
-  const bash = spawn(gitBash(process.env, []), ['-c', `sleep 60 # ${wrapperFolder} s4-run.ps1`], { windowsHide: true, stdio: 'ignore', cwd: c.base });
-  const ps = spawn('powershell', ['-NoProfile', '-Command', `Start-Sleep 60; '${wrapperFolder} s4-run.ps1'`], { windowsHide: true, stdio: 'ignore', cwd: c.base });
-  c.track(bash.pid!);
-  c.track(ps.pid!);
+  spawn(gitBash(process.env, []), ['-c', `sleep 60 # ${wrapperFolder} s4-run.ps1`], { windowsHide: true, stdio: 'ignore', cwd: c.base });
+  spawn('powershell', ['-NoProfile', '-Command', `Start-Sleep 60; '${wrapperFolder} s4-run.ps1'`], { windowsHide: true, stdio: 'ignore', cwd: c.base });
   await sleep(1500);
   const alive = (folder: string) => units(c, 'unit_alive', folder).status;
   return {
@@ -589,17 +664,17 @@ const Pr = async () => {
 /** The launcher killed after Start-Process and before its pids.txt line, then the batch killed and restarted. */
 const Pd = async () => {
   const c = track(new Case({ name: 'Pd', keys1: ['pb'] }));
-  c.knob('pb-w1', { fixture: KEY_FX(c, 'pb'), pidsDelayS: 60, endMs: 15_000, regrade: { exit: 1 } });
+  const release = c.hold('pb');
+  c.knob('pb-w1', { fixture: KEY_FX(c, 'pb'), pidsDelayS: 60, release, regrade: { exit: 1 } });
   const s = c.start();
   await until('the runner log', () => fs.existsSync(`${c.dir('pb-w1')}/run.log`) && c.log().some((l) => l.startsWith('launch pb-w1 pid ')));
   await sleep(1500);
   const launcher = c.launcherPid('pb-w1');
-  kill(launcher);
+  c.kill(launcher);
   await sleep(1000);
-  kill(s.child.pid!, true);
-  await s.done;
+  await killBatch(c, s);
   const pidsLines = c.runnerPids().length;
-  return { c, pidsLines, r: await c.run(), launcher };
+  return { c, pidsLines, r: await startHeld(c, 'pb-w1', release), launcher };
 };
 
 /** A launch that gives no pid: a directory sits where start.out goes, so the shell cannot open it, and a launch.txt of an earlier launch is in the folder. */
@@ -652,14 +727,39 @@ const only = process.env.Z0_BATCH_ONLY?.split(',');
 
 describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs Windows processes, PowerShell 5.1 and Git Bash)', () => {
   const started = Date.now();
+  let keep: string | undefined;
   beforeAll(() => {
+    // A refused keep folder fails the run before any scenario starts, and leaves keep unset so teardown copies nothing.
+    keep = keepDir(process.env.Z0_BATCH_KEEP);
     for (const [k, s] of Object.entries(runs)) if (!only || only.includes(k)) s.start();
   });
   afterAll(async () => {
-    await Promise.allSettled(Object.values(runs).flatMap((s) => s.pending()));
-    for (const c of cases) c.cleanup();
-    if (process.env.Z0_BATCH_TIME) fs.writeFileSync(process.env.Z0_BATCH_TIME, `${Math.round((Date.now() - started) / 1000)} s\n`);
-  });
+    // Teardown releases every hold and kills every case's processes before it waits on any scenario, and each wait has a bound.
+    // Every step's failure joins one list, thrown at the end, so no failed step hides the ones after it.
+    const errors: string[] = [];
+    const attempt = (what: string, fn: () => void) => {
+      try {
+        fn();
+      } catch (err) {
+        errors.push(`${what}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    await stopCases(cases, 60_000).catch((e: Error) => errors.push(`the first teardown stop: ${e.message}`));
+    const pending = Promise.allSettled(Object.values(runs).flatMap((s) => s.pending()));
+    await within(pending, 60_000, 'the scenarios to settle once teardown stopped their processes').catch((e: Error) => errors.push(e.message));
+    // With no second read, which cases still hold processes is unknown, so no case folder is removed.
+    const left = await stopCases(cases, 30_000).catch((e: Error) => { errors.push(`the second teardown stop: ${e.message}`); });
+    if (left) for (const [base, pids] of left) errors.push(`${base} still has pids ${pids.join(' ')} after teardown`);
+    // Global teardown removes the run's temp root (_real-store-guard.ts), so a diagnosis run copies each case folder, batch log and all, out first.
+    const into = keep;
+    for (const c of cases) {
+      if (into) attempt(`the copy of ${c.base} to ${into}`, () => fs.cpSync(c.base, path.join(into, path.basename(c.base)), { recursive: true }));
+      if (left && !left.has(c.base)) attempt(`the removal of ${c.base}`, () => c.remove());
+    }
+    const time = process.env.Z0_BATCH_TIME;
+    if (time) attempt('the time file', () => fs.writeFileSync(time, `${Math.round((Date.now() - started) / 1000)} s\n`));
+    if (errors.length > 0) throw new Error(errors.join('; '));
+  }, 240_000);
   const last = (r: Run) => r.last;
 
   describe('the start', () => {
@@ -846,11 +946,13 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
 
   describe('the Failure model walk', () => {
     it('a batch killed with two runners alive and restarted waits for both, launches neither again and writes both markers [IO1]', async () => {
-      const { c, third, survived, runners } = await runs.K.get();
+      const { c, third, survived, runners, beating, midway } = await runs.K.get();
       expect(survived.runners).toEqual([true, true]);
+      expect(beating).toEqual([true, true]);
+      // With ka released and finished, the restart still waits for kb: it is running, names kb alone, and has written no marker and no END.
+      expect(midway).toEqual({ both: true, kbOnly: true, kaDone: true, running: true, markers: [], end: false });
       expect(c.launches()).toEqual(['ka-w1', 'kb-w1']);
       expect(c.runnerPids()).toEqual(runners);
-      expect(c.log().some((l) => l.startsWith('wait for ') && l.includes('ka-w1'))).toBe(true);
       expect(c.marker('ka-w1')).toBe('ka-w1\n');
       expect(c.marker('kb-w1')).toBe('kb-w1\n');
       expect(third.code).toBe(1);
@@ -938,7 +1040,7 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
       expect(c.marker('lb-w1')).toBe('lb-w1\n');
     });
 
-    it('a launcher that writes exit.txt 20 s after its runner ends: done at the next poll, never a failure', async () => {
+    it('a launcher that writes exit.txt only after the batch ended: done at the next poll, never a failure', async () => {
       const { c, first, second, exitFiles, lcExit } = await runs.L.get();
       expect(exitFiles[2]).toBe(false);
       expect(first.out).not.toContain('lc-w1');
@@ -1186,6 +1288,42 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
       const { usage } = await runs.S.get();
       expect(usage.status).toBe(1);
       expect(usage.stdout).toContain('usage: Z0_CHECKOUT=<checkout> bash s4-units.sh <function> <args>');
+    });
+  });
+
+  describe('the stubs end on their own when a test never releases them', () => {
+    const HOLD = { Z0_STUB_HOLD_S: '1' };
+    const gaveUp = (what: string) => `stub ${what}: still held after Z0_STUB_HOLD_S=1 s, exiting 9`;
+    const node = (c: Case, script: string, args: string[]) => spawnSync(process.execPath, [`${c.scored}/${script}`, ...args], { env: c.env(HOLD), encoding: 'utf8', cwd: c.base, timeout: 25_000 });
+
+    it('a held runner, a beating runner and a hung runner each exit 9 with a line naming the bound', () => {
+      const c = track(new Case({ name: 'Hr', keys1: ['ha'] }));
+      const never = `${c.base}/never`;
+      const fixture = KEY_FX(c, 'ha', [1]);
+      c.knob('ha-w1', { fixture, release: never });
+      c.knob('ha-w2', { fixture, hang: true, beatUntil: never });
+      c.knob('ha-e1', { fixture, hang: true });
+      const [held, beat, hung] = ['ha-w1', 'ha-w2', 'ha-e1'].map((n) => node(c, 'ab-run.mjs', ['--out', `${c.dir(n)}/run`]));
+      expect(held).toMatchObject({ status: 9, stderr: expect.stringContaining(gaveUp(`runner release waiting for ${never}`)) });
+      expect(held.stdout).not.toContain('Records: ');
+      expect(Number(read(`${c.dir('ha-w1')}/held.beat`))).toBeGreaterThan(0);
+      expect(beat).toMatchObject({ status: 9, stderr: expect.stringContaining(gaveUp(`runner beat waiting for ${never}`)) });
+      expect(beat.stdout).toContain('beat\n');
+      expect(hung).toMatchObject({ status: 9, stderr: expect.stringContaining(gaveUp('runner hang')) });
+    });
+
+    it('a held launcher, a held regrade stub and a hung regrade stub each exit 9 with a line naming the bound', () => {
+      const c = track(new Case({ name: 'Hl', keys1: ['hb'] }));
+      const never = `${c.base}/never`;
+      c.knob('hb-w1', { fixture: KEY_FX(c, 'hb', [1]), exitRelease: never, regrade: { release: never } });
+      c.knob('hb-w2', { regrade: { hangOnce: true } });
+      const launcher = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-File', `${c.scored}/s4-run.ps1`, '-Checkout', CHECKOUT, '-Root', c.root, '-Batch', '1', '-Key', 'hb', '-Toolchain', 'node', '-Folder', c.dir('hb-w1')], { env: c.env(HOLD), encoding: 'utf8', input: '', cwd: c.base, timeout: 25_000 });
+      expect(launcher.status).toBe(9);
+      expect(launcher.stdout.trim().split(/\r?\n/).at(-1)).toBe(gaveUp(`launcher exit.txt waiting for ${never}`));
+      expect(fs.existsSync(`${c.dir('hb-w1')}/run/exit.txt`)).toBe(false);
+      const regrade = (n: string) => node(c, 'z0-regrade.mjs', ['regrade', '--out', `${c.dir(n)}/run`, '--tasks', `${c.base}/tasks.json`]);
+      expect(regrade('hb-w1')).toMatchObject({ status: 9, stderr: expect.stringContaining(gaveUp(`regrade regrade release waiting for ${never}`)) });
+      expect(regrade('hb-w2')).toMatchObject({ status: 9, stderr: expect.stringContaining(gaveUp('regrade regrade hang')) });
     });
   });
 });

@@ -7,6 +7,7 @@ import { ARM_TABLE, DESIGNS } from '../../../scripts/token-eval/arms.mjs';
 import { gitBash } from '../../../scripts/token-eval/homes.mjs';
 import { PILOT_CHECKS } from '../../../scripts/token-eval/z0-budget.mjs';
 import { BASIS, BATCH2_SEQ, MEAN, SEQ } from '../../_helpers/z0-r4-spend.js';
+import { killNaming, procsNaming } from '../kill-own.js';
 import { PRICES_BY_MODEL, generate, planOf, type Z0Record } from '../z0-gen.js';
 import { replay } from './ab-run.mjs';
 
@@ -25,26 +26,78 @@ export const read = (file: string) => fs.readFileSync(file, 'utf8');
 export const json = (file: string) => JSON.parse(read(file));
 export const lines = (file: string) => (fs.existsSync(file) ? read(file).split(/\r?\n/).filter((l) => l !== '') : []);
 
+/** `test`, with a file another process holds open (EBUSY, a Windows sharing violation) read as not yet, since a poll reads files the batch and its stubs are still writing. */
+function holds(test: () => boolean) {
+  try {
+    return test();
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'EBUSY') return false;
+    throw err;
+  }
+}
+
 /** Polls `test` until it holds; the message names what never happened. */
 export async function until(what: string, test: () => boolean, ms = 180_000) {
   const end = Date.now() + ms;
-  while (!test()) {
+  while (!holds(test)) {
     if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
     await sleep(250);
   }
 }
 
+/** `p`, or an error naming `what` once `ms` pass first. */
+export async function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms / 1000} s waiting for ${what}`)), ms);
+  });
+  try {
+    return await Promise.race([p, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const isAlive = (pid: number) => spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' }).stdout.includes(`"${pid}"`);
-export const kill = (pid: number, tree = false) => spawnSync('taskkill', [...(tree ? ['/T'] : []), '/F', '/PID', String(pid)], { encoding: 'utf8' });
+
+/** Resolves `p` through any junction in the part that exists, so a link under the temp folder cannot point a keep folder elsewhere. */
+function realPath(p: string): string {
+  const abs = path.resolve(p);
+  if (fs.existsSync(abs)) return fs.realpathSync.native(abs);
+  const up = path.dirname(abs);
+  return up === abs ? abs : path.join(realPath(up), path.basename(abs));
+}
+
+/** The Z0_BATCH_KEEP folder a diagnosis run copies case folders into, or undefined; one not strictly under the real temp folder, that is or is inside this run's temp root (global teardown removes it), or is under C:/z0-runs is refused. */
+export function keepDir(keep: string | undefined): string | undefined {
+  if (!keep) return undefined;
+  const at = realPath(keep).toLowerCase();
+  const rel = (root: string) => path.relative(realPath(root).toLowerCase(), at);
+  const atOrIn = (root: string) => {
+    const r = rel(root);
+    return r === '' || (r !== '..' && !r.startsWith(`..${path.sep}`) && !path.isAbsolute(r));
+  };
+  const under = (root: string) => rel(root) !== '' && atOrIn(root);
+  const realTmp = process.env.HIPPO_TEST_REAL_TMP;
+  const runTmp = process.env.HIPPO_TEST_TMP_RUN;
+  if (!path.isAbsolute(keep) || !realTmp || !under(realTmp) || (runTmp && atOrIn(runTmp)) || atOrIn('C:/z0-runs')) {
+    throw new Error(`Z0_BATCH_KEEP=${keep} is refused: a keep folder is an absolute path under the real temp folder ${realTmp ?? '(HIPPO_TEST_REAL_TMP is unset)'}, outside this run's temp root ${runTmp ?? ''} and C:/z0-runs`);
+  }
+  return realPath(keep);
+}
 
 export interface FxOpts { key: string; seeds: number[]; leaks?: number[]; tag?: string }
 interface Rec extends Z0Record { sessionId: string; costUsd: number; hookCancels: Record<string, never>; envKeys: string[] }
 /** A call's knobs for the stub z0-regrade.mjs. */
-export interface CallKnob { durationS?: number; lock?: boolean; errorRows?: { times: number; rows: number }; hangOnce?: boolean; keyNoLine?: boolean; exit?: number; real?: boolean }
+export interface CallKnob { durationS?: number; release?: string; lock?: boolean; errorRows?: { times: number; rows: number }; hangOnce?: boolean; keyNoLine?: boolean; exit?: number; real?: boolean }
 /** The stub runner's, launcher's and regrade stub's knobs for one unit folder, read by file name from the knobs folder. */
 export interface Knobs {
   fixture?: string; startMs?: number; endMs?: number; gapMs?: number; records?: number; printRecords?: boolean; exit?: number; hang?: boolean; abandon?: boolean;
-  pins?: 'once' | 'always'; box?: 'once' | 'always'; pidsDelayS?: number; exitDelayS?: number;
+  /** A file the runner waits for after its records and before its Records: line, beating `<folder>/held.beat`; `exitRelease` is the launcher's, before exit.txt. Both give up past Z0_STUB_HOLD_S. */
+  release?: string; exitRelease?: string;
+  /** With `hang`: until this file exists, the runner writes a line to run.log every 200 ms, so its grace stop waits for the test. */
+  beatUntil?: string;
+  pins?: 'once' | 'always'; box?: 'once' | 'always'; pidsDelayS?: number;
   regrade?: CallKnob; 'reader-draw'?: CallKnob; 'stored-draw'?: CallKnob; 'reader-score'?: CallKnob; 'stored-score'?: CallKnob; grading?: CallKnob;
 }
 /** One fixture run (static files, and one step per record for the stub runner to replay); returns its records. */
@@ -84,8 +137,9 @@ export class Case {
   readonly b: 'batch1' | 'batch2' | 'raise';
   readonly n: '1' | '2' | 'raise';
   readonly keys: string[];
-  private readonly pids = new Set<number>();
   private readonly sizes = new Map<string, number>();
+  private readonly holds: string[] = [];
+  private stopped = false;
   private calls = 0;
 
   constructor(o: CaseOpts) {
@@ -114,7 +168,12 @@ export class Case {
   fx(name: string, o: FxOpts) { const dir = `${this.base}/fx/${name}`; this.sizes.set(dir, makeFixture(dir, o).length); return dir; }
   size(fixture: string) { return this.sizes.get(fixture)!; }
   dir(name: string) { return `${this.root}/${this.b}/${name}`; }
-  track(pid: number) { this.pids.add(pid); }
+  /** A release file for a held stub; `stop` puts every one at teardown, so no stub waits on a scenario that never got to put it. */
+  hold(name: string) {
+    const file = `${this.base}/release-${name}`;
+    this.holds.push(file);
+    return file;
+  }
 
   /** A unit folder as a finished (count null) or cut-short runner left it. */
   async plant(name: string, fxDir: string, count: number | null = null) {
@@ -157,11 +216,11 @@ export class Case {
 
   /** One s4-batch.sh call; output goes to a file so no pipe stays open behind a runner. */
   start(extra: string[] = [], env: Record<string, string> = {}, root = this.root, n: string = this.n, checkout = CHECKOUT): Started {
+    if (this.stopped) throw new Error(`case ${this.base} is torn down and starts no batch`);
     const out = `${this.base}/out-${++this.calls}.txt`;
     const fd = fs.openSync(out, 'w');
     const child = spawn(gitBash(process.env, []), [`${this.scored}/s4-batch.sh`, n, checkout, root, '--poll', '1', ...extra], { env: this.env(env), stdio: ['ignore', fd, fd], windowsHide: true, cwd: this.base });
     fs.closeSync(fd);
-    this.track(child.pid!);
     const done = new Promise<Run>((resolve) => child.on('exit', (code) => {
       const text = read(out).trim();
       resolve({ code, out: text, last: text.split('\n').at(-1) ?? '' });
@@ -179,11 +238,28 @@ export class Case {
   marker(name: string) { return read(`${this.dir('done')}/${name}`); }
   runnerPids(b = this.b) { return lines(`${this.root}/${b}/pids.txt`).map((l) => Number(l.split(' ')[1])); }
 
-  /** Stops every process this case started (batches, launchers, runners, regrade stubs), then removes its folder. */
-  cleanup() {
-    const found = [...this.pids, ...this.runnerPids(), ...lines(`${this.root}/${this.b}/regrade-pids.txt`).map((l) => Number(l.split(' ')[1]))];
-    for (const l of this.log()) if (l.startsWith('launch ')) found.push(Number(l.split(' ')[3]));
-    for (const pid of found) if (Number.isInteger(pid) && pid > 4) kill(pid, true);
-    fs.rmSync(this.base, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  /** Teardown's first step: this case starts no new batch, and every hold is released. */
+  release() {
+    this.stopped = true;
+    for (const file of this.holds) put(file, '');
   }
+  remove() { fs.rmSync(this.base, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); }
+  /** Kills `pid`, read from a file this case's batch wrote, only while it is a live process naming this case's folder; anything else is an error, never a kill. */
+  kill(pid: number) {
+    if (!killNaming([this.base], [pid]).includes(pid)) throw new Error(`pid ${pid} is not a live process of case ${this.base}, so it was not killed`);
+  }
+}
+
+/** Teardown for every case, before it waits on anything: releases every hold, then kills each live process whose command line names a case folder and waits until none is left or `ms` pass; returns each case folder that still has live processes, with their pids. */
+export async function stopCases(cases: Case[], ms: number) {
+  for (const c of cases) c.release();
+  const bases = cases.map((c) => c.base);
+  const end = Date.now() + ms;
+  let left = procsNaming(bases);
+  while ([...left.values()].some((pids) => pids.length > 0) && Date.now() < end) {
+    killNaming(bases);
+    await sleep(1000);
+    left = procsNaming(bases);
+  }
+  return new Map([...left].filter(([, pids]) => pids.length > 0));
 }
