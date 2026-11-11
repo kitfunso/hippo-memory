@@ -1,5 +1,5 @@
 // Finds and stops a test's processes by a folder their command line names, so a test never signals a pid that has passed to another process.
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type ChildProcess } from 'node:child_process';
 import { dirname, isAbsolute } from 'node:path';
 
 const win = process.platform === 'win32';
@@ -12,13 +12,15 @@ $ErrorActionPreference = 'Stop'
 $OutputEncoding = [Console]::OutputEncoding
 $marks = @($env:Z0_OWN_MARKS -split '\\|' | Where-Object { $_ })
 $only = @($env:Z0_OWN_ONLY -split ',' | Where-Object { $_ })
-# Each live process (of all, or of $only) whose command line names a mark, as the mark's index and the process, parents before children.
+$roots = @($env:Z0_OWN_ROOTS -split ',' | Where-Object { $_ })
+# Each live process (of all, or of $only) that is one of $roots or whose command line names a mark, as the mark's index (-1 for a root) and the process, parents before children.
 # A sweep (no $only) adds each one's descendants under its mark; a child counts only if it started at or after its parent, so no process an earlier holder of the parent's pid left is taken.
 function Mine {
   if ($only.Count) { $all = @(Get-CimInstance Win32_Process -Filter (($only | ForEach-Object { "ProcessId=$_" }) -join ' OR ')) }
   else { $all = @(Get-CimInstance Win32_Process); if ($all.Count -eq 0) { throw 'the process read listed no process' } }
   $found = [System.Collections.Generic.List[object]]::new()
   foreach ($p in $all) {
+    if ($roots -contains [string]$p.ProcessId) { $found.Add([pscustomobject]@{ Mark = -1; Proc = $p }); continue }
     $t = ([string]$p.CommandLine -replace '\\\\+', '/').ToLowerInvariant()
     for ($i = 0; $i -lt $marks.Count; $i++) { if ($t.Contains($marks[$i])) { $found.Add([pscustomobject]@{ Mark = $i; Proc = $p }); break } }
   }
@@ -59,7 +61,7 @@ $still = @(Mine | ForEach-Object { [int]$_.Proc.ProcessId })
 for ($k = $held.Count - 1; $k -ge 0; $k--) {
   $p = $held[$k]
   if ($still -notcontains $p.Id) { continue }
-  try { $p.Kill(); $null = $p.WaitForExit(10000); $out.Add("killed $($p.Id)") } catch { if (-not $p.HasExited) { $out.Add("failed $($p.Id) $($_.Exception.Message)") } }
+  try { $p.Kill(); $null = $p.WaitForExit(10000); $out.Add("killed $($p.Id)") } catch { $null = $p.WaitForExit(5000); if (-not $p.HasExited) { $out.Add("failed $($p.Id) $($_.Exception.Message)") } }
 }
 $out
 'end'
@@ -73,9 +75,9 @@ function marksOf(marks: string[]) {
 }
 
 /** The script's output lines before its closing `end`; a script that failed or stopped early throws, so a failed read never reads as no process. */
-function ps(script: string, marks: string[], only: number[], what: string) {
+function ps(script: string, marks: string[], only: number[], what: string, roots: number[] = []) {
   const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
-    encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 60_000, windowsHide: true, env: { ...process.env, Z0_OWN_MARKS: marks.join('|'), Z0_OWN_ONLY: only.join(',') },
+    encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 60_000, windowsHide: true, env: { ...process.env, Z0_OWN_MARKS: marks.join('|'), Z0_OWN_ONLY: only.join(','), Z0_OWN_ROOTS: roots.join(',') },
   });
   const lines = (r.stdout ?? '').split(/\r?\n/).filter((l) => l !== '');
   if (r.status !== 0 || lines.at(-1) !== 'end') throw new Error(`the ${what} failed: exit ${r.status} ${r.error?.message ?? r.stderr}`);
@@ -94,14 +96,25 @@ export function procsNaming(dirs: string[]) {
   return found;
 }
 
+/** The pids PS_KILL's lines say it killed; a "failed" line, a process still alive after its kill, throws. */
+function killedBy(lines: string[], what: string) {
+  const failed = lines.filter((l) => l.startsWith('failed '));
+  if (failed.length > 0) throw new Error(`the kill of ${what} failed: ${failed.join('; ')}`);
+  return lines.filter((l) => l.startsWith('killed ')).map((l) => Number(l.slice('killed '.length)));
+}
+
+/** Kills `child`, which this test spawned and whose exit Node has not seen, so Node's open handle keeps its pid its own, and its descendants, children first; returns the pids killed. */
+export function killOwnTree(child: ChildProcess): number[] {
+  if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) return [];
+  if (!win) throw new Error('killOwnTree walks descendants through Win32_Process, so it runs on Windows only; no POSIX caller needs it');
+  return killedBy(ps(PS_KILL, [], [], `kill of the tree of ${child.pid}`, [child.pid]), `the tree of ${child.pid}`);
+}
+
 /** Kills each live process (of all, or of `only`) naming one of `marks` and returns the pids it killed; a sweep (no `only`) also kills each match's descendants, children first, while a kill of `only` stops just those, as a test crashing one launcher needs. */
 export function killNaming(marks: string[], only: number[] = []): number[] {
   const want = marksOf(marks);
   if (win) {
-    const lines = ps(PS_KILL, want, only, `kill of processes naming ${marks.join(' ')}`);
-    const failed = lines.filter((l) => l.startsWith('failed '));
-    if (failed.length > 0) throw new Error(`the kill of processes naming ${marks.join(' ')} failed: ${failed.join('; ')}`);
-    return lines.filter((l) => l.startsWith('killed ')).map((l) => Number(l.slice('killed '.length)));
+    return killedBy(ps(PS_KILL, want, only, `kill of processes naming ${marks.join(' ')}`), `processes naming ${marks.join(' ')}`);
   }
   if (only.length === 0) throw new Error('a sweep that also stops descendants runs on Windows only; on POSIX pass the pids to kill');
   // SHORTCUT: POSIX reads then signals with no handle between; pids there climb to pid_max before reuse, pidfd if that ever matters.

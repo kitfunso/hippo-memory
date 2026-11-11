@@ -1,5 +1,5 @@
 // Set-up for the s4-batch.sh tests: a dry root, a "scored" folder holding the real scripts beside the stubs, fixture runs the stub runner replays, and a spawned batch.
-import { spawn, spawnSync, type ChildProcess, type SpawnSyncReturns } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -59,15 +59,6 @@ export async function within<T>(p: Promise<T>, ms: number, what: string): Promis
 }
 
 export const isAlive = (pid: number) => spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' }).stdout.includes(`"${pid}"`);
-/** Tree-kills a child this test spawned whose exit Node has not seen, so its handle is still open and its pid is still its own; one already gone is left alone. */
-export function killTree(child: ChildProcess, taskkill: (args: string[]) => SpawnSyncReturns<string> = (args) => spawnSync('taskkill', args, { encoding: 'utf8', timeout: 60_000, windowsHide: true })) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const r = taskkill(['/T', '/F', '/PID', String(child.pid)]);
-  // A process of the tree that exits during the kill is taskkill's "not found" or "no running instance"; any other error, or none on a failed exit, is a real failure.
-  const stderr = (r.stderr ?? '').trim();
-  const errs = stderr.split(/^(?=ERROR:)/m).filter((block) => block.trim() !== '' && !/not found|no running instance/i.test(block));
-  if (r.error || (r.status !== 0 && (errs.length > 0 || stderr === ''))) throw new Error(`taskkill of the tree of ${child.pid} failed: exit ${r.status} ${r.error?.message ?? stderr}`);
-}
 
 /** Resolves `p` through any junction in the part that exists, so a link under the temp folder cannot point a keep folder elsewhere. */
 function realPath(p: string): string {

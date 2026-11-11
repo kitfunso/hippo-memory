@@ -7,7 +7,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { DESIGNS } from '../scripts/token-eval/arms.mjs';
 import { gitBash } from '../scripts/token-eval/homes.mjs';
 import { callRecord, pathForm, runCli, unitRecord } from '../scripts/token-eval/z0-unit-record.mjs';
-import { CHECKOUT, COST, Case, WARM, fwd, isAlive, json, keepDir, killTree, lines, put, read, sleep, stopCases, until, within, type Knobs, type Run, type Started } from './fixtures/z0-batch/harness.js';
+import { CHECKOUT, COST, Case, WARM, fwd, isAlive, json, keepDir, lines, put, read, sleep, stopCases, until, within, type Knobs, type Run, type Started } from './fixtures/z0-batch/harness.js';
+import { killOwnTree } from './fixtures/kill-own.js';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
 import { cli, sealedKey, synthOut, type Cell } from './fixtures/z0-g5.js';
 import { generate, planOf } from './fixtures/z0-gen.js';
@@ -218,9 +219,9 @@ function liveRunner(c: Case, out: string, spell = out, knob: Knobs = { records: 
   return child.pid!;
 }
 
-/** Tree-kills a started batch and returns once the listing holds no s4-batch.sh line for its root, the condition a restart checks. */
+/** Tree-kills a started batch (by Win32 parent links with a start-time check, so no other case's process that inherited a reused parent pid dies) and returns once the listing holds no s4-batch.sh line for its root, the condition a restart checks. */
 async function killBatch(c: Case, s: Started) {
-  killTree(s.child);
+  killOwnTree(s.child);
   const run = await within(s.done, 60_000, `killBatch: the tree-killed batch ${s.child.pid} to exit`);
   // The Git Bash wrapper's exit is not its forks': one forked during the tree kill outlives it, and a restart rightly refuses while it lives.
   await until(`killBatch: no s4-batch.sh line for ${c.root} after the tree kill`, () => {

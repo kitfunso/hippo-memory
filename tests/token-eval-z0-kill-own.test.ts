@@ -1,11 +1,11 @@
-// kill-own's sweep finds and stops a folder's processes with their descendants, reads a non-ASCII folder, and refuses a mark that could match unrelated processes.
+// kill-own's sweep and tree kill find and stop a test's processes with their descendants, read a non-ASCII folder, and refuse a mark that could match unrelated processes.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { gitBash } from '../scripts/token-eval/homes.mjs';
-import { killNaming, procsNaming } from './fixtures/kill-own.js';
+import { killNaming, killOwnTree, procsNaming } from './fixtures/kill-own.js';
 
 // Each process read is a PowerShell CIM query, which takes seconds on a loaded box.
 vi.setConfig({ testTimeout: 120_000 });
@@ -45,31 +45,52 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 });
 
+/** node mid.js, which starts node tick.js; neither command line names a test folder, the tick writes its pid and a dot every 200 ms, and both end once the stop file exists. */
+function midAndTick() {
+  const aux = folder('z0-aux-');
+  const tick = join(aux, 'tick.txt');
+  const tickPid = join(aux, 'tick.pid');
+  const stop = join(aux, 'stop');
+  stops.push(stop);
+  const until90s = `const fs = require('fs'); const end = Date.now() + 90000; const done = () => fs.existsSync(process.env.Z0_TICK_STOP) || Date.now() > end;`;
+  writeFileSync(join(aux, 'mid.js'), `${until90s} require('child_process').spawn(process.execPath, [${JSON.stringify(join(aux, 'tick.js'))}], { stdio: 'ignore' }); setInterval(() => { if (done()) process.exit(0); }, 200);`);
+  writeFileSync(join(aux, 'tick.js'), `${until90s} fs.writeFileSync(process.env.Z0_TICK_PID, String(process.pid)); setInterval(() => { if (done()) process.exit(0); fs.appendFileSync(process.env.Z0_TICK, '.'); }, 200);`);
+  const env = { ...process.env, Z0_TICK: tick, Z0_TICK_PID: tickPid, Z0_TICK_STOP: stop };
+  const ready = async () => {
+    await until('the tick to start', () => existsSync(tickPid) && existsSync(tick));
+    return Number(readFileSync(tickPid, 'utf8'));
+  };
+  const stopped = async () => {
+    const size = statSync(tick).size;
+    await sleep(1500);
+    return statSync(tick).size === size;
+  };
+  return { mid: join(aux, 'mid.js'), env, ready, stopped };
+}
+
 describe.skipIf(!win)('kill-own on Windows', () => {
   it('a sweep finds and stops a descendant two levels down whose command line does not name the folder', async () => {
     const mark = folder('z0-own-');
-    const aux = folder('z0-aux-');
-    const tick = join(aux, 'tick.txt');
-    const tickPid = join(aux, 'tick.pid');
-    const stop = join(aux, 'stop');
-    stops.push(stop);
-    const until90s = `const fs = require('fs'); const end = Date.now() + 90000; const done = () => fs.existsSync(process.env.Z0_TICK_STOP) || Date.now() > end;`;
-    writeFileSync(join(aux, 'mid.js'), `${until90s} require('child_process').spawn(process.execPath, [${JSON.stringify(join(aux, 'tick.js'))}], { stdio: 'ignore' }); setInterval(() => { if (done()) process.exit(0); }, 200);`);
-    writeFileSync(join(aux, 'tick.js'), `${until90s} fs.writeFileSync(process.env.Z0_TICK_PID, String(process.pid)); setInterval(() => { if (done()) process.exit(0); fs.appendFileSync(process.env.Z0_TICK, '.'); }, 200);`);
+    const t = midAndTick();
     // Scenario S's shape: bash -c runs its one command in place of a fork, so only bash names the folder, and node mid.js and its tick child do not.
-    const outer = spawn(gitBash(process.env, []), ['-c', `"${fwd(process.execPath)}" "${fwd(aux)}/mid.js" # ${fwd(mark)}`], {
-      env: { ...process.env, Z0_TICK: tick, Z0_TICK_PID: tickPid, Z0_TICK_STOP: stop }, stdio: 'ignore', windowsHide: true, cwd: tmpdir(),
-    });
-    started.push(outer);
-    await until('the tick to start', () => existsSync(tickPid) && existsSync(tick));
-    const pid = Number(readFileSync(tickPid, 'utf8'));
+    started.push(spawn(gitBash(process.env, []), ['-c', `"${fwd(process.execPath)}" "${fwd(t.mid)}" # ${fwd(mark)}`], { env: t.env, stdio: 'ignore', windowsHide: true, cwd: tmpdir() }));
+    const pid = await t.ready();
 
     expect(procsNaming([mark]).get(mark)).toContain(pid);
     expect(killNaming([mark])).toContain(pid);
-    const size = statSync(tick).size;
-    await sleep(1500);
-    expect(statSync(tick).size).toBe(size);
+    expect(await t.stopped()).toBe(true);
     expect(procsNaming([mark]).get(mark)).toEqual([]);
+  });
+
+  it('killOwnTree stops a child the test holds and its descendants, and leaves a child whose exit Node has seen alone', async () => {
+    const t = midAndTick();
+    const mid = spawn(process.execPath, [t.mid], { env: t.env, stdio: 'ignore', windowsHide: true, cwd: tmpdir() });
+    started.push(mid);
+    const pid = await t.ready();
+    expect(killOwnTree(mid)).toEqual(expect.arrayContaining([mid.pid, pid]));
+    expect(await t.stopped()).toBe(true);
+    await exited(mid);
+    expect(killOwnTree(mid)).toEqual([]);
   });
 
   it('a folder whose name holds a non-ASCII letter is found, and its process stopped', async () => {
