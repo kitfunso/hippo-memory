@@ -293,12 +293,14 @@ const PLANNERS = {
     return { projection, margin: 1, cap, capSpend: capOnly ? usdFlag(args, '--attempt-ledger') : 0, scale: 1, figure: !capOnly };
   },
   'whole-run'(args, cwd) {
-    const [basis, pins, pilot] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd)), readPilot(filePath(args, '--pilot', cwd))];
+    const pilotFile = filePath(args, '--pilot', cwd);
+    const [basis, pins, pilot] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd)), readPilot(pilotFile)];
+    const hot = hotArms(pilot, pilotFile);
     const gapByArm = sequenceGap(basis.bySequence, listOf(pins, 'batch1Keys'));
     const at = (seeds) => wholeRun({ basisByArm: basis.basisByArm, gapByArm, r: pilot.rMax, seeds });
     const seeds = wholeRunSeeds(pins);
     const lines = [`r ${pilot.rMax} from ${pilot.rArm}`, `projection at r ${pilot.rMax}, ${seeds} seeds: $${money(at(seeds))}`, `projection at r ${pilot.rMax}, ${SEED_CAP} seeds: $${money(at(SEED_CAP))}`];
-    return { projection: at(seeds), margin: GATE_MARGIN, cap: null, capSpend: 0, scale: 1, figure: true, pilot, lines };
+    return { projection: at(seeds), margin: GATE_MARGIN, cap: null, capSpend: 0, scale: 1, figure: true, hot, lines };
   },
   'batch-1'(args, cwd) {
     const [basis, pins, pilot] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd)), readPilot(filePath(args, '--pilot', cwd))];
@@ -319,16 +321,16 @@ const PLANNERS = {
   },
 };
 
-/** The raise: j falls from the rule's largest count until the check passes, else 3 (the base count), whatever the ledger. */
-function raisePlan(args, cwd, ctx) {
+/** The raise: j falls from the rule's largest count until the check passes, else 3 (the base count), whatever the ledger. A `sealed` cap from an earlier call replaces the search. */
+function raisePlan(args, cwd, ctx, sealed) {
   const [basis, pins, pilot] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd)), readPilot(filePath(args, '--pilot', cwd))];
   const rule = readSchema(filePath(args, '--seed-rule', cwd), 'seed rule', SEED_RULE_SCHEMA);
   const counts = ruleCounts(rule.seeds, 'seed rule', args.flags.get('--seed-rule'));
-  const [scale, k] = [readScale(filePath(args, '--scale', cwd)), Math.max(...Object.values(counts))];
+  const [scale, k] = [readScale(filePath(args, '--scale', cwd)), sealed === null ? Math.max(...Object.values(counts)) : sealed.count];
   const gapByArm = sequenceGap(basis.bySequence, listOf(pins, 'batch1Keys'));
   const at = (j) => projectSpend({ basisByArm: basis.basisByArm, gapByArm, r: pilot.rMax, seedsByArm: raiseSeeds(counts, j), scale });
-  let j = BASE_SEEDS;
-  for (let tryJ = k; tryJ > BASE_SEEDS; tryJ--) {
+  let j = sealed === null ? BASE_SEEDS : sealed.maxSeed;
+  for (let tryJ = k; sealed === null && tryJ > BASE_SEEDS; tryJ--) {
     if (admissionOk({ ledger: ctx.ledger, projection: at(tryJ), margin: GATE_MARGIN, figure: ctx.approved, cap: null, capSpend: 0 })) {
       j = tryJ;
       break;
@@ -337,10 +339,24 @@ function raisePlan(args, cwd, ctx) {
   return { projection: at(j), margin: GATE_MARGIN, cap: null, capSpend: 0, scale, figure: true, maxSeed: j, count: k };
 }
 
-/** "S1 has r 2, S2 has r 1.95": every arm whose pilot r is at the flag; the pilot's own largest-r arm when none is. */
-function hotArms(pilot) {
+/** The sealed raise cap, null when absent; one that parses but holds no usable counts was changed by hand, like one that does not parse. */
+function readSeal(file) {
+  const sealed = readSealed(file);
+  if (sealed === null) return null;
+  const { maxSeed, count } = sealed;
+  if (![maxSeed, count].every(Number.isInteger) || maxSeed < BASE_SEEDS || maxSeed > count || count > SEED_CAP) {
+    throw new Error(`${file}: sealed max-seed file holds no whole maxSeed and count with ${BASE_SEEDS} <= maxSeed <= count <= ${SEED_CAP}; the harness never rebuilds it`);
+  }
+  return { maxSeed, count };
+}
+
+/** The arms of the pilot's r at the flag, as [arm, r] pairs. The pilot file's flag19 must say the same, or the file was changed by hand. */
+function hotArms(pilot, file) {
   const hot = Object.entries(pilot.r ?? {}).filter(([, r]) => r >= R_FLAG);
-  return (hot.length > 0 ? hot : [[pilot.rArm, pilot.rMax]]).map(([arm, r]) => `${arm} has r ${r}`).join(', ');
+  if ((hot.length > 0) !== (pilot.flag19 === true)) {
+    throw new Error(`pilot ${file}: flag19 is ${pilot.flag19}, but pilot.r gives ${hot.length > 0} (any arm at ${R_FLAG} or more): ${JSON.stringify(pilot.r)}`);
+  }
+  return hot;
 }
 
 /** The refusal each step and reason takes: its exit code and its line. */
@@ -352,7 +368,7 @@ const REFUSALS = {
   },
   'whole-run': {
     figure: [4, (c) => `FOUNDER: the whole run needs $${money(c.ledger + c.margin * c.projection)}; approved $${money(c.approved)}`],
-    r: [4, (c) => `FOUNDER: ${hotArms(c.pilot)} on the pilot, ${R_FLAG} or more: on the pilot tasks the cost per task of each is 0.95 of Opus's or more before any saving; go on or stop`],
+    r: [4, (c) => `FOUNDER: ${c.hot.map(([arm, r]) => `${arm} has r ${r}`).join(', ')} on the pilot, ${R_FLAG} or more: on the pilot tasks the cost per task of each is 0.95 of Opus's or more before any saving; go on or stop`],
   },
   'batch-1': { figure: [3, (c) => `STOP: batch 1 needs $${money(c.ledger + c.margin * c.projection)}; approved $${money(c.approved)}`] },
   'batch-2': { figure: [5, (c) => `STOP: batch 2 needs $${money(c.ledger + c.margin * c.projection)}; approved $${money(c.approved)}; no claim unless the founder raises the figure`] },
@@ -375,16 +391,19 @@ function admit(args, cwd, now) {
   const [log, pinsFile] = [filePath(args, '--log', cwd), filePath(args, '--pins', cwd)];
   const [units, seal] = [listFlag(args, '--units').map((u) => path.resolve(cwd, u)), step === 'seeds' ? need(args, '--seal') : optional(args, '--seal')];
   const mark = ['batch-1', 'batch-2', 'seeds'].includes(step) ? filePath(args, '--mark', cwd) : null;
-  checkNotStarted(units, seal === null ? null : path.resolve(cwd, seal), SCOPES[step]);
+  const sealFile = seal === null ? null : path.resolve(cwd, seal);
+  // A seal with no mark and no unit run is a raise admit cut off between its two writes: it resumes from the seal, which stays as it is.
+  const sealed = step === 'seeds' && !fs.existsSync(mark) ? readSeal(sealFile) : null;
+  checkNotStarted(units, sealed === null ? sealFile : null, SCOPES[step]);
   const entries = readLog(log);
   const named = yesGos(entries, 'figure').some((e) => e.figure >= approved);
   if (approved > APPROVED_FIGURE && !named) throw new Error(`--approved ${need(args, '--approved')} is above $${APPROVED_FIGURE.toLocaleString('en-US')}.00 and no founder go names it`);
 
   const ctx = { entries, attempt, ledger, approved };
-  const plan = step === 'seeds' ? raisePlan(args, cwd, ctx) : PLANNERS[step](args, cwd, ctx);
+  const plan = step === 'seeds' ? raisePlan(args, cwd, ctx, sealed) : PLANNERS[step](args, cwd, ctx);
   const check = { ledger, projection: plan.projection, margin: plan.margin, figure: plan.figure ? approved : null, cap: plan.cap, capSpend: plan.capSpend };
   let reason = refusalOf(check);
-  if (reason === null && step === 'whole-run' && plan.pilot.flag19 === true) reason = 'r';
+  if (reason === null && step === 'whole-run' && plan.hot.length > 0) reason = 'r';
   const sealedSeeds = step === 'seeds';
   const admitted = sealedSeeds ? plan.maxSeed > BASE_SEEDS || plan.count <= BASE_SEEDS : reason === null;
   if (sealedSeeds) reason = plan.maxSeed < plan.count ? 'cap' : null;
@@ -396,7 +415,7 @@ function admit(args, cwd, now) {
   const lines = plan.lines ?? [];
   if (sealedSeeds) {
     // The seal goes first: a mark that outlives a failed seal write would let a driver start on a cap nothing recorded.
-    writeFileAtomic(path.resolve(cwd, seal), `${JSON.stringify({ maxSeed: plan.maxSeed, count: plan.count })}\n`);
+    if (sealed === null) writeFileAtomic(sealFile, `${JSON.stringify({ maxSeed: plan.maxSeed, count: plan.count })}\n`);
     writeMark(mark, entry);
     return reason === null ? answer(0, `max-seed ${plan.count}`) : answer(6, '', `CAP: max-seed ${plan.maxSeed} of ${plan.count}`);
   }

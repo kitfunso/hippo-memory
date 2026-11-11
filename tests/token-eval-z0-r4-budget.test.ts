@@ -18,6 +18,8 @@ const pilotFile = (over: PilotOver = {}) => ({ schema: 'z0-pilot/1', attempt: 1,
 const SPEND = { schema: 'z0-spend-basis/1', basisByArm: BASIS, bySequence: { ...SEQ, ...BATCH2_SEQ }, meanPerRecord: MEAN };
 const PINS = { batch1Keys: BATCH1.join(','), batch2Keys: BATCH2.join(','), wholeRunSeeds: '5', effort: 'medium', claudeVersion: '2.1.288' };
 const SLOW = { r: { S1: 0.3, S2: 0.3 }, rMax: 0.3 };
+// S1 at 2 is over the 1.9 flag, and the whole run at r = 2 needs $4,019.80, so these tests approve $5,000 after a figure go.
+const HOT = { r: { S1: 2, S2: 1 }, rArm: 'S1', rMax: 2, flag19: true };
 
 interface RootOver { spend?: { meanPerRecord: number }; pins?: { batch1Keys?: string | string[]; batch2Keys?: string | string[]; wholeRunSeeds?: string | number }; pilot?: PilotOver }
 interface Root { dir: string; log: string; basis: string; pins: string; pilot: string }
@@ -233,11 +235,26 @@ describe('admit: the whole run', () => {
   });
 
   it('refuses a fitting run whose pilot flags r of 1.9 with exit 4, reason r, naming the arm', () => {
-    const root = makeRoot({ pilot: { ...SLOW, flag19: true, rArm: 'S1' } });
-    const r = whole(root, { approved: '2140', ledger: '0' });
+    const root = makeRoot({ pilot: HOT });
+    expect(goFigure(root, '5000').code).toBe(0);
+    const r = whole(root, { approved: '5000', ledger: '0' });
     expect(r.code).toBe(4);
-    expect(r.stderr).toMatch(/FOUNDER: S1 has r 0\.3 on the pilot, 1\.9 or more: .*0\.95 of Opus's or more/);
+    expect(r.stderr).toMatch(/FOUNDER: S1 has r 2 on the pilot, 1\.9 or more: .*0\.95 of Opus's or more/);
     expect(last(root)).toMatchObject({ admitted: false, reason: 'r' });
+  });
+
+  it('exits 1 naming the pilot file and both values when flag19 is true and no arm of pilot.r is at 1.9', () => {
+    const root = makeRoot({ pilot: { ...SLOW, flag19: true } });
+    const r = whole(root, { approved: '2140', ledger: '0' });
+    expect([r.code, r.stderr]).toEqual([1, expect.stringContaining(`pilot ${root.pilot}: flag19 is true, but pilot.r gives false`)]);
+    expect(entries(root)).toEqual([]);
+  });
+
+  it('exits 1 naming the pilot file and both values when flag19 is false and an arm of pilot.r is at 1.9 or more', () => {
+    const root = makeRoot({ pilot: { ...HOT, flag19: false } });
+    const r = whole(root, { approved: '2140', ledger: '0' });
+    expect([r.code, r.stderr]).toEqual([1, expect.stringContaining(`pilot ${root.pilot}: flag19 is false, but pilot.r gives true`)]);
+    expect(entries(root)).toEqual([]);
   });
 
   it('names every arm whose pilot r is 1.9 or more, not only the largest', () => {
@@ -484,6 +501,40 @@ describe('admit: the seed raise', () => {
     expect(fs.existsSync(path.join(root.dir, 'raise', 'ADMITTED'))).toBe(false);
   });
 
+  it('resumes from a seal whose mark write failed: exits as the seal says, writes the mark and leaves the seal bytes alone', () => {
+    const root = makeRoot();
+    const [p5, p6, seal, blocker] = [raiseTo(5, 9), raiseTo(6, 9), path.join(root.dir, 'raise', 'max-seed.json'), path.join(root.dir, 'blocker')];
+    const args = seedArgs(root, 9);
+    args[args.indexOf('--mark') + 1] = path.join(blocker, 'ADMITTED');
+    fs.writeFileSync(blocker, 'a file where the mark\'s folder should be');
+    expect(admit(root, { step: 'seeds', approved: cents(100 + 1.25 * ((p5 + p6) / 2)), ledger: '100', extra: args }).code).toBe(1);
+    const bytes = fs.readFileSync(seal);
+    expect(JSON.parse(bytes.toString('utf8'))).toEqual({ maxSeed: 5, count: 9 });
+    fs.rmSync(blocker);
+    expect([9, 8, 7, 6].find((j) => 100 + 1.25 * raiseTo(j, 9) <= 2140)).toBeGreaterThan(5);
+    const retry = admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: args });
+    expect([retry.code, retry.stderr]).toEqual([6, expect.stringContaining('CAP: max-seed 5 of 9')]);
+    expect(fs.readFileSync(seal).equals(bytes)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(blocker, 'ADMITTED'), 'utf8'))).toMatchObject({ step: 'seeds', attempt: 1 });
+    expect(entries(root).map((e) => [e.maxSeed, e.reason])).toEqual([[5, 'cap'], [5, 'cap']]);
+    expect(entries(root)[1]!.projection).toBeCloseTo(p5, 9);
+  });
+
+  it('still exits 1 for a seal with no mark when a unit holds run/, and names a seal that is no usable max-seed file', () => {
+    const root = makeRoot();
+    const [args, seal] = [seedArgs(root, 5), path.join(root.dir, 'raise', 'max-seed.json')];
+    writeJson(seal, { maxSeed: 5, count: 5 });
+    fs.mkdirSync(path.join(root.dir, 'u', 'q12-w1', 'run'), { recursive: true });
+    const started = admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: [...args, '--units', path.join(root.dir, 'u', 'q12-w1')] });
+    expect([started.code, started.stderr]).toEqual([1, expect.stringContaining('has started')]);
+    for (const [body, said] of [['{not json', `${seal}: sealed file does not parse`], ['{"maxSeed":2,"count":5}', `${seal}: sealed max-seed file holds no whole maxSeed and count`]]) {
+      fs.writeFileSync(seal, body!);
+      const r = admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: args });
+      expect([r.code, r.stderr]).toEqual([1, expect.stringContaining(said!)]);
+    }
+    expect([fs.existsSync(path.join(root.dir, 'raise', 'ADMITTED')), entries(root)]).toEqual([false, []]);
+  });
+
   it('refuses a seed rule with no count for a rule arm, and a seeds step with no --seal', () => {
     const root = makeRoot();
     const args = seedArgs(root, 5);
@@ -574,8 +625,9 @@ describe('scale and founder-go', () => {
     const refused = go(figure, '--question', 'whole-run', '--words', 'go');
     expect([refused.code, refused.stderr]).toEqual([1, expect.stringContaining('refused on the figure')]);
     expect(entries(figure)).toHaveLength(1);
-    const r = makeRoot({ pilot: { ...SLOW, flag19: true } });
-    admit(r, { step: 'whole-run', approved: '2140', ledger: '0', extra: ['--pilot', r.pilot] });
+    const r = makeRoot({ pilot: HOT });
+    goFigure(r, '5000');
+    admit(r, { step: 'whole-run', approved: '5000', ledger: '0', extra: ['--pilot', r.pilot] });
     expect(last(r).reason).toBe('r');
     expect(go(r, '--question', 'whole-run', '--words', 'go').code).toBe(0);
     expect(last(r).question).toBe('whole-run');
