@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { FLOOR_ARMS, HIPPO_ARMS } from './arms.mjs';
+import { venvPaths } from './homes.mjs';
 import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment, SHELL_TOOLS } from './records.mjs';
 import { requestBodies } from './proxy.mjs';
 
@@ -200,7 +201,7 @@ function bounds(ctx, run, step, ownIds) {
   const operator = [...homes.flatMap((h) => ['.claude', '.codex', '.hippo'].map((s) => path.join(h, s))), ...(appData ? [path.join(appData, 'Claude')] : [])].map(fold);
   return {
     win, fold, operator, cache: fold(ctx.cacheDir), out: fold(ctx.outDir), root: fold(d.root), config: fold(d.claudeConfig), codex: fold(d.codexHome),
-    projects: fold(path.join(d.claudeConfig, 'projects')), own: [d.work, d.claudeConfig, d.codexHome, d.hippoHome, d.bin, d.home].map(fold),
+    projects: fold(path.join(d.claudeConfig, 'projects')), own: [d.work, d.claudeConfig, d.codexHome, d.hippoHome, d.bin, d.home, ...(ctx.venv ? Object.values(venvPaths(d, step.position)) : [])].map(fold),
     ownIds: new Set(ownIds.map((id) => (win ? id.toLowerCase() : id))),
     foreign: ctx.foreignDirs.filter((f) => f.order < step.order).map((f) => fold(f.path)),
     // A recursive search from an ancestor of any of these reads past transcripts, other runs or operator memory (162).

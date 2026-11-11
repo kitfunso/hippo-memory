@@ -10,7 +10,7 @@ import { sleep } from './runs.mjs';
 import { agentGit } from './checks.mjs';
 import { instructionSnapshot, restoreInstructions } from './workspace.mjs';
 import { DESIGNS, TOKEN_KEY, claudeModelOf } from './arms.mjs';
-import { appendJsonLine } from './atomic-write.mjs';
+import { appendJsonLine, writeFileAtomic } from './atomic-write.mjs';
 import { execFileSync } from 'node:child_process';
 
 /** A Windows user env var's value from the registry, so a token set with setx after the run started is seen; null when unset. */
@@ -118,15 +118,34 @@ export async function runSession(ctx, run, t, reset) {
   return { ...session, sessionId };
 }
 
+/** Round 4 keeps a cut-off resume's transcripts, main and subagent, under <out>/cutoffs/<run>/<arm>/seed<n>/<position>-<k>/ before the reset undoes them, with the attempt that made them. */
+function keepCutOff(ctx, run, { position, taskId, attempt, sessionId, sizesBefore, filesBefore }) {
+  const projects = path.join(run.dirs.claudeConfig, 'projects');
+  const files = new Set([...sessionFiles(projects, sessionId), ...listTranscripts(projects).filter((f) => !filesBefore.has(f))]);
+  const base = path.join(ctx.outDir, 'cutoffs', run.runName, run.arm, `seed${run.seed}`);
+  let k = 1;
+  while (fs.existsSync(path.join(base, `${position}-${k}`))) k++;
+  const dir = path.join(base, `${position}-${k}`);
+  fs.mkdirSync(dir, { recursive: true });
+  for (const f of files) {
+    const to = path.join(dir, path.relative(run.dirs.claudeConfig, f));
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(f, to);
+  }
+  writeFileAtomic(path.join(dir, 'attempt.json'), `${JSON.stringify({ taskId, attempt, sessionId, sizesBefore })}\n`);
+}
+
 /** One resume of `sessionId` with `message` on stdin; a cut-off attempt is undone exactly before the rerun. */
-export async function resumeSession(ctx, run, t, sessionId, message, afterReset = () => {}) {
+export async function resumeSession(ctx, run, t, sessionId, message, afterReset = () => {}, position = null) {
   const args = [...claudeArgs(ctx, run), '--resume', sessionId];
   let dir = null;
   try {
     // Outside the workspace, so nothing the cut-off attempt does to .git (gc, refs, config, hooks, even rm) reaches the saved state.
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-resume-'));
     const snap = workSnapshot(run, sessionId, dir);
+    let cuts = 0;
     const reset = () => {
+      if (ctx.design === DESIGNS.r4) keepCutOff(ctx, run, { position, taskId: t.id, attempt: ++cuts, sessionId, sizesBefore: sizes, filesBefore: before.filesBefore });
       restoreWork(run, snap, sessionId);
       return afterReset();
     };

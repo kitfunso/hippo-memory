@@ -3,7 +3,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { git, sh } from './exec.mjs';
-import { armEnv, childEnv } from './arms.mjs';
+import { ARM_TABLE, armEnv, childEnv, taskEnv } from './arms.mjs';
+import { createVenv, removeVenv, venvPaths } from './homes.mjs';
 import { checkoutBase, writeHiddenTests } from './workspace.mjs';
 import { runCheck, stateCommit, agentGit, CheckerError, WorkspaceGitError } from './checks.mjs';
 import { checkerIdentity } from './checker-identity.mjs';
@@ -88,7 +89,7 @@ export function readRows(file) {
 function scratchPaths(out, g) {
   const root = path.join(out, 'rg', g.runName, g.arm, `seed${g.seed}`);
   const at = (name) => path.join(root, name);
-  return { root, seed: g.seed, work: at('work'), claudeConfig: at('claude-config'), codexHome: at('codex-home'), hippoHome: at('hippo-home'), bin: at('bin') };
+  return { root, seed: g.seed, work: at('work'), claudeConfig: at('claude-config'), codexHome: at('codex-home'), hippoHome: at('hippo-home'), bin: at('bin'), venv: at('venv') };
 }
 
 /** The homes start empty for every cell (R22): checkers, setup and tests have no reason to read them. */
@@ -148,7 +149,7 @@ function fetchBundle(work, entry) {
 }
 
 /** R26's gates, in order: checker identity, stub, bundle, setup, every tree. Only then may a checker run. */
-function gates(ctx, entry, dirs, env) {
+function gates(ctx, entry, dirs, env, venv) {
   const g = entry.grade;
   const ids = Object.fromEntries(Object.keys(g.checkers).sort().map((id) => [id, ctx.checkerId(id)]));
   const changed = Object.keys(ids).filter((id) => ids[id] !== g.checkers[id]);
@@ -161,6 +162,11 @@ function gates(ctx, entry, dirs, env) {
   }
   if (stub !== g.stub) fault('stub', `the tasks file gives stub ${stub}, the run used ${g.stub}`);
   fetchBundle(dirs.work, entry);
+  // The run's task venv, made again from nothing in the scratch tree, by the python the arm env alone would find.
+  if (venv !== null) {
+    const made = createVenv(venv.path, childEnv(venv.base), dirs.root);
+    if (made.status !== 0) fault('setup', `the task venv could not be made (exit ${made.status}): ${made.stderr.slice(-300)}`);
+  }
   const setup = entry.t.setup ? sh(entry.t.setup, dirs.work, childEnv(env)) : null;
   if (setup && setup.status !== 0) fault('setup', `setup exited ${setup.status}: ${setup.stderr.slice(-300)}`);
   const trees = [['first', g.first], ['finalCheck', g.finalChecked ? g.finalCheck : null], ['stale', g.stale], ['final', g.final]];
@@ -245,16 +251,21 @@ export function regradeCell(ctx, entry, inputs) {
     position: g.position, taskId: g.taskId, kind: g.kind, lessonId: g.lessonId, staleLessonId: g.staleLessonId, finalChecked: g.finalChecked, extraEnvKeys: ctx.extraEnvKeys,
   };
   const dirs = scratchDirs(ctx.out, g);
-  const env = armEnv(g.arm, dirs, ctx.baseEnv, { passEnv: ctx.passEnv });
+  const base = armEnv(g.arm, dirs, ctx.baseEnv, { passEnv: ctx.passEnv });
+  // A round 4 run made under --venv gets its task env again, over a scratch venv of its own.
+  const venv = ctx.venvGroups.has(groupKey(g)) ? venvPaths(dirs, g.position).venv : null;
+  const env = venv === null ? base : taskEnv(base, venv, ctx.venv);
   // Checks that ended before a later fault stay on the error row, so their flips still count (R7).
   const checks = [];
   try {
-    lessonChecks(ctx, entry, dirs, env, gates(ctx, entry, dirs, env), checks);
+    lessonChecks(ctx, entry, dirs, env, gates(ctx, entry, dirs, env, venv === null ? null : { path: venv, base }), checks);
     return { ...head, status: 'done', error: null, checks, acceptance: acceptanceOf(ctx, entry, dirs, env) };
   } catch (err) {
     const known = err instanceof HarnessFault ? err : err instanceof WorkspaceGitError ? new HarnessFault('git', err.message) : null;
     if (!known) throw err;
     return { ...head, status: 'error', error: { stage: known.stage, message: known.message }, checks, acceptance: null };
+  } finally {
+    if (venv !== null) removeVenv(venv, { errFile: path.join(dirs.root, 'venv-remove.txt'), log: ctx.log, removeTree: ctx.removeTree });
   }
 }
 
@@ -315,24 +326,35 @@ function passEnvOf(records, baseEnv) {
   return passEnv;
 }
 
-/** R27: refuse when the run's arm env had a key this one lacks; keys only this one has are a warning, by name. */
-function envKeyCheck(records, entries, out, baseEnv, passEnv) {
+const groupKey = (g) => `${g.runName}|${g.arm}|${g.seed}`;
+
+/** R27: refuse when the run's arm env had a key this one lacks; keys only this one has are a warning, by name.
+ * A round 4 group whose record names VIRTUAL_ENV ran in task venvs: it needs `venv` (--poetry and --pip-constraint), and its env is compared as the task env it was.
+ * Returns the extra keys and the groups that regrade in a scratch venv. */
+function envKeyCheck(records, entries, out, baseEnv, passEnv, venv) {
   const extra = new Set();
-  for (const g of new Map(entries.map((e) => [`${e.grade.runName}|${e.grade.arm}|${e.grade.seed}`, e.grade])).values()) {
+  const venvGroups = new Set();
+  for (const g of new Map(entries.map((e) => [groupKey(e.grade), e.grade])).values()) {
     // record.sequence is the sequence id, which a renamed run no longer shares with its runName.
     const rec = records.find((r) => r.sequence === g.sequence && r.arm === g.arm && r.seed === g.seed && r.screen !== true && Array.isArray(r.envKeys));
     if (!rec) throw new Error(`no record of ${g.runName}/${g.arm}/seed${g.seed} names its envKeys; pass the runs file the run wrote`);
-    const now = armEnv(g.arm, scratchPaths(out, g), baseEnv, { passEnv });
+    const scratch = scratchPaths(out, g);
+    const had = Object.fromEntries(rec.envKeys.map((k) => [k, '']));
+    let now = armEnv(g.arm, scratch, baseEnv, { passEnv });
+    if (ARM_TABLE[g.arm].round === 'r4' && hasKey(had, 'VIRTUAL_ENV')) {
+      if (venv === null) throw new Error(`a round 4 record of ${g.runName}/${g.arm}/seed${g.seed} ran in a task venv; pass --poetry <dir> and --pip-constraint <file>`);
+      venvGroups.add(groupKey(g));
+      now = taskEnv(now, venvPaths(scratch, g.position).venv, venv);
+    }
     const lacking = rec.envKeys.filter((k) => !hasKey(now, k));
     if (lacking.length) throw new Error(`the run's env for ${g.runName}/${g.arm}/seed${g.seed} had ${lacking.join(', ')}, which this env lacks; set them before the regrade`);
-    const had = Object.fromEntries(rec.envKeys.map((k) => [k, '']));
     for (const k of Object.keys(now)) if (!hasKey(had, k)) extra.add(k);
   }
-  return [...extra].sort();
+  return { extra: [...extra].sort(), venvGroups };
 }
 
 function regradeContext(opts, entries) {
-  const { out, spec, records, pass, baseEnv } = opts;
+  const { out, spec, records, pass, baseEnv, venv = null, log = () => {}, removeTree = null } = opts;
   const lessons = lessonIndex(spec.families ?? []);
   const lesson = (id) => {
     const hit = lessons.get(id);
@@ -340,8 +362,8 @@ function regradeContext(opts, entries) {
     return hit.lesson;
   };
   const passEnv = passEnvOf(records, baseEnv);
-  const extraEnvKeys = envKeyCheck(records, entries, out, baseEnv, passEnv);
-  return { out, pass, baseEnv, passEnv, extraEnvKeys, lesson, checkerId: (id) => checkerIdentity(lesson(id)), cachedFor: (seq) => path.join(out, 'repo-cache', seq) };
+  const { extra: extraEnvKeys, venvGroups } = envKeyCheck(records, entries, out, baseEnv, passEnv, venv);
+  return { out, pass, baseEnv, passEnv, extraEnvKeys, venv, venvGroups, log, removeTree, lesson, checkerId: (id) => checkerIdentity(lesson(id)), cachedFor: (seq) => path.join(out, 'repo-cache', seq) };
 }
 
 /** A cell whose regrade wrote under the run root stops the whole regrade: the evidence is no longer the run's (R23). */

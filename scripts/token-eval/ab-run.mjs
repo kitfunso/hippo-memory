@@ -22,6 +22,8 @@ import { startStubUpstream } from './proxy.mjs';
 export { cacheTaskRepos } from './runs.mjs';
 export { usageFromResult, isUsageLimit, transcriptWork } from './records.mjs';
 
+const MODULE_NAME = /^[A-Za-z_][A-Za-z0-9_.]*$/;
+
 /** Validate a tasks file; `baseDir` (the file's folder) resolves checker scripts. Throws on the first problem.
  * @param {any} spec
  * @param {string | null} [baseDir] */
@@ -39,6 +41,9 @@ export function validateTasks(spec, baseDir = null) {
       if (taskIds.has(t.id)) throw new Error(`sequence ${s.id} has task id ${t.id} twice`);
       taskIds.add(t.id);
       if (!Array.isArray(t.testFiles)) throw new Error(`task ${t.id} needs a "testFiles" array`);
+      if (t.venvImports !== undefined && !(Array.isArray(t.venvImports) && t.venvImports.every((m) => m?.constructor === String && MODULE_NAME.test(m)))) {
+        throw new Error(`task ${t.id} venvImports must be a list of module names (letters, digits, underscores and dots; none starts with a digit)`);
+      }
       if (t.needsReview) throw new Error(`task ${t.id} still has needsReview: rewrite its prompt as the problem (not the fix), then delete needsReview`);
     }
   }
@@ -230,7 +235,7 @@ function orderReport(steps) {
   return lines;
 }
 
-const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR [--design r3|r4] [--model MODEL, round 3 only] [--arms ' + ARMS.join(',') + ' (round 4: ' + DESIGNS.r4.arms.join(',') + ')] [--seeds N | --seed-rule FILE [--max-seed N]] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--pins FILE] [--screen] [--dry-run | --check-homes]\n  round 4 only: [--effort low|medium|high] [--max-position N] (a real run needs --pins and --effort); for tests: --fake-agent KNOBS_FILE\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
+const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR [--design r3|r4] [--model MODEL, round 3 only] [--arms ' + ARMS.join(',') + ' (round 4: ' + DESIGNS.r4.arms.join(',') + ')] [--seeds N | --seed-rule FILE [--max-seed N]] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--pins FILE] [--screen] [--dry-run | --check-homes]\n  round 4 only: [--effort low|medium|high] [--max-position N] [--venv --poetry DIR --pip-constraint FILE] (a real run needs --pins and --effort); for tests: --fake-agent KNOBS_FILE\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
 const CODEX_FLAGS = { codexBin: '--codex-bin', codexModel: '--codex-model', codexAuth: '--codex-auth', codexHookTrust: '--codex-hook-trust', codexMemoryWait: '--codex-memory-wait', codexMemories: '--codex-memories', codexWrapperWaitMs: '--codex-wrapper-wait-ms' };
 
 /** The arms a run uses: the named ones, else every arm the tasks file has a sequence for; a screen's are always A0 and A4 (prereg 68), so an X arm named with it is refused.
@@ -269,6 +274,25 @@ function designOptions(argv, given, mode, screen) {
   if (mode === 'real' && !given('--pins')) throw new Error('a round 4 run needs --pins, so every chunk runs the same build and effort');
   if (mode === 'real' && effort === null) throw new Error(`a round 4 run needs --effort ${effortList}`);
   return { design, effort: effort ?? undefined, maxPosition: maxPosition === null ? Infinity : Number(maxPosition) };
+}
+
+/** --venv with --poetry and --pip-constraint (round 4 only): the poetry folder and the pip pin every task's venv is built from, as absolute paths; null without --venv. */
+function venvOptions(argv, given, design) {
+  const flags = ['--venv', '--poetry', '--pip-constraint'];
+  if (design === DESIGNS.r3) {
+    const named = flags.find((f) => argv.includes(f));
+    if (named !== undefined) throw new Error(`${named} is round 4 only (pass --design r4)`);
+    return null;
+  }
+  const [poetry, constraint] = [given('--poetry'), given('--pip-constraint')];
+  if (!argv.includes('--venv')) {
+    if (poetry !== null || constraint !== null) throw new Error('--poetry and --pip-constraint go with --venv');
+    return null;
+  }
+  if (!poetry || !constraint) throw new Error('--venv needs --poetry <dir> and --pip-constraint <file>');
+  if (!fs.statSync(poetry, { throwIfNoEntry: false })?.isDirectory()) throw new Error(`--poetry ${poetry} is not a folder`);
+  if (!fs.statSync(constraint, { throwIfNoEntry: false })?.isFile()) throw new Error(`--pip-constraint ${constraint} is not a file`);
+  return { poetryDir: path.resolve(poetry), pipConstraint: path.resolve(constraint) };
 }
 
 /** The command that runs the fake agent for --fake-agent, or null. It stands in for Claude Code, so --claude-bin beside it and a real login are refused before anything is cloned. */
@@ -340,10 +364,12 @@ export function parseArgs(argv) {
   }
   const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')), path.dirname(path.resolve(tasksFile)));
   const mode = argv.includes('--dry-run') ? 'dry' : (argv.includes('--check-homes') ? 'check' : 'real');
-  const named = flag('--arms', null);
+  const named = given('--arms');
+  if (named === '') throw new Error('--arms needs a comma-separated list of arm codes');
   const screen = argv.includes('--screen');
   const { design, effort, maxPosition } = designOptions(argv, given, mode, screen);
   const fakeCommand = fakeAgentCommand(argv, given, mode);
+  const venv = venvOptions(argv, given, design);
   const chosen = chooseArms(spec, named === null ? null : named.split(',').map((a) => a.trim()), screen, design);
   const { rule, arms, onlySeed, seeds } = seedOptions(argv, flag, given, chosen, design, screen);
   const timeoutArg = flag('--session-timeout-min', '60');
@@ -353,7 +379,7 @@ export function parseArgs(argv) {
   if (canariesFile && canaries.length === 0) throw new Error(`--canaries ${canariesFile} holds no canary; one per line`);
   const pinsFile = given('--pins');
   return {
-    canaries, pins: pinsFile ? readPins(pinsFile) : null, warmup: !argv.includes('--no-warmup'), design, effort, maxPosition, fakeCommand,
+    canaries, pins: pinsFile ? readPins(pinsFile) : null, warmup: !argv.includes('--no-warmup'), design, effort, maxPosition, fakeCommand, venv,
     flag, spec, arms, rule, onlySeed, seeds, sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen,
     passEnv: argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : [])), mode,
   };
@@ -382,7 +408,7 @@ export function runOptions(args, { progress, upstream, codexOpts }) {
   return {
     spec: args.spec, arms: args.arms, seeds: args.seeds, waveTwo: args.rule?.counts ?? null, onlySeed: args.onlySeed, tokenSchedule: flag('--token-schedule', null), tokenVar: flag('--token-var', null),
     outDir: args.out, passEnv: args.passEnv, progress, model: flag('--model', null), claudeBin: args.fakeCommand ?? flag('--claude-bin', 'claude'),
-    design: args.design, effort: args.effort, maxPosition: args.maxPosition, upstream,
+    design: args.design, effort: args.effort, maxPosition: args.maxPosition, upstream, venv: args.venv,
     maxBudgetUsd: flag('--max-budget-usd', null), settleMs: Number(flag('--settle-ms', '5000')), warmup: args.warmup,
     permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, pins: args.pins, ...codexOpts,
   };
