@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ALL_ARMS, ARM_TABLE, DESIGNS } from '../scripts/token-eval/arms.mjs';
+import * as abRun from '../scripts/token-eval/ab-run.mjs';
 
 const AB_RUN = resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs');
 const R4 = DESIGNS.r4.arms;
@@ -138,6 +139,30 @@ describe('ab-run --design', () => {
     expect(w.cli(['--dry-run', '--design', 'r4']).status).toBe(0);
   });
 
+  it('a trailing --pins, an empty --pins and a pins file that is not an object each stop before an out dir', () => {
+    const w = world();
+    const real = { CLAUDE_CODE_OAUTH_TOKEN: 'fake-tok-x', Z0_ANCESTOR_STOP: '' };
+    const base = ['--design', 'r4', '--effort', 'medium'];
+    const stops: [string, string[], string][] = [
+      ['a trailing --pins', [...base, '--pins'], 'a round 4 run needs --pins'],
+      ['an empty --pins', [...base, '--pins', ''], 'a round 4 run needs --pins'],
+    ];
+    for (const body of ['null', 'false', '0', '[]', '"pins"']) {
+      const file = join(w.scratch, `pins-${stops.length}.json`);
+      writeFileSync(file, body);
+      stops.push([`a pins file holding ${body}`, [...base, '--pins', file], 'must hold a JSON object of pinned values']);
+    }
+    for (const [what, args, message] of stops) {
+      const res = w.cli(args, real);
+      expect(res.status, what).toBe(1);
+      expect(res.stderr, what).toContain(message);
+      expect(existsSync(res.out), what).toBe(false);
+    }
+    const object = join(w.scratch, 'pins-object.json');
+    writeFileSync(object, '{}');
+    expect(w.cli(['--dry-run', '--design', 'r4', '--pins', object]).status).toBe(0);
+  });
+
   it('names the new flags in USAGE and says --model is round 3 only', () => {
     const res = spawnSync(process.execPath, [AB_RUN], { encoding: 'utf8' });
     expect(res.status).toBe(1);
@@ -253,6 +278,28 @@ describe('seed rule /2', () => {
     }
   });
 
+  it('refuses a rule that names another design, leaves a rule arm out, or gives the rule arms different counts', () => {
+    const w = world();
+    const last: string = RULE_ARMS.at(-1);
+    const seedsAt = (n: number): Over => Object.fromEntries(RULE_ARMS.map((a: string) => [a, n]));
+    const countsOf = (seeds: Over): Over => Object.fromEntries(R4.map((a: string) => [a, ARM_TABLE[a].seedRule ? seeds[a] : ARM_TABLE[a].seeds]));
+    const without = Object.fromEntries(Object.entries(seedsAt(5)).filter(([a]) => a !== last));
+    const uneven = { ...seedsAt(5), [RULE_ARMS[0]]: 4 };
+    const cases: [string, Over, string][] = [
+      ['design r3', { design: 'r3' }, 'design is "r3", not "r4"'],
+      ['no design', { design: undefined }, 'design is undefined, not "r4"'],
+      [`${last} missing from seeds and countsByArm`, { seeds: without, countsByArm: countsOf(without) }, `seeds lacks ${last}, which the rule sizes`],
+      [`${last} missing from countsByArm`, { countsByArm: Object.fromEntries(Object.entries(countsOf(seedsAt(5))).filter(([a]) => a !== last)) }, `countsByArm.${last} is undefined`],
+      ['uneven counts', { seeds: uneven, countsByArm: countsOf(uneven) }, 'run the largest count (prereg item 10)'],
+    ];
+    for (const [what, over, message] of cases) {
+      const res = w.cli(['--dry-run', '--design', 'r4', '--arms', 'S1', '--seed-rule', w.rule(5, over)]);
+      expect(res.status, what).toBe(1);
+      expect(res.stderr, what).toContain(message);
+      expect(existsSync(res.out), what).toBe(false);
+    }
+  });
+
   it('--only-seed 4 to 9 needs --seed-rule and runs that seed alone, in design order, for arms whose capped count reaches it', () => {
     const w = world();
     const rule = w.rule(5);
@@ -288,6 +335,18 @@ describe('seed rule /2', () => {
     expect(withSeeds.stderr).toContain('--only-seed cannot be combined with --seeds');
   });
 
+  it('a trailing --seeds or --only-seed stops instead of planning every seed', () => {
+    const w = world();
+    for (const [design, arm] of [['r3', 'A1'], ['r4', 'S1']]) {
+      for (const flag of ['--seeds', '--only-seed']) {
+        const res = w.cli(['--dry-run', '--design', design!, '--arms', arm!, flag]);
+        expect(res.status, `${design} ${flag}`).toBe(1);
+        expect(res.stderr, `${design} ${flag}`).toContain(`${flag} must be a positive integer`);
+        expect(res.planned, `${design} ${flag}`).toBe(false);
+      }
+    }
+  });
+
   it('under r3 --only-seed keeps today\'s rules, --seed-rule refusal included', () => {
     const w = world();
     const f = join(w.scratch, 'r3-rule.json');
@@ -303,5 +362,30 @@ describe('seed rule /2', () => {
     const { ARM_SEEDS } = await import('../scripts/token-eval/arms.mjs');
     expect(Object.keys(ARM_SEEDS)).toEqual([...ALL_ARMS]);
     for (const arm of ALL_ARMS) expect(ARM_SEEDS[arm], arm).toBe(ARM_TABLE[arm].seeds);
+  });
+});
+
+describe('the run options main builds', () => {
+  const argvOf = (w: ReturnType<typeof world>, more: string[]) => ['node', 'ab-run.mjs', '--tasks', w.file, '--out', join(w.scratch, 'run-out'), ...more];
+  const codexOpts = {};
+
+  it('carry the design, effort, max position, pins, warm-up switch and upstream the command line chose under r4', () => {
+    const w = world();
+    const pins = join(w.scratch, 'pins.json');
+    writeFileSync(pins, JSON.stringify({ hippoCommit: 'c' }));
+    const args = abRun.parseArgs(argvOf(w, ['--design', 'r4', '--effort', 'high', '--max-position', '2', '--pins', pins, '--arms', 'S1,S2', '--seeds', '2', '--no-warmup', '--settle-ms', '7']));
+    const opts = abRun.runOptions(args, { progress: { last: 'none' }, upstream: 'http://127.0.0.1:9', codexOpts });
+    expect(opts).toMatchObject({
+      design: DESIGNS.r4, effort: 'high', maxPosition: 2, pins: { hippoCommit: 'c' }, warmup: false, settleMs: 7, upstream: 'http://127.0.0.1:9',
+      arms: ['S1', 'S2'], seeds: 2, outDir: resolve(join(w.scratch, 'run-out')), model: null, claudeBin: 'claude',
+    });
+  });
+
+  it('carry round 3\'s own values under r3: no effort, no position cap, the --model flag, the warm-up on', () => {
+    const w = world();
+    const args = abRun.parseArgs(argvOf(w, ['--model', 'claude-x', '--arms', 'A1']));
+    const opts = abRun.runOptions(args, { progress: { last: 'none' }, upstream: null, codexOpts });
+    expect(opts).toMatchObject({ design: DESIGNS.r3, effort: undefined, maxPosition: Infinity, model: 'claude-x', warmup: true, upstream: null, pins: null });
+    expect(Object.keys(opts)).toEqual(expect.arrayContaining(['design', 'effort', 'maxPosition']));
   });
 });

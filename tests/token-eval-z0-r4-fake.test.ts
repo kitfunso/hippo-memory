@@ -32,7 +32,7 @@ afterEach(() => {
 
 type Json = string | number | boolean | null | undefined | readonly Json[] | { readonly [key: string]: Json };
 type Over = Readonly<Record<string, Json>>;
-interface Call { argv: string[]; tokenPrefix: string | null; effort: string | null; configDir: string }
+interface Call { argv: string[]; tokenPrefix: string | null; effort: string | null; subagentModel: string | null; configDir: string }
 interface Knobs { dir: string; file: string; cmd: string; calls: () => Call[] }
 const jsonl = <T>(file: string): T[] => (existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 /** The runner's fields beyond the z0-record/1 type that these tests read. */
@@ -58,7 +58,7 @@ function knobs(over: Over = {}): Knobs {
 
 interface Spawned { status: number | null; stdout: string; stderr: string; result: CallResult | null; out: string; cwd: string; configDir: string }
 interface CallOpts {
-  arm?: string; seq?: string; seed?: number; prompt?: string; model?: string | null; effort?: string | null; settings?: boolean; baseUrl?: string; token?: string | null; out?: string; knobsArg?: boolean;
+  arm?: string; seq?: string; seed?: number; prompt?: string; model?: string | null; effort?: string | null; subagentModel?: string; settings?: boolean; baseUrl?: string; token?: string | null; out?: string; knobsArg?: boolean;
 }
 
 const envWithout = (names: string[], add: Readonly<Record<string, string | undefined>> = {}) => ({ ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !names.includes(name))), ...add });
@@ -78,8 +78,9 @@ async function callFake(k: Knobs, c: CallOpts = {}): Promise<Spawned> {
   if (c.settings !== false) args.push('--settings', settingsFile);
   args.push('--strict-mcp-config');
   if (model) args.push('--model', model);
-  const env = envWithout(['CLAUDE_CODE_EFFORT_LEVEL', 'ANTHROPIC_BASE_URL'], { CLAUDE_CONFIG_DIR: configDir, CLAUDE_CODE_OAUTH_TOKEN: c.token === undefined ? TOKEN : (c.token ?? undefined) });
+  const env = envWithout(['CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_SUBAGENT_MODEL', 'ANTHROPIC_BASE_URL'], { CLAUDE_CONFIG_DIR: configDir, CLAUDE_CODE_OAUTH_TOKEN: c.token === undefined ? TOKEN : (c.token ?? undefined) });
   if (c.effort) env.CLAUDE_CODE_EFFORT_LEVEL = c.effort;
+  if (c.subagentModel) env.CLAUDE_CODE_SUBAGENT_MODEL = c.subagentModel;
   if (c.baseUrl) env.ANTHROPIC_BASE_URL = c.baseUrl;
   const child = spawn(process.execPath, args, { cwd, env });
   let [stdout, stderr] = ['', ''];
@@ -140,17 +141,19 @@ describe('the knobs file', () => {
     expect(run(junk).status).toBe(1);
   });
 
-  it('logs every call as { argv, tokenPrefix, effort, configDir }, without its own --fake-knobs pair', async () => {
+  it('logs every call as { argv, tokenPrefix, effort, subagentModel, configDir }, without its own --fake-knobs pair', async () => {
     const k = knobs();
     const res = await callFake(k, { effort: 'low' });
     expect(res.status, res.stderr).toBe(0);
     const [line] = k.calls();
-    expect(Object.keys(line!).sort()).toEqual(['argv', 'configDir', 'effort', 'tokenPrefix']);
-    expect(line).toMatchObject({ tokenPrefix: 'fake-tok-', effort: 'low', configDir: res.configDir });
+    expect(Object.keys(line!).sort()).toEqual(['argv', 'configDir', 'effort', 'subagentModel', 'tokenPrefix']);
+    expect(line).toMatchObject({ tokenPrefix: 'fake-tok-', effort: 'low', subagentModel: null, configDir: res.configDir });
     expect(line!.argv).toEqual(['-p', '--output-format', 'json', '--setting-sources', 'project', '--settings', join(res.out, 'settings.json'), '--strict-mcp-config', '--model', SONNET_MODEL]);
     const noEffort = await callFake(k);
     expect(k.calls().at(-1)!.effort).toBeNull();
     expect(noEffort.status).toBe(0);
+    await callFake(k, { subagentModel: OPUS_MODEL });
+    expect(k.calls().at(-1)!.subagentModel).toBe(OPUS_MODEL);
     spawnSync(process.execPath, [FAKE, '--fake-knobs', k.file, '--version'], { encoding: 'utf8', env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: TOKEN } });
     expect(k.calls().at(-1)!.argv).toEqual(['--version']);
   });
@@ -295,6 +298,54 @@ describe('requests', () => {
   });
 });
 
+describe('the fake is no kinder than the real CLI', () => {
+  interface Line { type: string; message?: { model?: string; usage?: Readonly<Record<string, number>> } }
+  /** Every JSON line of every transcript a call left under its config dir. */
+  const transcriptLines = (res: Spawned): Line[] => {
+    const root = join(res.configDir, 'projects');
+    if (!existsSync(root)) return [];
+    return readdirSync(root).flatMap((folder) => readdirSync(join(root, folder)).filter((f) => f.endsWith('.jsonl'))
+      .flatMap((f) => readFileSync(join(root, folder, f), 'utf8').trim().split('\n').map((l): Line => JSON.parse(l))));
+  };
+  const modelsIn = (res: Spawned) => [...new Set(transcriptLines(res).flatMap((l) => (l.message?.model ? [l.message.model] : [])))];
+
+  it('an off-pin attempt writes its own model in the transcript and in modelUsage, priced at that model', async () => {
+    const k = knobs({ offPin: [{ sequence: 'seqA', seed: 1, arm: 'S1', nth: 2, model: OPUS_MODEL }] });
+    const forced = await callFake(k, { prompt: 'x\nFAKE_POS 2' });
+    expect(forced.status, forced.stderr).toBe(0);
+    expect(Object.keys(forced.result!.modelUsage)).toEqual([OPUS_MODEL]);
+    const t = tokensOf(forced.result!);
+    const row = Object.entries(PRICES_BY_MODEL.models).find(([id]) => id === OPUS_MODEL)![1];
+    expect(forced.result!.total_cost_usd).toBeCloseTo(priceUsage({ inputTokens: t.input, cacheWriteTokens: t.cacheWrite, cacheReadTokens: t.cacheRead, outputTokens: t.output }, row), 10);
+    expect(modelsIn(forced)).toEqual([OPUS_MODEL]);
+    const pinned = await callFake(k, { prompt: 'x\nFAKE_POS 3' });
+    expect(Object.keys(pinned.result!.modelUsage)).toEqual([SONNET_MODEL]);
+    expect(modelsIn(pinned)).toEqual([SONNET_MODEL]);
+  });
+
+  it('a fail cell writes its transcript, with the call\'s usage, before it exits 1 with no result', async () => {
+    const k = knobs({ fail: [{ sequence: 'seqA', seed: 1, arm: 'S1', positions: [3] }] });
+    const bad = await callFake(k, { prompt: 'x\nFAKE_POS 3' });
+    expect(bad.status).toBe(1);
+    expect(bad.stdout).toBe('');
+    const priced = transcriptLines(bad).filter((l) => l.message?.usage);
+    expect(priced).toHaveLength(1);
+    expect(priced[0]!.message).toMatchObject({ model: SONNET_MODEL, usage: { output_tokens: expect.any(Number) } });
+    expect(priced[0]!.message!.usage!.output_tokens).toBeGreaterThan(0);
+  });
+
+  it('a warmupFail model writes its warm-up transcript, with usage, before it exits 1', async () => {
+    const k = knobs({ warmupFail: [SONNET_MODEL] });
+    const bad = await callFake(k, { settings: false, model: SONNET_MODEL });
+    expect(bad.status).toBe(1);
+    expect(bad.stdout).toBe('');
+    const priced = transcriptLines(bad).filter((l) => l.message?.usage);
+    expect(priced).toHaveLength(1);
+    expect(priced[0]!.message).toMatchObject({ model: SONNET_MODEL });
+    expect(priced[0]!.message!.usage!.output_tokens).toBeGreaterThan(0);
+  });
+});
+
 describe('outcome knobs and leaks', () => {
   const outcome = (lesson: number, solve: number) => ({ outcome: { S1: { lesson, solve } } });
 
@@ -382,6 +433,7 @@ describe('through the runner', () => {
       expect(x.envKeys).not.toContain('ANTHROPIC_BASE_URL');
     }
     for (const c of k.calls()) expect(c.tokenPrefix).toBe('fake-tok-');
+    for (const c of k.calls()) expect(c.subagentModel).toBe(SONNET_MODEL);
     // Every body names the arm's pinned model and effort.
     for (const p of posts) expect(bodyOf(p)).toMatchObject({ model: SONNET_MODEL, output_config: { effort: 'medium' } });
   }, 300_000);
@@ -520,6 +572,16 @@ describe('ab-run --fake-agent', () => {
     const missing = w.cli(['--fake-agent', join(w.scratch, 'nope.json')]);
     expect(missing.status).toBe(1);
     expect(missing.stderr).toContain('nope.json');
+    expect(readdirSync(w.out)).toEqual([]);
+  }, 60_000);
+
+  it('refuses --token-schedule and --token-var, which would put a real login in the calls log', () => {
+    const w = cliWorld();
+    for (const flag of ['--token-schedule', '--token-var']) {
+      const res = w.cli(['--fake-agent', w.k.file, flag, 'x', '--dry-run']);
+      expect(res.status, flag).toBe(1);
+      expect(res.stderr, flag).toContain(`drop ${flag}`);
+    }
     expect(readdirSync(w.out)).toEqual([]);
   }, 60_000);
 

@@ -104,12 +104,18 @@ function checkCount(file, arm, n) {
   if (!Number.isInteger(n) || n < WAVE_1_SEEDS || n > SEED_CAP) throw new Error(`--seed-rule ${file}: ${arm} needs a seed count from ${WAVE_1_SEEDS} to ${SEED_CAP}, got ${JSON.stringify(n)}`);
 }
 
-/** A /2 rule's refusals (prereg item 1): a fixed arm never raises, every `seeds` count is 3 to 9, and `countsByArm` repeats `seeds` for a rule arm and the table for a fixed one. */
+/** A /2 rule's refusals: design r4; a fixed arm never raises (prereg item 1); every rule arm is in `seeds` at one count of 3 to 9 (item 10: they run the largest);
+ * and `countsByArm` repeats `seeds` for a rule arm and the table for a fixed one. */
 function checkRuleR4(file, rule, design) {
   const { seeds, countsByArm } = rule;
+  if (rule.design !== 'r4') throw new Error(`--seed-rule ${file}: design is ${JSON.stringify(rule.design)}, not "r4"`);
   const fixed = design.arms.filter((a) => !ARM_TABLE[a].seedRule);
+  const ruled = design.arms.filter((a) => ARM_TABLE[a].seedRule);
   if (fixed.some((a) => Object.hasOwn(seeds, a))) throw new Error(`--seed-rule ${file}: ${joinCodes(fixed)} run ${ARM_TABLE[fixed[0]].seeds} seeds and never raise (prereg item 1)`);
+  const missing = ruled.filter((a) => !Object.hasOwn(seeds, a));
+  if (missing.length) throw new Error(`--seed-rule ${file}: seeds lacks ${joinCodes(missing)}, which the rule sizes`);
   for (const [arm, n] of Object.entries(seeds)) checkCount(file, arm, n);
+  if (new Set(ruled.map((a) => seeds[a])).size > 1) throw new Error(`--seed-rule ${file}: ${joinCodes(ruled)} run the largest count (prereg item 10), so seeds gives them one count, not ${ruled.map((a) => `${a} ${seeds[a]}`).join(', ')}`);
   for (const arm of design.arms) {
     const want = ARM_TABLE[arm].seedRule ? seeds[arm] : ARM_TABLE[arm].seeds;
     if (countsByArm?.[arm] !== want) throw new Error(`--seed-rule ${file}: countsByArm.${arm} is ${JSON.stringify(countsByArm?.[arm])}, not the ${want} that ${ARM_TABLE[arm].seedRule ? 'seeds' : 'the arm table'} gives`);
@@ -260,7 +266,7 @@ function designOptions(argv, given, mode, screen) {
   if (screen) throw new Error('--screen is round 3 only');
   if (effort !== null && !EFFORTS.includes(effort)) throw new Error(`--effort must be ${effortList}, got ${effort}`);
   if (maxPosition !== null && !/^[1-9]\d*$/.test(maxPosition)) throw new Error(`--max-position must be a positive integer, got ${maxPosition}`);
-  if (mode === 'real' && given('--pins') === null) throw new Error('a round 4 run needs --pins, so every chunk runs the same build and effort');
+  if (mode === 'real' && !given('--pins')) throw new Error('a round 4 run needs --pins, so every chunk runs the same build and effort');
   if (mode === 'real' && effort === null) throw new Error(`a round 4 run needs --effort ${effortList}`);
   return { design, effort: effort ?? undefined, maxPosition: maxPosition === null ? Infinity : Number(maxPosition) };
 }
@@ -270,6 +276,7 @@ function fakeAgentCommand(argv, given, mode) {
   const knobs = given('--fake-agent');
   if (knobs === null) return null;
   if (argv.includes('--claude-bin')) throw new Error('--fake-agent runs the fake itself; drop --claude-bin');
+  for (const name of ['--token-schedule', '--token-var']) if (argv.includes(name)) throw new Error(`--fake-agent runs on its one fake token, so ${name} would put a real login in the calls log; drop ${name}`);
   if (!fs.existsSync(knobs)) throw new Error(`--fake-agent ${knobs}: the knobs file does not exist`);
   if (mode === 'real' && !String(process.env[TOKEN_KEY] ?? '').startsWith('fake-tok-')) throw new Error(`${TOKEN_KEY} must start fake-tok-, so a fake run cannot use a real login`);
   return `"${process.execPath}" "${path.join(REPO, 'tests', 'fixtures', 'fake-claude.mjs')}" --fake-knobs "${path.resolve(knobs)}"`;
@@ -299,10 +306,10 @@ function seedOptions(argv, flag, given, chosen, design, screen) {
   const rule = ruleFile === null ? null : readSeedRule(ruleFile, chosen, design, maxSeedArg === null ? null : Number(maxSeedArg));
   // An arm at 3 seeds has finished in wave 1 and runs nothing now.
   const arms = rule === null ? chosen : chosen.filter((a) => rule.counts[a] > WAVE_1_SEEDS);
-  const seedsArg = flag('--seeds', null);
+  const seedsArg = given('--seeds');
   if (seedsArg !== null && !/^[1-9]\d*$/.test(seedsArg)) throw new Error(`--seeds must be a positive integer, got ${seedsArg}`);
   // Amendment 8 reruns one sequence-seed; planRuns keys rotation and order on the real seed, so seed N alone plans N's cells of a 1..N plan.
-  const onlyArg = flag('--only-seed', null);
+  const onlyArg = given('--only-seed');
   if (onlyArg !== null && !/^[1-9]\d*$/.test(onlyArg)) throw new Error(`--only-seed must be a positive integer, got ${onlyArg}`);
   if (onlyArg !== null && (seedsArg !== null || screen || (design === DESIGNS.r3 && ruleFile !== null))) throw new Error('--only-seed cannot be combined with --seeds, --seed-rule or --screen');
   const onlySeed = onlyArg === null ? null : Number(onlyArg);
@@ -310,8 +317,15 @@ function seedOptions(argv, flag, given, chosen, design, screen) {
   return { rule, arms, onlySeed, seeds: seedsArg === null ? null : Number(seedsArg) };
 }
 
+/** The --pins file's pins: a plain object, since refuseOffPins skips every check for a falsy value and a list or number has no keys to compare. */
+function readPins(file) {
+  const pins = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (pins === null || pins.constructor !== Object) throw new Error(`--pins ${file} must hold a JSON object of pinned values`);
+  return pins;
+}
+
 /** The command line, checked: the tasks file, out dir, design, arms, seeds, pass-env names and mode. */
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const flag = (name, fallback) => {
     const i = argv.indexOf(name);
     return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
@@ -337,9 +351,9 @@ function parseArgs(argv) {
   const canariesFile = flag('--canaries', null);
   const canaries = canariesFile ? fs.readFileSync(canariesFile, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : [];
   if (canariesFile && canaries.length === 0) throw new Error(`--canaries ${canariesFile} holds no canary; one per line`);
-  const pinsFile = flag('--pins', null);
+  const pinsFile = given('--pins');
   return {
-    canaries, pins: pinsFile ? JSON.parse(fs.readFileSync(pinsFile, 'utf8')) : null, design, effort, maxPosition, fakeCommand,
+    canaries, pins: pinsFile ? readPins(pinsFile) : null, warmup: !argv.includes('--no-warmup'), design, effort, maxPosition, fakeCommand,
     flag, spec, arms, rule, onlySeed, seeds, sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen,
     passEnv: argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : [])), mode,
   };
@@ -360,6 +374,18 @@ function dryRun(args, steps) {
 function startFakeUpstream(out) {
   fs.mkdirSync(out, { recursive: true });
   return startStubUpstream(path.join(out, 'stub.jsonl'));
+}
+
+/** The options runAll and runScreen take, from the checked command line; main and its test both build them here, so a field main drops shows. */
+export function runOptions(args, { progress, upstream, codexOpts }) {
+  const { flag } = args;
+  return {
+    spec: args.spec, arms: args.arms, seeds: args.seeds, waveTwo: args.rule?.counts ?? null, onlySeed: args.onlySeed, tokenSchedule: flag('--token-schedule', null), tokenVar: flag('--token-var', null),
+    outDir: args.out, passEnv: args.passEnv, progress, model: flag('--model', null), claudeBin: args.fakeCommand ?? flag('--claude-bin', 'claude'),
+    design: args.design, effort: args.effort, maxPosition: args.maxPosition, upstream,
+    maxBudgetUsd: flag('--max-budget-usd', null), settleMs: Number(flag('--settle-ms', '5000')), warmup: args.warmup,
+    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, pins: args.pins, ...codexOpts,
+  };
 }
 
 async function main() {
@@ -396,12 +422,7 @@ async function main() {
   if (mode === 'check') return;
   const progress = { last: 'none' };
   const stub = args.fakeCommand ? await startFakeUpstream(out) : null;
-  const opts = {
-    spec, arms, seeds, waveTwo, onlySeed: args.onlySeed, tokenSchedule: flag('--token-schedule', null), tokenVar: flag('--token-var', null), outDir: out, passEnv, progress, model: flag('--model', null), claudeBin: args.fakeCommand ?? flag('--claude-bin', 'claude'),
-    design: args.design, effort: args.effort, maxPosition: args.maxPosition, upstream: stub?.url ?? null,
-    maxBudgetUsd: flag('--max-budget-usd', null), settleMs: Number(flag('--settle-ms', '5000')), warmup: !process.argv.includes('--no-warmup'),
-    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, pins: args.pins, ...codexOpts,
-  };
+  const opts = runOptions(args, { progress, upstream: stub?.url ?? null, codexOpts });
   try {
     if (args.screen) {
       const v = await runScreen(opts);

@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, sh, cloneFresh } from './exec.mjs';
-import { ARM_TABLE, DESIGNS, HIPPO_ARMS, armSettings, armEnv, armSet, childEnv, claudeModelOf, warmupEnv, writeHippoShim, startupTools } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, HIPPO_ARMS, allowlistOf, armSettings, armEnv, armSet, childEnv, claudeModelOf, warmupEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs } from './homes.mjs';
 import { stubBaseCommit, assertNoInstructionLinks, STUB_CLAUDE_MD, X3_STUB } from './workspace.mjs';
 import { codexContext, writeCodexHome } from './codex.mjs';
@@ -103,7 +103,7 @@ function warmupCalls(ctx, effort) {
   if (!models.length) throw new Error('a round 4 run needs at least one arm');
   return models.map((model) => {
     const warmDir = path.join(base, model);
-    return { model, warmDir, ...warmupEnv(ctx.design, model, dirsAt(warmDir), process.env, { passEnv: ctx.passEnv, effort }) };
+    return { model, warmDir, ...warmupEnv(ctx.design, model, dirsAt(warmDir), process.env, { passEnv: ctx.passEnv, effort, allowlist: allowlistOf(ctx.design) }) };
   });
 }
 
@@ -159,7 +159,7 @@ export async function openContext(opts) {
 export function startRun(ctx, s, arm, seed, name = s.id) {
   const dirs = runDirs(ctx.outDir, name, arm, seed);
   freshRunDirs(dirs);
-  const env = armEnv(arm, dirs, process.env, { passEnv: ctx.passEnv, effort: ctx.effort });
+  const env = armEnv(arm, dirs, process.env, { passEnv: ctx.passEnv, effort: ctx.effort, allowlist: allowlistOf(ctx.design) });
   if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, ctx.fakeHome, ARM_TABLE[arm].shim);
   const settingsFile = path.join(ctx.outDir, 'settings', `${name}-${arm}-seed${seed}.json`);
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });

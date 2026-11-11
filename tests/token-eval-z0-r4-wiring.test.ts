@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  for (const k of ['FAKE_CLAUDE_LIMIT_ONCE', 'VIRTUAL_ENV']) delete process.env[k];
+  for (const k of ['FAKE_CLAUDE_LIMIT_ONCE', 'VIRTUAL_ENV', 'PIP_CONSTRAINT']) delete process.env[k];
   if (savedToken === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
   else process.env.CLAUDE_CODE_OAUTH_TOKEN = savedToken;
 });
@@ -140,7 +140,8 @@ describe('round 3 argv and files stay as they are (--design r3, the default)', (
     const { out } = isolate('r3-warm');
     const k = knobs();
     const probe = probeCommand(out, k);
-    await runAll({ spec: two(makeRepo()), arms: ['A1'], seeds: 1, outDir: out, model: SONNET_MODEL, claudeBin: probe.cmd, settleMs: 0, warmup: true, log: () => {}, passEnv: [] });
+    // The stub upstream keeps this knobs-mode fake from posting through the log proxy to the real API.
+    await r4run(two(makeRepo()), ['A1'], out, k, { claudeBin: probe.cmd, design: DESIGNS.r3, effort: undefined, model: SONNET_MODEL, warmup: true });
     const warm = probe.seen().filter((c) => !c.argv.includes('--settings') && !c.argv.includes('--version'));
     expect(warm).toHaveLength(1);
     expect(warm[0]!.argv).toEqual(['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', '--model', SONNET_MODEL]);
@@ -373,5 +374,89 @@ describe('warm-ups under r4', () => {
     expect(existsSync(join(out, 'warmups'))).toBe(false);
     expect(existsSync(join(out, 'warmup', SONNET_MODEL))).toBe(false);
     expect(k.calls().filter((c) => !c.argv.includes('--settings') && !c.argv.includes('--version'))).toEqual([]);
+  }, 120_000);
+});
+
+describe('the pip pin follows the design\'s allowlist', () => {
+  const PIN = 'C:/pins/constraints.txt';
+  const pipOf = (env: Readonly<Record<string, string | undefined>>) => Object.entries(env).find(([name]) => name.toUpperCase() === 'PIP_CONSTRAINT')?.[1] ?? null;
+  /** Setup and check commands that log the PIP_CONSTRAINT they run with; the check then runs the fixture's own test. */
+  function pipProbe() {
+    const dir = tmp('r4-pip-probe-');
+    const log = join(dir, 'pip.jsonl');
+    const script = join(dir, 'pip.mjs');
+    writeFileSync(script, [
+      "import { appendFileSync } from 'node:fs';",
+      `appendFileSync(${JSON.stringify(log)}, JSON.stringify({ step: process.argv[2], pip: process.env.PIP_CONSTRAINT ?? null }) + String.fromCharCode(10));`,
+    ].join(String.fromCharCode(10)));
+    return { at: (step: string) => `"${process.execPath}" "${script}" ${step}`, steps: () => jsonl<{ step: string; pip: string | null }>(log) };
+  }
+  async function pipRun(arm: string, extra: RunOpts) {
+    const { out } = isolate(`r4-pip-${arm}`);
+    const r = makeRepo();
+    const pp = pipProbe();
+    const k = knobs();
+    const probe = probeCommand(out, k);
+    const tasks = [1, 2].map((i) => task(r, `p${i}`, 'look around only', { setup: pp.at('setup'), test: `${pp.at('check')} && node test.js` }));
+    process.env.PIP_CONSTRAINT = PIN;
+    await r4run(spec(r, [], tasks), [arm], out, k, { claudeBin: probe.cmd, warmup: true, ...extra });
+    return { steps: pp.steps(), calls: probe.seen(), out };
+  }
+
+  it('under r4 task setup, the check, the warm-ups, the version probe and the sessions all hold PIP_CONSTRAINT', async () => {
+    const { steps, calls, out } = await pipRun('S1', {});
+    expect(new Set(steps.map((p) => p.step))).toEqual(new Set(['setup', 'check']));
+    for (const p of steps) expect(p.pip, p.step).toBe(PIN);
+    const kind = (c: Seen) => (c.argv.includes('--version') ? 'version' : (c.argv.includes('--settings') ? 'session' : 'warm-up'));
+    expect(new Set(calls.map(kind))).toEqual(new Set(['session', 'version', 'warm-up']));
+    for (const c of calls) expect(pipOf(c.env), kind(c)).toBe(PIN);
+    const allowed = envAllowSet(allowlistOf(DESIGNS.r4));
+    for (const x of wire(out)) {
+      expect(x.envKeys.map((name) => name.toUpperCase())).toContain('PIP_CONSTRAINT');
+      for (const name of x.envKeys) expect(allowed.has(name.toUpperCase()), name).toBe(true);
+    }
+  }, 180_000);
+
+  it('under r3 it is still dropped from every one of them', async () => {
+    const { steps, calls } = await pipRun('A1', { design: DESIGNS.r3, effort: undefined, model: SONNET_MODEL });
+    expect(new Set(steps.map((p) => p.step))).toEqual(new Set(['setup', 'check']));
+    for (const p of steps) expect(p.pip, p.step).toBeNull();
+    for (const c of calls) expect(pipOf(c.env), c.argv.join(' ')).toBeNull();
+  }, 180_000);
+});
+
+describe('the request log\'s upstream', () => {
+  it('an empty ANTHROPIC_BASE_URL passed with --pass-env falls back to the default upstream, as it did before the stub', async () => {
+    const saved = process.env.ANTHROPIC_BASE_URL;
+    process.env.ANTHROPIC_BASE_URL = '';
+    try {
+      const { out } = isolate('r3-empty-base');
+      await runAll({ spec: two(makeRepo()), arms: ['A1'], seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, passEnv: ['ANTHROPIC_BASE_URL'] });
+      expect(readRecords(out)).toHaveLength(2);
+    } finally {
+      if (saved === undefined) delete process.env.ANTHROPIC_BASE_URL;
+      else process.env.ANTHROPIC_BASE_URL = saved;
+    }
+  }, 60_000);
+});
+
+describe('surfaceRestored on session records', () => {
+  interface SurfaceWire { taskId: string; invalid: string | null; sessionId: string | null; surfaceRestored?: boolean }
+  it('every record a session wrote carries it, a no-result or no-transcript one with sessionId null included, and a setup failure does not', async () => {
+    const { out } = isolate('r3-surface');
+    const r = makeRepo();
+    const tasks = [
+      task(r, 'ok1', 'look around only'), task(r, 'crash', 'CRASH'), task(r, 'nosid', 'NO_SESSION_ID'),
+      task(r, 'badsetup', 'look around only', { setup: `"${process.execPath}" -e "process.exit(1)"` }),
+    ];
+    await runAll({ spec: spec(r, [], tasks), arms: ['A1'], seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, passEnv: [] });
+    const records = jsonl<SurfaceWire>(join(out, 'runs.jsonl'));
+    const of = (id: string) => records.find((x) => x.taskId === id)!;
+    expect(records.map((x) => x.taskId)).toEqual(['ok1', 'crash', 'nosid', 'badsetup']);
+    expect(of('crash')).toMatchObject({ invalid: 'no-result', sessionId: null });
+    expect(of('nosid')).toMatchObject({ invalid: 'no-transcript', sessionId: null });
+    expect(of('badsetup').invalid).toBe('setup');
+    for (const x of records.filter((y) => y.invalid !== 'setup')) expect([true, false], x.taskId).toContain(x.surfaceRestored);
+    expect(of('badsetup')).not.toHaveProperty('surfaceRestored');
   }, 120_000);
 });

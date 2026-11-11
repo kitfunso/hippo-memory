@@ -45,7 +45,7 @@ const { modelRow } = knobs ? await import('../../scripts/token-eval/z0-prices.mj
 const { priceUsage } = knobs ? await import('../../dist/eval/eval-stats.js') : {};
 if (knobs) {
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  const line = { argv, tokenPrefix: token ? token.slice(0, 9) : null, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL ?? null, configDir: process.env.CLAUDE_CONFIG_DIR ?? null };
+  const line = { argv, tokenPrefix: token ? token.slice(0, 9) : null, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL ?? null, configDir: process.env.CLAUDE_CONFIG_DIR ?? null, subagentModel: process.env.CLAUDE_CODE_SUBAGENT_MODEL ?? null };
   if (knobs.calls) fs.appendFileSync(knobs.calls, `${JSON.stringify(line)}\n`);
   if (knobs.token && token !== knobs.token) stop(1, 'CLAUDE_CODE_OAUTH_TOKEN is not the knobs file\'s token');
 }
@@ -63,7 +63,7 @@ const prompt = resumeId ? fs.readFileSync(path.join(promptsDir, `${resumeId}.pro
 
 // Knobs mode. A session's cell is read from its config dir (<out>/runs/<seq>/<arm>/seed<n>/claude-config) and its draw u from the cell and the first-session prompt,
 // so a rerun in a new --out draws the same; a call with no --settings is a warm-up and has no cell.
-const model = argv.includes('--model') ? argv[argv.indexOf('--model') + 1] : null;
+const pinned = argv.includes('--model') ? argv[argv.indexOf('--model') + 1] : null;
 const TAG = knobs ? randomUUID() : process.pid;
 function cellOf() {
   const [sequence, arm, seedDir] = path.resolve(process.env.CLAUDE_CONFIG_DIR).split(path.sep).slice(-4, -1);
@@ -73,6 +73,9 @@ function cellOf() {
 }
 const cell = knobs && argv.includes('--settings') ? cellOf() : null;
 const forCell = (e) => e.sequence === cell.sequence && e.seed === cell.seed && e.arm === cell.arm;
+// An off-pin cell names its own model once, on the first session whose position it lists; its request, transcript and modelUsage all carry it, as the real CLI's would.
+const forced = cell && !resumeId ? knobs.offPin?.find((e) => forCell(e) && e.nth === cell.position) : undefined;
+const model = forced?.model ?? pinned;
 const WARMUP_TOKENS = { input: 12, output: 8, cacheRead: 0, cacheWrite: 3000 };
 const drawTokens = () => {
   if (!cell) return WARMUP_TOKENS;
@@ -117,21 +120,18 @@ async function sendRequest(requestModel) {
   });
 }
 if (knobs) {
-  // An off-pin cell names its own model once, on the first session whose position it lists; a fail cell dies after its valid request, with no result.
-  const forced = cell && !resumeId ? knobs.offPin?.find((e) => forCell(e) && e.nth === cell.position) : undefined;
-  await sendRequest(forced?.model ?? model);
-  if (cell && knobs.fail?.some((e) => forCell(e) && e.positions.includes(cell.position))) process.exit(1);
+  await sendRequest(model);
   if (!cell) warmUp();
 }
 
-/** A warm-up call (no --settings): a small transcript and result, so a ledger has a transcript to price. */
+/** A warm-up call (no --settings): a small transcript and result, so a ledger has a transcript to price; a warmupFail model writes the transcript, then dies with no result. */
 function warmUp() {
-  if (knobs.warmupFail?.includes(model)) stop(1, `warm-up for ${model} fails (warmupFail knob)`);
   const sessionId = randomUUID();
   const file = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), `${sessionId}.jsonl`);
   const reply = { type: 'assistant', message: { id: `m-${TAG}-w`, model, usage: callUsage().usage, content: [{ type: 'text', text: 'OK' }] } };
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, [{ type: 'user', message: { role: 'user', content: input } }, reply].map((l) => JSON.stringify(l)).join('\n'));
+  if (knobs.warmupFail?.includes(model)) stop(1, `warm-up for ${model} fails (warmupFail knob)`);
   console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: sessionId, num_turns: 1, result: 'OK', ...callUsage() }));
   process.exit(0);
 }
@@ -232,6 +232,11 @@ const appendTurn = (lines) => {
   const turn = knobs ? [...lines, usageLine()] : lines;
   fs.appendFileSync(transcript, prefix + turn.map((l) => JSON.stringify(l)).join('\n'));
 };
+// A fail cell dies after its valid request and its transcript, with no result: the request was billed, so the ledger has usage to count.
+if (cell && knobs.fail?.some((e) => forCell(e) && e.positions.includes(cell.position))) {
+  appendTurn([{ type: 'user', message: { role: 'user', content: input } }]);
+  process.exit(1);
+}
 // Where Claude Code keeps a subagent's own transcript: <session>/subagents/<agent>.jsonl beside the session's file.
 const writeSubagent = (name, commands) => write(path.join(path.dirname(transcript), sessionId, 'subagents', `${name}.jsonl`), commands.map((command) => JSON.stringify(toolUse('Bash', { command }))).join('\n'));
 // KNOB_LESSON and KNOB_SOLVE: the outcome knobs decide the lesson file and the fix from the cell's draw u (the arm's lesson and solve rates).

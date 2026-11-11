@@ -66,7 +66,8 @@ export function requestLogs(run, taskId, kind) {
  * The upstream is the run's own (a fake agent's stub), else a base URL passed with --pass-env, so the log sits in front of the operator's own route. */
 async function withRequestLog(ctx, logFile, env, fn) {
   if (!logFile) return fn(env);
-  const proxy = await startLogProxy(logFile, { upstream: ctx.upstream ?? env.ANTHROPIC_BASE_URL });
+  const upstream = ctx.upstream || env.ANTHROPIC_BASE_URL;
+  const proxy = await startLogProxy(logFile, upstream ? { upstream } : {});
   try {
     return await fn({ ...env, ANTHROPIC_BASE_URL: proxy.url });
   } finally {
