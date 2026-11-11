@@ -20,7 +20,7 @@ export const GATE_MARGIN = 1.25;
 const GAP_SEQUENCE = 'q145';
 const R4_ARMS = DESIGNS.r4.arms;
 const RULE_ARMS = R4_ARMS.filter((a) => ARM_TABLE[a].seedRule);
-const BASE_SEEDS = ARM_TABLE[RULE_ARMS[0]].seeds;
+export const BASE_SEEDS = ARM_TABLE[RULE_ARMS[0]].seeds;
 const AT_R = 2;
 // The pilot's r at which prereg item 12 names the arm to the founder.
 export const R_FLAG = 1.9;
