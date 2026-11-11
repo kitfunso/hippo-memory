@@ -5,6 +5,7 @@
 import { combineCodings, harmGate, holmAdjust, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
 import { fixedRepositoryRatioT, fixedRepositoryT, repositoryT } from '../../dist/eval/repository-t.js';
 import { ARM_TABLE, DESIGNS, TWO_SEED_ARMS, pairOf } from './arms.mjs';
+import { blocks, cellsOf, familyOf, resolveDiff } from './z0-cost-solved.mjs';
 import { pairTasks, withoutRuns } from './z0-filters.mjs';
 import { costOf, partCost } from './z0-prices.mjs';
 import { positionKey } from './z0-records.mjs';
@@ -38,19 +39,6 @@ export function shareFail(r, coding) {
   const lessons = coding === 'excluded' ? r.lessons.filter((l) => l.first !== 'na') : r.lessons;
   if (lessons.length === 0) return null;
   return lessons.filter((l) => l.first !== 'pass').length / lessons.length;
-}
-
-const byKey = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
-
-/** Repository, then family, blocks sorted by key, so the resamples depend on neither a seed rerun nor argv order. */
-export function blocks(units) {
-  const repos = new Map();
-  for (const u of units) {
-    const families = repos.get(u.repo) ?? new Map();
-    families.set(u.family, [...(families.get(u.family) ?? []), u]);
-    repos.set(u.repo, families);
-  }
-  return [...repos].sort(byKey).map(([, f]) => [...f].sort(byKey).map(([, us]) => us));
 }
 
 /** Units are finite by construction, so a dropped resample is a bug, never data. */
@@ -116,7 +104,7 @@ export function taskUnits(scored, armT, armC, prices, keep, opts = {}) {
   });
   return pairTasks(scored, armT, armC)
     .filter(({ t, c }) => t.tool === 'claude-code' && c.tool === 'claude-code' && keep(t))
-    .map(({ t, c }) => ({ repo: t.repo, family: t.familyId ?? `task ${t.taskId}`, seed: t.seed, set: t.set, t: side(t), c: side(c) }));
+    .map(({ t, c }) => ({ repo: t.repo, family: familyOf(t), seed: t.seed, set: t.set, t: side(t), c: side(c) }));
 }
 
 export const ratioOf = (field) => (us) => sum(us.map((u) => u.t[field])) / sum(us.map((u) => u.c[field]));
@@ -125,25 +113,12 @@ function ratioBootstrap(units, field, opts) {
   return twoLevelBootstrap(blocks(units), ratioOf(field), { iterations: opts.iterations, seed: opts.seed, nullValue: 1, fixedRepositories: true });
 }
 
-/** One cell per (repo, family, seed), so each repository is a family-by-seed table; `make` reduces a cell's units. */
-function cellsOf(units, make) {
-  const groups = new Map();
-  for (const u of units) {
-    const key = JSON.stringify([u.repo, u.family, u.seed]);
-    groups.set(key, [...(groups.get(key) ?? []), u]);
-  }
-  return [...groups.values()].map((us) => ({ repo: us[0].repo, family: us[0].family, seed: us[0].seed, ...make(us) }));
-}
-
 const ratioCells = (units, field) => cellsOf(units, (us) => ({ t: sum(us.map((u) => u.t[field])), c: sum(us.map((u) => u.c[field])) }));
 
 /** The pooled ratio of `field` with the fixed-repository log-scale interval, plus `bootstrap` when `opts.iterations` is set. */
 export function ratioT(units, field, opts) {
   return { ...fixedRepositoryRatioT(ratioCells(units, field)), ...twin(opts, () => ratioBootstrap(units, field, opts)) };
 }
-
-// A unit may sum `n` pairs (the sizer folds seeds into one unit); the difference stays per pair.
-const resolveDiff = (us) => (sum(us.map((u) => u.t.resolved)) - sum(us.map((u) => u.c.resolved))) / sum(us.map((u) => u.n ?? 1));
 
 /** H4 on set N units: the cost ratio and the resolve difference, each a fixed-repository test (family is the unit), and the gate.
  * The cost ratio's interval is built on the log scale: skewed costs let a symmetric one pass a true 1.10 too often
@@ -264,10 +239,9 @@ function overlapCorrelation(s, opts, coding) {
 function perArm(s, arms, prices, opts) {
   return Object.fromEntries(arms.map((arm) => {
     const mine = s.filter((r) => r.arm === arm);
-    const family = (r) => r.familyId ?? `task ${r.taskId}`;
-    const units = mine.map((r) => ({ repo: r.repo, family: family(r), resolved: r.resolved ? 1 : 0, cost: costOf(r, prices, opts) }));
+    const units = mine.map((r) => ({ repo: r.repo, family: familyOf(r), resolved: r.resolved ? 1 : 0, cost: costOf(r, prices, opts) }));
     const stale = mine.filter((r) => r.afterReversal === true)
-      .flatMap((r) => r.lessons.filter((l) => l.staleFollow !== null).map((l) => ({ repo: r.repo, family: family(r), stale: l.staleFollow ? 1 : 0 })));
+      .flatMap((r) => r.lessons.filter((l) => l.staleFollow !== null).map((l) => ({ repo: r.repo, family: familyOf(r), stale: l.staleFollow ? 1 : 0 })));
     const boot = (us, stat) => (us.length === 0 ? NA : twoLevelBootstrap(blocks(us), stat, { ...opts, nullValue: 0 }));
     return [arm, {
       tasks: mine.length,
