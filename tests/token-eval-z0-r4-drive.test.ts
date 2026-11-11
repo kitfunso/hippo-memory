@@ -13,7 +13,7 @@ import { killOwnTree } from './fixtures/kill-own.js';
 vi.setConfig({ hookTimeout: 180_000 });
 
 const REPO = fwd(path.resolve(__dirname, '..'));
-const LAUNCH =`${REPO}/scripts/token-eval/r4-launch`;
+const LAUNCH = `${REPO}/scripts/token-eval/r4-launch`;
 const ps = (command: string) => (process.platform === 'win32' ? spawnSync('powershell', ['-NoProfile', '-Command', command], { encoding: 'utf8' }) : null);
 const HAVE = ps('$PSVersionTable.PSVersion.Major')?.status === 0 && ['C:/Program Files/Git/bin/bash.exe', `${POETRY}/Scripts/poetry.exe`].every((f) => existsSync(f));
 
@@ -738,7 +738,7 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(c.launches()).toEqual(['w3']);
   }, 400_000);
 
-  it('28. a unit folder that holds only run.log counts as started: smoke and step 1 take the retry path and never plan over it', async () => {
+  it('28. a unit folder that holds only run.log counts as started: smoke and step 1 take the retry path and never plan over it, and the batch guards of step 2 and step 3 read it the same way', async () => {
     const s = mk('runlog-smoke');
     put(`${s.root}/smoke/w1/run.log`, 'the launcher crashed\n');
     const smoke = await s.run('smoke');
@@ -758,5 +758,89 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(c.launches()).toEqual(['k1-p1-a2', 'k2-p1', 'low-p1', 'high-p1']);
     expect(c.admits().map((a) => [a.units, a.cap, a.capSpend, a.admitted])).toEqual([[['k1-p1-a2', 'k2-p1', 'low-p1', 'high-p1'], 40, 0, true]]);
     expect(existsSync(`${c.root}/pilot/k1-p1/launcher-calls.txt`)).toBe(false);
+
+    // The batch guards read the same rule as unit_started: a batch folder with only a run.log means batch 1 started.
+    const b = ready('runlog-batch', '1');
+    put(`${b.root}/batch1/q12-w1/run.log`, 'the launcher crashed\n');
+    expect(outcomeOf(b, await b.run('2'))).toEqual([3, 'DRIVE: step 2 runs before batch 1 starts']);
+    b.plant({ step: '2', exit: 0 });
+    b.script('s4-batch', [{ exit: 7, stdout: 'BATCH 1 LABELS: fill the labels files' }]);
+    expect((await b.run('3')).code).toBe(7);
+    expect([b.admits(), stubArgv(b, 's4-batch')]).toEqual([[], [expect.any(Array)]]);
   }, 400_000);
+
+  it('29. after a cause, a smoke and a step 1 killed after their folders exist and before their entry resume at the same attempt: admitted, nothing relaunched, outcome logged', async () => {
+    const c = mk('start-owns');
+    await c.doneUnit(`${c.root}/smoke/w1`);
+    c.plant({ step: 'smoke', exit: 0 });
+    c.plant({ step: '1', exit: 3, stopId: 'pilot-fail', line: 'STOP: the pilot failed' });
+    expect(outcome(await c.run('cause', ['--kind', 'version', '--words', 'a new version']))).toEqual([0, 'cause version logged for step 1 attempt 1']);
+    c.writePins({ claudeVersion: '9.9.10' });
+    const at2 = (step: string) => c.entries().filter((e) => e.step === step && e.attempt === 2);
+
+    const smoke = `${c.root}/smoke/w2`;
+    c.knob('w2', { fixture: w.fx, plan: w.plan, endMs: 10_000 });
+    const first = c.start('smoke', ['--attempt', '2']);
+    await wait('the smoke runner', () => c.runnerPids('smoke').length === 1);
+    const runner = c.runnerPids('smoke')[0]!;
+    killOwnTree(first.child);
+    await first.done;
+    // The killed call left its folder and its runner, and logged no outcome.
+    expect([existsSync(`${smoke}/run`), isAlive(runner), at2('smoke')]).toEqual([true, true, []]);
+    const again = await c.run('smoke', ['--attempt', '2']);
+    expect(again.code, again.out).toBe(0);
+    expect([c.launches(), c.launcherCalls(smoke), c.admits().map((a) => [a.attempt, a.units])]).toEqual([['w2'], ['plan', 'launch'], [[2, ['w2']]]]);
+    expect(at2('smoke')).toEqual([c.entry({ step: 'smoke', attempt: 2, exit: 0, claudeVersion: '9.9.10' })]);
+    // Each call logs its own start entry, with the fields finish() gives an outcome.
+    const started = c.entry({ step: 'smoke', attempt: 2, exit: 0, stopId: 'start', claudeVersion: '9.9.10' });
+    expect(c.starts()).toEqual([started, started]);
+
+    const pilot = `${c.root}/pilot/k1-p2`;
+    c.knob('k1-p2', { fixture: w.fx, plan: w.plan, endMs: 10_000 });
+    const second = c.start('1', ['--attempt', '2']);
+    await wait('the pilot runner', () => c.runnerPids('pilot').length === 1);
+    killOwnTree(second.child);
+    await second.done;
+    expect([existsSync(`${pilot}/run`), at2('1')]).toEqual([true, []]);
+    const resumed = await c.run('1', ['--attempt', '2']);
+    expect(resumed.code, resumed.out).toBe(0);
+    expect(c.launcherCalls(pilot)).toEqual(['plan', 'launch']);
+    expect(c.launches().filter((l) => l.startsWith('k1-p2'))).toEqual(['k1-p2']);
+    expect(c.admits().filter((a) => a.step === 'pilot').map((a) => a.units)).toEqual([['k1-p2', 'k2-p2', 'low-p2', 'high-p2'], ['k2-p2', 'low-p2', 'high-p2']]);
+    expect(at2('1')).toEqual([c.entry({ step: '1', attempt: 2, exit: 0, claudeVersion: '9.9.10' })]);
+    const startOne = c.entry({ step: '1', attempt: 2, exit: 0, stopId: 'start', claudeVersion: '9.9.10' });
+    expect(c.starts().filter((e) => e.step === '1')).toEqual([startOne, startOne]);
+  }, 600_000);
+
+  it('30. folders from before a cause stay refused when a fault entry sits at their attempt: a bad pin-roles line logs one before the gate runs, and smoke and step 1 at attempt 2 still launch nothing', async () => {
+    const used = (step: string) => `DRIVE: ${step} attempt 2 already has folders from before the cause; needs --attempt 3 or above`;
+    const refused = async (c: DriveCase, step: string, label: string) => {
+      const roles = `${c.root}/pin-roles.txt`;
+      const good = read(roles);
+      put(roles, 'not a role line\n');
+      const fault = await c.run(step, ['--attempt', '2']);
+      expect([fault.code, c.entries().at(-1)], fault.out).toEqual([1, expect.objectContaining({ step, attempt: 2, exit: 1, stopId: 'fault' })]);
+      put(roles, good);
+      expect(outcomeOf(c, await c.run(step, ['--attempt', '2']))).toEqual([3, used(label)]);
+      expect(c.entries().at(-1)).toMatchObject({ step, attempt: 2, exit: 3, stopId: 'order', line: used(label) });
+      expect([c.launches(), c.starts(), c.admits(), stubArgv(c, 'g1-pins')]).toEqual([[], [], [], []]);
+    };
+    const smoke = mk('fault-smoke');
+    await smoke.doneUnit(`${smoke.root}/smoke/w2`);
+    smoke.plant({ step: 'smoke', attempt: 2, exit: 0 });
+    smoke.plant({ step: '1', exit: 3, stopId: 'pilot-fail', line: 'STOP: the pilot failed' });
+    expect(outcome(await smoke.run('cause', ['--kind', 'version', '--words', 'a new version']))).toEqual([0, 'cause version logged for step 1 attempt 1']);
+    smoke.writePins({ claudeVersion: '9.9.10' });
+    await refused(smoke, 'smoke', 'smoke');
+
+    const pilot = mk('fault-pilot');
+    await pilot.doneUnit(`${pilot.root}/smoke/w1`);
+    pilot.plant({ step: 'smoke', exit: 0 });
+    pilot.plant({ step: '1', exit: 3, stopId: 'pilot-fail', line: 'STOP: the pilot failed' });
+    expect(outcome(await pilot.run('cause', ['--kind', 'version', '--words', 'a new version']))).toEqual([0, 'cause version logged for step 1 attempt 1']);
+    pilot.writePins({ claudeVersion: '9.9.10' });
+    pilot.plant({ step: 'smoke', attempt: 2, exit: 0 });
+    await pilot.doneUnit(`${pilot.root}/pilot/k1-p2`);
+    await refused(pilot, '1', 'step 1');
+  }, 600_000);
 });

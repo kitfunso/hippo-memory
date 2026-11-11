@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { FREEZE_1, FREEZE_2, REFUSALS, RESUMES, STOP_TABLE, TERMINAL_STOPS, entryOf, gate, hasFolders, runCli, stopIdOf } from '../scripts/token-eval/z0-drive.mjs';
+import { FREEZE_1, FREEZE_2, REFUSALS, RESUMES, START, STOP_TABLE, TERMINAL_STOPS, entryOf, gate, hasFolders, runCli, stopIdOf } from '../scripts/token-eval/z0-drive.mjs';
 import { BLOCK_SCHEMA } from '../scripts/token-eval/z0-batch1-block.mjs';
 
 const roots: string[] = [];
@@ -260,9 +260,10 @@ describe('the cause rules for smoke and step 1', () => {
     expect(smoke2([E({ step: 'smoke', exit: 0 })], { attempt: 1 }), 'no failure, no attempt rule').toEqual(OK);
   });
 
-  it('refuses an attempt above the failed one that already has folders, until its step logs an entry at it after the cause (W4-48)', () => {
+  it('refuses an attempt above the failed one that already has folders, until a start entry of its step owns it after the cause (W4-48)', () => {
     const newPins = { claudeVersion: '2.1.289', pinsSha256: 'p2' };
     const pins = (over: Partial<Entry> & { step: string; exit: number }) => E({ ...newPins, ...over });
+    const start = (step: string, attempt: number) => pins({ step, exit: 0, stopId: START, attempt });
     const wants = (step: string, n: number) => no(`DRIVE: ${step} attempt ${n} already has folders from before the cause; needs --attempt ${n + 1} or above`);
     // Smoke attempt 2 passed, the pilot failed at attempt 1, the cause was a new version: smoke/w2 predates the cause.
     const entries = [E({ step: 'smoke', exit: 0, attempt: 2 }), E({ step: '1', exit: 3, stopId: 'pilot-fail', attempt: 1 }), cause('version', { failedStep: '1' })];
@@ -270,20 +271,48 @@ describe('the cause rules for smoke and step 1', () => {
     expect(smoke(entries)).toEqual(wants('smoke', 2));
     expect(smoke(entries, { folders: false }), 'no folder on disk').toEqual(OK);
     expect(smoke(entries, { attempt: 3, folders: false })).toEqual(OK);
-    expect(smoke([...entries, pins({ step: 'smoke', exit: 1, stopId: 'fault', attempt: 2 })]), 'a call of its own at attempt 2 after the cause').toEqual(OK);
-    expect(smoke([...entries, pins({ step: 'smoke', exit: 3, stopId: 'order', attempt: 2 })]), 'a refusal is no call of its own').toEqual(wants('smoke', 2));
-    expect(smoke([...entries, pins({ step: '1', exit: 1, stopId: 'fault', attempt: 2 })]), 'an entry of the other step').toEqual(wants('smoke', 2));
-    expect(smoke([...entries, pins({ step: 'smoke', exit: 1, stopId: 'fault', attempt: 3 })]), 'an entry at another attempt').toEqual(wants('smoke', 2));
+    expect(smoke([...entries, start('smoke', 2)]), 'its own start entry after the cause').toEqual(OK);
+    expect(smoke([start('smoke', 2), ...entries]), 'a start entry before the cause').toEqual(wants('smoke', 2));
+    // Nothing else says who made the folders: the driver logs a fault before its gate runs (the tag rule, a failed pins check), and a refusal comes from the gate itself.
+    const others: [string, Entry][] = [
+      ['a refusal', pins({ step: 'smoke', exit: 3, stopId: 'order', attempt: 2 })],
+      ['a fault', pins({ step: 'smoke', exit: 1, stopId: 'fault', attempt: 2 })],
+      ['an outcome', pins({ step: 'smoke', exit: 0, attempt: 2 })],
+      ['the start of the other step', start('1', 2)],
+      ['a start at another attempt', start('smoke', 3)],
+    ];
+    for (const [what, e] of others) expect(smoke([...entries, e]), what).toEqual(wants('smoke', 2));
     const pilot = [...entries, pins({ step: 'smoke', exit: 0, attempt: 2 })];
     const one = (list: Entry[]) => gate({ entries: list, step: '1', ...CTX, ...newPins, attempt: 2, folders: true });
     expect(one(pilot), 'step 1 at attempt 2 with pilot folders from before the cause').toEqual(wants('step 1', 2));
-    expect(one([...pilot, pins({ step: '1', exit: 1, stopId: 'fault', attempt: 2 })])).toEqual(OK);
+    expect(one([...pilot, pins({ step: '1', exit: 1, stopId: 'fault', attempt: 2 })]), 'a fault of step 1').toEqual(wants('step 1', 2));
+    expect(one([...pilot, start('smoke', 2)]), 'the start of smoke').toEqual(wants('step 1', 2));
+    expect(one([...pilot, start('1', 2)])).toEqual(OK);
     const root = makeRoot();
     logFile(root, 'drive-log.jsonl', entries);
     fs.mkdirSync(path.join(root, 'smoke', 'w2'), { recursive: true });
     const gateAt = (attempt: string) => cli(['gate', '--root', root, '--step', 'smoke', '--tag', FREEZE_1, '--commit', 'c1', '--pins-sha256', 'p2', '--claude-version', '2.1.289', '--attempt', attempt]);
     expect(gateAt('2'), 'the gate command looks at the root').toEqual({ code: 3, stdout: '', stderr: 'DRIVE: smoke attempt 2 already has folders from before the cause; needs --attempt 3 or above\n' });
     expect(gateAt('3')).toEqual({ code: 0, stdout: 'ok\n', stderr: '' });
+    logFile(root, 'drive-log.jsonl', [...entries, start('smoke', 2)]);
+    expect(gateAt('2'), 'and reads the start entry in the log').toEqual({ code: 0, stdout: 'ok\n', stderr: '' });
+  });
+
+  it('reads a start entry as no outcome: not the step before, not a smoke at 0, not a failure, not a terminal stop', () => {
+    const newPins = { claudeVersion: '2.1.289', pinsSha256: 'p2' };
+    const start = (step: string, over: Partial<Entry> = {}) => E({ ...newPins, step, exit: 0, stopId: START, attempt: 2, ...over });
+    expect(refusal([start('1')], '2'), 'step 2 after the start of step 1').toEqual(no('DRIVE: step 2 needs step 1 at 0'));
+    const entries = [fail({ claudeVersion: '2.1.288' }), cause('version')];
+    expect(gate({ entries: [...entries, start('smoke')], step: '1', ...CTX, ...newPins }), 'step 1 after the start of a smoke').toEqual(no(`DRIVE: step 1 needs a smoke at 0 on ${FREEZE_1} with the current pins`));
+    expect(gate({ entries: [...entries, E({ ...newPins, step: 'smoke', exit: 0, attempt: 2 }), start('1')], step: '1', ...CTX, ...newPins })).toEqual(OK);
+    const root = makeRoot();
+    logFile(root, 'drive-log.jsonl', [start('smoke'), start('1')]);
+    expect(cli(['last-smoke', '--root', root]).code, 'only start entries').toBe(1);
+    expect(cli(['failure', '--root', root]).code).toBe(1);
+    expect(cli(['terminal', '--root', root])).toEqual({ code: 0, stdout: '', stderr: '' });
+    logFile(root, 'drive-log.jsonl', [fail({ claudeVersion: '2.1.288' }), start('smoke', { attempt: 1 }), start('smoke', { attempt: 4 })]);
+    expect(cli(['failure', '--root', root])).toEqual({ code: 0, stdout: `smoke 1 ${FREEZE_1}\n`, stderr: '' });
+    expect(cli(['cause', '--root', root, '--kind', 'version']).stdout).toBe('cause version logged for smoke attempt 1\n');
   });
 
   it('finds the folders of an attempt by their names: w<n>, <k>-p<n> and effort <e>-p<n>, each with its retries', () => {
@@ -507,7 +536,7 @@ describe('the read commands', () => {
     fs.writeFileSync(path.join(root, 'raise', 'max-seed.json'), '{"maxSeed": ');
     expect(cli(['max-seed', '--root', root]).stderr).toBe(`${path.join(root, 'raise', 'max-seed.json')}: sealed file does not parse; the harness never rebuilds it\n`);
     expect(cli(['last-smoke', '--root', root]).code, 'no log').toBe(1);
-    logFile(root, 'drive-log.jsonl', [E({ step: 'smoke', exit: 0, attempt: 1 }), E({ step: 'smoke', exit: 3, stopId: 'smoke-fail', attempt: 2 }), E({ step: 'smoke', exit: 0, attempt: 3 }), E({ step: 'smoke', exit: 3, stopId: 'tag', attempt: 4 })]);
+    logFile(root, 'drive-log.jsonl', [E({ step: 'smoke', exit: 0, attempt: 1 }), E({ step: 'smoke', exit: 3, stopId: 'smoke-fail', attempt: 2 }), E({ step: 'smoke', exit: 0, attempt: 3 }), E({ step: 'smoke', exit: 3, stopId: 'tag', attempt: 4 }), E({ step: 'smoke', exit: 0, stopId: START, attempt: 5 })]);
     expect(cli(['last-smoke', '--root', root]).stdout).toBe('3\n');
   });
 

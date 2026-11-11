@@ -86,7 +86,9 @@ export function readEntries(file) {
 /** `smoke` stays as it is and a number reads as `step <n>`, the form of every DRIVE: line. */
 export const stepLabel = (step) => (/^\d+$/.test(step) ? `step ${step}` : step);
 
-const isOutcome = (e) => !REFUSALS.includes(e.stopId);
+/** The stop id of the entry a smoke or step 1 call writes once its checks passed and before it makes any folder: it owns the attempt, says nothing about the outcome. */
+export const START = 'start';
+const isOutcome = (e) => !REFUSALS.includes(e.stopId) && e.stopId !== START;
 
 /** The first terminal entry's id and the step it stopped: a cause entry names the step it explained. */
 export function terminalOf(entries) {
@@ -158,21 +160,21 @@ export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersio
     const shown = stepLabel(step);
     if (open !== null) return no(`DRIVE: ${shown} needs a cause entry after the failure at ${stepLabel(open.entry.step)} attempt ${open.entry.attempt ?? 1}`);
     const failure = entries.findLast(isFailure);
-    const causeIndex = entries.findLastIndex((e) => e.step === 'cause' && e.exit === 0);
-    const cause = causeIndex < 0 ? null : entries[causeIndex];
+    const cause = entries.findLast((e) => e.step === 'cause' && e.exit === 0) ?? null;
+    const since = (list) => (cause === null ? list : list.slice(list.lastIndexOf(cause) + 1));
     if (cause !== null && failure !== undefined) {
       if (cause.kind === 'version' && failure.claudeVersion === claudeVersion) return no(`DRIVE: a version cause needs a new claudeVersion; pins-r4.json still names ${claudeVersion}`);
       if (cause.kind === 'other' && tag !== FREEZE_2) return no(`DRIVE: an other-cause failure needs ${FREEZE_2}`);
-      if (cause.kind === 'other' && !entries.slice(causeIndex + 1).some((e) => e.step === 'stage-checks' && e.exit === 0 && commit !== null && e.commit === commit)) return no(`DRIVE: ${shown} needs stage-checks at 0 on ${commit ?? 'none'}`);
+      if (cause.kind === 'other' && !since(entries).some((e) => e.step === 'stage-checks' && e.exit === 0 && commit !== null && e.commit === commit)) return no(`DRIVE: ${shown} needs stage-checks at 0 on ${commit ?? 'none'}`);
       // A cause is always followed by fresh folders (W4-48): a done unit made before it must never meet the smoke rule or feed pilot.json.
       const failed = failure.attempt ?? 1;
       if (attempt <= failed) return no(`DRIVE: ${shown} needs --attempt ${failed + 1} or above after the cause for attempt ${failed}`);
-      // An attempt that already has folders is fresh only once this step logged an entry at it after the cause: its own call made them.
-      if (folders && !entries.slice(causeIndex + 1).some((e) => e.step === step && e.attempt === attempt)) {
+      // Folders of an attempt are fresh only when a start entry owns it after the cause; an outcome, fault or refusal entry says nothing about who made them.
+      if (folders && !since(all).some((e) => e.stopId === START && e.step === step && e.attempt === attempt)) {
         return no(`DRIVE: ${shown} attempt ${attempt} already has folders from before the cause; needs --attempt ${attempt + 1} or above`);
       }
     }
-    if (step === '1' && !entries.slice(causeIndex + 1).some((e) => e.step === 'smoke' && e.exit === 0 && e.tag === tag && e.pinsSha256 === pinsSha256)) {
+    if (step === '1' && !since(entries).some((e) => e.step === 'smoke' && e.exit === 0 && e.tag === tag && e.pinsSha256 === pinsSha256)) {
       return no(`DRIVE: step 1 needs a smoke at 0 on ${tag} with the current pins`);
     }
     return { ok: true, line: null };
@@ -283,7 +285,7 @@ const COMMANDS = {
     return stopped === null ? '' : `${stopped.id} ${stopped.step}\n`;
   },
   'last-smoke'(f, root) {
-    const last = readEntries(path.join(root, 'drive-log.jsonl')).findLast((e) => e.step === 'smoke' && e.exit === 0);
+    const last = readEntries(path.join(root, 'drive-log.jsonl')).filter(isOutcome).findLast((e) => e.step === 'smoke' && e.exit === 0);
     if (last === undefined) throw new Error('DRIVE: no smoke entry at 0 in the drive log');
     return `${last.attempt}\n`;
   },

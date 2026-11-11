@@ -96,7 +96,7 @@ first_line() { LAST=$(tr -d '\r' 2> /dev/null < "$1" | grep -v '^[[:space:]]*$' 
 
 # ------------------------------------------------------------------------------------------------ the entry
 TAG='' COMMIT='' PINS_SHA='' CLAUDE_V='' ENTRY_EXTRA=()
-# Appends the step's entry, then exits with its code. No entry is written when the append itself fails, and that is said.
+# Appends the step's entry, then exits with its code (a start entry returns). No entry is written when the append itself fails, and that is said.
 finish() {
   local code=$1 id=$2 line=$3 args out
   [ "$PRINT" != 1 ] || return 0
@@ -112,6 +112,7 @@ finish() {
     exit 1
   }
   say "entry $LABEL exit $code${id:+ $id}"
+  [ "$id" != start ] || return 0
   exit "$code"
 }
 # A fault: the line is printed, logged and ends the step with exit 1.
@@ -230,7 +231,7 @@ any_started() {
 }
 started_in() {
   local d
-  for d in "$ROOT/$1"/*/run; do [ -d "$d" ] && return 0; done
+  for d in "$ROOT/$1"/*; do unit_started "$d" && return 0; done
   return 1
 }
 tc_of() {
@@ -793,4 +794,6 @@ case $rc in
   *) echo "DRIVE: $LABEL: z0-drive gate exit $rc: ${verdict%%$'\n'*}"; exit 1 ;;
 esac
 
+# A smoke or step 1 call owns its attempt before it makes a folder, so a call killed after that resumes at the same attempt.
+case $STEP in smoke | 1) finish 0 start ;; esac
 run_step

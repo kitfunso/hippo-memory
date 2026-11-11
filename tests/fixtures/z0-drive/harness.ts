@@ -236,7 +236,11 @@ export class DriveCase {
     return child;
   }
 
-  entries() { return jsonLines<Entry>(`${this.root}/drive-log.jsonl`); }
+  /** Every entry of the drive log, in order. */
+  allEntries() { return jsonLines<Entry>(`${this.root}/drive-log.jsonl`); }
+  /** The outcome, fault and refusal entries: a start entry is not one, so `starts()` holds those. */
+  entries() { return this.allEntries().filter((e) => e.stopId !== 'start'); }
+  starts() { return this.allEntries().filter((e) => e.stopId === 'start'); }
   budget() { return jsonLines<BudgetLine>(`${this.root}/budget-log.jsonl`); }
   admits() { return this.budget().filter((e) => e.kind === 'admit'); }
   /** The stub CLI calls, in order, for one CLI or all. */
