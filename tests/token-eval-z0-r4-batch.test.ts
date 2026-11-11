@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { DESIGNS } from '../scripts/token-eval/arms.mjs';
 import { gitBash } from '../scripts/token-eval/homes.mjs';
 import { callRecord, pathForm, runCli, unitRecord } from '../scripts/token-eval/z0-unit-record.mjs';
-import { CHECKOUT, COST, Case, WARM, fwd, isAlive, json, kill, lines, put, read, sleep, stopCases, until, within, type Knobs, type Run, type Started } from './fixtures/z0-batch/harness.js';
+import { CHECKOUT, COST, Case, WARM, fwd, isAlive, json, killTree, lines, put, read, sleep, stopCases, until, within, type Knobs, type Run, type Started } from './fixtures/z0-batch/harness.js';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
 import { cli, sealedKey, synthOut, type Cell } from './fixtures/z0-g5.js';
 import { generate, planOf } from './fixtures/z0-gen.js';
@@ -220,7 +220,7 @@ function liveRunner(c: Case, out: string, spell = out, knob: Knobs = { records: 
 
 /** Tree-kills a started batch and returns once the listing holds no s4-batch.sh line for its root, the condition a restart checks. */
 async function killBatch(c: Case, s: Started) {
-  kill(s.child.pid!, true);
+  killTree(s.child);
   const run = await within(s.done, 60_000, `killBatch: the tree-killed batch ${s.child.pid} to exit`);
   // The Git Bash wrapper's exit is not its forks': one forked during the tree kill outlives it, and a restart rightly refuses while it lives.
   await until(`killBatch: no s4-batch.sh line for ${c.root} after the tree kill`, () => {
@@ -375,7 +375,7 @@ const L = async () => {
   c.knob('lc-w1', { fixture: KEY_FX(c, 'lc'), exitRelease: releaseC });
   const s = c.start();
   await until('the lb runner', () => c.runnerPids().length === 2 && c.log().some((l) => l.startsWith('launch lb-w1 pid ')));
-  kill(c.launcherPid('lb-w1'));
+  c.kill(c.launcherPid('lb-w1'));
   put(releaseB, '');
   const first = await s.done;
   const exitFiles = ['la', 'lb', 'lc'].map((k) => fs.existsSync(`${c.dir(`${k}-w1`)}/run/exit.txt`));
@@ -508,7 +508,7 @@ const W2 = async () => {
   const s = c.start();
   await until('the held lock', () => fs.existsSync(`${c.dir('wa-w1')}/run/g5/regrade.lock`) && lines(`${c.root}/batch1/regrade-pids.txt`).length === 1);
   const pid = Number(lines(`${c.root}/batch1/regrade-pids.txt`)[0].split(' ')[1]);
-  kill(pid);
+  c.kill(pid);
   const first = await s.done;
   const second = await c.run();
   return { c, first, second, pid };
@@ -521,7 +521,7 @@ const W3 = async () => {
   const s = c.start();
   // The launcher writes its pid file before Start-Process, so the kill waits for the stub's regrade-pids.txt line.
   await until('the regrade stub', () => callsOf(c, 'regrade') === 1);
-  kill(Number(read(`${c.dir('wa-w1')}/g5-regrade.launcher.pid`).trim()));
+  c.kill(Number(read(`${c.dir('wa-w1')}/g5-regrade.launcher.pid`).trim()));
   return { c, r: await releaseOn(c, s, from, 'wait for ', 'wa-w1', release) };
 };
 const W4 = async () => {
@@ -669,7 +669,7 @@ const Pd = async () => {
   await until('the runner log', () => fs.existsSync(`${c.dir('pb-w1')}/run.log`) && c.log().some((l) => l.startsWith('launch pb-w1 pid ')));
   await sleep(1500);
   const launcher = c.launcherPid('pb-w1');
-  kill(launcher);
+  c.kill(launcher);
   await sleep(1000);
   await killBatch(c, s);
   const pidsLines = c.runnerPids().length;

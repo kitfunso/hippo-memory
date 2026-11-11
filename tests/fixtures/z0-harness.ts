@@ -1,8 +1,9 @@
 // Shared set-up for the Z0 surface, void and leak tests: temp homes, a fixture repo, spec builders and record readers.
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { killNaming } from './kill-own.js';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
 import type { Z0Record, Z0PlanCell } from './z0-contract.js';
@@ -30,12 +31,8 @@ export function cleanup() {
   while (pids.length) {
     const f = pids.pop()!;
     if (!existsSync(f)) continue;
-    const pid = Number(readFileSync(f, 'utf8'));
-    try {
-      process.kill(pid, 'SIGKILL');
-    } catch (err) {
-      if (!(err instanceof Error && 'code' in err && err.code === 'ESRCH')) throw err;
-    }
+    // The pid alone proves nothing once its process exits, so only a live process that names this test's out folder is killed.
+    killNaming([dirname(f)], [Number(readFileSync(f, 'utf8'))]);
   }
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true, maxRetries: 5 });
 }

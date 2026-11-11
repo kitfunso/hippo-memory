@@ -1,5 +1,5 @@
 // Set-up for the s4-batch.sh tests: a dry root, a "scored" folder holding the real scripts beside the stubs, fixture runs the stub runner replays, and a spawned batch.
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -7,6 +7,7 @@ import { ARM_TABLE, DESIGNS } from '../../../scripts/token-eval/arms.mjs';
 import { gitBash } from '../../../scripts/token-eval/homes.mjs';
 import { PILOT_CHECKS } from '../../../scripts/token-eval/z0-budget.mjs';
 import { BASIS, BATCH2_SEQ, MEAN, SEQ } from '../../_helpers/z0-r4-spend.js';
+import { killNaming, procsNaming } from '../kill-own.js';
 import { PRICES_BY_MODEL, generate, planOf, type Z0Record } from '../z0-gen.js';
 import { replay } from './ab-run.mjs';
 
@@ -48,19 +49,11 @@ export async function within<T>(p: Promise<T>, ms: number, what: string): Promis
 }
 
 export const isAlive = (pid: number) => spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' }).stdout.includes(`"${pid}"`);
-/** For each folder, the live processes whose command line names it, from one Win32_Process read; a case's folder is unique, so a reused pid never matches. */
-export function procsNaming(dirs: string[]) {
-  const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { [string]$_.ProcessId + [char]9 + $_.CommandLine }'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 60_000 });
-  if (r.status !== 0) throw new Error(`the process read for teardown failed: exit ${r.status} ${r.error?.message ?? r.stderr}`);
-  const found = new Map<string, number[]>(dirs.map((d) => [d, []]));
-  for (const line of r.stdout.split(/\r?\n/)) {
-    const [pid, cmd = ''] = line.split('\t');
-    const text = fwd(cmd).toLowerCase();
-    for (const d of dirs) if (text.includes(fwd(d).toLowerCase())) found.get(d)?.push(Number(pid));
-  }
-  return found;
+/** Tree-kills a child this test spawned whose exit Node has not seen, so its handle is still open and its pid is still its own; one already gone is left alone. */
+export function killTree(child: ChildProcess) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)], { encoding: 'utf8' });
 }
-export const kill = (pid: number, tree = false) => spawnSync('taskkill', [...(tree ? ['/T'] : []), '/F', '/PID', String(pid)], { encoding: 'utf8' });
 
 export interface FxOpts { key: string; seeds: number[]; leaks?: number[]; tag?: string }
 interface Rec extends Z0Record { sessionId: string; costUsd: number; hookCancels: Record<string, never>; envKeys: string[] }
@@ -220,6 +213,10 @@ export class Case {
     for (const file of this.holds) put(file, '');
   }
   remove() { fs.rmSync(this.base, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); }
+  /** Kills `pid`, read from a file this case's batch wrote, only while it is a live process naming this case's folder; anything else is an error, never a kill. */
+  kill(pid: number) {
+    if (!killNaming([this.base], [pid]).includes(pid)) throw new Error(`pid ${pid} is not a live process of case ${this.base}, so it was not killed`);
+  }
 }
 
 /** Teardown for every case, before it waits on anything: releases every hold, then kills each live process whose command line names a case folder and waits until none is left or `ms` pass; returns each case folder that still has live processes, with their pids. */
@@ -229,7 +226,7 @@ export async function stopCases(cases: Case[], ms: number) {
   const end = Date.now() + ms;
   let left = procsNaming(bases);
   while ([...left.values()].some((pids) => pids.length > 0) && Date.now() < end) {
-    for (const pids of left.values()) for (const pid of pids) kill(pid, true);
+    killNaming(bases);
     await sleep(1000);
     left = procsNaming(bases);
   }
