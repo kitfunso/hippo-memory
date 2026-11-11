@@ -17,8 +17,13 @@ export const CORPUS_LAYOUT: NonNullable<GenOpts['layout']> = [
 export const r4Corpus = (): Generated => corpus({ layout: CORPUS_LAYOUT });
 
 export const WHOLE_PLANS = 8;
-export const SPEND_BASIS = { schema: 'z0-spend-basis/1', basisByArm: { A0: 60, A1: 100, A2: 100, A4: 40, A5: 90 }, meanPerRecord: 0.3, bySequence: {
-  q12: { A0: 20, A1: 30, A2: 30, A4: 10, A5: 25 }, q145: { A0: 2, A1: 2, A2: 2, A4: 2, A5: 2 }, q140: { A0: 10, A1: 12, A2: 12, A4: 6, A5: 12 } } };
+// Frozen at every level, so one test cannot change it for the next.
+export const SPEND_BASIS = Object.freeze({
+  schema: 'z0-spend-basis/1', basisByArm: Object.freeze({ A0: 60, A1: 100, A2: 100, A4: 40, A5: 90 }), meanPerRecord: 0.3,
+  bySequence: Object.freeze({
+    q12: Object.freeze({ A0: 20, A1: 30, A2: 30, A4: 10, A5: 25 }), q145: Object.freeze({ A0: 2, A1: 2, A2: 2, A4: 2, A5: 2 }), q140: Object.freeze({ A0: 10, A1: 12, A2: 12, A4: 6, A5: 12 }),
+  }),
+});
 export const R3_FIGURE = 'A2 vs A5 violation 0.009 [-0.052, 0.070]';
 // The power read quotes line 27 of round 3's report.
 const R3_UNBLIND = `${Array.from({ length: 26 }, (_, i) => `round 3 line ${i + 1}`).join('\n')}\nattribution: ${R3_FIGURE}\n`;
@@ -43,7 +48,7 @@ export function runsFolder(dir: string, name: string, records: readonly Z0Record
   return `--runs ${posix(runs)} --plan ${posix(plan)} --off-pin ${posix(offPin)}`;
 }
 
-/** A registered folder with the round 4 read files, the whole-plan files, a spend basis, round 3's report, the `b1` runs folder, its merge manifest and `rs1.txt`. */
+/** A registered folder with the round 4 read files, the whole-plan files, a spend basis, round 3's report, the `b1` runs folder, its merge manifest and `rs1.txt`; `cleanUp` of z0-r4-read.ts removes it. */
 export function corpusWorkspace(g: Generated): string {
   const dir = workspace(g, { ...wholePlanFiles(R4, WHOLE_PLANS, CORPUS_LAYOUT), 'spend-basis.json': JSON.stringify(SPEND_BASIS), 'r3-unblind.stdout': R3_UNBLIND });
   const b1 = runsFolder(dir, 'b1', g.records);
@@ -60,10 +65,10 @@ export function raisedReadSet(dir: string, g: Generated, top: number): void {
   fs.writeFileSync(path.join(dir, 'rs2.txt'), `--max-seed ${top}\n${all}\n--merge-manifest ${posix(path.join(dir, 'merge.json'))}\n`);
 }
 
-/** A transcript with one assistant message, so the ledger prices a cell at the arm's model. */
-const transcript = (model: string): string => `${JSON.stringify({ type: 'assistant', message: { id: `m-${model}`, model, usage: { input_tokens: 1000, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 1000 } } })}\n`;
+/** A transcript with one assistant message, so the ledger prices a cell at the arm's model; the ledger prices each message id once per folder, so each cell needs its own. */
+const transcript = (model: string, id: string): string => `${JSON.stringify({ type: 'assistant', message: { id, model, usage: { input_tokens: 1000, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 1000 } } })}\n`;
 
-/** `<dir>/out1`: the runs file and one transcript per round 4 arm for rn-repo1 seed 1, the layout `--ledger-runs` reads. */
+/** `<dir>/out1`: the runs file and one transcript per round 4 arm for rn-repo1 seed 1, each under its own message id, the layout `--ledger-runs` reads. */
 export function ledgerFolder(dir: string, records: readonly Z0Record[]): string {
   const out = path.join(dir, 'out1');
   fs.mkdirSync(out, { recursive: true });
@@ -71,7 +76,7 @@ export function ledgerFolder(dir: string, records: readonly Z0Record[]): string 
   for (const arm of R4.arms) {
     const files = path.join(runDirs(out, 'rn-repo1', arm, 1).claudeConfig, 'projects', 'p');
     fs.mkdirSync(files, { recursive: true });
-    fs.writeFileSync(path.join(files, 'one.jsonl'), transcript(loose(ARM_TABLE)[arm].model));
+    fs.writeFileSync(path.join(files, 'one.jsonl'), transcript(loose(ARM_TABLE)[arm].model, `m-rn-repo1-${arm}-seed1`));
   }
   return out;
 }

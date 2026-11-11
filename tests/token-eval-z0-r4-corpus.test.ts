@@ -5,14 +5,13 @@ import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runCli as analyzeCli } from '../scripts/token-eval/z0-analyze.mjs';
 import { BLOCK_SCHEMA } from '../scripts/token-eval/z0-batch1-block.mjs';
-import { PILOT_CHECKS } from '../scripts/token-eval/z0-budget.mjs';
-import { SINCE_TEACH } from '../scripts/token-eval/z0-hypotheses.mjs';
+import { spendByArm } from '../scripts/token-eval/z0-ledger.mjs';
 import { runCli as pilotCli } from '../scripts/token-eval/z0-pilot.mjs';
 import { SEED_RULE_SCHEMA } from '../scripts/token-eval/z0-records.mjs';
 import { runCli as seedRuleCli } from '../scripts/token-eval/z0-seed-rule.mjs';
 import { runCli as sizeCli } from '../scripts/token-eval/z0-size.mjs';
 import { R3_FIGURE, WHOLE_PLANS, corpusWorkspace, ledgerFolder, pilotArgv, r4Corpus, raisedReadSet } from './fixtures/z0-r4-corpus.js';
-import { R4, cleanUp, raise } from './fixtures/z0-r4-read.js';
+import { PRICES4, R4, cleanUp, raise } from './fixtures/z0-r4-read.js';
 
 // The unblind's 10,000 resamples make this file about 10 s.
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -34,7 +33,7 @@ function commitGates(dir: string): void {
   git('commit', '-qm', 'drop list and grading');
 }
 
-/** The lines that are blank, hold n/a as a word, or hold an A code as a word; whole lines only, so a path cannot match. */
+/** The lines that are blank, hold n/a as a word, or hold an A code as a word; the lines hold absolute paths, and only the word bounds keep a path from matching A\d. */
 function flagged(text: string): string[] {
   const lines = text === '' ? [] : text.replace(/\n$/, '').split('\n');
   return lines.filter((line) => line.trim() === '' || /\bn\/a\b/.test(line) || /\bA\d\b/.test(line));
@@ -50,11 +49,12 @@ function runAll() {
   raisedReadSet(dir, g, top);
   const blind = analyzeCli([...ANALYZE, '--key', 'key.json', '--out', 'blind.json'], dir);
   commitGates(dir);
-  ledgerFolder(dir, raise(g, top).records);
+  const ledger = ledgerFolder(dir, raise(g, top).records);
   const unblind = analyzeCli([...ANALYZE, '--drop-list', 'drop.json', '--unblind', '--ledger-runs', 'out1', '--out', 'unblind.json'], dir);
+  const spend = spendByArm({ runs: [ledger], prices: PRICES4, design: R4 });
   const pilot = pilotCli(pilotArgv(dir, g), path.join(dir, 'pilot'));
   return {
-    rule, power, block, blind, unblind, pilot,
+    rule, power, block, blind, unblind, pilot, spend,
     ruleJson: readJson(dir, 'rule.json'), powerJson: readJson(dir, 'power.json'), blockJson: readJson(dir, 'block.json'),
     blindJson: readJson(dir, 'blind.json'), unblindJson: readJson(dir, 'unblind.json'), pilotJson: readJson(path.join(dir, 'pilot'), 'pilot.json'),
   };
@@ -63,6 +63,9 @@ function runAll() {
 interface Row { role: string; sha256: string }
 const rolesOf = (rows: readonly Row[]): string[] => rows.map((row) => row.role).filter((role) => role !== 'source');
 const times = (role: string, n: number): string[] => Array.from({ length: n }, () => role);
+const ARMS = ['O1', 'S0', 'S1', 'S2', 'S4', 'S5'];
+const BUCKETS = ['0-1', '2-4', '5-9', '10+'];
+const PILOT_CHECK_IDS = ['off-pin', 'effort', 'venv', 'env-keys', 'cost-usd', 'r'];
 const MAIN = ['runs', 'plan', 'prices', 'grading'];
 const RULE_ROLES = [...MAIN, 'drop-list', 'off-pin', 'levels', 'levels', 'read-set', 'merge-manifest'];
 const POWER_ROLES = [...MAIN, 'drop-list', 'off-pin', ...times('whole-plan', WHOLE_PLANS), 'levels', 'levels', 'spend-basis', 'r3-unblind', 'read-set', 'merge-manifest'];
@@ -108,9 +111,9 @@ describe('the round 4 corpus row through every round 4 CLI', () => {
 
   it('ratesBySinceTeach holds every arm in every bucket with a rate under both codings', () => {
     const rates = r.unblindJson.reported.ratesBySinceTeach;
-    expect(Object.keys(rates)).toEqual(SINCE_TEACH.map(([name]) => name));
+    expect(Object.keys(rates)).toEqual(BUCKETS);
     for (const bucket of Object.keys(rates)) {
-      expect(Object.keys(rates[bucket]).sort(), bucket).toEqual([...R4.arms].sort());
+      expect(Object.keys(rates[bucket]).sort(), bucket).toEqual(ARMS);
       for (const arm of Object.keys(rates[bucket])) {
         for (const coding of ['violation', 'excluded']) {
           const rate = rates[bucket][arm][coding];
@@ -132,13 +135,26 @@ describe('the round 4 corpus row through every round 4 CLI', () => {
     }
   });
 
-  it('the batch 1 block writes no stop', () => {
+  it("the batch 1 block writes no stop and prints the corpus's whole plan", () => {
     expect(r.blockJson).toEqual({ schema: BLOCK_SCHEMA, stops: [] });
+    expect(r.block.stdout.split('\n')).toContain('whole plan: 8 repositories, 4 in batch 1; 528 planned positions, 0 reached by off-pin voids; 24 planned (sequence, seed)s, 0 leaked');
+  });
+
+  it("the blind read prints one K line per arm, with the corpus's record counts", () => {
+    const counts = r.blind.stdout.split('\n').flatMap((line) => /^K\d+: (\d+ records of \d+ planned);/.exec(line)?.[1] ?? []);
+    expect(counts.sort()).toEqual([...times('176 records of 176 planned', 2), ...times('792 records of 792 planned', 4)]);
+  });
+
+  it('the ledger prices all six arms, and the unblind reads a spend per solve for S2, O1 and S1', () => {
+    expect(Object.keys(r.spend)).toEqual(ARMS);
+    for (const [arm, usd] of Object.entries(r.spend)) expect(Number.isFinite(usd) && usd > 0, `${arm} spend ${usd}`).toBe(true);
+    const perSolve = r.unblindJson.hypotheses.readouts.spendPerSolve;
+    for (const arm of ['S2', 'O1', 'S1']) expect(Number.isFinite(perSolve[arm]) && perSolve[arm] > 0, `${arm} spend per solve ${perSolve[arm]}`).toBe(true);
   });
 
   it("the pilot passes its six checks on the corpus's O1, S1 and S2 records", () => {
     const lines = r.pilot.stdout.split('\n');
-    for (const id of PILOT_CHECKS) expect(lines, id).toContain(`check ${id} pass`);
-    expect(r.pilotJson.checks).toEqual(Object.fromEntries(PILOT_CHECKS.map((id) => [id, 'pass'])));
+    for (const id of PILOT_CHECK_IDS) expect(lines, id).toContain(`check ${id} pass`);
+    expect(r.pilotJson.checks).toEqual(Object.fromEntries(PILOT_CHECK_IDS.map((id) => [id, 'pass'])));
   });
 });
