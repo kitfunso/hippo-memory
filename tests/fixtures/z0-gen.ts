@@ -56,6 +56,7 @@ export interface GenOpts {
   readonly arms?: readonly string[];
   readonly knobs?: Readonly<Partial<Record<string, Knobs>>>;
   readonly repos?: number;
+  readonly layout?: readonly (readonly [string, number])[];
 }
 
 export const ARMS: string[] = [...DESIGNS.r3.arms];
@@ -150,12 +151,13 @@ export function generate(opts: GenOpts = {}): Generated {
   const design = opts.design ?? DESIGNS.r3;
   const arms: readonly string[] = opts.arms ?? design.arms;
   const rates = defaultFail(design);
+  const rn = opts.layout ?? RN_LAYOUT;
   const records: Z0Record[] = [];
   for (let i = 1; i <= (opts.repos ?? 6); i++) {
     const repo = `repo${i}`;
     const runs = [
-      { sequence: `rn-${repo}`, layout: slots(RN_LAYOUT, 'R', `rn-${repo}`), armSet: arms.filter((a) => ROWS[a].tool === 'claude-code') },
-      { sequence: `x-${repo}`, layout: slots(RN_LAYOUT.filter(([c]) => c !== 'N'), 'X', `x-${repo}`), armSet: arms.filter((a) => ROWS[a].tool === 'codex') },
+      { sequence: `rn-${repo}`, layout: slots(rn, 'R', `rn-${repo}`), armSet: arms.filter((a) => ROWS[a].tool === 'claude-code') },
+      { sequence: `x-${repo}`, layout: slots(rn.filter(([c]) => c !== 'N'), 'X', `x-${repo}`), armSet: arms.filter((a) => ROWS[a].tool === 'codex') },
     ];
     for (const { sequence, layout, armSet } of runs) {
       for (let seed = 1; seed <= 3; seed++) {
@@ -178,8 +180,8 @@ export const planOf = (records: readonly Z0Record[]): PlanCell[] => records.map(
 }));
 
 /** `n` whole-plan files for a design, one repository each: `whole-1.json` holds repo1's plan cells, `whole-2.json` repo2's, and so on. */
-export const wholePlanFiles = (design: Design, n: number): Record<string, string> => {
-  const all = planOf(generate({ design, repos: n }).records);
+export const wholePlanFiles = (design: Design, n: number, layout?: GenOpts['layout']): Record<string, string> => {
+  const all = planOf(generate({ design, repos: n, layout }).records);
   return Object.fromEntries(Array.from({ length: n }, (_, i) => [`whole-${i + 1}.json`, JSON.stringify(all.filter((c) => c.repo === `repo${i + 1}`))]));
 };
 
