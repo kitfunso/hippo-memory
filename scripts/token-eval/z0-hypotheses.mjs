@@ -1,12 +1,13 @@
 /** Z0 analyzer, part 3 of 6: units, fixed-repository t tests (family is the unit) with stratified bootstrap twins, H1-H4,
  * one Holm procedure per coding over H1 and H2, attribution, reported estimates. The repeat-mistake rate reads each lesson's
- * `first` verdict only (prereg 151); H3 and H4 read Claude Code records only. */
+ * `first` verdict only (prereg 151); H3 and H4 read Claude Code records only. Round 4's estimates, drift and publish list sit at the end;
+ * scoring them is z0-analyze.mjs's, since z0-verdict-r4.mjs imports this file. */
 
 import { combineCodings, harmGate, holmAdjust, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
-import { fixedRepositoryRatioT, fixedRepositoryT, repositoryT } from '../../dist/eval/repository-t.js';
-import { ARM_TABLE, DESIGNS, TWO_SEED_ARMS, pairOf } from './arms.mjs';
-import { blocks, cellsOf, familyOf, resolveDiff } from './z0-cost-solved.mjs';
-import { pairTasks, withoutRuns } from './z0-filters.mjs';
+import { fixedRepositoryRatioT, fixedRepositoryT, repositoryT, studentTQuantile } from '../../dist/eval/repository-t.js';
+import { ARM_TABLE, DESIGNS, OPUS_MODEL, TWO_SEED_ARMS, designByName, hasPair, pairOf } from './arms.mjs';
+import { blocks, bootstrapRatio, cellsOf, costCells, costSolvedT, familyOf, partBValues, pooledSolveDiff, resolveDiff } from './z0-cost-solved.mjs';
+import { filteredInput, pairTasks, withoutRuns } from './z0-filters.mjs';
 import { costOf, partCost } from './z0-prices.mjs';
 import { positionKey } from './z0-records.mjs';
 
@@ -23,6 +24,7 @@ export const SPECS = { H1: REPEAT_SPEC, H2: REPEAT_SPEC };
 export const LESSONS_SENTENCE = "hippo's lessons cut repeat mistakes";
 export const BEHAVIOUR_SENTENCE = 'installing hippo changed behaviour, and this run cannot say its lessons did';
 export const NO_N_DATA = 'no set N data';
+export const H2_ABSENT = 'not in round 4: no Codex arm';
 export const A5_NOT_RUN = 'A5 not run';
 
 export const sum = (xs) => xs.reduce((s, x) => s + x, 0);
@@ -328,23 +330,32 @@ function ratesBySinceTeach(s, arms, opts) {
   }));
 }
 
-/** Estimates outside the family (190-199), each with a CI and no verdict; `records` are the raw ones, for rotation slots. */
+/** The block `design.reported` names: H3 is the cost ratio over sets R and N, any other name a both-codings repeat pair on first applies (a Codex pair on set X applies). */
+function reportedBlock(name, design, runs, rs, prices, opts) {
+  const pair = pairOf(design, name);
+  if (!runs(...pair)) return NOT_RUN;
+  if (name === 'H3') return ratioT(taskUnits(rs, ...pair, prices, inSets('R', 'N'), opts), 'cost', opts);
+  return bothCodings(rs, ...pair, opts, ARM_TABLE[pair[0]].tool === 'codex' ? codexApply : firstApplyR);
+}
+
+/** Estimates outside the family (190-199), each with a CI and no verdict; `records` are the raw ones, for rotation slots.
+ * It returns one block per `design.reported` name outside `design.tests`; the maintainer-only H2 needs a Codex arm, which round 4 has none of. */
 export function computeReported(records, filtered, prices, opts) {
   const s = filtered.scored;
   const runs = plannedArms(filtered);
   const design = opts.design ?? DESIGNS.r3;
-  const [h1, h2, h3Pair, a1vA0, a4vA1, x2vX1] = ['H1', 'H2', 'H3', 'A1vA0', 'A4vA1', 'X2vX1'].map((name) => pairOf(design, name));
+  const [h1, h3Pair] = ['H1', 'H3'].map((name) => pairOf(design, name));
+  const h2 = hasPair(design, 'H2') ? pairOf(design, 'H2') : null;
   const pair = (rs, arms, keep) => (runs(...arms) ? bothCodings(rs, ...arms, opts, keep) : NOT_RUN);
   const h3 = (rs, keep) => (runs(...h3Pair) ? ratioT(taskUnits(rs, ...h3Pair, prices, keep, opts), 'cost', opts) : NOT_RUN);
   const noUnion = withoutRuns(s, filtered.carryUnion);
+  const named = design.reported.filter((name) => !Object.hasOwn(design.tests, name));
   return {
-    A1vA0: pair(s, a1vA0, firstApplyR),
-    A4vA1: pair(s, a4vA1, firstApplyR),
-    X2vX1: pair(s, x2vX1, codexApply),
+    ...Object.fromEntries(named.map((name) => [name, reportedBlock(name, design, runs, s, prices, opts)])),
     perArm: perArm(s, filtered.arms, prices, opts),
     maintainerOnly: {
       H1: pair(s, h1, (r) => firstApplyR(r) && maintainer(r)),
-      H2: pair(s, h2, (r) => codexApply(r) && maintainer(r)),
+      H2: h2 === null ? H2_ABSENT : pair(s, h2, (r) => codexApply(r) && maintainer(r)),
       H3: h3(s, (r) => inSets('R', 'N')(r) && maintainer(r)),
     },
     allApplies: { H1: pair(s, h1, inSets('R')) },
@@ -360,4 +371,123 @@ export function computeReported(records, filtered, prices, opts) {
     rotation: slotTable(records, s, prices, opts),
     chain: chainRates(s),
   };
+}
+
+const RN = inSets('R', 'N');
+const laterApply = (r) => r.set === 'R' && r.applyIndex > 1;
+const repeatsAt = (rs, pair) => byCoding((c) => fixedRepositoryT(repeatMistakeUnits(rs, ...pair, c, firstApplyR).units, 0));
+const solvePart = (rs, pair) => fixedRepositoryT(partBValues(rs, pair, RN), 0);
+const sumOf = (cells, field) => sum(cells.map((c) => c[field]));
+
+/** Part (a), log R of cost per solved task with each arm at its own price row, and its bootstrap twin when `opts.iterations` is set. */
+function costPart(rs, pair, prices, opts) {
+  const cells = costCells(rs, pair, prices, RN, { design: opts.design });
+  const t = costSolvedT(cells);
+  return t.estimate === null ? t : { ...t, ...twin(opts, () => bootstrapRatio(cells, opts)) };
+}
+
+/** Round 4's estimates, each test over seeds 1 to its own count (`opts.windows`); a test the run did not reach has none.
+ * S1 is the S1-against-O1 read of T2's three parts, each at that part's window. */
+export function estimatesR4(filtered, prices, opts) {
+  const { design, windows } = opts;
+  const [s, setN, alone] = [filtered.scored, filtered.sets.includes('N'), pairOf(design, 'S1vO1')];
+  const at = (test, read) => (windows[test].reached ? read(s.filter((r) => r.seed <= windows[test].n), design.tests[test]) : null);
+  return {
+    T1: at('T1', repeatsAt),
+    T3: at('T3', repeatsAt),
+    T2a: at('T2a', (rs, pair) => costPart(rs, pair, prices, opts)),
+    T2b: at('T2b', solvePart),
+    T2c: at('T2c', repeatsAt),
+    H4: at('H4', (rs, pair) => harmGateOf(taskUnits(rs, ...pair, prices, RN, opts), setN, opts)),
+    s1: { a: at('T2a', (rs) => costPart(rs, alone, prices, opts)), b: at('T2b', (rs) => solvePart(rs, alone)), c: at('T2c', (rs) => repeatsAt(rs, alone)) },
+  };
+}
+
+/** R with the bootstrap interval beside it, or why there is none. */
+function ratioBlock(cells, opts) {
+  const t = costSolvedT(cells);
+  if (t.estimate === null) return { reason: t.reason };
+  const b = bootstrapRatio(cells, opts);
+  return { ratio: t.ratio, low: b.low, high: b.high };
+}
+
+/** The read-outs that carry no verdict: R with both arms at the Opus row (part (a)'s seeds), the S2-against-S1 R at each arm's own row (every seed),
+ * the pooled solve difference (part (b)'s seeds) and recorded spend per paired solve (part (a)'s seeds). `spend` is spend by arm. */
+export function readoutsR4(filtered, prices, opts, spend) {
+  const { design, windows } = opts;
+  const s = filtered.scored;
+  const [t2, h3, alone] = [pairOf(design, 'T2a'), pairOf(design, 'H3'), pairOf(design, 'S1vO1')];
+  const seeds = (test) => Math.min(windows[test].n, windows[test].k);
+  const upTo = (n) => s.filter((r) => r.seed <= n);
+  const opus = { design, rowModel: OPUS_MODEL };
+  const paired = (pair) => costCells(upTo(seeds('T2a')), pair, prices, RN, { design });
+  const per = (arm, solves) => (solves === 0 ? Number.NaN : spend[arm] / solves);
+  return {
+    seeds: { R: seeds('T2a'), pooled: seeds('T2b') },
+    R: ratioBlock(costCells(upTo(seeds('T2a')), t2, prices, RN, opus), opts),
+    own: ratioBlock(costCells(s, h3, prices, RN, { design }), opts),
+    pooled: pooledSolveDiff(s, pairOf(design, 'T2b'), RN, Array.from({ length: seeds('T2b') }, (_, i) => i + 1)),
+    spendPerSolve: { [t2[0]]: per(t2[0], sumOf(paired(t2), 'St')), [t2[1]]: per(t2[1], sumOf(paired(t2), 'Sc')), [alone[0]]: per(alone[0], sumOf(paired(alone), 'St')) },
+  };
+}
+
+const joinKey = (r) => JSON.stringify([r.sequence, r.seed, r.taskId]);
+
+/** The 95% interval of R from log R's t result, both ends back on the ratio scale. */
+function ratioInterval(t) {
+  if (t.estimate === null) return { reason: t.reason };
+  const half = studentTQuantile(0.975, Math.round(t.df * 1000) / 1000) * t.se;
+  return { ratio: t.ratio, low: Math.exp(t.estimate - half), high: Math.exp(t.estimate + half) };
+}
+
+/** The O1 drift (prereg 71): the round 3 arm and the round 4 one on the tasks both ran, raw records (no grading, drop list or voids).
+ * A round 3 record takes its partner's position, so `pairTasks` pairs them. No shared task reports `shared: 0`. */
+export function driftR4(records, planCells, drift, prices, opts) {
+  const { design } = opts;
+  const { arm, against } = design.drift;
+  const mine = filteredInput(records, planCells, { design, maxSeed: opts.maxSeed }, { dropAbandoned: true }).filtered.scored.filter((r) => r.arm === arm);
+  const theirs = filteredInput(drift.records, drift.planCells, { design: designByName(design.drift.design) }, { dropAbandoned: true }).filtered.scored.filter((r) => r.arm === against);
+  const position = new Map(mine.map((r) => [joinKey(r), r.position]));
+  const joined = theirs.filter((r) => position.has(joinKey(r))).map((r) => ({ ...r, position: position.get(joinKey(r)) }));
+  const keys = new Set(joined.map(joinKey));
+  const pool = [...mine.filter((r) => keys.has(joinKey(r))), ...joined];
+  const shared = pairTasks(pool, arm, against).length;
+  if (shared === 0) return { arm, shared };
+  const resolve = fixedRepositoryT(partBValues(pool, [arm, against], RN), 0);
+  const repeats = byCoding((c) => fixedRepositoryT(repeatMistakeUnits(pool, arm, against, c, firstApplyR).units, 0));
+  const cost = ratioInterval(costSolvedT(costCells(pool, [arm, against], prices, RN, { design, rowModel: OPUS_MODEL })));
+  return { arm, shared, resolve, repeats, cost, worse: resolve.high < 0 || CODINGS.some((c) => repeats[c].low > 0) };
+}
+
+const KINDS = {
+  teach: (r) => r.set === 'R' && r.kind === 'teach',
+  firstApply: firstApplyR,
+  laterApply,
+  setN: (r) => r.set === 'N',
+};
+
+const point = (e) => (e === NA ? NA : e.estimate);
+
+/** Prereg 124's publish list: each arm's repeat rate on first and later applies, cost per solved task, mean cost by task kind, and the
+ * taught-against-control repeat difference per family. The plan names no shape for these; the figures carry no interval. */
+export function publishR4(filtered, prices, opts) {
+  const { design } = opts;
+  const s = filtered.scored;
+  const cost = (r) => costOf(r, prices, { design });
+  const rate = (arm, keep) => byCoding((c) => point(armRate(s, arm, c, keep, {})));
+  const byKind = (mine) => Object.fromEntries(Object.entries(KINDS).map(([kind, keep]) => {
+    const costs = mine.filter(keep).map(cost);
+    return [kind, { mean: costs.length === 0 ? Number.NaN : mean(costs), n: costs.length }];
+  }));
+  const perArm = Object.fromEntries(design.arms.map((arm) => {
+    const mine = s.filter((r) => r.arm === arm);
+    return [arm, { first: rate(arm, firstApplyR), later: rate(arm, laterApply), costPerSolved: sum(mine.map(cost)) / sum(mine.map((r) => (r.resolved ? 1 : 0))), byKind: byKind(mine) }];
+  }));
+  const { taught, control } = design.g2.claudeCode;
+  const families = byCoding((c) => {
+    const by = new Map();
+    for (const u of repeatMistakeUnits(s, taught, control, c, firstApplyR).units) by.set(u.family, [...(by.get(u.family) ?? []), u.value]);
+    return Object.fromEntries([...by].sort(([a], [b]) => (a < b ? -1 : 1)).map(([family, values]) => [family, { mean: mean(values), units: values.length }]));
+  });
+  return { perArm, taught, control, families };
 }

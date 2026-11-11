@@ -39,7 +39,8 @@ describe('Z0 CLI and blind mode', () => {
     expect(first.code).toBe(0);
     for (const text of [first.stdout, out]) {
       expect(text).not.toMatch(ARM_NAME);
-      expect(text).not.toMatch(/resolveRate|costPerResolved|staleFollow|verdict|adjustedP|voidReasons/);
+      // The source rows hash the round 4 scoring module; its file name is no result.
+      expect(text.replaceAll('z0-verdict-r4.mjs', '')).not.toMatch(/resolveRate|costPerResolved|staleFollow|verdict|adjustedP|voidReasons/);
     }
     const report = JSON.parse(out);
     expect(report.voids).toEqual({ total: 2, reasons: { 'read-past-transcript': 1, 'received-hippo-text': 1 } });
