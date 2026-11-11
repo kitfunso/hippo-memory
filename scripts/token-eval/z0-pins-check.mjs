@@ -22,6 +22,8 @@ const USAGE = 'usage: z0-pins-check.mjs --pins FILE --checkout DIR [--roles FILE
 const FLAGS = new Map([['--pins', 'pins'], ['--write', 'write'], ['--checkout', 'checkout'], ['--manifest', 'manifest'], ['--manifest-check', 'manifestCheck'],
   ['--roles', 'rolesFile'], ['--poetry', 'poetry']]);
 const POETRY_VERSION = /^Poetry \(version ([^)\s]+)\)$/;
+const POETRY_TIMEOUT_MS = 30_000;
+const ROLE_LINE = /^[^=]+=.+$/;
 const MANIFEST_LINE = /^([0-9a-f]{64}) {2}(.+)$/;
 
 const fileHash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -31,8 +33,8 @@ class PinsStop extends Error {}
 
 const poetryExe = (dir) => path.join(dir, 'Scripts', 'poetry.exe');
 
-/** No shell, so the folder's own poetry.exe runs and nothing on PATH can stand in for it. */
-const defaultPoetryLine = (dir) => execFileSync(poetryExe(dir), ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+/** No shell, so the folder's own poetry.exe runs and nothing on PATH can stand in for it; the timeout stops a hung run from holding the check. */
+const defaultPoetryLine = (dir) => execFileSync(poetryExe(dir), ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: POETRY_TIMEOUT_MS });
 
 /** The version in the first line `poetry.exe --version` prints, or the `PINS:` line that says why there is none. */
 function readPoetry(dir, poetryLine) {
@@ -40,7 +42,8 @@ function readPoetry(dir, poetryLine) {
   try {
     first = String(poetryLine(dir)).split('\n')[0].trim();
   } catch (e) {
-    return { version: null, problem: `PINS: poetryVersion: ${poetryExe(dir)} did not run: ${e.message.split('\n')[0]}` };
+    const why = String(e.stderr ?? '').trim().split('\n')[0];
+    return { version: null, problem: `PINS: poetryVersion: ${poetryExe(dir)} did not run: ${e.message.split('\n')[0]}${why === '' ? '' : ` (stderr: ${why})`}` };
   }
   const m = POETRY_VERSION.exec(first);
   if (m === null) return { version: null, problem: `PINS: poetryVersion: ${dir} printed ${JSON.stringify(first)}, not "Poetry (version <v>)"` };
@@ -112,6 +115,7 @@ function parseArgs(argv) {
   const modes = [args.pins, args.write, args.manifest, args.manifestCheck].filter((m) => m !== null);
   if (modes.length !== 1) throw new Error(`give exactly one of --pins, --write, --manifest and --manifest-check\n${USAGE}`);
   if (args.manifest === null && args.manifestCheck === null && args.checkout === null) throw new Error(`--checkout is needed\n${USAGE}`);
+  if (args.manifestCheck !== null) checkManifestCheckAlone(args);
   if (args.write !== null) checkWriteSets(setPairs(args.set));
   return args;
 }
@@ -135,13 +139,30 @@ function checkWriteSets(pairs) {
   if (!EFFORTS.includes(effort[1])) throw new Error(`--set effort=${effort[1]}: effort is one of ${EFFORTS.join(', ')}`);
 }
 
+/** Why a --roles line is no role, or null; roleState's rule, applied here so the stop names the file and the line. */
+function lineProblem(line) {
+  if (line.includes('\r')) return 'holds a carriage return; the file takes LF line ends';
+  if (line === '') return 'is blank';
+  return ROLE_LINE.test(line.startsWith('tree:') ? line.slice(5) : line) ? null : 'is not [tree:]<role>=<path>';
+}
+
 /** The role arguments of a --roles file: one `[tree:]<role>=<path>` per LF line, read as if given on the command line. */
 function rolesFromFile(file, cwd) {
-  const lines = fs.readFileSync(path.resolve(cwd, file), 'utf8').split('\n');
+  const lines = fs.readFileSync(path.resolve(cwd, file), 'utf8').replace(/^﻿/, '').split('\n');
   if (lines.at(-1) === '') lines.pop();
-  const cr = lines.findIndex((l) => l.includes('\r'));
-  if (cr >= 0) throw new Error(`--roles ${file}: line ${cr + 1} holds a carriage return; the file takes LF line ends`);
+  const problems = lines.map(lineProblem);
+  const at = problems.findIndex((p) => p !== null);
+  if (at >= 0) throw new Error(`--roles ${file}: line ${at + 1} ${problems[at]}`);
   return lines;
+}
+
+/** --manifest-check reads one folder and its own manifest, so an input meant for the pins check beside it is a mistake to name, not to ignore. */
+function checkManifestCheckAlone(args) {
+  const beside = [
+    args.roles.length > 0 ? `role argument ${args.roles[0]}` : null, args.rolesFile !== null ? '--roles' : null, args.poetry !== null ? '--poetry' : null,
+    args.set.length > 0 ? '--set' : null, args.checkout !== null ? '--checkout' : null,
+  ].find((name) => name !== null);
+  if (beside !== undefined) throw new Error(`--manifest-check cannot be given with ${beside}; it checks one folder against its own manifest`);
 }
 
 function checkPins(args, cwd, states, poetry) {
@@ -194,6 +215,7 @@ export function runCli(argv, cwd = process.cwd(), deps = { poetryLine: defaultPo
     }
     if (args.manifestCheck !== null) {
       const dir = path.resolve(cwd, args.manifestCheck);
+      if (!fs.existsSync(dir)) throw new Error(`${dir} does not exist`);
       const problems = treeProblems(dir, dir);
       if (problems.length > 0) return { code: 3, stdout: '', stderr: `${problems.join('\n')}\n` };
       return { code: 0, stdout: `manifest ok: ${filesUnder(dir).length} files in ${dir}\n`, stderr: '' };

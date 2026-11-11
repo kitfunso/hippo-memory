@@ -8,9 +8,8 @@ const DIR = path.resolve(__dirname, '..', 'scripts', 'token-eval');
 // The four patterns of the plan's scanner (S/planA/scanner.sh): a quoted code, a first-letter test, a first-character index and a code as an object key.
 const PATTERNS = [/['"`](A|X|O|S)[0-9]['"`]/, /startsWith\(['"][A-Z]['"]\)/, /arm\[0\]/, /\b(A|X|O|S)[0-9]: /];
 
-/** `text` with each comment blanked and every line break kept, so code after a closed block comment is scanned and a hit keeps its line number.
- * TypeScript's parser tells the tokens apart, so a regex, string or template that holds '//' or '/*' is never read as a comment.
- * A source with a syntax error throws, since the parser's tree for it may hide a code from the scan. */
+/** `text` with each comment blanked and every line break kept, so a hit keeps its line number and code after a block comment is scanned.
+ * The parser tells tokens apart, so a regex or string that holds '//' is no comment; a source with a syntax error throws, as its tree may hide a code. */
 function withoutComments(text: string, file: string): string {
   const parsed = ts.transpileModule(text, { fileName: file, reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.Latest } });
   const first = parsed.diagnostics?.[0];

@@ -1,7 +1,8 @@
 // Round 4 prereg item 11: the pins check stops a launch or regrade on any pinned file, folder or hippo build that moved.
-import { execFileSync } from 'node:child_process';
+import childProcess from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -12,7 +13,7 @@ const put = (dir: string, rel: string, text: string) => {
   fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
   fs.writeFileSync(path.join(dir, rel), text);
 };
-const git = (dir: string, ...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const git = (dir: string, ...args: string[]) => childProcess.execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 type Pins = Record<string, string | undefined>;
 let work: string;
@@ -310,6 +311,27 @@ describe('--roles', () => {
     expect([missing.code, missing.stdout]).toEqual([1, '']);
     expect(missing.stderr).toMatch(/no-such-roles\.txt/);
   });
+
+  it('exits 1 naming the file and the line on a blank line inside the file, a second trailing newline and a line with no "="', () => {
+    const body = twenty();
+    const cases: [string, string, string][] = [
+      ['a blank line inside', `${[...body.slice(0, 4), '', ...body.slice(4)].join('\n')}\n`, '--roles pin-roles-bad.txt: line 5 is blank'],
+      ['a second trailing newline', `${body.join('\n')}\n\n`, '--roles pin-roles-bad.txt: line 21 is blank'],
+      ['a line with no "="', `${body.map((l, i) => (i === 6 ? 'pre-levels' : l)).join('\n')}\n`, '--roles pin-roles-bad.txt: line 7 is not [tree:]<role>=<path>'],
+      ['a line with no path', `${body.map((l, i) => (i === 1 ? 'tree:pilot-tasks=' : l)).join('\n')}\n`, '--roles pin-roles-bad.txt: line 2 is not [tree:]<role>=<path>'],
+    ];
+    for (const [what, text, message] of cases) {
+      put(work, 'pin-roles-bad.txt', text);
+      const r = byFile('pin-roles-bad.txt');
+      expect([r.code, r.stdout], what).toEqual([1, '']);
+      expect(r.stderr.split('\n')[0], what).toBe(message);
+    }
+  });
+
+  it('strips a leading UTF-8 BOM, so the first role reads as it would on the command line', () => {
+    put(work, 'pin-roles-bom.txt', `﻿${twenty().join('\n')}\n`);
+    expect(byFile('pin-roles-bom.txt')).toEqual(byArgs());
+  });
 });
 
 describe('--poetry', () => {
@@ -386,6 +408,30 @@ describe('--poetry', () => {
     expect(real.code).toBe(3);
     expect(lines(real)).toEqual([expect.stringContaining(`PINS: poetryVersion: ${exe} did not run: `)]);
   });
+
+  it('keeps the first line of the failed run\'s stderr in the PINS line, whether it is a string or a Buffer', () => {
+    const exe = path.join(poetryDir(), 'Scripts', 'poetry.exe');
+    for (const stderr of ['No module named poetry\nTraceback', Buffer.from('No module named poetry\nTraceback')]) {
+      const failing = { poetryLine: vi.fn((): string => { throw Object.assign(new Error('Command failed: poetry.exe --version\nNo module named poetry'), { stderr }); }) };
+      const r = checked(failing, '--poetry', 'poetry-dir');
+      expect([r.code, lines(r)]).toEqual([3, [`PINS: poetryVersion: ${exe} did not run: Command failed: poetry.exe --version (stderr: No module named poetry)`]]);
+    }
+  });
+
+  it('gives the real reader a 30 s timeout and reads a timeout as a failed run', () => {
+    const exe = path.join(poetryDir(), 'Scripts', 'poetry.exe');
+    // The ESM namespace of a builtin is not configurable, so the spy sits on the CJS object and the sync copies it over.
+    const spawned = vi.spyOn(childProcess, 'execFileSync').mockImplementationOnce(() => { throw Object.assign(new Error(`spawnSync ${exe} ETIMEDOUT`), { code: 'ETIMEDOUT' }); });
+    syncBuiltinESMExports();
+    try {
+      const r = checked(undefined, '--poetry', 'poetry-dir');
+      expect([r.code, lines(r)]).toEqual([3, [`PINS: poetryVersion: ${exe} did not run: spawnSync ${exe} ETIMEDOUT`]]);
+      expect(spawned).toHaveBeenNthCalledWith(1, exe, ['--version'], expect.objectContaining({ timeout: 30_000 }));
+    } finally {
+      spawned.mockRestore();
+      syncBuiltinESMExports();
+    }
+  });
 });
 
 describe('--manifest-check', () => {
@@ -420,6 +466,25 @@ describe('--manifest-check', () => {
     fs.symlinkSync(path.join(work, 'outside'), link, 'junction');
     const r = runCli(['--manifest-check', 'tasks'], work);
     expect([r.code, lines(r)]).toEqual([3, [`PINS: ${link} is a link; a pinned folder holds files only`]]);
+  });
+
+  it('exits 1 with one line naming the input, beside a role argument, --roles, --poetry, --set or --checkout, and leaves --manifest as it was', () => {
+    const beside: [string[], string][] = [
+      [['seam=seam.sh'], 'role argument seam=seam.sh'], [['--roles', 'pin-roles.txt'], '--roles'], [['--poetry', 'poetry-dir'], '--poetry'],
+      [['--set', 'effort=medium'], '--set'], [['--checkout', checkout], '--checkout'],
+    ];
+    for (const [extra, name] of beside) {
+      const r = runCli(['--manifest-check', 'tasks', ...extra], work);
+      expect([r.code, r.stdout, lines(r)], name).toEqual([1, '', [`--manifest-check cannot be given with ${name}; it checks one folder against its own manifest`]]);
+    }
+    expect(runCli(['--manifest', 'tasks', '--checkout', checkout], work).code).toBe(0);
+  });
+
+  it('exits 1 on a folder that does not exist, saying so, from both cwds', () => {
+    for (const [dir, cwd] of [['nowhere', work], [path.join(work, 'nowhere'), elsewhere()]] as const) {
+      const r = runCli(['--manifest-check', dir], cwd);
+      expect([r.code, r.stdout, r.stderr]).toEqual([1, '', `${path.join(work, 'nowhere')} does not exist\n`]);
+    }
   });
 
   it('is one of four modes: it exits 1 beside another mode and names all four', () => {
