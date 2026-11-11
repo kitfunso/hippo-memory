@@ -297,3 +297,17 @@ These notes fix revision 1 item 4 for four benchmarks. The loader commit is the 
 - Top-k 15, Cognee's own Modal run (`modal_apps/modal_qa_benchmark_cognee.py` line 74).
 - Primary: F1, `cognee/eval_framework/evaluation/metrics/f1.py` lines 27 to 59, copied verbatim, no model call, mean per question. Cognee's README reports EM, F1, DeepEval correctness and human-like correctness and names no primary. F1 is chosen as the one deterministic score that gives part credit. Comparison `hippo365` minus `bm25`, paired. Unit: the question, the only unit available with one shared store.
 - Secondary: exact match (`exact_match.py` lines 10 to 12), and Cognee's DirectLLM correctness prompt (`direct_llm_eval_system.txt` lines 1 to 10, `direct_llm_eval_prompt.txt` lines 1 to 3) judged by gpt-5.6-sol, with a score of 0.5 or more counted correct. DeepEval needs a paid key and does not run.
+
+### Amendment 6, dated notes 2 (2026-11-11, before the first full LongMemEval-S answer)
+
+This note fixes revision 1 item 4 for LongMemEval-S. The code commit is the commit that adds this note. The rules common to dated notes 1 (manifest, asks, smoke exclusion, reading) apply unchanged.
+
+**LongMemEval-S** (`benchmarks/public/runner/answer_judge.py` and `runner/score.py`, calling Mem0's runner `mem0ai/memory-benchmarks` at `4b61c5d`).
+- Status: a replication on examined items (revision 1 item 8). Amendment 2 and Lane A answers on these questions were seen before, and so was the v3 retrieval overlap logged in `results-r2/exposure-ledger.md`.
+- Data: `datasets/longmemeval/longmemeval_s_cleaned.json`, SHA-256 `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`, 500 questions. Items: all 500 `question_id` values.
+- Smoke items, excluded: `6ade9755`, `6c49646a`, `e48988bc`, `ef66a6e5`, `f685340e`. The runner lane's answer and judge smoke used them. The primary has 495 questions.
+- Retrieval: `hippo365` and `bm25` read only `~/hippo-bench/retrieval-v3-lme/`. It was retrieved with hippo-memory 3.5.1 on 11 Nov at top 200, one store per question. Its `MANIFEST-lme.sha256` (SHA-256 `88c0d322789bb4682761bc5135b83575e6a871e101d99656c4f8f34ee4154cee`) lists every file. `answer_judge.py` pins each file's hash on first use and stops if one changes.
+- Prompts: the runner's `benchmarks/longmemeval/prompts.py`: answer `get_answer_generation_prompt` (line 210, template at line 37), judge `get_judge_prompt` (line 345, template at line 265). They are applied by the runner's own `apply_longmemeval_answerer_judge_to_saved_result` (`run.py` line 728), whose yes/no judge is at lines 769 to 777. No prompt code is changed. The runner calls its own functions with in-process adapters in place of the OpenAI-compatible proxy that Amendment 6 names. The models, prompts and logging are the same, and each answer and verdict binds to its logged reply.
+- Cutoffs: 200 (primary) and 10 (secondary) memories shown.
+- Judge: gpt-5.6-sol medium through codex. The JSON-only preamble is replaced at run time by a plain one, because this judge answers yes or no. LongMemEval's own GPT-4o judge does not run, so no number here is comparable with published LongMemEval scores.
+- Primary: judge accuracy at top 200, one 0 or 1 per question with equal weight, parsed by the runner's `judge_yes_no`. A judge item with no valid reply in 3 asks scores "no", which means wrong. Comparison: `hippo365` minus `bm25`, paired. Unit: the question, since each question owns its haystack's store, so `cluster_boot` equals `boot`. Per question type and top 10 are secondary.

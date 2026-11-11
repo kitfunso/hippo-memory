@@ -4,5 +4,6 @@
   "personamem_v1": ["273ed74c-6547-40f1-9e82-459826e00b6b", "2c85c2a6-07ec-4ab1-92cc-06dc775f4fe8",
                     "67bec3f4-df73-4dbe-9dc2-74be96ebc51c", "8659e747-044a-47fa-a410-f5be842f4f7c",
                     "acd74206-37dc-4756-94a8-b99a395d9a21"],
-  "hotpotqa24": ["hotpot24-00", "hotpot24-04", "hotpot24-08", "hotpot24-12", "hotpot24-16"]
+  "hotpotqa24": ["hotpot24-00", "hotpot24-04", "hotpot24-08", "hotpot24-12", "hotpot24-16"],
+  "longmemeval-s": ["6ade9755", "6c49646a", "e48988bc", "ef66a6e5", "f685340e"]
 }
