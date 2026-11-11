@@ -50,8 +50,10 @@ def test_cluster_boot_resamples_whole_units():
     assert d == pytest.approx(2 / 6) and lo >= -1 and hi <= 1  # weighted by item, not by unit
 
 
-def test_smoke_file_holds_exactly_the_ids_of_dated_notes_1():
+def test_smoke_file_holds_exactly_the_ids_the_prereg_registers():
     doc = (PUBLIC.parents[1] / "docs" / "evals" / "2026-09-24-public-benchmarks-prereg.md").read_text(encoding="utf-8")
-    listed = [re.findall(r"`([^`]+)`", line) for line in doc.splitlines() if "Smoke items, excluded" in line]
+    # the list is the first sentence after the label: "none. The M smokes (`id`...)" registers no exclusion
+    lists = [re.findall(r"`([^`]+)`", line.split("Smoke items, excluded:", 1)[1].split(". ", 1)[0])
+             for line in doc.splitlines() if "Smoke items, excluded:" in line]
     table = json.loads((PUBLIC / "smoke_excluded.json").read_text(encoding="utf-8"))
-    assert listed == [table["locomo"], table["dmr"], table["personamem_v1"], table["hotpotqa24"]]
+    assert sorted(tuple(ids) for ids in lists if ids) == sorted(tuple(ids) for ids in table.values() if ids)
