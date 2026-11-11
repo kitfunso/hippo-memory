@@ -20,7 +20,7 @@ export const GATE_MARGIN = 1.25;
 const GAP_SEQUENCE = 'q145';
 const R4_ARMS = DESIGNS.r4.arms;
 const RULE_ARMS = R4_ARMS.filter((a) => ARM_TABLE[a].seedRule);
-const BASE_SEEDS = ARM_TABLE[RULE_ARMS[0]].seeds;
+export const BASE_SEEDS = ARM_TABLE[RULE_ARMS[0]].seeds;
 const AT_R = 2;
 // The pilot's r at which prereg item 12 names the arm to the founder.
 export const R_FLAG = 1.9;
@@ -129,9 +129,16 @@ export function readBasis(file) {
   return basis;
 }
 
-function readPilot(file) {
+/** The six checks z0-pilot writes; an admit reads a pilot only when every one passed. */
+export const PILOT_CHECKS = Object.freeze(['off-pin', 'effort', 'venv', 'env-keys', 'cost-usd', 'r']);
+
+// A failed pilot (rMax null, or any check not passed) still prints in report; every admit refuses it.
+function readPilot(file, { needR = true } = {}) {
   const pilot = readSchema(file, 'pilot', PILOT_SCHEMA);
+  if (!needR) return pilot;
   if (!Number.isFinite(pilot.rMax) || pilot.rMax <= 0) throw new Error(`pilot ${file}: rMax must be a number above 0`);
+  const failed = PILOT_CHECKS.filter((id) => pilot.checks?.[id] !== 'pass');
+  if (failed.length > 0) throw new Error(`pilot ${file}: checks not passed: ${failed.join(', ')}`);
   return pilot;
 }
 
@@ -466,7 +473,7 @@ function report(args, cwd) {
   const stopped = optional(args, '--stopped');
   if (stopped !== null) lines.push(`stopped: ${stopped} at step ${need(args, '--step')}`);
   const pilotFile = optional(args, '--pilot');
-  const pilot = pilotFile !== null && fs.existsSync(path.resolve(cwd, pilotFile)) ? readPilot(path.resolve(cwd, pilotFile)) : null;
+  const pilot = pilotFile !== null && fs.existsSync(path.resolve(cwd, pilotFile)) ? readPilot(path.resolve(cwd, pilotFile), { needR: false }) : null;
   if (pilot === null) lines.push('pilot: none');
   else lines.push(`pilot: $${money(pilot.pilotSpend)} against $${PILOT_BUDGET}`, ...Object.entries(pilot.r).map(([arm, r]) => `r ${arm}: ${r}`));
   lines.push(`effort: ${readPins(filePath(args, '--pins', cwd)).effort}`);
