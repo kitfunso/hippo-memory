@@ -136,16 +136,12 @@ describe.skipIf(!win)('stop-tree.ps1', () => {
 });
 
 describe.skipIf(!win)('stop-tree.ps1 over a listed process table', () => {
-  // Each table replaces one live read in turn (Z0_STOP_TREE_LISTED, then Z0_STOP_TREE_LISTED2 and on), and the last one repeats; the script runs its real rounds but opens no handle and kills nothing.
+  // Z0_STOP_TREE_LISTED holds one table per round, the last one repeating; a row's HandleStart is what a handle opened right after that read would report (absent: its CreationDate; null: gone). The script runs its real rounds but opens no handle and kills nothing.
   const mark = 'C:/z0-listed-mark';
   const at = (s: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, s)).toISOString();
   const row = (id: number, parent: number, s: number, line = 'node x.js') => ({ ProcessId: id, ParentProcessId: parent, CreationDate: at(s), CommandLine: line });
   const root = row(101, 4, 10, `node ${mark}/run.js`);
-  const listedRun = (tables: object[][], flags = ['-Mark', mark]) => {
-    const env: NodeJS.ProcessEnv = { ...process.env };
-    tables.forEach((t, i) => { env[i === 0 ? 'Z0_STOP_TREE_LISTED' : `Z0_STOP_TREE_LISTED${i + 1}`] = JSON.stringify(t); });
-    return stopTree(101, flags, env);
-  };
+  const listedRun = (rounds: object[][], flags = ['-Mark', mark]) => stopTree(101, flags, { ...process.env, Z0_STOP_TREE_LISTED: JSON.stringify(rounds) });
 
   it('takes a child only if it started at or after its parent, and nothing under a child it refused, oldest first with pid breaking ties', () => {
     const r = listedRun([[root, row(102, 101, 20), row(103, 101, 5), row(104, 103, 30), row(105, 101, 10), row(106, 102, 25), row(107, 101, 15)]]);
@@ -160,21 +156,30 @@ describe.skipIf(!win)('stop-tree.ps1 over a listed process table', () => {
     }
   });
 
-  it('says left, and exits 1, for a process the second read no longer puts under the root', () => {
-    const r = listedRun([[root, row(102, 101, 20), row(103, 101, 30)], [root, row(102, 4, 20), row(103, 101, 30)]]);
-    expect([r.code, r.lines], r.stderr).toEqual([1, ['listed 101', 'left 102 not under the root at the second read', 'listed 103', 'end']]);
-  });
-
-  // Reads alternate per round: one finds new descendants, the next confirms them, and a read after the kills starts the next round.
-  it('holds and lists a child that appears only in the second read, in a second round', () => {
+  it('holds and lists a child that appears in a later round', () => {
     const r = listedRun([[root, row(102, 101, 20)], [root, row(102, 101, 20), row(103, 101, 30)]]);
     expect([r.code, r.lines], r.stderr).toEqual([4, ['listed 101', 'listed 102', 'listed 103', 'end']]);
   });
 
+  // The handle names the process: a start that differs from the row means the pid changed hands, so the row's children are not walked from it.
+  it('says gone for a nominee whose handle start differs from its row, or whose handle finds it gone, and walks nothing from it', () => {
+    const r = listedRun([[root, { ...row(102, 101, 20), HandleStart: at(40) }, { ...row(103, 101, 25), HandleStart: null }], [row(104, 102, 30), row(105, 103, 35)]]);
+    expect([r.code, r.lines], r.stderr).toEqual([4, ['gone 102', 'gone 103', 'listed 101', 'end']]);
+  });
+
+  it('lists a grandchild whose parent was held and killed, and is gone from the next read', () => {
+    const r = listedRun([[root, row(102, 101, 20)], [row(104, 102, 30)]]);
+    expect([r.code, r.lines], r.stderr).toEqual([4, ['listed 101', 'listed 102', 'listed 104', 'end']]);
+  });
+
+  it('walks from every held pid, so a grandchild is found under a parent the next read no longer lists', () => {
+    const r = listedRun([[root, row(102, 101, 20)], [root, row(104, 102, 30)]]);
+    expect([r.code, r.lines], r.stderr).toEqual([4, ['listed 101', 'listed 102', 'listed 104', 'end']]);
+  });
+
   it('fails (exit 1) when a sixth round still finds a new child', () => {
     const chain = (n: number) => [root, ...Array.from({ length: n }, (_, i) => row(201 + i, i === 0 ? 101 : 200 + i, 20 + i))];
-    const tables = [1, 2, 3, 4, 5].flatMap((n) => [chain(n), chain(n)]);
-    const r = listedRun([...tables, chain(6)]);
+    const r = listedRun([1, 2, 3, 4, 5, 6].map(chain));
     expect([r.code, r.lines], r.stderr).toEqual([1, ['listed 101', 'listed 201', 'listed 202', 'listed 203', 'listed 204', 'listed 205', 'failed 206 still spawning after 5 rounds', 'end']]);
   });
 

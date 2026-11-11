@@ -39,7 +39,7 @@ async function killTree(child) {
     const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', STOP_TREE, '-RootPid', String(child.pid), '-StartedBy', startedBy];
     execFile('powershell', args, { windowsHide: true, timeout: 120_000 }, (err, out, stderr) => {
       const lines = String(out).split(/\r?\n/).filter((l) => l && l !== 'end');
-      const why = lines.filter((l) => /^(failed|left|error) /.test(l)).join('; ') || lines.at(-1) || String(stderr).trim() || err?.message;
+      const why = lines.filter((l) => /^(failed|error) /.test(l)).join('; ') || lines.at(-1) || String(stderr).trim() || err?.message;
       resolve(err ? `\n[stop-tree: ${why}]` : '');
     });
   });
