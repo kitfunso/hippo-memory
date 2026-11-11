@@ -67,12 +67,19 @@ function wrapper(k: Knobs, { cutFirst = false } = {}) {
     "process.stdout.write(r.stdout ?? '');",
     "process.stderr.write(r.stderr ?? '');",
     'if (first && r.status === 0) {',
-    "  const attach = (a) => JSON.stringify({ type: 'attachment', attachment: a });",
+    "  const attach = (a, uuid) => JSON.stringify({ type: 'attachment', uuid, attachment: a });",
     '  const lines = [];',
     "  if (input.includes('CANCEL_EVENT')) lines.push(attach({ type: 'hook_cancelled', hookEvent: 'UserPromptSubmit' }));",
     "  if (input.includes('CANCEL_NAME')) lines.push(attach({ type: 'hook_cancelled', hookName: 'PreToolUse:Bash' }));",
     "  if (input.includes('CANCEL_BARE')) lines.push(attach({ type: 'hook_cancelled' }));",
     "  if (input.includes('CANCEL_JUNK')) lines.push('not json at all', attach({ type: 'hook_success', hookEvent: 'UserPromptSubmit' }));",
+    "  if (input.includes('CANCEL_DUP')) {",
+    "    const sub = path.join(main.replace(/\\.jsonl$/, ''), 'subagents', 'agent-dup.jsonl');",
+    '    fs.mkdirSync(path.dirname(sub), { recursive: true });',
+    "    const again = attach({ type: 'hook_cancelled', hookEvent: 'UserPromptSubmit' }, 'u1');",
+    "    lines.push(again, attach({ type: 'hook_cancelled', hookEvent: 'UserPromptSubmit' }, 'u2'));",
+    "    fs.writeFileSync(sub, `${again}\\n${attach({ type: 'hook_cancelled', hookName: 'PreToolUse:Bash' }, 'u3')}\\n`);",
+    '  }',
     "  if (lines.length) fs.appendFileSync(main, `\\n${lines.join('\\n')}`);",
     '}',
     'process.exit(r.status ?? 1);',
@@ -215,6 +222,15 @@ describe('hookCancels on session records under round 4', () => {
     expect(res.code, res.stderr).toBe(0);
     expect(JSON.parse(readFileSync(list, 'utf8')).hookVoids).toEqual([{ sequence: 'seqF', seed: 1, position: 3 }]);
   }, 300_000);
+
+  it('counts an entry once when two transcript files of the session repeat it, by its uuid', async () => {
+    const { out } = isolate('r4-hookcancels-dup');
+    const r = makeRepo();
+    // u1 is in the main file and the subagent file, u2 only in the main file, u3 only in the subagent file.
+    await r4run(spec(r, [], [task(r, 'p1', 'CANCEL_DUP'), plain(r, 'p2')]), ['S1'], out, wrapper(knobs()));
+    const p1 = wire(out).find((x) => x.taskId === 'p1')!;
+    expect(p1.hookCancels).toEqual({ UserPromptSubmit: 2, 'PreToolUse:Bash': 1 });
+  }, 120_000);
 
   it('is {} when a session has no session id to read, and a setup failure writes no session fields', async () => {
     const { out } = isolate('r4-hookcancels-none');

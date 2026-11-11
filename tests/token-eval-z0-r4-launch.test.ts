@@ -154,6 +154,11 @@ beforeAll(() => {
   cpSync(join(REPO, 'package.json'), join(checkout, 'package.json'));
   writeFileSync(join(checkout, '.gitignore'), 'dist/\n');
   writeFileSync(join(checkout, 'scripts', 'token-eval', 'z0-regrade.mjs'), `${STUB_REGRADE}\n`);
+  // The checkout's runner logs its own cwd outside the checkout, which must stay clean; the probe sits under its shebang line.
+  const runner = join(checkout, 'scripts', 'token-eval', 'ab-run.mjs');
+  const [shebang, ...body] = readFileSync(runner, 'utf8').split('\n');
+  const probe = `import { appendFileSync as logCwd } from 'node:fs'; logCwd(${JSON.stringify(`${base}/runner-cwd.log`)}, process.cwd() + String.fromCharCode(10));`;
+  writeFileSync(runner, [shebang, probe, ...body].join('\n'));
   const git = (...args: string[]) => execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8' });
   git('init', '-q');
   git('config', 'user.email', 't@example.com');
@@ -287,6 +292,28 @@ describe.skipIf(!(HAVE_PS && HAVE_BOX))('the launchers: needs win32, PowerShell 
     expect(run(args({ folder: `${d}/smoke/w8`, more: ['-Attempt', '8', '-DryRun'] })).code).toBe(1);
   }, 360_000);
 
+  it('refuses a toolchain s3x-env.ps1 does not know before the box check, and an -Attempt below 1 or a -Retry above 3, each as one stdout line with exit 1', () => {
+    const d = world.dry.dir;
+    const toolchain = run(args({ toolchain: 'pythn', more: ['-DryRun'] }));
+    expect(toolchain.code).toBe(1);
+    expect(toolchain.lines).toHaveLength(1);
+    expect(toolchain.lines[0]).toContain('-Toolchain pythn');
+    for (const known of ['npm', 'gradle-android', 'rust-ucrt', 'python']) expect(toolchain.lines[0], known).toContain(known);
+    // A launch that would fail the box check says only the toolchain: the check never ran.
+    const beforeBox = run(args({ toolchain: 'pythn', box: false, more: ['-BoxCheck', world.stubBox.bad] }));
+    expect(beforeBox.code).toBe(1);
+    expect(beforeBox.lines).toEqual(toolchain.lines);
+    const retry = run(args({ batch: 'pilot', folder: `${d}/pilot/${KEYS.npm}-p1-a4`, more: ['-Retry', '4', '-DryRun'] }));
+    expect(retry.code).toBe(1);
+    expect(retry.lines).toHaveLength(1);
+    expect(retry.lines[0]).toContain('-Retry 4 must be 2 or 3');
+    const attempt = run(args({ folder: `${d}/smoke/w0`, more: ['-Attempt', '0', '-DryRun'] }));
+    expect(attempt.code).toBe(1);
+    expect(attempt.lines).toHaveLength(1);
+    expect(attempt.lines[0]).toContain('-Attempt 0 must be 1 or more');
+    expect(untouched(`${d}/smoke/w1`) && untouched(`${d}/smoke/w0`)).toBe(true);
+  }, 240_000);
+
   it('a DRYRUN root needs -FakeAgent, and a real-shaped root refuses -FakeAgent and -BoxCheck, each with exit 1 and nothing started', () => {
     const noFake = run(args({ fake: false, more: ['-DryRun'] }));
     expect(noFake.code).toBe(1);
@@ -358,6 +385,9 @@ describe.skipIf(!(HAVE_PS && HAVE_BOX))('the launchers: needs win32, PowerShell 
     expect(readFileSync(`${folder}/run.log`, 'utf8').split(/\r?\n/).some((l) => l.startsWith('Records:'))).toBe(true);
     expect(readFileSync(`${world.dry.dir}/smoke/pids.txt`, 'utf8').endsWith('\n')).toBe(true);
     expect(readFileSync(`${world.dry.dir}/smoke/pids.txt`, 'utf8')).not.toContain('\r');
+    // The runner starts in the batch folder, never in the cwd of the batch that launched it.
+    const cwds = readFileSync(`${world.base}/runner-cwd.log`, 'utf8').split(/\r?\n/).filter(Boolean).map((l) => slash(l).toLowerCase());
+    expect(cwds).toContain(folder.toLowerCase());
   }, 300_000);
 
   it('a runner that fails by warmupFail exits 1, writes run/ABANDONED and exit.txt 1, and prints no Records: line', () => {

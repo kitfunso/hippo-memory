@@ -32,7 +32,13 @@ export const venvPaths = (dirs, position) => ({ venv: path.join(dirs.venv, Strin
 
 /** A fresh venv for one task, made by the python `env` puts first; both folders are cleared first, so nothing of an earlier try is left. */
 export function createVenv(venv, env, cwd) {
-  for (const dir of [venv, `${venv}-boot`]) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  for (const dir of [venv, `${venv}-boot`]) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+    } catch (err) {
+      throw new Error(`could not clear ${dir} before the task venv: ${err.message}`, { cause: err });
+    }
+  }
   fs.mkdirSync(path.dirname(venv), { recursive: true });
   return sh(`python -m venv "${venv}"`, cwd, env);
 }

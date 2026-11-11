@@ -19,6 +19,8 @@ $POETRY = 'C:/z0-runs/r4/poetry-2.5.1'
 $CLAUDE = 'C:/z0-runs/scored/bin/claude.exe'
 $GITBASH = 'C:/Program Files/Git/bin/bash.exe'
 $DEFAULT_BOX = 'C:/z0-runs/s7/box-check.sh'
+# The names Get-S3xTool in C:/eval-authors/s3x-env.ps1 knows; any other throws there, after the box and pins checks.
+$TOOLCHAINS = @('npm', 'pnpm', 'gradle', 'gradle17', 'gradle-android', 'maven', 'julia', 'ruby', 'rust', 'rust-ucrt', 'elixir', 'go', 'dotnet', 'python')
 
 function Stop-Launch([string]$Message, [int]$Code = 1) { Write-Output $Message; exit $Code }
 function Quote-Arg([string]$Value) { if ($Value -match '[\s"]') { '"' + ($Value -replace '"', '\"') + '"' } else { $Value } }
@@ -53,7 +55,9 @@ if ($dryRoot -and $TokenSchedule) { Stop-Launch "-TokenSchedule is for a real ro
 $batchOnly = @('1', '2', 'raise')
 if ($OnlySeed -and $batchOnly -notcontains $Batch) { Stop-Launch "-OnlySeed goes with batch 1, 2 or raise, not $Batch" }
 if ($OnlySeed -and $OnlySeed -notmatch '^[1-9][0-9]*$') { Stop-Launch "-OnlySeed must be a positive whole number, got $OnlySeed" }
-if ($bound.ContainsKey('Retry') -and $Retry -lt 2) { Stop-Launch "-Retry $Retry is not a retry; the first launch of a folder has no -a suffix, so -Retry starts at 2" }
+if ($TOOLCHAINS -notcontains $Toolchain) { Stop-Launch "-Toolchain $Toolchain is not one s3x-env.ps1 knows: $($TOOLCHAINS -join ', ')" }
+if ($Attempt -lt 1) { Stop-Launch "-Attempt $Attempt must be 1 or more" }
+if ($bound.ContainsKey('Retry') -and ($Retry -lt 2 -or $Retry -gt 3)) { Stop-Launch "-Retry $Retry must be 2 or 3; the first launch of a folder has no -a suffix, so a retry starts at 2" }
 if ($Batch -eq 'effort' -and $Effort -eq 'medium') { Stop-Launch 'the effort batch runs low or high; pass -Effort low or -Effort high' }
 
 # The folder is a function of the batch, so two launches never share one and a retry is named by its number.
@@ -146,7 +150,7 @@ if ($PlanOnly) {
 New-Item -ItemType Directory -Force $Folder | Out-Null
 $env:CLAUDE_CODE_OAUTH_TOKEN = $token
 $argText = @($a | ForEach-Object { Quote-Arg $_ })
-$p = Start-Process -FilePath $node -ArgumentList $argText -RedirectStandardOutput "$Folder/run.log" -RedirectStandardError "$Folder/run.err" -WindowStyle Hidden -PassThru
+$p = Start-Process -FilePath $node -ArgumentList $argText -RedirectStandardOutput "$Folder/run.log" -RedirectStandardError "$Folder/run.err" -WorkingDirectory $Folder -WindowStyle Hidden -PassThru
 Remove-Item Env:CLAUDE_CODE_OAUTH_TOKEN
 # Read now, since PowerShell 5.1 loses the exit code of a process whose handle it never took.
 $handle = $p.Handle

@@ -1,11 +1,11 @@
 // Round 4 slice 2b, the task venv: the task env, the --venv command line, and (where the box has Python 3.12 and uv 0.10.9) one real venv per task through runAll, the cleanup and the regrade.
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
-import { basename, delimiter, join, resolve } from 'node:path';
+import { basename, delimiter, dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import * as abRun from '../scripts/token-eval/ab-run.mjs';
 import { ARM_TABLE, DESIGNS, ENV_ALLOWLIST, SONNET_MODEL, TASK_KEYS, allowlistOf, armEnv, taskEnv, warmupEnv } from '../scripts/token-eval/arms.mjs';
-import { runDirs } from '../scripts/token-eval/homes.mjs';
+import { createVenv, runDirs } from '../scripts/token-eval/homes.mjs';
 import { openContext, startRun } from '../scripts/token-eval/runs.mjs';
 import { runTask } from '../scripts/token-eval/task.mjs';
 import { driverOf } from '../scripts/token-eval/codex-task.mjs';
@@ -238,6 +238,20 @@ describe('z0-regrade takes --poetry and --pip-constraint together', () => {
 
   it('is a regrade flag only', () => {
     expect(() => regradeArgs(['reader', '--out', 'o', '--poetry', 'p'])).toThrow(/unknown flag --poetry/);
+  });
+
+  it('refuses an empty value, as the runner does, naming the flag', () => {
+    for (const more of [['--poetry', '', '--pip-constraint', 'c.txt'], ['--poetry', 'p', '--pip-constraint', '']]) {
+      expect(() => regradeArgs([...base, ...more]), more.join(' ')).toThrow(new RegExp(`regrade: ${more[more.indexOf('') - 1]} needs a value`));
+    }
+  });
+});
+
+describe('createVenv', () => {
+  // A path rmSync rejects stands for a folder it cannot clear: either way the throw must name the venv.
+  it('names the venv folder when it cannot clear it, and still throws', () => {
+    const venv = join(tmp('r4-venv-clear-'), 'venv', 'bad\0name');
+    expect(() => createVenv(venv, process.env, dirname(venv))).toThrow(`could not clear ${venv}`);
   });
 });
 
@@ -495,6 +509,20 @@ describe.skipIf(!REAL)('Venv row: real Python 3.12 and uv 0.10.9 (skipped here w
     expect([two.import_z0venvprobe, two.import_z0venvlate]).toEqual(['fail', 'fail']);
   }, 240_000);
 
+  it('probes the task\'s own interpreter: a python.cmd and a module in the work tree stand in for neither the venv\'s python nor its imports', async () => {
+    const { out } = isolate('r4-venv-shadow');
+    const tools = toolbox(UV);
+    const r = makeRepo({ 'python.cmd': '@echo FAKE-PYTHON-FROM-THE-WORK-TREE\r\n', 'z0shadow.py': 'X = 1\n' });
+    const { spec } = build(tools, r, [withImports(task(r, 's1', LEAD, { setup: tools.cmd('setup:s1') }), ['z0shadow']), task(r, 's2', LEAD)], []);
+    await r4run(spec, ['S1'], out, tools.agent(knobs()), { venv: venvOpts() });
+    const text = readFileSync(rawOf(out, 's1', '.venv.txt'), 'utf8');
+    const line = (key: string) => text.split('\n').find((l) => l.startsWith(`${key}=`))?.slice(key.length + 1);
+    expect(norm(line('prefix') ?? ''), text).toBe(norm(venvAt(out, 0)));
+    expect(line('import_z0shadow'), text).toBe('fail');
+    expect(line('packages')?.split(',')).toContain('pip');
+    expect(line('packages_end')?.split(',')).toContain('pip');
+  }, 240_000);
+
   it('a setup retry and a usage-limit reset each start from an empty venv, and the venv file is rewritten after the reset', async () => {
     const { out } = isolate('r4-venv-empty');
     const tools = toolbox(UV);
@@ -512,7 +540,10 @@ describe.skipIf(!REAL)('Venv row: real Python 3.12 and uv 0.10.9 (skipped here w
     const records = readRecords(out);
     expect(records.map((x) => [x.taskId, x.invalid, x.limitRetries])).toEqual([['r1', null, 0], ['r2', null, 1]]);
     // The reset's own setup installed the wheel, so only a rewrite after the reset shows it.
-    expect(readFileSync(rawOf(out, 'r2', '.venv.txt'), 'utf8')).toContain('import_z0venvprobe=ok');
+    const rewritten = readFileSync(rawOf(out, 'r2', '.venv.txt'), 'utf8');
+    expect(rewritten).toContain('import_z0venvprobe=ok');
+    // A file the reset appended to instead of rewriting would carry the first try's lines too.
+    expect(rewritten.split('\n').filter((l) => l.startsWith('prefix=') || l.startsWith('packages='))).toHaveLength(2);
     expect(existsSync(rawOf(out, 'r1', '.setup-try1.txt'))).toBe(true);
   }, 240_000);
 

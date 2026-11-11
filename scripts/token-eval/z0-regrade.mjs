@@ -47,6 +47,7 @@ export function parseArgs(argv) {
     else args[camel(f)] = v;
   }
   for (const f of spec.required) if (args[camel(f)] === undefined) throw new Error(`${mode} needs ${f}\n${USAGE}`);
+  for (const f of ['--poetry', '--pip-constraint']) if (args[camel(f)] === '') throw new Error(`${mode}: ${f} needs a value`);
   if ((args.poetry === undefined) !== (args.pipConstraint === undefined)) throw new Error(`${mode}: --poetry and --pip-constraint go together; pass both or neither`);
   return args;
 }
