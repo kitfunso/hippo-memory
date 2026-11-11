@@ -26,10 +26,20 @@ export const read = (file: string) => fs.readFileSync(file, 'utf8');
 export const json = (file: string) => JSON.parse(read(file));
 export const lines = (file: string) => (fs.existsSync(file) ? read(file).split(/\r?\n/).filter((l) => l !== '') : []);
 
+/** `test`, with a file another process holds open (EBUSY, a Windows sharing violation) read as not yet, since a poll reads files the batch and its stubs are still writing. */
+function holds(test: () => boolean) {
+  try {
+    return test();
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'EBUSY') return false;
+    throw err;
+  }
+}
+
 /** Polls `test` until it holds; the message names what never happened. */
 export async function until(what: string, test: () => boolean, ms = 180_000) {
   const end = Date.now() + ms;
-  while (!test()) {
+  while (!holds(test)) {
     if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
     await sleep(250);
   }
