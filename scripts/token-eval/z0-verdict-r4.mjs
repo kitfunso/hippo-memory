@@ -16,7 +16,7 @@ export const T_NULLS = Object.freeze({
   T2c: Object.freeze({ nullValue: 0.15, side: 'below' }),
 });
 // T1 is read at 0.05 alone; the closed test reads every other test at both thresholds.
-const THRESHOLDS = Object.freeze({ T1: ['0.05'], T3: ['0.025', '0.05'], T2a: ['0.025', '0.05'], T2b: ['0.025', '0.05'], T2c: ['0.025', '0.05'] });
+export const THRESHOLDS = Object.freeze({ T1: ['0.05'], T3: ['0.025', '0.05'], T2a: ['0.025', '0.05'], T2b: ['0.025', '0.05'], T2c: ['0.025', '0.05'] });
 
 const onSide = (estimate, nullValue, side) => {
   if (side !== 'below' && side !== 'above') throw new Error(`side ${side} is not below or above`);

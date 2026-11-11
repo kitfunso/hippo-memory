@@ -18,7 +18,7 @@ const MAX_SEED_FLOOR = 3;
 const INPUT_FLAGS = ['--runs', '--plan', '--off-pin'];
 const LINE_FLAGS = [...INPUT_FLAGS, '--merge-manifest', '--max-seed'];
 
-const keysOf = (pins, field, file) => {
+export const keysOf = (pins, field, file) => {
   if (!isString(pins[field]) || pins[field].trim() === '') throw new Error(`${file}: ${field} must be a comma list of keys`);
   return pins[field].split(',').map((k) => k.trim()).filter(Boolean);
 };

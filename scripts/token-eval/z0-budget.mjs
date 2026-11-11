@@ -15,7 +15,7 @@ import { PILOT_SCHEMA, SEED_CAP, SEED_PREVIEW_SCHEMA, SEED_RULE_SCHEMA, SPEND_BA
 export const APPROVED_FIGURE = 2140;
 /** The pilot's own budget (prereg item 11); the pilot admit's cap and the figure `project` adds as the pilot. */
 export const PILOT_BUDGET = 40;
-const GATE_MARGIN = 1.25;
+export const GATE_MARGIN = 1.25;
 // Prereg item 12: round 3's q145 run lost most of its records to the shared-venv break, so its spend is replaced by the other keys' mean.
 const GAP_SEQUENCE = 'q145';
 const R4_ARMS = DESIGNS.r4.arms;
@@ -23,7 +23,7 @@ const RULE_ARMS = R4_ARMS.filter((a) => ARM_TABLE[a].seedRule);
 const BASE_SEEDS = ARM_TABLE[RULE_ARMS[0]].seeds;
 const AT_R = 2;
 // The pilot's r at which prereg item 12 names the arm to the founder.
-const R_FLAG = 1.9;
+export const R_FLAG = 1.9;
 const USAGE = 'usage: z0-budget.mjs admit --step <smoke|pilot|whole-run|batch-1|batch-2|seeds> --attempt <n> --approved <usd> --ledger-total <usd> --spend-basis <f> --pins <f> --log <f>\n'
   + '         [--units <folder>: repeat the flag once per folder] [--plans <f>: repeat the flag once per plan] [--warmups <dir>] [--pilot <f>] [--scale <f>] [--seed-preview <f>] [--seed-rule <f>] [--seal <f>] [--mark <f>]\n'
   + '         [--cap-only --attempt-ledger <usd>]\n'
@@ -123,7 +123,7 @@ function readSchema(file, what, schema) {
   return body;
 }
 
-function readBasis(file) {
+export function readBasis(file) {
   const basis = readSchema(file, 'spend basis', SPEND_BASIS_SCHEMA);
   if (!Number.isFinite(basis.meanPerRecord) || basis.meanPerRecord <= 0) throw new Error(`spend basis ${file}: meanPerRecord must be a number above 0`);
   return basis;
@@ -136,7 +136,7 @@ function readPilot(file) {
 }
 
 /** The pins file's parsed body and the sha256 of its bytes; `z0-pins-check --write` stores every value as a string. */
-function readPins(file) {
+export function readPins(file) {
   const bytes = fs.readFileSync(file);
   try {
     return { ...JSON.parse(bytes.toString('utf8')), sha256: createHash('sha256').update(bytes).digest('hex') };
@@ -146,12 +146,12 @@ function readPins(file) {
 }
 
 /** A pins key list, held as an array or as one comma-separated string. */
-function listOf(pins, key) {
+export function listOf(pins, key) {
   if (pins[key] === undefined || pins[key] === null) throw new Error(`the pins file has no ${key}`);
   return String(pins[key]).split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-function wholeRunSeeds(pins) {
+export function wholeRunSeeds(pins) {
   const n = Number(pins.wholeRunSeeds);
   if (!Number.isInteger(n) || n < BASE_SEEDS || n > SEED_CAP) throw new Error(`the pins file's wholeRunSeeds ${pins.wholeRunSeeds} is not a whole number from ${BASE_SEEDS} to ${SEED_CAP}`);
   return n;
