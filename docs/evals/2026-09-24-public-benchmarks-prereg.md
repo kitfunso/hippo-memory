@@ -203,3 +203,40 @@ The gate writes `gate.json` with SHA-256 hashes of the three logs and every pred
 5. A failed call of any kind is named and retried by a rerun while every other result is saved. A last record cut off by a kill mid-write is cut from the file; one that is whole but lacks its newline is kept. The call logs, the server's log and the result files split into records on LF alone, since a record may hold U+2028, U+0085 or U+2029, which Python's `splitlines` also splits on; the runner's log splits on CR and LF, since its progress bars redraw with CR.
 
 **Unchanged:** Amendment 4's arms, models, prompts, sample, cutoffs, primary comparison, reading rule and publication rule.
+
+## Amendment 6 (2026-11-11, before any answer is made): every competitor benchmark that runs at no cost
+
+**Why.** The founder asked on 11 Nov 2026 to run hippo on as many of the benchmarks that competing memory systems publish as can run. Only LoCoMo and LongMemEval-S retrieval (Lane R) and the Lane A answers have run. This amendment registers the runs that need no money: answers on the Claude subscription, verdicts on the ChatGPT plan through codex. Amendment 5 points to an Amendment 6 for a `mem0fixed` arm. That text was never written, and `mem0fixed` does not run in this pass. The registered gpt-5 run (prereg:45-47) is unchanged and still waits.
+
+**What these runs can show.** Chat-QA scores are a floor check on retrieval. They never measure hippo's success, which is pass rate, repeat mistakes and cost per solved task on outcome tests. No number here is comparable with a vendor's published score: the answerer, the judge and the memory settings differ. The comparison that holds is inside each benchmark: `hippo@365` against `bm25` over the same stored text, and against `mem0-oss` on LoCoMo.
+
+**Models, the same for every arm of a benchmark.**
+- Answerer: Claude Sonnet 5 at medium effort, one `claude -p` call per answer through `claude_llm.py`, as Amendment 4.
+- Judge for the new runs: gpt-5.6-sol at medium effort through `codex exec` on the ChatGPT plan, one call per verdict. Each call runs with a clean codex home that holds only the login, so no local instructions, skills, hooks or MCP servers reach the judge. The judge sees no arm label, and verdicts are made in one shuffled pass per benchmark. On this plan gpt-5 and gpt-4o return `model_not_found` (tested 11 Nov 2026, codex-cli 0.164.0), so scorers that need them (LongMemEval's `evaluate_qa.py`) do not run.
+- Multiple-choice and exact-match items are scored by match, with no judge.
+- Every answer and verdict holds the SHA-256 of its prompt and must match a reply in its call log, as Amendment 5 items 2 and 3.
+- The LoCoMo head-to-head keeps Amendment 4's judge, Claude Sonnet 5 at medium, as its primary. gpt-5.6-sol judges the same answers again as a secondary, labelled so.
+
+**Arms.** `hippo@365` (the default, embeddings off, as Amendment 2) and `bm25` (hippo's BM25 alone over the same stored turns), served by `hippo-mem0-server.mjs` from hippo-memory 3.5.1 (`9d2a57529`). `mem0-oss` runs on LoCoMo only, from the ingest that passed its gate on 28 Sep. Elsewhere its ingest would need 19,000 or more extraction calls per benchmark (BEAM 500K alone is 19,029 adds; LongMemEval-S is 124,333), so it is out.
+
+**Benchmarks.**
+
+Group A, Mem0's runner at `4b61c5d` or `h2h.py`:
+1. **LoCoMo head-to-head:** Amendments 4 and 5 as written, three arms (`hippo365`, `bm25`, `mem0`), Lane A's 400 questions at top 200, 50 and 10. Lane R's retrieval files are copied out of the working checkout into the bench folder, and the result lists their SHA-256.
+2. **LongMemEval-S:** 500 questions, `hippo@365` and `bm25`, Lane R's retrieval. The runner's answer and judge prompts (`benchmarks/longmemeval/prompts.py`). Primary at top 200, the runner's and Mem0's published setting; top 10 is secondary.
+3. **BEAM** 100K, 500K, 1M and 10M: the runner's `benchmarks.beam.run`, unchanged, at its defaults (top-k 200, answer cutoff 100). An OpenAI-compatible proxy sends the answerer's model name to `claude -p` and the judge's to codex. Rubric nuggets and event ordering are scored as the runner scores them.
+4. **LongMemEval-M:** as LongMemEval-S, on `longmemeval_m_cleaned.json`.
+
+Group B, one shared harness (`benchmarks/public/qa/`) with one loader per benchmark: PersonaMem v1 (32k, multiple choice), DMR (MSC-Self-Instruct), EverMemBench-Dynamic, HaluMem-Medium (question answering only; then Long), PrefEval (explicit preferences, 10 filler turns), ConvoMem (a sample of 250 per category at seed 1), Cognee's HotPotQA-24, and PersonaMem v2 if its scoring method is found in its repository. Each loader copies the authors' answer and judge prompts from their files. Top-k is the authors' setting where they publish one, else 20. Before the first full answer of a group B benchmark, a dated note under this amendment records its loader commit, the source file and line of each prompt, the sample and the top-k.
+
+Group C, agent outcome tests:
+- **DolphinBench:** Amendment 3 as written, on the Claude subscription.
+- **Terminal-Bench 2.0:** registered in its own amendment before its first task.
+
+Not run: Context-Bench, the Letta Leaderboard and BrainBench rank models inside one vendor's agent, so hippo has no slot in them.
+
+**Smoke.** Each route first runs at most 5 questions per arm into a smoke folder. Smoke answers are never scored or reused.
+
+**Primary comparison, each benchmark of groups A and B:** `hippo@365` minus `bm25` in the benchmark's main score (judge accuracy, or match accuracy for multiple choice), paired by question, `boot` in `evidence_recall.py` (4,000 draws, seed 1, 95% interval), read with Amendment 2's rule: **beats**, **trails**, **matches** (within 3 points), otherwise **unresolved**. The LoCoMo head-to-head keeps Amendment 4's primary.
+
+**Published whatever the result:** one result doc per group, `docs/evals/<date>-public-benchmarks-r2-<group>.md`, with the answers, verdicts, call-log summaries, code commits and commands. A benchmark that fails to run is listed with the reason. HaluMem, PrefEval, ConvoMem and other datasets under non-commercial licences get scores only; no derived data is committed.
