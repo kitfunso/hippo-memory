@@ -2,15 +2,55 @@
 // Stand-in for `claude -p --output-format json` in the token-eval runner tests. It reads the prompt from stdin,
 // runs the UserPromptSubmit hooks from --settings with a real payload, calls `hippo` through PATH, writes a transcript
 // under $CLAUDE_CONFIG_DIR/projects/ and prints a result shaped like Claude Code's, plus what it saw.
+// With `--fake-knobs <file>` (z0-fake-knobs/1) it also draws, prices, logs and requests as the round 4 tests need; without it nothing changes.
 import * as fs from 'node:fs';
+import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { execSync, spawn, spawnSync } from 'node:child_process';
 
-const argv = process.argv.slice(2);
+const rawArgv = process.argv.slice(2);
+const knobsAt = rawArgv.indexOf('--fake-knobs');
+// Everything below sees the argv a real call would have had, so a knobs run echoes no knobs pair.
+const argv = knobsAt < 0 ? rawArgv : rawArgv.filter((_, i) => i !== knobsAt && i !== knobsAt + 1);
+const stop = (code, message) => {
+  console.error(`fake-claude: ${message}`);
+  process.exit(code);
+};
+const KNOB_KEYS = ['schema', 'token', 'calls', 'prices', 'version', 'usage', 'effortScale', 'outcome', 'leaks', 'offPin', 'fail', 'warmupFail'];
+
+async function readKnobs(file) {
+  const { FAKE_KNOBS_SCHEMA } = await import('../../scripts/token-eval/z0-records.mjs');
+  let k;
+  try {
+    k = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    stop(1, `knobs file ${file}: ${err.message}`);
+  }
+  if (k?.schema !== FAKE_KNOBS_SCHEMA) stop(1, `knobs file ${file}: schema must be "${FAKE_KNOBS_SCHEMA}"`);
+  for (const key of Object.keys(k)) if (!KNOB_KEYS.includes(key)) stop(1, `knobs file ${file}: ${key} is not a knob (${KNOB_KEYS.join(', ')})`);
+  for (const [arm, rates] of Object.entries(k.outcome ?? {})) {
+    for (const [name, rate] of Object.entries(rates)) {
+      if (name !== 'lesson' && name !== 'solve') stop(1, `knobs file ${file}: outcome.${arm}.${name} is not a knob (lesson, solve)`);
+      if (!(rate > 0 && rate < 1)) stop(1, `knobs file ${file}: outcome.${arm}.${name} must be above 0 and below 1, got ${rate}`);
+    }
+  }
+  return k;
+}
+
+const knobs = knobsAt < 0 ? null : await readKnobs(rawArgv[knobsAt + 1]);
+const knobsDir = knobs ? path.dirname(path.resolve(rawArgv[knobsAt + 1])) : null;
+const { modelRow } = knobs ? await import('../../scripts/token-eval/z0-prices.mjs') : {};
+const { priceUsage } = knobs ? await import('../../dist/eval/eval-stats.js') : {};
+if (knobs) {
+  const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  const line = { argv, tokenPrefix: token ? token.slice(0, 9) : null, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL ?? null, configDir: process.env.CLAUDE_CONFIG_DIR ?? null };
+  if (knobs.calls) fs.appendFileSync(knobs.calls, `${JSON.stringify(line)}\n`);
+  if (knobs.token && token !== knobs.token) stop(1, 'CLAUDE_CODE_OAUTH_TOKEN is not the knobs file\'s token');
+}
 if (argv.includes('--version')) {
-  console.log('0.0.0 (Claude Code)');
+  console.log(`${knobs?.version ?? '0.0.0'} (Claude Code)`);
   process.exit(0);
 }
 const input = fs.readFileSync(0, 'utf8');
@@ -20,7 +60,82 @@ const resumeId = argv.includes('--resume') ? argv[argv.indexOf('--resume') + 1] 
 // Each session's prompt lives outside the transcript dir, so a resume still knows its markers when no transcript was written.
 const promptsDir = path.join(path.dirname(process.env.CLAUDE_CONFIG_DIR), 'fake-prompts');
 const prompt = resumeId ? fs.readFileSync(path.join(promptsDir, `${resumeId}.prompt`), 'utf8') : input;
-const log = (line) => process.env.FAKE_CLAUDE_LOG && fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, `${line}\n`);
+
+// Knobs mode. A session's cell is read from its config dir (<out>/runs/<seq>/<arm>/seed<n>/claude-config) and its draw u from the cell and the first-session prompt,
+// so a rerun in a new --out draws the same; a call with no --settings is a warm-up and has no cell.
+const model = argv.includes('--model') ? argv[argv.indexOf('--model') + 1] : null;
+const TAG = knobs ? randomUUID() : process.pid;
+function cellOf() {
+  const [sequence, arm, seedDir] = path.resolve(process.env.CLAUDE_CONFIG_DIR).split(path.sep).slice(-4, -1);
+  const seed = Number(seedDir.replace('seed', ''));
+  const digest = createHash('sha256').update([sequence, String(seed), arm, prompt].join('\0')).digest();
+  return { sequence, arm, seed, position: Number(/FAKE_POS (\d+)/.exec(prompt)?.[1] ?? 0), u: Number(digest.readBigUInt64BE(0) >> 11n) / 2 ** 53 };
+}
+const cell = knobs && argv.includes('--settings') ? cellOf() : null;
+const forCell = (e) => e.sequence === cell.sequence && e.seed === cell.seed && e.arm === cell.arm;
+const WARMUP_TOKENS = { input: 12, output: 8, cacheRead: 0, cacheWrite: 3000 };
+const drawTokens = () => {
+  if (!cell) return WARMUP_TOKENS;
+  const row = knobs.usage?.[cell.arm];
+  if (!row) stop(1, `the usage knob has no row for arm ${cell.arm}`);
+  const spread = 0.95 + 0.1 * cell.u;
+  const scale = knobs.effortScale?.[process.env.CLAUDE_CODE_EFFORT_LEVEL] ?? 1;
+  const at = (n, extra = 1) => Math.round(n * spread * extra);
+  return { input: at(row.input), output: at(row.output, scale), cacheRead: at(row.cacheRead), cacheWrite: at(row.cacheWrite) };
+};
+let priced = null;
+/** The call's tokens, cost and result usage fields, priced at the --model row; drawn once, so the transcript and the result agree. */
+function callUsage() {
+  if (priced) return priced;
+  if (!model) stop(1, 'knobs mode prices a call at its --model row, and this call has none');
+  if (!knobs.prices) stop(1, 'knobs mode needs a prices file');
+  const row = modelRow(JSON.parse(fs.readFileSync(knobs.prices, 'utf8')), model, knobs.prices);
+  if (!row) stop(1, `${knobs.prices} has no price row for ${model}`);
+  const t = drawTokens();
+  const cost = priceUsage({ inputTokens: t.input, cacheWriteTokens: t.cacheWrite, cacheReadTokens: t.cacheRead, outputTokens: t.output }, row);
+  priced = {
+    total_cost_usd: cost,
+    usage: { input_tokens: t.input, cache_creation_input_tokens: t.cacheWrite, cache_read_input_tokens: t.cacheRead, output_tokens: t.output },
+    modelUsage: { [model]: { inputTokens: t.input, outputTokens: t.output, cacheReadInputTokens: t.cacheRead, cacheCreationInputTokens: t.cacheWrite, costUSD: cost } },
+  };
+  return priced;
+}
+/** One /v1/messages body, as the API would see it, to ANTHROPIC_BASE_URL when it is set; anything but 127.0.0.1 ends the call, so no fake run reaches a real API. */
+async function sendRequest(requestModel) {
+  const base = process.env.ANTHROPIC_BASE_URL;
+  if (!base) return;
+  if (new URL(base).hostname !== '127.0.0.1') stop(9, `ANTHROPIC_BASE_URL ${base} is not on 127.0.0.1`);
+  const body = { model: requestModel, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] };
+  if (process.env.CLAUDE_CODE_EFFORT_LEVEL) body.output_config = { effort: process.env.CLAUDE_CODE_EFFORT_LEVEL };
+  await new Promise((resolve, reject) => {
+    const req = http.request(new URL('/v1/messages', base), { method: 'POST', agent: false, headers: { 'content-type': 'application/json' } }, (res) => {
+      res.resume();
+      res.on('end', resolve);
+    });
+    req.on('error', reject);
+    req.end(JSON.stringify(body));
+  });
+}
+if (knobs) {
+  // An off-pin cell names its own model once, on the first session whose position it lists; a fail cell dies after its valid request, with no result.
+  const forced = cell && !resumeId ? knobs.offPin?.find((e) => forCell(e) && e.nth === cell.position) : undefined;
+  await sendRequest(forced?.model ?? model);
+  if (cell && knobs.fail?.some((e) => forCell(e) && e.positions.includes(cell.position))) process.exit(1);
+  if (!cell) warmUp();
+}
+
+/** A warm-up call (no --settings): a small transcript and result, so a ledger has a transcript to price. */
+function warmUp() {
+  if (knobs.warmupFail?.includes(model)) stop(1, `warm-up for ${model} fails (warmupFail knob)`);
+  const sessionId = randomUUID();
+  const file = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), `${sessionId}.jsonl`);
+  const reply = { type: 'assistant', message: { id: `m-${TAG}-w`, model, usage: callUsage().usage, content: [{ type: 'text', text: 'OK' }] } };
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, [{ type: 'user', message: { role: 'user', content: input } }, reply].map((l) => JSON.stringify(l)).join('\n'));
+  console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: sessionId, num_turns: 1, result: 'OK', ...callUsage() }));
+  process.exit(0);
+}
+const log =(line) => process.env.FAKE_CLAUDE_LOG && fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, `${line}\n`);
 const sh = (cmd) => execSync(cmd, { stdio: ['ignore', 'ignore', 'inherit'] });
 const write = (f, text) => {
   fs.mkdirSync(path.dirname(f) || '.', { recursive: true });
@@ -102,17 +217,27 @@ const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH')
 const hippoDir = process.env[pathKey].split(path.delimiter).find((d) => d && ['hippo', 'hippo.cmd'].some((n) => fs.existsSync(path.join(d, n)))) ?? null;
 
 let toolN = 0;
-const toolUse = (name, toolInput) => ({ type: 'assistant', message: { id: `m-${process.pid}-${toolN}`, usage: {}, content: [{ type: 'tool_use', id: `tu-${process.pid}-${++toolN}`, name, input: toolInput }] } });
+const toolUse = (name, toolInput) => {
+  const message = { id: `m-${TAG}-${toolN}`, usage: {}, content: [{ type: 'tool_use', id: `tu-${process.pid}-${++toolN}`, name, input: toolInput }] };
+  if (knobs) message.model = model;
+  return { type: 'assistant', message };
+};
 const transcript = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${sessionId}.jsonl`);
+// Knobs mode ends each appended turn with the call's usage on one message of its own, so a transcript prices to what the result says.
+const usageLine = () => ({ type: 'assistant', message: { id: `m-${TAG}-u`, model, usage: callUsage().usage, content: [{ type: 'text', text: 'done' }] } });
 const appendTurn = (lines) => {
   if (prompt.includes('NOTRANSCRIPT')) return;
   fs.mkdirSync(path.dirname(transcript), { recursive: true });
   const prefix = fs.existsSync(transcript) && fs.statSync(transcript).size > 0 ? '\n' : '';
-  fs.appendFileSync(transcript, prefix + lines.map((l) => JSON.stringify(l)).join('\n'));
+  const turn = knobs ? [...lines, usageLine()] : lines;
+  fs.appendFileSync(transcript, prefix + turn.map((l) => JSON.stringify(l)).join('\n'));
 };
 // Where Claude Code keeps a subagent's own transcript: <session>/subagents/<agent>.jsonl beside the session's file.
 const writeSubagent = (name, commands) => write(path.join(path.dirname(transcript), sessionId, 'subagents', `${name}.jsonl`), commands.map((command) => JSON.stringify(toolUse('Bash', { command }))).join('\n'));
+// KNOB_LESSON and KNOB_SOLVE: the outcome knobs decide the lesson file and the fix from the cell's draw u (the arm's lesson and solve rates).
+const knobLesson = () => Boolean(cell) && prompt.includes('KNOB_LESSON');
 const lessonState = () => {
+  if (knobLesson()) return cell.u < knobs.outcome?.[cell.arm]?.lesson ? 'ok' : 'bad';
   const seeded = /SEED(\d+)_(OK|BAD)/g;
   for (const m of prompt.matchAll(seeded)) if (m[1] === process.env.EVAL_SEED) return m[2] === 'OK' ? 'ok' : 'bad';
   if (prompt.includes('LESSON_TOLD')) return fs.existsSync('CLAUDE.md') && fs.readFileSync('CLAUDE.md', 'utf8').includes('\n- ') ? 'ok' : 'bad';
@@ -185,6 +310,17 @@ const agentFilter = (lines) => {
   fs.appendFileSync('.gitattributes', '* filter=z0agent\n');
 };
 
+/** The leaks knob: a listed cell's first session writes its phrase to the auto-memory file; `once` leaves a done file beside the knobs, so a rerun in a new --out stays clean. */
+function leaks() {
+  for (const e of cell ? knobs.leaks ?? [] : []) {
+    if (!forCell(e)) continue;
+    const done = path.join(knobsDir, 'fake-state', `leak-${cell.sequence}-${cell.seed}-${cell.arm}.done`);
+    if (e.once && fs.existsSync(done)) continue;
+    if (e.once) write(done, '');
+    memWrite(Buffer.from(e.phraseB64, 'base64').toString('utf8'));
+  }
+}
+
 function firstSession() {
   fs.mkdirSync(promptsDir, { recursive: true });
   fs.writeFileSync(path.join(promptsDir, `${sessionId}.prompt`), prompt);
@@ -197,6 +333,8 @@ function firstSession() {
       sh('hippo remember "add() in lib.js had its operator flipped; check operators first"');
     }
   }
+  if (cell && prompt.includes('KNOB_SOLVE') && cell.u < knobs.outcome?.[cell.arm]?.solve) fs.writeFileSync('lib.js', 'module.exports.add = (a, b) => a + b;\n');
+  leaks();
   // PLANT:<text> saves <text> to the store verbatim, so a test can put a later task's gold line there.
   const plant = /PLANT:([^\n"]+)/.exec(prompt);
   if (plant && fs.existsSync('.hippo')) sh(`hippo remember "${plant[1].trim()}"`);
@@ -304,7 +442,7 @@ function resumeTurn() {
   if (prompt.includes('NO_RESULT_ON_RESUME')) process.exit(0);
   const line = /WRITE_ON_RESUME (.+)$/m.exec(prompt);
   if (line) fs.appendFileSync('CLAUDE.md', `${line[1]}\n`);
-  if (lessonState() && input.startsWith('No:')) fs.writeFileSync('lesson.txt', 'ok\n');
+  if (lessonState() && input.startsWith('No:') && !knobLesson()) fs.writeFileSync('lesson.txt', 'ok\n');
   // GC_ON_RESUME: an agent's gc prunes every commit the runner has not held under a ref.
   if (prompt.includes('GC_ON_RESUME')) sh('git gc -q --prune=now');
   // CAPTURE_TEACH: the agent saves the teach message to hippo itself.
@@ -320,7 +458,7 @@ else firstSession();
 
 const PLAIN = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', 'ANTHROPIC_BASE_URL'];
 const extra = Math.ceil(injected.length / 4);
-console.log(JSON.stringify({
+const result = {
   type: 'result', subtype: 'success', is_error: false, session_id: prompt.includes('NO_SESSION_ID') ? undefined : sessionId, num_turns: resumeId ? 1 : 3, total_cost_usd: 0.01,
   pad: prompt.includes('BIG_RESULT') ? 'x'.repeat(30_000) : undefined,
   strayFile: fs.existsSync('stray.txt'), argv, files, ...startSeen,
@@ -332,6 +470,7 @@ console.log(JSON.stringify({
   hippoProbe: { status: probe.status, stdout: probe.stdout, stderr: probe.stderr }, hippoDir,
   usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 },
   modelUsage: { 'fake-model': { inputTokens: 100, outputTokens: 50, cacheReadInputTokens: 10000, cacheCreationInputTokens: 2000 + extra, costUSD: 0.01 } },
-}));
+};
+console.log(JSON.stringify(knobs ? { ...result, ...callUsage() } : result));
 // RMWORK deletes the workspace last; only POSIX lets a process delete its own cwd.
 if (prompt.includes('RMWORK')) fs.rmSync(process.cwd(), { recursive: true, force: true });

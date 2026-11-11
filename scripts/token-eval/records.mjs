@@ -12,6 +12,16 @@ export function isUsageLimit(result, output) {
   return (result === null || Boolean(result.is_error)) && LIMIT_RE.test(output);
 }
 
+/** The last stdout line parsed as JSON, null when there is none. */
+export function lastJson(stdout) {
+  try {
+    return JSON.parse(stdout.trim().split('\n').filter(Boolean).pop() ?? '');
+  } catch {
+    // No JSON line is no result; the record says so instead of guessing one.
+    return null;
+  }
+}
+
 export function findTranscript(projectsDir, sessionId) {
   if (!sessionId || !fs.existsSync(projectsDir)) return null;
   for (const p of fs.readdirSync(projectsDir)) {

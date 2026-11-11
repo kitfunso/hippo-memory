@@ -5,11 +5,12 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnTree } from './exec.mjs';
 import { startLogProxy } from './proxy.mjs';
-import { isUsageLimit, sessionFiles, findTranscript, listTranscripts } from './records.mjs';
+import { isUsageLimit, lastJson, sessionFiles, findTranscript, listTranscripts } from './records.mjs';
 import { sleep } from './runs.mjs';
 import { agentGit } from './checks.mjs';
 import { instructionSnapshot, restoreInstructions } from './workspace.mjs';
-import { TOKEN_KEY } from './arms.mjs';
+import { DESIGNS, TOKEN_KEY, claudeModelOf } from './arms.mjs';
+import { appendJsonLine } from './atomic-write.mjs';
 import { execFileSync } from 'node:child_process';
 
 /** A Windows user env var's value from the registry, so a token set with setx after the run started is seen; null when unset. */
@@ -44,18 +45,10 @@ export function moveToken(ctx, now = Date.now() / 1000, read = ctx.readToken ?? 
 
 function claudeArgs(ctx, run) {
   const args = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--settings', JSON.stringify(run.settingsFile), '--strict-mcp-config', '--permission-mode', ctx.permissionMode];
-  if (ctx.model) args.push('--model', ctx.model);
+  const model = claudeModelOf(ctx.design, run.arm, ctx.model);
+  if (model) args.push('--model', model);
   if (ctx.maxBudgetUsd) args.push('--max-budget-usd', String(ctx.maxBudgetUsd));
   return args;
-}
-
-function lastJson(stdout) {
-  try {
-    return JSON.parse(stdout.trim().split('\n').filter(Boolean).pop() ?? '');
-  } catch {
-    // No JSON line is no result; the record says so instead of guessing one.
-    return null;
-  }
 }
 
 const claudeLimit = (cc, result) => isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`);
@@ -70,10 +63,10 @@ export function requestLogs(run, taskId, kind) {
 }
 
 /** fn(env) with the attempt's API traffic routed through a request-log proxy; no log file runs it unproxied.
- * A base URL passed with --pass-env stays the upstream, so the log sits in front of the operator's own route. */
-async function withRequestLog(logFile, env, fn) {
+ * The upstream is the run's own (a fake agent's stub), else a base URL passed with --pass-env, so the log sits in front of the operator's own route. */
+async function withRequestLog(ctx, logFile, env, fn) {
   if (!logFile) return fn(env);
-  const proxy = await startLogProxy(logFile, env.ANTHROPIC_BASE_URL ? { upstream: env.ANTHROPIC_BASE_URL } : {});
+  const proxy = await startLogProxy(logFile, { upstream: ctx.upstream ?? env.ANTHROPIC_BASE_URL });
   try {
     return await fn({ ...env, ANTHROPIC_BASE_URL: proxy.url });
   } finally {
@@ -82,8 +75,11 @@ async function withRequestLog(logFile, env, fn) {
 }
 
 /** Run a session until it is not at the plan limit, calling `reset` before each rerun (a truthy reset skips it: `stopped`); `command()` or `args()` is called once per attempt.
- * Codex passes its own command, env, limit test and redaction, so both tools share one limit loop; only Claude Code passes `logKind`. */
-export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset, command = () => `${ctx.claude} ${args().join(' ')}`, env = run.env, isLimit = claudeLimit, redact = (text) => text, logKind = null }) {
+ * Codex passes its own command, env, limit test and redaction, so both tools share one limit loop; only Claude Code passes `logKind`.
+ * Round 4 writes each attempt to attempts.jsonl before it spawns: `attemptId()` is read after `command()`, which is what fixes it. */
+export async function untilNotLimited(ctx, run, t, {
+  args, input, rawName, reset, command = () => `${ctx.claude} ${args().join(' ')}`, env = run.env, isLimit = claudeLimit, redact = (text) => text, logKind = null, attemptId = () => null, sizesBefore = null,
+}) {
   // Every cut-off attempt, its wait and its reset: none of it is the kept attempt's work, so wallMs leaves it out.
   let cutOffMs = 0;
   // SHORTCUT: 15-minute polls up to 8 days, so a weekly limit's reset is waited out; parse the reset time if polling costs too much.
@@ -91,7 +87,9 @@ export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset
     const start = performance.now();
     const logFile = logKind ? requestLogFile(run, t.id, logKind, attempt) : null;
     const tokenEnv = ctx.token && env[TOKEN_KEY] ? { ...env, [TOKEN_KEY]: ctx.token } : env;
-    const cc = await withRequestLog(logFile, tokenEnv, (e) => spawnTree(command(), run.dirs.work, e, ctx.sessionTimeoutMs, input));
+    const line = command();
+    if (logFile && ctx.design === DESIGNS.r4) appendJsonLine(path.join(run.rawDir, 'attempts.jsonl'), { taskId: t.id, kind: logKind, attempt, sessionId: attemptId(), logFile, sizesBefore });
+    const cc = await withRequestLog(ctx, logFile, tokenEnv, (e) => spawnTree(line, run.dirs.work, e, ctx.sessionTimeoutMs, input));
     const result = lastJson(cc.stdout);
     // A hung session can print overloaded_error before it hangs; a timeout is a graded result, never a limit wait (prereg 165).
     if (cc.timedOut || !isLimit(cc, result)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
@@ -115,7 +113,7 @@ export async function runSession(ctx, run, t, reset) {
     sessionId = randomUUID();
     return [...claudeArgs(ctx, run), '--session-id', sessionId];
   };
-  const session = await untilNotLimited(ctx, run, t, { args, input: t.prompt, rawName: 'limit', reset, logKind: 'session' });
+  const session = await untilNotLimited(ctx, run, t, { args, input: t.prompt, rawName: 'limit', reset, logKind: 'session', attemptId: () => sessionId });
   return { ...session, sessionId };
 }
 
@@ -136,7 +134,10 @@ export async function resumeSession(ctx, run, t, sessionId, message, afterReset 
     // Where session 1 ends in every file it wrote, subagents included, since a resume can append to any of them.
     const sizesBefore = new Map([...snap.transcripts].map(([f, bytes]) => [f, bytes.length]));
     const before = { bytesBefore: (main && sizesBefore.get(main)) || 0, sizesBefore, filesBefore: new Set(listTranscripts(projects)) };
-    return { ...(await untilNotLimited(ctx, run, t, { args: () => args, input: message, rawName: 'resume-limit', reset, logKind: 'resume' })), ...before };
+    // Relative to claude-config with forward slashes, so the list reads the same on any box.
+    const sizes = Object.fromEntries([...sizesBefore].map(([f, bytes]) => [path.relative(run.dirs.claudeConfig, f).split(path.sep).join('/'), bytes]));
+    const attempt = { args: () => args, input: message, rawName: 'resume-limit', reset, logKind: 'resume', attemptId: () => sessionId, sizesBefore: sizes };
+    return { ...(await untilNotLimited(ctx, run, t, attempt)), ...before };
   } finally {
     if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
   }
