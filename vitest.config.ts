@@ -39,7 +39,7 @@ process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
 process.env.HIPPO_SKIP_SCHEDULE = '1';
 
 // Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
-export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns', 'z0-codex-run', 'z0-codex-guards', 'z0-codex-faults', 'z0-codex-install', 'z0-r4-runner', 'z0-r4-wiring', 'z0-r4-fake', 'z0-r4-venv', 'z0-r4-cutoff', 'z0-r4-launch', 'z0-r4-batch'].map((name) => `tests/token-eval-${name}.test.ts`);
+export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns', 'z0-codex-run', 'z0-codex-guards', 'z0-codex-faults', 'z0-codex-install', 'z0-r4-runner', 'z0-r4-wiring', 'z0-r4-fake', 'z0-r4-venv', 'z0-r4-cutoff', 'z0-r4-launch', 'z0-r4-batch', 'z0-r4-ledger-e2e'].map((name) => `tests/token-eval-${name}.test.ts`);
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
