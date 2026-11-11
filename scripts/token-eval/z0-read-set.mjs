@@ -7,6 +7,7 @@ import * as path from 'node:path';
 
 import { readSealed, writeFileAtomic } from './atomic-write.mjs';
 import { Stop, linesOf, parseFlags, readJson, runCommand, runMain } from './free-cli.mjs';
+import { readMergeManifest } from './z0-merge.mjs';
 import { isString } from './z0-records.mjs';
 
 const USAGE = 'usage: z0-read-set.mjs --root DIR --batches 1|1,2|1,2,raise --out FILE';
@@ -37,14 +38,19 @@ function noRegraded(dir) {
 
 const own = (dir) => `--runs ${dir}/run/runs.jsonl --plan ${dir}/run/plan.json --off-pin ${dir}/off-pin.json`;
 
-/** The line of a leaked key's merged folder; a merge that dropped every seed left no runs file, so its line holds the manifest alone (G3 still counts it). */
+/** The line of a leaked key's merged folder. Its manifest alone decides the shape: a merge that dropped every first-run seed left no runs, plan or off-pin file, so its line holds the manifest (G3 still counts it);
+ * any other merge needs all three files, and a missing one stops. */
 function mergedLine(root, dir, key, wave) {
   const name = `merged/${dir}/${key}-w${wave}`;
   const merged = `${root}/${name}`;
   if (!fs.existsSync(`${merged}/merge.json`)) throw new Stop(`STOP: ${name} is missing or has no merge.json; run z0-merge`);
   noRegraded(merged);
+  const { firstRun } = readMergeManifest(`${merged}/merge.json`);
   const manifest = `--merge-manifest ${merged}/merge.json`;
-  return fs.existsSync(`${merged}/runs.jsonl`) ? `--runs ${merged}/runs.jsonl --plan ${merged}/plan.json --off-pin ${merged}/off-pin.json ${manifest}` : manifest;
+  if (firstRun.leakedSequenceSeeds === firstRun.plannedSequenceSeeds) return manifest;
+  const absent = ['runs.jsonl', 'plan.json', 'off-pin.json'].find((f) => !fs.existsSync(`${merged}/${f}`));
+  if (absent !== undefined) throw new Stop(`STOP: ${name}/${absent} is missing; run z0-merge`);
+  return `--runs ${merged}/runs.jsonl --plan ${merged}/plan.json --off-pin ${merged}/off-pin.json ${manifest}`;
 }
 
 /** The lines of one key: its merged folder when its first run leaked a seed, else its completed attempt; then each leak rerun's completed attempt. */

@@ -92,6 +92,16 @@ describe('z0-merge on a synthetic round 4 first run (prereg item 9)', () => {
     expect(merge(s.argv)).toMatchObject({ code: 0 });
   });
 
+  it('removes the runs, plan and off-pin files an earlier merge left in --out when every seed leaked, so the read set cannot read them beside the manifest', () => {
+    const earlier = scene();
+    expect(merge(earlier.argv)).toMatchObject({ code: 0 });
+    expect(fs.readdirSync(earlier.out).sort()).toEqual(['merge.json', 'off-pin.json', 'plan.json', 'runs.jsonl']);
+    const whole = scene({ firstSeeds: [2] });
+    expect(merge([...whole.argv.slice(0, -1), earlier.out])).toMatchObject({ code: 0 });
+    expect(fs.readdirSync(earlier.out)).toEqual(['merge.json']);
+    expect(readMergeManifest(path.join(earlier.out, 'merge.json'))).toMatchObject({ first: { sha256: sha(path.join(whole.first, 'runs.jsonl')) }, firstRun: { plannedSequenceSeeds: 1, leakedSequenceSeeds: 1 } });
+  });
+
   it('refuses a rerun folder that holds another seed, a leak with no rerun, a stray rerun and a leak list for another runs file', () => {
     const wrong = scene({ rerunSeeds: [2, 3] });
     expect(merge(wrong.argv)).toMatchObject({ code: 1, stderr: expect.stringContaining('holds seeds other than 2') });

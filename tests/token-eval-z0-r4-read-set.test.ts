@@ -30,13 +30,16 @@ function runFolder(dir: string, records: Z0Record[], leaks: { sequence: string; 
   return dir;
 }
 
+// A first run of three seeds that dropped one, the shape of every merged folder in the scenes below.
+const PARTIAL_MANIFEST = { schema: 'z0-merge/1', firstRun: { plannedSequenceSeeds: 3, leakedSequenceSeeds: 1 } };
+
 /** The merged folder z0-merge leaves for a key: the first run's records without the leaked seeds, and the manifest. */
 function mergedFolder(root: string, name: string, records: Z0Record[]) {
   const merged = path.join(root, 'merged', 'batch1', name);
   put(path.join(merged, 'runs.jsonl'), `${jsonl(records)}\n`);
   json(path.join(merged, 'plan.json'), planOf(records));
   json(path.join(merged, 'off-pin.json'), offPinFor(path.join(merged, 'runs.jsonl')));
-  json(path.join(merged, 'merge.json'), { schema: 'z0-merge/1' });
+  json(path.join(merged, 'merge.json'), PARTIAL_MANIFEST);
   return merged;
 }
 
@@ -108,8 +111,26 @@ describe('z0-read-set (Read set contract)', () => {
     expect(s.call('1')).toMatchObject({ code: 3, stderr: MISSING });
     put(path.join(s.merged, 'runs.jsonl'), '');
     expect(s.call('1')).toMatchObject({ code: 3, stderr: MISSING });
-    put(path.join(s.merged, 'merge.json'), '{}\n');
+  });
+
+  it('decides a merged folder from its merge.json: a partial merge needs its runs, plan and off-pin files, and stops with exit 3 on a missing one', () => {
+    const s = scene();
+    for (const name of ['runs.jsonl', 'plan.json', 'off-pin.json']) {
+      const file = path.join(s.merged, name);
+      const kept = fs.readFileSync(file, 'utf8');
+      fs.rmSync(file);
+      expect(s.call('1'), name).toMatchObject({ code: 3, stderr: `STOP: merged/batch1/k1-w1/${name} is missing; run z0-merge\n` });
+      put(file, kept);
+    }
     expect(s.call('1')).toMatchObject({ code: 0 });
+  });
+
+  it('exits 1 on a merge.json that readMergeManifest refuses', () => {
+    const s = scene();
+    json(path.join(s.merged, 'merge.json'), { schema: 'z0-merge/1' });
+    expect(s.call('1')).toMatchObject({ code: 1, stderr: expect.stringContaining('firstRun') });
+    json(path.join(s.merged, 'merge.json'), { schema: 'z0-merge/9', firstRun: { plannedSequenceSeeds: 3, leakedSequenceSeeds: 1 } });
+    expect(s.call('1')).toMatchObject({ code: 1, stderr: expect.stringContaining('schema') });
   });
 
   it('names a wave that leaked whole by its merge manifest alone, and readReadSet returns it as a pair with no runs, plan or off-pin file', () => {

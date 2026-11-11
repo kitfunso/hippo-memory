@@ -112,7 +112,10 @@ export function runCli(argv, cwd = process.cwd()) {
     const kept = keptLines(runsFile, leaked);
     // parsePlan refuses an empty plan, so a first run that leaked whole keeps no runs, plan or off-pin file; the manifest alone carries its counts.
     const whole = leaked.size === planned.size;
-    if (!whole) {
+    if (whole) {
+      // An earlier merge into this folder left files the read set would read beside the manifest; merge.json goes too, so an interrupted run leaves no manifest.
+      for (const name of ['merge.json', 'runs.jsonl', 'plan.json', 'off-pin.json']) fs.rmSync(path.join(out, name), { force: true });
+    } else {
       const runsOut = path.join(out, 'runs.jsonl');
       writeFileAtomic(runsOut, kept.map((l) => `${l}\n`).join(''));
       writeFileAtomic(path.join(out, 'plan.json'), JSON.stringify(cells.filter((c) => !leaked.has(runKey(c.sequence, c.seed)))));
@@ -123,7 +126,7 @@ export function runCli(argv, cwd = process.cwd()) {
       hashes: [{ role: 'leaks', file: leaksFile, sha256: sha256(leaksFile) }, { role: 'first-off-pin', file: offPinFile, sha256: sha256(offPinFile) }],
       droppedSeeds: sortedSeeds(leaks), firstRun: { plannedSequenceSeeds: planned.size, leakedSequenceSeeds: leaked.size },
     };
-    // Written last, so a folder with a merge.json holds the other three files whole.
+    // Written last, so a folder with a merge.json holds its other files whole.
     writeFileAtomic(path.join(out, 'merge.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     return `merged ${kept.length} records, dropped ${leaked.size} leaked seeds, ${whole ? 0 : voids.length} voids kept\n`;
   });
