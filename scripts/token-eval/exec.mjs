@@ -32,9 +32,11 @@ async function killTree(child) {
       return `\n[kill -${child.pid}: ${err.code ?? err.message}]`;
     }
   }
-  // Node holds the child's handle until it sees the exit, so the pid is still the child's and stop-tree.ps1 needs no -Mark.
+  // Node holds the child's handle until it sees the exit, so a seen exit may have freed the pid, and a root that started after startedBy holds a freed pid.
+  if (child.exitCode !== null || child.signalCode !== null) return '';
+  const startedBy = new Date().toISOString();
   const said = await new Promise((resolve) => {
-    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', STOP_TREE, '-RootPid', String(child.pid)];
+    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', STOP_TREE, '-RootPid', String(child.pid), '-StartedBy', startedBy];
     execFile('powershell', args, { windowsHide: true, timeout: 120_000 }, (err, out, stderr) => {
       const lines = String(out).split(/\r?\n/).filter((l) => l && l !== 'end');
       const why = lines.filter((l) => /^(failed|error) /.test(l)).join('; ') || lines.at(-1) || String(stderr).trim() || err?.message;

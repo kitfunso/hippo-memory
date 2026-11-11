@@ -79,7 +79,7 @@ stop_finished() {
     mtime=$(stat -c %Y "$path/run.log" 2> /dev/null) || continue
     [ $((now - mtime)) -ge "$grace" ] || continue
     say "${path##*/} finished but did not exit, stopping pid $pid"
-    out=$(powershell -NoProfile -ExecutionPolicy Bypass -File "$Z0_CHECKOUT/scripts/token-eval/stop-tree.ps1" -RootPid "$pid" -Mark "$path" 2>&1 < /dev/null)
+    out=$(timeout 120 powershell -NoProfile -ExecutionPolicy Bypass -File "$Z0_CHECKOUT/scripts/token-eval/stop-tree.ps1" -RootPid "$pid" -Mark "$path" 2>&1 < /dev/null)
     rc=$?
     out=$(printf '%s\n' "$out" | tr -d '\r')
     while IFS= read -r line; do [ -z "$line" ] || say "${path##*/} stop: $line"; done <<< "$out"
