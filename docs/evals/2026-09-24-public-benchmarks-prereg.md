@@ -469,3 +469,21 @@ This note adds one exploratory arm to DMR. The DMR primary of dated notes 1 was 
 **What this can show.** What showing 20 retrieved turns costs, against showing the whole chat, with this prompt, answerer and judge. It cannot show how hippo compares with the published systems, which used other models, gave the answerer a persona, and used their own prompts. If `full` also lands far below 94%, the cap is this harness's prompt, not retrieval.
 
 **Calls.** 500 answers on the main Claude login and about 500 verdicts through codex on the ChatGPT plan, with no paid API. They start after the LoCoMo and LongMemEval-S judges now in flight have ended, so codex stays at 8 calls or fewer at a time.
+
+### Amendment 6, dated notes 5 (2026-11-11, before any `hippo-emb` answer): hippo with its local embeddings on, on every benchmark
+
+This note adds the arm `hippo-emb` to every benchmark of this amendment. The registered primaries (`hippo365` minus `bm25`) are unchanged. The code commit is the commit that adds this note for the group B harness; the LongMemEval, BEAM and LoCoMo scripts get the same arm in a later commit, named in a dated note before their first `hippo-emb` answer.
+
+**Why.** Amendment 2 runs every arm with embeddings off. Hippo ships with `embeddings.enabled: 'auto'` (`src/base/config/config.ts` line 230), on whenever a local Transformers.js is installed (README line 35), so `hippo365` is hippo without its meaning-based search. The DMR results (`hippo365` 61.2%, the full chat 83.6%, dated notes 4) were read before this note, so for DMR this arm is post hoc and exploratory. For every other benchmark it is registered before any of its answers.
+
+**Arm `hippo-emb`.**
+- `hippo-mem0-server.mjs --arm hippo --embeddings 1` on the same build (hippo-memory 3.5.1, `9d2a57529` source). `@huggingface/transformers` 4.3.2 is installed in the worktree with `npm i --no-save`, the bring-your-own route the README names, so `package.json` is unchanged.
+- Hippo's defaults as shipped: model `Xenova/all-MiniLM-L6-v2` (`config.ts` line 231), the default embedding weight (`src/domain/search/hybrid.ts` line 199), MMR on whenever embeddings are used (line 294), physics off. Each turn is embedded when it is stored (`hippo-mem0-server.mjs` line 95), so a question asked mid-history searches only vectors of turns stored before it.
+- The harness checks that the server's `/health` reports `embeddings: true` and stops otherwise (`qa/harness.py` `Server`).
+- Everything else is the benchmark's registered entry: data, items, smoke exclusions, top-k, prompts, answerer, judge and the ledger rules.
+
+**Runs.** Group B and DMR, PersonaMem v1 and HotPotQA-24: `qa/harness.py --arm hippo-emb --pairs-with <registered run>` in `results-r2/<benchmark>-emb/`. `--shards N` runs N servers per arm over disjoint users. Each user owns its store, so sharding changes no store and no result. DMR also pairs with `results-r2/dmr-full`.
+
+**Lines, all secondary.** `hippo-emb`'s score on the benchmark's primary metric over the primary items. Then `hippo-emb` minus each paired arm (`hippo365`, `bm25`, and `full` on DMR), paired by item, each paired arm re-made from its run's own call logs, with the benchmark's registered unit, 4,000 draws, seed 1, 95%, and Amendment 2's reading. For DMR the reading words only describe, since the arm is post hoc there.
+
+**Calls.** One more arm of answers and verdicts per benchmark: on the main Claude login for the benchmarks that run there now (DMR, PersonaMem v1, HotPotQA-24, LongMemEval-S, LoCoMo), and on the parked token from Friday for the rest, after their registered arms. No paid API.

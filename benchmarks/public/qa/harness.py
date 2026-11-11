@@ -2,8 +2,9 @@
 
 Stages, run in order, each resumable: ingest, retrieve, answer, judge, score.
   python -I harness.py <stage> --bench <loader> --out DIR [--limit N] [--slots 10] [--port-base 8921] [--bonferroni K]
-  --full-context RUN: the ceiling arm `full` (dated notes 4), every turn in the prompt and no store, stages retrieve to
-  score in a new --out, scored paired with the registered run in RUN.
+  --arm full|hippo-emb --pairs-with RUN [RUN ...]: one extra arm in a new --out, scored paired with each registered run.
+  `full` (dated notes 4) shows every turn and has no store, so it starts at retrieve; `hippo-emb` (dated notes 5) is
+  hippo with its local embeddings on.
 Each arm gets its own hippo-mem0-server on its own data dir under DIR. Answers are Claude Sonnet 5 at medium effort
 (claude_llm.Claude), verdicts gpt-5.6-sol at medium (codex_judge.CodexJudge) or a match, with the authors' prompts from
 the loader. A question asked mid-history is searched in a store that holds only the turns before it, so ingestion and
@@ -22,6 +23,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 import http.client
@@ -38,6 +40,7 @@ from qa.ledger import (ANSWERER, JUDGE, Item, Ledger, exhausted_lines, require, 
                        unsettled)
 
 ARMS = {"hippo365": "hippo", "bm25": "bm25"}  # arm -> the server's --arm
+SERVER_ARMS = {**ARMS, "hippo-emb": "hippo"}  # hippo-emb runs the hippo arm with --embeddings 1
 SERVER = PUBLIC / "hippo-mem0-server.mjs"
 
 
@@ -49,6 +52,11 @@ def atomic(path: Path, data: bytes) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_bytes(data)
     tmp.replace(path)  # whole or absent
+
+
+def server_args(arm: str, port: int, data: Path) -> list[str]:
+    return [str(SERVER), "--arm", SERVER_ARMS[arm], "--port", str(port), "--host", "127.0.0.1", "--data-dir", str(data),
+            *(["--embeddings", "1"] if arm == "hippo-emb" else [])]
 
 
 class Server:
@@ -66,8 +74,8 @@ class Server:
                 sys.exit(f"port {self.port} is already in use; pick another --port-base")
         self.data.mkdir(parents=True, exist_ok=True)
         self.log_f = self.log.open("ab")
-        self.proc = subprocess.Popen([node, str(SERVER), "--arm", ARMS[self.arm], "--port", str(self.port), "--host",
-                                      "127.0.0.1", "--data-dir", str(self.data)], stdout=self.log_f, stderr=self.log_f)
+        self.proc = subprocess.Popen([node, *server_args(self.arm, self.port, self.data)], stdout=self.log_f,
+                                     stderr=self.log_f)
         for _ in range(120):
             time.sleep(0.5)
             if self.proc.poll() is not None:
@@ -80,9 +88,11 @@ class Server:
         else:
             self.__exit__()
             sys.exit(f"server for {self.arm} did not answer on port {self.port}; see {self.log}")
-        if self.health.get("arm") != ARMS[self.arm] or self.health.get("embeddings"):
+        emb = self.arm == "hippo-emb"
+        if self.health.get("arm") != SERVER_ARMS[self.arm] or bool(self.health.get("embeddings")) != emb:
             self.__exit__()
-            sys.exit(f"server on port {self.port} is not the {self.arm} arm with embeddings off: {self.health}")
+            sys.exit(f"server on port {self.port} is not the {self.arm} arm with embeddings {'on' if emb else 'off'} "
+                     f"(on needs @huggingface/transformers installed): {self.health}")
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -195,29 +205,40 @@ def run_arm(a: argparse.Namespace, mod, arm: str, port: int, qs_by_user: dict, c
     if not todo:
         return
     adir.mkdir(parents=True, exist_ok=True)
-    with Server(arm, port, adir / "data", adir / "server.log") as srv:
-        for i, user in enumerate(todo, 1):
-            rec = run_unit(srv, mod, out, user, convs[user], qs_by_user[user], phase)
-            with done_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(rec) + "\n")
-            if i % 25 == 0 or i == len(todo):
-                print(f"{arm}: {i}/{len(todo)} users", flush=True)
-        if phase == "ingest":
-            (adir / "health.json").write_text(json.dumps(srv.health), encoding="utf-8")
+    lock, count = threading.Lock(), [0]
+
+    def shard(k: int, users: list[str]) -> None:
+        """One server over its own users; each user is its own store, so shards never share one."""
+        with Server(arm, port + k, adir / "data", adir / f"server-{k}.log" if k else adir / "server.log") as srv:
+            for user in users:
+                rec = run_unit(srv, mod, out, user, convs[user], qs_by_user[user], phase)
+                with lock:
+                    with done_path.open("a", encoding="utf-8") as f:
+                        f.write(json.dumps(rec) + "\n")
+                    count[0] += 1
+                    if count[0] % 25 == 0 or count[0] == len(todo):
+                        print(f"{arm}: {count[0]}/{len(todo)} users", flush=True)
+            if phase == "ingest" and k == 0:
+                (adir / "health.json").write_text(json.dumps(srv.health), encoding="utf-8")
+
+    n = max(1, min(a.shards, len(todo)))
+    with ThreadPoolExecutor(n) as pool:
+        for f in [pool.submit(shard, k, todo[k::n]) for k in range(n)]:
+            f.result()
 
 
 def setup(a: argparse.Namespace):
     mod = importlib.import_module(f"loaders.{a.bench}")
-    a.arms = {"full": "none"} if a.full_context else ARMS
+    a.arms = {a.arm: SERVER_ARMS.get(a.arm, "none")} if a.arm else ARMS
     a.out.mkdir(parents=True, exist_ok=True)
     qfile = a.out / "questions.json"
-    if a.stage == "ingest" or (a.full_context and a.stage == "retrieve"):
+    if a.stage == "ingest" or (a.arm == "full" and a.stage == "retrieve"):
         qs = mod.questions()
         if len({q["qid"] for q in qs}) != len(qs):
             sys.exit("loader gives duplicate qids")
-        if a.full_context:  # the ceiling arm asks exactly the paired run's questions, in its order
+        if a.arm:  # an extra arm asks exactly the paired runs' questions, in their order
             by_id = {q["qid"]: q for q in qs}
-            qs = [by_id[i] for i in load(a.full_context / "questions.json")["qids"]]
+            qs = [by_id[i] for i in load(a.pairs_with[0] / "questions.json")["qids"]]
         if a.limit:
             if "smoke" not in {p.lower() for p in a.out.parts}:
                 sys.exit("--limit is for smoke runs: --out must sit under a folder named smoke")
@@ -231,7 +252,7 @@ def setup(a: argparse.Namespace):
                "arms": a.arms, "hippo_memory": pkg, "repo_head": head, "loader_sha256": sha_bytes(Path(mod.__file__).read_bytes()),
                "data_sha256": {p.name: sha_bytes(p.read_bytes()) for p in mod.DATA_FILES},
                "answerer": "claude-sonnet-5 medium", "judge": "gpt-5.6-sol medium (llm items), match otherwise",
-               **({"pairs_with": str(a.full_context)} if a.full_context else {})}
+               **({"pairs_with": [str(r) for r in a.pairs_with]} if a.arm else {})}
         qfile.write_text(json.dumps({"qids": [q["qid"] for q in qs]}), encoding="utf-8")
         (a.out / "config.json").write_text(json.dumps(cfg, indent=1), encoding="utf-8")
     elif not qfile.exists():
@@ -261,20 +282,21 @@ def write_full(a: argparse.Namespace, mod, qs: list[dict]) -> None:
 
 
 def stage_ingest_retrieve(a: argparse.Namespace, mod, qs: list[dict]) -> None:
-    if a.full_context:
+    if a.arm == "full":
         return write_full(a, mod, qs)
     qu = by_user(qs)
     convs = {u: t for u, t in mod.conversations() if u in qu}
     if set(convs) != set(qu):
         sys.exit(f"no conversation for users {sorted(set(qu) - set(convs))[:3]}")
     with ThreadPoolExecutor(len(ARMS)) as pool:
-        futs = [pool.submit(run_arm, a, mod, arm, a.port_base + i, qu, convs, a.stage) for i, arm in enumerate(ARMS)]
+        futs = [pool.submit(run_arm, a, mod, arm, a.port_base + i * a.shards, qu, convs, a.stage)
+                for i, arm in enumerate(a.arms)]
         for f in futs:
             f.result()
     if a.stage == "retrieve":
-        manifest = {arm: {q["qid"]: sha_bytes(pred_path(a.out, arm, q["qid"]).read_bytes()) for q in qs} for arm in ARMS}
+        manifest = {arm: {q["qid"]: sha_bytes(pred_path(a.out, arm, q["qid"]).read_bytes()) for q in qs} for arm in a.arms}
         (a.out / "predicted" / "manifest.json").write_text(json.dumps(manifest, indent=0), encoding="utf-8")
-        print(f"retrieved {len(qs)} questions for {len(ARMS)} arms; manifest written")
+        print(f"retrieved {len(qs)} questions for {len(a.arms)} arms; manifest written")
 
 
 def prompts_of(a: argparse.Namespace, mod, qs: list[dict]) -> dict:
@@ -435,27 +457,33 @@ def correct_of(a: argparse.Namespace, mod, qs: list[dict]) -> tuple[dict, dict, 
     return answers, correct, llm, matched, listed
 
 
-def full_lines(a: argparse.Namespace, mod, qs: list[dict], correct: dict, primary: list[str], unit: dict) -> list[str]:
-    """Dated notes 4: each arm of the paired run minus the ceiling arm, paired by question. All secondary."""
-    pair = argparse.Namespace(**{**vars(a), "out": a.full_context, "arms": ARMS})
-    if load(pair.out / "questions.json")["qids"] != [q["qid"] for q in qs]:
-        sys.exit(f"{pair.out} holds another question set than {a.out}")
-    theirs = correct_of(pair, mod, qs)[1]
+def pair_lines(a: argparse.Namespace, mod, qs: list[dict], correct: dict, primary: list[str], unit: dict) -> list[str]:
+    """Dated notes 4 and 5: the extra arm against each arm of each paired run, paired by question, re-made from that
+    run's own call logs. All secondary. `full` prints paired arm minus full, as notes 4 registers; a memory arm prints
+    itself minus the paired arm."""
     out = []
-    for arm in ARMS:
-        acc = 100 * sum(theirs[(arm, i)] for i in primary) / len(primary)
-        diff = {i: theirs[(arm, i)] - correct[("full", i)] for i in primary}
-        out.append(f"secondary {arm} ({acc:.1f} in the paired run) - full: {paired(diff, primary, unit.get)}")
+    for run in a.pairs_with:
+        pair = argparse.Namespace(**{**vars(a), "out": run, "arms": load(run / "config.json")["arms"]})
+        if load(run / "questions.json")["qids"] != [q["qid"] for q in qs]:
+            sys.exit(f"{run} holds another question set than {a.out}")
+        theirs = correct_of(pair, mod, qs)[1]
+        sign = -1 if a.arm == "full" else 1
+        for arm in pair.arms:
+            acc = 100 * sum(theirs[(arm, i)] for i in primary) / len(primary)
+            diff = {i: sign * (correct[(a.arm, i)] - theirs[(arm, i)]) for i in primary}
+            label = (f"{arm} ({acc:.1f} in {run.name}) - full" if a.arm == "full"
+                     else f"{a.arm} - {arm} ({acc:.1f} in {run.name})")
+            out.append(f"secondary {label}: {paired(diff, primary, unit.get)}")
     return out
 
 
 def stage_score(a: argparse.Namespace, mod, qs: list[dict]) -> None:
     """Accuracy per arm and hippo365 minus bm25 over the store-owning unit, smoke items left out, exhausted ones listed;
-    with --full-context, the ceiling arm's accuracy and each paired arm minus it."""
+    with --arm, the extra arm's accuracy and its paired lines."""
     answers, correct, llm, matched, listed = correct_of(a, mod, qs)
     cats, ids, unit = {q["qid"]: q["category"] for q in qs}, [q["qid"] for q in qs], units(qs)
     primary, note = primary_ids(a, mod, ids)
-    lines = [f"{mod.NAME}: {len(ids)} questions, {len(primary)} in the primary, {"the whole chat" if a.full_context else f"top {mod.TOPK}"}, answers {len(answers)}, "
+    lines = [f"{mod.NAME}: {len(ids)} questions, {len(primary)} in the primary, {"the whole chat" if a.arm == "full" else f"top {mod.TOPK}"}, answers {len(answers)}, "
              f"{len(llm)} judged by model, {len(matched)} by match"]
     for arm in a.arms:
         rs = [answers[(arm, i)] for i in primary]
@@ -463,8 +491,8 @@ def stage_score(a: argparse.Namespace, mod, qs: list[dict]) -> None:
         lines.append(f"{arm:>9}  accuracy {100 * sum(correct[(arm, i)] for i in primary) / len(primary):5.1f}  "
                      f"memories {sum(r['memories'] for r in rs) / len(rs):5.1f}  "
                      f"input tokens {sum(toks) / max(1, len(toks)):7.0f}")
-    if a.full_context:
-        lines += full_lines(a, mod, qs, correct, primary, unit)
+    if a.arm:
+        lines += pair_lines(a, mod, qs, correct, primary, unit)
     else:
         diff = {i: correct[("hippo365", i)] - correct[("bm25", i)] for i in ids}
         lines += primary_lines("hippo365 - bm25 all", diff, primary, ids, unit.get, a.bonferroni)
@@ -484,13 +512,18 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--limit", type=int, default=0, help="smoke only: this many questions, spread over the set")
     ap.add_argument("--slots", type=int, default=10)
-    ap.add_argument("--port-base", type=int, default=8921, help="hippo arm here, bm25 on the next port")
+    ap.add_argument("--port-base", type=int, default=8921, help="arm i shard k listens on port-base + i * shards + k")
+    ap.add_argument("--shards", type=int, default=1, help="ingest and retrieve: servers per arm, each on its own users")
     ap.add_argument("--bonferroni", type=int, metavar="K", help="score: also the primary's interval at 1 - 0.05/K")
-    ap.add_argument("--full-context", type=Path, metavar="RUN",
-                    help="the ceiling arm (dated notes 4): whole chat in the prompt, paired with the registered run RUN")
+    ap.add_argument("--arm", choices=("full", "hippo-emb"), help="one extra arm in a new --out (dated notes 4 and 5)")
+    ap.add_argument("--pairs-with", type=Path, nargs="+", default=[], metavar="RUN", help="registered runs --arm pairs with")
     a = ap.parse_args()
-    if a.full_context and (a.stage == "ingest" or a.full_context.resolve() == a.out.resolve()):
-        ap.error("--full-context starts at retrieve, in a new --out: the ceiling arm has no store")
+    if bool(a.arm) != bool(a.pairs_with):
+        ap.error("--arm and --pairs-with go together")
+    if a.arm and any(r.resolve() == a.out.resolve() for r in a.pairs_with):
+        ap.error("--arm runs in a new --out, never in a paired run's folder")
+    if a.arm == "full" and a.stage == "ingest":
+        ap.error("--arm full starts at retrieve: it has no store")
     if a.bonferroni is not None and (a.stage != "score" or a.bonferroni < 1):
         ap.error("--bonferroni K needs the score stage and K of 1 or more")
     mod, qs = setup(a)

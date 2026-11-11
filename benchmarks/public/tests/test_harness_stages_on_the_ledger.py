@@ -51,9 +51,9 @@ def bench(tmp_path, monkeypatch):
             manifest.setdefault(arm, {})[q["qid"]] = hashlib.sha256(p.read_bytes()).hexdigest()
     (out / "predicted" / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     (out / "questions.json").write_text(json.dumps({"qids": [q["qid"] for q in QS]}), encoding="utf-8")
-    (out / "config.json").write_text(json.dumps({"limit": 0}), encoding="utf-8")
+    (out / "config.json").write_text(json.dumps({"limit": 0, "arms": harness.ARMS}), encoding="utf-8")
     a = argparse.Namespace(stage="score", bench="fakebench", out=out, limit=0, slots=2, port_base=0, bonferroni=4,
-                           full_context=None)
+                           arm=None, pairs_with=[])
     mod, qs = harness.setup(a)
     return a, mod, qs
 
@@ -168,13 +168,13 @@ def test_full_context_shows_the_whole_chat_and_scores_paired_with_the_registered
     a, mod, qs = bench
     full_log(a.out, {q["qid"]: "yes" for q in QS}, {**{q["qid"]: "yes" for q in QS}, "q0": "no"})
     f = argparse.Namespace(stage="retrieve", bench="fakebench", out=tmp_path / "full", limit=0, slots=2, port_base=0,
-                           bonferroni=None, full_context=a.out)
+                           bonferroni=None, arm="full", pairs_with=[a.out])
     mod, qs = harness.setup(f)
     harness.stage_ingest_retrieve(f, mod, qs)
     pred = json.loads(harness.pred_path(f.out, "full", "q2").read_text(encoding="utf-8"))
     assert [r["memory"] for r in pred["results"]] == ["Speaker 1: turn 1a", "Speaker 2: turn 1b"]  # oldest first, blank dropped
     assert (pred["returned"], pred["turns_visible"]) == (2, 3)
-    assert json.loads((f.out / "config.json").read_text(encoding="utf-8"))["pairs_with"] == str(a.out)
+    assert json.loads((f.out / "config.json").read_text(encoding="utf-8"))["pairs_with"] == [str(a.out)]
     write_log(f.out / "calls-answer.jsonl", [rec(f"answer full {q['qid']}", f"{q['question']} with 2 memories",
                                                  system=f"system for {q['qid']}", text="no" if q["qid"] == "q1" else "yes")
                                              for q in QS])
@@ -182,15 +182,72 @@ def test_full_context_shows_the_whole_chat_and_scores_paired_with_the_registered
     harness.stage_score(f, mod, qs)
     text = (f.out / "score.txt").read_text(encoding="utf-8")
     assert "the whole chat" in text and "full  accuracy  80.0  memories   2.0" in text and "PRIMARY" not in text
-    assert "secondary hippo365 (100.0 in the paired run) - full: +20.0 pp" in text and "n=5 over 3 units" in text
-    assert "secondary bm25 (80.0 in the paired run) - full:  +0.0 pp" in text
+    assert "secondary hippo365 (100.0 in out) - full: +20.0 pp" in text and "n=5 over 3 units" in text
+    assert "secondary bm25 (80.0 in out) - full:  +0.0 pp" in text
     assert "smoke items left out of every primary: q5" in text
 
 
-@pytest.mark.parametrize("stage, same", [("ingest", False), ("retrieve", True)])
-def test_full_context_starts_at_retrieve_in_a_new_folder(tmp_path, monkeypatch, stage, same):
-    run = tmp_path if same else tmp_path / "registered"
-    monkeypatch.setattr(sys, "argv", ["harness.py", stage, "--bench", "fakebench", "--out", str(tmp_path),
-                                      "--full-context", str(run)])
+@pytest.mark.parametrize("argv", [["ingest", "--arm", "full", "--pairs-with", "REG"],
+                                  ["retrieve", "--arm", "full", "--pairs-with", "OUT"],
+                                  ["ingest", "--arm", "hippo-emb"], ["ingest", "--pairs-with", "REG"]])
+def test_an_extra_arm_needs_its_pair_and_a_new_folder(tmp_path, monkeypatch, argv):
+    argv = [str(tmp_path / "registered") if x == "REG" else str(tmp_path) if x == "OUT" else x for x in argv]
+    monkeypatch.setattr(sys, "argv", ["harness.py", *argv, "--bench", "fakebench", "--out", str(tmp_path)])
     with pytest.raises(SystemExit):
         harness.main()
+
+
+def test_only_the_hippo_emb_arm_starts_its_server_with_embeddings(tmp_path):
+    emb, plain = harness.server_args("hippo-emb", 1, tmp_path), harness.server_args("hippo365", 1, tmp_path)
+    assert emb[emb.index("--arm") + 1] == "hippo" and emb[-2:] == ["--embeddings", "1"]
+    assert "--embeddings" not in plain and plain[plain.index("--arm") + 1] == "hippo"
+
+
+def test_a_memory_arm_prints_itself_minus_each_paired_arm(bench, tmp_path):
+    a, mod, qs = bench
+    full_log(a.out, {q["qid"]: "yes" for q in QS}, {**{q["qid"]: "yes" for q in QS}, "q0": "no", "q1": "no"})
+    e = argparse.Namespace(stage="score", bench="fakebench", out=tmp_path / "emb", limit=0, slots=2, port_base=0,
+                           bonferroni=None, arm="hippo-emb", pairs_with=[a.out])
+    manifest = {}
+    for q in QS:
+        pth = harness.pred_path(e.out, "hippo-emb", q["qid"])
+        pth.parent.mkdir(parents=True, exist_ok=True)
+        pth.write_bytes(json.dumps({"results": [{"memory": "m"}]}).encode())
+        manifest[q["qid"]] = hashlib.sha256(pth.read_bytes()).hexdigest()
+    (e.out / "predicted" / "manifest.json").write_text(json.dumps({"hippo-emb": manifest}), encoding="utf-8")
+    (e.out / "questions.json").write_text(json.dumps({"qids": [q["qid"] for q in QS]}), encoding="utf-8")
+    (e.out / "config.json").write_text(json.dumps({"limit": 0, "arms": {"hippo-emb": "hippo"}}), encoding="utf-8")
+    write_log(e.out / "calls-answer.jsonl", [answer("hippo-emb", q["qid"], text="no" if q["qid"] == "q0" else "yes")
+                                             for q in QS])
+    mod, qs = harness.setup(e)
+    harness.stage_score(e, mod, qs)
+    text = (e.out / "score.txt").read_text(encoding="utf-8")
+    assert "hippo-emb  accuracy  80.0" in text and "top 5" in text
+    assert "secondary hippo-emb - hippo365 (100.0 in out): -20.0 pp" in text
+    assert "secondary hippo-emb - bm25 (60.0 in out): +20.0 pp" in text
+
+
+def test_shards_split_the_users_and_record_each_once(tmp_path, monkeypatch):
+    ports: list[int] = []
+
+    class FakeServer:
+        def __init__(self, arm, port, data, log) -> None:
+            self.health = {"arm": arm}
+            ports.append(port)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc) -> None:
+            pass
+
+    monkeypatch.setattr(harness, "Server", FakeServer)
+    monkeypatch.setattr(harness, "run_unit", lambda srv, mod, out, user, turns, qs, phase:
+                        {"user": user, "phase": "ingest", "turns": len(turns), "stored": len(turns), "questions": 0})
+    users = {f"u{i}": [{"qid": f"q{i}"}] for i in range(7)}
+    a = argparse.Namespace(out=tmp_path, shards=3)
+    harness.run_arm(a, None, "hippo365", 9000, users, {u: [{}] for u in users}, "ingest")
+    done = [json.loads(line)["user"] for line in (tmp_path / "ingest" / "hippo365" / "done.jsonl").read_text().splitlines()]
+    assert sorted(done) == sorted(users) and sorted(ports) == [9000, 9001, 9002]
+    harness.run_arm(a, None, "hippo365", 9000, users, {u: [{}] for u in users}, "ingest")  # all done: no server starts
+    assert len(ports) == 3
