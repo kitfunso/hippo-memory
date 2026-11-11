@@ -1,6 +1,6 @@
 // Round 4 slice 2c end to end: z0-ledger over a fake r4 run (two models, a cut-off first session, a cut-off resume, a pilot folder), against the fake's own per-call figures and rates worked by hand.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, renameSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 import { runAll } from '../scripts/token-eval/ab-run.mjs';
 import { ALL_ARMS, DESIGNS, OPUS_MODEL, SONNET_MODEL } from '../scripts/token-eval/arms.mjs';
@@ -71,13 +71,13 @@ const slashes = (p: string) => p.split(sep).join('/');
 const modelOf = (c: Call) => c.argv[c.argv.indexOf('--model') + 1];
 const isVersion = (c: Call) => c.argv.includes('--version');
 const isWarmup = (c: Call) => !c.argv.includes('--settings') && !isVersion(c);
-const ARM_WORD = new RegExp(`\\b(${ALL_ARMS.join('|')})\\b`);
 
 let [A, B, P] = ['', '', ''];
 let kA: Knobs;
 let kB: Knobs;
 let [sumA, sumB] = [0, 0];
 const ledgerA = () => runCli(['--prices', P, '--design', 'r4', '--run', A]);
+const sessionsOf = (arm: string, taskId: string) => jsonl<Attempt>(join(A, 'raw', 'seqF', arm, 'seed1', 'attempts.jsonl')).filter((a) => a.taskId === taskId && a.kind === 'session');
 
 describe('z0-ledger over a fake r4 run', () => {
   beforeAll(async () => {
@@ -125,9 +125,11 @@ describe('z0-ledger over a fake r4 run', () => {
 
   it('prices every call by hand at the test\'s own rates, and each warm-up at 0.01901 (Opus) and 0.009505 (Sonnet)', () => {
     for (const k of [kA, kB]) {
-      for (const c of k.costs()) {
-        if (c.usage === null) continue;
-        expect(Math.abs(c.totalCostUsd - handUsd(c.model!, c.usage)), c.call).toBeLessThan(1e-12);
+      const costs = k.costs();
+      for (const c of k.calls().filter((x) => !isVersion(x))) {
+        const cost = costs.find((x) => x.call === c.call)!;
+        expect(cost.usage, c.call).not.toBeNull();
+        expect(Math.abs(cost.totalCostUsd - handUsd(cost.model!, cost.usage!)), c.call).toBeLessThan(1e-12);
       }
     }
     for (const model of [OPUS_MODEL, SONNET_MODEL]) {
@@ -141,8 +143,6 @@ describe('z0-ledger over a fake r4 run', () => {
   it('ran one cut-off first session and one cut-off resume per arm, and each billed', () => {
     const [calls, costs] = [kA.calls(), kA.costs()];
     const billed = (c: Call) => costs.find((x) => x.call === c.call)!.totalCostUsd;
-    const attemptsOf = (arm: string) => jsonl<Attempt>(join(A, 'raw', 'seqF', arm, 'seed1', 'attempts.jsonl'));
-    const sessionsOf = (arm: string, taskId: string) => attemptsOf(arm).filter((a) => a.taskId === taskId && a.kind === 'session');
     expect(['O1', 'S1'].map((arm) => sessionsOf(arm, 'n1').map((a) => a.attempt).join()).sort()).toEqual(['1', '1,2']);
     for (const arm of ['O1', 'S1']) {
       const config = join(A, 'runs', 'seqF', arm, 'seed1', 'claude-config');
@@ -202,20 +202,45 @@ describe('z0-ledger over a fake r4 run', () => {
       const r = runCli(['--prices', P, '--design', 'r4', '--run', A, ...extra]);
       expect(r.stdout).toMatch(/^LEDGER \d+\.\d{2}\n$/);
       expect(r.stderr).toBe('');
-      expect(r.stdout).not.toMatch(ARM_WORD);
-      expect(r.stderr).not.toMatch(ARM_WORD);
     }
+  });
+
+  // Both attempts of a cut first session bill the same figure, so only the missing file tells a ledger that priced the cut one from one that priced its retry twice.
+  it('prices the cut first session from its own transcript: moving that file aside drops LEDGER by the call\'s billed figure', () => {
+    const arm = ['O1', 'S1'].find((a) => sessionsOf(a, 'n1').length === 2)!;
+    const [first] = sessionsOf(arm, 'n1');
+    const cut = kA.calls().filter((c) => c.argv.includes('--session-id') && c.argv[c.argv.indexOf('--session-id') + 1] === first!.sessionId);
+    expect(cut).toHaveLength(1);
+    const billed = kA.costs().find((x) => x.call === cut[0]!.call)!.totalCostUsd;
+    expect(billed).toBeGreaterThan(0);
+    const projects = join(A, 'runs', 'seqF', arm, 'seed1', 'claude-config', 'projects');
+    const rel = readdirSync(projects, { recursive: true, encoding: 'utf8' }).find((f) => basename(f) === `${first!.sessionId}.jsonl`)!;
+    const aside = join(tmp('ledger-e2e-aside-'), 'cut.jsonl');
+    const total = () => ledgerTotal({ runs: [A], prices: RATES, design: DESIGNS.r4 });
+    const before = total();
+    renameSync(join(projects, rel), aside);
+    try {
+      expect(Math.abs(before - total() - billed)).toBeLessThan(1e-9);
+    } finally {
+      renameSync(aside, join(projects, rel));
+    }
+    expect(Math.abs(total() - before)).toBeLessThan(1e-9);
   });
 
   it('gives the same LEDGER with the last runs.jsonl line cut in half', () => {
     const file = join(A, 'runs.jsonl');
-    const lines = readFileSync(file, 'utf8').trimEnd().split('\n');
+    const original = readFileSync(file, 'utf8');
+    const lines = original.trimEnd().split('\n');
     const last = lines.pop()!;
     expect(JSON.parse(last).costUsd).toBeGreaterThan(0);
     writeFileSync(file, `${lines.join('\n')}\n${last.slice(0, Math.floor(last.length / 2))}`);
-    const r = ledgerA();
-    expect(r.code).toBe(0);
-    expect(r.stdout).toBe(`LEDGER ${sumA.toFixed(2)}\n`);
-    expect(Math.abs(ledgerTotal({ runs: [A], prices: RATES, design: DESIGNS.r4 }) - sumA)).toBeLessThan(1e-9);
+    try {
+      const r = ledgerA();
+      expect(r.code).toBe(0);
+      expect(r.stdout).toBe(`LEDGER ${sumA.toFixed(2)}\n`);
+      expect(Math.abs(ledgerTotal({ runs: [A], prices: RATES, design: DESIGNS.r4 }) - sumA)).toBeLessThan(1e-9);
+    } finally {
+      writeFileSync(file, original);
+    }
   });
 });
