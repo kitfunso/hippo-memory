@@ -5,9 +5,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { ARM_TABLE, DESIGNS } from '../scripts/token-eval/arms.mjs';
-import { GATE_MARGIN, R_FLAG, listOf, readBasis, readPins, runCli as budgetCli, sequenceGap, wholeRun, wholeRunSeeds } from '../scripts/token-eval/z0-budget.mjs';
+import { BASE_SEEDS, GATE_MARGIN, PILOT_CHECKS, R_FLAG, listOf, readBasis, readPins, runCli as budgetCli, sequenceGap, wholeRun, wholeRunSeeds } from '../scripts/token-eval/z0-budget.mjs';
 import { costOf } from '../scripts/token-eval/z0-prices.mjs';
 import { rSummary, runCli } from '../scripts/token-eval/z0-pilot.mjs';
+import { cellKey } from '../scripts/token-eval/z0-records.mjs';
 import { PRICES_BY_MODEL, crash, generate, planOf, type PlanCell, type Z0Record } from './fixtures/z0-gen.js';
 
 // SAFETY: every ARM_TABLE row of a round 4 arm carries a model; the cast only widens its literal keys to string.
@@ -129,6 +130,7 @@ const run = (c: Corpus, args: readonly string[] = argv(c)) => runCli([...args], 
 const pilotOf = (c: Corpus): PilotJson => JSON.parse(fs.readFileSync(path.join(c.root, 'pilot.json'), 'utf8'));
 const linesOf = (text: string): string[] => text.split('\n').filter(Boolean);
 const NAMES = ['off-pin', 'effort', 'venv', 'env-keys', 'cost-usd', 'r'];
+const ONE_VOID: readonly Void[] = [{ sequence: 'rn-repo1', seed: 1, arm: 'S1', position: 4, sessionId: 'abc', reason: 'model claude-opus-5-5' }];
 const crashed = (r: Rec, reason = 'no-result'): Rec => {
   crash(r, reason);
   r.costUsd = null;
@@ -198,6 +200,28 @@ describe('z0-pilot: the pass and the pilot.json it writes', () => {
     expect(refused.code).toBe(4);
     expect(refused.stderr.startsWith('FOUNDER: S2 has r')).toBe(true);
   });
+
+  it('writes the budget\'s six check ids in its order, whether the pilot passes or fails', () => {
+    expect(NAMES).toEqual([...PILOT_CHECKS]);
+    const passed = build();
+    expect(run(passed).code).toBe(0);
+    expect(Object.keys(pilotOf(passed).checks)).toEqual([...PILOT_CHECKS]);
+    const failed = build();
+    write(failed, ONE_VOID);
+    expect(run(failed).code).toBe(3);
+    expect(Object.keys(pilotOf(failed).checks)).toEqual([...PILOT_CHECKS]);
+  });
+
+  it('writes a pilot.json that the whole-run admit refuses when a check failed', () => {
+    const c = build();
+    write(c, ONE_VOID);
+    expect(run(c).code).toBe(3);
+    expect(pilotOf(c)).toMatchObject({ rMax: 1, checks: { 'off-pin': 'fail', effort: 'pass', r: 'pass' } });
+    const refused = budgetCli(['admit', '--step', 'whole-run', '--attempt', '1', '--approved', '2140', '--ledger-total', '40', '--spend-basis', c.basis, '--pins', c.pins,
+      '--log', path.join(c.root, 'budget-log.jsonl'), '--pilot', path.join(c.root, 'pilot.json')], c.root);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain('checks not passed: off-pin');
+  });
 });
 
 describe('z0-pilot: one fail per check', () => {
@@ -228,6 +252,14 @@ describe('z0-pilot: one fail per check', () => {
     const r = run(swapped, args);
     expect(r.code).toBe(3);
     expect(r.stdout).toContain('names a pins file at effort high');
+  });
+
+  it('effort: the low and high folders ran different tasks, and both ids are named', () => {
+    const c = build();
+    for (const r of c.high.records) r.taskId = 'rn-repo1-t1';
+    c.high.cells = planOf(c.high.records);
+    write(c);
+    expectOnlyFail(c, 'effort', 'run more than one task: rn-repo1-t0, rn-repo1-t1');
   });
 
   it('env-keys: a name outside the round 4 allowlist, uppercased before the test', () => {
@@ -486,7 +518,7 @@ describe('z0-pilot: missing evidence is bad input', () => {
     c.low.records = c.low.records.filter((r) => r.arm !== 'S1');
     c.low.cells = c.low.cells.filter((x) => x.arm !== 'S1');
     write(c);
-    stops(c, 'effort');
+    stops(c, `${c.low.dir}: its records hold arms O1; a effort folder holds exactly O1, S1`);
     const two = build();
     const copy = { ...find(two.high, 'O1', 0), position: 1, taskId: 'rn-repo1-t1' };
     two.high.records.push(copy);
@@ -516,6 +548,18 @@ describe('z0-pilot: missing evidence is bad input', () => {
     stops(c, 'a pilot folder holds exactly O1, S1, S2');
     const twice = build();
     stops(twice, `${runsOf(twice.pilot[1]!)} is given twice`, [...argv(twice), '--runs', runsOf(twice.pilot[1]!), '--plan', planFileOf(twice.pilot[1]!)]);
+  });
+
+  it('a cell held by a pilot folder and by its rerun folder, whichever is given first', () => {
+    for (const rerunFirst of [false, true]) {
+      const c = build();
+      const [home, other] = [c.pilot[0]!, c.pilot[1]!];
+      const rerun = folderOf(c.root, 'pilot/rn-repo2-p2', other.records.map((r, i) => (i === 0 ? setOutput({ ...r }, 777) : { ...r })));
+      c.pilot = rerunFirst ? [home, rerun, other] : [home, other, rerun];
+      write(c);
+      const [early, late] = [c.pilot[1]!, c.pilot[2]!];
+      stops(c, `cell ${cellKey(late.records[0]!)} is in both ${early.dir} and ${late.dir}`);
+    }
   });
 
   it('a pilot folder whose off-pin file names another pins file', () => {
@@ -581,9 +625,10 @@ describe('z0-pilot: the flags', () => {
 });
 
 describe('z0-budget exports (plan W3-1)', () => {
-  it('exports the margin, the flag and the three readers the pilot uses', () => {
+  it('exports the margin, the flag, the base seed count, the six check ids and the three readers the pilot uses', () => {
     expect(GATE_MARGIN).toBe(1.25);
     expect(R_FLAG).toBe(1.9);
+    expect(BASE_SEEDS).toBe(ARM_TABLE[DESIGNS.r4.seedRule[0]!.arms[0]!].seeds);
     for (const f of [readBasis, readPins, listOf, wholeRunSeeds]) expect(f).toBeInstanceOf(Function);
     expect(DESIGNS.r4.pairs.S1vO1).toEqual(['S1', 'O1']);
   });

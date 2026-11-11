@@ -9,7 +9,7 @@ import { ARM_TABLE, DESIGNS, OPUS_MODEL, allowlistOf, envAllowSet } from './arms
 import { writeFileAtomic } from './atomic-write.mjs';
 import { Stop, parseFlags, readJson, runCommand, runMain } from './free-cli.mjs';
 import { inputHashes, sha256 } from './z0-blind.mjs';
-import { GATE_MARGIN, PILOT_BUDGET, R_FLAG, listOf, readBasis, readPins, sequenceGap, wholeRun, wholeRunSeeds } from './z0-budget.mjs';
+import { BASE_SEEDS, GATE_MARGIN, PILOT_BUDGET, PILOT_CHECKS, R_FLAG, listOf, readBasis, readPins, sequenceGap, wholeRun, wholeRunSeeds } from './z0-budget.mjs';
 import { usageRatio } from './z0-cost-solved.mjs';
 import { readVoids } from './z0-filters.mjs';
 import { checkPrices, costOf } from './z0-prices.mjs';
@@ -31,8 +31,6 @@ const BASE = DESIGNS.r4.pairs.S1vO1[1];
 const R_ARMS = ARMS.filter((a) => a === DESIGNS.r4.pairs.S1vO1[0] || a === DESIGNS.r4.tests.T2a[0]);
 const PILOT_ARMS = ARMS.filter((a) => a === BASE || R_ARMS.includes(a));
 const EFFORT_ARMS = ARMS.filter((a) => DESIGNS.r4.pairs.S1vO1.includes(a));
-// The seed count z0-budget keeps private: the first rule arm's base seeds.
-const BASE_SEEDS = ARM_TABLE[DESIGNS.r4.seedRule[0].arms[0]].seeds;
 
 const bad = (message) => new Error(`${message}\n${USAGE}`);
 const plain = (v) => v !== undefined && v !== null && v.constructor === Object;
@@ -195,6 +193,18 @@ function loadBudget(args, cwd) {
   return { basis, pins, seeds, gapByArm };
 }
 
+/** A cell in two pilot folders, a run and its rerun, would make r depend on which one is read last; the two effort folders hold one cell by design. */
+function checkOneHome(pilots) {
+  const home = new Map();
+  for (const f of pilots) {
+    for (const r of f.records) {
+      const key = cellKey(r);
+      if (home.has(key)) throw new Error(`cell ${key} is in both ${home.get(key).dir} and ${f.dir}`);
+      home.set(key, f);
+    }
+  }
+}
+
 function loadInputs(args, cwd) {
   const pilots = args.runs.map((runs, i) => loadFolder('pilot', null, runs, args.plan[i], cwd));
   const efforts = args.efforts.map(({ level, dir }) => loadFolder('effort', level, path.join(dir, 'runs.jsonl'), path.join(dir, 'plan.json'), cwd));
@@ -204,6 +214,7 @@ function loadInputs(args, cwd) {
     if (seen.has(folderKey(cwd, f.runs))) throw new Error(`${f.runs} is given twice`);
     seen.add(folderKey(cwd, f.runs));
   }
+  checkOneHome(pilots);
   const prices = loadPlainJson(args.prices, cwd);
   checkPrices(prices, args.prices, DESIGNS.r4);
   const budget = loadBudget(args, cwd);
@@ -223,6 +234,8 @@ function checkEffort({ efforts }) {
   for (const f of efforts) {
     if (f.boundEffort !== f.level) reasons.push(`the ${f.level} folder's off-pin file names a pins file at effort ${f.boundEffort}, not ${f.level}`);
   }
+  const tasks = [...new Set(efforts.flatMap((f) => f.records.map((r) => r.taskId)))];
+  if (tasks.length > 1) reasons.push(`the effort records run more than one task: ${tasks.join(', ')}`);
   for (const model of modelsOf(EFFORT_ARMS)) {
     const [low, high] = efforts.map((f) => ({ level: f.level, tokens: outputTokens(f.records.filter((r) => ARM_TABLE[r.arm].model === model)) }));
     for (const { level, tokens } of [low, high]) if (tokens === null) reasons.push(`${model} at ${level} has no usage`);
@@ -391,7 +404,7 @@ function execute(argv, cwd) {
   const extra = [...args.efforts.flatMap((e) => [['effort-runs', path.join(e.dir, 'runs.jsonl')], ['effort-runs', path.join(e.dir, 'plan.json')]]),
     ['pilot-tasks', args.pilotTasks], ['pins', args.pins], ['spend-basis', args.spendBasis], ...venvFiles.map((f) => ['venv', f])];
   const hashes = inputHashes({ runs: args.runs, plan: args.plan, prices: args.prices, offPin: args.offPin }, cwd, { entry: ENTRY, extra });
-  const checks = Object.fromEntries(results.map((c) => [c.name, c.reasons.length === 0 ? 'pass' : 'fail']));
+  const checks = Object.fromEntries(PILOT_CHECKS.map((id) => [id, results.find((c) => c.name === id).reasons.length === 0 ? 'pass' : 'fail']));
   const body = { schema: PILOT_SCHEMA, attempt: args.attemptN, tag: args.tag, r: rResult.r, rArm: summary.rArm, rMax: summary.rMax, flag19: summary.flag19, ledgerTotal: args.ledgerUsd, pilotSpend: args.spentUsd, checks, hashes };
   writeFileAtomic(path.resolve(cwd, args.out), `${JSON.stringify(body, null, 2)}\n`);
   const [stdout, failed] = [`${lines.join('\n')}\n`, results.filter((c) => c.reasons.length > 0)];
