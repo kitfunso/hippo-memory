@@ -311,3 +311,40 @@ This note fixes revision 1 item 4 for LongMemEval-S. The code commit is the comm
 - Cutoffs: 200 (primary) and 10 (secondary) memories shown.
 - Judge: gpt-5.6-sol medium through codex. The JSON-only preamble is replaced at run time by a plain one, because this judge answers yes or no. LongMemEval's own GPT-4o judge does not run, so no number here is comparable with published LongMemEval scores.
 - Primary: judge accuracy at top 200, one 0 or 1 per question with equal weight, parsed by the runner's `judge_yes_no`. A judge item with no valid reply in 3 asks scores "no", which means wrong. Comparison: `hippo365` minus `bm25`, paired. Unit: the question, since each question owns its haystack's store, so `cluster_boot` equals `boot`. Per question type and top 10 are secondary.
+
+## Amendment 7 (2026-11-11, before any Terminal-Bench task is attempted): Terminal-Bench 2.0, Claude Code with and without hippo
+
+**Why.** Amendment 6 registers Terminal-Bench 2.0 in its own amendment, which this is. It is an outcome test: each task checks itself with its own tests, so no judge is used.
+
+**Data.** harbor 0.25.0 `terminal-bench@2.0`: 89 tasks, downloaded on 11 Nov 2026 to `~/hippo-bench/tbench/data/terminal-bench`. The run's `order.json` holds the SHA-256 of every task folder. Each task's `tests/test.sh` runs pytest on `/tests/test_outputs.py` and writes reward 1 if it passes, else 0 (`overfull-hbox/tests/test.sh` lines 23 to 34; the same reward lines are in all 89). Pass means reward 1. Per-task agent timeouts come from `task.toml` `[agent] timeout_sec`: 360 s to 12,000 s, 41.3 h in all. The setup limit is 1,800 s, up from harbor's 360 s, because the install of nodejs and npm took longer in the smoke.
+
+**Agent, the same in both arms.** Harbor's `claude-code` agent runs Claude Code 2.1.321, pinned. The model is `claude-sonnet-5` at effort medium. It runs on the founder's parked subscription token, passed as `CLAUDE_CODE_OAUTH_TOKEN` to the harbor process only, with `CLAUDE_FORCE_OAUTH=1` and no API key. Harbor's defaults stay unchanged: permission mode `bypassPermissions`, `IS_SANDBOX=1`, non-essential traffic off, web tools on, and Claude Code installed in each task container. Each task gets one trial per arm, and each task gets a fresh Claude Code config folder, so Claude Code keeps no memory across tasks.
+
+**Arms.**
+- `none`: Claude Code alone.
+- `hippo`: the same, plus hippo-memory 3.5.1. Its build is the `dist/` of this branch, with no `src` change since `9d2a57529`. It runs on Node 22 from a read-only docker volume.
+  - MCP: hippo's stdio server, registered user-scoped.
+  - Hooks: exactly those that `hippo hook install claude-code` writes, passed as a settings layer. These are SessionStart, UserPromptSubmit (the recall hook, which recalls by the task prompt), SessionEnd (sleep, then capture from the transcript), PreCompact, PostCompact and PostToolUseFailure (`capture-error`).
+  - Store: one global store on a docker volume. It starts empty and carries across the arm's 89 tasks, so lessons from earlier tasks can reach later ones.
+  - No added instruction: the agent gets the task text alone, as in `none`.
+
+**Order.** The task names are sorted, then shuffled with `random.Random(1)` (`terminalbench/run_tbench.py` lines 57 and 58). The first five are `nginx-request-logging`, `rstan-to-pystan`, `build-pmars`, `fix-ocaml-gc` and `reshard-c4-data`. Both arms of a task run at the same time. The next task starts when both end.
+
+**Infrastructure and the attempt ledger.** A trial with a test result is final; the first one counts. These trials have no test result and are retried:
+- the agent never started (setup or environment failure);
+- the session ended on an API error (HTTP 429 or 529, or an API-error end);
+- a usage-limit event rejected the session.
+
+Before each retry, the hippo store is restored to its copy from before that task. On a usage limit the driver waits until the reset plus 2 minutes; otherwise it waits 60 s. After 3 failures in a row that are not usage limits, the run stops for inspection, and a re-run resumes the same task. A task that still has no test result in an arm by the deadline scores fail in that arm and is listed (revision 1 item 5). Agent timeouts, agent errors and failed tests count as fail. Every try is in `progress.jsonl`, the attempt ledger.
+
+**Primary.** Pass rate of `hippo` minus `none`, paired by task, `boot` in `evidence_recall.py` (4,000 draws, seed 1, 95%), read with Amendment 2's rule. `overfull-hbox` (index 74) is the smoke item. It runs in place to keep the store's sequence, but it stays out of the primary, so n is 88.
+
+**Unit (revision 1 item 9).** The hippo arm has one store across all tasks, so no store-level unit exists. The task is the unit. A block bootstrap over runs of 10 consecutive tasks in run order is a sensitivity line. The suite rule of revision 1 item 10 applies.
+
+**Deadline (revision 1 item 11).** If the run has not finished by 2026-11-25, the primary covers the tasks that have a final result in both arms. Because the order is a seeded shuffle, they are a random sample of the 89. Every other task is listed as not run.
+
+**Secondary, labelled so.** Discordant pairs (pass in hippo only, pass in none only); the difference in the first and second half of the order; memories in the store after each task; agent time, turns and cost per task, from each session's result event.
+
+**What this can show.** Terminal-Bench tasks do not depend on each other. Memory can help only where a lesson from one task, such as a captured tool failure, applies to another. An effect near zero is expected. A matches or unresolved reading would not show that hippo fails to help an agent on repeated or related work. No number is comparable with the public leaderboard, since the agent, model, effort and harness settings differ.
+
+**Published whatever the result:** `docs/evals/<date>-public-benchmarks-r2-c.md`, with `progress.jsonl`, `order.json`, the bundle record, the hook settings, the per-trial harbor results and transcripts, the store snapshots, the commands and the code commit.
