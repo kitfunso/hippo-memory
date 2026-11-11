@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MANIFEST, manifestText, runCli } from '../scripts/token-eval/z0-pins-check.mjs';
 
 const sha = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -240,5 +240,191 @@ describe('--write', () => {
     expect(out.map((l) => path.basename(l))).toEqual(['pins.json', 'pins-effort-low.json', 'pins-effort-high.json']);
     const bad = runCli(['--write', 'pins.json', '--checkout', checkout, '--set', 'novalue'], work);
     expect([bad.code, bad.stderr]).toEqual([1, '--set novalue: a pair is key=value\n']);
+  });
+
+  it('exits 1 naming the three efforts on an effort outside them, and writes nothing', () => {
+    const snapshot = () => fs.readdirSync(work).sort().map((f) => [f, fs.statSync(path.join(work, f)).isFile() ? fs.readFileSync(path.join(work, f), 'utf8') : null]);
+    const before = snapshot();
+    const r = runCli(['--write', 'pins.json', '--checkout', checkout, '--set', 'effort=meduim', ...roles()], work);
+    expect([r.code, r.stdout, r.stderr]).toEqual([1, '', '--set effort=meduim: effort is one of low, medium, high\n']);
+    expect(snapshot()).toEqual(before);
+  });
+});
+
+// The plan's Pins roles contract (:77): the 20 roles in `<root>/pin-roles.txt` order.
+const ROLE_ORDER = ['tree:tasks', 'tree:pilot-tasks', 'tree:whole-plan', 'pip-constraint', 'prices', 'spend-basis', 'pre-levels', 'r3-inputs', 'drift-inputs', 'r3-grading', 'r3-drop-list',
+  's4-run.ps1', 's4-regrade.ps1', 's4-batch.sh', 's4-units.sh', 's4-procs.ps1', 's4-read.sh', 's4-drive.sh', 'box-check.sh', 's3x-env.ps1'];
+const twenty = () => ROLE_ORDER.map((r) => `${r}=roles/${r.replace(/^tree:/, '')}`);
+
+describe('--roles', () => {
+  const pinArgs = ['--pins', 'pins20.json', '--checkout'];
+  const byArgs = () => runCli([...pinArgs, checkout, ...twenty()], work);
+  const byFile = (file: string, extra: string[] = []) => runCli([...pinArgs, checkout, '--roles', file, ...extra], work);
+
+  beforeEach(() => {
+    for (const r of ROLE_ORDER) {
+      const name = r.replace(/^tree:/, '');
+      put(work, r.startsWith('tree:') ? `roles/${name}/f.txt` : `roles/${name}`, name);
+      if (r.startsWith('tree:')) expect(runCli(['--manifest', `roles/${name}`], work).code).toBe(0);
+    }
+    expect(runCli(['--write', 'pins20.json', '--checkout', checkout, '--set', 'effort=medium', ...twenty()], work).code).toBe(0);
+    put(work, 'pin-roles.txt', `${twenty().join('\n')}\n`);
+  });
+
+  it('gives the same exit, stdout and stderr as the same 20 arguments, on a pass and on two moved files', () => {
+    const passed = byArgs();
+    expect([passed.code, passed.stderr]).toEqual([0, '']);
+    expect(passed.stdout).toMatch(/^pins ok: 20 files and folders, hippo build [0-9a-f]{40}\n$/);
+    expect(byFile('pin-roles.txt')).toEqual(passed);
+    const pinnedPrices = JSON.parse(fs.readFileSync(path.join(work, 'pins20.json'), 'utf8'))['sha256:prices'];
+    put(work, 'roles/prices', 'moved');
+    put(work, 'roles/pilot-tasks/f.txt', 'moved');
+    const moved = byArgs();
+    expect(moved.code).toBe(3);
+    expect(lines(moved)).toEqual(['PINS: pilot-tasks: f.txt changed', `PINS: prices is pinned ${pinnedPrices}, this file has ${sha(path.join(work, 'roles/prices'))}`]);
+    expect(byFile('pin-roles.txt')).toEqual(moved);
+  });
+
+  it('reads the file beside role arguments, and a role in both exits 1', () => {
+    put(work, 'pin-roles-19.txt', `${twenty().slice(0, -1).join('\n')}\n`);
+    expect(byFile('pin-roles-19.txt', [twenty().at(-1)!])).toEqual(byArgs());
+    const twice = byFile('pin-roles-19.txt', [twenty()[0]!]);
+    expect([twice.code, twice.stdout]).toEqual([1, '']);
+    expect(twice.stderr).toMatch(/^role tasks is given twice; a role names one file or folder\n/);
+  });
+
+  it('exits 3 naming the role when a line is dropped from the file', () => {
+    put(work, 'pin-roles-19.txt', `${twenty().slice(0, -1).join('\n')}\n`);
+    const r = byFile('pin-roles-19.txt');
+    expect([r.code, r.stdout, lines(r)]).toEqual([3, '', ['PINS: s3x-env.ps1 is pinned but not checked; pass s3x-env.ps1=<path>']]);
+  });
+
+  it('allows a file with no final newline, and exits 1 naming the line that holds a CR, and on a missing file', () => {
+    put(work, 'pin-roles-bare.txt', twenty().join('\n'));
+    expect(byFile('pin-roles-bare.txt')).toEqual(byArgs());
+    put(work, 'pin-roles-cr.txt', `${twenty().map((l, i) => (i === 2 ? `${l}\r` : l)).join('\n')}\n`);
+    const cr = byFile('pin-roles-cr.txt');
+    expect([cr.code, cr.stdout]).toEqual([1, '']);
+    expect(cr.stderr).toMatch(/^--roles pin-roles-cr\.txt: line 3 holds a carriage return; the file takes LF line ends\n/);
+    const missing = byFile('no-such-roles.txt');
+    expect([missing.code, missing.stdout]).toEqual([1, '']);
+    expect(missing.stderr).toMatch(/no-such-roles\.txt/);
+  });
+});
+
+describe('--poetry', () => {
+  const stub = (out: string) => ({ poetryLine: vi.fn(() => out) });
+  const pinFile = 'pins-poetry.json';
+  const written = (deps: ReturnType<typeof stub>, ...set: string[]) => runCli(['--write', pinFile, '--checkout', checkout, '--set', 'effort=medium', ...set, '--poetry', 'poetry-dir', ...roles()], work, deps);
+  const checked = (deps?: ReturnType<typeof stub>, ...extra: string[]) => runCli(['--pins', pinFile, '--checkout', checkout, ...extra, ...roles()], work, deps);
+  const poetryDir = () => path.join(work, 'poetry-dir');
+
+  beforeEach(() => {
+    expect(written(stub('Poetry (version 2.5.1)\n')).code).toBe(0);
+  });
+
+  it('passes when the first line names the pinned version, reading the folder resolved against the cwd', () => {
+    const deps = stub('Poetry (version 2.5.1)\n');
+    const r = checked(deps, '--poetry', 'poetry-dir');
+    expect([r.code, r.stderr]).toEqual([0, '']);
+    expect(deps.poetryLine).toHaveBeenCalledExactlyOnceWith(poetryDir());
+  });
+
+  it('exits 3 with the mismatch line when the version differs', () => {
+    const r = checked(stub('Poetry (version 2.5.2)\n'), '--poetry', 'poetry-dir');
+    expect([r.code, r.stdout, lines(r)]).toEqual([3, '', ['PINS: poetryVersion is pinned 2.5.1, this run has 2.5.2']]);
+  });
+
+  it('exits 3 when a pinned poetryVersion has no --poetry beside it, and runs no reader', () => {
+    const deps = stub('Poetry (version 2.5.1)\n');
+    const r = checked(deps);
+    expect([r.code, lines(r)]).toEqual([3, ['PINS: poetryVersion is pinned but not checked; pass --poetry <dir>']]);
+    expect(deps.poetryLine).not.toHaveBeenCalled();
+  });
+
+  it('exits 3 when --poetry meets a pins file with no poetryVersion', () => {
+    const r = runCli(['--pins', 'pins.json', '--checkout', checkout, '--poetry', 'poetry-dir', ...roles()], work, stub('Poetry (version 2.5.1)\n'));
+    expect([r.code, lines(r)]).toEqual([3, ['PINS: poetryVersion is not pinned']]);
+  });
+
+  it('writes poetryVersion into the main file and both effort files, each of which then passes', () => {
+    for (const f of ['pins-r4.json', 'pins-r4-effort-low.json', 'pins-r4-effort-high.json']) expect(fs.existsSync(path.join(work, f)), f).toBe(false);
+    const r = runCli(['--write', 'pins-r4.json', '--checkout', checkout, '--set', 'effort=medium', '--poetry', 'poetry-dir', ...roles()], work, stub('Poetry (version 2.5.1)\n'));
+    expect(r.code).toBe(0);
+    for (const f of ['pins-r4.json', 'pins-r4-effort-low.json', 'pins-r4-effort-high.json']) {
+      expect(JSON.parse(fs.readFileSync(path.join(work, f), 'utf8')).poetryVersion, f).toBe('2.5.1');
+      expect(runCli(['--pins', f, '--checkout', checkout, '--poetry', 'poetry-dir', ...roles()], work, stub('Poetry (version 2.5.1)\n')).code, f).toBe(0);
+    }
+  });
+
+  it('writes no poetryVersion without --poetry', () => {
+    expect(JSON.parse(fs.readFileSync(path.join(work, 'pins.json'), 'utf8'))).not.toHaveProperty('poetryVersion');
+  });
+
+  it('exits 1 on --set poetryVersion and writes nothing', () => {
+    const before = fs.readFileSync(path.join(work, pinFile), 'utf8');
+    const r = written(stub('Poetry (version 2.5.1)\n'), '--set', 'poetryVersion=2.5.1');
+    expect([r.code, r.stdout]).toEqual([1, '']);
+    expect(r.stderr).toMatch(/^--set poetryVersion: --poetry writes it from the poetry folder, so --set cannot name it\n$/);
+    expect(fs.readFileSync(path.join(work, pinFile), 'utf8')).toBe(before);
+  });
+
+  it('exits 3 with one PINS line naming the folder and what it printed, on a first line of another shape, in --pins and in --write', () => {
+    const wrong = stub('Poetry 2.5.1\nPoetry (version 2.5.1)\n');
+    for (const r of [checked(wrong, '--poetry', 'poetry-dir'), written(wrong)]) {
+      expect(r.code).toBe(3);
+      expect(lines(r)).toEqual([`PINS: poetryVersion: ${poetryDir()} printed "Poetry 2.5.1", not "Poetry (version <v>)"`]);
+    }
+  });
+
+  it('exits 3 with one PINS line naming the folder when the reader fails, and with the real reader on a folder with no poetry.exe', () => {
+    const exe = path.join(poetryDir(), 'Scripts', 'poetry.exe');
+    const failing = { poetryLine: vi.fn((): string => { throw new Error('spawn failed\nmore'); }) };
+    const r = checked(failing, '--poetry', 'poetry-dir');
+    expect([r.code, lines(r)]).toEqual([3, [`PINS: poetryVersion: ${exe} did not run: spawn failed`]]);
+    const real = checked(undefined, '--poetry', 'poetry-dir');
+    expect(real.code).toBe(3);
+    expect(lines(real)).toEqual([expect.stringContaining(`PINS: poetryVersion: ${exe} did not run: `)]);
+  });
+});
+
+describe('--manifest-check', () => {
+  const elsewhere = () => path.parse(work).root;
+  const tasks = () => path.join(work, 'tasks');
+
+  it('passes from the cwd the folder is relative to and from another cwd with an absolute path, naming the folder and its file count', () => {
+    const [near, far] = [runCli(['--manifest-check', 'tasks'], work), runCli(['--manifest-check', tasks()], elsewhere())];
+    for (const r of [near, far]) expect([r.code, r.stdout, r.stderr]).toEqual([0, `manifest ok: 2 files in ${tasks()}\n`, '']);
+  });
+
+  it('exits 3 naming the changed file from both cwds', () => {
+    put(work, 'tasks/top.txt', 'TOP');
+    for (const [dir, cwd] of [['tasks', work], [tasks(), elsewhere()]] as const) {
+      const r = runCli(['--manifest-check', dir], cwd);
+      expect([r.code, r.stdout, lines(r)]).toEqual([3, '', [`PINS: ${tasks()}: top.txt changed`]]);
+    }
+  });
+
+  it('exits 3 on a missing file, an unlisted file and a missing manifest', () => {
+    put(work, 'tasks/extra.txt', 'x');
+    fs.rmSync(path.join(work, 'tasks/k/tasks-run.json'));
+    expect(lines(runCli(['--manifest-check', 'tasks'], work))).toEqual([`PINS: ${tasks()}: k/tasks-run.json is missing`, `PINS: ${tasks()}: extra.txt is not in ${MANIFEST}`]);
+    fs.rmSync(path.join(work, 'tasks', MANIFEST));
+    const r = runCli(['--manifest-check', 'tasks'], work);
+    expect([r.code, lines(r)]).toEqual([3, [expect.stringMatching(/^PINS: .*tasks: .*sha256\.txt does not exist; write it with --manifest$/)]]);
+  });
+
+  it('exits 3 naming a link under the folder', () => {
+    put(work, 'outside/x.txt', 'x');
+    const link = path.join(work, 'tasks', 'k', 'lnk');
+    fs.symlinkSync(path.join(work, 'outside'), link, 'junction');
+    const r = runCli(['--manifest-check', 'tasks'], work);
+    expect([r.code, lines(r)]).toEqual([3, [`PINS: ${link} is a link; a pinned folder holds files only`]]);
+  });
+
+  it('is one of four modes: it exits 1 beside another mode and names all four', () => {
+    const r = runCli(['--manifest-check', 'tasks', '--manifest', 'tasks'], work);
+    expect([r.code, r.stdout]).toEqual([1, '']);
+    expect(r.stderr).toMatch(/^give exactly one of --pins, --write, --manifest and --manifest-check\n/);
   });
 });

@@ -118,7 +118,7 @@ describe('DESIGNS["r4-on-r3"] on a round 3 corpus with seed 4 and a dropped fami
     expect(bothCodings(modern.filtered.scored, 'A2', 'A1', { ...STAT, design: DESIGN }, firstApplyR)).toEqual(bothCodings(classic.filtered.scored, 'A2', 'A1', STAT, firstApplyR));
   });
 
-  it('holds no seed 4 record in the gates, the planned runs of G3 or the size calibration', () => {
+  it('holds no seed 4 record in the gates or the planned runs of G3, and the sizer stops on T2a until part B sizes it', () => {
     const gates = computeGates(modern.records, modern.filtered, GRADING, { ...STAT, design: DESIGN });
     const round3 = computeGates(classic.records, classic.filtered, GRADING, STAT);
     expect(gates.G3.plannedRuns).toBe(round3.G3.plannedRuns);
@@ -127,9 +127,7 @@ describe('DESIGNS["r4-on-r3"] on a round 3 corpus with seed 4 and a dropped fami
     const args = parseSize(['--runs', 'r', '--plan', 'p', '--prices', 'c', '--sims', '20', '--repos', '5', '--effects', '0.2', '--level-sims', '20']);
     const quota = Object.fromEntries(Object.entries(QUOTA_USD_PER_DAY).map(([tool, usdPerDay]) => [tool, { usdPerDay, source: 'default assumption' }]));
     const settings = { ...Object.fromEntries(Object.entries(args).filter(([k]) => k in DEFAULTS)), firstWave: 3, holmLevel: 0.025, quota };
-    const size = sizeZ0(parse(records), plan, R3_FILE, { ...settings, ...filterOpts({ design: DESIGN }) });
-    expect(size.calibration.records).toBe(base.records.length);
-    expect(size.calibration.perRecord).toEqual(perRecordUsage(parse(base.records), PRICES));
+    expect(() => sizeZ0(parse(records), plan, R3_FILE, { ...settings, ...filterOpts({ design: DESIGN }) })).toThrow(/^T2a: design r4-on-r3 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
     const cal = calibrate(modern.filtered, R3_FILE, 0.8, { design: DESIGN });
     expect(cal.H1).toEqual({ reason: 'design r4-on-r3 has no H1' });
     expect(cal.H4).toEqual(calibrate(classic.filtered, PRICES, 0.8).H4);
@@ -211,9 +209,9 @@ describe('the seed rule on a design with a test it cannot size', () => {
     expect(() => seedRule(parse(g.records), g.plan, PRICES_BY_MODEL, { ...SETTINGS, design: DESIGNS.r4 })).toThrow(/^T2a: design r4 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
   });
 
-  it('stops under r4-on-r3, whose rule names no test, rather than returning no seeds', () => {
+  it('stops under r4-on-r3 on the first T2 part of its one group, naming it and saying part B sizes it', () => {
     const g = generate({ arms: ['A0', 'A1', 'A2', 'A4', 'A5'] });
-    expect(() => seedRule(parse(g.records), g.plan, PRICES, { ...SETTINGS, design: DESIGNS['r4-on-r3'] })).toThrow(/^design r4-on-r3 names no test in its seed rule, so the rule has nothing to size$/);
+    expect(() => seedRule(parse(g.records), g.plan, PRICES, { ...SETTINGS, design: DESIGNS['r4-on-r3'] })).toThrow(/^T2a: design r4-on-r3 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
   });
 });
 

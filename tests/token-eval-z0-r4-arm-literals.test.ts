@@ -9,9 +9,13 @@ const DIR = path.resolve(__dirname, '..', 'scripts', 'token-eval');
 const PATTERNS = [/['"`](A|X|O|S)[0-9]['"`]/, /startsWith\(['"][A-Z]['"]\)/, /arm\[0\]/, /\b(A|X|O|S)[0-9]: /];
 
 /** `text` with each comment blanked and every line break kept, so code after a closed block comment is scanned and a hit keeps its line number.
- * TypeScript's parser tells the tokens apart, so a regex, string or template that holds '//' or '/*' is never read as a comment. */
-function withoutComments(text: string): string {
-  const source = ts.createSourceFile('scanned.mjs', text, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);
+ * TypeScript's parser tells the tokens apart, so a regex, string or template that holds '//' or '/*' is never read as a comment.
+ * A source with a syntax error throws, since the parser's tree for it may hide a code from the scan. */
+function withoutComments(text: string, file: string): string {
+  const parsed = ts.transpileModule(text, { fileName: file, reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.Latest } });
+  const first = parsed.diagnostics?.[0];
+  if (first !== undefined) throw new Error(`${file}: ${ts.flattenDiagnosticMessageText(first.messageText, '\n')}`);
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);
   const out = text.split('');
   const visit = (node: ts.Node): void => {
     // A JSDoc node only repeats a comment that the token after it holds in its own leading text.
@@ -20,7 +24,7 @@ function withoutComments(text: string): string {
       children.forEach(visit);
       return;
     }
-    // Only whitespace and comments sit between a token's full start and its own start.
+    // Only whitespace, comments and a leading shebang sit between a token's full start and its own start.
     for (let i = node.pos; i < node.getStart(source); i++) if (!/\s/.test(out[i]!)) out[i] = ' ';
   };
   visit(source);
@@ -28,15 +32,15 @@ function withoutComments(text: string): string {
 }
 
 /** The 1-based line numbers of `text` that a pattern matches once comment text is stripped. */
-function hits(text: string): number[] {
-  return withoutComments(text).split('\n').flatMap((line, i) => (PATTERNS.some((p) => p.test(line)) ? [i + 1] : []));
+function hits(text: string, file = 'scanned.mjs'): number[] {
+  return withoutComments(text, file).split('\n').flatMap((line, i) => (PATTERNS.some((p) => p.test(line)) ? [i + 1] : []));
 }
 
 describe('arm literals (round 4 prereg :104)', () => {
   const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.mjs'));
 
   it('finds no code outside arms.mjs', () => {
-    const found = files.filter((f) => f !== 'arms.mjs').flatMap((f) => hits(fs.readFileSync(path.join(DIR, f), 'utf8')).map((n) => `${f}:${n}`));
+    const found = files.filter((f) => f !== 'arms.mjs').flatMap((f) => hits(fs.readFileSync(path.join(DIR, f), 'utf8'), f).map((n) => `${f}:${n}`));
     expect(found).toEqual([]);
   });
 
@@ -45,7 +49,7 @@ describe('arm literals (round 4 prereg :104)', () => {
     const [start, end] = [lines.findIndex((l) => l.includes('arm-table:start')) + 1, lines.findIndex((l) => l.includes('arm-table:end')) + 1];
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
-    const outside = hits(lines.join('\n')).filter((n) => n < start || n > end);
+    const outside = hits(lines.join('\n'), 'arms.mjs').filter((n) => n < start || n > end);
     expect(outside).toEqual([]);
   });
 
@@ -58,6 +62,17 @@ describe('arm literals (round 4 prereg :104)', () => {
     expect(hits("/* x */\n/* y */ const a = 'A1';")).toEqual([2]);
     expect(hits("const a = 1; /* skip */ const b = 'S2';")).toEqual([1]);
     expect(hits("const re = /[/*]/;\nconst a = 'A1';")).toEqual([2]);
+  });
+
+  it('parses every scanned file with no diagnostic', () => {
+    for (const f of files) expect(() => withoutComments(fs.readFileSync(path.join(DIR, f), 'utf8'), f), f).not.toThrow();
+  });
+
+  it('refuses a source the parser misreads, naming the file and the first message, so it cannot pass the scan', () => {
+    for (const sample of ['const a = ;', "const a = 'A1';\nconst = 2;", 'const b = { ;']) {
+      expect(() => hits(sample, 'bad.mjs'), sample).toThrow(/^bad\.mjs: .+/);
+    }
+    expect(() => hits('#!/usr/bin/env node\nconst a = 1;', 'shebang.mjs')).not.toThrow();
   });
 
   it('skips a code that sits inside a comment only, on one line or several', () => {

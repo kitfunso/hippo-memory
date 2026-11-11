@@ -3,7 +3,7 @@ import { delimiter } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   ALL_ARMS, ARMS, ARM_SEEDS, ARM_TABLE, CAPTURE_ARMS, CARRY_ARMS, CODEX_HIPPO_ARMS, DESIGNS, EFFORTS, ENV_ALLOWLIST, FLOOR_ARMS, HIPPO_ARMS, NO_AUTO_MEMORY, OPUS_MODEL, RESTORED_ARMS,
-  RN_ARMS, RULE_ARMS, SONNET_MODEL, TWO_SEED_ARMS, X_ARMS, armEnv, armSet, armSettings, checkDesigns, checkTable, designByName, joinCodes, pairOf, roundArms, warmupEnv,
+  RN_ARMS, RULE_ARMS, SONNET_MODEL, TWO_SEED_ARMS, X_ARMS, allowlistOf, armEnv, armSet, armSettings, checkDesigns, checkTable, designByName, joinCodes, pairOf, roundArms, warmupEnv,
 } from '../scripts/token-eval/arms.mjs';
 import { runDirs } from '../scripts/token-eval/homes.mjs';
 import { pooledVoids } from '../scripts/token-eval/z0-blind.mjs';
@@ -116,6 +116,17 @@ describe('the designs', () => {
     expect(DESIGNS.r4.seedRule).toEqual([{ arms: ['O1', 'S1', 'S2', 'S5'], tests: ['T1', 'T2a', 'T2b', 'T2c', 'T3', 'H4'] }]);
     expect(DESIGNS['r4-on-r3']).toMatchObject({ arms: ['A0', 'A1', 'A2', 'A4', 'A5'], maxSeed: 3, dropFamilies: ['hu3-f2', 'q133-f2', 'q14-f3', 'q256-f1'], prices: 'model' });
     expect([DESIGNS.r3.prices, DESIGNS.r4.prices, DESIGNS.r4.drift]).toEqual(['tool', 'model', { arm: 'O1', against: 'A1', design: 'r3' }]);
+  });
+
+  it('gives r4-on-r3 one seed-rule group of A1, A2 and A5 with the pairs its tests name, and T2aMiss stays out', () => {
+    const group = [{ arms: ['A1', 'A2', 'A5'], tests: ['T1', 'T2a', 'T2b', 'T2c', 'T3', 'H4'] }];
+    expect(DESIGNS['r4-on-r3'].seedRule).toEqual(group);
+    expect(group[0]!.tests.every((t) => t in DESIGNS['r4-on-r3'].tests)).toBe(true);
+    expect(DESIGNS['r4-on-r3'].seedRule.flatMap((g: { tests: string[] }) => g.tests)).not.toContain('T2aMiss');
+    expect(() => checkDesigns()).not.toThrow();
+    const copy: DesignsCopy = JSON.parse(JSON.stringify(DESIGNS));
+    copy['r4-on-r3'].seedRule[0]!.arms.pop();
+    expect(() => checkDesigns(copy)).toThrow(/DESIGNS\.r4-on-r3\.seedRule: its groups cover A1, A2 but the arms whose row has seedRule are A1, A2, A5/);
   });
 
   it('stops, naming the design and the field, on each break made on a deep copy', () => {
@@ -238,6 +249,16 @@ describe('arm settings and env for the round 4 arms', () => {
       expect(ENV_ALLOWLIST).toContain(k);
       expect(() => armEnv('S1', dirs, { ...base, [k]: 'x' }, { passEnv: [k] }), k).toThrow(/the runner sets/);
     }
+  });
+
+  it('allowlists by design: ENV_ALLOWLIST itself for r3 and r4-on-r3, and a frozen copy with PIP_CONSTRAINT for r4', () => {
+    expect(allowlistOf(DESIGNS.r3)).toBe(ENV_ALLOWLIST);
+    expect(allowlistOf(DESIGNS['r4-on-r3'])).toBe(ENV_ALLOWLIST);
+    const r4 = allowlistOf(DESIGNS.r4);
+    expect(r4).not.toBe(ENV_ALLOWLIST);
+    expect([...r4]).toEqual([...ENV_ALLOWLIST, 'PIP_CONSTRAINT']);
+    expect(Object.isFrozen(r4)).toBe(true);
+    expect(ENV_ALLOWLIST).not.toContain('PIP_CONSTRAINT');
   });
 
   it('builds the warm-up call from the design\'s no-memory arm with --model as an argv flag', () => {

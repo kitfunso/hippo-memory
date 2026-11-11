@@ -155,7 +155,7 @@ export const DESIGNS = deepFreeze({
     tests: { T1: [A2, A1], T2a: [A2, A1], T2b: [A2, A1], T2c: [A2, A1], H4: [A2, A1], T3: [A2, A5], T2aMiss: [A0, A1] },
     pairs: { resampled: [A2, A1] },
     reported: [],
-    seedRule: [],
+    seedRule: [{ arms: [A1, A2, A5], tests: ['T1', 'T2a', 'T2b', 'T2c', 'T3', 'H4'] }],
     g2: { claudeCode: null, codex: null },
     screen: null,
     drift: null,
@@ -298,6 +298,10 @@ export const ENV_ALLOWLIST = Object.freeze([...RUNNER_KEYS, ...SYSTEM_ENV, ...TO
 // Any allowlisted name that looks like this stops armEnv, so a secret cannot ride in on a list edit.
 export const SECRET_SHAPED = /TOKEN|SECRET|PASSW|API_KEY|_KEY$|DSN|CREDENTIAL|ACCOUNT_ID/i;
 export const envAllowSet = (list = ENV_ALLOWLIST) => new Set(list.map((name) => name.toUpperCase()));
+const PIP_CONSTRAINT = 'PIP_CONSTRAINT';
+const R4_ALLOWLIST = Object.freeze([...ENV_ALLOWLIST, PIP_CONSTRAINT]);
+/** The names a design's sessions may start from: a round 4 design adds the task env's pip pin, so round 3's list and G1 do not move. */
+export const allowlistOf = (design) => (design.arms.some((a) => ARM_TABLE[a].round === 'r4') ? R4_ALLOWLIST : ENV_ALLOWLIST);
 
 const rowOf = (arm) => {
   if (!own(ARM_TABLE, arm)) throw new Error(`unknown arm ${arm}; known: ${ALL_ARMS.join(', ')}`);

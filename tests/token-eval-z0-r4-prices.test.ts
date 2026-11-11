@@ -4,7 +4,7 @@ import { addUsage, priceUsage } from '../dist/eval/eval-stats.js';
 import { DESIGNS, OPUS_MODEL, SONNET_MODEL } from '../scripts/token-eval/arms.mjs';
 import { filterRecords } from '../scripts/token-eval/z0-filters.mjs';
 import { inSets, taskUnits } from '../scripts/token-eval/z0-hypotheses.mjs';
-import { PRICE_FIELDS, checkPrices, costOf, partCost, priceRow } from '../scripts/token-eval/z0-prices.mjs';
+import { PRICE_FIELDS, checkPrices, costOf, modelRow, partCost, priceRow } from '../scripts/token-eval/z0-prices.mjs';
 import { PRICES, PRICES_BY_MODEL, generate, type Z0Record } from './fixtures/z0-gen.js';
 
 const [OPUS, SONNET] = [PRICES_BY_MODEL.models[OPUS_MODEL], PRICES_BY_MODEL.models[SONNET_MODEL]];
@@ -57,6 +57,20 @@ describe('the price row of one record', () => {
     expect(priceRow(R3_FILE, a1, { design: DESIGNS['r4-on-r3'] })).toBe(R3_FILE['claude-code']);
     expect(costOf(a1, R3_FILE, { design: DESIGNS['r4-on-r3'] })).toBe(costOf(a1, R3_FILE));
     expect(() => costOf(a1, { 'claude-code': PRICES['claude-code'] }, { design: DESIGNS['r4-on-r3'] })).toThrow(/no price row for model claude-opus-5-5/);
+  });
+});
+
+describe('modelRow', () => {
+  it('is the model\'s row in a models block, null for an unknown model, and the row of a top-level file by its model field', () => {
+    expect(modelRow(PRICES_BY_MODEL, SONNET_MODEL)).toBe(SONNET);
+    expect(modelRow(PRICES_BY_MODEL, OPUS_MODEL)).toBe(OPUS);
+    expect(modelRow(PRICES_BY_MODEL, 'claude-unknown-9')).toBeNull();
+    expect(modelRow(R3_FILE, OPUS_MODEL)).toBe(R3_FILE['claude-code']);
+  });
+
+  it('stops on two rows for one model, naming the file it was given', () => {
+    const twice = { a: { ...OPUS, model: OPUS_MODEL }, b: { ...OPUS, model: OPUS_MODEL } };
+    expect(() => modelRow(twice, OPUS_MODEL, 'p.json')).toThrow('p.json: rows "a" and "b" both name model claude-opus-5-5; a model has one price row');
   });
 });
 

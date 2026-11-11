@@ -35,7 +35,7 @@ function modelRows(prices, file) {
 }
 
 /** The one way to find a model's price row, for the read and the check alike: null when the file has none. */
-const modelRow = (prices, model, file) => modelRows(prices, file).get(model) ?? null;
+export const modelRow = (prices, model, file) => modelRows(prices, file).get(model) ?? null;
 
 /** The price row of one record, or null when a round 3 file has no row for its tool; round 4 stops on a record it cannot price.
  * @param {any} prices
