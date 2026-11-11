@@ -13,13 +13,13 @@ import { assertCheckersJudged, drawReader, readerSummary, scoreReader } from './
 import { drawStored, scoreStored, storedSummary } from './stored-sample.mjs';
 
 const USAGE = [
-  'usage: z0-regrade.mjs regrade --out DIR --tasks FILE [--runs FILE] [--post-fix] [--cell KEY]...',
+  'usage: z0-regrade.mjs regrade --out DIR --tasks FILE [--runs FILE] [--post-fix] [--cell KEY]... [--poetry DIR --pip-constraint FILE]',
   '       z0-regrade.mjs reader --out DIR (--tasks FILE --seed N [--n N] [--round K] [--flip-errors] | [--round K] --labels FILE)',
   '       z0-regrade.mjs stored --out DIR (--tasks FILE --seed N [--n N] [--runs FILE] | --labels FILE)',
   '       z0-regrade.mjs grading --out DIR [--flip-errors]',
 ].join('\n');
 const MODES = {
-  regrade: { values: ['--out', '--tasks', '--runs'], multi: ['--cell'], flags: ['--post-fix'], required: ['--out', '--tasks'] },
+  regrade: { values: ['--out', '--tasks', '--runs', '--poetry', '--pip-constraint'], multi: ['--cell'], flags: ['--post-fix'], required: ['--out', '--tasks'] },
   reader: { values: ['--out', '--tasks', '--seed', '--n', '--round', '--labels'], multi: [], flags: ['--flip-errors'], required: ['--out'] },
   stored: { values: ['--out', '--tasks', '--runs', '--seed', '--n', '--labels'], multi: [], flags: [], required: ['--out'] },
   grading: { values: ['--out'], multi: [], flags: ['--flip-errors'], required: ['--out'] },
@@ -47,6 +47,8 @@ export function parseArgs(argv) {
     else args[camel(f)] = v;
   }
   for (const f of spec.required) if (args[camel(f)] === undefined) throw new Error(`${mode} needs ${f}\n${USAGE}`);
+  for (const f of ['--poetry', '--pip-constraint']) if (args[camel(f)] === '') throw new Error(`${mode}: ${f} needs a value`);
+  if ((args.poetry === undefined) !== (args.pipConstraint === undefined)) throw new Error(`${mode}: --poetry and --pip-constraint go together; pass both or neither`);
   return args;
 }
 
@@ -77,6 +79,16 @@ export const sortKeys = (v) => {
   return Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])]));
 };
 
+/** --poetry's folder and --pip-constraint's file as the task env takes them, or null when neither is given. */
+function venvInputs(args, cwd) {
+  if (args.poetry === undefined) return null;
+  const poetryDir = path.resolve(cwd, args.poetry);
+  const pipConstraint = path.resolve(cwd, args.pipConstraint);
+  if (!fs.statSync(poetryDir, { throwIfNoEntry: false })?.isDirectory()) throw new Error(`--poetry ${args.poetry} is not a folder`);
+  if (!fs.statSync(pipConstraint, { throwIfNoEntry: false })?.isFile()) throw new Error(`--pip-constraint ${args.pipConstraint} is not a file`);
+  return { poetryDir, pipConstraint };
+}
+
 function regradeMode(args, out, cwd, log) {
   const tasksFile = path.resolve(cwd, args.tasks);
   const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')), path.dirname(tasksFile));
@@ -85,7 +97,7 @@ function regradeMode(args, out, cwd, log) {
   const pass = args.postFix ? 'postfix' : 'repro';
   // Passed in, since reader-sample.mjs imports regrade.mjs and the regrade must not import it back.
   const assertCheckers = (pairs) => assertCheckersJudged(out, pairs);
-  const tally = runRegrade({ out, spec, records, runsFile, pass, cells: args.cell, baseEnv: process.env, log, assertCheckers });
+  const tally = runRegrade({ out, spec, records, runsFile, pass, cells: args.cell, baseEnv: process.env, log, assertCheckers, venv: venvInputs(args, cwd) });
   const wrote = tally.regraded ? `; wrote ${tally.regraded}` : '';
   return `${pass}: regraded ${tally.ran} cells (${tally.errors} with errors), skipped ${tally.skipped} done ones${wrote}\n`;
 }

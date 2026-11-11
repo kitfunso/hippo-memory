@@ -20,9 +20,46 @@ export function runDirs(outDir, seq, arm, seed) {
     codexHome: path.join(root, 'codex-home'),
     hippoHome: path.join(root, 'hippo-home'),
     bin: path.join(root, 'bin'),
+    // One venv per task under --venv: `<position>` and its `<position>-boot`.
+    venv: path.join(root, 'venv'),
     // HOME and APPDATA for Codex sessions and the X2 install, so hippo's wrapper metadata is per run (E6 plan R11).
     home: path.join(root, 'home'),
   };
+}
+
+/** A task's venv and the boot venv its setup may build beside it. */
+export const venvPaths = (dirs, position) => ({ venv: path.join(dirs.venv, String(position)), boot: path.join(dirs.venv, `${position}-boot`) });
+
+/** A fresh venv for one task, made by the python `env` puts first; both folders are cleared first, so nothing of an earlier try is left. */
+export function createVenv(venv, env, cwd) {
+  for (const dir of [venv, `${venv}-boot`]) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+    } catch (err) {
+      throw new Error(`could not clear ${dir} before the task venv: ${err.message}`, { cause: err });
+    }
+  }
+  fs.mkdirSync(path.dirname(venv), { recursive: true });
+  return sh(`python -m venv "${venv}"`, cwd, env);
+}
+
+const defaultRemove = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+
+/** Remove a task's venv and its boot venv. A folder that will not go is logged and written to `errFile`; it never stops the run. */
+export function removeVenv(venv, { errFile, log, removeTree }) {
+  const remove = removeTree ?? defaultRemove;
+  const failed = [];
+  for (const dir of [venv, `${venv}-boot`]) {
+    try {
+      remove(dir);
+    } catch (err) {
+      failed.push(`${dir}: ${err.message}`);
+      log(`venv: could not remove ${dir}: ${err.message}`);
+    }
+  }
+  if (failed.length === 0) return;
+  fs.mkdirSync(path.dirname(errFile), { recursive: true });
+  fs.appendFileSync(errFile, `${failed.join('\n')}\n`);
 }
 
 /** Throws unless the three home dirs exist and are empty. */

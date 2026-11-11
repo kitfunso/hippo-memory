@@ -2,8 +2,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { sh } from './exec.mjs';
-import { ARM_TABLE, CAPTURE_ARMS, CARRY_ARMS, CODEX_HIPPO_ARMS, HIPPO_ARMS, childEnv, claudeModelOf } from './arms.mjs';
-import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
+import { ARM_TABLE, CAPTURE_ARMS, CARRY_ARMS, CODEX_HIPPO_ARMS, DESIGNS, HIPPO_ARMS, childEnv, claudeModelOf, taskEnv } from './arms.mjs';
+import { homeFiles, ancestorInstructionFiles, venvPaths, createVenv, removeVenv } from './homes.mjs';
+import { writeFileAtomic } from './atomic-write.mjs';
+import { linesOf, parseOrNull } from './free-cli.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, commitInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import {
   findTranscript, sessionFiles, listTranscripts, transcriptUsage, assistantTurns, assistantIds, usageFromResult, invalidRecord, validRecord,
@@ -76,17 +78,49 @@ function ancestorFiles(ctx, run, name) {
 
 const ancestorHits = (ctx, run, t) => ancestorFiles(ctx, run, `${t.id}.ancestor.txt`).length > 0;
 
+/** The task venv's own interpreter by full path: a bare `python` searches the work tree first, and -P keeps the work tree off sys.path, so a repo file cannot stand in for the venv. */
+const venvPython = (venv) => `"${path.join(venv, 'Scripts', 'python.exe')}" -P`;
+
+/** The task venv's installed packages, lowercased and sorted, comma-joined; empty when pip cannot list them (logged). */
+function pipList(ctx, run, t, venv) {
+  const r = sh(`${venvPython(venv)} -m pip list --format=freeze --disable-pip-version-check`, run.dirs.work, childEnv(run.env));
+  if (r.status !== 0) ctx.log(`${cellName(run, t)}: pip list failed in the task venv (exit ${r.status}): ${r.stderr.slice(-300)}`);
+  return r.status === 0 ? r.stdout.split(/\r?\n/).filter(Boolean).map((l) => l.split(/==| @ /)[0].trim().toLowerCase()).sort().join(',') : '';
+}
+
+/** `<task>.venv.txt`, one `key=value` line each: the venv's prefix, its packages after setup, the setup time, and whether each name in the task's venvImports imports. */
+function writeVenvFile(ctx, run, t, setupMs, venv) {
+  const env = childEnv(run.env);
+  const python = venvPython(venv);
+  const prefix = sh(`${python} -c "import sys; print(sys.prefix)"`, run.dirs.work, env).stdout.trim();
+  const imports = (t.venvImports ?? []).map((name) => `import_${name}=${sh(`${python} -c "import ${name}"`, run.dirs.work, env).status === 0 ? 'ok' : 'fail'}`);
+  const lines = [`prefix=${prefix}`, `packages=${pipList(ctx, run, t, venv)}`, `setup_ms=${setupMs}`, ...imports];
+  writeFileAtomic(path.join(run.rawDir, `${t.id}.venv.txt`), `${lines.join('\n')}\n`);
+}
+
 /** Every runner write before the session, then CHECK_PRE_COMMIT over all of it and the surface snapshot; `failed` when setup failed. */
 function stageTask(ctx, run, step) {
   const { t } = step;
   const work = run.dirs.work;
-  const once = () => ({ commit: checkoutBase(run.cached, work, run.s.id, t, run.arm), setup: t.setup ? sh(t.setup, work, childEnv(run.env)) : null });
+  const venv = ctx.venv ? venvPaths(run.dirs, step.position).venv : null;
+  const once = () => {
+    const started = performance.now();
+    // The launch PATH's python makes the venv, so a task's own PATH never picks the interpreter; a venv that cannot be made fails the setup.
+    const made = venv ? createVenv(venv, childEnv(run.launchEnv), run.dirs.root) : null;
+    if (made && made.status !== 0) return { commit: null, setup: made, ms: 0 };
+    const commit = checkoutBase(run.cached, work, run.s.id, t, run.arm);
+    const setup = t.setup ? sh(t.setup, work, childEnv(run.env)) : null;
+    return { commit, setup, ms: Math.round(performance.now() - started) };
+  };
   // A tool's own race can fail a setup that is fine (pnpm 12.3.4 on Windows, os error 183), so a failed one runs once more from a fresh checkout.
   const prepare = () => {
-    const first = once();
-    if (!first.setup || first.setup.status === 0) return first;
-    writeLog(run, `${t.id}.setup-try1.txt`, `${first.setup.stdout}\n${first.setup.stderr}`);
-    return once();
+    let done = once();
+    if (done.setup && done.setup.status !== 0) {
+      writeLog(run, `${t.id}.setup-try1.txt`, `${done.setup.stdout}\n${done.setup.stderr}`);
+      done = once();
+    }
+    if (venv && (!done.setup || done.setup.status === 0)) writeVenvFile(ctx, run, t, done.ms, venv);
+    return done;
   };
   const { commit, setup } = prepare();
   if (setup && setup.status !== 0) return { commit, setup, failed: true };
@@ -205,7 +239,7 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
     stage.restores.push(restoreSurfaces(ctx, run, preResume, 'resume-restore', step));
     return resumeAncestors();
   };
-  const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset).catch((err) => guarded(run, t, stage, () => { throw err; }));
+  const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset, step.position).catch((err) => guarded(run, t, stage, () => { throw err; }));
   if (!resume) return noResume;
   // The reset put the transcripts back, so no resume ran; only its retries and wait are kept.
   if (resume.stopped) return { ...noResume, resumeAncestorHits, cutOffResume: resume };
@@ -292,6 +326,27 @@ function resumeAwareVoid(ctx, run, step, stage, sessionIds, resume) {
   return { void: hits[0]?.reason ?? null, voidHits: hits };
 }
 
+/** The `hook_cancelled` attachments in the session's transcripts, counted per hook event; one that names no event counts under `unknown`. */
+function hookCancelsOf(stage, sessionIds) {
+  const counts = new Map();
+  // A forked resume repeats the history it forked from, so an entry already seen in one file is not counted again in another.
+  const seen = new Set();
+  for (const file of stage.filesOf(sessionIds)) {
+    for (const line of linesOf(fs.readFileSync(file, 'utf8'))) {
+      const entry = parseOrNull(line);
+      const a = entry?.attachment;
+      if (a?.type !== 'hook_cancelled') continue;
+      if (entry.uuid) {
+        if (seen.has(entry.uuid)) continue;
+        seen.add(entry.uuid);
+      }
+      const event = String(a.hookEvent || a.hookName || 'unknown');
+      counts.set(event, (counts.get(event) ?? 0) + 1);
+    }
+  }
+  return Object.fromEntries(counts);
+}
+
 /** The record for a cell whose session ran. */
 function sessionRecord(ctx, run, step, parts) {
   const { session, turns, sessionIds, acceptancePassed, wallMs, stage } = parts;
@@ -309,6 +364,9 @@ function sessionRecord(ctx, run, step, parts) {
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
     surfaceRestored: stage.restores.every(Boolean), injectedRows: stage.injected,
   };
+  // Only a --venv run says whether its resume was cut off, and only round 4 counts the cancels its hooks lost.
+  if (ctx.venv) shared.venvResumed = ((resume ?? turns?.cutOffResume)?.limitRetries ?? 0) > 0;
+  if (ctx.design === DESIGNS.r4) shared.hookCancels = hookCancelsOf(stage, sessionIds);
   if (codex) Object.assign(shared, codexFields(ctx, run, session));
   const reason = invalidReason(session, turns, found, stage);
   if (reason) return invalidRecord(parts.base, reason, shared);
@@ -463,8 +521,34 @@ export async function runSteps(ctx, steps) {
   return ctx.records;
 }
 
+/** One step under --venv gets its own venv and env, and loses both however it ends; without --venv it is the step itself. */
+export async function runTask(ctx, run, step) {
+  if (!ctx.venv) return runCell(ctx, run, step);
+  run.env = taskEnv(run.launchEnv, venvPaths(run.dirs, step.position).venv, ctx.venv);
+  try {
+    return await runCell(ctx, run, step);
+  } finally {
+    endVenv(ctx, run, step);
+  }
+}
+
+/** The task venv's last package list, then both venv folders removed, and the run's env back to the launch env. */
+function endVenv(ctx, run, step) {
+  const { t } = step;
+  const { venv } = venvPaths(run.dirs, step.position);
+  const file = path.join(run.rawDir, `${t.id}.venv.txt`);
+  try {
+    // After the hidden test, so a package the test installed shows here and not in `packages`.
+    if (fs.existsSync(file) && fs.existsSync(venv)) fs.appendFileSync(file, `packages_end=${pipList(ctx, run, t, venv)}\n`);
+  } catch (err) {
+    ctx.log(`${cellName(run, t)}: could not write packages_end to ${file}: ${err.message}`);
+  }
+  removeVenv(venv, { errFile: path.join(run.rawDir, `${t.id}.venv-remove.txt`), log: ctx.log, removeTree: ctx.removeTree });
+  run.env = run.launchEnv;
+}
+
 /** One step: prepare the checkout, skip the session if the step is void before it starts, else run, check, resume and record it. */
-async function runTask(ctx, run, step) {
+async function runCell(ctx, run, step) {
   const { t } = step;
   const base = baseFields(ctx, run, step);
   const meta = { envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv };
