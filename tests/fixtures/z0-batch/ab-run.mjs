@@ -33,14 +33,22 @@ async function main() {
   const knobs = knobsOf(path.basename(path.dirname(out)));
   await sleep(knobs.startMs ?? 0);
   await replay(knobs.fixture, out, knobs.records ?? null, knobs.gapMs ?? 0);
+  // A held runner lives until the test has seen what it needs, however slow the box is; a sleep would race the load.
+  while (knobs.release && !fs.existsSync(knobs.release)) await sleep(100);
   await sleep(knobs.endMs ?? 0);
   if (knobs.abandon) {
     fs.writeFileSync(path.join(out, 'ABANDONED'), '');
     process.exit(1);
   }
   if (knobs.printRecords !== false) process.stdout.write(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with the stub\n`);
-  if (knobs.hang) setInterval(() => {}, 1000);
-  else process.exit(knobs.exit ?? 0);
+  if (knobs.hang) {
+    // A beating runner keeps run.log fresh until the test releases it, so no grace stop can come before the step the test waits for.
+    while (knobs.beatUntil && !fs.existsSync(knobs.beatUntil)) {
+      process.stdout.write('beat\n');
+      await sleep(200);
+    }
+    setInterval(() => {}, 1000);
+  } else process.exit(knobs.exit ?? 0);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

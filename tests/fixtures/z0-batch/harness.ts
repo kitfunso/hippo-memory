@@ -40,11 +40,15 @@ export const kill = (pid: number, tree = false) => spawnSync('taskkill', [...(tr
 export interface FxOpts { key: string; seeds: number[]; leaks?: number[]; tag?: string }
 interface Rec extends Z0Record { sessionId: string; costUsd: number; hookCancels: Record<string, never>; envKeys: string[] }
 /** A call's knobs for the stub z0-regrade.mjs. */
-export interface CallKnob { durationS?: number; lock?: boolean; errorRows?: { times: number; rows: number }; hangOnce?: boolean; keyNoLine?: boolean; exit?: number; real?: boolean }
+export interface CallKnob { durationS?: number; release?: string; lock?: boolean; errorRows?: { times: number; rows: number }; hangOnce?: boolean; keyNoLine?: boolean; exit?: number; real?: boolean }
 /** The stub runner's, launcher's and regrade stub's knobs for one unit folder, read by file name from the knobs folder. */
 export interface Knobs {
   fixture?: string; startMs?: number; endMs?: number; gapMs?: number; records?: number; printRecords?: boolean; exit?: number; hang?: boolean; abandon?: boolean;
-  pins?: 'once' | 'always'; box?: 'once' | 'always'; pidsDelayS?: number; exitDelayS?: number;
+  /** A file the runner waits for after its records and before its Records: line; `exitRelease` is the launcher's, before exit.txt. */
+  release?: string; exitRelease?: string;
+  /** With `hang`: until this file exists, the runner writes a line to run.log every 200 ms, so its grace stop waits for the test. */
+  beatUntil?: string;
+  pins?: 'once' | 'always'; box?: 'once' | 'always'; pidsDelayS?: number;
   regrade?: CallKnob; 'reader-draw'?: CallKnob; 'stored-draw'?: CallKnob; 'reader-score'?: CallKnob; 'stored-score'?: CallKnob; grading?: CallKnob;
 }
 /** One fixture run (static files, and one step per record for the stub runner to replay); returns its records. */

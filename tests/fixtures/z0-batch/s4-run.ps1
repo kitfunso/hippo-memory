@@ -1,5 +1,5 @@
 # Stub of s4-run.ps1 for the s4-batch.sh tests: the launch contract (plan :200) over the stub ab-run.mjs beside it.
-# Knobs come from $env:Z0_STUB_KNOBS/<folder name>.json: box and pins (once|always), pidsDelayS, exitDelayS.
+# Knobs come from $env:Z0_STUB_KNOBS/<folder name>.json: box and pins (once|always), pidsDelayS, exitRelease (a file it waits for before exit.txt).
 param(
   [Parameter(Mandatory = $true)][string]$Checkout,
   [Parameter(Mandatory = $true)][string]$Root,
@@ -41,6 +41,6 @@ if ($knobs.pidsDelayS) { Start-Sleep -Seconds $knobs.pidsDelayS }
 Add-Content -Encoding ascii (Join-Path (Split-Path -Parent $Folder) 'pids.txt') "$Key $($p.Id) $Folder"
 Write-Output "run pid $($p.Id)"
 $p.WaitForExit()
-if ($knobs.exitDelayS) { Start-Sleep -Seconds $knobs.exitDelayS }
+if ($knobs.exitRelease) { while (-not (Test-Path $knobs.exitRelease)) { Start-Sleep -Milliseconds 200 } }
 Set-Content -Encoding ascii (Join-Path $run 'exit.txt') $p.ExitCode
 exit $p.ExitCode
