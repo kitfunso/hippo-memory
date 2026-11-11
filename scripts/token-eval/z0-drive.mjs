@@ -42,7 +42,7 @@ export const STOP_TABLE = [
   { step: '1', cmd: 'z0-pilot', exit: 3, id: 'pilot-fail' },
   { step: '2', cmd: 'admit', exit: 4, pick: (ctx) => WHOLE_RUN_STOPS[lastWholeRunReason(ctx)] },
   { step: '3', cmd: 'admit', exit: 3, id: 'batch1-fit' },
-  { step: '3', cmd: 'block', exit: 3, pick: ({ block }) => (BLOCK_IDS.includes(block?.stops?.[0]?.id) ? block.stops[0].id : undefined) },
+  { step: '3', cmd: 'block', exit: 3, pick: ({ block }) => (BLOCK_IDS.includes(block?.stops?.[0]) ? block.stops[0] : undefined) },
   { step: '3', cmd: 's4-batch', exit: 3, id: 'batch-failed' },
   { step: '3', cmd: 's4-batch', exit: 7, id: 'labels' },
   { step: '4', cmd: 'level-check', exit: 3, id: 'broken-design' },
@@ -125,11 +125,22 @@ const ORDER = { 2: '1', 3: '2', 4: '3', 5: '4', 6: '5', 7: '6' };
 const FOLLOWS_EXIT_4 = { 3: 'whole-run', 5: 'power' };
 const TERMINAL_REFUSED = new Set(['smoke', '1', '2', '3', '4', '5', '6', '7', 'stage-checks']);
 
-/** @typedef {{ entries: DriveEntry[], step: string, tag: string | null, commit: string | null, pinsSha256: string | null, claudeVersion: string | null, attempt?: number }} GateInput */
+/** @typedef {{ entries: DriveEntry[], step: string, tag: string | null, commit: string | null, pinsSha256: string | null, claudeVersion: string | null, attempt?: number, folders?: boolean }} GateInput */
+
+/** True when a folder of `step` (smoke or 1) at `attempt` is on disk under `root`: smoke/w<n>, pilot/<k>-p<n> and effort/<e>-p<n>, each with its -a2 and -a3 retries. */
+export function hasFolders(root, step, attempt) {
+  const kinds = step === 'smoke' ? [['smoke', /^w(\d+)(?:-a[23])?$/]] : [['pilot', /^.+-p(\d+)(?:-a[23])?$/], ['effort', /^.+-p(\d+)(?:-a[23])?$/]];
+  return kinds.some(([dir, re]) => {
+    const folder = path.join(root, dir);
+    if (!fs.existsSync(folder)) return false;
+    return fs.readdirSync(folder, { withFileTypes: true }).some((e) => e.isDirectory() && Number(re.exec(e.name)?.[1]) === attempt);
+  });
+}
 
 /** The refusal rules in their order (plan :404-424): TERMINAL_STOPS, a stop that waits on a founder go, the cause rules, then the order rule.
+ * `folders` says a folder of this step at this attempt already exists on disk (hasFolders); the pure rules read nothing else.
  * @param {GateInput} input @returns {{ ok: true, line: null } | { ok: false, line: string }} */
-export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersion, attempt = 1 }) {
+export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersion, attempt = 1, folders = false }) {
   const no = (line) => ({ ok: false, line });
   const entries = all.filter(isOutcome);
   const lastOf = (s) => entries.findLast((e) => e.step === s);
@@ -156,6 +167,10 @@ export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersio
       // A cause is always followed by fresh folders (W4-48): a done unit made before it must never meet the smoke rule or feed pilot.json.
       const failed = failure.attempt ?? 1;
       if (attempt <= failed) return no(`DRIVE: ${shown} needs --attempt ${failed + 1} or above after the cause for attempt ${failed}`);
+      // An attempt that already has folders is fresh only once this step logged an entry at it after the cause: its own call made them.
+      if (folders && !entries.slice(causeIndex + 1).some((e) => e.step === step && e.attempt === attempt)) {
+        return no(`DRIVE: ${shown} attempt ${attempt} already has folders from before the cause; needs --attempt ${attempt + 1} or above`);
+      }
     }
     if (step === '1' && !entries.slice(causeIndex + 1).some((e) => e.step === 'smoke' && e.exit === 0 && e.tag === tag && e.pinsSha256 === pinsSha256)) {
       return no(`DRIVE: step 1 needs a smoke at 0 on ${tag} with the current pins`);
@@ -176,7 +191,7 @@ export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersio
 }
 
 /** The stop id of a command that exited non-zero, or null for exit 0 (plan :406): never read from printed text; `fault` for an exit the table has no row for.
- * @param {{ step: string, cmd: string, exit: number, budgetLog?: Record<string, unknown>[], block?: { stops?: { id: string }[] } | null, kind?: string | null }} input */
+ * @param {{ step: string, cmd: string, exit: number, budgetLog?: Record<string, unknown>[], block?: { stops?: string[] } | null, kind?: string | null }} input */
 export function stopIdOf({ step, cmd, exit, budgetLog = [], block = null, kind = null }) {
   if (exit === 0) return null;
   const row = STOP_TABLE.find((r) => r.step === step && r.cmd === cmd && r.exit === exit);
@@ -229,7 +244,9 @@ const rootFolder = (raw) => {
 
 const COMMANDS = {
   gate(f, root) {
-    const verdict = gate({ entries: readEntries(path.join(root, 'drive-log.jsonl')), step: stepOf(f.step), tag: noneIsNull(f.tag), commit: noneIsNull(f.commit), pinsSha256: noneIsNull(f.pinsSha256), claudeVersion: noneIsNull(f.claudeVersion), attempt: whole('--attempt', f.attempt, 1) });
+    const [step, attempt] = [stepOf(f.step), whole('--attempt', f.attempt, 1)];
+    const folders = (step === 'smoke' || step === '1') && hasFolders(root, step, attempt);
+    const verdict = gate({ entries: readEntries(path.join(root, 'drive-log.jsonl')), step, tag: noneIsNull(f.tag), commit: noneIsNull(f.commit), pinsSha256: noneIsNull(f.pinsSha256), claudeVersion: noneIsNull(f.claudeVersion), attempt, folders });
     if (!verdict.ok) throw new Stop(verdict.line);
     return 'ok\n';
   },

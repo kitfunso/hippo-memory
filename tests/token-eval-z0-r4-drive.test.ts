@@ -1,6 +1,6 @@
 // Round 4 slice R2, the run driver s4-drive.sh, end to end on stubs: the real driver, z0-drive, z0-budget, z0-pins-check and z0-unit-record against a fixture checkout and a dry root.
 // The launcher, the runner, the batch, the read and every other CLI are stubs; no session is paid. One case or more for each plan check of slice R (plan :322).
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -9,8 +9,11 @@ import { BATCH1, BATCH2 } from './_helpers/z0-r4-spend.js';
 import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type World } from './fixtures/z0-drive/harness.js';
 import { killOwnTree } from './fixtures/kill-own.js';
 
+// A case's afterEach scans for its processes up to 20 times, far past the eval config's 30 s hookTimeout.
+vi.setConfig({ hookTimeout: 180_000 });
+
 const REPO = fwd(path.resolve(__dirname, '..'));
-const LAUNCH = `${REPO}/scripts/token-eval/r4-launch`;
+const LAUNCH =`${REPO}/scripts/token-eval/r4-launch`;
 const ps = (command: string) => (process.platform === 'win32' ? spawnSync('powershell', ['-NoProfile', '-Command', command], { encoding: 'utf8' }) : null);
 const HAVE = ps('$PSVersionTable.PSVersion.Major')?.status === 0 && ['C:/Program Files/Git/bin/bash.exe', `${POETRY}/Scripts/poetry.exe`].every((f) => existsSync(f));
 
@@ -714,4 +717,46 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(c.entries().at(-1)).toEqual(c.entry({ step: '6', exit: 1, stopId: 'fault', line }));
     expect([stubArgv(c, 'z0-grading-combine'), c.admits()]).toEqual([[], []]);
   }, 300_000);
+
+  it('27. smoke attempt 2 done, then a pilot failure at attempt 1 and a version cause: smoke --attempt 2 is refused with no launch, attempt 3 runs, and a later call at 3 still works (W4-48)', async () => {
+    const c = mk('used-attempt');
+    await c.doneUnit(`${c.root}/smoke/w2`);
+    c.plant({ step: 'smoke', attempt: 2, exit: 0 });
+    c.plant({ step: '1', exit: 3, stopId: 'pilot-fail', line: 'STOP: the pilot failed' });
+    expect(outcome(await c.run('cause', ['--kind', 'version', '--words', 'a new version']))).toEqual([0, 'cause version logged for step 1 attempt 1']);
+    c.writePins({ claudeVersion: '9.9.10' });
+    // smoke/w2 predates the cause: it must not stand in for a smoke on the new pins.
+    const used = 'DRIVE: smoke attempt 2 already has folders from before the cause; needs --attempt 3 or above';
+    expect(outcomeOf(c, await c.run('smoke', ['--attempt', '2']))).toEqual([3, used]);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: 'smoke', attempt: 2, exit: 3, stopId: 'order', claudeVersion: '9.9.10', line: used }));
+    expect([c.launches(), stubArgv(c, 'g1-pins')]).toEqual([[], []]);
+    const three = await c.run('smoke', ['--attempt', '3']);
+    expect(three.code, three.out).toBe(0);
+    expect(c.launches()).toEqual(['w3']);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: 'smoke', attempt: 3, exit: 0, claudeVersion: '9.9.10' }));
+    expect((await c.run('smoke', ['--attempt', '3'])).code).toBe(0);
+    expect(c.launches()).toEqual(['w3']);
+  }, 400_000);
+
+  it('28. a unit folder that holds only run.log counts as started: smoke and step 1 take the retry path and never plan over it', async () => {
+    const s = mk('runlog-smoke');
+    put(`${s.root}/smoke/w1/run.log`, 'the launcher crashed\n');
+    const smoke = await s.run('smoke');
+    expect(smoke.code, smoke.out).toBe(0);
+    expect(s.launches()).toEqual(['w1-a2']);
+    expect(s.admits()).toEqual([]);
+    expect(existsSync(`${s.root}/smoke/w1/launcher-calls.txt`)).toBe(false);
+    expect(s.launcherArgs(`${s.root}/smoke/w1-a2`)).toMatchObject({ Folder: `${s.root}/smoke/w1-a2`, Retry: '2', Attempt: '1' });
+
+    const c = mk('runlog-pilot');
+    await c.doneUnit(`${c.root}/smoke/w1`);
+    c.plant({ step: 'smoke', exit: 0 });
+    for (const f of ['pilot/k1-p1', 'pilot/k2-p1', 'effort/low-p1', 'effort/high-p1']) put(`${c.root}/${f}/dry/plan.json`, read(w.plan));
+    put(`${c.root}/pilot/k1-p1/run.log`, 'the launcher crashed\n');
+    const one = await c.run('1');
+    expect(one.code, one.out).toBe(0);
+    expect(c.launches()).toEqual(['k1-p1-a2', 'k2-p1', 'low-p1', 'high-p1']);
+    expect(c.admits().map((a) => [a.units, a.cap, a.capSpend, a.admitted])).toEqual([[['k1-p1-a2', 'k2-p1', 'low-p1', 'high-p1'], 40, 0, true]]);
+    expect(existsSync(`${c.root}/pilot/k1-p1/launcher-calls.txt`)).toBe(false);
+  }, 400_000);
 });

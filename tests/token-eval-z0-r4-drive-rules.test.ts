@@ -5,7 +5,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { FREEZE_1, FREEZE_2, REFUSALS, RESUMES, STOP_TABLE, TERMINAL_STOPS, entryOf, gate, runCli, stopIdOf } from '../scripts/token-eval/z0-drive.mjs';
+import { FREEZE_1, FREEZE_2, REFUSALS, RESUMES, STOP_TABLE, TERMINAL_STOPS, entryOf, gate, hasFolders, runCli, stopIdOf } from '../scripts/token-eval/z0-drive.mjs';
+import { BLOCK_SCHEMA } from '../scripts/token-eval/z0-batch1-block.mjs';
 
 const roots: string[] = [];
 afterAll(() => { for (const r of roots) fs.rmSync(r, { recursive: true, force: true }); });
@@ -18,7 +19,7 @@ function makeRoot(): string {
 type Entry = ReturnType<typeof entryOf>;
 const E = (over: Partial<Entry> & { step: string; exit: number }): Entry => entryOf({ attempt: 1, tag: FREEZE_1, commit: 'c1', pinsSha256: 'p1', claudeVersion: '2.1.288', ...over });
 // attempt 2 is above every failure the cases log at attempt 1, so the attempt rule stays out of the way until a case aims at it.
-interface Ctx { tag: string; commit: string | null; pinsSha256: string; claudeVersion: string; attempt: number }
+interface Ctx { tag: string; commit: string | null; pinsSha256: string; claudeVersion: string; attempt: number; folders?: boolean }
 const CTX: Ctx = { tag: FREEZE_1, commit: 'c1', pinsSha256: 'p1', claudeVersion: '2.1.288', attempt: 2 };
 const refusal = (entries: Entry[], step: string, over: Partial<typeof CTX> = {}) => gate({ entries, step, ...CTX, ...over });
 const OK = { ok: true, line: null };
@@ -33,6 +34,8 @@ function logFile(root: string, name: string, entries: unknown[], tail = ''): str
   return file;
 }
 const cli = (argv: string[]) => runCli(argv);
+/** block.json as z0-batch1-block.mjs:105 writes it: the stops are `{ id, line }` in memory, and the file keeps their ids. */
+const blockFile = (...stops: { id: string; line: string }[]) => `${JSON.stringify({ schema: BLOCK_SCHEMA, stops: stops.map((s) => s.id) }, null, 2)}\n`;
 
 describe('the order rule', () => {
   it('lets plans, smoke, founder-go, cause and stage-checks run on an empty log', () => {
@@ -257,6 +260,41 @@ describe('the cause rules for smoke and step 1', () => {
     expect(smoke2([E({ step: 'smoke', exit: 0 })], { attempt: 1 }), 'no failure, no attempt rule').toEqual(OK);
   });
 
+  it('refuses an attempt above the failed one that already has folders, until its step logs an entry at it after the cause (W4-48)', () => {
+    const newPins = { claudeVersion: '2.1.289', pinsSha256: 'p2' };
+    const pins = (over: Partial<Entry> & { step: string; exit: number }) => E({ ...newPins, ...over });
+    const wants = (step: string, n: number) => no(`DRIVE: ${step} attempt ${n} already has folders from before the cause; needs --attempt ${n + 1} or above`);
+    // Smoke attempt 2 passed, the pilot failed at attempt 1, the cause was a new version: smoke/w2 predates the cause.
+    const entries = [E({ step: 'smoke', exit: 0, attempt: 2 }), E({ step: '1', exit: 3, stopId: 'pilot-fail', attempt: 1 }), cause('version', { failedStep: '1' })];
+    const smoke = (list: Entry[], over: Partial<Ctx> = {}) => smoke2(list, { ...newPins, attempt: 2, folders: true, ...over });
+    expect(smoke(entries)).toEqual(wants('smoke', 2));
+    expect(smoke(entries, { folders: false }), 'no folder on disk').toEqual(OK);
+    expect(smoke(entries, { attempt: 3, folders: false })).toEqual(OK);
+    expect(smoke([...entries, pins({ step: 'smoke', exit: 1, stopId: 'fault', attempt: 2 })]), 'a call of its own at attempt 2 after the cause').toEqual(OK);
+    expect(smoke([...entries, pins({ step: 'smoke', exit: 3, stopId: 'order', attempt: 2 })]), 'a refusal is no call of its own').toEqual(wants('smoke', 2));
+    expect(smoke([...entries, pins({ step: '1', exit: 1, stopId: 'fault', attempt: 2 })]), 'an entry of the other step').toEqual(wants('smoke', 2));
+    expect(smoke([...entries, pins({ step: 'smoke', exit: 1, stopId: 'fault', attempt: 3 })]), 'an entry at another attempt').toEqual(wants('smoke', 2));
+    const pilot = [...entries, pins({ step: 'smoke', exit: 0, attempt: 2 })];
+    const one = (list: Entry[]) => gate({ entries: list, step: '1', ...CTX, ...newPins, attempt: 2, folders: true });
+    expect(one(pilot), 'step 1 at attempt 2 with pilot folders from before the cause').toEqual(wants('step 1', 2));
+    expect(one([...pilot, pins({ step: '1', exit: 1, stopId: 'fault', attempt: 2 })])).toEqual(OK);
+    const root = makeRoot();
+    logFile(root, 'drive-log.jsonl', entries);
+    fs.mkdirSync(path.join(root, 'smoke', 'w2'), { recursive: true });
+    const gateAt = (attempt: string) => cli(['gate', '--root', root, '--step', 'smoke', '--tag', FREEZE_1, '--commit', 'c1', '--pins-sha256', 'p2', '--claude-version', '2.1.289', '--attempt', attempt]);
+    expect(gateAt('2'), 'the gate command looks at the root').toEqual({ code: 3, stdout: '', stderr: 'DRIVE: smoke attempt 2 already has folders from before the cause; needs --attempt 3 or above\n' });
+    expect(gateAt('3')).toEqual({ code: 0, stdout: 'ok\n', stderr: '' });
+  });
+
+  it('finds the folders of an attempt by their names: w<n>, <k>-p<n> and effort <e>-p<n>, each with its retries', () => {
+    const root = makeRoot();
+    expect([hasFolders(root, 'smoke', 1), hasFolders(root, '1', 1)], 'an empty root').toEqual([false, false]);
+    for (const d of ['smoke/w1-a2', 'smoke/w20', 'pilot/k1-p3', 'effort/low-p4-a3']) fs.mkdirSync(path.join(root, d), { recursive: true });
+    fs.writeFileSync(path.join(root, 'pilot', 'k2-p5'), '');
+    expect([1, 2, 20].map((n) => hasFolders(root, 'smoke', n))).toEqual([true, false, true]);
+    expect([1, 3, 4, 5].map((n) => hasFolders(root, '1', n)), 'a file named like a folder is no folder').toEqual([false, true, true, false]);
+  });
+
   it('keeps a failure open past a cause entry that failed to log (a fault is no cause)', () => {
     const entries = [fail(), E({ step: 'cause', exit: 1, stopId: 'fault', kind: 'version', failedStep: 'smoke' })];
     expect(smoke2(entries, { claudeVersion: '2.1.289', pinsSha256: 'p2' })).toEqual(no('DRIVE: smoke needs a cause entry after the failure at smoke attempt 1'));
@@ -339,12 +377,21 @@ describe('the stop-id table', () => {
   });
 
   it('reads the batch 1 block\'s exit 3 from the first id of block.json\'s stops, and only a terminal one', () => {
-    const block = (...ids: string[]) => ({ schema: 'z0-batch1-block/1', stops: ids.map((i) => ({ id: i, line: `STOP: ${i}` })) });
+    const block = (...ids: string[]) => ({ schema: BLOCK_SCHEMA, stops: ids });
     for (const stopId of ['g1-run', 'g2', 'g4', 'off-pin', 'g3']) expect(id('3', 'block', 3, { block: block(stopId, 'g3') }), stopId).toBe(stopId);
     expect(id('3', 'block', 3, { block: block() }), 'no stop listed').toBe('fault');
     expect(id('3', 'block', 3, { block: null }), 'no block file').toBe('fault');
     expect(id('3', 'block', 3, { block: block('weird') }), 'an id that is no terminal stop').toBe('fault');
     expect(id('3', 'block', 1, { block: block('g2') })).toBe('fault');
+  });
+
+  it('reads the id of every real block stop, from block.json written the way z0-batch1-block.mjs:105 writes it', () => {
+    const root = makeRoot();
+    fs.mkdirSync(path.join(root, 'batch1'));
+    for (const stopId of ['g1-run', 'g2', 'g4', 'off-pin', 'g3']) {
+      fs.writeFileSync(path.join(root, 'batch1', 'block.json'), blockFile({ id: stopId, line: `STOP: ${stopId}` }, { id: 'g3', line: 'STOP: G3' }));
+      expect(cli(['stop-id', '--root', root, '--step', '3', '--cmd', 'block', '--exit', '3']), stopId).toEqual({ code: 0, stdout: `${stopId}\n`, stderr: '' });
+    }
   });
 
   it('reads a cause step\'s exit 3 from its kind', () => {
@@ -362,7 +409,7 @@ describe('the stop-id table', () => {
     logFile(root, 'budget-log.jsonl', [{ kind: 'admit', step: 'whole-run', reason: 'r' }]);
     expect(sid('2', 'admit', 4).stdout).toBe('whole-run-r\n');
     fs.mkdirSync(path.join(root, 'batch1'));
-    fs.writeFileSync(path.join(root, 'batch1', 'block.json'), JSON.stringify({ schema: 'z0-batch1-block/1', stops: [{ id: 'g4', line: 'STOP: G4' }, { id: 'g2', line: 'STOP: G2' }] }));
+    fs.writeFileSync(path.join(root, 'batch1', 'block.json'), blockFile({ id: 'g4', line: 'STOP: G4' }, { id: 'g2', line: 'STOP: G2' }));
     expect(sid('3', 'block', 3).stdout).toBe('g4\n');
     expect(cli(['stop-id', '--root', root, '--step', '3', '--cmd', 'block', '--exit', 'x']).code).toBe(1);
     expect(cli(['stop-id', '--root', root, '--step', 'cause', '--cmd', 'cause', '--exit', '3', '--kind', 'no-version']).stdout).toBe('no-version\n');

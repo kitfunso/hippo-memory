@@ -258,16 +258,24 @@ export class DriveCase {
     if (!killNaming([this.mark], [pid]).includes(pid)) throw new Error(`pid ${pid} is not a live process of case ${this.dir}, so it was not killed`);
   }
 
-  /** Stops what this case spawned and every live process naming its folder, until none is left, then removes the folder. */
+  /** Stops what this case spawned, then every live process naming its folder, until none is left; a child whose kill throws is reported after the sweep and the folder removal, never in place of them. */
   async cleanup() {
-    for (const child of this.children) killOwnTree(child);
+    const failed: string[] = [];
+    for (const child of this.children) {
+      try {
+        killOwnTree(child);
+      } catch (err) {
+        failed.push(String(err));
+      }
+    }
     let left = procsNaming([this.mark]).get(this.mark) ?? [];
     for (let i = 0; left.length > 0 && i < 20; i++) {
       killNaming([this.mark]);
       await sleep(500);
       left = procsNaming([this.mark]).get(this.mark) ?? [];
     }
-    if (left.length > 0) throw new Error(`case ${this.dir} still has live processes after its cleanup: ${left.join(' ')}`);
-    fs.rmSync(this.dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+    if (left.length > 0) failed.push(`live processes remain: ${left.join(' ')}`);
+    else fs.rmSync(this.dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+    if (failed.length > 0) throw new Error(`cleanup of case ${this.dir} failed: ${failed.join('; ')}`);
   }
 }

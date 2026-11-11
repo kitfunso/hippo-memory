@@ -221,8 +221,8 @@ state_of() {
   STATE=${out#state }
   STATE=${STATE%% *}
 }
-# A unit folder is one that holds the runner's run/; dry plans under dry/ do not count.
-unit_started() { [ -d "$1/run" ] || [ -d "$1-a2/run" ] || [ -d "$1-a3/run" ]; }
+# A unit folder is one that holds the runner's run/ or its run.log, which s4-run.ps1 also refuses to plan over; dry plans under dry/ do not count.
+unit_started() { local f; for f in "$1" "$1-a2" "$1-a3"; do { [ -d "$f/run" ] || [ -f "$f/run.log" ]; } && return 0; done; return 1; }
 any_started() {
   local u
   for u in "$@"; do unit_started "$u" && return 0; done
