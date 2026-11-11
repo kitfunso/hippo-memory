@@ -45,6 +45,14 @@ def json_reply(text: str) -> dict | None:
     return None
 
 
+class ToolUse(RuntimeError):
+    """A reply whose run used a tool: logged as an ask that is never valid (prereg Amendment 6 revision 1 item 7)."""
+
+    def __init__(self, rec: dict) -> None:
+        super().__init__(f"{rec['tag']}: the reply used a tool: {rec['tools']}")
+        self.rec = rec
+
+
 class Claude:
     def __init__(self, work: Path, log: Path, slots: int) -> None:
         self.exe = shutil.which("claude")
@@ -136,6 +144,11 @@ class Claude:
                     self._fail(base, f"{failures} failed attempts: {detail}")
                 time.sleep(min(10 * failures, max(0.0, deadline - time.monotonic())))
                 continue
+            if res.get("tools"):  # only codex_judge reports tools; the caller counts the ask and may ask again
+                rec = {**base, "event": "tool-use", "tools": res["tools"], "models": sorted(res.get("modelUsage") or {}),
+                       "usage": res.get("usage"), "text": text}
+                self._log(rec)
+                raise ToolUse(rec)
             if want_json and json_reply(text) is None:
                 misses += 1
                 self._log({**base, "event": "json-miss", "text": text[:2000]})

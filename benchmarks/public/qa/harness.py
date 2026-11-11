@@ -1,11 +1,12 @@
 """Group B chat-QA harness (prereg Amendment 6): hippo@365 against BM25 on one benchmark, one loader each.
 
 Stages, run in order, each resumable: ingest, retrieve, answer, judge, score.
-  python -I harness.py <stage> --bench <loader> --out DIR [--limit N] [--slots 10] [--port-base 8921]
+  python -I harness.py <stage> --bench <loader> --out DIR [--limit N] [--slots 10] [--port-base 8921] [--bonferroni K]
 Each arm gets its own hippo-mem0-server on its own data dir under DIR. Answers are Claude Sonnet 5 at medium effort
 (claude_llm.Claude), verdicts gpt-5.6-sol at medium (codex_judge.CodexJudge) or a match, with the authors' prompts from
 the loader. A question asked mid-history is searched in a store that holds only the turns before it, so ingestion and
-retrieval for such a user run as one pass in `ingest`.
+retrieval for such a user run as one pass in `ingest`. Judge and score take every answer and verdict from the call logs
+through ledger.py; answers.jsonl and verdicts.jsonl only record each run for people.
 """
 from __future__ import annotations
 
@@ -30,8 +31,9 @@ PUBLIC = HERE.parent
 REPO = PUBLIC.parent.parent
 sys.path[:0] = [str(HERE), str(PUBLIC), str(PUBLIC / "mem0")]
 from claude_llm import Claude  # noqa: E402
-from evidence_recall import boot  # noqa: E402
-from h2h import load, read_jsonl, reading, records, replies, run_all, sha, tokens_in  # noqa: E402
+from h2h import load, paired, primary_lines, read_jsonl, reading, run_all, sha, tokens_in  # noqa: E402,F401
+from qa.ledger import (ANSWERER, JUDGE, Item, Ledger, exhausted_lines, require, smoke_excluded, trail,  # noqa: E402
+                       unsettled)
 
 ARMS = {"hippo365": "hippo", "bm25": "bm25"}  # arm -> the server's --arm
 SERVER = PUBLIC / "hippo-mem0-server.mjs"
@@ -126,16 +128,19 @@ def pred_path(out: Path, arm: str, qid: str) -> Path:
 
 def write_pred(out: Path, arm: str, q: dict, results: list[dict], topk: int, visible: int) -> None:
     rec = {"qid": q["qid"], "arm": arm, "user_id": q["user_id"], "question": q["question"], "topk": topk,
-           "ask_after": q["ask_after"], "turns_visible": visible, "results": results}
+           "ask_after": q["ask_after"], "turns_visible": visible, "returned": len(results), "results": results}
     p = pred_path(out, arm, q["qid"])
     p.parent.mkdir(parents=True, exist_ok=True)
     atomic(p, json.dumps(rec, ensure_ascii=False).encode("utf-8"))
 
 
 def search_for(srv: Server, q: dict, topk: int, stored: int) -> list[dict]:
+    """A short list is a real result: hippo and BM25 return only memories that share a term with the query. More than
+    top-k, or than the store holds so far, fails; a server error raises in Server.call."""
     res = srv.search(q["user_id"], q["question"], topk)
-    if len(res) != min(topk, stored):
-        raise RuntimeError(f"{srv.arm} returned {len(res)} memories for {q['qid']}, expected {min(topk, stored)}")
+    if len(res) > min(topk, stored):
+        raise RuntimeError(f"{srv.arm} returned {len(res)} memories for {q['qid']}, at most {min(topk, stored)} "
+                           f"expected (top {topk}, {stored} stored)")
     return res
 
 
@@ -268,49 +273,53 @@ def prompts_of(a: argparse.Namespace, mod, qs: list[dict]) -> dict:
     return out
 
 
-def answers_on_file(a: argparse.Namespace, prompts: dict) -> dict:
-    """The answers so far, each made from the prompt and retrieval file now on disk and equal to a logged reply to it."""
-    answers = records(a.out / "answers.jsonl", lambda r: (r["arm"], r["qid"]))
-    said = replies(a.out / "calls-answer.jsonl")
-    stale = [k for k, r in answers.items() if k not in prompts or r["prompt"] != sha(prompts[k][3])
-             or r["system"] != sha(prompts[k][2]) or r["retrieval"] != prompts[k][1]
-             or r["answer"] not in said.get((f"answer {k[0]} {k[1]}", r["prompt"][:16]), [])]
-    if stale:
-        sys.exit(f"answers.jsonl holds {len(stale)} answers made from other inputs or not in the call log, e.g. "
-                 f"{stale[0]}; move it aside and answer again")
-    return answers
+def answer_items(prompts: dict) -> dict:
+    """Each answer prompt as a log item: its system text is the loader's for that question, checked per item."""
+    return {(arm, qid): Item(f"answer {arm} {qid}", p[2], p[3], ANSWERER) for (arm, qid), p in prompts.items()}
 
 
 def stage_answer(a: argparse.Namespace, mod, qs: list[dict]) -> None:
-    prompts = prompts_of(a, mod, qs)
-    done = answers_on_file(a, prompts)
-    jobs = [(arm, qid, p[3]) for (arm, qid), p in prompts.items() if (arm, qid) not in done]
+    """Asks each answer that has no valid reply in the log, up to its 3rd ask counted across every run."""
+    prompts, ledger = prompts_of(a, mod, qs), Ledger(a.out / "calls-answer.jsonl")
+    items = answer_items(prompts)
+    got = {k: ledger.choose(item) for k, item in items.items()}
+    jobs = [(*k, items[k]) for k, c in got.items() if c.status == "open"]
     random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits both alike
+    print(f"{len(jobs)} answers to ask, {sum(c.status == 'valid' for c in got.values())} valid in the log", flush=True)
+    print("\n".join(exhausted_lines(got, "answers")), flush=True)
+    if not jobs:
+        return
     claude = Claude(a.out / "claude", a.out / "calls-answer.jsonl", a.slots)
+    require(claude, ANSWERER)
 
     def one(job: tuple) -> dict:
-        arm, qid, user = job
+        arm, qid, item = job
+        ch = ledger.settle(item, claude)
         n, ret, system, _ = prompts[(arm, qid)]
-        r = claude.ask(system, user, effort="medium", tag=f"answer {arm} {qid}")
-        return {"arm": arm, "qid": qid, "memories": n, "retrieval": ret, "prompt": sha(user), "system": sha(system),
-                "tokens_in": tokens_in(r), "answer": r["text"]}
+        return {"arm": arm, "qid": qid, "memories": n, "retrieval": ret, "prompt": sha(item.user), "system": sha(system),
+                "tokens_in": tokens_in(ch.record or {}), "answer": ch.value, **trail(ch)}
 
-    print(f"{len(jobs)} answers to make, {len(done)} already made", flush=True)
     run_all(jobs, one, a.out / "answers.jsonl", a.slots)
 
 
 def all_answers(a: argparse.Namespace, mod, qs: list[dict]) -> dict:
-    answers = answers_on_file(a, prompts_of(a, mod, qs))
-    missing = len(qs) * len(ARMS) - len(answers)
-    if missing:
-        sys.exit(f"answers: {missing} of {len(qs) * len(ARMS)} missing")
+    """Every answer as its call log settles it, made from the prompt and retrieval file now on disk, or stop while one
+    still has asks left. An exhausted answer holds None and scores wrong."""
+    prompts, ledger, answers = prompts_of(a, mod, qs), Ledger(a.out / "calls-answer.jsonl"), {}
+    for k, item in answer_items(prompts).items():
+        c = ledger.choose(item)
+        answers[k] = {"answer": c.value, "memories": prompts[k][0], "tokens_in": tokens_in(c.record or {}), "choice": c}
+    unsettled({k: r["choice"] for k, r in answers.items()}, "answers")
     return answers
 
 
 def llm_items(mod, qs: list[dict], answers: dict) -> tuple[dict, dict]:
-    """(arm, qid) -> (system, prompt, parse) for the llm-judged answers, and (arm, qid) -> bool for the matched."""
+    """(arm, qid) -> (system, prompt, parse) for the llm-judged answers, and (arm, qid) -> bool for the matched. An
+    exhausted answer is in neither: it scores wrong with nothing to judge."""
     by_id, llm, matched = {q["qid"]: q for q in qs}, {}, {}
     for (arm, qid), r in answers.items():
+        if r["answer"] is None:
+            continue
         j = mod.judge(by_id[qid], r["answer"])
         if j[0] == "match":
             matched[(arm, qid)] = bool(j[1])
@@ -335,33 +344,25 @@ def judge_key(a: argparse.Namespace, llm: dict, answers: dict) -> dict:
     return key
 
 
-def verdicts_on_file(a: argparse.Namespace, key: dict, llm: dict) -> dict:
-    """The verdicts so far, each on the judge prompt as it is now and equal to the parse of a logged reply to it."""
-    verdicts = records(a.out / "verdicts.jsonl", lambda r: r["id"])
-    said = replies(a.out / "calls-judge.jsonl")
-    bad = []
-    for jid, v in verdicts.items():
-        if jid not in key:
-            bad.append(jid)
-            continue
-        _, prompt, parse = llm[(key[jid]["arm"], key[jid]["qid"])]
-        if v["prompt"] != sha(prompt) or v["correct"] not in map(parse, said.get((f"judge {jid}", v["prompt"][:16]), [])):
-            bad.append(jid)
-    if bad:
-        sys.exit(f"verdicts.jsonl holds {len(bad)} verdicts on other prompts or not read from the call log, e.g. "
-                 f"{bad[0]}; judge again from an empty file")
-    return verdicts
+def judge_items(key: dict, llm: dict) -> dict:
+    """Each keyed answer's judge prompt as a log item under the judge's manifest."""
+    return {jid: Item(f"judge {jid}", *llm[(k["arm"], k["qid"])][:2], JUDGE, llm[(k["arm"], k["qid"])][2])
+            for jid, k in key.items()}
 
 
 def stage_judge(a: argparse.Namespace, mod, qs: list[dict]) -> None:
+    """Asks each keyed verdict that has no valid reply in the log, up to its 3rd ask counted across every run."""
     answers = all_answers(a, mod, qs)
     llm, matched = llm_items(mod, qs, answers)
     print(f"{len(matched)} answers scored by match, {len(llm)} for the judge", flush=True)
     if not llm:
         return
     key = judge_key(a, llm, answers)
-    done = verdicts_on_file(a, key, llm)
-    jobs = [(jid, llm[(k["arm"], k["qid"])][1]) for jid, k in key.items() if jid not in done]
+    items, ledger = judge_items(key, llm), Ledger(a.out / "calls-judge.jsonl")
+    got = {jid: ledger.choose(item) for jid, item in items.items()}
+    jobs = [(jid, items[jid]) for jid, c in got.items() if c.status == "open"]
+    print(f"{len(jobs)} verdicts to ask, {sum(c.status == 'valid' for c in got.values())} valid in the log", flush=True)
+    print("\n".join(exhausted_lines(got, "verdicts")), flush=True)
     if not jobs:
         return
     try:
@@ -369,46 +370,61 @@ def stage_judge(a: argparse.Namespace, mod, qs: list[dict]) -> None:
     except ImportError:
         sys.exit("benchmarks/public/qa/codex_judge.py is missing; it comes from the codex-judge lane")
     judge = CodexJudge(log=a.out / "calls-judge.jsonl", slots=a.slots)
+    require(judge, JUDGE)
 
     def one(job: tuple) -> dict:
-        jid, prompt = job
-        system, _, parse = llm[(key[jid]["arm"], key[jid]["qid"])]
-        for _ in range(3):  # a reply with no verdict is asked again, as the runner does
-            c = parse(judge.ask(system, prompt, tag=f"judge {jid}")["text"])
-            if c is not None:
-                return {"id": jid, "prompt": sha(prompt), "correct": c}
-        raise RuntimeError("no verdict in 3 replies")
+        jid, item = job
+        ch = ledger.settle(item, judge)
+        return {"id": jid, "prompt": sha(item.user), "correct": ch.value, **trail(ch)}
 
-    print(f"{len(jobs)} verdicts to get, {len(done)} already in", flush=True)
     run_all(jobs, one, a.out / "verdicts.jsonl", a.slots)
 
 
+def units(qs: list[dict]) -> dict:
+    """Each question's bootstrap unit: the user that owns its store (prereg Amendment 6 revision 1 item 9), or the
+    question itself when one store holds every question, as HotPotQA-24's does (dated notes 1)."""
+    one_store = len({q["user_id"] for q in qs}) == 1
+    return {q["qid"]: q["qid"] if one_store else q["user_id"] for q in qs}
+
+
+def primary_ids(a: argparse.Namespace, mod, ids: list[str]) -> tuple[list[str], str]:
+    """The questions every primary reads and the line naming what it leaves out: the registered smoke items (dated
+    notes 1). A smoke run is never scored, so it keeps every question under a SMOKE label."""
+    if load(a.out / "config.json").get("limit"):
+        return ids, "SMOKE run: never scored or reused"
+    smoke = smoke_excluded(a.bench, [q["qid"] for q in mod.questions()])
+    return [i for i in ids if i not in smoke], f"smoke items left out of every primary: {', '.join(sorted(smoke)) or 'none'}"
+
+
 def stage_score(a: argparse.Namespace, mod, qs: list[dict]) -> None:
+    """Accuracy per arm and hippo365 minus bm25 over the store-owning unit, smoke items left out, exhausted ones listed."""
     answers = all_answers(a, mod, qs)
     llm, matched = llm_items(mod, qs, answers)
-    correct = {k: float(v) for k, v in matched.items()}
+    correct = {k: 0.0 for k in answers}  # an exhausted answer or verdict scores wrong
+    correct.update({k: float(v) for k, v in matched.items()})
+    listed = exhausted_lines({k: r["choice"] for k, r in answers.items()}, "answers")
     if llm:
-        key = judge_key(a, llm, answers)
-        verdicts = verdicts_on_file(a, key, llm)
-        if set(verdicts) != set(key):
-            sys.exit(f"{len(verdicts)} verdicts for {len(key)} keyed answers; never scored partial")
-        correct.update({(k["arm"], k["qid"]): float(verdicts[j]["correct"]) for j, k in key.items()})
-    cats = {q["qid"]: q["category"] for q in qs}
-    ids = [q["qid"] for q in qs]
-    lines = [f"{mod.NAME}: {len(ids)} questions, top {mod.TOPK}, answers {len(answers)}, "
+        key, ledger = judge_key(a, llm, answers), Ledger(a.out / "calls-judge.jsonl")
+        got = {jid: ledger.choose(item) for jid, item in judge_items(key, llm).items()}
+        unsettled(got, "verdicts")
+        correct.update({(key[j]["arm"], key[j]["qid"]): float(c.value) for j, c in got.items() if c.status == "valid"})
+        listed += exhausted_lines(got, "verdicts")
+    cats, ids, unit = {q["qid"]: q["category"] for q in qs}, [q["qid"] for q in qs], units(qs)
+    primary, note = primary_ids(a, mod, ids)
+    lines = [f"{mod.NAME}: {len(ids)} questions, {len(primary)} in the primary, top {mod.TOPK}, answers {len(answers)}, "
              f"{len(llm)} judged by model, {len(matched)} by match"]
     for arm in ARMS:
-        rs = [answers[(arm, i)] for i in ids]
-        lines.append(f"{arm:>9}  accuracy {100 * sum(correct[(arm, i)] for i in ids) / len(ids):5.1f}  "
+        rs = [answers[(arm, i)] for i in primary]
+        toks = [r["tokens_in"] for r in rs if r["answer"] is not None]
+        lines.append(f"{arm:>9}  accuracy {100 * sum(correct[(arm, i)] for i in primary) / len(primary):5.1f}  "
                      f"memories {sum(r['memories'] for r in rs) / len(rs):5.1f}  "
-                     f"input tokens {sum(r['tokens_in'] for r in rs) / len(rs):7.0f}")
-    for name, sub in [("all", ids)] + [(c, [i for i in ids if cats[i] == c]) for c in sorted(set(cats.values()))]:
-        if name != "all" and len(set(cats.values())) == 1:
-            continue
-        d, lo, hi = boot([correct[("hippo365", i)] - correct[("bm25", i)] for i in sub])
-        tag = "PRIMARY " if name == "all" else "secondary "
-        lines.append(f"{tag}hippo365 - bm25 {name}: {100 * d:+5.1f} pp [{100 * lo:+5.1f}, {100 * hi:+5.1f}] n={len(sub)}"
-                     f"  {reading(d, lo, hi)}")
+                     f"input tokens {sum(toks) / max(1, len(toks)):7.0f}")
+    diff = {i: correct[("hippo365", i)] - correct[("bm25", i)] for i in ids}
+    lines += primary_lines("hippo365 - bm25 all", diff, primary, ids, unit.get, a.bonferroni)
+    for c in sorted(set(cats.values())) if len(set(cats.values())) > 1 else []:
+        if sub := [i for i in primary if cats[i] == c]:
+            lines.append(f"secondary hippo365 - bm25 {c}: {paired(diff, sub, unit.get)}")
+    lines += ["", note, *listed]
     text = "\n".join(lines)
     (a.out / "score.txt").write_text(text + "\n", encoding="utf-8")
     print(text)
@@ -422,7 +438,10 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="smoke only: this many questions, spread over the set")
     ap.add_argument("--slots", type=int, default=10)
     ap.add_argument("--port-base", type=int, default=8921, help="hippo arm here, bm25 on the next port")
+    ap.add_argument("--bonferroni", type=int, metavar="K", help="score: also the primary's interval at 1 - 0.05/K")
     a = ap.parse_args()
+    if a.bonferroni is not None and (a.stage != "score" or a.bonferroni < 1):
+        ap.error("--bonferroni K needs the score stage and K of 1 or more")
     mod, qs = setup(a)
     {"ingest": stage_ingest_retrieve, "retrieve": stage_ingest_retrieve, "answer": stage_answer, "judge": stage_judge,
      "score": stage_score}[a.stage](a, mod, qs)

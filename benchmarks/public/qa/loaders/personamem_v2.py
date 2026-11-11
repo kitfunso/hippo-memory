@@ -18,7 +18,6 @@ import json
 import random
 import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 NAME = "PersonaMem v2 (text, 32k)"
@@ -137,26 +136,26 @@ def judge(q: dict, answer: str):
     return "match", check_mcq_correctness(extract_final_answer(answer), q["gold"], q["options"])
 
 
-def score(out: Path) -> str:
+def score(out: Path, bonferroni: int | None = None) -> str:
     """Accuracy per arm and hippo365 minus bm25 with the interval over personas (one store each, prereg Amendment 6
-    revision 1 item 9), beside the harness' question-level line."""
+    revision 1 item 9), from the answers the call log settles; an exhausted answer scores wrong."""
     sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
     import harness  # noqa: E402  (imported here: harness imports this module while it runs)
-    from evidence_recall import cluster_boot  # noqa: E402
 
     a = argparse.Namespace(stage="score", bench="personamem_v2", out=out, limit=0, slots=1, port_base=0)
     mod, qs = harness.setup(a)
     answers = harness.all_answers(a, mod, qs)
-    ok = {(arm, q["qid"]): float(mod.judge(q, answers[(arm, q["qid"])]["answer"])[1]) for q in qs for arm in harness.ARMS}
-    lines = [f"{NAME}: {len(qs)} questions over {len({q['user_id'] for q in qs})} personas, top {TOPK}, MCQ match"]
+    ok = {(arm, q["qid"]): 0.0 if (ans := answers[(arm, q["qid"])]["answer"]) is None else float(mod.judge(q, ans)[1])
+          for q in qs for arm in harness.ARMS}
+    ids, persona = [q["qid"] for q in qs], {q["qid"]: q["user_id"] for q in qs}
+    primary, note = harness.primary_ids(a, mod, ids)
+    lines = [f"{NAME}: {len(qs)} questions over {len(set(persona.values()))} personas, {len(primary)} in the primary, "
+             f"top {TOPK}, MCQ match"]
     for arm in harness.ARMS:
-        lines.append(f"{arm:>9}  accuracy {100 * sum(ok[(arm, q['qid'])] for q in qs) / len(qs):5.1f}")
-    by_persona: dict = defaultdict(list)
-    for q in qs:
-        by_persona[q["user_id"]].append(ok[("hippo365", q["qid"])] - ok[("bm25", q["qid"])])
-    d, lo, hi = cluster_boot(dict(by_persona))
-    lines.append(f"PRIMARY hippo365 - bm25: {100 * d:+5.1f} pp [{100 * lo:+5.1f}, {100 * hi:+5.1f}] n={len(by_persona)} "
-                 f"personas  {harness.reading(d, lo, hi)}")
+        lines.append(f"{arm:>9}  accuracy {100 * sum(ok[(arm, i)] for i in primary) / len(primary):5.1f}")
+    diff = {i: ok[("hippo365", i)] - ok[("bm25", i)] for i in ids}
+    lines += harness.primary_lines("hippo365 - bm25, personas", diff, primary, ids, persona.get, bonferroni)
+    lines += ["", note, *harness.exhausted_lines({k: r["choice"] for k, r in answers.items()}, "answers")]
     text = "\n".join(lines)
     (out / "score_persona.txt").write_text(text + "\n", encoding="utf-8")
     return text
@@ -166,4 +165,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("cmd", choices=("score",))
     ap.add_argument("--out", type=Path, required=True)
-    print(score(ap.parse_args().out))
+    ap.add_argument("--bonferroni", type=int, metavar="K", help="also the primary's interval at 1 - 0.05/K")
+    args = ap.parse_args()
+    if args.bonferroni is not None and args.bonferroni < 1:
+        ap.error("--bonferroni K needs K of 1 or more")
+    print(score(args.out, args.bonferroni))

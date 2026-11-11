@@ -6,7 +6,8 @@ Data `src/hotpot_qa_24_corpus.json` (240 paragraphs) and `src/hotpot_qa_24_qa_pa
 differs by system: Cognee's Modal runs use 15 (modal_apps/modal_qa_benchmark_cognee.py:74; the class default is 5,
 qa_benchmark_cognee.py:37), Mem0 5 (qa_benchmark_mem0.py:65), Graphiti 10 (qa_benchmark_graphiti.py:110). TOPK is 15, the
 benchmark owner's own setting.
-Main score: exact match and F1, run locally by `python -I loaders/hotpotqa24.py score --out DIR` (no model call).
+Main score: F1 (exact match secondary), run locally by `python -I loaders/hotpotqa24.py score --out DIR [--bonferroni K]`
+(no model call), on the answers the call log settles (qa/ledger.py).
 Secondary, through the harness judge stage: cognee's own non-DeepEval correctness judge (DirectLLM), which stands in for
 DeepEval's GEval, since DeepEval needs a paid key. The harness' own "PRIMARY" score line is that judge, not the main score.
 """
@@ -127,8 +128,9 @@ def judge(q: dict, answer: str):
             DIRECT_USER.format(question=q["question"], answer=answer, golden_answer=q["gold"]), parse)
 
 
-def score(out: Path) -> str:
-    """Exact match and F1 per arm and hippo365 minus bm25, from answers the harness has bound to their prompts."""
+def score(out: Path, bonferroni: int | None = None) -> str:
+    """F1 and exact match per arm and hippo365 minus bm25, from the answers the call log settles; an exhausted answer
+    scores 0 on both. Smoke items are left out of the primary (dated notes 1)."""
     sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
     import harness  # noqa: E402  (imported here: harness imports this module while it runs)
 
@@ -136,16 +138,18 @@ def score(out: Path) -> str:
     mod, qs = harness.setup(a)
     answers = harness.all_answers(a, mod, qs)
     ids, by_id = [q["qid"] for q in qs], {q["qid"]: q for q in qs}
-    sc = {(arm, i): (exact_match(answers[(arm, i)]["answer"], by_id[i]["gold"]), f1(answers[(arm, i)]["answer"], by_id[i]["gold"]))
-          for arm in harness.ARMS for i in ids}
-    lines = [f"{NAME}: {len(ids)} questions, top {TOPK}, main score exact match and F1 (cognee metrics, no model call)"]
+    sc = {(arm, i): (0.0, 0.0) if (ans := answers[(arm, i)]["answer"]) is None else
+          (exact_match(ans, by_id[i]["gold"]), f1(ans, by_id[i]["gold"])) for arm in harness.ARMS for i in ids}
+    primary, note = harness.primary_ids(a, mod, ids)
+    lines = [f"{NAME}: {len(ids)} questions, {len(primary)} in the primary, top {TOPK}, main score F1, exact match "
+             f"secondary (cognee metrics, no model call); unit the question: one store holds all 24"]
     for arm in harness.ARMS:
-        lines.append(f"{arm:>9}  EM {100 * sum(sc[(arm, i)][0] for i in ids) / len(ids):5.1f}  "
-                     f"F1 {100 * sum(sc[(arm, i)][1] for i in ids) / len(ids):5.1f}")
-    for k, name, tag in ((1, "F1", "PRIMARY "), (0, "EM", "secondary ")):
-        d, lo, hi = harness.boot([sc[("hippo365", i)][k] - sc[("bm25", i)][k] for i in ids])
-        lines.append(f"{tag}hippo365 - bm25 {name}: {100 * d:+5.1f} pp [{100 * lo:+5.1f}, {100 * hi:+5.1f}] n={len(ids)} "
-                     f"{harness.reading(d, lo, hi)}  (question-level: one store holds all 24, so no coarser unit exists)")
+        lines.append(f"{arm:>9}  EM {100 * sum(sc[(arm, i)][0] for i in primary) / len(primary):5.1f}  "
+                     f"F1 {100 * sum(sc[(arm, i)][1] for i in primary) / len(primary):5.1f}")
+    diff = [{i: sc[("hippo365", i)][k] - sc[("bm25", i)][k] for i in ids} for k in (0, 1)]
+    lines += harness.primary_lines("hippo365 - bm25 F1", diff[1], primary, ids, str, bonferroni)
+    lines += [f"secondary hippo365 - bm25 EM: {harness.paired(diff[0], primary, str)}", "", note,
+              *harness.exhausted_lines({k: r["choice"] for k, r in answers.items()}, "answers")]
     (out / "score_match.jsonl").write_text("".join(json.dumps({"arm": a_, "qid": i, "em": e, "f1": f}) + "\n"
                                                    for (a_, i), (e, f) in sc.items()), encoding="utf-8")
     text = "\n".join(lines)
@@ -157,4 +161,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("cmd", choices=("score",))
     ap.add_argument("--out", type=Path, required=True)
-    print(score(ap.parse_args().out))
+    ap.add_argument("--bonferroni", type=int, metavar="K", help="also the primary's interval at 1 - 0.05/K")
+    args = ap.parse_args()
+    if args.bonferroni is not None and args.bonferroni < 1:
+        ap.error("--bonferroni K needs K of 1 or more")
+    print(score(args.out, args.bonferroni))

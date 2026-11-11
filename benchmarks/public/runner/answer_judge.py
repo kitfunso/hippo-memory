@@ -4,7 +4,8 @@ The runner's own functions run unchanged, `apply_longmemeval_answerer_judge_to_s
 `process_question` for BEAM, over its saved `--predict-only` files, with two adapters in place of its LLM clients:
 the answerer is Claude Sonnet 5 at medium effort through claude_llm.py, the judge gpt-5.6-sol at medium effort
 through codex_judge.py. Every call is logged, and every saved result must be reproducible from the call logs alone:
-`verify` runs the same code again with no calls allowed and compares (prereg Amendment 5 items 2 and 3).
+`verify` runs the same code again with no calls allowed and compares (prereg Amendment 5 items 2 and 3). Each prompt
+takes the first valid reply among its first 3 asks, counted across every run, under the frozen manifest (qa/ledger.py).
 Usage (runner venv): python -I answer_judge.py {run,verify} --bench B --pred hippo365=DIR --pred bm25=DIR --out DIR
 """
 from __future__ import annotations
@@ -34,6 +35,7 @@ from benchmarks.common.llm_client import LLMClient  # noqa: E402
 from benchmarks.common.mem0_client import format_search_results  # noqa: E402
 from benchmarks.longmemeval import run as lme  # noqa: E402
 from claude_llm import Claude  # noqa: E402
+from qa.ledger import ANSWERER, JUDGE, Choice, Item, Ledger, require, trail  # noqa: E402
 
 # codex_judge's preamble asks for "the JSON object only", which would turn LongMemEval's yes/no judge into JSON.
 # Same no-tools wording, format left to the prompt; one value for every arm and benchmark.
@@ -48,6 +50,11 @@ sha = h2h.sha
 
 class MissingReply(RuntimeError):
     """Replay needs a logged reply that is not there."""
+
+
+class Exhausted(RuntimeError):
+    """An answer with no valid reply in its 3 asks: its question scores wrong on every metric (prereg Amendment 6
+    revision 1 item 5)."""
 
 
 def kind_of(bench: str) -> str:
@@ -91,59 +98,62 @@ def valid_structured(system: str, v: object) -> bool:
     return True
 
 
+def yes_no_of(text: str) -> tuple[bool, str] | None:
+    """LongMemEval's verdict as the runner parses it, or None for a reply with neither word, which is asked again."""
+    if text.strip() and re.search(r"\b(yes|no)\b", text.lower()):
+        return LLMClient._parse_yes_no_judgment(None, text), text.strip()  # type: ignore[arg-type]
+    return None
+
+
 class Backend:
-    """Claude and the codex judge behind one reply store: a prompt asked before is answered from its logged reply."""
+    """Claude and the codex judge behind the call logs: each prompt gets the first valid reply among its first 3 asks,
+    counted across every run (qa/ledger.py). A replay (live=False) never asks."""
 
     def __init__(self, out: Path, slots_answer: int, slots_judge: int, live: bool) -> None:
         self.live, self.lock = live, threading.Lock()
         self.logs = {"answer": out / "calls-answer.jsonl", "judge": out / "calls-judge.jsonl"}
-        self.store = {role: h2h.replies(p) for role, p in self.logs.items()}
+        self.ledgers = {role: Ledger(p) for role, p in self.logs.items()}
         self.trace: dict[tuple[str, str], list[dict]] = {}
         if live:
-            self.claude = Claude(out / "claude-work", self.logs["answer"], slots_answer)
-            self.codex = codex_judge.CodexJudge(self.logs["judge"], slots_judge)
+            self.llm = {"answer": Claude(out / "claude-work", self.logs["answer"], slots_answer),
+                        "judge": codex_judge.CodexJudge(self.logs["judge"], slots_judge)}
+            require(self.llm["answer"], ANSWERER)
+            require(self.llm["judge"], JUDGE)
 
-    def _ask(self, role: str, system: str, user: str, tag: str, want: int) -> list[str]:
-        """The logged replies for this prompt, asking for more while fewer than `want` exist."""
-        key = (tag, hashlib.sha256(user.encode()).hexdigest()[:16])
+    def _settle(self, role: str, item: Item) -> Choice:
+        c = self.ledgers[role].settle(item, self.llm[role]) if self.live else self.ledgers[role].choose(item)
+        if c.status == "open":
+            raise MissingReply(f"{role} reply for {item.tag} {item.key[1]} not in {self.logs[role].name}")
         with self.lock:
-            have = list(self.store[role].get(key, []))
-        if len(have) < want:
-            if not self.live:
-                raise MissingReply(f"{role} reply for {tag} {key[1]} not in {self.logs[role].name}")
-            who = self.claude if role == "answer" else self.codex
-            r = who.ask(system, user, effort="medium", tag=tag)
-            have.append(r["text"])
-            with self.lock:
-                self.store[role].setdefault(key, []).append(r["text"])
-                self.trace.setdefault(CTX.get(), []).append({"role": role, "tag": tag, "prompt_sha256": sha(user),
-                                                              "tokens_in": h2h.tokens_in(r)})
-        return have
+            self.trace.setdefault(CTX.get(), []).append({"role": role, "tag": item.tag, "prompt_sha256": sha(item.user),
+                                                          "tokens_in": h2h.tokens_in(c.record or {}), **trail(c)})
+        return c
 
     def answer(self, system: str, user: str) -> str:
         arm, qid = CTX.get()
-        return self._ask("answer", system, user, f"answer {arm} {qid} {sha(system)[:8]}", 1)[0].strip()
+        c = self._settle("answer", Item(f"answer {arm} {qid} {sha(system)[:8]}", system, user, ANSWERER))
+        if c.status == "exhausted":
+            raise Exhausted(f"answer {arm} {qid}: {'; '.join(c.rejected)}")
+        return c.value.strip()
 
     def structured(self, system: str, user: str):
-        """The first usable reply of up to three, as the runner asks again on a reply it cannot read."""
+        """The first usable reply in 3 asks. With none, the runner's own value after unreadable replies, {}
+        (llm_client.py:308), which its code scores as a failed step; no verdict is made up."""
         arm, qid = CTX.get()
-        tag = f"judge {arm} {qid} {sha(system)[:8]}"
-        for n in range(1, 4):
-            for text in self._ask("judge", system, user, tag, n):
-                v = parse_json_reply(text)
-                if valid_structured(system, v):
-                    return v
-        raise RuntimeError(f"{tag}: no usable reply in 3")
+
+        def usable(text: str):
+            v = parse_json_reply(text)
+            return v if valid_structured(system, v) else None
+
+        c = self._settle("judge", Item(f"judge {arm} {qid} {sha(system)[:8]}", system, user, JUDGE, usable))
+        return c.value if c.status == "valid" else {}
 
     def yes_no(self, user: str) -> tuple[bool, str]:
-        """LongMemEval's yes/no judge. The runner counts a reply with neither word as no; this asks again."""
+        """LongMemEval's yes/no judge, asked again on a reply with neither word. With none in 3 asks the item is no,
+        as the runner counts such a reply."""
         arm, qid = CTX.get()
-        tag = f"judge {arm} {qid} {sha('')[:8]}"
-        for n in range(1, 4):
-            for text in self._ask("judge", "", user, tag, n):
-                if text.strip() and re.search(r"\b(yes|no)\b", text.lower()):
-                    return LLMClient._parse_yes_no_judgment(None, text), text.strip()  # type: ignore[arg-type]
-        raise RuntimeError(f"{tag}: no yes or no in 3 replies")
+        c = self._settle("judge", Item(f"judge {arm} {qid} {sha('')[:8]}", "", user, JUDGE, yes_no_of))
+        return c.value if c.status == "valid" else (False, "")
 
 
 class Answerer:
@@ -205,18 +215,25 @@ def beam_question(saved: dict) -> dict:
 
 
 async def evaluate(bench: str, saved: dict, be: Backend, pool: ThreadPoolExecutor) -> dict:
-    """The runner's result for one saved question, its cutoff_results filled by the runner's own code."""
+    """The runner's result for one saved question, its cutoff_results filled by the runner's own code. A question
+    with an exhausted prompt names it under "exhausted"; one with an exhausted answer has no cutoff_results."""
     ans, jdg = Answerer(be, pool), Judge(be, pool)
-    if kind_of(bench) == "lme":
-        res = json.loads(json.dumps(saved))
-        await lme.apply_longmemeval_answerer_judge_to_saved_result(res, ans, jdg, LME_CUTOFFS)  # type: ignore[arg-type]
-    else:
-        res = await beam.process_question(
-            question_data=beam_question(saved), qi=saved["question_type_idx"], chat_size=saved["chat_size"],
-            conv_idx=saved["conversation_idx"], user_id=saved["user_id"], mem0=SavedSearch(saved["retrieval"]["search_results"]),
-            answerer=ans, judge_llm=jdg, cutoffs=BEAM_CUTOFFS, top_k=200, predict_only=False,
-            logger=logging.getLogger("beam"), conversation_meta={"conversation_id": saved.get("conversation_id", "")})
+    try:
+        if kind_of(bench) == "lme":
+            res = json.loads(json.dumps(saved))
+            await lme.apply_longmemeval_answerer_judge_to_saved_result(res, ans, jdg, LME_CUTOFFS)  # type: ignore[arg-type]
+        else:
+            res = await beam.process_question(
+                question_data=beam_question(saved), qi=saved["question_type_idx"], chat_size=saved["chat_size"],
+                conv_idx=saved["conversation_idx"], user_id=saved["user_id"],
+                mem0=SavedSearch(saved["retrieval"]["search_results"]), answerer=ans, judge_llm=jdg,
+                cutoffs=BEAM_CUTOFFS, top_k=200, predict_only=False, logger=logging.getLogger("beam"),
+                conversation_meta={"conversation_id": saved.get("conversation_id", "")})
+    except Exhausted as e:
+        return {"question_type": saved["question_type"], "exhausted": [str(e)]}
     res.pop("retrieval", None)
+    if spent := [t["tag"] for t in be.trace.get(CTX.get(), []) if t["status"] == "exhausted"]:
+        res["exhausted"] = spent  # absent when none, so results saved before this rule still verify
     return res
 
 

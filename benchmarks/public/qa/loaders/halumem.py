@@ -229,27 +229,32 @@ def judge(q: dict, answer: str):
 
 
 def secondary(out: Path) -> str:
-    """Correct, Hallucination and Omission counts per arm and per question type, read from the judge's logged replies:
-    the first reply with a label counts, as the harness takes it. Run after the score stage."""
-    here = Path(__file__).resolve().parents[1]
-    sys.path[:0] = [str(here), str(here.parent), str(here.parent / "mem0")]
-    from h2h import load, read_jsonl, replies  # noqa: E402
+    """Correct, Hallucination and Omission counts per arm and per question type, read from the judge reply the call log
+    settles for each verdict (qa/ledger.py), smoke items left out; an exhausted answer or verdict is counted apart.
+    Run after the score stage."""
+    import argparse
+    sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
+    import harness  # noqa: E402  (imported here: harness imports this module while it runs)
 
-    key, said = load(out / "judge_key.json"), replies(out / "calls-judge.jsonl")
-    verdicts = {r["id"]: r for r in read_jsonl(out / "verdicts.jsonl")}
-    cat = {q["qid"]: q["category"] for q in questions()}
-    rows: dict = {}
-    for jid, k in key.items():
-        v = verdicts.get(jid) or sys.exit(f"no verdict for {jid}; run the judge stage")
-        got = next((r for t in said.get((f"judge {jid}", v["prompt"][:16]), []) if (r := label_of(t))), None)
-        if got is None or (got == "Correct") != v["correct"]:
-            sys.exit(f"verdict {jid} does not match a logged reply")
-        for name in ("all", cat[k["qid"]]):
-            rows.setdefault((k["arm"], name), dict.fromkeys(LABELS, 0))[got] += 1
-    lines = [f"{NAME}: label counts, judge replies in calls-judge.jsonl"]
+    a = argparse.Namespace(stage="score", bench="halumem", out=out, limit=0, slots=1, port_base=0)
+    mod, qs = harness.setup(a)
+    answers = harness.all_answers(a, mod, qs)
+    llm, _ = harness.llm_items(mod, qs, answers)
+    key, ledger = harness.judge_key(a, llm, answers), harness.Ledger(out / "calls-judge.jsonl")
+    got = {(key[j]["arm"], key[j]["qid"]): ledger.choose(item) for j, item in harness.judge_items(key, llm).items()}
+    harness.unsettled(got, "verdicts")
+    primary, note = harness.primary_ids(a, mod, [q["qid"] for q in qs])
+    cat, cols, rows = {q["qid"]: q["category"] for q in qs}, (*LABELS, "Exhausted"), {}
+    for arm in harness.ARMS:
+        for qid in primary:
+            c = got.get((arm, qid))
+            label = label_of(c.record["text"]) if c and c.status == "valid" else "Exhausted"
+            for name in ("all", cat[qid]):
+                rows.setdefault((arm, name), dict.fromkeys(cols, 0))[label] += 1
+    lines = [f"{NAME}: label counts from the judge replies the call log settles; {note}"]
     for (arm, name), c in sorted(rows.items(), key=lambda kv: (kv[0][1] != "all", kv[0][1], kv[0][0])):
         n = sum(c.values())
-        lines.append(f"{name:>28} {arm:>9} n={n:5d}  " + "  ".join(f"{lab} {c[lab]:5d} ({100 * c[lab] / n:4.1f}%)" for lab in LABELS))
+        lines.append(f"{name:>28} {arm:>9} n={n:5d}  " + "  ".join(f"{lab} {c[lab]:5d} ({100 * c[lab] / n:4.1f}%)" for lab in cols))
     text = "\n".join(lines)
     (out / "secondary.txt").write_text(text + "\n", encoding="utf-8")
     return text

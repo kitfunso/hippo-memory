@@ -1,8 +1,9 @@
 """gpt-5.6-sol at medium effort through `codex exec` on the ChatGPT plan: the judge of prereg Amendment 6.
 
 Every call runs in one shared clean CODEX_HOME that starts with only a copy of the login, with no tools, so no
-AGENTS.md, skills, hooks or MCP servers reach the judge. Calls are logged in claude_llm's record shape, so
-h2h.verdicts_on_file reads the log; limits are waited out and a failed call raises, never a verdict.
+AGENTS.md, skills, hooks or MCP servers reach the judge, from an empty folder outside any checkout in the read-only
+sandbox. Calls are logged in claude_llm's record shape, so qa/ledger.py reads the log; a reply that shows a tool is
+logged as `tool-use` and raises claude_llm.ToolUse; limits are waited out and a failed call raises, never a verdict.
 Login safety: refresh tokens are single use, so the pool home never refreshes. Its access token must outlive a
 call; near expiry the pool pauses, the main home refreshes as codex does for the user, and the pool copies it in.
 Usage: CodexJudge(log=Path("calls-judge.jsonl"), slots=8).ask(system, prompt, tag="judge q1")["text"]
@@ -44,6 +45,9 @@ LIMIT_429 = re.compile(r"\b429\b|too many requests|usage limit|rate limit|hit yo
 # With the code-mode host off, codex says once per run that its exec tool fails closed: the wanted state.
 NOTICE = "Code Mode is unavailable because code-mode host is disabled"
 LEAK = re.compile(r"hook:|skill", re.I)  # what the main home's hooks and skills print; a clean home prints neither
+# codex --json shows no item for a code-mode tool call, only this stderr line and a second agent message (seen 11 Nov)
+TOOL_LOG = re.compile(r"codex_core::tools")
+REPLY_ITEMS = ("agent_message", "reasoning", "error")  # every other item type is a tool
 LOCK_NAMES = ("auth.lock", "auth.json.lock")  # codex creates both, then writes auth.json (seen 11 Nov)
 GUARD = dt.timedelta(minutes=20)  # a call starts only if the pool's access token outlives the 900 s call cap
 
@@ -69,6 +73,50 @@ def _write(path: Path, raw: bytes) -> None:
     tmp = path.with_name(path.name + ".judge-tmp")
     tmp.write_bytes(raw)
     os.replace(tmp, path)
+
+
+def read_run(rc: int, out: str, err: str) -> tuple[dict, str]:
+    """One `codex exec --json` run as claude_llm reads a result, with every sign of a tool, and its non-event lines."""
+    texts, items, tools, errors, usage, loose = [], {}, [], [], None, []
+    for line in out.splitlines():
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            loose.append(line)
+            continue
+        kind, item = ev.get("type"), ev.get("item") or {}
+        if kind in ("item.started", "item.updated", "item.completed"):
+            t = item.get("type")
+            if t == "error" and str(item.get("message")).startswith(NOTICE):
+                continue
+            if t not in REPLY_ITEMS:
+                tools.append(f"{kind} {t}")
+            if kind == "item.completed":
+                items[t] = items.get(t, 0) + 1
+                if t == "agent_message":
+                    texts.append(item.get("text") or "")
+                elif t == "error":
+                    errors.append(str(item.get("message")))
+        elif kind == "turn.completed":
+            usage = ev.get("usage")
+        elif kind in ("error", "turn.failed"):
+            errors.append(str(ev.get("message") or (ev.get("error") or {}).get("message")))
+    tools += [x.strip() for x in err.splitlines() if TOOL_LOG.search(x)]
+    if len(texts) > 1:  # a second message needs a tool's result between the two
+        tools.append(f"{len(texts)} agent messages")
+    res = {"result": texts[-1] if texts else "", "usage": usage, "modelUsage": {MODEL: {}}, "items": items}
+    if tools:
+        res["tools"] = tools
+    if rc != 0 or errors or not texts:
+        res["is_error"] = True
+        res["result"] = f"rc={rc} errors={errors} tools={tools} {err[-200:]} {out[-400:]}"[:800]
+    if LIMIT_429.search(" ".join(errors) + err):
+        res["api_error_status"] = 429
+    return res, "\n".join(loose) + "\n" + err
+
+
+def outside_checkouts(folder: Path) -> bool:
+    return not any((p / ".git").exists() for p in (folder, *folder.parents))
 
 
 @contextlib.contextmanager
@@ -104,11 +152,13 @@ class CodexJudge(Claude):
         if not node or not CODEX_JS.exists():
             raise SystemExit(f"node or {CODEX_JS} not found: install @openai/codex with npm")
         self.cmd = [node, str(CODEX_JS), *FLAGS]
-        work = work or log.parent / "codex-judge"
+        work = (work or log.parent / "codex-judge").resolve()
         self.cwd, self.sysdir = work / "cwd", work / "system-prompts"  # attributes Claude.ask and _log read
         profile = work / "profile"
         for d in (self.cwd, self.sysdir, profile, home):
             d.mkdir(parents=True, exist_ok=True)
+        if any(self.cwd.iterdir()) or not outside_checkouts(self.cwd):  # prereg Amendment 6 revision 1 item 7
+            raise SystemExit(f"the judge's working folder {self.cwd} must be empty and outside any git checkout")
         self.log_path, self.lock, self.model, self.n = log, threading.Lock(), MODEL, slots
         self.slots, self.solo = threading.BoundedSemaphore(slots), threading.Lock()
         self.home, self.main_home = home, main_home
@@ -120,6 +170,8 @@ class CodexJudge(Claude):
         self.env.update(CODEX_HOME=str(home), USERPROFILE=str(profile), HOME=str(profile))
         if _stamp(main_home / "auth.json") is None:
             raise SystemExit(f"no codex login in {main_home}: run `codex login`")
+        ver = subprocess.run([*self.cmd[:2], "--version"], capture_output=True, env=self.env, cwd=self.cwd, timeout=60)
+        self.cli = ver.stdout.decode("utf-8", "replace").strip()  # stamped on every record for the frozen manifest
         self.sync()
 
     def ask(self, system: str, user: str, *, tag: str, effort: str = "medium", want_json: bool = False) -> dict:
@@ -205,6 +257,8 @@ class CodexJudge(Claude):
         return None
 
     def _exec(self, system: str, user: str, effort: str, deadline: float) -> tuple[dict, str]:
+        if any(self.cwd.iterdir()):
+            raise RuntimeError(f"the judge's working folder {self.cwd} is no longer empty")
         cmd = [*self.cmd, "-c", f'model_reasoning_effort="{effort}"', "-"]
         limit = max(1.0, min(900.0, deadline - time.monotonic()))
         try:
@@ -213,35 +267,10 @@ class CodexJudge(Claude):
         except subprocess.TimeoutExpired:
             return {"is_error": True, "result": f"timeout after {limit:.0f} s"}, ""
         out, err = p.stdout.decode("utf-8", "replace"), p.stderr.decode("utf-8", "replace")
-        texts, items, errors, usage, loose = [], {}, [], None, []
-        for line in out.splitlines():
-            try:
-                ev = json.loads(line)
-            except json.JSONDecodeError:
-                loose.append(line)
-                continue
-            kind, item = ev.get("type"), ev.get("item") or {}
-            if kind == "item.completed":
-                if item.get("type") == "error" and str(item.get("message")).startswith(NOTICE):
-                    continue
-                items[item.get("type")] = items.get(item.get("type"), 0) + 1
-                if item.get("type") == "agent_message":
-                    texts.append(item.get("text") or "")
-            elif kind == "turn.completed":
-                usage = ev.get("usage")
-            elif kind in ("error", "turn.failed"):
-                errors.append(str(ev.get("message") or (ev.get("error") or {}).get("message")))
-        noise = "\n".join(loose) + "\n" + err
+        res, noise = read_run(p.returncode, out, err)
         if LEAK.search(noise):
             self._log({"event": "fail", "why": "the judge home loaded hooks or skills", "detail": noise[-400:]})
             raise RuntimeError(f"codex printed hook or skill lines; the judge home is not clean: {noise[-200:]}")
-        extra = sorted(k for k in items if k not in ("agent_message", "reasoning"))
-        res = {"result": texts[-1] if texts else "", "usage": usage, "modelUsage": {MODEL: {}}, "items": items}
-        if p.returncode != 0 or errors or extra or not texts:
-            res["is_error"] = True
-            res["result"] = f"rc={p.returncode} errors={errors} extra_items={extra} {err[-200:]} {out[-400:]}"[:800]
-        if LIMIT_429.search(" ".join(errors) + err):
-            res["api_error_status"] = 429
         return res, err[-300:]
 
 
