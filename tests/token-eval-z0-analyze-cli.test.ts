@@ -37,11 +37,11 @@ describe('Z0 CLI and blind mode', () => {
     const first = run();
     const out = fs.readFileSync(path.join(dir, 'out.json'), 'utf8');
     expect(first.code).toBe(0);
-    for (const text of [first.stdout, out]) {
-      expect(text).not.toMatch(ARM_NAME);
-      expect(text).not.toMatch(/resolveRate|costPerResolved|staleFollow|verdict|adjustedP|voidReasons/);
-    }
     const report = JSON.parse(out);
+    // Source rows name the code that ran, so a file name there is no result; a word anywhere else still fails.
+    const unhashed = [first.stdout.split('\nsha256:')[0]!, JSON.stringify({ ...report, hashes: report.hashes.filter((h: { role: string }) => h.role !== 'source') })];
+    for (const text of [first.stdout, out]) expect(text).not.toMatch(ARM_NAME);
+    for (const text of unhashed) expect(text).not.toMatch(/resolveRate|costPerResolved|staleFollow|verdict|adjustedP|voidReasons/);
     expect(report.voids).toEqual({ total: 2, reasons: { 'read-past-transcript': 1, 'received-hippo-text': 1 } });
     expect(pooledVoids({ A1: { voids: 1, voidReasons: { x: 1 } }, A2: { voids: 0, voidReasons: {} } })).toEqual({ total: 1 });
     expect(first.stdout).toContain('hypotheses sealed until unblinded');

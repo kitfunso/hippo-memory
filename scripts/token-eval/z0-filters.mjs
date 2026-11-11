@@ -188,14 +188,15 @@ function checkDesignArms(design, records, planCells) {
   }
 }
 
-/** The one path from parsed inputs to filtered records. It checks the voids against the whole plan, drops seeds above the design's `maxSeed`,
+/** The one path from parsed inputs to filtered records. It checks the voids against the whole plan, drops seeds above the design's `maxSeed` and above `opts.maxSeed` (the read set's cap; null or missing means none),
  * validates the corpus and the design's arms, and calls `filterRecords` with the design's families dropped. With `dropAbandoned` it leaves
  * abandoned runs out of the filter; the returned `records` and `planCells` stay whole, so counts taken before filtering do not move.
  * @param {any[]} records @param {any[]} planCells @param {any} opts the FILTER_KEYS inputs @param {{dropAbandoned: boolean}} mode */
 export function filteredInput(records, planCells, opts, { dropAbandoned }) {
   const design = opts.design ?? DESIGNS.r3;
   checkVoids(opts.voids ?? [], planCells);
-  const under = (x) => design.maxSeed === null || x.seed <= design.maxSeed;
+  const caps = [design.maxSeed, opts.maxSeed].filter((m) => m !== null && m !== undefined);
+  const under = (x) => caps.every((m) => x.seed <= m);
   const [kept, cells, voids] = [records.filter(under), planCells.filter(under), (opts.voids ?? []).filter(under)];
   const { unchecked } = validateCorpus(kept, cells);
   checkDesignArms(design, kept, cells);
