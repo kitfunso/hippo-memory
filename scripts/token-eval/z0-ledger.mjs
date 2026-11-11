@@ -23,6 +23,7 @@ const NO_FILE = 'the price file';
 // Where a runner out folder keeps a cell, and what a folder may hold when a kill left it no record: a failed warm-up writes warmups/ and ABANDONED only.
 const CELL_ROOTS = ['raw', 'runs', 'cutoffs'];
 const OUT_MARKS = ['runs.jsonl', 'plan.json', 'warmups', 'ABANDONED'];
+const SCREEN = 'screen.jsonl';
 
 /** A stop that exits 3, its message already a `STOP:` line. */
 class LedgerStop extends Error {}
@@ -76,7 +77,7 @@ function checkAttempt(row, where) {
   if (!isString(row?.taskId) || !KINDS.has(row.kind) || !Number.isInteger(row.attempt) || !isString(row.sessionId)) {
     throw new Error(`${where}: an attempt needs taskId, kind (session or resume), attempt and sessionId`);
   }
-  return row;
+  return { ...row, where };
 }
 
 /** The assistant messages of one segment that carry usage: id (null when absent), model and the four counts. */
@@ -150,9 +151,29 @@ function cellsOf(out, records) {
   return [...cells.values()];
 }
 
+// A sizesBefore key is `projects/<dir>/<id>.jsonl` or `projects/<dir>/<id>/subagents/...`, the layout `sessionFiles` reads.
+const ownsKey = (id) => (key) => {
+  const [root, , leaf] = key.split('/');
+  return root === 'projects' && (leaf === `${id}.jsonl` || leaf === id);
+};
+
+/** Stops on an attempts file its records contradict, where reading on would price a session twice: a paid record with no session line of its own, or a resume cut that names none of its session. */
+function checkAttempts(cell, attempts) {
+  for (const r of cell.records) {
+    if (!Number.isFinite(r.costUsd) || attempts.some((a) => a.kind === 'session' && a.taskId === r.taskId && a.sessionId === r.sessionId)) continue;
+    throw new Error(`${path.join(rawDir(cell), 'attempts.jsonl')}: task ${r.taskId} has a record with a costUsd and no session attempt line for its sessionId ${r.sessionId}, so its session would be priced again on top of that cost`);
+  }
+  for (const a of attempts) {
+    if (a.kind === 'resume' && (a.sizesBefore ?? null) !== null && !Object.keys(a.sizesBefore).some(ownsKey(a.sessionId))) {
+      throw new Error(`${a.where}: this resume line's sizesBefore names no file of its own session ${a.sessionId}, so the share its record covers cannot be told`);
+    }
+  }
+}
+
 /** The transcripts the records' costUsd already pays for. A covered session is its files up to sizesBefore, and a file a resume made is no part of it; a covered resume is its files past sizesBefore. */
 function coveredSegments(cell) {
   const attempts = readJsonLines(path.join(rawDir(cell), 'attempts.jsonl'), checkAttempt).sort((a, b) => a.attempt - b.attempt);
+  checkAttempts(cell, attempts);
   const projects = path.join(cell.configDir, 'projects');
   const resumed = (r) => (r.resumeSessionId ?? null) !== null;
   return [...new Set(attempts.map((a) => a.taskId))].flatMap((taskId) => {
@@ -192,7 +213,10 @@ function warmupUsd(out, seen, rowOf, pricesFile) {
     if (Number.isFinite(paid(model))) continue;
     const { configDir } = readJson(path.join(dir, f));
     if (!isString(configDir)) throw new Error(`${path.join(dir, f)}: a start file needs a configDir`);
-    collect(pending, seen, listTranscripts(path.join(path.resolve(out, configDir), 'projects')).map((file) => ({ file })));
+    const home = path.resolve(out, configDir);
+    // A moved run folder keeps its old absolute path, and a new location would be a guess.
+    if (!fs.existsSync(home)) throw new Error(`${path.join(dir, f)}: its configDir ${home} is not on disk, so the warm-up's spend cannot be read`);
+    collect(pending, seen, listTranscripts(path.join(home, 'projects')).map((file) => ({ file })));
   }
   return [...results.keys()].map(paid).filter(Number.isFinite).reduce((a, b) => a + b, 0) + priceMessages(pending, rowOf, pricesFile);
 }
@@ -206,6 +230,7 @@ function refuseRoundFourFiles(out) {
 
 /** The entries of one out folder (records and swept transcripts, each `{ sequence, arm, usd, tool }`) and its warm-up dollars. */
 function readOut(out, design, rowOf, pricesFile) {
+  if (fs.existsSync(path.join(out, SCREEN))) throw new Error(`${out}: holds ${SCREEN}; the ledger does not read screen output, and round 4 runs no screen (prereg line 72)`);
   if (!OUT_MARKS.some((name) => fs.existsSync(path.join(out, name)))) throw new Error(`${out}: holds none of ${OUT_MARKS.join(', ')}; pass a runner --out folder`);
   const records = readJsonLines(path.join(out, 'runs.jsonl'), checkRecord);
   const entries = records.filter((r) => Number.isFinite(r.costUsd)).map((r) => ({ sequence: r.sequence, arm: r.arm, usd: r.costUsd, tool: r.tool ?? null }));

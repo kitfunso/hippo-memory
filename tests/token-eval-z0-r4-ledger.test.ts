@@ -40,6 +40,18 @@ const transcript = (out: string, id: string, rows: readonly Line[], cell: Cell =
 const subagent = (out: string, id: string, rows: readonly Line[]) => put(path.join(home(out), 'projects', '-work', id, 'subagents', 'agent-a1.jsonl'), jsonl(rows));
 const attemptsFile = (out: string, rows: readonly Attempt[], cell: Cell = CELL, tail = '') => put(path.join(out, 'raw', cell.seq, cell.arm, `seed${cell.seed}`, 'attempts.jsonl'), jsonl(rows) + tail);
 const runsFile = (out: string, rows: readonly Rec[], tail = '') => put(path.join(out, 'runs.jsonl'), jsonl(rows) + tail);
+// Records plus the session attempt line each one's runner wrote before it, which a paid record needs.
+const ran = (out: string, rows: readonly Rec[]) => {
+  runsFile(out, rows);
+  const cells = new Map<string, { cell: Cell; lines: Attempt[] }>();
+  for (const r of rows) {
+    const cell = { seq: r.sequence, arm: r.arm, seed: r.seed };
+    const held = cells.get(`${r.sequence}/${r.arm}/${r.seed}`) ?? { cell, lines: [] };
+    held.lines.push(attempt({ taskId: r.taskId, sessionId: r.sessionId }));
+    cells.set(`${r.sequence}/${r.arm}/${r.seed}`, held);
+  }
+  for (const { cell, lines } of cells.values()) attemptsFile(out, lines, cell);
+};
 const cutoff = (out: string, name: string, meta: { taskId: string; attempt: number; sessionId: string; sizesBefore: Record<string, number> } | null, files: Record<string, readonly Line[]>, cell: Cell = CELL) => {
   const dir = path.join(out, 'cutoffs', cell.seq, cell.arm, `seed${cell.seed}`, name);
   if (meta !== null) put(path.join(dir, 'attempt.json'), JSON.stringify(meta));
@@ -291,7 +303,7 @@ describe('the fork case', () => {
 describe('arms, pilot folders and the spend basis', () => {
   const build = (name: string, rows: readonly Rec[]) => {
     const out = folder(name);
-    runsFile(out, rows);
+    ran(out, rows);
     return out;
   };
 
@@ -354,7 +366,7 @@ describe('arms, pilot folders and the spend basis', () => {
 
   it('prices the warm-ups of a folder with no record, no plan and an ABANDONED marker, as --run and as --pilot-run', () => {
     const [run, killed, marker] = [folder('run'), folder('killed'), folder('marker')];
-    runsFile(run, [record({ costUsd: 4 })]);
+    ran(run, [record({ costUsd: 4 })]);
     warmup(killed, OPUS_MODEL, [say('w1', OPUS_MODEL, 100_000)], null);
     put(path.join(killed, 'ABANDONED'), 'warm-up for claude-opus-5-5 failed (exit 1)\nlast completed: none\n');
     put(path.join(marker, 'ABANDONED'), 'stopped\n');
@@ -406,6 +418,79 @@ describe('--design r3', () => {
   });
 });
 
+describe('guards that stop a ledger that would come out low or wrong [S2C-R2]', () => {
+  const refused = (r: { code: number; stdout: string; stderr: string }) => [r.code, r.stdout];
+
+  it('exits 1 naming the start file and the path when the configDir a warm-up start file names is not on disk', () => {
+    const out = folder('a');
+    const gone = path.join(out, 'moved', OPUS_MODEL);
+    runsFile(out, []);
+    put(path.join(out, 'warmups', `${OPUS_MODEL}.start.json`), JSON.stringify({ model: OPUS_MODEL, configDir: gone }));
+    const r = cli([out]);
+    expect(refused(r)).toEqual([1, '']);
+    expect(r.stderr).toContain(path.join(out, 'warmups', `${OPUS_MODEL}.start.json`));
+    expect(r.stderr).toContain(gone);
+    // A start file whose result file holds a total never reads its configDir, so it may point anywhere.
+    put(path.join(out, 'warmups', `${OPUS_MODEL}.json`), JSON.stringify({ model: OPUS_MODEL, status: 0, total_cost_usd: 0.5, result: 'ok' }));
+    expect(lastLine(cli([out]))).toBe('LEDGER 0.50');
+  });
+
+  it('exits 1 on a folder holding screen.jsonl, whatever else it holds and under either design', () => {
+    const marks = {
+      alone: () => undefined,
+      plan: (out: string) => put(path.join(out, 'plan.json'), '{}'),
+      abandoned: (out: string) => put(path.join(out, 'ABANDONED'), 'stopped'),
+      runs: (out: string) => runsFile(out, [record({ costUsd: 1 })]),
+    };
+    for (const [name, mark] of Object.entries(marks)) {
+      const out = folder(name);
+      put(path.join(out, 'screen.jsonl'), jsonl([record({ costUsd: 5 })]));
+      mark(out);
+      for (const design of ['r3', 'r4']) {
+        const r = runCli(['--prices', pricesPath(), '--design', design, '--run', out], work);
+        expect(refused(r), `${name} ${design}`).toEqual([1, '']);
+        expect(r.stderr, `${name} ${design}`).toMatch(/does not read screen output.*round 4 runs no screen/);
+      }
+    }
+  });
+
+  it('exits 1 on a record with a costUsd and no session attempt line for its sessionId, naming the file and the task [C9]', () => {
+    const [stray, bare, resumeOnly] = [folder('stray'), folder('bare'), folder('resume-only')];
+    // Session S1 is the last attempt line, so S2 would be swept on top of the 4.00 its record paid.
+    runsFile(stray, [record({ costUsd: 4, sessionId: 'S2' })]);
+    attemptsFile(stray, [attempt({ sessionId: 'S1' })]);
+    transcript(stray, 'S2', [say('b1', OPUS_MODEL, 100_000)]);
+    runsFile(bare, [record({ costUsd: 4 })]);
+    runsFile(resumeOnly, [record({ costUsd: 4, taskId: 't2' })]);
+    attemptsFile(resumeOnly, [attempt({ taskId: 't2', kind: 'resume', attempt: 1 }), attempt({ taskId: 't9' })]);
+    for (const out of [stray, bare, resumeOnly]) {
+      const r = cli([out]);
+      expect(refused(r), out).toEqual([1, '']);
+      expect(r.stderr, out).toContain(path.join(out, 'raw', CELL.seq, CELL.arm, `seed${CELL.seed}`, 'attempts.jsonl'));
+      expect(r.stderr, out).toMatch(/task t[12]/);
+    }
+  });
+
+  it('exits 1 on a resume line whose sizesBefore names no file of its own session, naming the file and the line [C6]', () => {
+    const head = [say('h1', OPUS_MODEL, 100_000)];
+    const [other, empty, ok] = [folder('other'), folder('empty'), folder('ok')];
+    const naming: Array<[string, Record<string, number>]> = [[other, { [rel('S9')]: bytes(head) }], [empty, {}], [ok, { 'projects/-work/S1/subagents/agent-a1.jsonl': 1 }]];
+    for (const [out, sizesBefore] of naming) {
+      // No resume result, so the record covers session 1 only up to sizesBefore; a cut that names none of it would price the whole file again.
+      runsFile(out, [record({ costUsd: 6 })]);
+      attemptsFile(out, [attempt({}), attempt({ kind: 'resume', attempt: 1, sizesBefore })]);
+      transcript(out, 'S1', [...head, say('r1', SONNET_MODEL, 100_000)]);
+    }
+    for (const out of [other, empty]) {
+      const r = cli([out]);
+      expect(refused(r), out).toEqual([1, '']);
+      expect(r.stderr, out).toContain(`${path.join(out, 'raw', CELL.seq, CELL.arm, `seed${CELL.seed}`, 'attempts.jsonl')}:2`);
+    }
+    // A subagent path of its own session is a file of it, so this folder reads.
+    expect(cli([ok]).code).toBe(0);
+  });
+});
+
 describe('the command line', () => {
   it('exits 1 with the usage on an unknown flag, no --run, no --prices, a missing folder and a folder with no run files', () => {
     const [empty, missing] = [folder('empty'), folder('missing')];
@@ -421,8 +506,8 @@ describe('the command line', () => {
 
   it('exits 1 naming a folder given twice, by either flag and however its path is spelled', () => {
     const [a, b] = [folder('a'), folder('b')];
-    runsFile(a, [record({ costUsd: 1 })]);
-    runsFile(b, [record({ costUsd: 2 })]);
+    ran(a, [record({ costUsd: 1 })]);
+    ran(b, [record({ costUsd: 2 })]);
     const prices = pricesPath();
     const again = path.join(a, '..', 'a');
     for (const argv of [['--run', a, '--run', a], ['--run', a, '--pilot-run', again], ['--run', b, a, '--pilot-run', b]]) {
@@ -435,11 +520,11 @@ describe('the command line', () => {
 
   it('takes several folders after one --run, and runs as a script that prints LEDGER last and exits 3 on a stop', () => {
     const [a, b] = [folder('a'), folder('b')];
-    runsFile(a, [record({ costUsd: 1 })]);
-    runsFile(b, [record({ costUsd: 2 })]);
+    ran(a, [record({ costUsd: 1 })]);
+    ran(b, [record({ costUsd: 2 })]);
     const run = spawnSync(process.execPath, [SCRIPT, '--prices', pricesPath(), '--design', 'r4', '--run', a, b], { encoding: 'utf8' });
     expect([run.status, run.stdout]).toEqual([0, 'LEDGER 3.00\n']);
-    attemptsFile(a, [attempt({ taskId: 't2', sessionId: 'S9' })]);
+    attemptsFile(a, [attempt({}), attempt({ taskId: 't2', sessionId: 'S9' })]);
     transcript(a, 'S9', [say('y1', 'claude-haiku-9', 1)]);
     const stop = spawnSync(process.execPath, [SCRIPT, '--prices', pricesPath(), '--design', 'r4', '--run', a], { encoding: 'utf8' });
     expect(stop.status).toBe(3);
