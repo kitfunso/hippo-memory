@@ -1,6 +1,6 @@
 // stop-tree.ps1 (plan amendment W4-49) stops a root and its descendants oldest first, refuses a root that names another folder, and s4-units.sh stop_finished leaves alive a process that took a listed pid.
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -111,63 +111,98 @@ describe.skipIf(!win)('stop-tree.ps1', () => {
     const r = stopTree(Number(child.pid), ['-Mark', unit]);
     expect([r.code, r.lines], r.stderr).toEqual([0, [`gone ${child.pid}`, 'end']]);
   });
+
+  it('kills a child that a root starts during the stop, or exits 1, and never exits 0 with one alive', async () => {
+    const unit = folder('z0-stop-unit-');
+    const aux = folder('z0-stop-aux-');
+    const stop = join(aux, 'stop');
+    stops.push(stop);
+    const kids = join(aux, 'kids.txt');
+    const until60s = `const fs = require('fs'); const end = Date.now() + 60000; const done = () => fs.existsSync(${JSON.stringify(stop)}) || Date.now() > end;`;
+    writeFileSync(join(aux, 'kid.js'), `${until60s} const f = ${JSON.stringify(join(aux, 'tick-'))} + process.pid; setInterval(() => { if (done()) process.exit(0); fs.appendFileSync(f, '.'); }, 100);`);
+    // A detached child every 250 ms, so children keep appearing while the stop reads, holds and kills.
+    writeFileSync(join(aux, 'spawner.js'), `${until60s} setInterval(() => { if (done()) process.exit(0); const c = require('child_process').spawn(process.execPath, [${JSON.stringify(join(aux, 'kid.js'))}], { stdio: 'ignore', detached: true }); fs.appendFileSync(${JSON.stringify(kids)}, c.pid + '\\n'); }, 250);`);
+    const root = spawn(process.execPath, [join(aux, 'spawner.js'), '--out', join(unit, 'run')], { stdio: 'ignore', windowsHide: true, cwd: tmpdir() });
+    started.push(root);
+    await until('two children', () => existsSync(kids) && readFileSync(kids, 'utf8').split('\n').filter(Boolean).length >= 2);
+    const r = stopTree(Number(root.pid), ['-Mark', unit]);
+    const sizes = () => new Map(readdirSync(aux).filter((f) => f.startsWith('tick-')).map((f) => [f, statSync(join(aux, f)).size]));
+    const before = sizes();
+    await sleep(1500);
+    const alive = [...sizes()].filter(([f, size]) => before.get(f) !== size).map(([f]) => f);
+    expect([0, 1], r.lines.join('\n')).toContain(r.code);
+    expect(r.code === 0 ? alive : [], `children still ticking after exit 0\n${r.lines.join('\n')}`).toEqual([]);
+  });
 });
 
 describe.skipIf(!win)('stop-tree.ps1 over a listed process table', () => {
-  // Z0_STOP_TREE_LISTED (and Z0_STOP_TREE_LISTED2 for the second read) replaces the live reads; the script runs its real order and second-read code but opens no handle and kills nothing.
+  // Each table replaces one live read in turn (Z0_STOP_TREE_LISTED, then Z0_STOP_TREE_LISTED2 and on), and the last one repeats; the script runs its real rounds but opens no handle and kills nothing.
   const mark = 'C:/z0-listed-mark';
   const at = (s: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, s)).toISOString();
   const row = (id: number, parent: number, s: number, line = 'node x.js') => ({ ProcessId: id, ParentProcessId: parent, CreationDate: at(s), CommandLine: line });
   const root = row(101, 4, 10, `node ${mark}/run.js`);
-  const listedRun = (listed: object[], flags = ['-Mark', mark], again?: object[]) => {
-    const env: NodeJS.ProcessEnv = { ...process.env, Z0_STOP_TREE_LISTED: JSON.stringify(listed) };
-    if (again) env.Z0_STOP_TREE_LISTED2 = JSON.stringify(again);
+  const listedRun = (tables: object[][], flags = ['-Mark', mark]) => {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    tables.forEach((t, i) => { env[i === 0 ? 'Z0_STOP_TREE_LISTED' : `Z0_STOP_TREE_LISTED${i + 1}`] = JSON.stringify(t); });
     return stopTree(101, flags, env);
   };
 
   it('takes a child only if it started at or after its parent, and nothing under a child it refused, oldest first with pid breaking ties', () => {
-    const r = listedRun([root, row(102, 101, 20), row(103, 101, 5), row(104, 103, 30), row(105, 101, 10), row(106, 102, 25), row(107, 101, 15)]);
+    const r = listedRun([[root, row(102, 101, 20), row(103, 101, 5), row(104, 103, 30), row(105, 101, 10), row(106, 102, 25), row(107, 101, 15)]]);
     expect([r.code, r.lines], r.stderr).toEqual([4, ['listed 101', 'listed 105', 'listed 107', 'listed 102', 'listed 106', 'end']]);
   });
 
   // Sort-Object in PowerShell 5.1 is not stable, so only the pid key fixes the order of a tie.
   it('orders two processes that started together by pid, whatever their order in the table', () => {
     for (const pair of [[108, 109], [109, 108]]) {
-      const r = listedRun([root, ...pair.map((id) => row(id, 101, 20))]);
+      const r = listedRun([[root, ...pair.map((id) => row(id, 101, 20))]]);
       expect([r.code, r.lines], `${pair} ${r.stderr}`).toEqual([4, ['listed 101', 'listed 108', 'listed 109', 'end']]);
     }
   });
 
   it('says left, and exits 1, for a process the second read no longer puts under the root', () => {
-    const r = listedRun([root, row(102, 101, 20), row(103, 101, 30)], ['-Mark', mark], [root, row(102, 4, 20), row(103, 101, 30)]);
+    const r = listedRun([[root, row(102, 101, 20), row(103, 101, 30)], [root, row(102, 4, 20), row(103, 101, 30)]]);
     expect([r.code, r.lines], r.stderr).toEqual([1, ['listed 101', 'left 102 not under the root at the second read', 'listed 103', 'end']]);
+  });
+
+  // Reads alternate per round: one finds new descendants, the next confirms them, and a read after the kills starts the next round.
+  it('holds and lists a child that appears only in the second read, in a second round', () => {
+    const r = listedRun([[root, row(102, 101, 20)], [root, row(102, 101, 20), row(103, 101, 30)]]);
+    expect([r.code, r.lines], r.stderr).toEqual([4, ['listed 101', 'listed 102', 'listed 103', 'end']]);
+  });
+
+  it('fails (exit 1) when a sixth round still finds a new child', () => {
+    const chain = (n: number) => [root, ...Array.from({ length: n }, (_, i) => row(201 + i, i === 0 ? 101 : 200 + i, 20 + i))];
+    const tables = [1, 2, 3, 4, 5].flatMap((n) => [chain(n), chain(n)]);
+    const r = listedRun([...tables, chain(6)]);
+    expect([r.code, r.lines], r.stderr).toEqual([1, ['listed 101', 'listed 201', 'listed 202', 'listed 203', 'listed 204', 'listed 205', 'failed 206 still spawning after 5 rounds', 'end']]);
   });
 
   // Exit 0 tells exec.mjs the child is stopped, so a leaked table must never give it.
   it('exits 4, never 0, over an empty listed table', () => {
-    const r = listedRun([]);
+    const r = listedRun([[]]);
     expect([r.code, r.lines], r.stderr).toEqual([4, ['gone 101', 'end']]);
   });
 
   it('exits 4, never 0, over a listed table with no row for the root', () => {
-    const r = listedRun([row(102, 4, 10, `node ${mark}/run.js`), row(103, 102, 20)]);
+    const r = listedRun([[row(102, 4, 10, `node ${mark}/run.js`), row(103, 102, 20)]]);
     expect([r.code, r.lines], r.stderr).toEqual([4, ['gone 101', 'end']]);
   });
 
   // exec.mjs passes the time it still held the child's handle, so a root that started later holds a freed pid.
   it('refuses a root that started after -StartedBy (exit 3), before any listed line', () => {
-    const r = listedRun([root, row(102, 101, 20)], ['-StartedBy', at(5)]);
+    const r = listedRun([[root, row(102, 101, 20)]], ['-StartedBy', at(5)]);
     expect([r.code, r.lines], r.stderr).toEqual([3, [`not-mine 101 started after ${at(5)}`, 'end']]);
   });
 
   it('stops as usual a root that started before -StartedBy, with children that started after it', () => {
-    const r = listedRun([root, row(102, 101, 20)], ['-StartedBy', at(15)]);
+    const r = listedRun([[root, row(102, 101, 20)]], ['-StartedBy', at(15)]);
     expect([r.code, r.lines], r.stderr).toEqual([4, ['listed 101', 'listed 102', 'end']]);
   });
 
   it('takes a -StartedBy that is not a UTC round-trip time as a script error (exit 2)', () => {
     for (const bad of ['yesterday', '2026-01-01T00:00:15', '2026-01-01T00:00:15+01:00']) {
-      const r = listedRun([root], ['-StartedBy', bad]);
+      const r = listedRun([[root]], ['-StartedBy', bad]);
       expect([r.code, r.lines], bad).toEqual([2, [`error -StartedBy ${bad} is not a UTC round-trip time`]]);
     }
   });

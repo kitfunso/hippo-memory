@@ -18,25 +18,30 @@ try {
     if ($t.Length -gt 3) { $t = $t.TrimEnd('/') }
     return $t
   }
-  # Z0_STOP_TREE_LISTED, a test's process table as JSON, replaces the first read and Z0_STOP_TREE_LISTED2 (else the same table) the second; a listed run opens no handle and kills nothing.
-  function Table([string]$json) {
+  # Z0_STOP_TREE_LISTED, a test's process table as JSON, replaces the first read and Z0_STOP_TREE_LISTED<n> the n-th (else the read before it); a listed run opens no handle and kills nothing.
+  $script:reads = 0
+  $script:json = ''
+  function Table {
+    $script:reads++
     if ($listed) {
-      $rows = @(($json | ConvertFrom-Json) | ForEach-Object { [pscustomobject]@{ ProcessId = [uint32]$_.ProcessId; ParentProcessId = [uint32]$_.ParentProcessId; CreationDate = [datetime]$_.CreationDate; CommandLine = [string]$_.CommandLine } })
+      $name = if ($script:reads -eq 1) { 'Z0_STOP_TREE_LISTED' } else { "Z0_STOP_TREE_LISTED$($script:reads)" }
+      $given = [Environment]::GetEnvironmentVariable($name)
+      if ($given) { $script:json = $given }
+      $rows = @(($script:json | ConvertFrom-Json) | ForEach-Object { [pscustomobject]@{ ProcessId = [uint32]$_.ProcessId; ParentProcessId = [uint32]$_.ParentProcessId; CreationDate = [datetime]$_.CreationDate; CommandLine = [string]$_.CommandLine } })
       return $rows
     }
     $all = @(Get-CimInstance Win32_Process)
     if ($all.Count -eq 0) { throw 'the process read listed no process' }
     return $all
   }
-  # The rows under the root, each taken only if it started at or after its parent, so nothing an earlier holder of a parent's pid left behind is taken.
-  function Walk($table, [int]$root, $created) {
+  # The rows under $known (pid to start time of the root and each process a read confirmed), each taken only if it started at or after its parent, so nothing an earlier holder of a parent's pid left is taken.
+  function Walk($table, $known) {
     $kids = @{}
     foreach ($c in $table) { $pp = [int]$c.ParentProcessId; if (-not $kids.ContainsKey($pp)) { $kids[$pp] = [System.Collections.Generic.List[object]]::new() }; $kids[$pp].Add($c) }
     $seen = @{}
-    $seen[$root] = $true
     $seen[[int]$PID] = $true
     $queue = [System.Collections.Generic.Queue[object]]::new()
-    $queue.Enqueue([pscustomobject]@{ Id = $root; Created = $created })
+    foreach ($id in @($known.Keys)) { $seen[[int]$id] = $true; $queue.Enqueue([pscustomobject]@{ Id = [int]$id; Created = $known[$id] }) }
     while ($queue.Count) {
       $up = $queue.Dequeue()
       if ($null -eq $up.Created -or -not $kids.ContainsKey($up.Id)) { continue }
@@ -94,7 +99,7 @@ public static string[] Split(string line) {
     if ($p) { try { $null = $p.Handle } catch { if (Get-Process -Id $root -ErrorAction SilentlyContinue) { Say "failed $root $($_.Exception.Message)"; Say 'end'; Done 1 }; $p = $null } }
     if (-not $p) { Say "gone $root"; Say 'end'; Done 0 }
   }
-  $first = @(Table $env:Z0_STOP_TREE_LISTED)
+  $first = @(Table)
   $row = $first | Where-Object { [int]$_.ProcessId -eq $root } | Select-Object -First 1
   if (-not $row -or ($p -and $p.HasExited)) { Say "gone $root"; Say 'end'; Done 0 }
   # The caller held the root's handle at -StartedBy, so a root that started later holds a pid the caller's process gave up.
@@ -102,36 +107,53 @@ public static string[] Split(string line) {
   if ($by -and $row.CreationDate.ToUniversalTime() -gt $by) { Say "not-mine $root started after $StartedBy"; Say 'end'; Done 3 }
   if ($want -and -not (Names $row.CommandLine $want)) { Say "not-mine $root its command line names no $want"; Say 'end'; Done 3 }
 
+  # Rounds until a read finds no new descendant: each holds what a read finds, confirms it with a second read and kills it, and a kill can race a fork, so the next read looks again.
+  # $held keeps every handle to the end, so a killed parent's pid stays its own and its late children, which still name it, are walked from $proven.
+  $rounds = 5
   $failed = $false
-  $held = [System.Collections.Generic.List[object]]::new()
-  $held.Add([pscustomobject]@{ P = $p; Created = $row.CreationDate; Id = $root })
-  foreach ($c in @(Walk $first $root $row.CreationDate)) {
-    $id = [int]$c.ProcessId
-    if ($listed) { $held.Add([pscustomobject]@{ P = $null; Created = $c.CreationDate; Id = $id }); continue }
-    $q = Get-Process -Id $id -ErrorAction SilentlyContinue
-    if (-not $q) { Say "gone $id"; continue }
-    try { $null = $q.Handle; $held.Add([pscustomobject]@{ P = $q; Created = $c.CreationDate; Id = $id }) }
-    catch { if (Get-Process -Id $id -ErrorAction SilentlyContinue) { Say "failed $id $($_.Exception.Message)"; $failed = $true } else { Say "gone $id" } }
-  }
-  # A second read with every handle open proves each held process is still under the root, so a pid that changed hands before its handle opened is left alone.
-  $again = if ($env:Z0_STOP_TREE_LISTED2) { $env:Z0_STOP_TREE_LISTED2 } else { $env:Z0_STOP_TREE_LISTED }
-  $still = @{}
-  $still[$root] = $true
-  foreach ($c in @(Walk @(Table $again) $root $row.CreationDate)) { $still[[int]$c.ProcessId] = $true }
-  # SHORTCUT: a descendant whose Windows parent exited before the read (an orphan, or an msys program exec'd from a fork) is out of reach, as under taskkill /T; a job object per unit would hold it.
-  # Oldest first, pid breaking ties: a parent killed first cannot fork a new child while its children die, and each held handle keeps a child's pid its own until its kill.
-  foreach ($h in @($held | Sort-Object -Property Created, Id)) {
-    $q = $h.P
-    if ($q -and $q.HasExited) { Say "gone $($h.Id)"; continue }
-    if (-not $still.ContainsKey($h.Id)) { Say "left $($h.Id) not under the root at the second read"; $failed = $true; continue }
-    if ($listed) { Say "listed $($h.Id)"; continue }
-    try {
-      $q.Kill()
-      if ($q.WaitForExit(10000)) { Say "killed $($h.Id)" } else { Say "failed $($h.Id) still running 10 s after its kill"; $failed = $true }
-    } catch {
-      $null = $q.WaitForExit(5000)
-      if ($q.HasExited) { Say "gone $($h.Id)" } else { Say "failed $($h.Id) $($_.Exception.Message)"; $failed = $true }
+  $proven = @{}
+  $proven[$root] = $row.CreationDate
+  $held = @{}
+  $held[$root] = [pscustomobject]@{ P = $p; Created = $row.CreationDate; Id = $root }
+  $batch = [System.Collections.Generic.List[object]]::new()
+  $batch.Add($held[$root])
+  $table = $first
+  for ($round = 1; $round -le $rounds + 1; $round++) {
+    foreach ($c in @(Walk $table $proven)) {
+      $id = [int]$c.ProcessId
+      if ($held.ContainsKey($id)) { continue }
+      if ($round -gt $rounds) { Say "failed $id still spawning after $rounds rounds"; $failed = $true; continue }
+      if ($listed) { $held[$id] = [pscustomobject]@{ P = $null; Created = $c.CreationDate; Id = $id }; $batch.Add($held[$id]); continue }
+      $q = Get-Process -Id $id -ErrorAction SilentlyContinue
+      if (-not $q) { Say "gone $id"; continue }
+      try { $null = $q.Handle; $held[$id] = [pscustomobject]@{ P = $q; Created = $c.CreationDate; Id = $id }; $batch.Add($held[$id]) }
+      catch { if (Get-Process -Id $id -ErrorAction SilentlyContinue) { Say "failed $id $($_.Exception.Message)"; $failed = $true } else { Say "gone $id" } }
     }
+    if ($batch.Count -eq 0) { break }
+    # A second read with every handle open proves each new one is still under the root, so a pid that changed hands before its handle opened is left alone.
+    $still = @{}
+    foreach ($c in @(Walk @(Table) $proven)) { $still[[int]$c.ProcessId] = $true }
+    # SHORTCUT: a descendant whose Windows parent exited unconfirmed (an orphan, or an msys program exec'd from a fork) is out of reach, as under taskkill /T; a job object per unit would hold it.
+    # Oldest first, pid breaking ties: a parent killed first cannot fork a new child while its children die, and each held handle keeps a child's pid its own until its kill.
+    foreach ($h in @($batch | Sort-Object -Property Created, Id)) {
+      $q = $h.P
+      if (-not $proven.ContainsKey($h.Id) -and -not $still.ContainsKey($h.Id)) {
+        if ($q -and $q.HasExited) { Say "gone $($h.Id)" } else { Say "left $($h.Id) not under the root at the second read"; $failed = $true }
+        continue
+      }
+      $proven[$h.Id] = $h.Created
+      if ($q -and $q.HasExited) { Say "gone $($h.Id)"; continue }
+      if ($listed) { Say "listed $($h.Id)"; continue }
+      try {
+        $q.Kill()
+        if ($q.WaitForExit(10000)) { Say "killed $($h.Id)" } else { Say "failed $($h.Id) still running 10 s after its kill"; $failed = $true }
+      } catch {
+        $null = $q.WaitForExit(5000)
+        if ($q.HasExited) { Say "gone $($h.Id)" } else { Say "failed $($h.Id) $($_.Exception.Message)"; $failed = $true }
+      }
+    }
+    $batch.Clear()
+    $table = @(Table)
   }
   Say 'end'
   if ($failed) { Done 1 }
