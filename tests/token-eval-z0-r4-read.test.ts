@@ -11,6 +11,7 @@ import { filterOpts, filteredInput } from '../scripts/token-eval/z0-filters.mjs'
 import { computeGates } from '../scripts/token-eval/z0-gates.mjs';
 import { NOT_RUN, bothCodings, firstApplyR, taskUnits } from '../scripts/token-eval/z0-hypotheses.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
+import { THRESHOLDS } from '../scripts/token-eval/z0-verdict-r4.mjs';
 import { DEFAULTS, QUOTA_USD_PER_DAY, calibrate, parseArgs as parseSize, perRecordUsage, runCli as sizeCli, sizeZ0 } from '../scripts/token-eval/z0-size.mjs';
 import { runCli as seedRuleCli, seedRule } from '../scripts/token-eval/z0-seed-rule.mjs';
 import { GRADING, PRICES, PRICES_BY_MODEL, generate, jsonl, planOf, type Z0Record } from './fixtures/z0-gen.js';
@@ -118,7 +119,7 @@ describe('DESIGNS["r4-on-r3"] on a round 3 corpus with seed 4 and a dropped fami
     expect(bothCodings(modern.filtered.scored, 'A2', 'A1', { ...STAT, design: DESIGN }, firstApplyR)).toEqual(bothCodings(classic.filtered.scored, 'A2', 'A1', STAT, firstApplyR));
   });
 
-  it('holds no seed 4 record in the gates or the planned runs of G3, and the sizer stops on T2a until part B sizes it', () => {
+  it('holds no seed 4 record in the gates, the planned runs of G3 or the size calibration', () => {
     const gates = computeGates(modern.records, modern.filtered, GRADING, { ...STAT, design: DESIGN });
     const round3 = computeGates(classic.records, classic.filtered, GRADING, STAT);
     expect(gates.G3.plannedRuns).toBe(round3.G3.plannedRuns);
@@ -127,7 +128,10 @@ describe('DESIGNS["r4-on-r3"] on a round 3 corpus with seed 4 and a dropped fami
     const args = parseSize(['--runs', 'r', '--plan', 'p', '--prices', 'c', '--sims', '20', '--repos', '5', '--effects', '0.2', '--level-sims', '20']);
     const quota = Object.fromEntries(Object.entries(QUOTA_USD_PER_DAY).map(([tool, usdPerDay]) => [tool, { usdPerDay, source: 'default assumption' }]));
     const settings = { ...Object.fromEntries(Object.entries(args).filter(([k]) => k in DEFAULTS)), firstWave: 3, holmLevel: 0.025, quota };
-    expect(() => sizeZ0(parse(records), plan, R3_FILE, { ...settings, ...filterOpts({ design: DESIGN }) })).toThrow(/^T2a: design r4-on-r3 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
+    const size = sizeZ0(parse(records), plan, R3_FILE, { ...settings, ...filterOpts({ design: DESIGN }) });
+    expect(size.calibration.records).toBe(base.records.length);
+    expect(size.calibration.perRecord).toEqual(perRecordUsage(parse(base.records), PRICES));
+    expect(Object.keys(size.tests).sort()).toEqual(['H4', 'T1', 'T2a', 'T2b', 'T2c', 'T3']);
     const cal = calibrate(modern.filtered, R3_FILE, 0.8, { design: DESIGN });
     expect(cal.H1).toEqual({ reason: 'design r4-on-r3 has no H1' });
     expect(cal.H4).toEqual(calibrate(classic.filtered, PRICES, 0.8).H4);
@@ -201,30 +205,41 @@ describe('loadInputs and the three CLIs', () => {
   });
 });
 
-describe('the seed rule on a design with a test it cannot size', () => {
+describe('the seed rule on a design whose tests part B sizes', () => {
   const SETTINGS = { minimumEffect: 0.15, targetZ: 3.5, cap: 9, onMiss: 'cap', power: 0.8, sims: 20, seed: 1, bound: 0.8, firstWave: 3 };
+  const NOMINAL = Object.fromEntries(Object.entries(THRESHOLDS).map(([t, ths]) => [t, Object.fromEntries(ths.map((th) => [th, { level: Number(th) }]))]));
 
-  it('stops under r4 on the first T2 part, naming it and saying part B sizes it', () => {
+  it('returns a count from 3 to 9 for every rule arm under r4, and does not stop', () => {
     const g = generate({ design: DESIGNS.r4 });
-    expect(() => seedRule(parse(g.records), g.plan, PRICES_BY_MODEL, { ...SETTINGS, design: DESIGNS.r4 })).toThrow(/^T2a: design r4 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
+    const got = seedRule(parse(g.records), g.plan, PRICES_BY_MODEL, { ...SETTINGS, design: DESIGNS.r4, costRatio: 1, levels: NOMINAL });
+    expect(got.stop).toBe(false);
+    expect(Object.keys(got.seeds).sort()).toEqual([...DESIGNS.r4.seedRule[0]!.arms].sort());
+    for (const n of Object.values<number>(got.seeds)) expect(n >= 3 && n <= 9 && Number.isInteger(n)).toBe(true);
+    expect(Object.keys(got.perTest).sort()).toEqual(['H4', 'T1', 'T2a', 'T2b', 'T2c', 'T3']);
   });
 
-  it('stops under r4-on-r3 on the first T2 part of its one group, naming it and saying part B sizes it', () => {
+  it('returns a count from 3 to 9 for every rule arm under r4-on-r3, and does not stop', () => {
     const g = generate({ arms: ['A0', 'A1', 'A2', 'A4', 'A5'] });
-    expect(() => seedRule(parse(g.records), g.plan, PRICES, { ...SETTINGS, design: DESIGNS['r4-on-r3'] })).toThrow(/^T2a: design r4-on-r3 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
+    const got = seedRule(parse(g.records), g.plan, PRICES_BY_MODEL, { ...SETTINGS, design: DESIGNS['r4-on-r3'] });
+    expect(got.stop).toBe(false);
+    expect(Object.keys(got.seeds).sort()).toEqual([...DESIGNS['r4-on-r3'].seedRule[0]!.arms].sort());
+    for (const n of Object.values<number>(got.seeds)) expect(n >= 3 && n <= 9 && Number.isInteger(n)).toBe(true);
   });
 });
 
-describe('the sizer on a design with a test it cannot size', () => {
+describe('the sizer on a design whose tests part B sizes', () => {
   const settings = () => {
     const args = parseSize(['--runs', 'r', '--plan', 'p', '--prices', 'c', '--sims', '20', '--repos', '5', '--effects', '0.2', '--level-sims', '20']);
     const quota = Object.fromEntries(Object.entries(QUOTA_USD_PER_DAY).map(([tool, usdPerDay]) => [tool, { usdPerDay, source: 'default assumption' }]));
     return { ...Object.fromEntries(Object.entries(args).filter(([k]) => k in DEFAULTS)), firstWave: 3, holmLevel: 0.025, quota };
   };
 
-  it('stops under r4 on the first T2 part, as the seed rule does, rather than sizing it at H1\'s search', () => {
+  it('returns a report with T2a under r4, sized by its own rule and not by H1 or H2', () => {
     const g = generate({ design: DESIGNS.r4 });
     const opts = { ...settings(), ...filterOpts({ design: DESIGNS.r4 }), design: DESIGNS.r4 };
-    expect(() => sizeZ0(parse(g.records), g.plan, PRICES_BY_MODEL, opts)).toThrow(/^T2a: design r4 names it in its seed rule, but the rule sizes only H1, H2, T1, T3, H4; part B sizes T2a with its own rule$/);
+    const size = sizeZ0(parse(g.records), g.plan, PRICES_BY_MODEL, opts);
+    expect(size.tests.T2a.seeds >= 3 && size.tests.T2a.seeds <= 9).toBe(true);
+    expect(['rule', 'miss']).toContain(size.tests.T2a.branch);
+    expect(Object.keys(size.tests).sort()).toEqual(['H4', 'T1', 'T2a', 'T2b', 'T2c', 'T3']);
   });
 });
