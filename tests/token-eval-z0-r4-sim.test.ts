@@ -79,7 +79,7 @@ describe('Z0 round 4 simulation engine: the Sizer recovery', () => {
   const cases = [['repeat-shaped', REPEAT_CAL], ['part (a)-shaped', PART_A_CAL], ['part (b)-shaped', PART_B_CAL], ['no family part', NO_FAMILY_CAL]] as const;
   it.each(cases.flatMap(([name, cal]) => [3, 9].map((seeds) => [name, cal, seeds] as const)))(
     'unclampedSpreads gives back each part of the %s calibration at %i seeds',
-    (_name, cal, seeds) => {
+    (_name, cal: Record<string, Required<Part>>, seeds) => {
       const rand = seededRandom(20261110 + seeds);
       const sums = CODINGS.map(() => ({ family: 0, sequence: 0, noise: 0 }));
       const sims = 2000;
@@ -217,7 +217,7 @@ describe('Z0 round 4 simulation engine: exact draws and scored draws', () => {
     expect(scored.units).toEqual(plain.units);
     for (const coding of CODINGS) {
       const by = fixedRepositoryT(plain.units[coding], 0);
-      expect(scored.stat[coding]).toEqual({ estimate: by.estimate, se: by.se, df: by.df });
+      expect(scored.stat![coding]).toEqual({ estimate: by.estimate, se: by.se, df: by.df });
     }
   });
 
@@ -226,9 +226,9 @@ describe('Z0 round 4 simulation engine: exact draws and scored draws', () => {
     for (const coding of CODINGS) {
       const units: Unit[] = scored.units[coding];
       const spread = weightedVariance(units, units.map((u) => u.value))!;
-      expect(scored.stat[coding].estimate).toBeCloseTo(sum(units.map((u) => u.value)) / units.length, 12);
-      expect(scored.stat[coding].se).toBeCloseTo(Math.sqrt(spread.v), 12);
-      expect(scored.stat[coding].df).toBeCloseTo(spread.df, 12);
+      expect(scored.stat![coding].estimate).toBeCloseTo(sum(units.map((u) => u.value)) / units.length, 12);
+      expect(scored.stat![coding].se).toBeCloseTo(Math.sqrt(spread.v), 12);
+      expect(scored.stat![coding].df).toBeCloseTo(spread.df, 12);
     }
   });
 
@@ -307,11 +307,11 @@ describe('Z0 round 4 simulation engine: sizes at the null', () => {
 });
 
 describe('Z0 round 4 simulation engine: levelSearch', () => {
-  const cell = (setting: string, n: number, below: [number, number][]) => {
+  const cell = (setting: string, n: number, below: [number, number][], noEstimate = 0) => {
     const ps = Array.from({ length: n }, () => 0.5);
     let at = 0;
     for (const [count, p] of below) for (let i = 0; i < count; i++) ps[at++] = p;
-    return { setting, ps, noEstimate: 0 };
+    return { setting, ps, noEstimate };
   };
 
   it('gives the level where the sizes cross the threshold, names the blocking cell, and reports sizes and errors', () => {
@@ -321,8 +321,36 @@ describe('Z0 round 4 simulation engine: levelSearch', () => {
     expect(found.level).toBe(0.023);
     expect(found.setBy).toMatchObject({ setting: 'blocking', at: 0.024, size: 0.026 });
     expect(found.cells.map((c: { setting: string }) => c.setting)).toEqual(['quiet', 'blocking']);
-    expect(found.cells[0]).toEqual({ setting: 'quiet', size: 0.01, simError: Math.sqrt((0.01 * 0.99) / 1000) });
-    expect(found.cells[1]).toEqual({ setting: 'blocking', size: 0.025, simError: Math.sqrt((0.025 * 0.975) / 1000) });
+    expect(found.cells[0]).toEqual({ setting: 'quiet', size: 0.01, simError: Math.sqrt((0.01 * 0.99) / 1000), noEstimate: 0 });
+    expect(found.cells[1]).toEqual({ setting: 'blocking', size: 0.025, simError: Math.sqrt((0.025 * 0.975) / 1000), noEstimate: 0 });
+  });
+
+  it('gives setBy the size and error of its cell at the returned level too, so the claim can be quoted from it', () => {
+    const found = levelSearch([cell('quiet', 1000, [[10, 0.001]]), cell('blocking', 1000, [[25, 0.0225], [1, 0.0235]])], 0.025);
+    expect(found.setBy).toEqual({
+      setting: 'blocking', at: 0.024, size: 0.026, simError: Math.sqrt((0.026 * 0.974) / 1000),
+      sizeAtLevel: 0.025, simErrorAtLevel: Math.sqrt((0.025 * 0.975) / 1000), noEstimate: 0,
+    });
+    const atThreshold = levelSearch([cell('high', 1000, [[20, 0.001]])], 0.025);
+    expect(atThreshold.setBy).toMatchObject({ at: 0.025, size: 0.02, sizeAtLevel: 0.02 });
+    expect(levelSearch([cell('bad', 1000, [[100, 0.0005]])], 0.025).setBy).toMatchObject({ at: 0.001, size: 0.1, sizeAtLevel: 0, simErrorAtLevel: 0 });
+  });
+
+  it("carries each cell's noEstimate into cells and setBy", () => {
+    const found = levelSearch([cell('quiet', 1000, [[10, 0.001]], 7), cell('blocking', 1000, [[25, 0.0225], [1, 0.0235]], 40)], 0.025);
+    expect(found.cells.map((c: { noEstimate: number }) => c.noEstimate)).toEqual([7, 40]);
+    expect(found.setBy.noEstimate).toBe(40);
+  });
+
+  it('refuses a cell whose draws all lack an estimate, since its size says nothing', () => {
+    expect(() => levelSearch([cell('fine', 100, []), cell('blind', 100, [[100, 1]], 100)], 0.05)).toThrow(/blind.*no estimate/);
+    expect(() => levelSearch([JSON.parse('{"setting":"untallied","ps":[0.5]}')], 0.05)).toThrow(/noEstimate/);
+  });
+
+  it('refuses a threshold off the 0.001 grid, where rounding would return a level above it', () => {
+    const cells = [cell('even', 2000, [[40, 0.04]])];
+    for (const threshold of [0.0125, 0.0005, 0, 0.05001]) expect(() => levelSearch(cells, threshold), `threshold ${threshold}`).toThrow(/0\.001/);
+    for (const threshold of [0.025, 0.05, 0.001, 0.013]) expect(levelSearch(cells, threshold).level, `threshold ${threshold}`).toBeLessThanOrEqual(threshold);
   });
 
   it('gives the threshold when no cell crosses it, and names the cell with the largest size there', () => {
@@ -337,7 +365,7 @@ describe('Z0 round 4 simulation engine: levelSearch', () => {
     const found = levelSearch([cell('bad', 1000, [[100, 0.0005]])], 0.025);
     expect(found.level).toBe(0);
     expect(found.setBy).toMatchObject({ setting: 'bad', at: 0.001, size: 0.1 });
-    expect(found.cells).toEqual([{ setting: 'bad', size: 0, simError: 0 }]);
+    expect(found.cells).toEqual([{ setting: 'bad', size: 0, simError: 0, noEstimate: 0 }]);
   });
 
   it('counts a p strictly below the level, so a p equal to it does not count', () => {
@@ -348,6 +376,7 @@ describe('Z0 round 4 simulation engine: levelSearch', () => {
 
   it('refuses a cell with no draws', () => {
     expect(() => levelSearch([{ setting: 'empty', ps: [], noEstimate: 0 }], 0.05)).toThrow(/draws/);
+    expect(() => levelSearch([], 0.05)).toThrow(/draws/);
   });
 });
 
@@ -393,8 +422,11 @@ describe('Z0 round 4 simulation engine: levelCells', () => {
     T2a: [...normalCases, 'resampled'],
     T2b: [...normalCases, '0/1 base 0.9 at upper', '0/1 base 0.5 at upper', 'resampled'],
   };
+  const oneCoding = (test: string) => test === 'T2a' || test === 'T2b';
+  const calPointOf = (test: string) => (oneCoding(test) ? one({ loss: 0.05, family: 0.02, sequence: 0.03, noise: 0.09 }) : REPEAT_CAL);
+  const calUpperOf = (test: string) => (oneCoding(test) ? one({ loss: 0.05, family: 0.04, sequence: 0.03, noise: 0.09 }) : { violation: { ...REPEAT_CAL.violation, family: 0.04 }, excluded: { ...REPEAT_CAL.excluded, family: 0.05 } });
   const spec = (test: string, extra = {}) => ({
-    test, calPoint: REPEAT_CAL, calUpper: { violation: { ...REPEAT_CAL.violation, family: 0.04 }, excluded: { ...REPEAT_CAL.excluded, family: 0.05 } }, layout: small,
+    test, calPoint: calPointOf(test), calUpper: calUpperOf(test), layout: small,
     rule: { m: 0.15, cap: 9, targetZ: 3.5, near: 1.1 }, sims: 50, seed: 20261110, label: 'unit',
     resampled: test === 'T2a' ? costCells(4, 4, 3) : test === 'T2b' ? valueCells(4, 4, 4) : undefined, ...extra,
   });
@@ -430,7 +462,7 @@ describe('Z0 round 4 simulation engine: levelCells', () => {
       const rand = seededRandom(cellSeed(20261110, 'level4', 'unit', test, 'rule at upper'));
       const ps = Array.from({ length: 50 }, () => {
         const { stat } = repeatRun(heavy, { layout: small }, T_NULLS[test].nullValue, rand, { ...rule, onMiss }, { score, exact: true });
-        return scoreTest(stat.violation, { ...T_NULLS[test], level: 0.05 }).p;
+        return scoreTest(stat!.violation, { ...T_NULLS[test], level: 0.05 }).p;
       });
       expect(cell.ps).toEqual(ps);
     }
@@ -439,7 +471,8 @@ describe('Z0 round 4 simulation engine: levelCells', () => {
   it('draws every normal cell at the test\'s null, whatever the codings\' scales', () => {
     const flat = { violation: { scale: 0.8, loss: 0, family: 0, sequence: 0, noise: 0 }, excluded: { scale: 0.9, loss: 0, family: 0, sequence: 0, noise: 0 } };
     for (const test of ['T1', 'T2b', 'T2c']) {
-      const cells = levelCells(spec(test, { calPoint: flat, calUpper: flat, cases: ['rule at point', '4 seeds at upper'] }));
+      const cal = oneCoding(test) ? one({ scale: 0.8, family: 0, sequence: 0, noise: 0 }) : flat;
+      const cells = levelCells(spec(test, { calPoint: cal, calUpper: cal, cases: ['rule at point', '4 seeds at upper'] }));
       expect(cells.length).toBeGreaterThan(0);
       for (const c of cells) expect(c.ps.every((p: number) => p === 1)).toBe(true);
     }
@@ -455,6 +488,68 @@ describe('Z0 round 4 simulation engine: levelCells', () => {
   it('drops resampled cells with seed above 3', () => {
     const cells = costCells(3, 4, 6);
     expect(levelCells(spec('T2a', { cases: ['resampled'], resampled: cells }))).toEqual(levelCells(spec('T2a', { cases: ['resampled'], resampled: cells.filter((c) => c.seed <= 3) })));
+  });
+
+  it('draws each 0/1 cell from binaryRun on calUpper at 3 seeds, at its base and the null of its test as shift', () => {
+    const cases = [['T1', 0.3], ['T3', 0.3], ['T2c', 0.3], ['T2b', 0.9], ['T2b', 0.5]] as const;
+    for (const [test, base] of cases) {
+      const setting = `0/1 base ${base} at upper`;
+      const made = spec(test, { cases: [setting] });
+      const got = levelCells(made);
+      const rand = seededRandom(cellSeed(20261110, 'level4', 'unit', test, setting));
+      const codings = oneCoding(test) ? CODINGS.slice(0, 1) : CODINGS;
+      const ps: number[][] = codings.map(() => []);
+      for (let i = 0; i < 50; i++) {
+        const units = binaryRun(made.calUpper, { layout: small, seeds: 3 }, rand, { base, shift: T_NULLS[test].nullValue });
+        codings.forEach((coding, j) => {
+          const { estimate, se, df } = fixedRepositoryT(units[coding], 0);
+          const p = scoreTest({ estimate, se, df }, { ...T_NULLS[test], level: 0.05 }).p;
+          ps[j]!.push(Number.isFinite(p) ? p : 1);
+        });
+      }
+      expect(got.map((c: { ps: number[] }) => c.ps), `${test} ${setting}`).toEqual(ps);
+      expect(got).toHaveLength(codings.length);
+    }
+  });
+
+  it('refuses a layout that would draw no families, before any draw', () => {
+    const bad = [undefined, [], 'abc', [{ repo: 'a', families: 3 }], [{ repo: 'a', k: 0 }], [{ repo: 'a', k: 2.5 }], [{ repo: 7, k: 2 }], [{ repo: 'a', k: 2 }, null]];
+    for (const layout of bad) expect(() => levelCells(spec('T1', { layout })), JSON.stringify(layout)).toThrow(/layout/);
+    const entry = [{ repo: 'a', k: 2 }, { repo: 'b', families: 3 }];
+    expect(() => levelCells(spec('T2c', { layout: entry }))).toThrow(/entry 1/);
+  });
+
+  it('refuses a bad layout in the draws and the rule as well, where the same hole would give no families', () => {
+    const layout = JSON.parse('[{"repo":"a","families":3}]');
+    const units = repeatRun(REPEAT_CAL, { repos: 4, families: 3, seeds: 3 }, 0, seededRandom(1)).units.violation;
+    expect(() => repeatRun(REPEAT_CAL, { layout, seeds: 3 }, 0, seededRandom(1))).toThrow(/layout/);
+    expect(() => binaryRun(REPEAT_CAL, { layout, seeds: 3 }, seededRandom(1))).toThrow(/layout/);
+    expect(() => predictedSe(units, 3, { layout })).toThrow(/layout/);
+    expect(() => ruleSeeds(units, { m: 0.15, layout })).toThrow(/layout/);
+    expect(() => seedsNeeded(units, 0.15, { layout: [] })).toThrow(/layout/);
+  });
+
+  it('checks spec.resampled at entry for T2a and T2b, when the resampled case will run', () => {
+    // A calibration that throws when read stands for the first draw: the check must come before any.
+    const drawn = () => { throw new Error('drew before the check'); };
+    const trap = { get violation() { return drawn(); }, get excluded() { return drawn(); } };
+    for (const test of ['T2a', 'T2b']) {
+      expect(() => levelCells(spec(test, { resampled: undefined, calPoint: trap, calUpper: trap })), test).toThrow(/resampled/);
+      expect(() => levelCells(spec(test, { resampled: [], calPoint: trap, calUpper: trap })), test).toThrow(/resampled/);
+      expect(() => levelCells(spec(test, { resampled: costCells(2, 3, 6).filter((c) => c.seed > 3), calPoint: trap, calUpper: trap })), test).toThrow(/resampled/);
+      expect(levelCells(spec(test, { resampled: undefined, cases: ['rule at upper'] })), test).toHaveLength(1);
+    }
+  });
+
+  it('refuses a calibration whose two coding keys differ for a test that reads one coding', () => {
+    const [point, upper] = [calPointOf('T2a'), calUpperOf('T2a')];
+    const differ = { ...upper, excluded: { ...upper.excluded, family: 0.5 } };
+    for (const test of ['T2a', 'T2b']) {
+      expect(() => levelCells(spec(test, { calPoint: REPEAT_CAL })), test).toThrow(/coding/);
+      expect(() => levelCells(spec(test, { calUpper: differ })), test).toThrow(/coding/);
+      expect(() => levelCells(spec(test, { calPoint: { ...point, excluded: { ...point.excluded, scale: 0.8 } } })), test).toThrow(/coding/);
+    }
+    expect(() => levelCells(spec('T1', { calPoint: REPEAT_CAL, cases: ['rule at upper'] }))).not.toThrow();
   });
 
   it('refuses a test it does not know', () => {

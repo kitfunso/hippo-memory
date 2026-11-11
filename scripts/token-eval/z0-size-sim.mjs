@@ -92,16 +92,25 @@ export function spreadComponents(units, bound) {
   };
 }
 
+// An entry with no integer k draws no families, so every p would read 1 and every size 0; a layout of that kind stops the run instead.
+function checkedLayout(layout, who) {
+  if (!Array.isArray(layout) || layout.length === 0) throw new Error(`${who}: layout must be a non-empty array of { repo, k }`);
+  const bad = layout.findIndex((e) => String(e?.repo) !== e?.repo || !Number.isInteger(e.k) || e.k < 1);
+  if (bad >= 0) throw new Error(`${who}: layout entry ${bad} needs a string repo and an integer k of 1 or more, got ${JSON.stringify(layout[bad])}`);
+  return layout;
+}
+
 // A layout names the repositories and families a run will have; with none, the units' own repositories are sized, as round 3 did.
-const layoutFor = (design) => design.layout ?? Array.from({ length: design.repos }, (_, r) => ({ repo: `r${r}`, k: design.families }));
+const layoutFor = (design) => (design.layout ? checkedLayout(design.layout, 'design') : Array.from({ length: design.repos }, (_, r) => ({ repo: `r${r}`, k: design.families })));
 
 // One pooled fit gives the predicted error at any count, so a rule's loop never refits.
 function predictor(units, layout) {
+  if (layout) checkedLayout(layout, 'rule');
   const pooled = pooledComponents(units);
   if (pooled === null) return null;
   const { family, sequence, noise } = pointSpreads(pooled);
-  const entries = layout ?? pooled.repos;
-  return (seeds) => sd(sum(entries.map((r) => family / r.k + sequence / seeds + noise / (r.k * seeds))) / entries.length ** 2);
+  const sized = layout ?? pooled.repos;
+  return (seeds) => sd(sum(sized.map((r) => family / r.k + sequence / seeds + noise / (r.k * seeds))) / sized.length ** 2);
 }
 
 /** The standard error the blind seed rule predicts at `seeds`, from first-wave units' spreads; null when nothing can be fitted.
@@ -165,15 +174,13 @@ const SCORERS = {
   },
 };
 
-/** One simulated H1 or H2 run: the same draws under both codings, each with its own spread, dilution and unit loss. Family
- * effects are drawn first and a sequence effect per seed, so seeds the rule adds later extend the same families. With a
- * `rule` of { m, cap, targetZ, onMiss, near } the first wave is SEEDS and `ruleSeeds` sets the count (a layout in the design reaches it).
- * When the cap cannot reach the target, onMiss 'stop' (the default) stops the run, 'cap' runs it at the cap and 'near' at the near count.
- * `opts.score` ('repeat' or 'ratio') adds `stat` per coding for `scoreTest`; `opts.exact` puts every cell at `delta`, not scale x delta.
+/** One simulated H1 or H2 run, both codings from the same draws; `ruleSeeds` sets the count under a rule, and later seeds extend the same families.
+ * `opts.score` adds `stat` per coding for `scoreTest`; `opts.exact` puts every cell at `delta`, not scale x delta.
  * @param {Record<string, {scale: number, loss: number, family: number, sequence: number, noise: number}>} cal
  * @param {{repos?: number, families?: number, layout?: {repo: string, k: number}[], seeds?: number}} design @param {number} delta
  * @param {{m: number, cap?: number, targetZ?: number, onMiss?: 'stop' | 'cap' | 'near', near?: number} | null} [rule]
- * @param {{score?: 'repeat' | 'ratio', exact?: boolean}} [opts] */
+ * @param {{score?: 'repeat' | 'ratio', exact?: boolean}} [opts]
+ * @returns {{units: Record<string, {repo: string, family: string, seed: number, value: number}[]>, seeds: number, stopped: boolean, stat?: Record<string, {estimate: number, se: number, df: number}> | null}} */
 export function repeatRun(cal, design, delta, rand, rule = null, opts = {}) {
   const scorer = opts.score === undefined ? null : SCORERS[opts.score];
   if (opts.score !== undefined && !scorer) throw new Error(`repeatRun: score ${opts.score} is not repeat or ratio`);
@@ -372,8 +379,8 @@ const LEVEL_TESTS = {
 // A draw's p does not depend on the level, so one set of p values serves every threshold.
 const ANY_LEVEL = 0.05;
 
-// Each case is [setting, draw(rand)], a draw giving { coding: { estimate, se, df } | null }.
-function levelCases(spec, cfg) {
+// Each case is [setting, draw(rand)], a draw giving { coding: { estimate, se, df } | null }; `resampledCells` are the cells that case draws from.
+function levelCases(spec, cfg, resampledCells) {
   const { calPoint, calUpper, layout } = spec;
   const { nullValue } = T_NULLS[spec.test];
   const counts = Array.from({ length: (spec.rule.cap ?? SEED_CAP) - SEEDS + 1 }, (_, i) => SEEDS + i);
@@ -383,11 +390,7 @@ function levelCases(spec, cfg) {
     const units = binaryRun(calUpper, { layout, seeds: SEEDS }, rand, { base, shift: nullValue });
     return byCoding((c) => SCORERS.repeat(units[c]));
   };
-  const cells = spec.resampled?.filter((c) => c.seed <= SEEDS);
-  const resampled = (rand) => {
-    if (cells === undefined) throw new Error(`levelCells ${spec.test}: the resampled case needs spec.resampled`);
-    return { [CODINGS[0]]: resampledRun(cells, rand, cfg.part) };
-  };
+  const resampled = (rand) => ({ [CODINGS[0]]: resampledRun(resampledCells, rand, cfg.part) });
   return [
     ...spreads.map(([at, cal]) => [`rule at ${at}`, run(cal, SEEDS, { ...spec.rule, onMiss: cfg.onMiss ?? 'cap' })]),
     ...spreads.flatMap(([at, cal]) => counts.map((n) => [`${n} seeds at ${at}`, run(cal, n, null)])),
@@ -396,13 +399,27 @@ function levelCases(spec, cfg) {
   ];
 }
 
+const CALIBRATION_FIELDS = ['scale', 'loss', 'family', 'sequence', 'noise'];
+const sameCoding = (cal) => CALIBRATION_FIELDS.every((f) => cal[CODINGS[0]][f] === cal[CODINGS[1]][f]);
+
+// A Level check costs minutes per cell, so every input a run could fail on late or silently is refused before the first draw.
+function checkedLevelSpec(spec, cfg) {
+  checkedLayout(spec.layout, `levelCells ${spec.test}`);
+  const resampled = (spec.resampled ?? []).filter((c) => c.seed <= SEEDS);
+  const runsResampled = cfg.part !== undefined && (spec.cases === undefined || spec.cases.includes('resampled'));
+  if (runsResampled && resampled.length === 0) throw new Error(`levelCells ${spec.test}: the resampled case needs spec.resampled cells with a seed of ${SEEDS} or less`);
+  if (cfg.codings.length === 1 && !(sameCoding(spec.calPoint) && sameCoding(spec.calUpper))) throw new Error(`levelCells ${spec.test}: reads one coding, but a calibration gives its two codings different spreads, so the rule's count could change silently`);
+  return resampled;
+}
+
 /** Every cell of prereg :112 for one test: the p values of `sims` draws per case and coding, each drawn at the test's null and scored by
  * `scoreTest` at its `T_NULLS` entry. A draw with no estimate counts as p = 1 and in `noEstimate`. `spec.cases` keeps only the named cases.
- * @param {{test: string, calPoint: object, calUpper: object, layout: {repo: string, k: number}[], rule: object, sims: number, seed: number, label?: string, resampled?: object[], cases?: string[]}} spec */
+ * @param {{test: string, calPoint: object, calUpper: object, layout: {repo: string, k: number}[], rule: object, sims: number, seed: number, label?: string, resampled?: object[], cases?: string[]}} spec
+ * @returns {{setting: string, ps: number[], noEstimate: number}[]} */
 export function levelCells(spec) {
   const cfg = LEVEL_TESTS[spec.test];
   if (cfg === undefined) throw new Error(`levelCells: test ${spec.test} is not one of ${Object.keys(LEVEL_TESTS).join(', ')}`);
-  const all = levelCases(spec, cfg);
+  const all = levelCases(spec, cfg, checkedLevelSpec(spec, cfg));
   const unknown = (spec.cases ?? []).filter((name) => !all.some(([known]) => known === name));
   if (unknown.length > 0) throw new Error(`levelCells ${spec.test}: no case named ${unknown.join(', ')}`);
   return all.filter(([name]) => spec.cases === undefined || spec.cases.includes(name)).flatMap(([name, draw]) => {
@@ -421,18 +438,25 @@ export function levelCells(spec) {
 }
 
 /** The largest L = k / 1000 up to the threshold at which every cell's share of p below L is at most the threshold (0 when none), with each
- * size and its simulation error at L. `setBy` is the cell largest at L + 0.001 when L is under the threshold, else at L.
- * @param {{setting: string, ps: number[]}[]} cells @param {number} threshold */
+ * size, error and noEstimate at L. `setBy` is the cell largest at L + 0.001 when L is under the threshold, else at L, with its size at L too.
+ * @param {{setting: string, ps: number[], noEstimate: number}[]} cells @param {number} threshold */
 export function levelSearch(cells, threshold) {
+  const top = Math.round(threshold * 1000);
+  if (top < 1 || Math.abs(threshold * 1000 - top) > 1e-6) throw new Error(`levelSearch: threshold ${threshold} is not a multiple of 0.001`);
   if (cells.length === 0 || cells.some((c) => c.ps.length === 0)) throw new Error('levelSearch: needs cells that each hold draws');
+  if (cells.some((c) => !Number.isInteger(c.noEstimate))) throw new Error('levelSearch: every cell needs its noEstimate count');
+  const blind = cells.find((c) => c.noEstimate >= c.ps.length);
+  if (blind) throw new Error(`levelSearch: every draw of "${blind.setting}" has no estimate, so its size says nothing`);
   const sizeAt = (c, k) => share(c.ps, (p) => p < k / 1000);
-  let k = Math.round(threshold * 1000);
+  let k = top;
   while (k > 0 && cells.some((c) => sizeAt(c, k) > threshold)) k--;
   const probe = k / 1000 < threshold ? k + 1 : k;
-  const view = (c, size) => ({ setting: c.setting, size, simError: sd((size * (1 - size)) / c.ps.length) });
+  const view = (c, size) => ({ setting: c.setting, size, simError: sd((size * (1 - size)) / c.ps.length), noEstimate: c.noEstimate });
+  const atLevel = cells.map((c) => view(c, sizeAt(c, k)));
   const blocking = cells.map((c) => sizeAt(c, probe));
   const worst = blocking.indexOf(Math.max(...blocking));
-  return { level: k / 1000, setBy: { ...view(cells[worst], blocking[worst]), at: probe / 1000 }, cells: cells.map((c) => view(c, sizeAt(c, k))) };
+  const { size: sizeAtLevel, simError: simErrorAtLevel } = atLevel[worst];
+  return { level: k / 1000, setBy: { ...view(cells[worst], blocking[worst]), at: probe / 1000, sizeAtLevel, simErrorAtLevel }, cells: atLevel };
 }
 
 function memoized(evaluate) {
