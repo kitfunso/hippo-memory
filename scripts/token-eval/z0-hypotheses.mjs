@@ -386,12 +386,13 @@ function costPart(rs, pair, prices, opts) {
   return t.estimate === null ? t : { ...t, ...twin(opts, () => bootstrapRatio(cells, opts)) };
 }
 
-/** Round 4's estimates, each test over seeds 1 to its own count (`opts.windows`); a test the run did not reach has none.
+/** Round 4's estimates, each test over seeds 1 to its own count (`opts.windows`), or to the highest seed run when the run did not reach it (its window marks that).
  * S1 is the S1-against-O1 read of T2's three parts, each at that part's window. */
 export function estimatesR4(filtered, prices, opts) {
   const { design, windows } = opts;
   const [s, setN, alone] = [filtered.scored, filtered.sets.includes('N'), pairOf(design, 'S1vO1')];
-  const at = (test, read) => (windows[test].reached ? read(s.filter((r) => r.seed <= windows[test].n), design.tests[test]) : null);
+  const last = (test) => Math.min(windows[test].n, windows[test].k);
+  const at = (test, read) => (last(test) < 1 ? null : read(s.filter((r) => r.seed <= last(test)), design.tests[test]));
   return {
     T1: at('T1', repeatsAt),
     T3: at('T3', repeatsAt),
@@ -440,12 +441,14 @@ function ratioInterval(t) {
   return { ratio: t.ratio, low: Math.exp(t.estimate - half), high: Math.exp(t.estimate + half) };
 }
 
-/** The O1 drift (prereg 71): the round 3 arm and the round 4 one on the tasks both ran, raw records (no grading, drop list or voids).
+/** The O1 drift (prereg 71): the round 3 arm and the round 4 one on the tasks both ran, raw records (no grading or drop list) less the positions the off-pin files void.
  * A round 3 record takes its partner's position, so `pairTasks` pairs them. No shared task reports `shared: 0`. */
 export function driftR4(records, planCells, drift, prices, opts) {
   const { design } = opts;
   const { arm, against } = design.drift;
-  const mine = filteredInput(records, planCells, { design, maxSeed: opts.maxSeed }, { dropAbandoned: true }).filtered.scored.filter((r) => r.arm === arm);
+  const caps = [design.maxSeed, opts.maxSeed].filter((m) => m !== null && m !== undefined);
+  const voids = (opts.voids ?? []).filter((v) => caps.every((m) => v.seed <= m));
+  const mine = filteredInput(records, planCells, { design, maxSeed: opts.maxSeed, voids }, { dropAbandoned: true }).filtered.scored.filter((r) => r.arm === arm);
   const theirs = filteredInput(drift.records, drift.planCells, { design: designByName(design.drift.design) }, { dropAbandoned: true }).filtered.scored.filter((r) => r.arm === against);
   const position = new Map(mine.map((r) => [joinKey(r), r.position]));
   const joined = theirs.filter((r) => position.has(joinKey(r))).map((r) => ({ ...r, position: position.get(joinKey(r)) }));

@@ -3,14 +3,15 @@
 
 import * as path from 'node:path';
 
-import { ARM_TABLE, DESIGNS, designName, pairOf } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, EFFORTS, designName, pairOf } from './arms.mjs';
 import { CODINGS } from './z0-hypotheses.mjs';
 import { keysOf, readReadSet } from './z0-read-set.mjs';
-import { LEVELS_SCHEMA, SEED_CAP, SEED_RULE_SCHEMA } from './z0-records.mjs';
+import { LEVELS_SCHEMA, SEED_CAP, SEED_RULE_SCHEMA, isString } from './z0-records.mjs';
 import { NO_VERDICT, THRESHOLDS, T_NULLS, closedTest, minLevels, scoreTest } from './z0-verdict-r4.mjs';
 
 const PARTS = ['a', 'b', 'c'];
 const BRANCHES = ['rule', 'miss', 'cap'];
+const SOURCE_ORDER = ['pre-freeze', 'batch-1'];
 const isPlain = (v) => v !== undefined && v !== null && v.constructor === Object;
 
 /** The args with the read set's pairs written out: each full pair's runs, plan and off-pin file, each merge manifest, and the `--max-seed` line (null without one). */
@@ -23,14 +24,14 @@ export function expandReadSet(args, cwd) {
   return out;
 }
 
-/** The levels files through `minLevels`, the first as the pre-freeze file and the second as batch 1; its log lines come back as `notes`. */
+/** The levels files through `minLevels`, sorted by their `source` field (pre-freeze, then batch 1) so argv order does not matter; its log lines come back as `notes`. */
 export function levelsOf(files, parsed) {
   const notes = [];
   const given = parsed.map((body, i) => {
     if (!isPlain(body)) throw new Error(`${files[i]}: a levels file is a JSON object`);
     if (body.schema !== LEVELS_SCHEMA) throw new Error(`${files[i]}: schema must be "${LEVELS_SCHEMA}"`);
     return { ...body, file: files[i] };
-  });
+  }).sort((a, b) => SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source));
   try {
     return { levels: minLevels(given[0], given[1], (line) => notes.push(line)), notes };
   } catch (e) {
@@ -83,7 +84,7 @@ function scoredOne(name, e, levels) {
   const first = at[THRESHOLDS[name][0]];
   const pick = (field) => Object.fromEntries(Object.entries(at).map(([t, s]) => [t, s[field]]));
   const bounds = Object.fromEntries(Object.entries(at).map(([t, s]) => [t, { low: s.low, high: s.high }]));
-  return { estimate: e.estimate, se: e.se, df: e.df, side, p: first.p, bounds, win: pick('win'), edge: pick('edge') };
+  return { estimate: e.estimate, se: e.se, df: e.df, bootstrap: e.bootstrap, side, p: first.p, bounds, win: pick('win'), edge: pick('edge') };
 }
 
 /** A test's `closedTest` input: null when it has no usable estimate, `codings` for one that holds a result per coding. */
@@ -106,10 +107,11 @@ function readS1(s1, levels, windows, threshold) {
 }
 
 /** The closed test over hand-made or measured estimates: `closed` is `closedTest`'s result, `views` its input, `edges` the wins a rounded-df bound contradicts,
- * and `s1` the exploratory S1 read. A test the run did not reach (`windows[test].reached` false) enters as null. */
+ * and `s1` the exploratory S1 read. A test the run did not reach (`windows[test].reached` false) enters as null; `seen` holds every scored estimate, reached or not. */
 export function scoreR4(estimates, levels, windows) {
-  const reached = (test, e) => (windows[test].reached ? viewOf(test, e, levels) : null);
-  const views = { T1: reached('T1', estimates.T1), T3: reached('T3', estimates.T3), T2: Object.fromEntries(PARTS.map((k) => [k, reached(`T2${k}`, estimates[`T2${k}`])])) };
+  const seen = { T1: viewOf('T1', estimates.T1, levels), T3: viewOf('T3', estimates.T3, levels), T2: Object.fromEntries(PARTS.map((k) => [k, viewOf(`T2${k}`, estimates[`T2${k}`], levels)])) };
+  const reached = (test, v) => (windows[test].reached ? v : null);
+  const views = { T1: reached('T1', seen.T1), T3: reached('T3', seen.T3), T2: Object.fromEntries(PARTS.map((k) => [k, reached(`T2${k}`, seen.T2[k])])) };
   const closed = closedTest(views, levels);
   const read = closed.T2.readAt;
   const edges = {
@@ -117,22 +119,39 @@ export function scoreR4(estimates, levels, windows) {
     T2: closed.T2.verdict === 'pass' && PARTS.some((k) => edgeOf(views.T2[k], read)),
     T3: closed.T3.verdict === 'win' && edgeOf(views.T3, read),
   };
-  return { closed, views, edges, s1: readS1(estimates.s1, levels, windows, read ?? '0.025') };
+  return { closed, views, seen, edges, s1: readS1(estimates.s1, levels, windows, read ?? '0.025') };
 }
 
-/** The one effort every arm row of the design runs; a headline names one. */
-export function effortOf(design) {
+/** The effort the run used, from the pins file. Every row of the design carries one effort setting, so the pinned effort replaces it (`armEnv`) when it is one of `EFFORTS`. */
+export function effortOf(design, pinned) {
   const efforts = [...new Set(design.arms.map((a) => ARM_TABLE[a].effort))];
   if (efforts.length !== 1) throw new Error(`design ${designName(design)} rows hold efforts ${efforts.map(String).join(', ')}; a headline names one effort (prereg item 4)`);
-  return efforts[0];
+  if (efforts[0] === null) throw new Error(`design ${designName(design)} rows carry no effort setting, so a pinned effort cannot apply`);
+  if (pinned === undefined) throw new Error(`the run's effort is missing; it must be one of ${EFFORTS.join(', ')}`);
+  if (!EFFORTS.includes(pinned)) throw new Error(`effort ${String(pinned)} is not one of ${EFFORTS.join(', ')}`);
+  return pinned;
+}
+
+/** The effort a pins file holds, checked against the design, with the file named in the error. */
+export function pinsEffort(pins, design, file) {
+  try {
+    return effortOf(design, pins.effort);
+  } catch (e) {
+    throw new Error(`${file}: ${e.message}`);
+  }
+}
+
+/** A round 4 prices file names the date of its list prices; the headline prints it. */
+export function checkAsOf(prices, file) {
+  if (!(isString(prices?.asOf) && prices.asOf !== '')) throw new Error(`${file}: asOf must be a non-empty string, the date of the list prices (the round 4 headline prints it)`);
 }
 
 const one = (x) => x.toFixed(1);
 
 /** The headline by item 4's branches. Added to the T2 sentence: the pooled task-level solve difference when below -0.03, and recorded spend per solve
  * when the T2 pair's treated arm is not below its control. `d` is the smaller of T1's two codings' cuts, so the line claims no more than both show. */
-export function headlineR4({ design, scored, estimates, asOf, pooled, spendPerSolve }) {
-  const effort = effortOf(design);
+export function headlineR4({ design, effort: pinned, scored, estimates, asOf, pooled, spendPerSolve }) {
+  const effort = effortOf(design, pinned);
   const { closed } = scored;
   if (closed.T1.verdict !== 'win') return `At ${effort} effort, T1 is ${closed.T1.verdict}, so T2 and T3 get no verdict; their estimates follow and this run makes no cost claim.`;
   if (closed.T2.verdict !== 'pass') return `At ${effort} effort, hippo cuts Sonnet's repeat mistakes, but this run did not show that Sonnet with hippo meets the Opus bar.`;

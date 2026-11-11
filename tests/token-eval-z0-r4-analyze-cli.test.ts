@@ -63,19 +63,21 @@ describe('the unblinded round 4 read through runCli', () => {
     const r = unblind(['--out', 'cut.json']);
     expect(r.stdout).toContain('T3 at seeds 1 to 3, below its count 4: no verdict');
     const report = JSON.parse(fs.readFileSync(path.join(dir, 'cut.json'), 'utf8'));
-    expect([report.hypotheses.scored.closed.T3.verdict, report.hypotheses.estimates.T3]).toEqual(['no verdict', null]);
+    expect([report.hypotheses.scored.closed.T3.verdict, report.hypotheses.windows.T3.reached, Number.isFinite(report.hypotheses.estimates.T3.violation.estimate)]).toEqual(['no verdict', false, true]);
     expect(report.hashes.some((h: { role: string; file: string }) => h.role === 'pins' && h.file === 'pins.json')).toBe(true);
     const noPins = analyze.runCli(R4_ARGV.filter((_, i) => i < R4_ARGV.indexOf('--pins') || i > R4_ARGV.indexOf('--pins') + 1), dir);
     expect([noPins.code, noPins.stderr]).toEqual([1, expect.stringContaining('--pins')]);
   });
 
-  it('never opens the ledger folders while a gate fails or without --unblind, and exits 1 on a folder that is no runner output once it opens', () => {
+  it('neither hashes nor reads the ledger folders while a gate fails, and exits 1 on one that is no runner output once the codes open; --ledger-runs without --unblind exits 1', () => {
     const bad = loose(g);
     const shut = { ...bad, records: [{ ...bad.records[0], void: 'operator-canary' }, ...bad.records.slice(1)] };
     const { dir } = gitWorkspace({ 'runs.jsonl': shut.records.map((r: any) => JSON.stringify(r)).join('\n') });
-    const closed = analyze.runCli([...R4_ARGV, '--drop-list', 'drop.json', '--unblind', '--ledger-runs', 'empty'], dir);
-    expect(closed.code).toBe(0);
+    const closed = analyze.runCli([...R4_ARGV, '--drop-list', 'drop.json', '--unblind', '--ledger-runs', 'nowhere', '--out', 'closed.json'], dir);
+    expect([closed.code, closed.stderr]).toEqual([0, '']);
     expect(closed.stdout).toContain('invalid: G1');
+    expect(closed.stdout).not.toContain('ledger-runs');
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'closed.json'), 'utf8')).hashes.some((h: { role: string }) => h.role === 'ledger-runs')).toBe(false);
     const open = gitWorkspace();
     const missing = analyze.runCli([...R4_ARGV, '--drop-list', 'drop.json', '--unblind', '--ledger-runs', 'empty'], open.dir);
     expect([missing.code, missing.stderr]).toEqual([1, expect.stringContaining('empty')]);

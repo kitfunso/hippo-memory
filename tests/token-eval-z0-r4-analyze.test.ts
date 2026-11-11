@@ -11,7 +11,7 @@ import { scoreTest } from '../scripts/token-eval/z0-verdict-r4.mjs';
 import { MERGE_SCHEMA, OFFPIN_SCHEMA } from '../scripts/token-eval/z0-records.mjs';
 import { GRADING, PRICES, PRICES_BY_MODEL, generate, jsonl, type Generated, type Z0Record } from './fixtures/z0-gen.js';
 const { FILTER_KEYS, filteredInput } = filters;
-import { KEYS, R3, R4, R4_ARGV, SPEND, STAT, TESTS, WIN, cells, cleanUp, corpus, drift, driftOf, levelsFile, levelsOf, loose, parse, raise, readInputs, seedRule, workspace } from './fixtures/z0-r4-read.js';
+import { KEYS, PINS, R3, R4, R4_ARGV, SPEND, STAT, TESTS, WIN, cells, cleanUp, corpus, drift, driftOf, levelsFile, levelsOf, loose, parse, raise, readInputs, seedRule, workspace } from './fixtures/z0-r4-read.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 afterAll(cleanUp);
@@ -222,7 +222,8 @@ describe('seed windows (brief 7)', () => {
     expect(a.hypotheses.windows.T3).toMatchObject({ n: 6, k: 5, reached: false });
     expect([a.hypotheses.scored.closed.T1.verdict, a.hypotheses.scored.closed.T3.verdict]).toEqual(['win', 'no verdict']);
     expect(text(a)).toContain('T3 at seeds 1 to 5, below its count 6: no verdict');
-    expect(JSON.stringify(a.hypotheses.estimates.T3)).toBe('null');
+    expect(text(a)).toMatch(/^T3 at seeds 1 to 5, below its count 6: no verdict; estimate at seeds 1 to 5: violation -?[\d.]+ \[[^\n]*excluded /m);
+    expect(a.hypotheses.estimates.T3.violation.estimate).toEqual(expect.any(Number));
   });
 
   it('gives T3 no verdict when the run is cut below its count and leaves T2 at its own level at 0.025', () => {
@@ -236,6 +237,43 @@ describe('seed windows (brief 7)', () => {
     const a = run(corpus(), { seedRule: seedRule(3, { T2a: { branch: 'miss', power: 0.7 }, H4: { branch: 'cap', power: 0.55 } }) });
     expect(text(a)).toMatch(/^T2a ran at 3 seeds by the miss branch; power 0\.700$/m);
     expect(text(a)).toMatch(/^H4 ran at 3 seeds by the cap branch; power 0\.550$/m);
+  });
+});
+
+describe('estimates below a count and with T1 not won (fix round 1, items 1 and 2)', () => {
+  const g = corpus();
+  const below = (test: string) => run(g, { seedRule: seedRule(3, { [test]: { seeds: 5 } }) });
+  const ESTIMATE = '; estimate at seeds 1 to 3: ';
+  const CI = String.raw`-?[\d.]+ \[[^\]]*\] t\([\d.]+\)`;
+
+  it('computes a test below its count at seeds 1 to k, as the read at k gives it, and still enters it at p = 1 with no verdict', () => {
+    const [full, cut] = [run(g), below('T3')];
+    expect(JSON.stringify(cut.hypotheses.estimates.T3)).toBe(JSON.stringify(full.hypotheses.estimates.T3));
+    expect(cut.hypotheses.windows.T3).toMatchObject({ n: 5, k: 3, reached: false });
+    expect([cut.hypotheses.scored.closed.T3.verdict, cut.hypotheses.scored.views.T3, cut.hypotheses.scored.seen.T3 === null]).toEqual(['no verdict', null, false]);
+  });
+
+  it.each([
+    ['T1', new RegExp(String.raw`^violation ${CI}, excluded ${CI}$`)],
+    ['T3', new RegExp(String.raw`^violation ${CI}, excluded ${CI}`)],
+    ['T2a', new RegExp(String.raw`^R [\d.]+ \[[^\]]*\] t\([\d.]+\), bootstrap \[[^\]]*\]$`)],
+    ['T2b', new RegExp(String.raw`^resolve difference ${CI}$`)],
+    ['T2c', new RegExp(String.raw`^repeat difference violation ${CI}, excluded ${CI}$`)],
+    ['H4', /^(pass|FAIL): /],
+  ])('prints the estimate of %s on its below-count line, marked as at seeds 1 to k', (test, tail) => {
+    const line = lines(text(below(test))).find((l) => l.startsWith(`${test} at seeds`));
+    expect(line).toContain(`${test} at seeds 1 to 3, below its count 5: no verdict${ESTIMATE}`);
+    expect(line!.split(ESTIMATE)[1]).toMatch(tail);
+  });
+
+  it('prints the T2 parts and T3 with their estimates and intervals, marked no verdict, when T1 does not win', () => {
+    const out = text(run(g, { levels: levelsOf(1e-9) }));
+    const part = String.raw`a R [\d.]+ \[[^\]]*\] t\([\d.]+\), bootstrap \[[^\]]*\]; b resolve difference ${CI}; c repeat difference violation ${CI}, excluded ${CI}`;
+    expect(out).toMatch(new RegExp(String.raw`^T2 no verdict \(T1 is \w+\); estimates at 0\.025: ${part}$`, 'm'));
+    expect(out).toMatch(new RegExp(String.raw`^T3 no verdict \(T1 is \w+\); estimate at 0\.025: violation ${CI}, excluded ${CI}$`, 'm'));
+    expect(lines(out).find((l) => l.startsWith('T2 '))).not.toMatch(/\((win|no win)/);
+    expect(out).not.toContain(hyp.LESSONS_SENTENCE);
+    expect(out).not.toContain(hyp.BEHAVIOUR_SENTENCE);
   });
 });
 
@@ -279,7 +317,7 @@ describe('scoreR4 with hand-made numbers (brief 8)', () => {
   it('gives T1 no verdict, and so T2 and T3 none, when it is unreached or has no estimate', () => {
     const cut = { ...WINDOWS, T1: { n: 5, k: 3, reached: false, branch: 'rule', power: null } };
     for (const s of [score({}, levelsOf(0.05), cut), score({ T1: null })]) expect([s.closed.T1.verdict, s.closed.T2.verdict, s.closed.T3.verdict]).toEqual(['no verdict', 'no verdict', 'no verdict']);
-    expect(analyze.testLinesR4(R4, score({}, levelsOf(0.05), cut), cut).join('\n')).toContain('T1 at seeds 1 to 3, below its count 5: no verdict');
+    expect(analyze.testLinesR4(R4, score({}, levelsOf(0.05), cut), cut).join('\n')).toContain('T1 at seeds 1 to 3, below its count 5: no verdict; estimate at seeds 1 to 3: violation -0.300 [');
   });
 
   it('keeps T2 at no pass when part (a) has no estimate, and enters an unreached part as no verdict', () => {
@@ -299,6 +337,15 @@ describe('scoreR4 with hand-made numbers (brief 8)', () => {
     expect([score(weak, levels).s1.verdict, score(weak, levelsOf(0.05)).s1.verdict]).toEqual(['pass', 'no pass']);
     expect(score({ s1: { a: null, b: stat(0.01), c: codes(-0.05) } }).s1.verdict).toBe('no verdict');
   });
+
+  it('prints the behaviour sentence on a T3 with no verdict once T1 wins, and none when T1 does not win [prereg 53]', () => {
+    const unreached = { ...WINDOWS, T3: { n: 5, k: 3, reached: false, branch: 'rule', power: null } };
+    for (const lines of [analyze.testLinesR4(R4, score({ T3: null }), WINDOWS), analyze.testLinesR4(R4, score({}, levelsOf(0.05), unreached), unreached)]) {
+      expect(lines.find((l: string) => l.startsWith('T3 '))).toContain(`; ${hyp.BEHAVIOUR_SENTENCE}`);
+      expect(lines.join('\n')).not.toContain(hyp.LESSONS_SENTENCE);
+    }
+    expect(analyze.testLinesR4(R4, score({ T1: codes(0.2) }), WINDOWS).join('\n')).not.toContain(hyp.BEHAVIOUR_SENTENCE);
+  });
 });
 
 describe('headline branches and their added sentences (briefs 5 and 8)', () => {
@@ -308,7 +355,7 @@ describe('headline branches and their added sentences (briefs 5 and 8)', () => {
   const windows = Object.fromEntries(TESTS.map((t) => [t, { n: 3, k: 3, reached: true, branch: 'rule', power: null }]));
   const head = (over: any = {}, levels = levelsOf(0.05), extra: any = {}) => {
     const estimates = hand(over);
-    return analyze.headlineR4({ design: R4, scored: analyze.scoreR4(estimates, levels, windows), estimates, asOf: '2026-10-11', pooled: -0.01, spendPerSolve: { S2: 1, O1: 2, S1: 1 }, ...extra });
+    return analyze.headlineR4({ design: R4, scored: analyze.scoreR4(estimates, levels, windows), estimates, effort: 'medium', asOf: '2026-10-11', pooled: -0.01, spendPerSolve: { S2: 1, O1: 2, S1: 1 }, ...extra });
   };
 
   it('T1 wins and T2 passes: the prereg sentence with the effort, asOf, R, and d as the smaller cut', () => {
@@ -337,10 +384,17 @@ describe('headline branches and their added sentences (briefs 5 and 8)', () => {
     expect(head({}, levelsOf(0.05), { spendPerSolve: { S2: 1.9, O1: 2, S1: 1 } })).not.toContain('with discarded and rerun work');
   });
 
+  it('names the effort it is given in every branch, and stops on one the rows do not allow [prereg 4]', () => {
+    expect(head({}, levelsOf(0.05), { effort: 'low' })).toMatch(/^At low effort and at list prices on 2026-10-11, /);
+    expect(head({ T2b: stat(-0.04) }, levelsOf(0.05), { effort: 'high' })).toMatch(/^At high effort, hippo cuts /);
+    expect(head({ T1: codes(0.2) }, levelsOf(0.05), { effort: 'low' })).toMatch(/^At low effort, T1 is loss/);
+    expect(() => head({}, levelsOf(0.05), { effort: 'extreme' })).toThrow('effort extreme is not one of low, medium, high');
+  });
+
   it('throws when the design rows hold two efforts, naming the design and the efforts', () => {
     const mixed = { ...R4, arms: ['A1', 'S1'] };
     const estimates = hand();
-    expect(() => analyze.headlineR4({ design: mixed, scored: analyze.scoreR4(estimates, levelsOf(0.05), windows), estimates, asOf: 'x', pooled: 0, spendPerSolve: {} }))
+    expect(() => analyze.headlineR4({ design: mixed, scored: analyze.scoreR4(estimates, levelsOf(0.05), windows), estimates, effort: 'medium', asOf: 'x', pooled: 0, spendPerSolve: {} }))
       .toThrow(/^design \(A1, S1\) rows hold efforts null, medium; a headline names one effort \(prereg item 4\)$/);
   });
 });
@@ -384,7 +438,7 @@ describe('a round 4 read through analyzeZ0 (briefs 5, 6, 9, 12)', () => {
     const sentence = "O1 did worse than round 3's Opus arm on the same tasks, so the Opus bars in parts (b) and (c) were easier to meet than round 3's Opus would make them.";
     expect(text(worse)).toContain(sentence);
     expect([text(better).includes(sentence), full().includes(sentence)]).toEqual([false, false]);
-    expect(text(worse)).toMatch(/^ {2}O1 drift, O1 minus round 3's Opus arm on \d+ shared tasks \(raw records, no regrade\): resolve [-\d.]+ \[[^\n]*first-apply repeats violation [^\n]*excluded [^\n]*cost per solved task at the Opus row [^\n]*no verdict/m);
+    expect(text(worse)).toMatch(/^ {2}O1 drift, O1 minus round 3's Opus arm on \d+ shared tasks \(raw records, no regrade, off-pin voids dropped\): resolve [-\d.]+ \[[^\n]*first-apply repeats violation [^\n]*excluded [^\n]*cost per solved task at the Opus row [^\n]*no verdict/m);
   });
 
   it('prints no shared tasks when no task id joins, and reads the drift with no grading', () => {
@@ -425,6 +479,28 @@ describe('a round 4 read through analyzeZ0 (briefs 5, 6, 9, 12)', () => {
     expect(full()).toContain('H2 not in round 4: no Codex arm');
     expect(full()).toMatch(/^ {2}tasksSinceTeach 2-4: S2 - S1 /m);
     expect(full()).toMatch(/^ {2}H3: [\d.]+ \[[\d., ]+\] t\(/m);
+  });
+
+  it("prints part (a)'s bootstrap interval beside R on the T2 line, as H3 does", () => {
+    const b = win().hypotheses.estimates.T2a.bootstrap;
+    expect(lines(full()).find((l) => l.startsWith('T2 pass'))).toMatch(new RegExp(String.raw`: a R [\d.]+ \[[^\]]*\] t\([\d.]+\), bootstrap \[${b.low.toFixed(3)}, ${b.high.toFixed(3)}\] \((win|no win)`));
+  });
+
+  it('names the effort of the pins file in the headline and the report [prereg 4]', () => {
+    const low = run(corpus(), { effort: 'low' });
+    expect(low.hypotheses.effort).toBe('low');
+    expect(text(low)).toMatch(/^At low effort and at list prices on 2026-10-11, /m);
+    expect(text(low)).not.toContain('medium effort');
+    expect(() => run(corpus(), { effort: undefined })).toThrow('a round 4 read needs --pins');
+  });
+
+  it('drops the O1 positions an off-pin file voids from the drift, and says so', () => {
+    const last = Math.max(...corpus().plan.filter((c) => c.sequence === KEYS[0] && c.seed === 1).map((c) => c.position));
+    const voids = [{ sequence: KEYS[0], seed: 1, arm: 'O1', position: last, sessionId: null, reason: 'cut', file: 'off.json', index: 0 }];
+    const cut = run(corpus(), { voids });
+    expect(cut.status).toBe('valid');
+    expect(cut.hypotheses.drift.shared).toBeLessThan(win().hypotheses.drift.shared);
+    expect(text(cut)).toMatch(/shared tasks \(raw records, no regrade, off-pin voids dropped\)/);
   });
 
   it('never calls opts.spend without unblinding, or when a gate fails', () => {
@@ -491,6 +567,8 @@ describe('round 4 inputs through runCli (brief 10)', () => {
     ['a seed rule that is null', { 'sr.json': 'null' }, /sr\.json/],
     ['a pins file that is null', { 'pins.json': 'null' }, /pins\.json/],
     ['a pins file with no batch2Keys', { 'pins.json': JSON.stringify({ batch1Keys: 'rn-repo1' }) }, /pins\.json: batch2Keys/],
+    ['a pins file with an effort the design does not allow', { 'pins.json': JSON.stringify({ ...PINS, effort: 'extreme' }) }, /pins\.json: effort extreme is not one of low, medium, high/],
+    ['a pins file with no effort', { 'pins.json': JSON.stringify({ ...PINS, effort: undefined }) }, /pins\.json: the run's effort is missing; it must be one of low, medium, high/],
     ['a drift plan that is no plan', { 'dp.json': '{}' }, /dp\.json/],
     ['a drift runs file that is missing', { 'dr.jsonl': '' }, /drift-runs|dr\.jsonl/],
   ];
@@ -521,5 +599,27 @@ describe('round 4 inputs through runCli (brief 10)', () => {
     expect(r.stdout).toMatch(/^G3 pass: 0 of \d+ planned \(sequence, seed\)s leaked; first run 0 of \d+ leaked$/m);
     const roles = JSON.parse(fs.readFileSync(path.join(dir, 'out.json'), 'utf8')).hashes.filter((h: { role: string }) => h.role !== 'source').map((h: { role: string }) => h.role);
     expect(roles).toEqual(['runs', 'plan', 'prices', 'grading', 'levels', 'levels', 'seed-rule', 'pins', 'drift-runs', 'drift-plan']);
+  });
+
+  it('checks the prices asOf on the round 4 path only: loadInputs returns, runCli exits 1', () => {
+    const over = { 'prices.json': JSON.stringify(PRICES_BY_MODEL) };
+    expect(() => analyze.loadInputs(analyze.parseArgs(R4_ARGV), workspace(g, over))).not.toThrow();
+    expect(go(over).stderr).toMatch(/prices\.json: .*asOf/);
+  });
+
+  it('reads the effort from the pins file', () => {
+    const low = loose(analyze.loadInputs(analyze.parseArgs(R4_ARGV), workspace(g, { 'pins.json': JSON.stringify({ ...PINS, effort: 'low' }) })));
+    expect(low.effort).toBe('low');
+  });
+
+  it('takes the two levels files in either order, sorted by their source field', () => {
+    const [pre, b1] = [JSON.stringify(levelsFile('pre-freeze', 0.9, 'c1')), JSON.stringify(levelsFile('batch-1', 0.8, 'c2'))];
+    const read = (over: Record<string, string>) => loose(analyze.loadInputs(analyze.parseArgs(R4_ARGV), workspace(g, over)));
+    const [normal, swapped] = [read({ 'pre.json': pre, 'b1.json': b1 }), read({ 'pre.json': b1, 'b1.json': pre })];
+    expect(normal.levels.T1['0.05']).toMatchObject({ level: 0.8, file: 'b1.json' });
+    expect(swapped.levels.T1['0.05']).toMatchObject({ level: 0.8, file: 'pre.json' });
+    expect(swapped.notes).toEqual(['minLevels: the levels files were made at different commits, c1 and c2']);
+    expect(swapped.notes).toEqual(normal.notes);
+    expect(go({ 'pre.json': b1, 'b1.json': pre }).code).toBe(0);
   });
 });

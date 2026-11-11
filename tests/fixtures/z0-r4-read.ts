@@ -65,14 +65,14 @@ export function readInputs(g: Generated, over: any = {}) {
   const d = drift();
   return {
     planCells: cells(g), design: R4, prices: PRICES4, grading: GRADING, ...STAT, unblind: true, refuse: () => null,
-    levels: levelsOf(0.999), seedRule: seedRule(3), batchKeys: KEYS, notes: [], spend: () => SPEND,
+    levels: levelsOf(0.999), seedRule: seedRule(3), batchKeys: KEYS, effort: 'medium', notes: [], spend: () => SPEND,
     drift: driftOf(d), ...over,
   };
 }
 
 const dirs: string[] = [];
 export const cleanUp = () => { for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); };
-export const PINS = { batch1Keys: KEYS.slice(0, 2).join(','), batch2Keys: KEYS.slice(2).join(',') };
+export const PINS = { batch1Keys: KEYS.slice(0, 2).join(','), batch2Keys: KEYS.slice(2).join(','), effort: 'medium' };
 
 /** A folder holding a round 4 read's files; `over` adds or replaces a file. */
 export function workspace(g: Generated, over: Record<string, string> = {}): string {

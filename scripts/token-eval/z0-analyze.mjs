@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { DESIGNS, designByName, designName, isRound4Design, pairOf } from './arms.mjs';
-import { batchKeysOf, checkSeedRule, effortOf, expandReadSet, headlineR4, levelsOf, scoreR4, seedWindows } from './z0-analyze-r4.mjs';
+import { batchKeysOf, checkAsOf, checkSeedRule, effortOf, expandReadSet, headlineR4, levelsOf, pinsEffort, scoreR4, seedWindows } from './z0-analyze-r4.mjs';
 import { SEALED, blindView, inputHashes, loadOrCreateKey, sha256, unblindRefusal } from './z0-blind.mjs';
 import { filteredInput, readVoids } from './z0-filters.mjs';
 import { computeGates } from './z0-gates.mjs';
@@ -44,7 +44,7 @@ const noRefuse = () => {
   throw new Error('analyzeZ0: unblind needs a refuse callback that runs the commit and G5 checks (z0-blind.mjs unblindRefusal)');
 };
 
-const NEEDED_R4 = { levels: '--levels', seedRule: '--seed-rule', batchKeys: '--pins', drift: '--drift-runs and --drift-plan', spend: '--ledger-runs' };
+const NEEDED_R4 = { levels: '--levels', seedRule: '--seed-rule', batchKeys: '--pins', effort: '--pins', drift: '--drift-runs and --drift-plan', spend: '--ledger-runs' };
 
 /** Round 4's block in place of the hypothesis family: windows, estimates with their closed-test scores, read-outs, drift, headline and publish list.
  * `opts.spend` (spend by arm) is called here and nowhere else, so recorded spend is read only once the codes are open. */
@@ -52,16 +52,17 @@ function roundFour({ filtered, kept, planCells }, opts, stat) {
   const missing = Object.keys(NEEDED_R4).find((k) => opts[k] === undefined || opts[k] === null);
   if (missing !== undefined) throw new Error(`a round 4 read needs ${NEEDED_R4[missing]}`);
   const { design } = stat;
+  const effort = effortOf(design, opts.effort);
   const windows = seedWindows(planCells, design, opts.seedRule, opts.batchKeys);
   const run = { ...stat, windows, maxSeed: opts.maxSeed ?? null };
   const estimates = estimatesR4(filtered, opts.prices, run);
   const scored = scoreR4(estimates, opts.levels, windows);
   const readouts = readoutsR4(filtered, opts.prices, run, opts.spend());
   const { asOf } = opts.prices;
-  const headline = headlineR4({ design, scored, estimates, asOf, pooled: readouts.pooled, spendPerSolve: readouts.spendPerSolve });
+  const headline = headlineR4({ design, effort, scored, estimates, asOf, pooled: readouts.pooled, spendPerSolve: readouts.spendPerSolve });
   return {
-    effort: effortOf(design), asOf, notes: opts.notes ?? [], windows, levels: opts.levels, estimates, scored, readouts,
-    drift: driftR4(kept, planCells, opts.drift, opts.prices, run), headline, publish: publishR4(filtered, opts.prices, run),
+    effort, asOf, notes: opts.notes ?? [], windows, levels: opts.levels, estimates, scored, readouts,
+    drift: driftR4(kept, planCells, opts.drift, opts.prices, { ...run, voids: opts.voids ?? [] }), headline, publish: publishR4(filtered, opts.prices, run),
   };
 }
 
@@ -154,13 +155,17 @@ const isCi = (v) => v === null || (Array.isArray(v) && v.length === 2 && v.every
 const isTable = (t, s) => ['yesYes', 'yesNo', 'noYes', 'noNo'].every((k) => isCount(t?.[k])) && t.yesYes + t.yesNo + t.noYes + t.noNo === s.n && t.yesYes + t.noNo === s.agree;
 const isStoredSample = (s) => s !== null && isCount(s.n) && isCount(s.agree) && s.agree <= s.n && isRate(s.agreement) && isRate(s.kappa) && isCi(s.ci95) && isTable(s.table, s);
 
-/** Round 4's own inputs, each read only when its flag is given: the levels (with minLevels' notes), the seed rule, the frozen layout's keys and the drift records. */
-function readRoundFour(args, cwd) {
+/** Round 4's own inputs, each read only when its flag is given: the levels (with minLevels' notes), the seed rule, the pins (frozen layout's keys and the effort) and the drift records. */
+function readRoundFour(args, cwd, design) {
   const out = { warnings: [] };
   const [levels, driftRuns, driftPlan] = [args.levels ?? [], args.driftRuns ?? [], args.driftPlan ?? []];
   if (levels.length > 0) Object.assign(out, levelsOf(levels, levels.map((f) => readJson(cwd, f))));
   if (args.seedRule) out.seedRule = checkSeedRule(readJson(cwd, args.seedRule), args.seedRule);
-  if (args.pins) out.batchKeys = batchKeysOf(readJson(cwd, args.pins), args.pins);
+  if (args.pins) {
+    const pins = readJson(cwd, args.pins);
+    out.batchKeys = batchKeysOf(pins, args.pins);
+    out.effort = pinsEffort(pins, design, args.pins);
+  }
   if (driftRuns.length > 0 || driftPlan.length > 0) {
     const parsed = driftRuns.map((f) => parseZ0Records(fs.readFileSync(path.resolve(cwd, f), 'utf8'), f));
     out.drift = { records: parsed.flatMap((p) => p.records), planCells: driftPlan.flatMap((f) => parsePlan(fs.readFileSync(path.resolve(cwd, f), 'utf8'), f)) };
@@ -186,8 +191,6 @@ export function loadInputs(args, cwd) {
   // A price-free caller, such as the leak list, passes no --prices and reads no price file.
   const prices = isString(args.prices) ? readJson(cwd, args.prices) : null;
   if (prices !== null) checkPrices(prices, args.prices, design);
-  const round4 = isRound4Design(design);
-  if (round4 && prices !== null && !(isString(prices.asOf) && prices.asOf !== '')) throw new Error(`${args.prices}: asOf must be a non-empty string, the date of the list prices (the round 4 headline prints it)`);
   const offPin = args.offPin ?? [];
   // An off-pin file binds to the runs files this read loads; with none given no runs file is hashed here.
   const runHashes = offPin.length === 0 ? [] : args.runs.map((f) => sha256(path.resolve(cwd, f)));
@@ -207,7 +210,7 @@ export function loadInputs(args, cwd) {
     throw new Error(`${args.dropList}: hookVoids needs { sequence (string), seed and position (integers) } entries`);
   }
   const mergeManifests = (args.mergeManifest ?? []).map((f) => readMergeManifest(path.resolve(cwd, f)));
-  const { warnings: more, ...own } = round4 ? readRoundFour(args, cwd) : { warnings: [] };
+  const { warnings: more, ...own } = isRound4Design(design) ? readRoundFour(args, cwd, design) : { warnings: [] };
   return { records, warnings: [...warnings, ...more], planCells, prices, grading, dropList, voids, design, offPinGiven: offPin.length > 0, mergeManifests, maxSeed: args.maxSeed ?? null, ...own };
 }
 
@@ -319,36 +322,51 @@ function reportedLines(rep, design) {
 
 const KNIFE = ' (knife edge: a bound crosses the null)';
 const PART_NAMES = { a: 'R', b: 'resolve difference', c: 'repeat difference' };
-const belowCount = (test, w) => `${test} at seeds 1 to ${w.k}, below its count ${w.n}: no verdict`;
+const belowCount = (test, w, shown) => `${test} at seeds 1 to ${w.k}, below its count ${w.n}: no verdict; ${shown === null ? `no estimate at seeds 1 to ${w.k}` : `estimate at seeds 1 to ${w.k}: ${shown}`}`;
 const usd = (x) => (Number.isFinite(x) ? `$${x.toFixed(2)}` : 'n/a');
 const viewText = (v, at) => `${f3(v.estimate)} [${f3(v.bounds[at].low)}, ${f3(v.bounds[at].high)}] t(${Number(v.df.toFixed(1))})`;
 const codedText = (v, at) => (v.codings === undefined ? viewText(v, at) : CODINGS.map((c) => `${c} ${viewText(v.codings[c], at)}`).join(', '));
 const pText = (v) => (v.codings === undefined ? f3(v.p) : CODINGS.map((c) => f3(v.codings[c].p)).join('/'));
 const eachView = (v) => (v.codings === undefined ? [v] : Object.values(v.codings));
 
-/** One T2 or S1 part: its estimate and interval at threshold `at` (R back on the ratio scale), whether it wins there, and T2's harmful-side note. */
+/** A part's estimate and interval at threshold `at` (R back on the ratio scale, with its bootstrap interval beside it, as H3's est() does). */
+function partBody(k, v, at) {
+  if (k !== 'a') return codedText(v, at);
+  const twin = v.bootstrap ? `, bootstrap [${f3(v.bootstrap.low)}, ${f3(v.bootstrap.high)}]` : '';
+  return `${f3(Math.exp(v.estimate))} [${f3(Math.exp(v.bounds[at].low))}, ${f3(Math.exp(v.bounds[at].high))}] t(${Number(v.df.toFixed(1))})${twin}`;
+}
+
+/** One T2 or S1 part: its estimate and interval, whether it wins at `at`, and T2's harmful-side note. */
 function partText(k, v, at, harmful) {
   if (v === null) return `${k} no verdict`;
-  const body = k === 'a' ? `${f3(Math.exp(v.estimate))} [${f3(Math.exp(v.bounds[at].low))}, ${f3(Math.exp(v.bounds[at].high))}] t(${Number(v.df.toFixed(1))})` : codedText(v, at);
-  return `${k} ${PART_NAMES[k]} ${body} (${eachView(v).every((x) => x.win[at]) ? 'win' : 'no win'}${harmful ? ', harmful side' : ''})`;
+  return `${k} ${PART_NAMES[k]} ${partBody(k, v, at)} (${eachView(v).every((x) => x.win[at]) ? 'win' : 'no win'}${harmful ? ', harmful side' : ''})`;
 }
+
+/** A part's estimate with no win mark, for a read that gives no verdict; null when it has no estimate. */
+const partShown = (k, v, at) => (v === null ? null : `${PART_NAMES[k]} ${partBody(k, v, at)}`);
+const seenText = (v, at) => (v === null ? null : codedText(v, at));
 
 /** T1, T2 and T3 with their verdicts, then a line for each part or test the run did not reach and for each miss or cap branch.
  * T2's p is printed and decides nothing; T3 ends on the sentence its verdict allows. */
 export function testLinesR4(design, scored, windows) {
-  const { closed, views, edges } = scored;
+  const { closed, views, seen, edges } = scored;
   const knife = (name) => (edges[name] ? KNIFE : '');
   const one = (name, at, tail) => {
-    if (!windows[name].reached) return belowCount(name, windows[name]);
     const v = closed[name];
-    if (v.verdict === NO_VERDICT) return `${name} no verdict (${v.reason})`;
+    if (!windows[name].reached) return `${belowCount(name, windows[name], seenText(seen[name], at))}${tail(v)}`;
+    if (v.verdict === NO_VERDICT) return `${name} no verdict (${v.reason})${seen[name] === null ? '' : `; estimate at ${at}: ${codedText(seen[name], at)}`}${tail(v)}`;
     return `${name} ${v.verdict}, p ${pText(views[name])}: ${codedText(views[name], at)}${knife(name)}${tail(v)}`;
   };
   const t2 = closed.T2;
-  const t2Line = t2.verdict === NO_VERDICT ? `T2 no verdict (${t2.reason})`
+  const reachedParts = Object.keys(PART_NAMES).filter((k) => windows[`T2${k}`].reached);
+  const t2Shown = reachedParts.map((k) => `${k} ${partShown(k, seen.T2[k], '0.025') ?? 'no estimate'}`).join('; ');
+  const t2Line = t2.verdict === NO_VERDICT ? `T2 no verdict (${t2.reason})${reachedParts.length === 0 ? '' : `; estimates at 0.025: ${t2Shown}`}`
     : `T2 ${t2.verdict} (read at ${t2.readAt}), p ${f3(t2.p)} (decides nothing): ${Object.keys(PART_NAMES).map((k) => partText(k, views.T2[k], t2.readAt, t2.parts[k].harmfulSide)).join('; ')}${knife('T2')}`;
-  const sentence = (v) => (v.verdict === 'win' ? `; ${LESSONS_SENTENCE}` : `; ${BEHAVIOUR_SENTENCE}`);
-  const cut = Object.keys(PART_NAMES).map((k) => `T2${k}`).filter((t) => !windows[t].reached).map((t) => belowCount(t, windows[t]));
+  const sentence = (v) => {
+    if (v.verdict === 'win') return `; ${LESSONS_SENTENCE}`;
+    return closed.T1.verdict === 'win' ? `; ${BEHAVIOUR_SENTENCE}` : '';
+  };
+  const cut = Object.keys(PART_NAMES).filter((k) => !windows[`T2${k}`].reached).map((k) => belowCount(`T2${k}`, windows[`T2${k}`], partShown(k, seen.T2[k], '0.025')));
   const ran = Object.entries(windows).filter(([, w]) => w.branch !== 'rule').map(([t, w]) => `${t} ran at ${w.n} seeds by the ${w.branch} branch; power ${f3(w.power)}`);
   return [one('T1', '0.05', () => ''), t2Line, one('T3', t2.readAt ?? '0.025', sentence), ...cut, ...ran];
 }
@@ -364,7 +382,7 @@ const S1_SENTENCES = {
 
 function driftLines(d) {
   if (d.shared === 0) return [`  ${d.arm} drift: no shared tasks`];
-  const head = `  ${d.arm} drift, ${d.arm} minus round 3's Opus arm on ${d.shared} shared tasks (raw records, no regrade)`;
+  const head = `  ${d.arm} drift, ${d.arm} minus round 3's Opus arm on ${d.shared} shared tasks (raw records, no regrade, off-pin voids dropped)`;
   const line = `${head}: resolve ${est(d.resolve)}; first-apply repeats violation ${est(d.repeats.violation)}, excluded ${est(d.repeats.excluded)}; cost per solved task at the Opus row ${ratioText(d.cost)}; no verdict${noChange(d.cost)}`;
   return d.worse ? [line, WORSE(d.arm)] : [line];
 }
@@ -393,11 +411,12 @@ function publishLines(p) {
   ];
 }
 
+const h4Text = (e) => `${e.gate.pass ? 'pass' : 'FAIL'}: ${e.reason ?? `set N cost ratio ${est(e.costRatio)}; resolve difference ${est(e.resolveDiff)}`}`;
+
 function h4Line(h) {
   const [w, e] = [h.windows.H4, h.estimates.H4];
-  if (!w.reached) return belowCount('H4', w);
-  if (e === null) return 'H4 not run';
-  return `H4 ${e.gate.pass ? 'pass' : 'FAIL'}: ${e.reason ?? `set N cost ratio ${est(e.costRatio)}; resolve difference ${est(e.resolveDiff)}`}`;
+  if (!w.reached) return belowCount('H4', w, e === null ? null : h4Text(e));
+  return e === null ? 'H4 not run' : `H4 ${h4Text(e)}`;
 }
 
 /** The round 4 block: the headline, the tests, the read-outs beside it (each no verdict), the S1 read, the drift and the publish list. */
@@ -450,10 +469,10 @@ export function renderText(r, design = DESIGNS.r3) {
   return `${lines.join('\n')}\n`;
 }
 
-/** The hash rows beyond the main inputs, each only when its flag is set, in the order the plan names them. */
-const extraRows = (args) => [
+/** The hash rows beyond the main inputs, each only when its flag is set, in the order the plan names them; the ledger folders only once the codes are open. */
+const extraRows = (args, opened) => [
   ...args.levels.map((f) => ['levels', f]), ['seed-rule', args.seedRule], ['read-set', args.readSet], ...args.mergeManifest.map((f) => ['merge-manifest', f]), ['pins', args.pins],
-  ...args.driftRuns.map((f) => ['drift-runs', f]), ...args.driftPlan.map((f) => ['drift-plan', f]), ...args.ledgerRuns.map((f) => ['ledger-runs', f]),
+  ...args.driftRuns.map((f) => ['drift-runs', f]), ...args.driftPlan.map((f) => ['drift-plan', f]), ...(opened ? args.ledgerRuns : []).map((f) => ['ledger-runs', f]),
 ].filter(([, f]) => f !== null);
 
 /** The whole CLI as a function of argv and cwd, so tests drive it without a child process. */
@@ -469,11 +488,12 @@ export function runCli(argv, cwd = process.cwd()) {
     if (args.help) return { code: 0, stdout: `${USAGE}\n`, stderr: '' };
     args = expandReadSet(args, cwd);
     inputs = loadInputs(args, cwd);
+    if (isRound4Design(inputs.design)) checkAsOf(inputs.prices, args.prices);
     const spend = () => spendByArm({ runs: args.ledgerRuns.map((f) => path.resolve(cwd, f)), prices: inputs.prices, design: inputs.design, pricesFile: args.prices });
     analysis = analyzeZ0(inputs.records, { ...inputs, iterations: args.iterations ?? ITERATIONS, seed: args.seed ?? SEED, unblind: args.unblind, refuse: (gates) => unblindRefusal(args, gates, cwd), spend });
     if (analysis.refusal !== null) return fail(2, `unblind refused: ${analysis.refusal}`);
     // Before the blind key is written, so a failed hash leaves no key behind.
-    hashes = inputHashes(args, cwd, { extra: extraRows(args) });
+    hashes = inputHashes(args, cwd, { extra: extraRows(args, analysis.hypotheses !== null) });
     if (!args.unblind) codes = loadOrCreateKey(args.key === null ? path.join(path.dirname(path.resolve(cwd, args.runs[0])), 'z0-blind-key.json') : path.resolve(cwd, args.key), analysis.filtered.arms);
   } catch (e) {
     return fail(1, e.message);
