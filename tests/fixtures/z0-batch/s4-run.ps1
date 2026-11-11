@@ -41,6 +41,14 @@ if ($knobs.pidsDelayS) { Start-Sleep -Seconds $knobs.pidsDelayS }
 Add-Content -Encoding ascii (Join-Path (Split-Path -Parent $Folder) 'pids.txt') "$Key $($p.Id) $Folder"
 Write-Output "run pid $($p.Id)"
 $p.WaitForExit()
-if ($knobs.exitRelease) { while (-not (Test-Path $knobs.exitRelease)) { Start-Sleep -Milliseconds 200 } }
+if ($knobs.exitRelease) {
+  # A held launcher still ends on its own past the bound, as the stub runner does (ab-run.mjs giveUp).
+  $hold = if ($env:Z0_STUB_HOLD_S) { [int]$env:Z0_STUB_HOLD_S } else { 600 }
+  $end = (Get-Date).AddSeconds($hold)
+  while (-not (Test-Path $knobs.exitRelease)) {
+    if ((Get-Date) -gt $end) { Write-Output "stub launcher exit.txt waiting for $($knobs.exitRelease): still held after Z0_STUB_HOLD_S=$hold s, exiting 9"; exit 9 }
+    Start-Sleep -Milliseconds 200
+  }
+}
 Set-Content -Encoding ascii (Join-Path $run 'exit.txt') $p.ExitCode
 exit $p.ExitCode
