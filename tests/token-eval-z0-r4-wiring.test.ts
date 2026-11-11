@@ -377,19 +377,20 @@ describe('warm-ups under r4', () => {
   }, 120_000);
 });
 
-describe('the pip pin follows the design\'s allowlist', () => {
+describe('the task env follows the design: round 4 sets VIRTUAL_ENV and PIP_CONSTRAINT itself', () => {
   const PIN = 'C:/pins/constraints.txt';
-  const pipOf = (env: Readonly<Record<string, string | undefined>>) => Object.entries(env).find(([name]) => name.toUpperCase() === 'PIP_CONSTRAINT')?.[1] ?? null;
-  /** Setup and check commands that log the PIP_CONSTRAINT they run with; the check then runs the fixture's own test. */
+  const LAUNCH_VENV = 'C:/launcher/venv';
+  const valueOf = (env: Readonly<Record<string, string | undefined>>, name: string) => Object.entries(env).find(([key]) => key.toUpperCase() === name)?.[1] ?? null;
+  /** Setup and check commands that log the two names they run with; the check then runs the fixture's own test. */
   function pipProbe() {
     const dir = tmp('r4-pip-probe-');
     const log = join(dir, 'pip.jsonl');
     const script = join(dir, 'pip.mjs');
     writeFileSync(script, [
       "import { appendFileSync } from 'node:fs';",
-      `appendFileSync(${JSON.stringify(log)}, JSON.stringify({ step: process.argv[2], pip: process.env.PIP_CONSTRAINT ?? null }) + String.fromCharCode(10));`,
+      `appendFileSync(${JSON.stringify(log)}, JSON.stringify({ step: process.argv[2], pip: process.env.PIP_CONSTRAINT ?? null, venv: process.env.VIRTUAL_ENV ?? null }) + String.fromCharCode(10));`,
     ].join(String.fromCharCode(10)));
-    return { at: (step: string) => `"${process.execPath}" "${script}" ${step}`, steps: () => jsonl<{ step: string; pip: string | null }>(log) };
+    return { at: (step: string) => `"${process.execPath}" "${script}" ${step}`, steps: () => jsonl<{ step: string; pip: string | null; venv: string | null }>(log) };
   }
   async function pipRun(arm: string, extra: RunOpts) {
     const { out } = isolate(`r4-pip-${arm}`);
@@ -399,29 +400,36 @@ describe('the pip pin follows the design\'s allowlist', () => {
     const probe = probeCommand(out, k);
     const tasks = [1, 2].map((i) => task(r, `p${i}`, 'look around only', { setup: pp.at('setup'), test: `${pp.at('check')} && node test.js` }));
     process.env.PIP_CONSTRAINT = PIN;
+    process.env.VIRTUAL_ENV = LAUNCH_VENV;
     await r4run(spec(r, [], tasks), [arm], out, k, { claudeBin: probe.cmd, warmup: true, ...extra });
     return { steps: pp.steps(), calls: probe.seen(), out };
   }
 
-  it('under r4 task setup, the check, the warm-ups, the version probe and the sessions all hold PIP_CONSTRAINT', async () => {
+  it('under r4, without --venv, a launcher PIP_CONSTRAINT and VIRTUAL_ENV reach no setup, check, warm-up, version probe or session, and no record\'s envKeys', async () => {
     const { steps, calls, out } = await pipRun('S1', {});
     expect(new Set(steps.map((p) => p.step))).toEqual(new Set(['setup', 'check']));
-    for (const p of steps) expect(p.pip, p.step).toBe(PIN);
+    for (const p of steps) expect([p.pip, p.venv], p.step).toEqual([null, null]);
     const kind = (c: Seen) => (c.argv.includes('--version') ? 'version' : (c.argv.includes('--settings') ? 'session' : 'warm-up'));
     expect(new Set(calls.map(kind))).toEqual(new Set(['session', 'version', 'warm-up']));
-    for (const c of calls) expect(pipOf(c.env), kind(c)).toBe(PIN);
-    const allowed = envAllowSet(allowlistOf(DESIGNS.r4));
+    for (const c of calls) expect([valueOf(c.env, 'PIP_CONSTRAINT'), valueOf(c.env, 'VIRTUAL_ENV')], kind(c)).toEqual([null, null]);
+    expect(wire(out)).toHaveLength(2);
     for (const x of wire(out)) {
-      expect(x.envKeys.map((name) => name.toUpperCase())).toContain('PIP_CONSTRAINT');
-      for (const name of x.envKeys) expect(allowed.has(name.toUpperCase()), name).toBe(true);
+      expect(x.envKeys.map((name) => name.toUpperCase()), x.taskId).not.toContain('PIP_CONSTRAINT');
+      expect(x.envKeys.map((name) => name.toUpperCase()), x.taskId).not.toContain('VIRTUAL_ENV');
     }
   }, 180_000);
 
-  it('under r3 it is still dropped from every one of them', async () => {
+  it('under r4 --pass-env of either name stops the run and names it', async () => {
+    for (const name of ['VIRTUAL_ENV', 'pip_constraint']) {
+      await expect(pipRun('S1', { passEnv: [name] }), name).rejects.toThrow(`--pass-env ${name}: the runner sets ${name.toUpperCase()} itself per task, so it cannot be passed through`);
+    }
+  }, 180_000);
+
+  it('under r3 PIP_CONSTRAINT is still dropped from every one of them', async () => {
     const { steps, calls } = await pipRun('A1', { design: DESIGNS.r3, effort: undefined, model: SONNET_MODEL });
     expect(new Set(steps.map((p) => p.step))).toEqual(new Set(['setup', 'check']));
     for (const p of steps) expect(p.pip, p.step).toBeNull();
-    for (const c of calls) expect(pipOf(c.env), c.argv.join(' ')).toBeNull();
+    for (const c of calls) expect(valueOf(c.env, 'PIP_CONSTRAINT'), c.argv.join(' ')).toBeNull();
   }, 180_000);
 });
 

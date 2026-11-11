@@ -142,6 +142,8 @@ export async function openContext(opts) {
     ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'), canaries: opts.canaries ?? [], foreignDirs: [], leakedRuns: new Map(),
     operatorEnv: { ...process.env }, hippoBuild: opts.hippoBuild ?? hippoBuild(), tokenSchedule: opts.tokenSchedule ?? null, tokenVar: opts.tokenVar ?? null, token: null, readToken: opts.readToken ?? null,
     design: opts.design ?? DESIGNS.r3, arms: opts.arms ?? [], upstream: opts.upstream ?? null,
+    // --venv's poetry folder and pip pin, or null; `removeTree` is the test seam for removing a task's venv.
+    venv: opts.venv ?? null, removeTree: opts.removeTree ?? null,
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
   const calls = warmupCalls(ctx, opts.effort);
@@ -165,7 +167,7 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));
   const run = {
-    s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [], teachSeen: new Set(), captured: new Map(),
+    s, arm, seed, dirs, env, launchEnv: env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [], teachSeen: new Set(), captured: new Map(),
     rawDir: path.join(ctx.outDir, 'raw', name, arm, `seed${seed}`), runName: name,
   };
   if (armSet(arm) === 'X') writeCodexHome(ctx, run);

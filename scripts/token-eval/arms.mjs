@@ -303,6 +303,8 @@ const R4_ALLOWLIST = Object.freeze([...ENV_ALLOWLIST, PIP_CONSTRAINT]);
 /** The names a design's sessions may start from: a round 4 design adds the task env's pip pin, so round 3's list and G1 do not move. */
 export const isRound4Design = (design) => design.arms.some((a) => ARM_TABLE[a].round === 'r4');
 export const allowlistOf = (design) => (isRound4Design(design) ? R4_ALLOWLIST : ENV_ALLOWLIST);
+/** The names a round 4 task env sets itself, per task, from its venv and the pip pin; a launcher's copy of either never reaches a session. */
+export const TASK_KEYS = Object.freeze(['VIRTUAL_ENV', 'PIP_CONSTRAINT']);
 
 const rowOf = (arm) => {
   if (!own(ARM_TABLE, arm)) throw new Error(`unknown arm ${arm}; known: ${ALL_ARMS.join(', ')}`);
@@ -339,11 +341,14 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [], allowlist = ENV_ALLOW
   const r = rowOf(arm);
   const reserved = passEnv.find((name) => RUNNER_KEYS.includes(name.toUpperCase()));
   if (reserved !== undefined) throw new Error(`--pass-env ${reserved}: the runner sets ${reserved.toUpperCase()} itself per arm, so it cannot be passed through`);
+  const r4 = r.round === 'r4';
+  const tasked = r4 ? passEnv.find((name) => TASK_KEYS.includes(name.toUpperCase())) : undefined;
+  if (tasked !== undefined) throw new Error(`--pass-env ${tasked}: the runner sets ${tasked.toUpperCase()} itself per task, so it cannot be passed through`);
   if (effort !== undefined && r.effort === null) throw new Error(`arm ${arm} runs with no effort setting, so effort ${effort} cannot replace it`);
   if (effort !== undefined && !EFFORTS.includes(effort)) throw new Error(`effort ${effort} is not one of ${EFFORTS.join(', ')}`);
   const allowed = envAllowSet(allowlist);
   // The runner's own keys are set below, so a base copy under another case would leave two keys.
-  const env = Object.fromEntries(Object.entries(baseEnv).filter(([k]) => allowed.has(k.toUpperCase()) && !RUNNER_KEYS.includes(k.toUpperCase())));
+  const env = Object.fromEntries(Object.entries(baseEnv).filter(([k]) => allowed.has(k.toUpperCase()) && !RUNNER_KEYS.includes(k.toUpperCase()) && !(r4 && TASK_KEYS.includes(k.toUpperCase()))));
   const token = getKey(baseEnv, TOKEN_KEY);
   if (token !== undefined) env[TOKEN_KEY] = token;
   env.CLAUDE_CONFIG_DIR = dirs.claudeConfig;
@@ -376,6 +381,17 @@ export function warmupEnv(design, model, dirs, baseEnv, options = {}) {
   // Round 3's warm-up set no subagent model, so a row with no effort keeps armEnv's env as it is.
   if (rowOf(design.noMemory).effort !== null) env.CLAUDE_CODE_SUBAGENT_MODEL = model;
   return { env, args: ['--model', model] };
+}
+
+/** A task's env under --venv: `env` without any task keys, then its venv and the pip pin, and the venv's and poetry's Scripts folders ahead of PATH. */
+export function taskEnv(env, venv, { poetryDir, pipConstraint }) {
+  const key = pathKey(env);
+  const out = Object.fromEntries(Object.entries(env).filter(([k]) => !TASK_KEYS.includes(k.toUpperCase())));
+  const tail = env[key] ?? '';
+  out[key] = [path.join(venv, 'Scripts'), path.join(poetryDir, 'Scripts'), ...(tail === '' ? [] : [tail])].join(path.delimiter);
+  out.VIRTUAL_ENV = venv;
+  out.PIP_CONSTRAINT = pipConstraint;
+  return out;
 }
 
 /** The env for setup, tests, init and the homes check: no OAuth token, and (unless keepBin) no run `bin/` on PATH. */
