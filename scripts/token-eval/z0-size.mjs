@@ -7,14 +7,26 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ARM_TABLE, DESIGNS, TWO_SEED_ARMS, designName, hasPair, pairOf } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, TWO_SEED_ARMS, designByName, isRound4Design as isRealR4 } from './arms.mjs';
+import { writeFileAtomic } from './atomic-write.mjs';
 import { loadInputs } from './z0-analyze.mjs';
+import { runBlock } from './z0-batch1-block.mjs';
 import { inputHashes } from './z0-blind.mjs';
+import { projectSpend, readBasis } from './z0-budget.mjs';
 import { filterOpts, filteredInput, withoutRuns } from './z0-filters.mjs';
-import { CODINGS, byCoding, codexApply, firstApplyR, inSets, mean, repeatMistakeUnits, sum, taskUnits } from './z0-hypotheses.mjs';
+import { mean } from './z0-hypotheses.mjs';
+import { readMergeManifest } from './z0-merge.mjs';
 import { costOf } from './z0-prices.mjs';
-import { SEED_CAP, isString } from './z0-records.mjs';
-import { SEEDS, clopperPearsonUpper, confirmSize, harmSizer, levelCheck, repeatSizer, smallestPassing, spreadComponents } from './z0-size-sim.mjs';
+import { readReadSet } from './z0-read-set.mjs';
+import { SEED_CAP, SEED_PREVIEW_SCHEMA, isString } from './z0-records.mjs';
+import {
+  R4_SEED, calibrate, checkLevelFlags, checkLevels, headCommit, levelCheckR4, levelsFor, namesT1, powerFigures, powerLines, prepareR4, previewR4, r3Attribution, readLevelFiles, readWholePlans,
+  repoCount, sizeLines, sizeR4,
+} from './z0-size-r4.mjs';
+import { SEEDS, confirmSize, harmSizer, levelCheck, repeatSizer, smallestPassing } from './z0-size-sim.mjs';
+
+export { BLOCK_SCHEMA } from './z0-batch1-block.mjs';
+export { HARM_TEST, calibrate } from './z0-size-r4.mjs';
 
 const TOOLS = ['claude-code', 'codex'];
 // SHORTCUT: placeholder quotas in list-price dollars a day, not measured; S9 passes the screen's measured usage per plan window (D7).
@@ -24,11 +36,14 @@ export const DEFAULTS = {
   searchSims: 200, maxFamilies: 60, maxFamiliesPerRepo: 4, maxNTasks: 600, spreadBound: 0.8,
   seedCap: SEED_CAP, targetZ: 3.5, onMiss: 'cap', levelSims: 20_000,
 };
+const ENTRY = 'scripts/token-eval/z0-size.mjs';
 const USAGE = 'usage: z0-size.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--grading FILE] [--drop-list FILE] [--off-pin FILE ...] '
   + '[--repos 5,8,10,12,15,20] [--effects 0.15,0.2,0.25] [--power 0.8] [--sims 2000] [--seed 1] '
   + '[--search-sims 200] [--max-families 60] [--max-families-per-repo 4] [--max-n-tasks 600] [--spread-bound 0.8] '
   + '[--seed-cap 9] [--target-z 3.5] [--on-miss stop|cap] [--level-sims 20000] '
-  + '[--claude-usd-per-day 300] [--codex-usd-per-day 100] [--out FILE]';
+  + '[--claude-usd-per-day 300] [--codex-usd-per-day 100] [--out FILE]\n'
+  + 'round 4: [--design r3|r4|r4-on-r3] [--read-set FILE] [--whole-plan FILE ...] [--levels FILE ...] [--pre-levels FILE] [--cost-ratio R] [--spend-basis FILE] [--r3-unblind FILE] [--key FILE] '
+  + '[--power | --level-check | --batch1-block | --seed-rule-preview | --check-levels FILE]';
 
 const integer = (flag, min) => (v) => {
   const n = Number(v);
@@ -49,7 +64,11 @@ const oneOf = (flag, values) => (v) => {
   if (!values.includes(v)) throw new Error(`${flag} must be one of ${values.join(', ')}, got ${v}`);
   return v;
 };
-const REPEATED = new Map([['--runs', 'runs'], ['--plan', 'plan'], ['--off-pin', 'offPin']]);
+const designArg = (v) => {
+  designByName(v);
+  return v;
+};
+const REPEATED = new Map([['--runs', 'runs'], ['--plan', 'plan'], ['--off-pin', 'offPin'], ['--whole-plan', 'wholePlan'], ['--levels', 'levels']]);
 const list = (parse) => (v) => v.split(',').map(parse);
 const FLAGS = new Map([
   ['--prices', ['prices', String]], ['--grading', ['grading', String]], ['--drop-list', ['dropList', String]], ['--out', ['out', String]],
@@ -63,18 +82,57 @@ const FLAGS = new Map([
   ['--on-miss', ['onMiss', oneOf('--on-miss', ['stop', 'cap'])]],
   ['--level-sims', ['levelSims', integer('--level-sims', 1)]],
   ['--claude-usd-per-day', ['claudeQuota', positive('--claude-usd-per-day')]], ['--codex-usd-per-day', ['codexQuota', positive('--codex-usd-per-day')]],
+  ['--design', ['design', designArg]], ['--read-set', ['readSet', String]], ['--pre-levels', ['preLevels', String]],
+  ['--cost-ratio', ['costRatio', positive('--cost-ratio')]], ['--spend-basis', ['spendBasis', String]], ['--r3-unblind', ['r3Unblind', String]], ['--key', ['key', String]],
 ]);
+// A mode takes no value, except --power, which keeps round 3's valued form when a value follows; --check-levels takes its file.
+const MODES = new Map([['--power', 'power'], ['--level-check', 'level-check'], ['--batch1-block', 'batch1-block'], ['--seed-rule-preview', 'seed-rule-preview'], ['--check-levels', 'check-levels']]);
+const BARE = new Set(['--level-check', '--batch1-block', '--seed-rule-preview']);
+const ROUND_FOUR_FLAGS = new Set(['--whole-plan', '--levels', '--read-set', '--pre-levels', '--cost-ratio', '--spend-basis', '--r3-unblind', '--key']);
+// Round 4's seed rules are fixed by prereg item 10, so a value for these would be recorded in settings and never used.
+const ROUND_THREE_FLAGS = ['--seed-cap', '--target-z'];
+const FLAG_OF = { costRatio: '--cost-ratio', out: '--out', key: '--key' };
+const NEEDS = { power: ['costRatio'], 'level-check': ['out'], 'seed-rule-preview': ['out'], 'batch1-block': ['key', 'out'] };
 
-/** @param {string[]} argv */
+/** The round 4 rules of a parsed argv: round 3 takes none of its flags or modes, one mode runs, and each mode names the flags it needs. */
+function checkRoundFour(args, { given, used, modes }) {
+  const design = designByName(args.design);
+  if (!namesT1(design) && used.length > 0) throw new Error(`${used[0]}: round 4 only`);
+  if (modes.length > 1) throw new Error(`one mode at a time: ${modes.join(', ')}`);
+  args.mode = modes.length === 0 ? null : MODES.get(modes[0]);
+  if (namesT1(design) && given.has('--seed')) throw new Error(`round 4 draws use seed ${R4_SEED} (prereg item 10)`);
+  for (const flag of ROUND_THREE_FLAGS) if (namesT1(design) && given.has(flag)) throw new Error(`${flag}: round 3 only; round 4 sizes its seeds by the fixed rules of prereg item 10`);
+  if (args.mode === 'check-levels') return;
+  if (args.readSet === null && (args.runs.length === 0 || args.plan.length === 0)) throw new Error(USAGE);
+  for (const k of NEEDS[args.mode] ?? []) if (args[k] === null) throw new Error(`${modes[0]} needs ${FLAG_OF[k]}`);
+  if (args.preLevels !== null && args.mode !== 'level-check') throw new Error('--pre-levels needs --level-check');
+  if (args.mode === 'batch1-block' && !isRealR4(design)) throw new Error('--batch1-block: design r4 only');
+  if (namesT1(design) && args.mode !== 'batch1-block') checkLevelFlags(args.design, args.levels.length, args.mode === 'power');
+}
+
+/** @param {string[]} argv @returns {any} */
 export function parseArgs(argv) {
-  const args = { runs: [], plan: [], offPin: [], prices: null, dropList: null, grading: null, out: null, claudeQuota: null, codexQuota: null, help: false, ...DEFAULTS };
-  const given = new Set();
+  const args = {
+    runs: [], plan: [], offPin: [], wholePlan: [], levels: [], mergeManifest: [], prices: null, dropList: null, grading: null, out: null, claudeQuota: null, codexQuota: null,
+    design: 'r3', readSet: null, preLevels: null, costRatio: null, spendBasis: null, r3Unblind: null, key: null, mode: null, checkLevels: null, help: false, ...DEFAULTS,
+  };
+  const [given, used, modes] = [new Set(), [], []];
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     if (flag === '--help' || flag === '-h') return { ...args, help: true };
+    const next = argv[i + 1];
+    if (BARE.has(flag) || (flag === '--power' && !(isString(next) && !next.startsWith('--')))) {
+      modes.push(flag);
+      used.push(flag);
+      continue;
+    }
     const value = argv[++i];
     if (!isString(value) || value.startsWith('--')) throw new Error(`${flag} needs a value\n${USAGE}`);
-    if (REPEATED.has(flag)) args[REPEATED.get(flag)].push(value);
+    if (ROUND_FOUR_FLAGS.has(flag)) used.push(flag);
+    if (flag === '--check-levels') {
+      modes.push(flag);
+      args.checkLevels = value;
+    } else if (REPEATED.has(flag)) args[REPEATED.get(flag)].push(value);
     else if (!FLAGS.has(flag)) throw new Error(`unknown flag ${flag}\n${USAGE}`);
     else if (given.has(flag)) throw new Error(`${flag} given twice`);
     else {
@@ -83,66 +141,9 @@ export function parseArgs(argv) {
       given.add(flag);
     }
   }
-  if (args.runs.length === 0 || args.plan.length === 0 || args.prices === null) throw new Error(USAGE);
+  checkRoundFour(args, { given, used, modes });
+  if (args.mode !== 'check-levels' && args.prices === null) throw new Error(USAGE);
   return args;
-}
-
-/** Share of the arm pair's apply lessons marked not applicable on the first attempt. */
-function naRate(s, armT, armC, keep) {
-  const lessons = s.filter((r) => (r.arm === armT || r.arm === armC) && r.kind === 'apply' && keep(r)).flatMap((r) => r.lessons);
-  return lessons.length === 0 ? 0 : lessons.filter((l) => l.first === 'na').length / lessons.length;
-}
-
-/** H1 or H2 spreads per coding. The effect is defined on applicable checks, and `violation` counts na as a fail
- * in both arms, so it carries (1 - na rate) of the effect; `loss` is the share of units a coding drops. */
-function repeatCalibration(s, armT, armC, keep, bound) {
-  const na = naRate(s, armT, armC, keep);
-  const per = byCoding((coding) => {
-    const { units, dropped } = repeatMistakeUnits(s, armT, armC, coding, keep);
-    return { components: spreadComponents(units, bound), loss: dropped.length / Math.max(1, units.length + dropped.length) };
-  });
-  if (CODINGS.some((c) => per[c].components === null)) return { reason: `needs ${armT} and ${armC} units in a repository with 2 families and 2 seeds` };
-  const scale = (c) => (c === 'violation' ? 1 - na : 1);
-  const sim = byCoding((c) => ({ scale: scale(c), loss: per[c].loss, family: per[c].components.family, sequence: per[c].components.sequence, noise: per[c].components.noise }));
-  const simUpper = byCoding((c) => ({ ...sim[c], ...per[c].components.upper }));
-  return { naRate: na, ...per, sim, simUpper };
-}
-
-const sdOf = (xs) => Math.sqrt(xs.length < 2 ? 0 : sum(xs.map((x) => (x - mean(xs)) ** 2)) / (xs.length - 1));
-
-/** Spread of log(A2 cost / A1 cost) by family, sequence and residual, and of the control's log cost, which weights the ratio. */
-function ratioCalibration(units, bound) {
-  const priced = units.filter((u) => u.t.cost > 0 && u.c.cost > 0);
-  const components = spreadComponents(priced.map((u) => ({ repo: u.repo, family: u.family, seed: u.seed, value: Math.log(u.t.cost / u.c.cost) })), bound);
-  if (components === null) return { reason: 'needs priced A1 and A2 pairs in a repository with 2 tasks and 2 seeds' };
-  const controlSd = sdOf(priced.map((u) => Math.log(u.c.cost)));
-  return { components, controlSd, sim: { family: components.family, sequence: components.sequence, noise: components.noise, controlSd } };
-}
-
-/** Set N's spreads plus its resolve pairs. A true zero makes the two discordant cells equal, so each gets half the discordant
- * share, taken at its exact one-sided upper bound at `bound` (few pairs barely estimate it). */
-function harmCalibration(units, bound) {
-  const cost = ratioCalibration(units, bound);
-  if (cost.sim === undefined) return { reason: 'needs set N pairs in a repository with 2 tasks and 2 seeds' };
-  const n = units.length;
-  const both = units.filter((u) => u.t.resolved && u.c.resolved).length / n;
-  const discordant = units.filter((u) => u.t.resolved !== u.c.resolved).length;
-  const oneSide = clopperPearsonUpper(discordant, n, bound) / 2;
-  return { ...cost, resolve: { pairs: n, discordant, both, oneSide, oneSideEstimate: discordant / n / 2 }, sim: { ...cost.sim, both, oneSide } };
-}
-
-/** The spreads each sized hypothesis needs, from the records the analyzer would score. H3 carries no verdict, so it sets no size. */
-export function calibrate(filtered, prices, bound, opts = {}) {
-  const s = filtered.scored;
-  const design = opts.design ?? DESIGNS.r3;
-  const [h1, h2, h4] = ['H1', 'H2', 'H4'].map((name) => (hasPair(design, name) ? pairOf(design, name) : null));
-  const planned = (pair) => pair !== null && pair.every((a) => filtered.arms.includes(a));
-  const notPlanned = (name, pair) => ({ reason: pair === null ? `design ${designName(design)} has no ${name}` : `${[...pair].sort().join(', ')} not in the calibration plan` });
-  return {
-    H1: planned(h1) ? repeatCalibration(s, ...h1, firstApplyR, bound) : notPlanned('H1', h1),
-    H2: planned(h2) ? repeatCalibration(s, ...h2, codexApply, bound) : notPlanned('H2', h2),
-    H4: planned(h4) ? harmCalibration(taskUnits(s, ...h4, prices, inSets('N'), opts), bound) : notPlanned('H4', h4),
-  };
 }
 
 /** Per set, the plan's teach and apply tasks per family and its no-lesson share, from one arm and seed per sequence.
@@ -223,16 +224,6 @@ function sized(search, repos, unit) {
   if (search === undefined) return null;
   const size = { [`${unit}PerRepo`]: search.n, [unit]: search.n === null ? null : search.n * repos, power: search.result };
   return 'boundsPower' in search ? { ...size, boundsPower: search.boundsPower } : size;
-}
-
-export const HARM_TEST = 'H4';
-// The tests that share H1's repeat-mistake rule; the T2 parts get their own rules in part B (prereg line 80).
-const REPEAT_TESTS = ['H1', 'H2', 'T1', 'T3'];
-
-/** Stops on a seed-rule test that neither the seed rule nor this sizer can size, naming it; both call it, so they stop on the same tests. */
-export function requireSizedTests(design, tests) {
-  const unsized = tests.find((name) => name !== HARM_TEST && !REPEAT_TESTS.includes(name));
-  if (unsized !== undefined) throw new Error(`${unsized}: design ${designName(design)} names it in its seed rule, but the rule sizes only ${[...REPEAT_TESTS, HARM_TEST].join(', ')}; part B sizes ${unsized} with its own rule`);
 }
 
 // A seed-rule group runs the seeds of its own search, in the design's group order; any other arm runs wave 1's seeds.
@@ -324,7 +315,7 @@ function levelOf(cal, chosen, m, opts) {
  * @param {any[]} records @param {any[]} planCells @param {any} prices @param {any} opts */
 export function sizeZ0(records, planCells, prices, opts) {
   const design = opts.design ?? DESIGNS.r3;
-  requireSizedTests(design, design.seedRule.flatMap((g) => g.tests));
+  if (namesT1(design)) return sizeReport(prepareR4(records, planCells, prices, opts), opts);
   const { filtered, abandoned, records: counted, planCells: cells } = filteredInput(records, planCells, opts, { dropAbandoned: true });
   const cal = calibrate(filtered, prices, opts.spreadBound, opts);
   const layout = planLayout(cells);
@@ -363,6 +354,99 @@ const NOTES = [
   'level is the share of true-zero runs below Holm\'s strictest 0.025, at the chosen design under the seed rule at the bounds, the seed rule at the point estimates, 3 seeds, 2 seeds at the bounds and 0/1 values. Each cell is read against 0.025 plus 2 simulation errors of the runs it kept (a rule cell drops the runs it stopped), and a cell with no run fails; held: false stops the freeze.',
 ];
 
+/** The report of the default round 4 sizer: round 3's calibration counts and usage table, then each test's count, errors and power, `T2aMiss` and the bounds.
+ * @param {any} p `prepareR4`'s reading @param {any} opts @returns {any} */
+function sizeReport(p, opts) {
+  return { calibration: { records: p.records, scored: p.scored.length, abandoned: p.abandoned, perRecord: perRecordUsage(p.usable, p.prices, opts) }, ...sizeR4(p, opts) };
+}
+
+/** `--read-set`: each pair's runs, plan and off-pin file join the argv's own, and its merge manifests are kept for the gates; its `--max-seed` line is not read.
+ * @param {any} args @param {string} cwd */
+export function expandReadSet(args, cwd) {
+  for (const pair of readReadSet(path.resolve(cwd, args.readSet)).pairs) {
+    if (pair.runs !== null) {
+      args.runs.push(pair.runs);
+      args.plan.push(pair.plan);
+      args.offPin.push(pair.offPin);
+    }
+    if (pair.mergeManifest !== null) args.mergeManifest.push(pair.mergeManifest);
+  }
+  if (args.runs.length === 0 || args.plan.length === 0) throw new Error(`--read-set ${args.readSet}: it names no runs file and plan`);
+}
+
+/** The roles `inputHashes` lists after runs, plan, prices, grading, drop list and off-pin, each only when its flag is set. */
+export const extraRows = (args) => [
+  ...(args.wholePlan ?? []).map((f) => ['whole-plan', f]), ...args.levels.map((f) => ['levels', f]),
+  ...[['pre-levels', args.preLevels], ['spend-basis', args.spendBasis], ['r3-unblind', args.r3Unblind], ['read-set', args.readSet]].filter(([, f]) => isString(f)),
+  ...args.mergeManifest.map((f) => ['merge-manifest', f]),
+];
+
+/** The item 12 projection at these seed counts, as a line: the binding check is `z0-budget admit`'s. */
+function spendLine(args, cwd, countsByArm) {
+  const usd = projectSpend({ basisByArm: readBasis(path.resolve(cwd, args.spendBasis)).basisByArm, r: args.costRatio, seedsByArm: countsByArm });
+  return `projected spend at r ${args.costRatio} and the rule counts: $${usd.toFixed(2)}, before q145's gap and the pilot; z0-budget admit makes the binding check`;
+}
+
+function powerMode(args, p, opts, cwd, real) {
+  const read = powerFigures(p, { sims: opts.sims, levels: opts.levels, costRatio: args.costRatio, wholeRun: !real, second: real });
+  const beside = args.r3Unblind === null ? null : r3Attribution(args.r3Unblind, cwd);
+  const spend = real && args.spendBasis !== null ? spendLine(args, cwd, previewR4(p, opts).countsByArm) : null;
+  const { lines, code } = powerLines(read, { wholeRun: !real, beside, spend });
+  return { lines, code, json: { power: read } };
+}
+
+function previewMode(args, p, opts, cwd) {
+  const { countsByArm, count } = previewR4(p, opts);
+  const spend = args.spendBasis !== null && args.costRatio !== null ? [spendLine(args, cwd, countsByArm)] : [];
+  const seeds = `seeds ${Object.entries(countsByArm).map(([arm, n]) => `${arm} ${n}`).join(', ')}`;
+  return { lines: [seeds, ...spend], code: 0, file: { schema: SEED_PREVIEW_SCHEMA, countsByArm, count } };
+}
+
+function levelMode(args, p, opts, cwd, real, hashes) {
+  const pre = args.preLevels === null ? {} : { pre: readLevelFiles([args.preLevels], cwd)[0] };
+  const inputs = hashes().filter((r) => r.role !== 'source');
+  const { commit, why } = headCommit();
+  const { file, lines, code } = levelCheckR4(p, { levelSims: opts.levelSims, source: real ? 'batch-1' : 'pre-freeze', commit, commitWhy: why, inputs, ...pre });
+  return { lines, code, file };
+}
+
+/** The round 4 modes of one read: they print text, headed by the layout's repository count, and `--out` takes the mode's JSON file.
+ * @param {any} args @param {any} inputs `loadInputs`' result @param {string} cwd @param {any} settings @returns {{code: number, stdout: string, stderr: string}} */
+function runRoundFour(args, inputs, cwd, settings) {
+  const real = isRealR4(inputs.design);
+  if (real && args.mode !== null && args.wholePlan.length === 0) throw new Error(`batch 1 holds ${repoCount(inputs.planCells)} repositories; pass --whole-plan so the counts are the whole run's`);
+  const wholePlans = readWholePlans(args.wholePlan, cwd);
+  if (args.mode === 'batch1-block') {
+    const mergeManifests = args.mergeManifest.map((f) => readMergeManifest(path.resolve(cwd, f)));
+    return { ...runBlock({ key: args.key, out: args.out, mergeManifests }, inputs, cwd, wholePlans), stderr: '' };
+  }
+  const notes = [];
+  const levels = levelsFor(inputs.design, readLevelFiles(args.levels, cwd), (m) => notes.push(m));
+  const opts = { ...settings, ...filterOpts(inputs), seed: R4_SEED, wholePlans, levels, costRatio: args.costRatio };
+  const p = prepareR4(inputs.records, inputs.planCells, inputs.prices, opts);
+  const hashes = () => inputHashes(args, cwd, { entry: ENTRY, extra: extraRows(args) });
+  const modes = {
+    size: () => {
+      const sized = sizeReport(p, opts);
+      return { lines: sizeLines(sized), code: 0, json: sized };
+    },
+    power: () => powerMode(args, p, opts, cwd, real), 'seed-rule-preview': () => previewMode(args, p, opts, cwd), 'level-check': () => levelMode(args, p, opts, cwd, real, hashes),
+  };
+  const mode = modes[args.mode ?? 'size']();
+  const shown = { ...settings, seed: R4_SEED, levels: args.levels, partAEffect: args.costRatio === null ? null : Math.log(0.5 * args.costRatio) };
+  const file = mode.file ?? (mode.json === undefined ? undefined : {
+    schema: 'z0-size/2', mode: args.mode ?? 'size', settings: shown, inputs: hashes(), warnings: inputs.warnings, repositories: p.repos, ...mode.json,
+  });
+  if (args.out !== null && file !== undefined) {
+    try {
+      writeFileAtomic(path.resolve(cwd, args.out), `${JSON.stringify(file, null, 2)}\n`);
+    } catch (e) {
+      throw new Error(`--out ${args.out}: ${e.message}`);
+    }
+  }
+  return { code: mode.code, stdout: `${[`${p.repos} repositories`, ...notes, ...mode.lines].join('\n')}\n`, stderr: '' };
+}
+
 /** @param {string[]} argv @param {string} [cwd] */
 export function runCli(argv, cwd = process.cwd()) {
   const fail = (message) => ({ code: 1, stdout: '', stderr: `${message}\n` });
@@ -371,14 +455,24 @@ export function runCli(argv, cwd = process.cwd()) {
   try {
     args = parseArgs(argv);
     if (args.help) return { code: 0, stdout: `${USAGE}\n`, stderr: '' };
+    if (args.mode === 'batch1-block') fs.rmSync(path.resolve(cwd, args.out), { force: true });
+    if (args.mode === 'check-levels') {
+      const { code, lines } = checkLevels(args.checkLevels, cwd);
+      return { code, stdout: `${lines.join('\n')}\n`, stderr: '' };
+    }
+    if (args.readSet !== null) expandReadSet(args, cwd);
     const inputs = loadInputs(args, cwd);
     const quota = {
       'claude-code': { usdPerDay: args.claudeQuota ?? QUOTA_USD_PER_DAY['claude-code'], source: args.claudeQuota === null ? 'default assumption' : 'flag' },
       codex: { usdPerDay: args.codexQuota ?? QUOTA_USD_PER_DAY.codex, source: args.codexQuota === null ? 'default assumption' : 'flag' },
     };
-    const settings = { ...Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, args[k]])), firstWave: SEEDS, holmLevel: 0.05 / 2, quota };
+    const settings = {
+      ...Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, args[k]])), firstWave: SEEDS, holmLevel: 0.05 / 2, quota,
+      design: args.design, wholePlan: args.wholePlan.length === 0 ? null : args.wholePlan, preLevels: args.preLevels, costRatio: args.costRatio, spendBasis: args.spendBasis,
+    };
+    if (namesT1(inputs.design)) return runRoundFour(args, inputs, cwd, settings);
     const sizing = sizeZ0(inputs.records, inputs.planCells, inputs.prices, { ...settings, ...filterOpts(inputs) });
-    const hashes = inputHashes(args, cwd, { entry: 'scripts/token-eval/z0-size.mjs' });
+    const hashes = inputHashes(args, cwd, { entry: ENTRY });
     report = { schema: 'z0-size/1', settings, inputs: hashes, warnings: inputs.warnings, ...sizing, notes: NOTES };
   } catch (e) {
     return fail(e.message);

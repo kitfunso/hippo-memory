@@ -100,8 +100,13 @@ function checkedLayout(layout, who) {
   return layout;
 }
 
-// A layout names the repositories and families a run will have; with none, the units' own repositories are sized, as round 3 did.
-const layoutFor = (design) => (design.layout ? checkedLayout(design.layout, 'design') : Array.from({ length: design.repos }, (_, r) => ({ repo: `r${r}`, k: design.families })));
+// A layout names the repositories and families a run will have; without one, `repos` and `families` must be positive integers, or no unit would be drawn.
+function layoutFor(design) {
+  if (design.layout) return checkedLayout(design.layout, 'design');
+  const whole = (n) => Number.isInteger(n) && n >= 1;
+  if (!whole(design.repos) || !whole(design.families)) throw new Error(`repeatRun: design needs a layout or a positive integer repos and families, got ${JSON.stringify(design)}`);
+  return Array.from({ length: design.repos }, (_, r) => ({ repo: `r${r}`, k: design.families }));
+}
 
 // One pooled fit gives the predicted error at any count, so a rule's loop never refits.
 function predictor(units, layout) {
@@ -408,6 +413,10 @@ function checkedLevelSpec(spec, cfg) {
   const resampled = (spec.resampled ?? []).filter((c) => c.seed <= SEEDS);
   const runsResampled = cfg.part !== undefined && (spec.cases === undefined || spec.cases.includes('resampled'));
   if (runsResampled && resampled.length === 0) throw new Error(`levelCells ${spec.test}: the resampled case needs spec.resampled cells with a seed of ${SEEDS} or less`);
+  for (const name of ['calPoint', 'calUpper']) {
+    const whole = CODINGS.every((c) => CALIBRATION_FIELDS.every((f) => Number.isFinite(spec[name]?.[c]?.[f])));
+    if (!whole) throw new Error(`levelCells ${spec.test}: spec.${name} needs a calibration under both coding keys (${CODINGS.join(', ')}) with finite scale, loss, family, sequence and noise; a one-coding test passes one calibration under both keys`);
+  }
   if (cfg.codings.length === 1 && !(sameCoding(spec.calPoint) && sameCoding(spec.calUpper))) throw new Error(`levelCells ${spec.test}: reads one coding, but a calibration gives its two codings different spreads, so the rule's count could change silently`);
   return resampled;
 }
