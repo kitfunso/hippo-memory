@@ -210,8 +210,15 @@ export function loadInputs(args, cwd) {
     throw new Error(`${args.dropList}: hookVoids needs { sequence (string), seed and position (integers) } entries`);
   }
   const mergeManifests = (args.mergeManifest ?? []).map((f) => readMergeManifest(path.resolve(cwd, f)));
-  const { warnings: more, ...own } = isRound4Design(design) ? readRoundFour(args, cwd, design) : { warnings: [] };
-  return { records, warnings: [...warnings, ...more], planCells, prices, grading, dropList, voids, design, offPinGiven: offPin.length > 0, mergeManifests, maxSeed: args.maxSeed ?? null, ...own };
+  return { records, warnings, planCells, prices, grading, dropList, voids, design, offPinGiven: offPin.length > 0, mergeManifests, maxSeed: args.maxSeed ?? null };
+}
+
+/** The analyzer's inputs: the shared ones plus round 4's own reads. The sizer and seed rule share loadInputs and read their levels by their own rules. */
+export function loadAnalyzeInputs(args, cwd) {
+  const inputs = loadInputs(args, cwd);
+  if (!isRound4Design(inputs.design)) return inputs;
+  const { warnings, ...own } = readRoundFour(args, cwd, inputs.design);
+  return { ...inputs, warnings: [...inputs.warnings, ...warnings], ...own };
 }
 
 /** The report object; blind mode keys every per-arm figure by code and carries no outcome by arm. */
@@ -487,7 +494,7 @@ export function runCli(argv, cwd = process.cwd()) {
     args = parseArgs(argv);
     if (args.help) return { code: 0, stdout: `${USAGE}\n`, stderr: '' };
     args = expandReadSet(args, cwd);
-    inputs = loadInputs(args, cwd);
+    inputs = loadAnalyzeInputs(args, cwd);
     if (isRound4Design(inputs.design)) checkAsOf(inputs.prices, args.prices);
     const spend = () => spendByArm({ runs: args.ledgerRuns.map((f) => path.resolve(cwd, f)), prices: inputs.prices, design: inputs.design, pricesFile: args.prices });
     analysis = analyzeZ0(inputs.records, { ...inputs, iterations: args.iterations ?? ITERATIONS, seed: args.seed ?? SEED, unblind: args.unblind, refuse: (gates) => unblindRefusal(args, gates, cwd), spend });

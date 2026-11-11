@@ -142,7 +142,7 @@ describe('gate wiring through analyzeZ0 from loadInputs [S3A-R7, W2-2]', () => {
     expect(gateText(a)).toMatch(new RegExp(`^G3 pass: 0 of ${a.filtered.plannedRuns} planned \\(sequence, seed\\)s leaked; first run 3 of ${a.filtered.plannedRuns} leaked$`, 'm'));
     const r4 = corpus();
     const dir = workspace(r4, { 'm1.json': manifest(2) });
-    const inputs = loose(analyze.loadInputs(analyze.parseArgs([...R4_ARGV, '--merge-manifest', 'm1.json']), dir));
+    const inputs = loose(analyze.loadAnalyzeInputs(analyze.parseArgs([...R4_ARGV, '--merge-manifest', 'm1.json']), dir));
     const b = loose(analyze.analyzeZ0(inputs.records, { ...inputs, ...STAT }));
     expect([b.gates.G3.firstRun.leakedSequenceSeeds, b.gates.G1.offPinPass, b.gates.pass]).toEqual([2, true, true]);
   });
@@ -601,20 +601,20 @@ describe('round 4 inputs through runCli (brief 10)', () => {
     expect(roles).toEqual(['runs', 'plan', 'prices', 'grading', 'levels', 'levels', 'seed-rule', 'pins', 'drift-runs', 'drift-plan']);
   });
 
-  it('checks the prices asOf on the round 4 path only: loadInputs returns, runCli exits 1', () => {
+  it('checks the prices asOf on the round 4 path only: loadAnalyzeInputs returns, runCli exits 1', () => {
     const over = { 'prices.json': JSON.stringify(PRICES_BY_MODEL) };
-    expect(() => analyze.loadInputs(analyze.parseArgs(R4_ARGV), workspace(g, over))).not.toThrow();
+    expect(() => analyze.loadAnalyzeInputs(analyze.parseArgs(R4_ARGV), workspace(g, over))).not.toThrow();
     expect(go(over).stderr).toMatch(/prices\.json: .*asOf/);
   });
 
   it('reads the effort from the pins file', () => {
-    const low = loose(analyze.loadInputs(analyze.parseArgs(R4_ARGV), workspace(g, { 'pins.json': JSON.stringify({ ...PINS, effort: 'low' }) })));
+    const low = loose(analyze.loadAnalyzeInputs(analyze.parseArgs(R4_ARGV), workspace(g, { 'pins.json': JSON.stringify({ ...PINS, effort: 'low' }) })));
     expect(low.effort).toBe('low');
   });
 
   it('takes the two levels files in either order, sorted by their source field', () => {
     const [pre, b1] = [JSON.stringify(levelsFile('pre-freeze', 0.9, 'c1')), JSON.stringify(levelsFile('batch-1', 0.8, 'c2'))];
-    const read = (over: Record<string, string>) => loose(analyze.loadInputs(analyze.parseArgs(R4_ARGV), workspace(g, over)));
+    const read = (over: Record<string, string>) => loose(analyze.loadAnalyzeInputs(analyze.parseArgs(R4_ARGV), workspace(g, over)));
     const [normal, swapped] = [read({ 'pre.json': pre, 'b1.json': b1 }), read({ 'pre.json': b1, 'b1.json': pre })];
     expect(normal.levels.T1['0.05']).toMatchObject({ level: 0.8, file: 'b1.json' });
     expect(swapped.levels.T1['0.05']).toMatchObject({ level: 0.8, file: 'pre.json' });
