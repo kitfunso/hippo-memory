@@ -9,6 +9,8 @@ for LongMemEval (one haystack each), the conversation for BEAM (prereg Amendment
 Usage (runner venv): python -I score.py --bench B --pred hippo365=DIR --pred bm25=DIR --out DIR [--bonferroni K]
 BEAM pooled (prereg Amendment 6 dated notes 3, entry 1): python -I score.py --bench beam --root results-r2 --out DIR
 [--bonferroni K] loads the four sizes as above from ROOT/beam-<size>/ (answers) and its retrieval/<arm>/predicted_beam-<size>/.
+Extra arm (dated notes 5): --pred hippo-emb=DIR --pairs-with RUN [RUN ...] --out DIR scores that arm alone, then minus each
+arm of each registered run RUN (an --out of a scored run), every run loaded and checked as above. All lines secondary.
 """
 from __future__ import annotations
 
@@ -91,13 +93,13 @@ def pair_record(diff: dict, sel: list[str], unit) -> dict:
 def load_size(bench: str, arms: dict[str, Path], out: Path):
     """One size's saved results, loaded and checked as every score run does: both arms hold exactly the benchmark's
     questions, the results match the call logs, the retrieval checks pass. Returns ids, results, notes, metrics, smoke."""
-    ids = sorted(set(aj.pred_files(arms[X])) & set(aj.pred_files(arms[Y])))
+    ids = sorted(set.intersection(*(set(aj.pred_files(d)) for d in arms.values())))
     if len(ids) != EXPECT[bench]:
-        sys.exit(f"{len(ids)} questions in both arms, {EXPECT[bench]} expected: never scored partial")
+        sys.exit(f"{len(ids)} questions in every arm, {EXPECT[bench]} expected: never scored partial")
     aj.check_inputs(out, arms, ids)
     recs = aj.verify(bench, arms, out, ids)
     if set(recs) != {(arm, q) for arm in arms for q in ids}:
-        sys.exit(f"{len(recs)} results for {2 * len(ids)} (arm, question) pairs: never scored partial")
+        sys.exit(f"{len(recs)} results for {len(arms) * len(ids)} (arm, question) pairs: never scored partial")
     notes = [f"{arm}: {aj.check_retrieval(arm, d, ids)}" for arm, d in arms.items()]
     return ids, recs, notes, per_question(bench, recs), smoke_excluded(bench, ids)
 
@@ -125,6 +127,34 @@ def single(bench: str, arms: dict[str, Path], out: Path, k: int | None) -> tuple
     body, pairs = metric_lines(bench, m, ids, kept, list(arms), k)
     lines = [f"{bench}: {len(ids)} questions, {len(kept)} in the primary, results {len(recs)}, all match the call "
              f"logs", *notes, *body, *memory_lines(m, list(arms)),
+             "", f"smoke items left out of every primary: {', '.join(sorted(smoke)) or 'none'}", *spent_lines(recs)]
+    return lines, {"bench": bench, "questions": len(ids), "primary_questions": len(kept), "pairs": pairs}
+
+
+def extra_arm(bench: str, arms: dict[str, Path], out: Path, runs: list[Path]) -> tuple[list[str], dict]:
+    """Dated notes 5: the extra arm's means, then the arm minus each arm of each registered run, paired by question,
+    over the primary's questions with the benchmark's unit. Each run is loaded and checked as `single` loads it."""
+    ids, recs, notes, m, smoke = load_size(bench, arms, out)
+    kept, unit, (arm,) = [q for q in ids if q not in smoke], unit_of(bench), arms
+    metrics = ("acc@200", "acc@10") if aj.kind_of(bench) == "lme" else ("score", "pass")
+    body: list[str] = []
+    pairs: dict = {}
+    for run in runs:
+        theirs = {a: Path(d) for a, d in json.loads((run / "inputs.json").read_text(encoding="utf-8"))["arms"].items()}
+        r_ids, _, r_notes, r_m, _ = load_size(bench, theirs, run)
+        if r_ids != ids:
+            sys.exit(f"{run} holds another question set than {out}")
+        notes += [f"{run.name} {n}" for n in r_notes]
+        for metric in metrics:
+            for other in theirs:
+                acc = 100 * sum(r_m[metric][(other, q)] for q in kept) / len(kept)
+                diff = {q: m[metric][(arm, q)] - r_m[metric][(other, q)] for q in ids}
+                body.append(f"secondary {metric} {arm} - {other} ({acc:.1f} in {run.name}): {paired(diff, kept, unit)}")
+                pairs[f"{metric}/{other}@{run.name}"] = pair_record(diff, kept, unit)
+    means = [f"{arm:>9}  {metric}  n={len(kept)}  mean {100 * sum(m[metric][(arm, q)] for q in kept) / len(kept):5.1f}"
+             for metric in metrics]
+    lines = [f"{bench}: {len(ids)} questions, {len(kept)} in the primary, results {len(recs)}, all match the call logs",
+             *notes, "", *means, *body, *memory_lines(m, [arm]),
              "", f"smoke items left out of every primary: {', '.join(sorted(smoke)) or 'none'}", *spent_lines(recs)]
     return lines, {"bench": bench, "questions": len(ids), "primary_questions": len(kept), "pairs": pairs}
 
@@ -173,6 +203,8 @@ def main() -> None:
     ap.add_argument("--root", type=Path, help="with --bench beam: the results-r2 folder that holds beam-<size>/")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--bonferroni", type=int, metavar="K", help="also the primary's interval at 1 - 0.05/K")
+    ap.add_argument("--pairs-with", type=Path, nargs="+", default=[], metavar="RUN",
+                    help="dated notes 5: score the one --pred arm paired with each registered run's --out")
     a = ap.parse_args()
     if a.bonferroni is not None and a.bonferroni < 1:
         ap.error("--bonferroni K needs K of 1 or more")
@@ -185,9 +217,14 @@ def main() -> None:
         if a.root or not a.pred:
             ap.error(f"--root is for --bench {POOLED}; a single size needs --pred hippo365=DIR --pred bm25=DIR")
         arms = {s.split("=", 1)[0]: Path(s.split("=", 1)[1]) for s in a.pred}
-        if set(arms) != {X, Y}:
+        if a.pairs_with:
+            if len(arms) != 1 or set(arms) & {X, Y} or any(r.resolve() == a.out.resolve() for r in a.pairs_with):
+                ap.error("--pairs-with scores one extra arm in its own --out")
+            lines, out = extra_arm(a.bench, arms, a.out, a.pairs_with)
+        elif set(arms) != {X, Y}:
             sys.exit(f"--pred needs exactly {X} and {Y}")
-        lines, out = single(a.bench, arms, a.out, a.bonferroni)
+        else:
+            lines, out = single(a.bench, arms, a.out, a.bonferroni)
     text = "\n".join(lines)
     (a.out / "score.txt").write_text(text + "\n", encoding="utf-8")
     (a.out / "score.json").write_text(json.dumps(out, indent=1), encoding="utf-8")

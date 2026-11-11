@@ -155,3 +155,32 @@ def test_the_cli_writes_the_pooled_score_files_and_keeps_the_two_modes_apart(wor
         with pytest.raises(SystemExit) as e:
             run_cli(monkeypatch, *argv)
         assert e.value.code == 2
+
+
+def test_an_extra_arm_is_scored_minus_each_arm_of_the_registered_run(world):
+    bench, emb = "beam-100k", "hippo-emb"
+    run = world.root / bench
+    score.single(bench, {arm: run / "retrieval" / arm / f"predicted_{bench}" for arm in (X, Y)}, run, None)
+    out = world.root / f"{bench}-emb"
+    pred = out / "retrieval" / emb / f"predicted_{bench}"
+    pred.mkdir(parents=True)
+    for qid in ids_of(bench):
+        (pred / f"{qid}.json").write_text(json.dumps({"question_id": qid}), encoding="utf-8")
+    (out / "results.jsonl").write_text("".join(json.dumps({"arm": emb, "qid": q, "pred_sha256": "", "result": result(q, 1.0)})
+                                               + "\n" for q in ids_of(bench)), encoding="utf-8")
+    lines, res = score.extra_arm(bench, {emb: pred}, out, [run])
+    kept = [q for q in ids_of(bench) if q not in world.smoke[bench]]
+    for other in (X, Y):
+        want = sum(1.0 - world.truth[(other, q)] for q in kept) / len(kept)
+        assert res["pairs"][f"score/{other}@{bench}"]["diff"] == pytest.approx(want)
+        assert res["pairs"][f"score/{other}@{bench}"]["n"] == len(kept)
+        assert any(x.startswith(f"secondary score {emb} - {other} (") for x in lines)
+    assert f"{emb}  score  n={len(kept)}  mean 100.0" in lines
+
+
+@pytest.mark.parametrize("preds", [["hippo-emb=A", "bm25=B"], ["hippo365=A"]])
+def test_pairs_with_takes_one_extra_arm_only(world, monkeypatch, preds):
+    argv = [f"--pred={p}" for p in preds]
+    with pytest.raises(SystemExit):
+        run_cli(monkeypatch, "--bench", "beam-100k", *argv, "--pairs-with", str(world.root / "beam-100k"),
+                "--out", str(world.tmp / "emb"))

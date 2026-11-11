@@ -487,3 +487,20 @@ This note adds the arm `hippo-emb` to every benchmark of this amendment. The reg
 **Lines, all secondary.** `hippo-emb`'s score on the benchmark's primary metric over the primary items. Then `hippo-emb` minus each paired arm (`hippo365`, `bm25`, and `full` on DMR), paired by item, each paired arm re-made from its run's own call logs, with the benchmark's registered unit, 4,000 draws, seed 1, 95%, and Amendment 2's reading. For DMR the reading words only describe, since the arm is post hoc there.
 
 **Calls.** One more arm of answers and verdicts per benchmark: on the main Claude login for the benchmarks that run there now (DMR, PersonaMem v1, HotPotQA-24, LongMemEval-S, LoCoMo), and on the parked token from Friday for the rest, after their registered arms. No paid API.
+
+### Amendment 6, dated notes 6 (2026-11-11, before any LongMemEval, BEAM or LoCoMo `hippo-emb` answer): the runner and LoCoMo scripts get the arm
+
+Dated notes 5 said the LongMemEval, BEAM and LoCoMo scripts get `hippo-emb` in a later commit. This is that note, and the code commit is the commit that adds it. The arm itself, its lines and its calls are as dated notes 5 registers them.
+
+**Runner benchmarks (LongMemEval-S, LongMemEval-M, BEAM).**
+- Retrieval: `runner/run_retrieval.py --arms hippo-emb` in `results-r2/<benchmark>-emb/`. The server starts with `--embeddings 1` for `hippo-emb` and `0` for every other arm, and the run stops unless `/health` reports that backend and that setting.
+- LongMemEval-S joins the script's list with the dataset the registered run read (`longmemeval_s_cleaned.json`, SHA-256 `d6f21ea9...`). The registered v3 retrieval called the runner without `--mode answerer`, `--top-k-cutoffs 10,200` and `--max-workers 8`. The first is the runner's default mode, which its v3 log prints. The others set the answer cutoffs and the add threads, not what is stored or searched. Top 200, one store per question, as registered.
+- Answers: `runner/answer_judge.py run --pred hippo-emb=DIR`, with the registered prompts, cutoffs, answerer and judge.
+- Score: `runner/score.py --pred hippo-emb=DIR --pairs-with RUN`. It loads and checks the arm as the registered score stage does, and loads and checks each run named the same way. Then it prints the arm's means and the arm minus each registered arm, paired by question, with the benchmark's registered unit.
+
+**LoCoMo.**
+- Retrieval: the registered v3 command (`results-r2/retrieval-v3/run.sh`) with `--embeddings 1`, into `~/hippo-bench/retrieval-emb-locomo/` (`run.sh` there). Its own `MANIFEST-locomo.sha256` is written once retrieval passes its check, and `check_gate` re-hashes it before answer and score.
+- `mem0/h2h.py --arm hippo-emb --pairs-with runs/mem0-h2h results-r2/locomo-h2h`, in its own `--run` and `--out`, with its own call logs. It has its own blind key: the same `Random(7)` shuffle over this arm's answers alone. Cutoffs 200, 50 and 10, and both judges.
+- Score adds the arm minus `hippo365`, `bm25` and `mem0`, re-made from the registered run's call logs, for F1 and each judge both runs hold, at each cutoff, paired by question. All lines are secondary.
+
+**Read before this note.** HotPotQA-24's `hippo-emb` score (94.7%, the same as both registered arms) was read before this note. It holds nothing about these benchmarks.

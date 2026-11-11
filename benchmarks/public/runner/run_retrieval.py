@@ -27,10 +27,10 @@ HERE = Path(__file__).resolve().parent
 HIPPO = HERE.parents[2]
 RUNNER = Path.home() / "hippo-bench" / "memory-benchmarks"
 SERVER = HIPPO / "benchmarks" / "public" / "hippo-mem0-server.mjs"
-SERVER_ARM = {"hippo365": "hippo", "bm25": "bm25"}  # hippo365 is the shipped default half-life, embeddings off
+SERVER_ARM = {"hippo365": "hippo", "bm25": "bm25", "hippo-emb": "hippo"}  # only hippo-emb has embeddings on (notes 5)
 BENCH = {
     "beam-100k": ("beam", "100K"), "beam-500k": ("beam", "500K"), "beam-1m": ("beam", "1M"), "beam-10m": ("beam", "10M"),
-    "longmemeval-m": ("lme", "longmemeval_m_cleaned.json"),
+    "longmemeval-s": ("lme", "longmemeval_s_cleaned.json"), "longmemeval-m": ("lme", "longmemeval_m_cleaned.json"),
 }
 LME_SMOKE_TYPES = "single-session-user,single-session-assistant,multi-session,knowledge-update,temporal-reasoning"
 BAD_LOG = re.compile(r"failed|error|traceback|exception", re.I)
@@ -72,15 +72,20 @@ def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[lis
     return [q["question_id"] for q in qs], flags
 
 
-def wait_health(port: int, proc: subprocess.Popen) -> None:
+def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
+    """Waits for /health, then stops unless the server runs the arm's backend with embeddings on exactly for hippo-emb."""
     for _ in range(120):
         if proc.poll() is not None:
             sys.exit(f"hippo-mem0-server on {port} exited with {proc.returncode}")
         try:
-            urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2).read()
-            return
+            health = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2).read())
         except OSError:
             time.sleep(0.5)
+            continue
+        if health.get("arm") != SERVER_ARM[arm] or bool(health.get("embeddings")) != (arm == "hippo-emb"):
+            proc.terminate()
+            sys.exit(f"server on {port} is not the {arm} arm (hippo-emb needs @huggingface/transformers): {health}")
+        return
     sys.exit(f"hippo-mem0-server on {port} did not answer /health in 60 s")
 
 
@@ -128,7 +133,7 @@ class Shard:
                     "PYTHONUTF8": "1"}  # the runner reads its own files with open()'s default, which is cp1252 here
         self.rlog_path = dirp / "runner.log"
         self.srv = self._start_server()
-        wait_health(port, self.srv)
+        wait_health(port, self.srv, arm)
         self._launch()
         self.thread = threading.Thread(target=self._supervise, daemon=True)
         self.thread.start()
@@ -136,7 +141,8 @@ class Shard:
     def _start_server(self) -> subprocess.Popen:
         slog = (self.dir / "server.log").open("ab")
         return subprocess.Popen(["node", str(SERVER), "--arm", SERVER_ARM[self.arm], "--port", str(self.port),
-                                 "--data-dir", str(self.store), "--embeddings", "0"], stdout=slog, stderr=slog)
+                                 "--data-dir", str(self.store), "--embeddings", "1" if self.arm == "hippo-emb" else "0"],
+                                stdout=slog, stderr=slog)
 
     def _launch(self) -> None:
         if self.pred.exists():
@@ -166,7 +172,7 @@ class Shard:
                     self.server_restarts += 1
                     self._note(f"server exited {self.srv.returncode}, restart {self.server_restarts}")
                     self.srv = self._start_server()
-                    wait_health(self.port, self.srv)
+                    wait_health(self.port, self.srv, self.arm)
             if rc == 0 or self.runner_restarts >= MAX_RESTARTS:
                 self.rc = rc
                 if self.sweeps:
@@ -267,15 +273,17 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--bench", required=True, choices=sorted(BENCH))
     ap.add_argument("--arms", default="hippo365,bm25")
-    ap.add_argument("--ports", required=True, help="ports arm by arm, SHARDS per arm; 8911-8919 are ours")
+    ap.add_argument("--ports", required=True, help="ports arm by arm, SHARDS per arm; 8911-8949 are ours")
     ap.add_argument("--out", type=Path, required=True, help="results-r2/<benchmark>")
     ap.add_argument("--limit-convs", type=int, default=0, help="smoke: BEAM conversations 0..N-1")
     ap.add_argument("--limit-questions", type=int, default=0, help="smoke: LongMemEval questions, one per type")
     ap.add_argument("--resume", action="store_true")
     a = ap.parse_args()
     arms, ports = a.arms.split(","), [int(p) for p in a.ports.split(",")]
-    if len(ports) % len(arms) or any(not 8911 <= p <= 8919 for p in ports) or len(set(ports)) != len(ports):
-        sys.exit("--ports needs the same count of distinct ports in 8911-8919 for every arm")
+    if set(arms) - set(SERVER_ARM):
+        sys.exit(f"--arms takes {', '.join(SERVER_ARM)}")
+    if len(ports) % len(arms) or any(not 8911 <= p <= 8949 for p in ports) or len(set(ports)) != len(ports):
+        sys.exit("--ports needs the same count of distinct ports in 8911-8949 for every arm")
     n_shards = len(ports) // len(arms)
     ids, flag_sets = plan(a.bench, a, n_shards, a.out)
     started = time.time()

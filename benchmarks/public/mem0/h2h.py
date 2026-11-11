@@ -7,6 +7,8 @@ verdicts*.jsonl, which only record each run for people.
 Usage: python h2h.py {answer,judge,score} --run SCRATCH_DIR --out RESULTS_DIR [--slots 10] [--judge codex]
   [--bonferroni K]
 Smoke only: --limit N [--cutoff C] needs an --out path with a "smoke" folder, and keeps the call logs under --out.
+Extra arm (dated notes 5): --arm hippo-emb --pairs-with RUN OUT, in its own --run and --out with its own blind key; score
+adds the arm minus each registered arm of RUN and OUT, re-made from that run's call logs, all secondary.
 """
 from __future__ import annotations
 
@@ -26,7 +28,7 @@ HERE = Path(__file__).resolve().parent
 RUNNER = Path.home() / "hippo-bench" / "memory-benchmarks"
 LOCOMO = Path.home() / "hippo-bench" / "locomo"
 RETRIEVAL = Path.home() / "hippo-bench" / "retrieval-v3-locomo"  # hippo 3.5.1 retrieval (Amendment 6 rev. 1 item 1)
-MANIFEST = RETRIEVAL / "MANIFEST-locomo.sha256"
+RETRIEVAL_OF = {"hippo-emb": Path.home() / "hippo-bench" / "retrieval-emb-locomo"}  # extra arms (dated notes 5)
 SAMPLE = HERE.parent / "results" / "2026-09-25-lane-a" / "locomo" / "sample.json"
 ARMS, CUTOFFS, LABELS = ("hippo365", "bm25", "mem0"), (200, 50, 10), ("CORRECT", "WRONG")
 INGEST = {"mem0": "ingest"}  # the Mem0 arm's ingestion under --run, gated
@@ -98,7 +100,8 @@ def qa_of(data: list, qid: str) -> dict:
 
 
 def predicted(run: Path, arm: str, qid: str) -> dict:
-    d = run / INGEST[arm] / "predicted_locomo-mem0" if arm in INGEST else RETRIEVAL / f"predicted_locomo-{arm}"
+    d = (run / INGEST[arm] / "predicted_locomo-mem0" if arm in INGEST
+         else RETRIEVAL_OF.get(arm, RETRIEVAL) / f"predicted_locomo-{arm}")
     return load(d / f"{qid}.json")
 
 
@@ -107,13 +110,17 @@ def tokens_in(rec: dict) -> int:
     return sum(u.get(k) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
 
 
-def check_gate(run: Path) -> None:
-    """Lane R's copied retrieval still matches its manifest, and Mem0's ingestion has a passing gate for its files."""
-    for line in MANIFEST.read_text(encoding="utf-8").splitlines():
-        digest, rel = line.split("  ", 1)
-        if not (RETRIEVAL / rel).is_file() or hashlib.sha256((RETRIEVAL / rel).read_bytes()).hexdigest() != digest:
-            sys.exit(f"{rel} in {RETRIEVAL.name} is missing or differs from {MANIFEST.name}")
-    for name in INGEST.values():
+def check_gate(run: Path, arms: tuple[str, ...] = ARMS) -> None:
+    """Each arm's retrieval folder still matches its manifest, and Mem0's ingestion has a passing gate for its files."""
+    for folder in sorted({RETRIEVAL_OF.get(arm, RETRIEVAL) for arm in arms if arm not in INGEST}):
+        manifest = folder / "MANIFEST-locomo.sha256"
+        if not manifest.is_file():
+            sys.exit(f"{folder.name} has no {manifest.name}")
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            digest, rel = line.split("  ", 1)
+            if not (folder / rel).is_file() or hashlib.sha256((folder / rel).read_bytes()).hexdigest() != digest:
+                sys.exit(f"{rel} in {folder.name} is missing or differs from {manifest.name}")
+    for name in (INGEST[arm] for arm in arms if arm in INGEST):
         ingest = run / name
         g = load(ingest / "gate.json") if (ingest / "gate.json").exists() else {}
         if not g.get("pass") or g.get("fingerprint") != fingerprint(ingest):
@@ -124,7 +131,7 @@ def check_gate(run: Path) -> None:
 def answer_prompts(a: argparse.Namespace) -> dict:
     """Every answer prompt the design calls for, by (arm, cutoff, qid): how many memories it shows and its log item."""
     prompts = {}
-    for arm in ARMS:
+    for arm in a.arms:
         for qid in a.qids:
             q = predicted(a.run, arm, qid)
             for c in a.cutoffs:
@@ -217,7 +224,7 @@ def run_all(jobs: list[tuple], fn, out: Path, slots: int) -> None:
 
 def answer(a: argparse.Namespace) -> None:
     """Asks each design answer that has no valid reply in the log, up to its 3rd ask counted across every run."""
-    check_gate(a.run)
+    check_gate(a.run, a.arms)
     prompts, ledger = answer_prompts(a), Ledger(a.logs / "calls-answer.jsonl")
     got = {k: ledger.choose(item) for k, (_, item) in prompts.items()}
     jobs = [(*k, prompts[k][1]) for k, c in got.items() if c.status == "open"]
@@ -328,7 +335,7 @@ def f1_scores(answers: dict, data: list) -> dict:
 
 def score(a: argparse.Namespace) -> None:
     """F1 and both judges per arm, the primary without the smoke items (dated notes 1), every exhausted item listed."""
-    check_gate(a.run)
+    check_gate(a.run, a.arms)
     data, sample, answers = load(LOCOMO / "data" / "locomo10.json"), a.qids, all_answers(a)
     key = judge_key(a.out, answers)
     smoke = set() if a.limit else smoke_excluded("locomo", load(SAMPLE))  # a smoke run is never scored
@@ -346,8 +353,8 @@ def score(a: argparse.Namespace) -> None:
         lines.append(f"{name} = {'Claude Sonnet 5, the registered judge' if judge == 'claude' else 'codex gpt-5.6-sol'}, secondary: "
                      f"{sum(c.status == 'valid' for c in choices.values())} valid verdicts of {len(choices)}")
     for c in a.cutoffs:
-        lines += [f"\n=== top {c} ==="] + [arm_line(answers, metric, arm, c, primary) for arm in ARMS]
-        for x, y in PAIRS:
+        lines += [f"\n=== top {c} ==="] + [arm_line(answers, metric, arm, c, primary) for arm in a.arms]
+        for x, y in () if a.arm else PAIRS:
             for m, vals in metric.items():
                 cats = [(None, primary)] + [(k, [q for q in primary if qa_of(data, q)["category"] == k]) for k in CAT]
                 for cat, ids in cats:
@@ -360,10 +367,33 @@ def score(a: argparse.Namespace) -> None:
                                      f"{paired(diff, primary, lambda q: q.split('_q')[0])}")
                     else:
                         lines.append(f"{label} {CAT.get(cat, 'all'):>11}: {paired(diff, ids, str)}")
+    if a.arm:
+        lines += pair_lines(a, data, primary, metric)
     lines += ["", f"smoke items left out of every primary: {', '.join(sorted(smoke)) or 'none'}", *listed]
     text = "\n".join(lines)
     (a.out / "score.txt").write_text(text + "\n", encoding="utf-8")
     print(text)
+
+
+def pair_lines(a: argparse.Namespace, data: list, primary: list, metric: dict) -> list[str]:
+    """Dated notes 5: the extra arm minus each registered arm, paired by question, at each cutoff and for each metric
+    both runs hold, the registered run re-made from its own call logs and checked as its own score stage checks it."""
+    run, out = a.pairs_with
+    reg = argparse.Namespace(**{**vars(a), "run": run, "out": out, "logs": run, "arms": ARMS, "arm": None})
+    check_gate(run, ARMS)
+    answers = all_answers(reg)
+    key, theirs = judge_key(out, answers), {"F1": f1_scores(answers, data)}
+    for judge, name in (("claude", "judge"), ("codex", "judge2")):
+        if name in metric and (run / JUDGES[judge][1]).exists():
+            theirs[name] = judge_scores(reg, judge, key, answers, data)[0]
+    lines = [f"\n=== {a.arm} minus each arm of {out.name}, paired by question, all secondary (dated notes 5) ==="]
+    for c in a.cutoffs:
+        for other in ARMS:
+            for m, vals in theirs.items():
+                acc = 100 * sum(vals[(other, c, q)] for q in primary) / len(primary)
+                diff = {q: metric[m][(a.arm, c, q)] - vals[(other, c, q)] for q in a.qids}
+                lines.append(f"top {c:>3} {a.arm} - {other} ({acc:.1f} in {out.name}) {m:>6}: {paired(diff, primary, str)}")
+    return lines
 
 
 def arm_line(answers: dict, metric: dict, arm: str, c: int, ids: list) -> str:
@@ -384,7 +414,15 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="smoke only: the first N sample questions, into a smoke out dir")
     ap.add_argument("--cutoff", type=int, choices=CUTOFFS, help="smoke only: one cutoff, with --limit")
     ap.add_argument("--bonferroni", type=int, metavar="K", help="score: also each primary's interval at 1 - 0.05/K")
+    ap.add_argument("--arm", choices=tuple(RETRIEVAL_OF), help="dated notes 5: one extra arm in its own --run and --out")
+    ap.add_argument("--pairs-with", type=Path, nargs=2, metavar=("RUN", "OUT"), default=[],
+                    help="the registered run's --run and --out that --arm is paired with")
     a = ap.parse_args()
+    if bool(a.arm) != bool(a.pairs_with):
+        ap.error("--arm and --pairs-with go together")
+    if a.arm and {a.run.resolve(), a.out.resolve()} & {p.resolve() for p in a.pairs_with}:
+        ap.error("--arm runs in its own --run and --out, never in the registered run's")
+    a.arms = (a.arm,) if a.arm else ARMS
     if a.bonferroni is not None and (a.stage != "score" or a.bonferroni < 1):
         ap.error("--bonferroni K needs the score stage and K of 1 or more")
     if a.judge != "claude" and a.stage != "judge":
