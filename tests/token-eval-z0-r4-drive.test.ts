@@ -6,7 +6,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'nod
 import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { BATCH1, BATCH2 } from './_helpers/z0-r4-spend.js';
-import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, kill, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type World } from './fixtures/z0-drive/harness.js';
+import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type World } from './fixtures/z0-drive/harness.js';
+import { killOwnTree } from './fixtures/kill-own.js';
 
 const REPO = fwd(path.resolve(__dirname, '..'));
 const LAUNCH = `${REPO}/scripts/token-eval/r4-launch`;
@@ -23,8 +24,10 @@ const mk = (name: string, checkout?: string) => {
 beforeAll(() => {
   if (HAVE) w = makeWorld('drive');
 }, 180_000);
-afterEach(() => {
-  for (const c of cases.splice(0)) c.cleanup();
+afterEach(async () => {
+  const done = await Promise.allSettled(cases.splice(0).map((c) => c.cleanup()));
+  const errors = done.flatMap((r) => (r.status === 'rejected' ? [String(r.reason)] : []));
+  if (errors.length > 0) throw new Error(errors.join('; '));
 });
 afterAll(() => dropWorld(w));
 
@@ -432,7 +435,7 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     const s = c.start('smoke');
     await wait('the runner', () => c.runnerPids('smoke').length === 1 && c.log().some((l) => l.startsWith('launch w1 pid ')));
     const [launcher, runner] = [c.launcherPid('w1'), c.runnerPids('smoke')[0]!];
-    kill(launcher);
+    c.kill(launcher);
     await sleep(2500);
     expect([isAlive(launcher), isAlive(runner), c.stubCalls('g1-pins').length]).toEqual([false, true, 0]);
     const r = await s.done;
@@ -511,21 +514,22 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     const first = live.start('1');
     await wait('the pilot runner', () => live.runnerPids('pilot').length === 1);
     const runner = live.runnerPids('pilot')[0]!;
-    kill(first.child.pid!, true);
+    killOwnTree(first.child);
     await first.done;
     expect(isAlive(runner)).toBe(true);
     const again = await live.run('1');
     expect(again.code, again.out).toBe(0);
     expect(again.lines).toContain(`DRIVE: waiting for ${runner} ab-run`);
     expect(live.launcherCalls(`${live.root}/pilot/k1-p1`)).toEqual(['plan', 'launch']);
-    expect(live.admits()).toHaveLength(1);
+    // The three units the dead driver never launched go through the cap-only admit, as every first launch after the first phase does (W4-47).
+    expect(live.admits().map((a) => [a.units, a.cap, a.capSpend, a.admitted])).toEqual([[['k1-p1', 'k2-p1', 'low-p1', 'high-p1'], 40, 0, true], [['k2-p1', 'low-p1', 'high-p1'], 40, 1, true]]);
 
     const batch = ready('kill-batch', '2');
     batch.script('s4-batch', [{ make: [`${batch.root}/batch1/q12-w1/run`], hangMs: 8000 }, {}]);
     const running = batch.start('3');
     await wait('the batch', () => batch.stubCalls('s4-batch').length === 1);
     // The child of start() is Git's bash.exe wrapper; the driver proper is the pid its call line names, and killing only that leaves its fork and the batch alive.
-    kill(batch.driverPid());
+    batch.kill(batch.driverPid());
     await running.done;
     const next = await batch.run('3');
     expect(next.code, next.out).toBe(0);
@@ -537,7 +541,7 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     const third = hung.start('1');
     await wait('the Records line', () => lines(`${hung.root}/pilot/k1-p1/run.log`).some((l) => l.startsWith('Records: ')));
     const hang = hung.runnerPids('pilot')[0]!;
-    kill(third.child.pid!, true);
+    killOwnTree(third.child);
     await third.done;
     const restart = await hung.run('1');
     expect(restart.code, restart.out).toBe(0);
@@ -557,7 +561,7 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(second.lines).toHaveLength(1);
     expect(second.lines[0]).toMatch(new RegExp(`^DRIVE: driver \\d+ already runs on ${c.root}$`));
     expect(c.entries()).toHaveLength(1);
-    kill(first.child.pid!, true);
+    killOwnTree(first.child);
     await first.done;
 
     const o = ready('orphan-batch', '3');

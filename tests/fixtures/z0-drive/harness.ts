@@ -1,6 +1,6 @@
 // Set-up for the s4-drive.sh tests: a fixture checkout (a git repository with the freeze tag), a dry root with real pins and a spend basis, a "scored" folder holding the real driver
 // beside the stubs, and a spawned driver. Only the budget, pins, unit-record and drive CLIs run real; every other CLI, the launcher, the batch and the read are stubs.
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -11,9 +11,10 @@ import { runCli as pinsCli } from '../../../scripts/token-eval/z0-pins-check.mjs
 import { BASIS, BATCH1, BATCH2, BATCH2_SEQ, MEAN, SEQ } from '../../_helpers/z0-r4-spend.js';
 import { PRICES_BY_MODEL, generate, planOf } from '../z0-gen.js';
 import { replay } from '../z0-batch/ab-run.mjs';
-import { CHECKOUT as REPO, fwd, isAlive, json, kill, lines, makeFixture, put, read, sleep, until } from '../z0-batch/harness.js';
+import { CHECKOUT as REPO, fwd, isAlive, json, lines, makeFixture, put, read, sleep, until } from '../z0-batch/harness.js';
+import { killNaming, killOwnTree, procsNaming } from '../kill-own.js';
 
-export { fwd, isAlive, json, kill, lines, put, read, sleep, until };
+export { fwd, isAlive, json, lines, put, read, sleep, until };
 export const POETRY = 'C:/z0-runs/r4/poetry-2.5.1';
 export const TESTS = 'C:/z0-drive-tests';
 const LAUNCH = path.join(REPO, 'scripts', 'token-eval', 'r4-launch');
@@ -104,7 +105,7 @@ export class DriveCase {
   readonly knobs: string;
   readonly stubs: string;
   readonly checkout: string;
-  private readonly pids = new Set<number>();
+  private readonly children = new Set<ChildProcess>();
   private n = 0;
 
   constructor(readonly w: World, name: string, checkout = w.checkout) {
@@ -217,7 +218,7 @@ export class DriveCase {
     if (!o.raw && LAUNCH_STEPS.includes(step) && !more.includes('--fake')) more.push('--fake', `${this.knobs}/fake.json`);
     const child = spawn(gitBash(process.env, []), [`${this.scored}/s4-drive.sh`, step, o.checkout ?? this.checkout, o.root ?? this.root, ...more], { env: this.env(o.env), stdio: ['ignore', fd, fd], windowsHide: true, cwd: this.dir });
     fs.closeSync(fd);
-    this.pids.add(child.pid!);
+    this.children.add(child);
     const done = new Promise<Run>((resolve) => child.on('exit', (code) => {
       const text = fs.existsSync(out) ? read(out).replace(/\r/g, '').trim() : '';
       const all = text === '' ? [] : text.split('\n');
@@ -231,7 +232,7 @@ export class DriveCase {
   orphan(file: string, args: string[]) {
     const [cmd, argv] = file.endsWith('.sh') ? [gitBash(process.env, []), [file, ...args]] : [process.execPath, [file, ...args]];
     const child = spawn(cmd, argv, { env: this.env(), stdio: 'ignore', windowsHide: true, cwd: this.dir });
-    this.pids.add(child.pid!);
+    this.children.add(child);
     return child;
   }
 
@@ -250,24 +251,23 @@ export class DriveCase {
   stubLog() { return lines(`${this.root}/stubs.log`); }
   launcherArgs(folder: string): Record<string, string> { return json(`${folder}/launcher-args.json`); }
   launcherCalls(folder: string) { return lines(`${folder}/launcher-calls.txt`); }
-  /** Pids of every launcher and runner this case started, read from drive.log and each pids.txt. */
-  private started(): number[] {
-    const found = [...this.pids];
-    for (const l of this.log()) if (l.startsWith('launch ')) found.push(Number(l.split(' ')[3]));
-    const walk = (d: string) => {
-      if (!fs.existsSync(d)) return;
-      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-        if (e.isDirectory()) walk(`${d}/${e.name}`);
-        else if (e.name === 'pids.txt') for (const l of lines(`${d}/${e.name}`)) found.push(Number(l.split(' ')[1]));
-      }
-    };
-    walk(this.root);
-    return found;
+  /** The mark of this case: every process of it names its folder, and the slash keeps `print` apart from `print-live`. */
+  private get mark() { return `${this.dir}/`; }
+  /** Kills `pid`, a launcher or driver pid read from this case's own files, only while it is a live process naming this case's folder; anything else is an error, never a kill. */
+  kill(pid: number) {
+    if (!killNaming([this.mark], [pid]).includes(pid)) throw new Error(`pid ${pid} is not a live process of case ${this.dir}, so it was not killed`);
   }
 
-  /** Stops every process this case started, then removes its folder. */
-  cleanup() {
-    for (const pid of this.started()) if (Number.isInteger(pid) && pid > 4) kill(pid, true);
+  /** Stops what this case spawned and every live process naming its folder, until none is left, then removes the folder. */
+  async cleanup() {
+    for (const child of this.children) killOwnTree(child);
+    let left = procsNaming([this.mark]).get(this.mark) ?? [];
+    for (let i = 0; left.length > 0 && i < 20; i++) {
+      killNaming([this.mark]);
+      await sleep(500);
+      left = procsNaming([this.mark]).get(this.mark) ?? [];
+    }
+    if (left.length > 0) throw new Error(`case ${this.dir} still has live processes after its cleanup: ${left.join(' ')}`);
     fs.rmSync(this.dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   }
 }
