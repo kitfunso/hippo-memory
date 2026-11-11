@@ -111,7 +111,8 @@ export function closedTest({ T1, T2, T3 }, levels) {
   return { T1: t1, T2: t2, T3: t3, jointFalls };
 }
 
-const keysOf = (file) => Object.fromEntries(Object.entries(file.levels).map(([test, byThreshold]) => [test, Object.keys(byThreshold).sort()]));
+/** The tests and their thresholds, each sorted, so the order a file lists them in never separates two files. */
+const keysOf = (file) => Object.keys(file.levels).sort().map((test) => [test, Object.keys(file.levels[test]).sort()]);
 
 function checkPair(preFreeze, batch1) {
   if (preFreeze.source !== 'pre-freeze' || batch1.source !== 'batch-1') {

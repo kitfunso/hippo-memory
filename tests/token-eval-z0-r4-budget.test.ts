@@ -1,150 +1,14 @@
-// Round 4 prereg item 12 and the plan's Budget model: the spend projection, the one admission check, the sealed files and the budget CLI.
-// The whole-write cases of atomic-write.mjs sit here too: the plan names no test file for it.
+// Round 4 prereg item 12 and the plan's Budget model: the budget CLI, its log and its sealed files.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
-import { DESIGNS } from '../scripts/token-eval/arms.mjs';
-import { appendJsonLine, readSealed, writeFileAtomic } from '../scripts/token-eval/atomic-write.mjs';
-import { admissionOk, projectSpend, runCli, sequenceGap, stepProjection, wholeRun } from '../scripts/token-eval/z0-budget.mjs';
+import { appendJsonLine, readSealed } from '../scripts/token-eval/atomic-write.mjs';
+import { projectSpend, runCli, sequenceGap, wholeRun } from '../scripts/token-eval/z0-budget.mjs';
+import { ALL_ARMS, BASIS, BATCH1, BATCH2, BATCH2_SEQ, MEAN, SEQ, cents, plan, rule, sumsOver } from './_helpers/z0-r4-spend.js';
 
-// Round 3's recorded spend by arm and by batch 1 sequence (r3-bases.py on the round 3 run), unrounded.
-const BASIS = { A0: 314.93659099999996, A1: 386.4545920000009, A2: 385.2113900000005, A4: 256.7379992000001, A5: 373.4189512000002 };
-const SEQ = {
-  q12: { A0: 23.390040399999993, A1: 31.0537406, A2: 27.276879600000004, A4: 21.507720200000005, A5: 25.7946444 },
-  q14: { A0: 6.299849600000002, A1: 8.908169000000001, A2: 8.9157628, A4: 4.874098600000001, A5: 8.036368399999999 },
-  q140: { A0: 12.632800200000002, A1: 12.9875568, A2: 13.336087199999998, A4: 8.9711754, A5: 13.4532806 },
-  q145: { A0: 1.7979228000000003, A1: 1.0015326, A2: 1.2296926000000001, A4: 1.8101713999999998, A5: 1.7773954 },
-  q184: { A0: 7.272139400000002, A1: 8.829888200000003, A2: 8.913826, A4: 5.6796945999999995, A5: 8.950295200000003 },
-  q190: { A0: 8.991719199999999, A1: 10.146631600000001, A2: 11.240961999999998, A4: 7.870867800000001, A5: 10.227016999999998 },
-  q212: { A0: 12.3443082, A1: 15.6111226, A2: 15.932155599999998, A4: 9.772375799999999, A5: 15.209025400000002 },
-  q222: { A0: 6.994181, A1: 9.908843399999999, A2: 9.404470600000002, A4: 5.367052199999999, A5: 10.102072399999999 },
-  q226: { A0: 8.415646, A1: 9.394431800000003, A2: 10.121354799999999, A4: 5.976598000000001, A5: 10.433823600000004 },
-  q238: { A0: 7.886454799999999, A1: 8.901907, A2: 9.308398000000004, A4: 6.080827799999999, A5: 8.855432400000002 },
-};
-const BATCH2_SEQ = { qa: { A0: 30, A1: 40, A2: 40, A4: 20, A5: 40 }, qb: { A0: 20, A1: 30, A2: 30, A4: 10, A5: 30 }, qc: { A0: 10, A1: 20, A2: 20, A4: 5, A5: 20 } };
-const MEAN = 0.3449386223427768;
-const BATCH1 = Object.keys(SEQ);
-const BATCH2 = Object.keys(BATCH2_SEQ);
 const RULE_ARMS = ['O1', 'S1', 'S2', 'S5'];
-const cents = (x: number): string => x.toFixed(2);
-const sum = (xs: readonly number[]): number => xs.reduce((s, x) => s + x, 0);
-const rule = (n: number) => ({ O1: n, S1: n, S2: n, S5: n });
-const sumsOver = (table: Record<string, Record<string, number>>, keys: readonly string[]) => Object.fromEntries(Object.keys(BASIS).map((a) => [a, sum(keys.map((k) => table[k]![a]!))]));
-
-describe('projectSpend on round 3\'s unrounded bases, as r4-projection.py prints it', () => {
-  const gap = sequenceGap(SEQ, BATCH1);
-  const batch1 = sumsOver(SEQ, BATCH1);
-  const spend = (over: { basisByArm?: Record<string, number>; gapByArm?: Record<string, number>; r?: number; seedsByArm?: Record<string, number>; pilotUsd?: number; scale?: number }) => projectSpend({ basisByArm: BASIS, gapByArm: {}, r: 1, seedsByArm: {}, pilotUsd: 0, scale: 1, ...over });
-
-  it('gives 1284.83, 1714.02 and 2143.21 at r = 1, 1.5 and 2 with the $40 pilot', () => {
-    expect([1, 1.5, 2].map((r) => cents(spend({ r, pilotUsd: 40 })))).toEqual(['1284.83', '1714.02', '2143.21']);
-  });
-
-  it('gives the 5206.29 ceiling with the four rule arms at 9 seeds at r = 2', () => {
-    expect(cents(spend({ r: 2, pilotUsd: 40, seedsByArm: rule(9) }))).toBe('5206.29');
-  });
-
-  it('gives batch 1\'s 376.34 and 635.94 from its sequence sums with no gap', () => {
-    expect([1, 2].map((r) => cents(spend({ r, basisByArm: batch1 })))).toEqual(['376.34', '635.94']);
-  });
-
-  it('gives batch 1 with q145\'s gap 412.81 at r = 1 and 697.03 at r = 2', () => {
-    expect([1, 2].map((r) => cents(spend({ r, basisByArm: batch1, gapByArm: gap })))).toEqual(['412.81', '697.03']);
-  });
-
-  it('multiplies every projection by the scale and adds the pilot once, unscaled', () => {
-    const unscaled = spend({ r: 1.5, gapByArm: gap, seedsByArm: rule(5) });
-    expect(spend({ r: 1.5, gapByArm: gap, seedsByArm: rule(5), scale: 1.2 })).toBeCloseTo(1.2 * unscaled, 9);
-    expect(spend({ r: 1.5, gapByArm: gap, seedsByArm: rule(5), scale: 1.2, pilotUsd: 40 })).toBeCloseTo(1.2 * unscaled + 40, 9);
-  });
-
-  it('runs S0 and S4 at their own 2 seeds, and a seed count of 0 projects nothing for that arm', () => {
-    const none = { O1: 0, S0: 0, S1: 0, S2: 0, S4: 0, S5: 0 };
-    expect(spend({ seedsByArm: none })).toBe(0);
-    expect(spend({ seedsByArm: { ...none, S0: 2 } })).toBeCloseTo(0.5 * BASIS.A0, 9);
-    expect(spend({ seedsByArm: { ...none, O1: 3 } })).toBeCloseTo(BASIS.A1, 9);
-  });
-
-  it('refuses a basis that holds no spend for an arm\'s twin, naming the twin', () => {
-    const { A4: dropped, ...without } = BASIS;
-    expect(dropped).toBeGreaterThan(0);
-    expect(() => spend({ basisByArm: without })).toThrow(/no spend for A4/);
-  });
-
-  it('gives the q145 gaps A0 8.67, A1 11.86, A2 11.49, A4 6.65 and A5 10.56', () => {
-    expect(Object.fromEntries(Object.entries(gap).map(([a, x]) => [a, cents(x)]))).toEqual({ A0: '8.67', A1: '11.86', A2: '11.49', A4: '6.65', A5: '10.56' });
-  });
-
-  it('refuses a gap that cannot be taken: q145 missing from the keys or from the sequences, or a key with no row', () => {
-    expect(() => sequenceGap(SEQ, BATCH1.filter((q) => q !== 'q145'))).toThrow(/do not hold q145/);
-    const { q145: dropped, ...without } = SEQ;
-    expect(dropped.A0).toBeGreaterThan(0);
-    expect(() => sequenceGap(without, BATCH1)).toThrow(/no row for q145/);
-    expect(() => sequenceGap(SEQ, [...BATCH1, 'q999'])).toThrow(/no row for q999/);
-  });
-
-  it('gives the whole-run check 1641.63 and 2464.81 at r = 1 and 2745.37 and 4059.80 at r = 2, for 3 and 5 seeds, with the pilot and the 1.25 margin', () => {
-    const need = (r: number, seeds: number) => cents(40 + 1.25 * wholeRun({ basisByArm: BASIS, gapByArm: gap, r, seeds }));
-    expect([need(1, 3), need(1, 5), need(2, 3), need(2, 5)]).toEqual(['1641.63', '2464.81', '2745.37', '4059.80']);
-  });
-});
-
-/** `n` plan cells over the arms listed, in the runner's plan.json shape. */
-const plan = (n: number, arms: readonly string[]) => Array.from({ length: n }, (_, i) => ({ seed: 1, position: i + 1, arm: arms[i % arms.length]!, sequence: 's', taskId: `t${i}`, repo: 'r', kind: 'apply', familyId: 'f', set: 'R' }));
-const ALL_ARMS: readonly string[] = DESIGNS.r4.arms;
-
-describe('step projections at the measured mean per record', () => {
-  it('projects the smoke, 6 sessions and 2 warm-ups, at $2.76', () => {
-    expect(cents(stepProjection({ plans: [plan(6, ALL_ARMS)], meanPerRecord: MEAN, warmupUsd: undefined }))).toBe('2.76');
-  });
-
-  it('projects the pilot, 108 sessions and 4 effort sessions, at $38.63 before its 8 warm-ups', () => {
-    const plans = [plan(54, ['O1', 'S1', 'S2']), plan(54, ['O1', 'S1', 'S2']), plan(2, ['O1', 'S1']), plan(2, ['O1', 'S1'])];
-    expect(cents(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0 }))).toBe('38.63');
-    expect(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0.17 })).toBeCloseTo(112 * MEAN + 8 * 0.17, 9);
-    expect(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0.17 })).toBeLessThan(40);
-  });
-
-  it('projects 118 sessions, 2 more positions in one pilot repository, at $40.70', () => {
-    const plans = [plan(60, ['O1', 'S1', 'S2']), plan(54, ['O1', 'S1', 'S2']), plan(2, ['O1', 'S1']), plan(2, ['O1', 'S1'])];
-    expect(cents(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0 }))).toBe('40.70');
-  });
-
-  it('counts one warm-up per distinct model of each plan\'s Claude Code arms, and prices it at the mean when there is no measured cost', () => {
-    expect(stepProjection({ plans: [plan(4, ['S1', 'S2'])], meanPerRecord: 1, warmupUsd: 5 })).toBe(9);
-    expect(stepProjection({ plans: [plan(4, ['O1', 'S1'])], meanPerRecord: 1, warmupUsd: 5 })).toBe(14);
-    expect(stepProjection({ plans: [plan(4, ['O1', 'S1'])], meanPerRecord: 1, warmupUsd: undefined })).toBe(6);
-  });
-});
-
-describe('admissionOk, the one check', () => {
-  const ok = (over: { ledger?: number; projection?: number; margin?: number; figure?: number | null; cap?: number | null; capSpend?: number }) => admissionOk({ ledger: 1000, projection: 30, margin: 1.25, figure: 1100, cap: null, capSpend: 0, ...over });
-
-  it('is true only when ledger + margin x projection is at most the figure', () => {
-    expect([ok({ figure: 1037.5 }), ok({ figure: 1037.49 })]).toEqual([true, false]);
-  });
-
-  it('reads the margin on the projection alone: a case that fits ledger + 1.25 x projection and misses 1.25 x (ledger + projection)', () => {
-    const fits = { ledger: 1000, projection: 100, figure: 1130 };
-    expect(fits.ledger + 1.25 * fits.projection).toBeLessThanOrEqual(fits.figure);
-    expect(1.25 * (fits.ledger + fits.projection)).toBeGreaterThan(fits.figure);
-    expect(ok(fits)).toBe(true);
-  });
-
-  it('with ledger 1000, projection 30 and figure 1035 passes at margin 1 and refuses at 1.25 (1037.50)', () => {
-    expect([ok({ figure: 1035, margin: 1 }), ok({ figure: 1035, margin: 1.25 })]).toEqual([true, false]);
-  });
-
-  it('tests the cap on capSpend + projection where the step has one, and skips the figure in a cap-only check', () => {
-    expect([ok({ margin: 1, cap: 40 }), ok({ margin: 1, cap: 29.99 })]).toEqual([true, false]);
-    expect(ok({ margin: 1, cap: 40, capSpend: 11 })).toBe(false);
-    expect(ok({ margin: 1, cap: 40, capSpend: 10 })).toBe(true);
-    expect(ok({ figure: null, margin: 1, cap: 40, capSpend: 9 })).toBe(true);
-    expect(ok({ ledger: 5000, figure: null, margin: 1, cap: 40, capSpend: 11 })).toBe(false);
-  });
-});
 
 /* ------------------------------------------------------------------------------------------------ the CLI */
 
@@ -157,7 +21,7 @@ const SLOW = { r: { S1: 0.3, S2: 0.3 }, rMax: 0.3 };
 
 interface RootOver { spend?: { meanPerRecord: number }; pins?: { batch1Keys?: string | string[]; batch2Keys?: string | string[]; wholeRunSeeds?: string | number }; pilot?: PilotOver }
 interface Root { dir: string; log: string; basis: string; pins: string; pilot: string }
-interface LogEntry { kind: string; step: string; attempt: number; units: string[]; pinsSha256: string; approved: number; ledgerBefore: number; projection: number; scale: number;
+interface LogEntry { kind: string; step: string; attempt: number; units: string[]; pinsSha256: string; approved: number; ledgerBefore: number; projection: number; ownProjection: number; scale: number;
   margin: number; cap: number | null; capSpend: number | null; admitted: boolean; reason: string | null; maxSeed: number | null; at: string; question: string; figure: number | null; stop: boolean; words: string }
 
 type Json = string | number | boolean | null | readonly Json[] | { readonly [key: string]: Json | undefined };
@@ -198,7 +62,8 @@ describe('admit: the smoke and the pilot', () => {
     const [e] = entries(root);
     expect(e).toMatchObject({ kind: 'admit', step: 'smoke', attempt: 1, units: ['w1'], approved: 1035, ledgerBefore: 1000, scale: 1, margin: 1, cap: null, capSpend: null, admitted: true, reason: null, maxSeed: null, pinsSha256: sha(root.pins), at: '2026-11-11T00:00:00.000Z' });
     expect(cents(e!.projection)).toBe('2.76');
-    expect(Object.keys(e!).sort()).toEqual(['admitted', 'approved', 'at', 'attempt', 'cap', 'capSpend', 'kind', 'ledgerBefore', 'margin', 'maxSeed', 'pinsSha256', 'projection', 'reason', 'scale', 'step', 'units']);
+    expect(e!.ownProjection).toBe(e!.projection);
+    expect(Object.keys(e!).sort()).toEqual(['admitted', 'approved', 'at', 'attempt', 'cap', 'capSpend', 'kind', 'ledgerBefore', 'margin', 'maxSeed', 'ownProjection', 'pinsSha256', 'projection', 'reason', 'scale', 'step', 'units']);
   });
 
   it('refuses a smoke that does not fit with exit 3 and the plan\'s line, and still logs it', () => {
@@ -333,6 +198,14 @@ describe('admit: a started scope and the approved figure', () => {
     runCli(['founder-go', '--question', 'pilot', '--figure', '9000', '--attempt', '1', '--words', 'go on', '--log', root.log]);
     expect(smoke(root, { approved: '2600' }).code).toBe(1);
   });
+
+  it('reads a stop as no yes: a stopped figure go names no figure and a stopped pilot go lifts no cap', () => {
+    const root = makeRoot();
+    for (const rest of [['figure', '--figure', '2600'], ['pilot', '--figure', '45', '--attempt', '1']]) runCli(['founder-go', '--question', ...rest, '--stop', '--words', 'stop', '--log', root.log]);
+    expect(smoke(root, { approved: '2600' }).stderr).toContain('no founder go names it');
+    const pilot = admit(root, { step: 'pilot', extra: ['--plans', planFile(root, 'p.json', plan(118, ['O1', 'S1', 'S2'])), '--warmups', warmups(root, { 'claude-opus-5-5': 0.17 })] });
+    expect(pilot.code).toBe(4);
+  });
 });
 
 describe('admit: the whole run', () => {
@@ -365,6 +238,14 @@ describe('admit: the whole run', () => {
     expect(r.code).toBe(4);
     expect(r.stderr).toMatch(/FOUNDER: S1 has r 0\.3 on the pilot, 1\.9 or more: .*0\.95 of Opus's or more/);
     expect(last(root)).toMatchObject({ admitted: false, reason: 'r' });
+  });
+
+  it('names every arm whose pilot r is 1.9 or more, not only the largest', () => {
+    const root = makeRoot({ pilot: { r: { S1: 2, S2: 1.95 }, rArm: 'S1', rMax: 2, flag19: true } });
+    expect(goFigure(root, '5000').code).toBe(0);
+    const r = whole(root, { approved: '5000', ledger: '0' });
+    expect([r.code, last(root).reason]).toEqual([4, 'r']);
+    expect(r.stderr).toMatch(/S1 has r 2, S2 has r 1\.95 on the pilot, 1\.9 or more/);
   });
 
   it('puts the figure refusal ahead of the r refusal when both hold', () => {
@@ -408,6 +289,15 @@ describe('admit: batches', () => {
     expect(entries(root)[0]).toMatchObject({ admitted: false, reason: 'figure', units: BATCH1.map((k) => `${k}-w1`) });
     expect(admit(root, { step: 'batch-1', approved: '1000', ledger: '40', extra: batch1Args(root) }).code).toBe(0);
     expect(JSON.parse(fs.readFileSync(mark, 'utf8'))).toMatchObject({ step: 'batch-1', attempt: 1 });
+  });
+
+  it('removes an earlier mark when a later admit of the same batch is refused, after logging the refusal', () => {
+    const root = makeRoot();
+    const mark = path.join(root.dir, 'batch1', 'ADMITTED');
+    expect(admit(root, { step: 'batch-1', approved: '1000', ledger: '40', extra: batch1Args(root) }).code).toBe(0);
+    expect(fs.existsSync(mark)).toBe(true);
+    expect(admit(root, { step: 'batch-1', approved: '300', ledger: '40', extra: batch1Args(root) }).code).toBe(3);
+    expect([fs.existsSync(mark), entries(root).map((e) => e.admitted)]).toEqual([false, [true, false]]);
   });
 
   it('adds nothing for the pilot: with $40 of pilot in the ledger the projection is projectSpend at pilotUsd 0', () => {
@@ -477,6 +367,17 @@ describe('admit: batches', () => {
       return last(root).projection;
     };
     expect(at(1.2)).toBeCloseTo(1.2 * at(1), 9);
+  });
+
+  it('exits 1 naming the arm and the file when the seed preview holds no whole count from 3 to 9 for a rule arm, and logs nothing', () => {
+    const root = makeRoot();
+    const scale = writeJson(path.join(root.dir, 'scale.json'), { scale: 1 });
+    const bad: [string, Record<string, number>][] = [['S5', { O1: 5, S1: 5, S2: 5 }], ['S2', { ...rule(5), S2: 4.5 }], ['O1', { ...rule(5), O1: 10 }]];
+    for (const [arm, counts] of bad) {
+      const r = admit(root, { step: 'batch-2', extra: batch2Args(root, scale, counts) });
+      expect([r.code, r.stderr]).toEqual([1, expect.stringContaining(`seed preview ${path.join(root.dir, 'seed-preview.json')} has no seed count for ${arm}`)]);
+    }
+    expect(entries(root)).toEqual([]);
   });
 
   it('exits 1 when batch 2\'s units are not batch2Keys, naming both lists', () => {
@@ -574,6 +475,15 @@ describe('admit: the seed raise', () => {
     expect(entries(root)[0]!.projection).toBeCloseTo(want, 9);
   });
 
+  it('seals max-seed before it writes the mark: a seal that cannot be written leaves no mark', () => {
+    const root = makeRoot();
+    const args = seedArgs(root, 5);
+    fs.writeFileSync(path.join(root.dir, 'blocker'), 'a file where the seal\'s folder should be');
+    args[args.indexOf('--seal') + 1] = path.join(root.dir, 'blocker', 'max-seed.json');
+    expect(admit(root, { step: 'seeds', approved: '2140', ledger: '100', extra: args }).code).toBe(1);
+    expect(fs.existsSync(path.join(root.dir, 'raise', 'ADMITTED'))).toBe(false);
+  });
+
   it('refuses a seed rule with no count for a rule arm, and a seeds step with no --seal', () => {
     const root = makeRoot();
     const args = seedArgs(root, 5);
@@ -587,7 +497,7 @@ describe('admit: the seed raise', () => {
 });
 
 describe('scale and founder-go', () => {
-  const scaleArgs = (root: Root, ledger: string) => ['scale', '--ledger-total', ledger, '--spend-basis', root.basis, '--pins', root.pins, '--pilot', root.pilot, '--out', path.join(root.dir, 'scale.json')];
+  const scaleArgs = (root: Root, ledger: string) => ['scale', '--batch1-ledger', ledger,'--spend-basis', root.basis, '--pins', root.pins, '--pilot', root.pilot, '--out', path.join(root.dir, 'scale.json')];
   const go = (root: Root, ...rest: string[]) => runCli(['founder-go', '--log', root.log, ...rest]);
 
   it('writes the ledger over batch 1\'s scale-1 projection, and a second call leaves the file as it was', () => {
@@ -612,6 +522,13 @@ describe('scale and founder-go', () => {
     expect(last(root).scale).toBe(sealedScale);
   });
 
+  it('reads batch 1\'s ledger from --batch1-ledger, and refuses --ledger-total there', () => {
+    const root = makeRoot();
+    const r = runCli(scaleArgs(root, '826').map((a) => (a === '--batch1-ledger' ? '--ledger-total' : a)));
+    expect([r.code, r.stderr]).toEqual([1, expect.stringContaining('scale needs --batch1-ledger')]);
+    expect(fs.existsSync(path.join(root.dir, 'scale.json'))).toBe(false);
+  });
+
   it('refuses a scale over a ledger of 0 and writes no file', () => {
     const root = makeRoot();
     expect(runCli(scaleArgs(root, '0')).code).toBe(1);
@@ -624,6 +541,21 @@ describe('scale and founder-go', () => {
     expect(go(root, '--question', 'pilot', '--figure', '45', '--attempt', '2', '--words', 'go on', '--stop').code).toBe(0);
     expect(entries(root).map((e) => [e.kind, e.question, e.figure, e.stop, e.words])).toEqual([['founder-go', 'power', null, false, 'go on'], ['founder-go', 'pilot', 45, true, 'go on']]);
     expect(Object.keys(entries(root)[0]!).sort()).toEqual(['at', 'attempt', 'figure', 'kind', 'question', 'stop', 'words']);
+  });
+
+  it('stamps a founder go with the injected clock', () => {
+    const root = makeRoot();
+    runCli(['founder-go', '--question', 'power', '--words', 'go on', '--log', root.log], root.dir, () => new Date('2026-11-11T00:00:00Z'));
+    expect(last(root).at).toBe('2026-11-11T00:00:00.000Z');
+  });
+
+  it('records a stop with no figure for every question, a pilot stop with its attempt, and a whole-run stop after a figure refusal', () => {
+    const root = makeRoot();
+    admit(root, { step: 'whole-run', approved: '2140', ledger: '100', extra: ['--pilot', root.pilot] });
+    for (const q of ['figure', 'whole-run', 'power']) expect(go(root, '--question', q, '--stop', '--words', 'stop').code).toBe(0);
+    expect(go(root, '--question', 'pilot', '--stop', '--words', 'stop').stderr).toContain('founder-go needs --attempt');
+    expect(go(root, '--question', 'pilot', '--attempt', '1', '--stop', '--words', 'stop').code).toBe(0);
+    expect(entries(root).slice(1).map((e) => [e.question, e.figure, e.stop])).toEqual([['figure', null, true], ['whole-run', null, true], ['power', null, true], ['pilot', null, true]]);
   });
 
   it('exits 1 for empty words, a figure go with no figure, a pilot go with no attempt, and an unknown question', () => {
@@ -678,6 +610,19 @@ describe('report', () => {
     expect(lines.filter((l: string) => l.includes('OVERRUN'))).toHaveLength(1);
   });
 
+  it('compares batch 2\'s ledger growth with its own base projection, not the gate figure that adds the raise preview', () => {
+    const root = makeRoot();
+    const extra = ['--pilot', root.pilot, '--scale', writeJson(path.join(root.dir, 's.json'), { scale: 1 }), '--mark', path.join(root.dir, 'm'),
+      '--seed-preview', writeJson(path.join(root.dir, 'sp.json'), { schema: 'z0-seed-preview/1', countsByArm: rule(9) }), ...units(root, 'b2', BATCH2)];
+    expect(goFigure(root, '5000').code).toBe(0);
+    expect(admit(root, { step: 'batch-2', approved: '5000', extra }).code).toBe(0);
+    const base = projectSpend({ basisByArm: sumsOver(BATCH2_SEQ, BATCH2), r: 1 });
+    expect(last(root).ownProjection).toBeCloseTo(base, 9);
+    expect(last(root).projection).toBeGreaterThan(2 * base);
+    const r = runCli(['report', '--log', root.log, '--ledger-total', String(2 * base), '--approved', '5000', '--pins', root.pins]);
+    expect(r.stdout).toContain(`projected $${cents(base)}, ledger grew $${cents(2 * base)}; OVERRUN by $${cents(base)}`);
+  });
+
   it('prints pilot: none when no pilot file is given or the file is absent, and flags a total over the approved figure', () => {
     const root = makeRoot();
     expect(report(root).stdout).toContain('pilot: none');
@@ -723,6 +668,7 @@ describe('usage errors', () => {
     expect(bad.map((r) => r.code)).toEqual([1, 1, 1, 1, 1, 1]);
     expect(bad.every((r) => r.stderr.includes('usage: z0-budget.mjs admit'))).toBe(true);
     expect(bad[3]!.stderr).toContain('admit needs --log');
+    expect(bad[0]!.stderr).toContain('repeat the flag once per folder');
     expect(bad[5]!.stderr).toContain('--log given twice');
   });
 
@@ -747,87 +693,17 @@ describe('usage errors', () => {
   });
 });
 
-/* ------------------------------------------------------------------------------------------- atomic-write */
-
-const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'z0-atomic-'));
-const busy = (code: string): Error => Object.assign(new Error(`${code}: busy`), { code });
-
-describe('writeFileAtomic', () => {
-  it('writes the whole text, making the folder', () => {
-    const file = path.join(tmp(), 'a', 'b', 'out.json');
-    writeFileAtomic(file, '{"a":1}\n');
-    expect(fs.readFileSync(file, 'utf8')).toBe('{"a":1}\n');
-    expect(fs.readdirSync(path.dirname(file))).toEqual(['out.json']);
-  });
-
-  it('killed between the temp write and the rename leaves the target as it was, and the next call deletes the temp', () => {
-    const file = path.join(tmp(), 'out.json');
-    writeFileAtomic(file, 'old');
-    const killed = () => { throw new Error('killed'); };
-    expect(() => writeFileAtomic(file, 'new', killed)).toThrow('killed');
-    expect(fs.readFileSync(file, 'utf8')).toBe('old');
-    expect(fs.readdirSync(path.dirname(file)).filter((n) => n.startsWith('out.json.tmp-'))).toHaveLength(1);
-    fs.writeFileSync(path.join(path.dirname(file), 'out.json.tmp-424242'), 'half');
-    writeFileAtomic(file, 'newer');
-    expect(fs.readFileSync(file, 'utf8')).toBe('newer');
-    expect(fs.readdirSync(path.dirname(file))).toEqual(['out.json']);
-  });
-
-  it('leaves another file\'s temp alone', () => {
-    const dir = tmp();
-    fs.writeFileSync(path.join(dir, 'other.json.tmp-1'), 'x');
-    writeFileAtomic(path.join(dir, 'out.json'), 'y');
-    expect(fs.readdirSync(dir).sort()).toEqual(['other.json.tmp-1', 'out.json']);
-  });
-
-  it('retries a busy rename 3 times and then writes', () => {
-    const file = path.join(tmp(), 'out.json');
-    let calls = 0;
-    writeFileAtomic(file, 'done', (from, to) => {
-      calls++;
-      if (calls <= 3) throw busy('EBUSY');
-      fs.renameSync(from, to);
-    });
-    expect([calls, fs.readFileSync(file, 'utf8')]).toEqual([4, 'done']);
-  });
-
-  it('throws the busy error when the rename stays busy, after 4 tries, and never retries another error', () => {
-    const file = path.join(tmp(), 'out.json');
-    let calls = 0;
-    expect(() => writeFileAtomic(file, 'x', () => { calls++; throw busy('EPERM'); })).toThrow(/EPERM/);
-    expect(calls).toBe(4);
-    calls = 0;
-    expect(() => writeFileAtomic(file, 'x', () => { calls++; throw busy('ENOENT'); })).toThrow(/ENOENT/);
-    expect(calls).toBe(1);
-    expect(fs.existsSync(file)).toBe(false);
+describe('the pins file', () => {
+  it('names the file when it does not parse', () => {
+    const root = makeRoot();
+    fs.writeFileSync(root.pins, '{not json');
+    const r = admit(root, { step: 'smoke', extra: ['--plans', planFile(root, 'smoke.json', plan(6, ALL_ARMS))] });
+    expect([r.code, r.stderr]).toEqual([1, expect.stringContaining(`pins ${root.pins} is not JSON`)]);
   });
 });
 
-describe('appendJsonLine and readSealed', () => {
-  it('appends one line per call and creates the file', () => {
-    const file = path.join(tmp(), 'log.jsonl');
-    appendJsonLine(file, { a: 1 });
-    appendJsonLine(file, { b: 2 });
-    expect(fs.readFileSync(file, 'utf8')).toBe('{"a":1}\n{"b":2}\n');
-  });
-
-  it('drops a torn last line first, after lines that hold multi-byte characters', () => {
-    const file = path.join(tmp(), 'log.jsonl');
-    fs.writeFileSync(file, '{"name":"é"}\n{"name":"ü"}\n{"b":');
-    appendJsonLine(file, { c: 3 });
-    expect(fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))).toEqual([{ name: 'é' }, { name: 'ü' }, { c: 3 }]);
-  });
-
-  it('reads a sealed file, null when it is absent, and throws the plan\'s line when it does not parse', () => {
-    const dir = tmp();
-    expect(readSealed(path.join(dir, 'none.json'))).toBeNull();
-    writeFileAtomic(path.join(dir, 's.json'), '{"scale":1.2}\n');
-    expect(readSealed(path.join(dir, 's.json'))).toEqual({ scale: 1.2 });
-    fs.writeFileSync(path.join(dir, 'bad.json'), '{"scale":');
-    expect(() => readSealed(path.join(dir, 'bad.json'))).toThrow(`${path.join(dir, 'bad.json')}: sealed file does not parse; the harness never rebuilds it`);
-  });
-
-  it('a budget log with a torn last line is read without it, and the next entry lands whole', () => {
+describe('the budget log', () => {
+  it('is read without a torn last line, and the next entry lands whole', () => {
     const root = makeRoot();
     fs.writeFileSync(root.log, `${JSON.stringify({ kind: 'founder-go', question: 'figure', figure: 2600, attempt: null, stop: false, words: 'w', at: 'x' })}\n{"kind":"admit","ste`);
     const r = admit(root, { step: 'smoke', approved: '2600', extra: ['--plans', planFile(root, 'smoke.json', plan(6, ALL_ARMS))] });

@@ -423,6 +423,12 @@ describe('minLevels', () => {
     expect(() => minLevels(levelsFile('pre-freeze', { levels: noThreshold }), levelsFile('batch-1', { levels: noThreshold }), quiet)).toThrow(/T2b at 0\.025/);
   });
 
+  it('accepts the same tests and thresholds listed in another key order', () => {
+    const reversed = (file: LevelsFile) => ({ ...file, levels: Object.fromEntries(Object.entries(file.levels).reverse().map(([test, byThreshold]) => [test, Object.fromEntries(Object.entries(byThreshold).reverse())])) });
+    const min = minLevels(levelsFile('pre-freeze'), reversed(levelsFile('batch-1')), quiet);
+    expect(Object.keys(min)).toEqual(['T1', 'T3', 'T2a', 'T2b', 'T2c']);
+  });
+
   it('refuses files that hold different tests', () => {
     const extra = { ...levelsFile('batch-1').levels, T2aMiss: both(entry(0.02)) };
     expect(() => minLevels(levelsFile('pre-freeze'), levelsFile('batch-1', { levels: extra }), quiet)).toThrow(/different tests or thresholds/);

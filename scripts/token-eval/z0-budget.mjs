@@ -22,10 +22,14 @@ const R4_ARMS = DESIGNS.r4.arms;
 const RULE_ARMS = R4_ARMS.filter((a) => ARM_TABLE[a].seedRule);
 const BASE_SEEDS = ARM_TABLE[RULE_ARMS[0]].seeds;
 const AT_R = 2;
+// The pilot's r at which prereg item 12 names the arm to the founder.
+const R_FLAG = 1.9;
 const USAGE = 'usage: z0-budget.mjs admit --step <smoke|pilot|whole-run|batch-1|batch-2|seeds> --attempt <n> --approved <usd> --ledger-total <usd> --spend-basis <f> --pins <f> --log <f>\n'
-  + '         [--units <folder>...] [--plans <f>...] [--warmups <dir>] [--pilot <f>] [--scale <f>] [--seed-preview <f>] [--seed-rule <f>] [--seal <f>] [--mark <f>] [--cap-only --attempt-ledger <usd>]\n'
-  + '       z0-budget.mjs scale --ledger-total <usd> --spend-basis <f> --pins <f> --pilot <f> --out <f>\n'
-  + '       z0-budget.mjs founder-go --question <whole-run|power|pilot|figure> [--figure <usd>] [--attempt <n>] [--stop] --words "<text>" --log <f>\n'
+  + '         [--units <folder>: repeat the flag once per folder] [--plans <f>: repeat the flag once per plan] [--warmups <dir>] [--pilot <f>] [--scale <f>] [--seed-preview <f>] [--seed-rule <f>] [--seal <f>] [--mark <f>]\n'
+  + '         [--cap-only --attempt-ledger <usd>]\n'
+  + '       z0-budget.mjs scale --batch1-ledger <usd> --spend-basis <f> --pins <f> --pilot <f> --out <f>\n'
+  + '         (--batch1-ledger is the ledger over batch 1\'s unit folders only, so the pilot stays out)\n'
+  + '       z0-budget.mjs founder-go --question <whole-run|power|pilot|figure> [--figure <usd>: figure and pilot need it unless --stop] [--attempt <n>: pilot needs it] [--stop] --words "<text>" --log <f>\n'
   + '       z0-budget.mjs report --log <f> --ledger-total <usd> --approved <usd> --pins <f> [--pilot <f>] [--stopped <id> --step <step>]\n'
   + '       z0-budget.mjs project --spend-basis <f> --pins <f>\n'
   + 'exit 0 pass, 1 input error, 3 or 4 or 5 or 6 a refusal named by its line';
@@ -134,7 +138,11 @@ function readPilot(file) {
 /** The pins file's parsed body and the sha256 of its bytes; `z0-pins-check --write` stores every value as a string. */
 function readPins(file) {
   const bytes = fs.readFileSync(file);
-  return { ...JSON.parse(bytes.toString('utf8')), sha256: createHash('sha256').update(bytes).digest('hex') };
+  try {
+    return { ...JSON.parse(bytes.toString('utf8')), sha256: createHash('sha256').update(bytes).digest('hex') };
+  } catch (err) {
+    throw new Error(`pins ${file} is not JSON: ${err.message}`, { cause: err });
+  }
 }
 
 /** A pins key list, held as an array or as one comma-separated string. */
@@ -183,7 +191,7 @@ function warmupCost(dir) {
 /* ------------------------------------------------------------------------------------------------ arguments */
 
 const COMMANDS = new Set(['admit', 'scale', 'founder-go', 'report', 'project']);
-const VALUE_FLAGS = new Set(['--step', '--attempt', '--approved', '--ledger-total', '--spend-basis', '--pins', '--log', '--warmups', '--pilot', '--scale', '--seed-preview',
+const VALUE_FLAGS = new Set(['--step', '--attempt', '--approved', '--ledger-total', '--batch1-ledger', '--spend-basis', '--pins', '--log', '--warmups', '--pilot', '--scale', '--seed-preview',
   '--seed-rule', '--seal', '--mark', '--attempt-ledger', '--out', '--question', '--figure', '--words', '--stopped']);
 const LIST_FLAGS = new Set(['--units', '--plans']);
 const SWITCHES = new Set(['--cap-only', '--stop']);
@@ -254,6 +262,18 @@ function checkKeys(units, pins, pinKey) {
   }
 }
 
+/** The founder's yes answers to one question, in order: a go logged with --stop is a stop, never a yes. */
+const yesGos = (entries, question) => entries.filter((e) => e.kind === 'founder-go' && e.question === question && !e.stop);
+
+/** Each rule arm's seed count from a seed rule or seed preview, a whole number from the base count to the cap. */
+function ruleCounts(counts, what, file) {
+  return Object.fromEntries(RULE_ARMS.map((a) => {
+    const n = counts?.[a];
+    if (!Number.isInteger(n) || n < BASE_SEEDS || n > SEED_CAP) throw new Error(`${what} ${file} has no seed count for ${a} from ${BASE_SEEDS} to ${SEED_CAP}`);
+    return [a, n];
+  }));
+}
+
 /** A step's inputs read once, and its projection with the margin, cap and scale it runs at. `figure` is false for a cap-only check. */
 const PLANNERS = {
   smoke(args, cwd) {
@@ -267,7 +287,7 @@ const PLANNERS = {
     const plans = listFlag(args, '--plans').map((f) => parsePlan(fs.readFileSync(path.resolve(cwd, f), 'utf8'), f));
     if (plans.length === 0) throw usage('admit --step pilot needs --plans');
     const projection = stepProjection({ plans, meanPerRecord: basis.meanPerRecord, warmupUsd: warmupCost(filePath(args, '--warmups', cwd)) });
-    const gos = ctx.entries.filter((e) => e.kind === 'founder-go' && e.question === 'pilot' && e.attempt === ctx.attempt);
+    const gos = yesGos(ctx.entries, 'pilot').filter((e) => e.attempt === ctx.attempt);
     const cap = Math.max(PILOT_BUDGET, gos.length === 0 ? 0 : gos.at(-1).figure);
     const capOnly = args.flags.has('--cap-only');
     return { projection, margin: 1, cap, capSpend: capOnly ? usdFlag(args, '--attempt-ledger') : 0, scale: 1, figure: !capOnly };
@@ -290,10 +310,12 @@ const PLANNERS = {
     const units = listFlag(args, '--units');
     checkKeys(units, pins, 'batch2Keys');
     const [scale, r] = [readScale(filePath(args, '--scale', cwd)), pilot.rMax];
-    const counts = readSchema(filePath(args, '--seed-preview', cwd), 'seed preview', SEED_PREVIEW_SCHEMA).countsByArm;
+    const preview = readSchema(filePath(args, '--seed-preview', cwd), 'seed preview', SEED_PREVIEW_SCHEMA);
+    const counts = ruleCounts(preview.countsByArm, 'seed preview', args.flags.get('--seed-preview'));
     const base = projectSpend({ basisByArm: sumsOver(basis.bySequence, listOf(pins, 'batch2Keys')), r, scale });
     const raise = projectSpend({ basisByArm: basis.basisByArm, gapByArm: sequenceGap(basis.bySequence, listOf(pins, 'batch1Keys')), r, seedsByArm: raiseSeeds(counts, SEED_CAP), scale });
-    return { projection: base + raise, margin: GATE_MARGIN, cap: null, capSpend: 0, scale, figure: true };
+    // The gate adds the raise preview; the batch's own spend, the one `report` compares growth with, is the base term.
+    return { projection: base + raise, ownProjection: base, margin: GATE_MARGIN, cap: null, capSpend: 0, scale, figure: true };
   },
 };
 
@@ -301,10 +323,7 @@ const PLANNERS = {
 function raisePlan(args, cwd, ctx) {
   const [basis, pins, pilot] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd)), readPilot(filePath(args, '--pilot', cwd))];
   const rule = readSchema(filePath(args, '--seed-rule', cwd), 'seed rule', SEED_RULE_SCHEMA);
-  const counts = Object.fromEntries(RULE_ARMS.map((a) => {
-    if (!Number.isInteger(rule.seeds?.[a])) throw new Error(`seed rule ${args.flags.get('--seed-rule')} has no seed count for ${a}`);
-    return [a, rule.seeds[a]];
-  }));
+  const counts = ruleCounts(rule.seeds, 'seed rule', args.flags.get('--seed-rule'));
   const [scale, k] = [readScale(filePath(args, '--scale', cwd)), Math.max(...Object.values(counts))];
   const gapByArm = sequenceGap(basis.bySequence, listOf(pins, 'batch1Keys'));
   const at = (j) => projectSpend({ basisByArm: basis.basisByArm, gapByArm, r: pilot.rMax, seedsByArm: raiseSeeds(counts, j), scale });
@@ -318,6 +337,12 @@ function raisePlan(args, cwd, ctx) {
   return { projection: at(j), margin: GATE_MARGIN, cap: null, capSpend: 0, scale, figure: true, maxSeed: j, count: k };
 }
 
+/** "S1 has r 2, S2 has r 1.95": every arm whose pilot r is at the flag; the pilot's own largest-r arm when none is. */
+function hotArms(pilot) {
+  const hot = Object.entries(pilot.r ?? {}).filter(([, r]) => r >= R_FLAG);
+  return (hot.length > 0 ? hot : [[pilot.rArm, pilot.rMax]]).map(([arm, r]) => `${arm} has r ${r}`).join(', ');
+}
+
 /** The refusal each step and reason takes: its exit code and its line. */
 const REFUSALS = {
   smoke: { figure: [3, (c) => `STOP: smoke does not fit: $${money(c.ledger)} + $${money(c.projection)} above $${money(c.approved)}`] },
@@ -327,7 +352,7 @@ const REFUSALS = {
   },
   'whole-run': {
     figure: [4, (c) => `FOUNDER: the whole run needs $${money(c.ledger + c.margin * c.projection)}; approved $${money(c.approved)}`],
-    r: [4, (c) => `FOUNDER: ${c.pilot.rArm} has r ${c.pilot.rMax} on the pilot, 1.9 or more: on the pilot tasks its cost per task is 0.95 of Opus's or more before any saving; go on or stop`],
+    r: [4, (c) => `FOUNDER: ${hotArms(c.pilot)} on the pilot, ${R_FLAG} or more: on the pilot tasks the cost per task of each is 0.95 of Opus's or more before any saving; go on or stop`],
   },
   'batch-1': { figure: [3, (c) => `STOP: batch 1 needs $${money(c.ledger + c.margin * c.projection)}; approved $${money(c.approved)}`] },
   'batch-2': { figure: [5, (c) => `STOP: batch 2 needs $${money(c.ledger + c.margin * c.projection)}; approved $${money(c.approved)}; no claim unless the founder raises the figure`] },
@@ -352,7 +377,7 @@ function admit(args, cwd, now) {
   const mark = ['batch-1', 'batch-2', 'seeds'].includes(step) ? filePath(args, '--mark', cwd) : null;
   checkNotStarted(units, seal === null ? null : path.resolve(cwd, seal), SCOPES[step]);
   const entries = readLog(log);
-  const named = entries.some((e) => e.kind === 'founder-go' && e.question === 'figure' && e.figure >= approved);
+  const named = yesGos(entries, 'figure').some((e) => e.figure >= approved);
   if (approved > APPROVED_FIGURE && !named) throw new Error(`--approved ${need(args, '--approved')} is above $${APPROVED_FIGURE.toLocaleString('en-US')}.00 and no founder go names it`);
 
   const ctx = { entries, attempt, ledger, approved };
@@ -365,16 +390,19 @@ function admit(args, cwd, now) {
   if (sealedSeeds) reason = plan.maxSeed < plan.count ? 'cap' : null;
   const entry = {
     kind: 'admit', step, attempt, units: units.map((u) => path.basename(u)), pinsSha256: readPins(pinsFile).sha256, approved, ledgerBefore: ledger, projection: plan.projection,
-    scale: plan.scale, margin: plan.margin, cap: plan.cap, capSpend: plan.cap === null ? null : plan.capSpend, admitted, reason, maxSeed: plan.maxSeed ?? null, at: now().toISOString(),
+    ownProjection: plan.ownProjection ?? plan.projection, scale: plan.scale, margin: plan.margin, cap: plan.cap, capSpend: plan.cap === null ? null : plan.capSpend, admitted, reason, maxSeed: plan.maxSeed ?? null, at: now().toISOString(),
   };
   appendJsonLine(log, entry);
   const lines = plan.lines ?? [];
   if (sealedSeeds) {
-    writeMark(mark, entry);
+    // The seal goes first: a mark that outlives a failed seal write would let a driver start on a cap nothing recorded.
     writeFileAtomic(path.resolve(cwd, seal), `${JSON.stringify({ maxSeed: plan.maxSeed, count: plan.count })}\n`);
+    writeMark(mark, entry);
     return reason === null ? answer(0, `max-seed ${plan.count}`) : answer(6, '', `CAP: max-seed ${plan.maxSeed} of ${plan.count}`);
   }
   if (reason !== null) {
+    // A refusal takes back an earlier pass's mark, so a driver script never reads a stale yes.
+    if (mark !== null) fs.rmSync(mark, { force: true });
     const [code, line] = REFUSALS[step][reason];
     return answer(code, lines.join('\n'), line({ ...plan, ledger, approved }));
   }
@@ -388,7 +416,7 @@ function sealScale(args, cwd) {
   const out = filePath(args, '--out', cwd);
   const sealed = readSealed(out);
   if (sealed !== null) return answer(0, `scale ${sealed.scale} (sealed, ${out} is left as it was)`);
-  const ledger = usdFlag(args, '--ledger-total');
+  const ledger = usdFlag(args, '--batch1-ledger');
   const [basis, pins, pilot] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd)), readPilot(filePath(args, '--pilot', cwd))];
   const projection = batch1Spend(basis, pins, pilot.rMax);
   if (!(ledger > 0) || !(projection > 0)) throw new Error(`scale: the ledger $${ledger} and batch 1's projection $${projection} must both be above 0`);
@@ -398,20 +426,22 @@ function sealScale(args, cwd) {
 
 const QUESTIONS = new Set(['whole-run', 'power', 'pilot', 'figure']);
 
-function founderGo(args, cwd) {
+function founderGo(args, cwd, now) {
   const question = need(args, '--question');
   if (!QUESTIONS.has(question)) throw usage(`--question ${question} is not one of ${[...QUESTIONS].join(', ')}`);
   const words = need(args, '--words').trim();
   if (words === '') throw usage('--words must hold the founder\'s words');
-  const needsFigure = question === 'figure' || question === 'pilot';
-  const figure = needsFigure ? usdFlag(args, '--figure') : (optional(args, '--figure') === null ? null : usdFlag(args, '--figure'));
+  const stop = args.flags.has('--stop');
+  // A stop answer names no figure; a go on the figure or the pilot names the one it lifts.
+  const needsFigure = !stop && (question === 'figure' || question === 'pilot');
+  const figure = (needsFigure || optional(args, '--figure') !== null) ? usdFlag(args, '--figure') : null;
   const attempt = question === 'pilot' ? countFlag(args, '--attempt') : (optional(args, '--attempt') === null ? null : countFlag(args, '--attempt'));
   const log = filePath(args, '--log', cwd);
   const lastWhole = readLog(log).filter((e) => e.kind === 'admit' && e.step === 'whole-run').at(-1);
-  if (question === 'whole-run' && lastWhole?.reason === 'figure') {
+  if (!stop && question === 'whole-run' && lastWhole?.reason === 'figure') {
     throw new Error('founder-go: the last whole-run check refused on the figure, so log a figure go and run step 2 again at the new --approved');
   }
-  const entry = { kind: 'founder-go', question, figure, attempt, stop: args.flags.has('--stop'), words, at: new Date().toISOString() };
+  const entry = { kind: 'founder-go', question, figure, attempt, stop, words, at: now().toISOString() };
   appendJsonLine(log, entry);
   return answer(0, `founder-go ${question} logged${figure === null ? '' : ` at $${money(figure)}`}${entry.stop ? ' with stop' : ''}`);
 }
@@ -422,9 +452,10 @@ function report(args, cwd) {
   const lines = [];
   admits.forEach((e, i) => {
     if (!e.admitted) return;
-    const grew = (admits[i + 1]?.ledgerBefore ?? ledgerTotal) - e.ledgerBefore;
-    const over = grew > e.projection ? `; OVERRUN by $${money(grew - e.projection)}` : '';
-    lines.push(`${e.step} attempt ${e.attempt}: projected $${money(e.projection)}, ledger grew $${money(grew)}${over}`);
+    // Batch 2's gate figure adds the raise preview, so growth is read against the batch's own projection.
+    const [own, grew] = [e.ownProjection ?? e.projection, (admits[i + 1]?.ledgerBefore ?? ledgerTotal) - e.ledgerBefore];
+    const over = grew > own ? `; OVERRUN by $${money(grew - own)}` : '';
+    lines.push(`${e.step} attempt ${e.attempt}: projected $${money(own)}, ledger grew $${money(grew)}${over}`);
   });
   const stopped = optional(args, '--stopped');
   if (stopped !== null) lines.push(`stopped: ${stopped} at step ${need(args, '--step')}`);
