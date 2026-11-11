@@ -25,6 +25,25 @@ def boot(diffs: list[float], draws: int = 4000) -> tuple[float, float, float]:
     return sum(diffs) / n, means[int(0.025 * draws)], means[int(0.975 * draws) - 1]
 
 
+def cluster_boot(diffs_by_unit: dict[str, list[float]], draws: int = 4000,
+                 level: float = 0.95) -> tuple[float, float, float]:
+    """Paired bootstrap CI that resamples whole units (a conversation, persona or haystack) with all their questions.
+
+    Questions that share a memory store are correlated, so the unit that owns the store is the independent draw
+    (prereg Amendment 6, revision 1, item 9). `level` below 0.95 gives the Bonferroni intervals of item 10.
+    """
+    random.seed(1)
+    units = [d for d in diffs_by_unit.values() if d]
+    estimate = sum(map(sum, units)) / sum(map(len, units))
+    means = []
+    for _ in range(draws):
+        pick = [random.choice(units) for _ in units]
+        means.append(sum(map(sum, pick)) / sum(map(len, pick)))
+    means.sort()
+    lo, hi = int((1 - level) / 2 * draws), int((1 + level) / 2 * draws) - 1
+    return estimate, means[lo], means[hi]
+
+
 def turn_texts(conv: dict) -> dict[str, str]:
     out = {}
     for key, turns in conv["conversation"].items():

@@ -1,7 +1,9 @@
-"""LoCoMo head-to-head with Mem0 (prereg Amendments 4 to 6): answer, judge and score four arms on the Lane A sample.
+"""LoCoMo head-to-head with Mem0 (prereg Amendments 4 to 6): answer, judge and score three arms on the Lane A sample.
 
 Prompts and parsing are Mem0's runner's at 4b61c5d (run.py:529-556), one `claude -p` call each through claude_llm.py.
-Usage: python h2h.py {answer,judge,score} --run SCRATCH_DIR --out RESULTS_DIR [--slots 10]
+Judge: Claude (primary) or `--judge codex` (secondary, gpt-5.6-sol through qa/codex_judge.py), each with its own files.
+Usage: python h2h.py {answer,judge,score} --run SCRATCH_DIR --out RESULTS_DIR [--slots 10] [--judge codex]
+Smoke only: --limit N [--cutoff C] needs an --out path with a "smoke" folder, and keeps the call logs under --out.
 """
 from __future__ import annotations
 
@@ -20,12 +22,13 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 RUNNER = Path.home() / "hippo-bench" / "memory-benchmarks"
 LOCOMO = Path.home() / "hippo-bench" / "locomo"
-LANE_R = Path.home() / "hippo" / "benchmarks" / "public" / "results" / "2026-09-25-lane-r" / "predicted"
+RETRIEVAL = Path.home() / "hippo-bench" / "retrieval-v3-locomo"  # hippo 3.5.1 retrieval (Amendment 6 rev. 1 item 1)
+MANIFEST = RETRIEVAL / "MANIFEST-locomo.sha256"
 SAMPLE = HERE.parent / "results" / "2026-09-25-lane-a" / "locomo" / "sample.json"
-ARMS, CUTOFFS, LABELS = ("hippo365", "bm25", "mem0", "mem0fixed"), (200, 50, 10), ("CORRECT", "WRONG")
-INGEST = {"mem0": "ingest", "mem0fixed": "ingest-fixed"}  # each Mem0 arm's ingestion under --run, gated on its own
-PAIRS = (("hippo365", "mem0"), ("hippo365", "mem0fixed"), ("mem0fixed", "mem0"), ("bm25", "mem0"), ("bm25", "mem0fixed"),
-         ("hippo365", "bm25"))
+ARMS, CUTOFFS, LABELS = ("hippo365", "bm25", "mem0"), (200, 50, 10), ("CORRECT", "WRONG")
+INGEST = {"mem0": "ingest"}  # the Mem0 arm's ingestion under --run, gated
+PAIRS = (("hippo365", "mem0"), ("bm25", "mem0"), ("hippo365", "bm25"))
+JUDGES = {"claude": ("verdicts.jsonl", "calls-judge.jsonl"), "codex": ("verdicts-codex.jsonl", "calls-judge-codex.jsonl")}
 FENCE = re.compile(r"```[a-zA-Z0-9]*\n([\s\S]*?)\n```")  # a whole-reply code fence, as claude_llm.json_reply reads it
 CAT = {1: "multi-hop", 2: "temporal", 3: "open-domain", 4: "single-hop"}
 
@@ -100,7 +103,7 @@ def qa_of(data: list, qid: str) -> dict:
 
 
 def predicted(run: Path, arm: str, qid: str) -> dict:
-    d = run / INGEST[arm] / "predicted_locomo-mem0" if arm in INGEST else LANE_R / f"predicted_locomo-{arm}"
+    d = run / INGEST[arm] / "predicted_locomo-mem0" if arm in INGEST else RETRIEVAL / f"predicted_locomo-{arm}"
     return load(d / f"{qid}.json")
 
 
@@ -110,6 +113,11 @@ def tokens_in(rec: dict) -> int:
 
 
 def check_gate(run: Path) -> None:
+    """Lane R's copied retrieval still matches its manifest, and Mem0's ingestion has a passing gate for its files."""
+    for line in MANIFEST.read_text(encoding="utf-8").splitlines():
+        digest, rel = line.split("  ", 1)
+        if not (RETRIEVAL / rel).is_file() or hashlib.sha256((RETRIEVAL / rel).read_bytes()).hexdigest() != digest:
+            sys.exit(f"{rel} in {RETRIEVAL.name} is missing or differs from {MANIFEST.name}")
     for name in INGEST.values():
         ingest = run / name
         g = load(ingest / "gate.json") if (ingest / "gate.json").exists() else {}
@@ -118,24 +126,24 @@ def check_gate(run: Path) -> None:
                      f"first (prereg Amendments 5 and 6)")
 
 
-def answer_prompts(run: Path) -> dict:
+def answer_prompts(a: argparse.Namespace) -> dict:
     """Every answer prompt the design calls for, by (arm, cutoff, qid), with how many memories it shows."""
     prompts = {}
     for arm in ARMS:
-        for qid in load(SAMPLE):
-            q = predicted(run, arm, qid)
-            for c in CUTOFFS:
+        for qid in a.qids:
+            q = predicted(a.run, arm, qid)
+            for c in a.cutoffs:
                 hits = q["retrieval"]["search_results"][:c]
                 prompts[(arm, c, qid)] = (len(hits), get_answer_generation_prompt(
                     q["question"], hits, reference_date=q.get("reference_date"), user_profile=q.get("user_profile")))
     return prompts
 
 
-def answers_on_file(run: Path, out: Path, prompts: dict) -> dict:
+def answers_on_file(a: argparse.Namespace, prompts: dict) -> dict:
     """The answers made so far, each checked to come from the prompt its retrieval file gives now and to be the answer
     in a logged reply to that prompt, or stop."""
-    answers = records(out / "answers.jsonl", lambda r: (r["arm"], r["cutoff"], r["qid"]))
-    said = replies(run / "calls-answer.jsonl")
+    answers = records(a.out / "answers.jsonl", lambda r: (r["arm"], r["cutoff"], r["qid"]))
+    said = replies(a.logs / "calls-answer.jsonl")
 
     def logged(k: tuple, r: dict) -> bool:
         return r.get("answer") in map(answer_of, said.get((f"answer {k[0]} {k[1]} {k[2]}", r["prompt"][:16]), []))
@@ -148,10 +156,10 @@ def answers_on_file(run: Path, out: Path, prompts: dict) -> dict:
     return answers
 
 
-def all_answers(run: Path, out: Path) -> dict:
+def all_answers(a: argparse.Namespace) -> dict:
     """Exactly the answers the design calls for, or stop: a count alone can hide a missing answer behind a stray one."""
-    prompts = answer_prompts(run)
-    answers = answers_on_file(run, out, prompts)
+    prompts = answer_prompts(a)
+    answers = answers_on_file(a, prompts)
     if set(answers) != set(prompts):
         sys.exit(f"answers: {len(set(prompts) - set(answers))} of {len(prompts)} missing")
     return answers
@@ -194,11 +202,11 @@ def judge_prompts(key: dict, answers: dict, data: list) -> dict:
     return prompts
 
 
-def verdicts_on_file(run: Path, out: Path, prompts: dict) -> dict:
-    """The verdicts so far, each on the judge prompt as it is now, labelled CORRECT or WRONG, and read from a logged
-    reply to that prompt, or stop."""
-    verdicts = records(out / "verdicts.jsonl", lambda r: r["id"])
-    said = replies(run / "calls-judge.jsonl")
+def verdicts_on_file(a: argparse.Namespace, judge: str, prompts: dict) -> dict:
+    """One judge's verdicts so far, each on the judge prompt as it is now, labelled CORRECT or WRONG, and read from a
+    logged reply to that prompt, or stop."""
+    verdicts = records(a.out / JUDGES[judge][0], lambda r: r["id"])
+    said = replies(a.logs / JUDGES[judge][1])
 
     def logged(j: str, v: dict) -> bool:
         return {"label": v.get("label"), "reasoning": v.get("reasoning")} in map(
@@ -207,7 +215,7 @@ def verdicts_on_file(run: Path, out: Path, prompts: dict) -> dict:
     bad = [j for j, v in verdicts.items()
            if j not in prompts or v.get("prompt") != sha(prompts[j]) or v.get("label") not in LABELS or not logged(j, v)]
     if bad:
-        sys.exit(f"verdicts.jsonl holds {len(bad)} verdicts on other prompts, without a CORRECT or WRONG label or not "
+        sys.exit(f"{JUDGES[judge][0]} holds {len(bad)} verdicts on other prompts, without a CORRECT or WRONG label or not "
                  f"read from the call log, e.g. {bad[0]}; judge again from an empty file")
     return verdicts
 
@@ -233,11 +241,11 @@ def run_all(jobs: list[tuple], fn, out: Path, slots: int) -> None:
 
 def answer(a: argparse.Namespace) -> None:
     check_gate(a.run)
-    prompts = answer_prompts(a.run)
-    done = answers_on_file(a.run, a.out, prompts)
+    prompts = answer_prompts(a)
+    done = answers_on_file(a, prompts)
     jobs = [(arm, c, qid, n, prompt) for (arm, c, qid), (n, prompt) in prompts.items() if (arm, c, qid) not in done]
     random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits every arm alike
-    claude = Claude(a.run / "claude", a.run / "calls-answer.jsonl", a.slots)
+    claude = Claude(a.logs / "claude", a.logs / "calls-answer.jsonl", a.slots)
 
     def one(job: tuple) -> dict:
         arm, c, qid, n, prompt = job
@@ -250,7 +258,7 @@ def answer(a: argparse.Namespace) -> None:
 
 
 def judge(a: argparse.Namespace) -> None:
-    data, answers = load(LOCOMO / "data" / "locomo10.json"), all_answers(a.run, a.out)
+    data, answers = load(LOCOMO / "data" / "locomo10.json"), all_answers(a)
     key_path = a.out / "judge_key.json"
     if not key_path.exists():
         items = sorted(answers)
@@ -262,20 +270,27 @@ def judge(a: argparse.Namespace) -> None:
         tmp.replace(key_path)  # whole or absent: a kill mid-write never leaves half a key
     key = judge_key(a.out, answers)
     prompts = judge_prompts(key, answers, data)
-    done = verdicts_on_file(a.run, a.out, prompts)
+    done = verdicts_on_file(a, a.judge, prompts)
     jobs = [(jid, prompts[jid]) for jid in key if jid not in done]
-    claude = Claude(a.run / "claude", a.run / "calls-judge.jsonl", a.slots)
+    log = a.logs / JUDGES[a.judge][1]
+    if a.judge == "codex":
+        from qa.codex_judge import CodexJudge  # gpt-5.6-sol at medium through codex exec; read once, so smoke can pass first
+        ask = CodexJudge(log=log, slots=a.slots).ask
+        call = lambda prompt, tag: ask(JUDGE_SYSTEM_PROMPT, prompt, tag=tag)  # noqa: E731
+    else:
+        ask = Claude(a.logs / "claude", log, a.slots).ask
+        call = lambda prompt, tag: ask(JUDGE_SYSTEM_PROMPT, prompt, effort="medium", tag=tag)  # noqa: E731
 
     def one(job: tuple) -> dict:
         jid, prompt = job
         for _ in range(3):  # three replies in all: without want_json, ask() never asks again on its own
-            v = verdict(claude.ask(JUDGE_SYSTEM_PROMPT, prompt, effort="medium", tag=f"judge {jid}")["text"])
+            v = verdict(call(prompt, f"judge {jid}")["text"])
             if v:
                 return {"id": jid, "prompt": sha(prompt), **v}
         raise RuntimeError("no CORRECT or WRONG label in 3 replies")
 
     print(f"{len(jobs)} verdicts to get, {len(done)} already in", flush=True)
-    run_all(jobs, one, a.out / "verdicts.jsonl", a.slots)
+    run_all(jobs, one, a.out / JUDGES[a.judge][0], a.slots)
 
 
 def reading(d: float, lo: float, hi: float) -> str:
@@ -304,15 +319,23 @@ def f1_scores(answers: dict, data: list) -> dict:
 
 def score(a: argparse.Namespace) -> None:
     check_gate(a.run)
-    data, sample, answers = load(LOCOMO / "data" / "locomo10.json"), load(SAMPLE), all_answers(a.run, a.out)
+    data, sample, answers = load(LOCOMO / "data" / "locomo10.json"), a.qids, all_answers(a)
     key = judge_key(a.out, answers)
-    verdicts = verdicts_on_file(a.run, a.out, judge_prompts(key, answers, data))
-    if set(verdicts) != set(key):
-        sys.exit(f"{len(verdicts)} verdicts for {len(key)} keyed answers; never scored partial")
-    metric = {"F1": f1_scores(answers, data),
-              "judge": {(k["arm"], k["cutoff"], k["qid"]): float(verdicts[j]["label"] == "CORRECT") for j, k in key.items()}}
-    lines = [f"answers {len(answers)}, verdicts {len(verdicts)}"]
-    for c in CUTOFFS:
+    prompts = judge_prompts(key, answers, data)
+    metric, lines = {"F1": f1_scores(answers, data)}, [f"answers {len(answers)}"]
+    if a.limit:
+        lines.insert(0, f"SMOKE: first {a.limit} questions, cutoffs {a.cutoffs}; never scored or reused")
+    for judge, name in (("claude", "judge"), ("codex", "judge2")):  # judge2 is the secondary, run only if its file exists
+        if judge == "codex" and not (a.out / JUDGES[judge][0]).exists():
+            lines.append("judge2 (codex gpt-5.6-sol, secondary): not run")
+            continue
+        verdicts = verdicts_on_file(a, judge, prompts)
+        if set(verdicts) != set(key):
+            sys.exit(f"{len(verdicts)} {judge} verdicts for {len(key)} keyed answers; never scored partial")
+        metric[name] = {(k["arm"], k["cutoff"], k["qid"]): float(verdicts[j]["label"] == "CORRECT") for j, k in key.items()}
+        lines.append(f"{name} = {'Claude Sonnet 5, primary' if judge == 'claude' else 'codex gpt-5.6-sol, secondary'}: "
+                     f"{len(verdicts)} verdicts")
+    for c in a.cutoffs:
         lines.append(f"\n=== top {c} ===")
         for arm in ARMS:
             rs = [answers[(arm, c, q)] for q in sample]
@@ -323,11 +346,11 @@ def score(a: argparse.Namespace) -> None:
             for m, vals in metric.items():
                 cats = [(None, sample)] + [(k, [q for q in sample if qa_of(data, q)["category"] == k]) for k in CAT]
                 for cat, ids in cats:
-                    if not ids or (cat and m == "judge"):
+                    if not ids or (cat and m != "F1"):
                         continue
                     d, lo, hi = boot([vals[(x, c, q)] - vals[(y, c, q)] for q in ids])
                     tag = "PRIMARY " if (x, y, m, cat) == ("hippo365", "mem0", "F1", None) and c in (200, 50) else ""
-                    lines.append(f"{tag}{x} - {y} {m:>5} {CAT.get(cat, 'all'):>11}: {100 * d:+5.1f} pp "
+                    lines.append(f"{tag}{x} - {y} {m:>6} {CAT.get(cat, 'all'):>11}: {100 * d:+5.1f} pp "
                                  f"[{100 * lo:+5.1f}, {100 * hi:+5.1f}] n={len(ids)}  {reading(d, lo, hi)}")
     text = "\n".join(lines)
     (a.out / "score.txt").write_text(text + "\n", encoding="utf-8")
@@ -340,7 +363,19 @@ def main() -> None:
     ap.add_argument("--run", type=Path, required=True, help="scratch run dir: Mem0's predicted files, call logs")
     ap.add_argument("--out", type=Path, required=True, help="results dir: answers, judge key, verdicts, score")
     ap.add_argument("--slots", type=int, default=10)
+    ap.add_argument("--judge", choices=tuple(JUDGES), default="claude", help="judge stage only: the secondary is codex")
+    ap.add_argument("--limit", type=int, help="smoke only: the first N sample questions, into a smoke out dir")
+    ap.add_argument("--cutoff", type=int, choices=CUTOFFS, help="smoke only: one cutoff, with --limit")
     a = ap.parse_args()
+    if a.judge != "claude" and a.stage != "judge":
+        ap.error("--judge applies to the judge stage; score reads both judges' files")
+    if a.cutoff and not a.limit:
+        ap.error("--cutoff is for smoke runs and needs --limit")
+    if a.limit and (a.limit < 1 or "smoke" not in (p.lower() for p in a.out.resolve().parts)):
+        ap.error("--limit is for smoke runs: it needs a positive N and an --out path with a folder named smoke")
+    sample = load(SAMPLE)
+    a.qids, a.cutoffs = (sample[:a.limit] if a.limit else sample), ((a.cutoff,) if a.cutoff else CUTOFFS)
+    a.logs = a.out if a.limit else a.run  # a smoke run never writes into the real run's call logs
     a.out.mkdir(parents=True, exist_ok=True)
     {"answer": answer, "judge": judge, "score": score}[a.stage](a)
 

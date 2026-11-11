@@ -256,3 +256,44 @@ Not run: Context-Bench, the Letta Leaderboard and BrainBench rank models inside 
 9. **Bootstrap unit.** The primary interval resamples the unit that owns a memory store, with the arms paired: the conversation, persona or haystack. LoCoMo keeps Amendment 4's question-level interval as registered and adds the conversation-level interval as a sensitivity line.
 10. **Many benchmarks.** Each benchmark's reading stands alone at 95%. A statement about the whole suite needs every primary to give the same reading under Bonferroni intervals (1 - 0.05/k, where k is the number of primaries reported). Otherwise the suite reading is "mixed".
 11. **Deadline and publication.** Every run here finishes or stops by 2026-11-25. Every registered cell is published with its status, results so far, failures and the attempt ledger, including cells that did not finish.
+
+### Amendment 6, dated notes 1 (2026-11-11, before the first full answer of each benchmark named here)
+
+These notes fix revision 1 item 4 for four benchmarks. The loader commit is the commit that adds this note. Smoke runs for all four are done; their score files are kept and never enter an analysis.
+
+**Rules common to all four.**
+- Manifest (item 6). Answerer `claude-sonnet-5` at effort `medium`, Claude Code CLI `2.1.321`, stamped on every call record (`cli`). Judge `gpt-5.6-sol` at effort `medium`, `codex-cli 0.164.0`. The system-prompt hash is the SHA-256 of the system text each loader builds. A record whose model, effort, CLI or system hash differs from the stage's first record is rejected.
+- Asks (item 5). An ask is a call that returns reply text: a valid reply, a reply that does not parse, or a judge reply that used a tool. A call that ends in a CLI error, a timeout or a usage-limit wait returns no text; it is logged and is not an ask. Call logs are append-only. For each item, the scorer reads its first 3 asks in log order and takes the first valid one. No valid reply in those 3 scores wrong and is listed.
+- Smoke items are excluded from every primary below and listed. They are answered in the full run like the rest, and appear only in an all-items secondary line.
+- Reading: Amendment 2's rule on the 95% interval. The suite rule is item 10.
+
+**1. LoCoMo head-to-head** (`benchmarks/public/mem0/h2h.py`).
+- Data: `locomo10.json`, SHA-256 `553cd5a15e25f2ceccc6ed185221eba645080c93e5b91087560a91aa5961f365` (snap-research/locomo at `3eb6f2c`). Items: Lane A's sample, `benchmarks/public/results/2026-09-25-lane-a/locomo/sample.json`, SHA-256 `b24b7e2d5851c63beaf49e5f0996feea469af731a7d3f835dfa36fc9c61412dd`, 400 questions, categories 1 to 4.
+- Smoke items, excluded: `conv4_q177`, `conv6_q141`, `conv8_q21`, `conv8_q73`, `conv8_q85` (smoked at top 50). The primary has 395 questions.
+- Retrieval: `hippo365` and `bm25` read only `~/hippo-bench/retrieval-v3-locomo/`, retrieved with hippo-memory 3.5.1 on 11 Nov at top 200. Its `MANIFEST-locomo.sha256` (SHA-256 `002d583a9a3893ec6574e7967ab65fbfd78e7593a94cd17cf4882bf8330fa534`) lists all 3,100 files, and `check_gate` re-hashes every file before answer and score. `mem0` reads its gated 28 Sep ingest, `runs/mem0-h2h/ingest`.
+- Prompts: Mem0's runner `mem0ai/memory-benchmarks` at `4b61c5d`, `benchmarks/locomo/prompts.py`: answer `get_answer_generation_prompt` (line 143, template at line 40), judge `get_judge_prompt` (line 277) with `JUDGE_SYSTEM_PROMPT` (line 203), `preprocess_answer` (line 315). No prompt code is changed.
+- Cutoffs: 200, 50 and 10 memories shown.
+- Primary (Amendment 4, revision 1 item 3): LoCoMo F1, `eval_question_answering` in the authors' `task_eval/evaluation.py` (line 189; F1 at lines 126 to 141), mean per question with equal weight. Comparison `hippo365` minus `mem0` at top 200 and at top 50, paired by question, `boot`, 4,000 draws, seed 1. Unit: the question, as registered. Sensitivity line: the same difference with `cluster_boot` over the 10 conversations.
+- Secondary: judge accuracy from Claude Sonnet 5 (the registered judge) and from gpt-5.6-sol, both blind over one shuffled key (`Random(7)`), labels parsed as Mem0's runner parses them. The pairs `hippo365` minus `bm25` and `bm25` minus `mem0` are descriptive.
+
+**2. DMR** (`benchmarks/public/qa/loaders/dmr.py`).
+- Data: HF `MemGPT/MSC-Self-Instruct` at `5138f416f8fa76b75b2e080da87e8a8e346e1500`, `msc_self_instruct.jsonl`, SHA-256 `d3dbea36848b41dc46c0f1548d0ebf74eeaf6390d6f3fe9318e8480dc984495e`, 500 rows. Items: all 500, `dmr-000` to `dmr-499`. Each row is its own store.
+- Smoke items, excluded: `dmr-000`, `dmr-100`, `dmr-200`, `dmr-300`, `dmr-400`. The primary has 495 questions.
+- Prompts: the MemGPT paper, arXiv 2310.08560, Appendix 6.1.1 (answer instructions) and 6.1.2 (judge), verbatim with line wraps joined. The retrieved memories fill the paper's conversation-summary slot. The sentence "Answer from the perspective of the persona provided" is dropped, because some final personas name the answer. The judge gets one added system line asking for JSON `{reasoning, label}`.
+- Top-k 20 (the paper sets none). Question: `self_instruct.B`; gold: `self_instruct.A`.
+- Primary: judge accuracy, gpt-5.6-sol medium, one blind shuffled pass (seed 7) over both arms. Parse: the JSON label, else the paper's rule (exactly one of CORRECT or WRONG). Mean per question. Comparison `hippo365` minus `bm25`, paired. Unit: the question (one store per question), so `cluster_boot` equals `boot` here.
+
+**3. PersonaMem v1, 32k** (`benchmarks/public/qa/loaders/personamem_v1.py`).
+- Data: HF `bowen-upenn/PersonaMem-v1` at `a8076d5608c93ba2a28983cd78aa99b01a163ae7`: `questions_32k.csv`, SHA-256 `cccd34cf53e0bc4d9536c04cff5ca045156d9a4e227e83327112482840bbc93c` (589 questions), and `shared_contexts_32k.jsonl`, SHA-256 `217247ebfec9e8442fc53570c795ab69f21aad08745f7de78d9beab51b122d4a` (37 shared contexts). Items: all 589 `question_id` values.
+- Smoke items, excluded: `273ed74c-6547-40f1-9e82-459826e00b6b`, `2c85c2a6-07ec-4ab1-92cc-06dc775f4fe8`, `67bec3f4-df73-4dbe-9dc2-74be96ebc51c`, `8659e747-044a-47fa-a410-f5be842f4f7c`, `acd74206-37dc-4756-94a8-b99a395d9a21`. The primary has 584 questions.
+- Prompts: the authors' `bowen-upenn/PersonaMem` at `d07e6ade22e8`, `inference.py`: instructions at lines 56 to 57, final user message at line 59 (question, instructions, the raw options string), context cut at `end_index_in_shared_context` (lines 495 and 499). The retrieved memories replace the shared context under two framing lines of ours. The search query is the question text only.
+- Top-k 20 (the authors set none).
+- Primary: match accuracy by `extract_answer`, `inference.py` lines 106 to 136, copied verbatim. Mean per question. Comparison `hippo365` minus `bm25`, paired. Unit: the shared context that owns the store, 37 units, `cluster_boot`, 4,000 draws, seed 1. Per question type is secondary.
+
+**4. HotPotQA-24, Cognee's subset** (`benchmarks/public/qa/loaders/hotpotqa24.py`).
+- Data: `topoteretes/cognee` at `8853378eae5366addb064e758e560a456146ae1a`, `evals/old/hotpot_qa_24_2025/src/`: `hotpot_qa_24_qa_pairs.json`, SHA-256 `61a9361ecccc9b6ea5390544942ba0cb266608ef0a4c403949d3a790c212247a` (24 questions), `hotpot_qa_24_corpus.json`, SHA-256 `76b0fdf87bd01d020f5137f4450cd93f3ae95c65a321d0d0cbf512b1030c7c80` (240 paragraphs), and the instance filter, SHA-256 `abcb54cfacdfd7e7519f9f62695dc3e6e639116067bc34a22edf24ec68024af3`. Items: `hotpot24-00` to `hotpot24-23`. One store holds all 240 paragraphs.
+- Smoke items, excluded: `hotpot24-00`, `hotpot24-04`, `hotpot24-08`, `hotpot24-12`, `hotpot24-16`. The primary has 19 questions, so its interval will be wide.
+- Prompts: system `cognee/infrastructure/llm/prompts/answer_simple_question_benchmark2.txt` lines 1 to 7; user `context_for_question.txt` lines 1 to 2, passages joined by a newline. The same for both arms.
+- Top-k 15, Cognee's own Modal run (`modal_apps/modal_qa_benchmark_cognee.py` line 74).
+- Primary: F1, `cognee/eval_framework/evaluation/metrics/f1.py` lines 27 to 59, copied verbatim, no model call, mean per question. Cognee's README reports EM, F1, DeepEval correctness and human-like correctness and names no primary. F1 is chosen as the one deterministic score that gives part credit. Comparison `hippo365` minus `bm25`, paired. Unit: the question, the only unit available with one shared store.
+- Secondary: exact match (`exact_match.py` lines 10 to 12), and Cognee's DirectLLM correctness prompt (`direct_llm_eval_system.txt` lines 1 to 10, `direct_llm_eval_prompt.txt` lines 1 to 3) judged by gpt-5.6-sol, with a score of 0.5 or more counted correct. DeepEval needs a paid key and does not run.
