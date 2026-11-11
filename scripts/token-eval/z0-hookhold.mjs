@@ -10,6 +10,7 @@ import { designByName, isRound4Design } from './arms.mjs';
 import { writeFileAtomic } from './atomic-write.mjs';
 import { linesOf, parseFlags, parseOrNull, runCommand, runMain } from './free-cli.mjs';
 import { findTranscript } from './records.mjs';
+import { sha256 } from './z0-blind.mjs';
 import { positionKey } from './z0-records.mjs';
 
 const USAGE = 'usage: z0-hookhold.mjs --design r3|r4 (--run OUT [--run OUT ...] | --runs FILE [--runs FILE ...]) (--hold | --sensitivity FILE)';
@@ -37,6 +38,13 @@ const anyPromptHookCancelled = (text) => linesOf(text).some((line) => {
   return a?.type === 'hook_cancelled' && String(a.hookEvent || a.hookName || '').includes(EVENT);
 });
 
+/** Under round 4 a session's cancel count is the record's `hookCancels`, so a record without it would read as a session that lost nothing; it stops the read instead. */
+function checkCancels(r, file, i) {
+  const counts = r.hookCancels;
+  if (counts?.constructor !== Object) throw new Error(`${file} line ${i + 1}: a ${r.arm} record needs a hookCancels object`);
+  if (Object.hasOwn(counts, EVENT) && !(Number.isInteger(counts[EVENT]) && counts[EVENT] >= 0)) throw new Error(`${file} line ${i + 1}: hookCancels.${EVENT} must be a non-negative integer`);
+}
+
 /** The `hookHold` arms' records with a session id, in read order: each source in turn, each file line by line.
  * @param {{file: string, out: string | null}[]} sources `out` is the run folder whose transcripts hold the sessions, null under round 4 */
 function sessionsOf(sources, design) {
@@ -48,8 +56,10 @@ function sessionsOf(sources, design) {
       if (line.trim() === '') return;
       const r = parseOrNull(line);
       if (r === null) throw new Error(`${file} line ${i + 1}: not JSON`);
+      if (!arms.has(r.arm) || !r.sessionId) return;
+      if (out === null) checkCancels(r, file, i);
       // `line` is the index within its own file, as r3-hookhold.py counts it.
-      if (arms.has(r.arm) && r.sessionId) found.push({ r, out, at: r.startedAt || '', mtime: 'startedAt' in r ? 0 : mtime, line: i });
+      found.push({ r, out, at: r.startedAt || '', mtime: 'startedAt' in r ? 0 : mtime, line: i });
     });
   }
   return found;
@@ -63,7 +73,7 @@ function transcriptOf({ r, out }) {
 
 /** Whether the session lost its prompt hook; `any` reads every attachment of a transcript, otherwise its first. */
 function lost(session, any) {
-  if (session.out === null) return session.r.hookCancels?.[EVENT] > 0;
+  if (session.out === null) return session.r.hookCancels[EVENT] > 0;
   const text = transcriptOf(session);
   if (text === null) return false;
   return any ? anyPromptHookCancelled(text) : firstPromptHookCancelled(text);
@@ -78,10 +88,11 @@ function holdLine(sessions) {
   return `${cancelled / last.length > HOLD_ABOVE ? 'hold' : 'ok'} ${cancelled} of ${last.length}\n`;
 }
 
-function sensitivityFile(sessions, file) {
+/** The round 3 list keeps the Python's three keys; a round 4 list also names the runs files it read (`runs`), left out under round 3 as an undefined value. */
+function sensitivityFile(sessions, file, runs) {
   const voids = new Map();
   for (const s of sessions) if (lost(s, true)) voids.set(positionKey(s.r), { sequence: s.r.sequence, seed: s.r.seed, position: s.r.position });
-  writeFileAtomic(file, `${JSON.stringify({ droppedLessons: [], droppedFamilies: [], hookVoids: [...voids.values()] }, null, 2)}\n`);
+  writeFileAtomic(file, `${JSON.stringify({ droppedLessons: [], droppedFamilies: [], hookVoids: [...voids.values()], runs }, null, 2)}\n`);
   return `${sessions.length} sessions, ${voids.size} positions dropped\n`;
 }
 
@@ -95,7 +106,8 @@ export function runCli(argv, cwd = process.cwd()) {
     if (args.hold === (args.sensitivity !== null)) throw new Error(`give --hold or --sensitivity, not both and not neither\n${USAGE}`);
     const sources = wanted.map((w) => path.resolve(cwd, w)).map((w) => (isRound4Design(design) ? { file: w, out: null } : { file: path.join(w, 'runs.jsonl'), out: w }));
     const sessions = sessionsOf(sources, design);
-    return args.hold ? holdLine(sessions) : sensitivityFile(sessions, path.resolve(cwd, args.sensitivity));
+    const runs = isRound4Design(design) ? sources.map(({ file }) => ({ file, sha256: sha256(file) })) : undefined;
+    return args.hold ? holdLine(sessions) : sensitivityFile(sessions, path.resolve(cwd, args.sensitivity), runs);
   });
 }
 

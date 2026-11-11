@@ -57,8 +57,8 @@ export function g2(filtered, opts) {
 }
 
 /** G3: leaked (sequence, seed)s at most 5% of those planned. A `firstRun` count is printed beside it and does not move `pass`.
- * @param {number} leaked @param {number} plannedRuns @param {{leaked: number, plannedRuns: number} | null} [firstRun]
- * @returns {{pass: boolean, leaked: number, plannedRuns: number, share: number, firstRun?: {leaked: number, plannedRuns: number}}} */
+ * @param {number} leaked @param {number} plannedRuns @param {{leakedSequenceSeeds: number, plannedRuns: number} | null} [firstRun]
+ * @returns {{pass: boolean, leaked: number, plannedRuns: number, share: number, firstRun?: {leakedSequenceSeeds: number, plannedRuns: number}}} */
 export function g3(leaked, plannedRuns, firstRun = null) {
   const gate = { pass: leaked * 20 <= plannedRuns, leaked, plannedRuns, share: plannedRuns === 0 ? 0 : leaked / plannedRuns };
   return firstRun === null ? gate : { ...gate, firstRun };
@@ -88,16 +88,16 @@ export function g5(grading) {
 }
 
 /** Every gate, then `failed`, the names a report prints as "invalid: G<n>". The off-pin bar and the first-run count are on under a round 4 design,
- * with `opts.offPinGiven`, or with `opts.mergeManifests` (readMergeManifest results, whose first-run counts are summed); off, every gate keeps its round 3 keys. */
+ * with `opts.offPinGiven`, or with `opts.mergeManifests` (readMergeManifest results, whose leaked sequence-seed counts are summed); off, every gate keeps its round 3 keys. */
 export function computeGates(records, filtered, grading, opts) {
   const design = opts.design ?? DESIGNS.r3;
   const manifests = opts.mergeManifests ?? [];
   const bar = isRound4Design(design) || opts.offPinGiven === true || manifests.length > 0;
-  const firstRun = (key) => manifests.reduce((n, m) => n + m.firstRun[key], 0);
+  const firstLeaked = manifests.reduce((n, m) => n + m.firstRun.leakedSequenceSeeds, 0);
   const gates = {
     G1: g1(records, filtered.counts, bar ? { design, offPinVoided: filtered.offPinVoided } : { design }),
     G2: g2(filtered, opts),
-    G3: g3(filtered.leaked.length, filtered.plannedRuns, bar ? { leaked: firstRun('leakedSequenceSeeds'), plannedRuns: firstRun('plannedSequenceSeeds') } : null),
+    G3: g3(filtered.leaked.length, filtered.plannedRuns, bar ? { leakedSequenceSeeds: firstLeaked, plannedRuns: filtered.plannedRuns } : null),
     G4: g4(filtered.counts, filtered.hookVoided),
     G5: g5(grading),
   };

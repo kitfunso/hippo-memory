@@ -14,6 +14,8 @@ const SPEC = { values: ['--root', '--batches', '--out'], required: ['--root', '-
 const BATCHES = new Map([['1', ['batch1']], ['1,2', ['batch1', 'batch2']], ['1,2,raise', ['batch1', 'batch2', 'raise']]]);
 // The raise never caps below the base seeds.
 const MAX_SEED_FLOOR = 3;
+const INPUT_FLAGS = ['--runs', '--plan', '--off-pin'];
+const LINE_FLAGS = [...INPUT_FLAGS, '--merge-manifest', '--max-seed'];
 
 const keysOf = (pins, field, file) => {
   if (!isString(pins[field]) || pins[field].trim() === '') throw new Error(`${file}: ${field} must be a comma list of keys`);
@@ -35,19 +37,27 @@ function noRegraded(dir) {
 
 const own = (dir) => `--runs ${dir}/run/runs.jsonl --plan ${dir}/run/plan.json --off-pin ${dir}/off-pin.json`;
 
-/** The lines of one key: its merged folder, else its completed attempt, then each leak rerun's completed attempt. */
+/** The line of a leaked key's merged folder; a merge that dropped every seed left no runs file, so its line holds the manifest alone (G3 still counts it). */
+function mergedLine(root, dir, key, wave) {
+  const name = `merged/${dir}/${key}-w${wave}`;
+  const merged = `${root}/${name}`;
+  if (!fs.existsSync(`${merged}/merge.json`)) throw new Stop(`STOP: ${name} is missing or has no merge.json; run z0-merge`);
+  noRegraded(merged);
+  const manifest = `--merge-manifest ${merged}/merge.json`;
+  return fs.existsSync(`${merged}/runs.jsonl`) ? `--runs ${merged}/runs.jsonl --plan ${merged}/plan.json --off-pin ${merged}/off-pin.json ${manifest}` : manifest;
+}
+
+/** The lines of one key: its merged folder when its first run leaked a seed, else its completed attempt; then each leak rerun's completed attempt. */
 function keyLines(root, dir, key, wave) {
   const attempt = marker(root, dir, key);
-  const merged = `${root}/merged/${dir}/${key}-w${wave}`;
+  const seeds = [...new Set(readJson(`${root}/${dir}/${attempt}/leaks.json`).leaks.map((l) => l.seed))].sort((a, b) => a - b);
   const lines = [];
-  if (fs.existsSync(merged)) {
-    noRegraded(merged);
-    lines.push(`--runs ${merged}/runs.jsonl --plan ${merged}/plan.json --off-pin ${merged}/off-pin.json --merge-manifest ${merged}/merge.json`);
+  if (seeds.length > 0) {
+    lines.push(mergedLine(root, dir, key, wave));
   } else {
     noRegraded(`${root}/${dir}/${attempt}/run`);
     lines.push(own(`${root}/${dir}/${attempt}`));
   }
-  const seeds = [...new Set(readJson(`${root}/${dir}/${attempt}/leaks.json`).leaks.map((l) => l.seed))].sort((a, b) => a - b);
   for (const seed of seeds) {
     const rerun = marker(root, dir, `${key}-e${seed}`);
     noRegraded(`${root}/${dir}/${rerun}/run`);
@@ -79,7 +89,7 @@ export function runCli(argv, cwd = process.cwd()) {
     const args = parseFlags(argv, SPEC, USAGE);
     const dirs = BATCHES.get(args.batches);
     if (dirs === undefined) throw new Error(`--batches must be 1, 1,2 or 1,2,raise, got ${args.batches}\n${USAGE}`);
-    const root = args.root.replace(/\\/g, '/').replace(/\/$/, '');
+    const root = path.resolve(cwd, args.root).replace(/\\/g, '/').replace(/\/$/, '');
     if (/\s/.test(root)) throw new Error(`--root ${root}: a path with a space cannot sit in a one-space-split line`);
     const pinsFile = `${root}/pins-r4.json`;
     const pins = readJson(pinsFile);
@@ -92,8 +102,8 @@ export function runCli(argv, cwd = process.cwd()) {
   });
 }
 
-/** The pairs of a read-set file and its `--max-seed` line; every parser of it comes through here.
- * @returns {{maxSeed: number | null, pairs: {runs: string, plan: string, offPin: string, mergeManifest: string | null}[]}} */
+/** The pairs of a read-set file and its `--max-seed` line; every parser of it comes through here. A merge manifest alone is a pair with no runs, plan or off-pin file.
+ * @returns {{maxSeed: number | null, pairs: {runs: string | null, plan: string | null, offPin: string | null, mergeManifest: string | null}[]}} */
 export function readReadSet(file) {
   let maxSeed = null;
   const pairs = [];
@@ -102,12 +112,17 @@ export function readReadSet(file) {
     const flags = new Map();
     for (let i = 0; i < tokens.length; i += 2) flags.set(tokens[i], tokens[i + 1]);
     if (tokens.length % 2 !== 0 || flags.size * 2 !== tokens.length) throw new Error(`${file}: a line is flag and value pairs, got "${line}"`);
+    const unknown = [...flags.keys()].find((f) => !LINE_FLAGS.includes(f));
+    if (unknown !== undefined) throw new Error(`${file}: unknown flag ${unknown} in "${line}"`);
     if (flags.has('--max-seed')) {
+      if (flags.size > 1 || !/^\d+$/.test(flags.get('--max-seed')) || Number(flags.get('--max-seed')) < MAX_SEED_FLOOR) throw new Error(`${file}: a --max-seed line holds that flag alone, with an integer of ${MAX_SEED_FLOOR} or more, got "${line}"`);
       maxSeed = Number(flags.get('--max-seed'));
       continue;
     }
-    for (const f of ['--runs', '--plan', '--off-pin']) if (!flags.has(f)) throw new Error(`${file}: a line needs ${f}, got "${line}"`);
-    pairs.push({ runs: flags.get('--runs'), plan: flags.get('--plan'), offPin: flags.get('--off-pin'), mergeManifest: flags.get('--merge-manifest') ?? null });
+    const given = INPUT_FLAGS.filter((f) => flags.has(f));
+    if (given.length === 0 && !flags.has('--merge-manifest')) throw new Error(`${file}: a line needs ${INPUT_FLAGS.join(', ')} or --merge-manifest, got "${line}"`);
+    if (given.length > 0 && given.length < INPUT_FLAGS.length) throw new Error(`${file}: a line needs ${INPUT_FLAGS.find((f) => !flags.has(f))}, got "${line}"`);
+    pairs.push({ runs: flags.get('--runs') ?? null, plan: flags.get('--plan') ?? null, offPin: flags.get('--off-pin') ?? null, mergeManifest: flags.get('--merge-manifest') ?? null });
   }
   return { maxSeed, pairs };
 }

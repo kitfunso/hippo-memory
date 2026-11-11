@@ -1,8 +1,9 @@
 // Round 4 prereg item 6: g1-pins reads every request log of every Claude Code attempt and lists the attempts off the pinned model or effort.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createHash } from 'node:crypto';
 import { describe, it, expect, afterEach } from 'vitest';
-import { DESIGNS } from '../scripts/token-eval/arms.mjs';
+import { ARM_TABLE, DESIGNS } from '../scripts/token-eval/arms.mjs';
 import { logVerdict, runCli } from '../scripts/token-eval/g1-pins.mjs';
 import { loadInputs } from '../scripts/token-eval/z0-analyze.mjs';
 import { filteredInput, offPinReach } from '../scripts/token-eval/z0-filters.mjs';
@@ -13,6 +14,8 @@ import { GRADING, generate, jsonl } from './fixtures/z0-gen.js';
 
 const PINS = { modelOpus: 'claude-opus-5-5', modelSonnet: 'claude-sonnet-5-5', effort: 'medium' };
 const SONNET = PINS.modelSonnet;
+// The round 4 Claude Code arms hold the Opus pin or the Sonnet pin.
+const pinOf = (arm: string) => (ARM_TABLE[arm].pinKey === 'modelOpus' ? PINS.modelOpus : PINS.modelSonnet);
 type Entry = Record<string, string | number | null>;
 const line = (x: Entry) => `${JSON.stringify(x)}\n`;
 // JSON.stringify leaves out an undefined output_config, which is how a body with no effort looks.
@@ -42,6 +45,13 @@ describe('the verdict of one request log (prereg item 6)', () => {
     expect(verdict(text(GOOD, request('/v1/messages', body(SONNET, 'medium'), 'GET')))).toBeNull();
   });
 
+  it('names a POST /v1/messages with an empty or missing body, and lets an empty body on a HEAD request pass', () => {
+    expect(verdict(text(request('/v1/messages', '')))).toBe('body does not parse');
+    expect(verdict(text(GOOD, request('/v1/messages', '')))).toBe('body does not parse');
+    expect(verdict(text(GOOD, { at: 't', method: 'POST', url: '/v1/messages' }))).toBe('body does not parse');
+    expect(verdict(text(GOOD, request('/v1/messages', '', 'HEAD')))).toBeNull();
+  });
+
   it('names a model or an effort off the pins, on any request with a body', () => {
     expect(verdict(text(request('/v1/messages', body('claude-haiku-4', 'medium'))))).toBe(`model claude-haiku-4, pinned ${SONNET}`);
     expect(verdict(text(GOOD, request('/v1/messages/count_tokens', body('claude-haiku-4'))))).toBe(`model claude-haiku-4, pinned ${SONNET}`);
@@ -57,24 +67,51 @@ describe('the verdict of one request log (prereg item 6)', () => {
   });
 });
 
-/** One out folder: records, plan and the raw folders. `corpus` is slice 1's generator under round 4; the folder holds its seeds. */
-function outFolder(opts: { seeds?: number[]; raw?: Record<string, { attempts?: Entry[]; logs?: Record<string, string> }>; envKeys?: Record<string, string[]> } = {}) {
+const attempt = (taskId: string, kind: string, n: number, sessionId: string | null) => ({ taskId, kind, attempt: n, sessionId, logFile: `C:\\elsewhere\\raw\\${taskId}.${kind}${n}.requests.jsonl`, sizesBefore: null });
+const logName = (a: { taskId: string | number | null; kind: string | number | null; attempt: string | number | null }) => `${a.taskId}.${a.kind}${a.attempt}.requests.jsonl`;
+
+interface Folder { attempts: Entry[]; logs: Map<string, string | null> }
+/** What one seed folder differs by from the clean one: attempts that replace or add to the clean ones by task and kind, clean attempts dropped as `<task>.<kind>`, a log text (null deletes the file), or no attempts.jsonl. */
+interface Raw { attempts?: Entry[]; drop?: string[]; logs?: Record<string, string | null>; noAttemptsFile?: boolean }
+
+/** One out folder: records, plan and the clean raw folders (one on-pin session attempt and log per Claude Code record); `raw` changes a seed folder, null leaves it out. */
+function outFolder(opts: { seeds?: number[]; raw?: Record<string, Raw | null>; envKeys?: Record<string, string[]>; noRaw?: boolean } = {}) {
   const out = tmp('z0-g1pins-');
   const all = generate({ design: DESIGNS.r4, repos: 1 });
   const keep = (x: { seed: number }) => (opts.seeds ?? [1, 2, 3]).includes(x.seed);
-  const records = all.records.filter(keep).map((r) => ({ ...r, envKeys: opts.envKeys?.[`${r.arm}#${r.seed}#${r.position}`] ?? ['PATH', 'PIP_CONSTRAINT'] }));
+  const records = all.records.filter(keep).map((r) => ({ ...r, sessionId: `s-${r.arm}-${r.seed}-${r.position}`, envKeys: opts.envKeys?.[`${r.arm}#${r.seed}#${r.position}`] ?? ['PATH', 'PIP_CONSTRAINT'] }));
   fs.writeFileSync(path.join(out, 'runs.jsonl'), jsonl(records));
   fs.writeFileSync(path.join(out, 'plan.json'), JSON.stringify(all.plan.filter(keep)));
-  for (const [where, folder] of Object.entries(opts.raw ?? {})) {
-    const dir = path.join(out, 'raw', ...where.split('/'));
-    fs.mkdirSync(dir, { recursive: true });
-    if (folder.attempts !== undefined) fs.writeFileSync(path.join(dir, 'attempts.jsonl'), folder.attempts.map(line).join(''));
-    for (const [name, log] of Object.entries(folder.logs ?? {})) fs.writeFileSync(path.join(dir, name), log);
+  const folders = new Map<string, Folder>();
+  const noAttempts = new Set<string>();
+  for (const r of records.filter((x) => ARM_TABLE[x.arm].tool === 'claude-code')) {
+    const folder: Folder = folders.get(`${r.sequence}/${r.arm}/seed${r.seed}`) ?? { attempts: [], logs: new Map() };
+    const a = attempt(r.taskId, 'session', 1, r.sessionId);
+    folder.attempts.push(a);
+    folder.logs.set(logName(a), text(request('/v1/messages', body(pinOf(r.arm), 'medium'))));
+    folders.set(`${r.sequence}/${r.arm}/seed${r.seed}`, folder);
   }
-  return { out, sequence: 'rn-repo1' };
+  for (const [where, change] of Object.entries(opts.raw ?? {})) {
+    if (change === null) folders.delete(where);
+    else {
+      const folder = folders.get(where)!;
+      const same = (a: Entry, b: Entry) => a.taskId === b.taskId && a.kind === b.kind;
+      folder.attempts = folder.attempts.filter((a) => !(change.drop ?? []).includes(`${a.taskId}.${a.kind}`) && !(change.attempts ?? []).some((b) => same(a, b))).concat(change.attempts ?? []);
+      for (const [name, log] of Object.entries(change.logs ?? {})) folder.logs.set(name, log);
+      if (change.noAttemptsFile === true) noAttempts.add(where);
+    }
+  }
+  if (opts.noRaw !== true) {
+    for (const [where, folder] of folders) {
+      const dir = path.join(out, 'raw', ...where.split('/'));
+      fs.mkdirSync(dir, { recursive: true });
+      if (!noAttempts.has(where)) fs.writeFileSync(path.join(dir, 'attempts.jsonl'), folder.attempts.map(line).join(''));
+      for (const [name, log] of folder.logs) if (log !== null) fs.writeFileSync(path.join(dir, name), log);
+    }
+  }
+  return { out, sequence: 'rn-repo1', records };
 }
 
-const attempt = (taskId: string, kind: string, n: number, sessionId: string | null) => ({ taskId, kind, attempt: n, sessionId, logFile: `C:\\elsewhere\\raw\\${taskId}.${kind}${n}.requests.jsonl`, sizesBefore: null });
 const pinsFile = (extra: { effort?: string } = {}) => {
   const file = path.join(tmp('z0-g1pins-pins-'), 'pins.json');
   fs.writeFileSync(file, JSON.stringify({ ...PINS, ...extra }));
@@ -119,13 +156,63 @@ describe('g1-pins on a run folder', () => {
 
   it('lists an attempt with no log, and reads a log no attempt names with a null sessionId', () => {
     const { out } = outFolder({
-      raw: { 'rn-repo1/S1/seed2': { attempts: [attempt('rn-repo1-t3', 'session', 1, 's-3')], logs: { 'rn-repo1-t7.session2.requests.jsonl': text(request('/v1/messages', body('claude-haiku-4', 'medium'))) } } },
+      raw: { 'rn-repo1/S1/seed2': { attempts: [attempt('rn-repo1-t3', 'session', 1, 's-3')], logs: { 'rn-repo1-t3.session1.requests.jsonl': null, 'rn-repo1-t7.session2.requests.jsonl': text(request('/v1/messages', body('claude-haiku-4', 'medium'))) } } },
     });
     run(out, offPinOf(out));
     expect(readJson(offPinOf(out)).voids).toEqual([
       expect.objectContaining({ seed: 2, arm: 'S1', position: 3, sessionId: 's-3', reason: 'no log' }),
       expect.objectContaining({ seed: 2, arm: 'S1', position: 7, sessionId: null, reason: `model claude-haiku-4, pinned ${SONNET}` }),
     ]);
+  });
+
+  it('stops with exit 1, naming the folder and writing nothing, on a --run with no raw folder', () => {
+    const { out } = outFolder({ noRaw: true });
+    expect(run(out, offPinOf(out))).toMatchObject({ code: 1, stderr: expect.stringContaining(path.join(out, 'raw')) });
+    expect(fs.existsSync(offPinOf(out))).toBe(false);
+  });
+
+  describe('a record with no evidence of its log (the report fails closed)', () => {
+    const noLog = (records: { arm: string; seed: number; position: number; sessionId: string | null }[], arm: string, seed: number) => records
+      .filter((r) => r.arm === arm && r.seed === seed).map((r) => ({ sequence: 'rn-repo1', seed, arm, position: r.position, sessionId: r.sessionId ?? null, reason: 'no log' })).sort((a, b) => a.position - b.position);
+    const voidsOf = (raw: Record<string, Raw | null>) => {
+      const { out, records } = outFolder({ raw });
+      expect(run(out, offPinOf(out))).toMatchObject({ code: 0 });
+      return { voids: readJson(offPinOf(out)).voids, records };
+    };
+
+    it('voids every record of a seed with no raw seed folder', () => {
+      const { voids, records } = voidsOf({ 'rn-repo1/S2/seed1': null });
+      expect(voids).toEqual(noLog(records, 'S2', 1));
+      expect(voids.length).toBeGreaterThan(1);
+    });
+
+    it('voids every record of a seed folder with no attempts.jsonl, though its logs sit there', () => {
+      const { voids, records } = voidsOf({ 'rn-repo1/S2/seed1': { noAttemptsFile: true } });
+      expect(voids).toEqual(noLog(records, 'S2', 1));
+    });
+
+    it('voids a record with no session attempt for its task, a resume attempt of the task not counting', () => {
+      const { voids, records } = voidsOf({ 'rn-repo1/S2/seed1': { drop: ['rn-repo1-t5.session'], attempts: [attempt('rn-repo1-t5', 'resume', 1, 's-5')], logs: { 'rn-repo1-t5.resume1.requests.jsonl': GOOD_LOG } } });
+      expect(voids).toEqual(noLog(records.filter((r) => r.position === 5), 'S2', 1));
+      expect(voids).toHaveLength(1);
+    });
+
+    it('voids an attempt whose log is not on disk and an attempt that names no log file', () => {
+      const { voids, records } = voidsOf({
+        'rn-repo1/S2/seed1': { logs: { 'rn-repo1-t4.session1.requests.jsonl': null }, attempts: [{ ...attempt('rn-repo1-t5', 'session', 1, 's-5'), logFile: null }] },
+      });
+      expect(voids).toEqual([...noLog(records.filter((r) => r.position === 4), 'S2', 1), { ...noLog(records.filter((r) => r.position === 5), 'S2', 1)[0], sessionId: 's-5' }]);
+    });
+  });
+
+  it('records the sha256 of the pins file and the plan file it read, beside the runs file hash', () => {
+    const { out } = outFolder();
+    const pins = pinsFile();
+    expect(run(out, offPinOf(out), [], pins)).toMatchObject({ code: 0 });
+    const sha = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    const file = readJson(offPinOf(out));
+    expect(file.pins).toEqual({ file: pins, sha256: sha(pins) });
+    expect(file.planOf).toEqual({ file: path.join(out, 'plan.json'), sha256: sha(path.join(out, 'plan.json')) });
   });
 
   it('voids positions 5 and up of its (sequence, seed) in every arm once filteredInput reads the file', () => {
@@ -284,12 +371,13 @@ describe('the off-pin bar and the first-run count (prereg item 6, R67)', () => {
     expect(reaching(within + 1)).toMatchObject({ pass: false, offPinVoided: { positions: within + 1 }, offPinPass: false });
   });
 
-  it('adds firstRun to G3, summed over the merge manifests, and only when the bar is on', () => {
+  it('adds firstRun to G3, its leaked count summed over the merge manifests beside the whole read\'s planned runs, and only when the bar is on', () => {
     expect(g3(1, 20)).not.toHaveProperty('firstRun');
-    expect(g3(1, 20, { leaked: 2, plannedRuns: 40 })).toMatchObject({ pass: true, leaked: 1, plannedRuns: 20, firstRun: { leaked: 2, plannedRuns: 40 } });
+    expect(g3(1, 20, { leakedSequenceSeeds: 2, plannedRuns: 20 })).toMatchObject({ pass: true, leaked: 1, plannedRuns: 20, firstRun: { leakedSequenceSeeds: 2, plannedRuns: 20 } });
     const { filtered, records, opts } = round3();
     const gates = computeGates(records, filtered, GRADING, { ...opts, offPinGiven: true, mergeManifests: [manifest(1, 3), manifest(2, 6)] });
-    expect(gates.G3).toEqual({ ...HEAD_G3, firstRun: { leaked: 3, plannedRuns: 9 } });
-    expect(computeGates(records, filtered, GRADING, { ...opts, offPinGiven: true }).G3.firstRun).toEqual({ leaked: 0, plannedRuns: 0 });
+    // The planned count is the whole read's, so the first-run leaks sit over the same total as G3's own; the manifests' own planned counts are not summed.
+    expect(gates.G3).toEqual({ ...HEAD_G3, firstRun: { leakedSequenceSeeds: 3, plannedRuns: HEAD_G3.plannedRuns } });
+    expect(computeGates(records, filtered, GRADING, { ...opts, offPinGiven: true }).G3.firstRun).toEqual({ leakedSequenceSeeds: 0, plannedRuns: HEAD_G3.plannedRuns });
   });
 });

@@ -110,10 +110,14 @@ export function runCli(argv, cwd = process.cwd()) {
     checkReruns(args.rerunOf.map((d) => path.resolve(cwd, d)), leaks);
     const { cells, planned } = readFirstPlan(first, leaks, leaksFile);
     const kept = keptLines(runsFile, leaked);
-    const runsOut = path.join(out, 'runs.jsonl');
-    writeFileAtomic(runsOut, kept.map((l) => `${l}\n`).join(''));
-    writeFileAtomic(path.join(out, 'plan.json'), JSON.stringify(cells.filter((c) => !leaked.has(runKey(c.sequence, c.seed)))));
-    writeFileAtomic(path.join(out, 'off-pin.json'), `${JSON.stringify({ schema: OFFPIN_SCHEMA, runs: [{ dir: out, file: 'runs.jsonl', sha256: sha256(runsOut) }], voids }, null, 2)}\n`);
+    // parsePlan refuses an empty plan, so a first run that leaked whole keeps no runs, plan or off-pin file; the manifest alone carries its counts.
+    const whole = leaked.size === planned.size;
+    if (!whole) {
+      const runsOut = path.join(out, 'runs.jsonl');
+      writeFileAtomic(runsOut, kept.map((l) => `${l}\n`).join(''));
+      writeFileAtomic(path.join(out, 'plan.json'), JSON.stringify(cells.filter((c) => !leaked.has(runKey(c.sequence, c.seed)))));
+      writeFileAtomic(path.join(out, 'off-pin.json'), `${JSON.stringify({ schema: OFFPIN_SCHEMA, runs: [{ dir: out, file: 'runs.jsonl', sha256: sha256(runsOut) }], voids }, null, 2)}\n`);
+    }
     const manifest = {
       schema: MERGE_SCHEMA, first: { dir: path.dirname(runsFile), file: path.basename(runsFile), sha256: sha256(runsFile) },
       hashes: [{ role: 'leaks', file: leaksFile, sha256: sha256(leaksFile) }, { role: 'first-off-pin', file: offPinFile, sha256: sha256(offPinFile) }],
@@ -121,7 +125,7 @@ export function runCli(argv, cwd = process.cwd()) {
     };
     // Written last, so a folder with a merge.json holds the other three files whole.
     writeFileAtomic(path.join(out, 'merge.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-    return `merged ${kept.length} records, dropped ${leaked.size} leaked seeds, ${voids.length} voids kept\n`;
+    return `merged ${kept.length} records, dropped ${leaked.size} leaked seeds, ${whole ? 0 : voids.length} voids kept\n`;
   });
 }
 

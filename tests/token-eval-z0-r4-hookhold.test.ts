@@ -1,6 +1,7 @@
 // Round 4 prereg item 9 (Amendment B): the hook hold rule and the sensitivity drop list, from transcripts under round 3 and from `hookCancels` under round 4.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createHash } from 'node:crypto';
 import { describe, it, expect, afterEach } from 'vitest';
 import { runCli } from '../scripts/token-eval/z0-hookhold.mjs';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
@@ -15,6 +16,7 @@ const write = (file: string, recs: Rec[]) => {
   return file;
 };
 const folder = () => tmp('z0-hookhold-');
+const sha = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const hold = (design: string, ...files: string[]) => runCli(['--design', design, ...(design === 'r4' ? files.flatMap((f) => ['--runs', f]) : files.flatMap((f) => ['--run', f])), '--hold']);
 
 describe('z0-hookhold under round 4: hookCancels on the S2 and S5 apply sessions', () => {
@@ -65,8 +67,54 @@ describe('z0-hookhold under round 4: hookCancels on the S2 and S5 apply sessions
     expect(result).toMatchObject({ code: 0, stdout: '4 sessions, 2 positions dropped\n' });
     expect(JSON.parse(fs.readFileSync(out, 'utf8'))).toEqual({
       droppedLessons: [], droppedFamilies: [], hookVoids: [{ sequence: 'rn-q1', seed: 1, position: 2 }, { sequence: 'rn-q1', seed: 2, position: 4 }],
+      runs: [{ file, sha256: sha(file) }],
     });
     expect(result.stdout).not.toMatch(/S[0-9]/);
+  });
+
+  it('names every runs file it read, in argument order, with its sha256 in the drop list', () => {
+    const dir = folder();
+    const out = path.join(dir, 'hook.json');
+    const [a, b] = [write(path.join(dir, 'a.jsonl'), fifty([7])), write(path.join(dir, 'b.jsonl'), fifty([]))];
+    runCli(['--design', 'r4', '--runs', a, '--runs', b, '--sensitivity', out]);
+    expect(JSON.parse(fs.readFileSync(out, 'utf8')).runs).toEqual([{ file: a, sha256: sha(a) }, { file: b, sha256: sha(b) }]);
+  });
+
+  describe('a session whose cancel count the record does not hold stops the read (exit 1, naming the file and line)', () => {
+    const bare = (extra: Partial<Rec> = {}): Rec => {
+      const record = rec(1, extra);
+      delete record.hookCancels;
+      return record;
+    };
+    // The second line is raw JSON text, so a hookCancels of any type reaches the command as a file holds it.
+    const stopFor = (second: string, mode: string[]) => {
+      const file = path.join(folder(), 'runs.jsonl');
+      fs.writeFileSync(file, `${JSON.stringify(rec(0))}\n${second}\n`);
+      return { file, result: runCli(['--design', 'r4', '--runs', file, ...mode]) };
+    };
+
+    it('stops on a record with no hookCancels object, under --hold and under --sensitivity', () => {
+      const list = path.join(folder(), 'hook.json');
+      for (const mode of [['--hold'], ['--sensitivity', list]]) {
+        const { file, result } = stopFor(JSON.stringify(bare()), mode);
+        expect(result).toMatchObject({ code: 1, stdout: '', stderr: expect.stringContaining(`${file} line 2`) });
+        expect(result.stderr).toContain('hookCancels');
+      }
+      expect(fs.existsSync(list)).toBe(false);
+    });
+
+    it('stops on a hookCancels that is null, a list or a string, and on a UserPromptSubmit that is not a non-negative integer', () => {
+      for (const hookCancels of [null, [], 'none', { UserPromptSubmit: -1 }, { UserPromptSubmit: 1.5 }, { UserPromptSubmit: '1' }, { UserPromptSubmit: null }]) {
+        const { file, result } = stopFor(JSON.stringify({ ...bare(), hookCancels }), ['--hold']);
+        expect(result, JSON.stringify(hookCancels)).toMatchObject({ code: 1, stderr: expect.stringContaining(`${file} line 2`) });
+      }
+    });
+
+    it('reads {} and a count of 0 as a session that lost nothing, and a record of another arm or with no session id as none of its business', () => {
+      const dir = folder();
+      const file = write(path.join(dir, 'runs.jsonl'), [rec(0, { hookCancels: { UserPromptSubmit: 0 } }), rec(1), bare({ arm: 'S1' }), bare({ sessionId: null })]);
+      expect(runCli(['--design', 'r4', '--runs', file, '--hold'])).toMatchObject({ code: 0, stdout: 'ok 0 of 2\n' });
+    });
   });
 
   it('lists the drop list in file and line order whatever the startedAt order, as r3-sensitivity.py does', () => {
@@ -141,8 +189,11 @@ describe('z0-hookhold under round 3: the hook state in each session\'s transcrip
     const out = path.join(folder(), 'hook.json');
     const result = runCli(['--design', 'r3', '--run', first, '--run', second, '--sensitivity', out]);
     expect(result).toMatchObject({ code: 0, stdout: '5 sessions, 3 positions dropped\n' });
-    expect(JSON.parse(fs.readFileSync(out, 'utf8')).hookVoids).toEqual([
+    const written = JSON.parse(fs.readFileSync(out, 'utf8'));
+    expect(written.hookVoids).toEqual([
       { sequence: 'rn-q1', seed: 1, position: 1 }, { sequence: 'rn-q1', seed: 1, position: 2 }, { sequence: 'rn-q2', seed: 1, position: 2 },
     ]);
+    // The round 3 list keeps the keys of r3-sensitivity.py and no more.
+    expect(Object.keys(written)).toEqual(['droppedLessons', 'droppedFamilies', 'hookVoids']);
   });
 });

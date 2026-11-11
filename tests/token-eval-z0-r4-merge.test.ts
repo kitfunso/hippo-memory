@@ -24,12 +24,13 @@ function writeOut(dir: string, records: Z0Record[], plan: PlanCell[]) {
 }
 
 /** A first run of three seeds with a leak at seed 2, a rerun of seed 2, and a first-run off-pin file with a void at seed 1 and one at seed 2. */
-function scene(opts: { rerunLeaks?: boolean; rerunSeeds?: number[] } = {}) {
+function scene(opts: { rerunLeaks?: boolean; rerunSeeds?: number[]; firstSeeds?: number[] } = {}) {
   const root = tmp('z0-merge-');
   const g = generate({ design: DESIGNS.r4, repos: 1 });
   const hit = g.records.find((r) => r.seed === 2 && r.position === 4)!;
   Object.assign(hit, { leak: true });
-  const first = writeOut(path.join(root, 'first'), g.records, g.plan);
+  const inFirst = (x: { seed: number }) => (opts.firstSeeds ?? [1, 2, 3]).includes(x.seed);
+  const first = writeOut(path.join(root, 'first'), g.records.filter(inFirst), g.plan.filter(inFirst));
   const seeds = opts.rerunSeeds ?? [2];
   const rerunRecords = g.records.filter((r) => seeds.includes(r.seed)).map((r) => ({ ...r, sessionId: `rerun-${r.position}`, leak: opts.rerunLeaks === true && r.seed === 2 && r.position === 4 && r.arm === hit.arm }));
   const rerun = writeOut(path.join(root, 'rerun'), rerunRecords, planOf(rerunRecords));
@@ -81,6 +82,14 @@ describe('z0-merge on a synthetic round 4 first run (prereg item 9)', () => {
     expect(manifest.hashes).toEqual([{ role: 'leaks', file: expect.any(String), sha256: sha(s.listed) }, { role: 'first-off-pin', file: expect.any(String), sha256: sha(s.offPin) }]);
     fs.writeFileSync(path.join(s.root, 'bad.json'), JSON.stringify({ schema: 'z0-merge/9' }));
     expect(() => readMergeManifest(path.join(s.root, 'bad.json'))).toThrow(/schema/);
+  });
+
+  it('writes merge.json alone, with its counts, when every seed of the first run leaked, since parsePlan refuses an empty plan', () => {
+    const s = scene({ firstSeeds: [2] });
+    expect(merge(s.argv)).toMatchObject({ code: 0, stdout: 'merged 0 records, dropped 1 leaked seeds, 0 voids kept\n' });
+    expect(fs.readdirSync(s.out)).toEqual(['merge.json']);
+    expect(readMergeManifest(path.join(s.out, 'merge.json'))).toMatchObject({ droppedSeeds: { [SEQ]: [2] }, firstRun: { plannedSequenceSeeds: 1, leakedSequenceSeeds: 1 } });
+    expect(merge(s.argv)).toMatchObject({ code: 0 });
   });
 
   it('refuses a rerun folder that holds another seed, a leak with no rerun, a stray rerun and a leak list for another runs file', () => {
@@ -143,6 +152,6 @@ describe('a seed that leaks in its first run and in its rerun stays leaked (prer
     const { filtered, records } = filteredInput(inputs.records, inputs.planCells, { design: inputs.design }, { dropAbandoned: false });
     expect(filtered.leaked).toEqual([`${SEQ} seed 2`]);
     const gates = computeGates(records, filtered, null, { iterations: 50, seed: 1, design: DESIGNS.r4, mergeManifests: [readMergeManifest(path.join(s.out, 'merge.json'))] });
-    expect(gates.G3).toMatchObject({ leaked: 1, plannedRuns: 3, firstRun: { leaked: 1, plannedRuns: 3 } });
+    expect(gates.G3).toMatchObject({ leaked: 1, plannedRuns: 3, firstRun: { leakedSequenceSeeds: 1, plannedRuns: 3 } });
   });
 });
