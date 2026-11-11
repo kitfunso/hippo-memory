@@ -21,6 +21,38 @@ try {
   function Utc($d) { if ($null -eq $d) { return $null }; return ([datetime]$d).ToUniversalTime() }
   # WMI keeps whole microseconds, so a row's start and a handle's start are compared at that precision.
   function Micro([datetime]$d) { return $d.Ticks - ($d.Ticks % 10) }
+  $script:handles = [System.Collections.Generic.List[IntPtr]]::new()
+  if (-not $listed) {
+    Add-Type -Namespace Z0 -Name Proc -UsingNamespace System.ComponentModel -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)]
+static extern IntPtr OpenProcess(int access, bool inherit, int pid);
+[DllImport("kernel32.dll", SetLastError = true)]
+static extern bool GetProcessTimes(IntPtr h, out long created, out long exited, out long kernel, out long user);
+[DllImport("kernel32.dll", SetLastError = true)]
+static extern uint WaitForSingleObject(IntPtr h, uint ms);
+[DllImport("kernel32.dll", SetLastError = true)]
+static extern bool TerminateProcess(IntPtr h, uint code);
+[DllImport("kernel32.dll")]
+public static extern bool CloseHandle(IntPtr h);
+// PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE; the error is read here, before PowerShell's own calls can reset it.
+public static IntPtr Open(int pid, out int error) {
+  IntPtr h = OpenProcess(0x1000 | 0x100000 | 0x1, false, pid);
+  error = h == IntPtr.Zero ? Marshal.GetLastWin32Error() : 0;
+  return h;
+}
+public static DateTime Start(IntPtr h) {
+  long created, exited, kernel, user;
+  if (!GetProcessTimes(h, out created, out exited, out kernel, out user)) throw new Win32Exception();
+  return DateTime.FromFileTimeUtc(created);
+}
+public static bool Ended(IntPtr h, uint ms) {
+  uint r = WaitForSingleObject(h, ms);
+  if (r == 0xFFFFFFFF) throw new Win32Exception();
+  return r == 0;
+}
+public static void Kill(IntPtr h) { if (!TerminateProcess(h, 1)) throw new Win32Exception(); }
+'@
+  }
   # Z0_STOP_TREE_LISTED, a test's JSON {root, reads}, replaces the live handles and reads: root is the start a handle on the root reports (null: gone), reads one table per round, the last repeating.
   # A row's HandleStart is what a handle opened right after that read would report: absent means its CreationDate, null means the process is gone.
   $script:tables = [System.Collections.Generic.List[object]]::new()
@@ -72,25 +104,24 @@ public static string[] Split(string line) {
     foreach ($word in [Z0.Argv]::Split($line)) { $n = Norm $word; if ($n -eq $want -or $n.StartsWith("$want/")) { return $true } }
     return $false
   }
-  # A handle on $id and the start it reports at once, or $null after a gone or failed line; .NET reads StartTime through the open handle, so the start holds after an exit.
+  # A handle on $id and the start it reports, or $null after a gone or failed line; OpenProcess reaches a process that exited while another handle holds it, which keeps its pid and children its own, and which no process list shows.
   function Open([int]$id) {
-    $q = Get-Process -Id $id -ErrorAction SilentlyContinue
-    if ($q) {
-      try { $null = $q.Handle }
-      catch {
-        if (Get-Process -Id $id -ErrorAction SilentlyContinue) { Say "failed $id $($_.Exception.Message)"; $script:failed = $true; return $null }
-        $q = $null
-      }
+    $err = 0
+    $x = [Z0.Proc]::Open($id, [ref]$err)
+    if ($x -eq [IntPtr]::Zero) {
+      # ERROR_INVALID_PARAMETER is the one answer for a pid no process holds; any other refusal leaves a process that may still run.
+      if ($err -eq 87) { Say "gone $id" } else { Say "failed $id $((New-Object System.ComponentModel.Win32Exception $err).Message)"; $script:failed = $true }
+      return $null
     }
-    if (-not $q) { Say "gone $id"; return $null }
-    return [pscustomobject]@{ P = $q; Start = $q.StartTime.ToUniversalTime(); Id = $id; Done = $false }
+    $script:handles.Add($x)
+    return [pscustomobject]@{ H = $x; Start = [Z0.Proc]::Start($x); Id = $id; Done = $false }
   }
   # The process a row nominates, held through its own handle, or $null after a gone or failed line; a handle start that differs from the row's means the pid changed hands since the read.
   function Hold($row, [datetime]$made) {
     $id = [int]$row.ProcessId
     if (-not $listed) { $h = Open $id }
     elseif ($null -eq $row.HandleStart) { Say "gone $id"; $h = $null }
-    else { $h = [pscustomobject]@{ P = $null; Start = Utc $row.HandleStart; Id = $id; Done = $false } }
+    else { $h = [pscustomobject]@{ H = $null; Start = Utc $row.HandleStart; Id = $id; Done = $false } }
     if ($h -and (Micro $h.Start) -ne (Micro $made)) { Say "gone $id"; return $null }
     return $h
   }
@@ -135,7 +166,7 @@ public static string[] Split(string line) {
 
   # The root's handle and its start come before the first read, so a root that exits later is still walked and its pid stays its own.
   $failed = $false
-  $top = if (-not $listed) { Open $root } elseif ($null -eq $listedRoot) { Say "gone $root"; $null } else { [pscustomobject]@{ P = $null; Start = Utc $listedRoot; Id = $root; Done = $false } }
+  $top = if (-not $listed) { Open $root } elseif ($null -eq $listedRoot) { Say "gone $root"; $null } else { [pscustomobject]@{ H = $null; Start = Utc $listedRoot; Id = $root; Done = $false } }
   if (-not $top) { Say 'end'; if ($failed) { Done 1 }; Done 0 }
   # The caller held the root's handle at -StartedBy, so a root that started later holds a pid the caller's process gave up.
   if ($by -and $top.Start -gt $by) { Say "not-mine $root started after $StartedBy"; Say 'end'; Done 3 }
@@ -154,19 +185,17 @@ public static string[] Split(string line) {
     $new = Grow $table
     $todo = @($held.Values | Where-Object { -not $_.Done })
     if ($todo.Count -eq 0) { break }
-    # SHORTCUT: a descendant whose Windows parent exited before its handle opened (an orphan, or an msys program exec'd from a fork) is out of reach, as under taskkill /T; a job object per unit would hold it.
+    # SHORTCUT: a descendant whose Windows parent left the process list before a read (an orphan, an msys program exec'd from a fork, or an exited parent another handle holds) is out of reach, as under taskkill /T; a job object per unit would hold it.
     # Oldest first by handle start, pid breaking ties: a parent killed first cannot fork a new child while its children die.
     foreach ($h in @($todo | Sort-Object -Property Start, Id)) {
       $h.Done = $true
-      $q = $h.P
       if ($listed) { Say "listed $($h.Id)"; continue }
-      if ($q.HasExited) { Say "gone $($h.Id)"; continue }
+      if ([Z0.Proc]::Ended($h.H, 0)) { Say "gone $($h.Id)"; continue }
       try {
-        $q.Kill()
-        if ($q.WaitForExit(10000)) { Say "killed $($h.Id)" } else { Say "failed $($h.Id) still running 10 s after its kill"; $failed = $true }
+        [Z0.Proc]::Kill($h.H)
+        if ([Z0.Proc]::Ended($h.H, 10000)) { Say "killed $($h.Id)" } else { Say "failed $($h.Id) still running 10 s after its kill"; $failed = $true }
       } catch {
-        $null = $q.WaitForExit(5000)
-        if ($q.HasExited) { Say "gone $($h.Id)" } else { Say "failed $($h.Id) $($_.Exception.Message)"; $failed = $true }
+        if ([Z0.Proc]::Ended($h.H, 5000)) { Say "gone $($h.Id)" } else { Say "failed $($h.Id) $($_.Exception.Message)"; $failed = $true }
       }
     }
     # A sixth round's nominees pass the same handle check, so they die too, but a tree that still spawns may have more, so the stop fails.
@@ -178,4 +207,7 @@ public static string[] Split(string line) {
 } catch {
   Say "error $($_.Exception.Message)"
   exit 2
+} finally {
+  # Every handle stays open until here, so no held pid passes to another process before the last kill.
+  foreach ($x in $script:handles) { $null = [Z0.Proc]::CloseHandle($x) }
 }

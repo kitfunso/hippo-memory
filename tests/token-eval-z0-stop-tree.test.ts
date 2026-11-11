@@ -46,17 +46,18 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 });
 
-/** node root.js --out <names>/run, which starts a detached tick child (out of root's libuv job, so only the walk ends it); the tick writes its pid and a dot every 200 ms. */
+/** node root.js --out <names>/run, which starts a detached tick child (out of root's libuv job, so only the walk ends it); the tick writes its pid and a dot every 200 ms, and the root alone exits once its go file exists. */
 function treeNaming(names: string) {
   const aux = folder('z0-stop-aux-');
   const tick = join(aux, 'tick.txt');
   const tickPid = join(aux, 'tick.pid');
   const stop = join(aux, 'stop');
+  const go = join(aux, 'go');
   stops.push(stop);
   const until90s = `const fs = require('fs'); const end = Date.now() + 90000; const done = () => fs.existsSync(process.env.Z0_TICK_STOP) || Date.now() > end;`;
-  writeFileSync(join(aux, 'root.js'), `${until90s} require('child_process').spawn(process.execPath, [${JSON.stringify(join(aux, 'tick.js'))}], { stdio: 'ignore', detached: true }); setInterval(() => { if (done()) process.exit(0); }, 200);`);
+  writeFileSync(join(aux, 'root.js'), `${until90s} require('child_process').spawn(process.execPath, [${JSON.stringify(join(aux, 'tick.js'))}], { stdio: 'ignore', detached: true }); setInterval(() => { if (done() || fs.existsSync(process.env.Z0_ROOT_GO)) process.exit(0); }, 200);`);
   writeFileSync(join(aux, 'tick.js'), `${until90s} fs.writeFileSync(process.env.Z0_TICK_PID, String(process.pid)); setInterval(() => { if (done()) process.exit(0); fs.appendFileSync(process.env.Z0_TICK, '.'); }, 200);`);
-  const env = { ...process.env, Z0_TICK: tick, Z0_TICK_PID: tickPid, Z0_TICK_STOP: stop };
+  const env = { ...process.env, Z0_TICK: tick, Z0_TICK_PID: tickPid, Z0_TICK_STOP: stop, Z0_ROOT_GO: go };
   const root = spawn(process.execPath, [join(aux, 'root.js'), '--out', join(names, 'run')], { env, stdio: 'ignore', windowsHide: true, cwd: tmpdir() });
   started.push(root);
   const ready = async () => {
@@ -68,7 +69,23 @@ function treeNaming(names: string) {
     await sleep(1500);
     return statSync(tick).size === size;
   };
-  return { pid: Number(root.pid), root, ready, stopped };
+  return { pid: Number(root.pid), root, ready, stopped, go };
+}
+
+/** A PowerShell that opens a handle on `pid` and keeps it until its stop file exists, as Node keeps a child's handle until it sees the exit. */
+async function holdHandle(pid: number) {
+  const aux = folder('z0-stop-hold-');
+  const ready = join(aux, 'ready');
+  const stop = join(aux, 'stop');
+  stops.push(stop);
+  writeFileSync(join(aux, 'hold.ps1'), [
+    '$p = Get-Process -Id ([int]$env:Z0_HOLD_PID); $null = $p.Handle; $end = (Get-Date).AddSeconds(90)',
+    'New-Item -ItemType File -Path $env:Z0_HOLD_READY | Out-Null',
+    'while (-not (Test-Path $env:Z0_HOLD_STOP) -and (Get-Date) -lt $end) { Start-Sleep -Milliseconds 200 }',
+  ].join('\n'));
+  const env = { ...process.env, Z0_HOLD_PID: String(pid), Z0_HOLD_READY: ready, Z0_HOLD_STOP: stop };
+  started.push(spawn('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(aux, 'hold.ps1')], { env, stdio: 'ignore', windowsHide: true }));
+  await until('the holder to open its handle', () => existsSync(ready));
 }
 
 /** stop-tree.ps1's exit code and output lines. */
@@ -103,10 +120,27 @@ describe.skipIf(!win)('stop-tree.ps1', () => {
     expect([r.code, r.lines], r.stderr).toEqual([3, [expect.stringMatching(new RegExp(`^not-mine ${t.pid} `)), 'end']]);
   });
 
+  // exec.mjs's root before Node reaps it: exited, out of every process list, but its pid and its children still its own while a handle holds it.
+  it('stops the descendant of a root that exited while another process holds its handle, and says the root gone', async () => {
+    const unit = folder('z0-stop-unit-');
+    const t = treeNaming(unit);
+    const tick = await t.ready();
+    await holdHandle(t.pid);
+    writeFileSync(t.go, '');
+    await exited(t.root);
+    const r = stopTree(t.pid, ['-StartedBy', new Date().toISOString()]);
+    expect([r.code, r.lines.at(-1)], `${r.lines.join('\n')}\n${r.stderr}`).toEqual([0, 'end']);
+    expect(r.lines).toEqual(expect.arrayContaining([`gone ${t.pid}`, `killed ${tick}`]));
+    expect(r.lines.indexOf(`gone ${t.pid}`)).toBeLessThan(r.lines.indexOf(`killed ${tick}`));
+    expect(await t.stopped(), 'the tick still ticks').toBe(true);
+  });
+
   it('says gone and exits 0 for a pid no process holds', async () => {
     const unit = folder('z0-stop-unit-');
     const child = spawn(process.execPath, ['-e', '', join(unit, 'run')], { stdio: 'ignore', windowsHide: true, cwd: tmpdir() });
     await exited(child);
+    // libuv closes the child's handle a loop turn after 'exit', and until then the pid is held, so the stop would open it.
+    await sleep(500);
     // The mark keeps this harmless if another process took the pid meanwhile: the script refuses it rather than kill it.
     const r = stopTree(Number(child.pid), ['-Mark', unit]);
     expect([r.code, r.lines], r.stderr).toEqual([0, [`gone ${child.pid}`, 'end']]);
