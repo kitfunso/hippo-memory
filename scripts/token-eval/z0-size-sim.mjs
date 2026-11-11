@@ -3,9 +3,11 @@
  * and verdict rules, so the power is the full analysis's (prereg 209). */
 
 import { combineCodings, holmAdjust, seededRandom, verdict } from '../../dist/eval/eval-stats.js';
-import { incompleteBeta, lnGamma, pooledComponents } from '../../dist/eval/repository-t.js';
+import { fixedRepositoryT, incompleteBeta, lnGamma, pooledComponents } from '../../dist/eval/repository-t.js';
+import { blocks, costSolvedT, weightedVariance } from './z0-cost-solved.mjs';
 import { CODINGS, SPECS, byCoding, harmT, mean, repeatT, sum } from './z0-hypotheses.mjs';
 import { SEED_CAP } from './z0-records.mjs';
+import { T_NULLS, scoreTest } from './z0-verdict-r4.mjs';
 
 /** Seeds in the first wave; the seed rule may add more up to SEED_CAP. */
 export const SEEDS = 3;
@@ -58,8 +60,17 @@ const sd = Math.sqrt;
 const share = (xs, keep) => xs.filter(keep).length / xs.length;
 
 // The expected mean squares are E = noise, F = noise + s family and Q = noise + k sequence, so each spread is its excess over E.
-function pointSpreads({ F, Q, E, sBar, kBar }) {
-  return { noise: E, family: Math.max(0, (F - E) / sBar), sequence: Math.max(0, (Q - E) / kBar) };
+const rawSpreads = ({ F, Q, E, sBar, kBar }) => ({ noise: E, family: (F - E) / sBar, sequence: (Q - E) / kBar });
+function pointSpreads(pooled) {
+  const raw = rawSpreads(pooled);
+  return { ...raw, family: Math.max(0, raw.family), sequence: Math.max(0, raw.sequence) };
+}
+
+/** The spreads before the clamp at 0, so the Sizer's recovery check can average them without the clamp's upward bias.
+ * @param {{repo: string, family: string, seed: number, value: number}[]} units */
+export function unclampedSpreads(units) {
+  const pooled = pooledComponents(units);
+  return pooled === null ? null : rawSpreads(pooled);
 }
 
 // One-sided upper bound of a mean square at `bound`; with no df there is nothing to widen.
@@ -81,18 +92,48 @@ export function spreadComponents(units, bound) {
   };
 }
 
-/** The blind seed rule (prereg Amendment 2 item 5): from first-wave units only, the fewest seeds from SEEDS up to `cap` at which
- * the predicted standard error of the estimate is at most m / targetZ; null when the cap misses or nothing can be fitted.
- * @param {{repo: string, family: string, seed: number, value: number}[]} units @param {number} m
- * @param {{cap?: number, targetZ?: number}} [opts] */
-export function seedsNeeded(units, m, opts = {}) {
+// A layout names the repositories and families a run will have; with none, the units' own repositories are sized, as round 3 did.
+const layoutFor = (design) => design.layout ?? Array.from({ length: design.repos }, (_, r) => ({ repo: `r${r}`, k: design.families }));
+
+// One pooled fit gives the predicted error at any count, so a rule's loop never refits.
+function predictor(units, layout) {
   const pooled = pooledComponents(units);
   if (pooled === null) return null;
   const { family, sequence, noise } = pointSpreads(pooled);
-  const variance = (seeds) => sum(pooled.repos.map((r) => family / r.k + sequence / seeds + noise / (r.k * seeds))) / pooled.repos.length ** 2;
-  const bar = m / (opts.targetZ ?? TARGET_Z);
-  for (let seeds = SEEDS; seeds <= (opts.cap ?? SEED_CAP); seeds++) if (sd(variance(seeds)) <= bar) return seeds;
-  return null;
+  const entries = layout ?? pooled.repos;
+  return (seeds) => sd(sum(entries.map((r) => family / r.k + sequence / seeds + noise / (r.k * seeds))) / entries.length ** 2);
+}
+
+/** The standard error the blind seed rule predicts at `seeds`, from first-wave units' spreads; null when nothing can be fitted.
+ * @param {{repo: string, family: string, seed: number, value: number}[]} units @param {number} seeds
+ * @param {{layout?: {repo: string, k: number}[]}} [opts] */
+export function predictedSe(units, seeds, opts = {}) {
+  return predictor(units, opts.layout)?.(seeds) ?? null;
+}
+
+/** The rule's count: the fewest seeds from SEEDS to `cap` at which `predictedSe` is at most m / targetZ. On a miss (or nothing to fit),
+ * onMiss 'stop' gives null, 'cap' gives the cap, and 'near' the fewest seeds within `near` times the error at the cap (prereg item 10).
+ * @param {{repo: string, family: string, seed: number, value: number}[]} units
+ * @param {{m: number, cap?: number, targetZ?: number, onMiss?: 'stop' | 'cap' | 'near', near?: number, layout?: {repo: string, k: number}[]}} rule */
+export function ruleSeeds(units, rule) {
+  const { m, onMiss, near, layout } = rule;
+  const [cap, targetZ] = [rule.cap ?? SEED_CAP, rule.targetZ ?? TARGET_Z];
+  if (onMiss === 'near' && !Number.isFinite(near)) throw new Error("ruleSeeds: onMiss 'near' needs rule.near, the multiple of the cap's error to accept");
+  const se = predictor(units, layout);
+  if (se !== null) for (let seeds = SEEDS; seeds <= cap; seeds++) if (se(seeds) <= m / targetZ) return seeds;
+  if (onMiss === 'cap' || (onMiss === 'near' && se === null)) return cap;
+  if (onMiss !== 'near') return null;
+  const limit = near * se(cap);
+  for (let seeds = SEEDS; seeds < cap; seeds++) if (se(seeds) <= limit) return seeds;
+  return cap;
+}
+
+/** The blind seed rule (prereg Amendment 2 item 5): from first-wave units only, the fewest seeds from SEEDS up to `cap` at which
+ * the predicted standard error of the estimate is at most m / targetZ; null when the cap misses or nothing can be fitted.
+ * @param {{repo: string, family: string, seed: number, value: number}[]} units @param {number} m
+ * @param {{cap?: number, targetZ?: number, layout?: {repo: string, k: number}[]}} [opts] */
+export function seedsNeeded(units, m, opts = {}) {
+  return ruleSeeds(units, { m, cap: opts.cap, targetZ: opts.targetZ, layout: opts.layout });
 }
 
 /** Exact one-sided upper bound of a binomial share: the p at which P(X <= d | n, p) = 1 - level, by bisection.
@@ -109,29 +150,46 @@ export function clopperPearsonUpper(d, n, level) {
   return (lo + hi) / 2;
 }
 
-const effectOf = (c, delta, zf, zq, ze) => c.scale * delta + sd(c.family) * zf + sd(c.sequence) * zq + sd(c.noise) * ze;
+const effectOf = (c, mu, zf, zq, ze) => mu + sd(c.family) * zf + sd(c.sequence) * zq + sd(c.noise) * ze;
 const normals = (n, rand) => Array.from({ length: n }, () => normal(rand));
+
+// Part (a)'s draws are pseudo-values log R + v, so its estimate is the plain mean and its error is item 3's weighted variance.
+const SCORERS = {
+  repeat: (units) => {
+    const { estimate, se, df } = fixedRepositoryT(units, 0);
+    return { estimate, se, df };
+  },
+  ratio: (units) => {
+    const spread = weightedVariance(units, units.map((u) => u.value));
+    return { estimate: mean(units.map((u) => u.value)), se: spread === null ? Number.NaN : sd(spread.v), df: spread === null ? Number.NaN : spread.df };
+  },
+};
 
 /** One simulated H1 or H2 run: the same draws under both codings, each with its own spread, dilution and unit loss. Family
  * effects are drawn first and a sequence effect per seed, so seeds the rule adds later extend the same families. With a
- * `rule` of { m, cap, targetZ, onMiss } the first wave is SEEDS and the rule sets the count. When the cap cannot reach the
- * target, onMiss 'stop' (the default) stops the run and onMiss 'cap' runs it at the cap.
+ * `rule` of { m, cap, targetZ, onMiss, near } the first wave is SEEDS and `ruleSeeds` sets the count (a layout in the design reaches it).
+ * When the cap cannot reach the target, onMiss 'stop' (the default) stops the run, 'cap' runs it at the cap and 'near' at the near count.
+ * `opts.score` ('repeat' or 'ratio') adds `stat` per coding for `scoreTest`; `opts.exact` puts every cell at `delta`, not scale x delta.
  * @param {Record<string, {scale: number, loss: number, family: number, sequence: number, noise: number}>} cal
- * @param {{repos: number, families: number, seeds?: number}} design @param {number} delta
- * @param {{m: number, cap?: number, targetZ?: number, onMiss?: 'stop' | 'cap'} | null} [rule] */
-export function repeatRun(cal, design, delta, rand, rule = null) {
-  const zf = Array.from({ length: design.repos }, () => normals(design.families, rand));
+ * @param {{repos?: number, families?: number, layout?: {repo: string, k: number}[], seeds?: number}} design @param {number} delta
+ * @param {{m: number, cap?: number, targetZ?: number, onMiss?: 'stop' | 'cap' | 'near', near?: number} | null} [rule]
+ * @param {{score?: 'repeat' | 'ratio', exact?: boolean}} [opts] */
+export function repeatRun(cal, design, delta, rand, rule = null, opts = {}) {
+  const scorer = opts.score === undefined ? null : SCORERS[opts.score];
+  if (opts.score !== undefined && !scorer) throw new Error(`repeatRun: score ${opts.score} is not repeat or ratio`);
+  const layout = layoutFor(design);
+  const zf = layout.map(({ k }) => normals(k, rand));
   const units = byCoding(() => []);
   let seeds = 0;
   const addSeed = () => {
     seeds++;
-    for (let r = 0; r < design.repos; r++) {
+    for (let r = 0; r < layout.length; r++) {
       const zq = normal(rand);
-      for (let f = 0; f < design.families; f++) {
+      for (let f = 0; f < layout[r].k; f++) {
         const [ze, u] = [normal(rand), rand()];
         for (const coding of CODINGS) {
           const c = cal[coding];
-          if (u >= c.loss) units[coding].push({ repo: `r${r}`, family: `r${r}f${f}`, seed: seeds, value: effectOf(c, delta, zf[r][f], zq, ze) });
+          if (u >= c.loss) units[coding].push({ repo: layout[r].repo, family: `${layout[r].repo}f${f}`, seed: seeds, value: effectOf(c, opts.exact ? delta : c.scale * delta, zf[r][f], zq, ze) });
         }
       }
     }
@@ -139,15 +197,20 @@ export function repeatRun(cal, design, delta, rand, rule = null) {
   const drawTo = (n) => {
     while (seeds < n) addSeed();
   };
+  const finish = (stopped) => {
+    const run = { units, seeds, stopped };
+    if (scorer !== null) run.stat = stopped ? null : byCoding((c) => scorer(units[c]));
+    return run;
+  };
   if (rule === null) {
     drawTo(design.seeds ?? SEEDS);
-    return { units, seeds, stopped: false };
+    return finish(false);
   }
   drawTo(SEEDS);
-  const needed = CODINGS.map((c) => seedsNeeded(units[c], rule.m, rule));
-  if (needed.includes(null) && rule.onMiss !== 'cap') return { units, seeds, stopped: true };
-  drawTo(Math.max(...needed.map((n) => n ?? rule.cap ?? SEED_CAP)));
-  return { units, seeds, stopped: false };
+  const needed = CODINGS.map((c) => ruleSeeds(units[c], { ...rule, layout: design.layout ?? rule.layout }));
+  if (needed.includes(null)) return finish(true);
+  drawTo(Math.max(...needed));
+  return finish(false);
 }
 
 // A stopped run scores nothing, so it carries no estimates.
@@ -226,24 +289,49 @@ export function harmSizer(cal, opts) {
   };
 }
 
-// Resolve-style 0/1 values: each unit is the difference of two Bernoulli draws at one p, so its true mean is zero.
-function binaryRun(cal, design, rand) {
+/** Resolve-style 0/1 values: the treatment's rate is the control's (`base` plus the spreads, clamped so both stay in [0.02, 0.98]) plus
+ * `shift`, so each cell's true mean is `shift`; at shift 0 this is round 3's draw.
+ * @param {{repos?: number, families?: number, layout?: {repo: string, k: number}[], seeds: number}} design @param {{base?: number, shift?: number}} [opts] */
+export function binaryRun(cal, design, rand, { base = 0.3, shift = 0 } = {}) {
   const units = byCoding(() => []);
-  const zf = Array.from({ length: design.repos }, () => normals(design.families, rand));
-  for (let r = 0; r < design.repos; r++) {
+  const layout = layoutFor(design);
+  const zf = layout.map(({ k }) => normals(k, rand));
+  const [low, high] = [Math.max(0.02, 0.02 - shift), Math.min(0.98, 0.98 - shift)];
+  for (let r = 0; r < layout.length; r++) {
     const zq = normals(design.seeds, rand);
-    for (let f = 0; f < design.families; f++) {
+    for (let f = 0; f < layout[r].k; f++) {
       for (let s = 1; s <= design.seeds; s++) {
         const [b1, b2, u] = [rand(), rand(), rand()];
         for (const coding of CODINGS) {
           const c = cal[coding];
-          const p = Math.min(0.98, Math.max(0.02, 0.3 + sd(c.family) * zf[r][f] + sd(c.sequence) * zq[s - 1]));
-          if (u >= c.loss) units[coding].push({ repo: `r${r}`, family: `r${r}f${f}`, seed: s, value: Number(b1 < p) - Number(b2 < p) });
+          const p = Math.min(high, Math.max(low, base + sd(c.family) * zf[r][f] + sd(c.sequence) * zq[s - 1]));
+          if (u >= c.loss) units[coding].push({ repo: layout[r].repo, family: `${layout[r].repo}f${f}`, seed: s, value: Number(b1 < p + shift) - Number(b2 < p) });
         }
       }
     }
   }
   return units;
+}
+
+const swapArms = (c) => ({ ...c, Ct: c.Cc, Cc: c.Ct, St: c.Sc, Sc: c.St });
+const copyOf = (c, part, swapped) => (part === 'a' ? (swapped ? swapArms(c) : c) : { value: (swapped ? -c.value : c.value) - 0.03 });
+
+/** One resampled draw: each repository redraws its families with replacement, all seeds each, and swaps each copy's arms with probability 1/2.
+ * Part 'a' takes cost cells and scores `costSolvedT` (true log R 0); part 'b' takes `partBValues` cells, takes 0.03 off every value (true -0.03).
+ * @param {Record<string, any>[]} cells @param {'a' | 'b'} part */
+export function resampledRun(cells, rand, part) {
+  if (part !== 'a' && part !== 'b') throw new Error(`resampledRun: part ${part} is not a or b`);
+  const drawn = [];
+  for (const families of blocks(cells)) {
+    for (let i = 0; i < families.length; i++) {
+      const source = families[Math.floor(rand() * families.length)];
+      const swapped = rand() < 0.5;
+      for (const c of source) drawn.push({ ...copyOf(c, part, swapped), repo: c.repo, family: `draw${i}`, seed: c.seed });
+    }
+  }
+  if (part === 'b') return SCORERS.repeat(drawn);
+  const got = costSolvedT(drawn);
+  return got.estimate === null ? null : { estimate: got.estimate, se: got.se, df: got.df };
 }
 
 /** The level of the H1 or H2 test at a chosen design: the share of true-zero runs whose p is below Holm's strictest 0.025,
@@ -271,6 +359,80 @@ export function levelCheck(calPoint, calUpper, design, m, opts) {
     return CODINGS.map((coding) => ({ name, coding, level: share(runs, (r) => r.est[coding].p < LEVEL), runs: runs.length, stopShare, ceiling }));
   });
   return { cells, held: cells.every((c) => c.level <= c.ceiling) };
+}
+
+// Per test (prereg :112): its codings, how a draw is scored, its 0/1 bases (the shift is its null) and the part its resampled case runs.
+const LEVEL_TESTS = {
+  T1: { codings: CODINGS, score: 'repeat', bases: [0.3] },
+  T3: { codings: CODINGS, score: 'repeat', bases: [0.3] },
+  T2c: { codings: CODINGS, score: 'repeat', bases: [0.3] },
+  T2a: { codings: CODINGS.slice(0, 1), score: 'ratio', bases: [], part: 'a', onMiss: 'near' },
+  T2b: { codings: CODINGS.slice(0, 1), score: 'repeat', bases: [0.9, 0.5], part: 'b' },
+};
+// A draw's p does not depend on the level, so one set of p values serves every threshold.
+const ANY_LEVEL = 0.05;
+
+// Each case is [setting, draw(rand)], a draw giving { coding: { estimate, se, df } | null }.
+function levelCases(spec, cfg) {
+  const { calPoint, calUpper, layout } = spec;
+  const { nullValue } = T_NULLS[spec.test];
+  const counts = Array.from({ length: (spec.rule.cap ?? SEED_CAP) - SEEDS + 1 }, (_, i) => SEEDS + i);
+  const run = (cal, seeds, rule) => (rand) => repeatRun(cal, { layout, seeds }, nullValue, rand, rule, { score: cfg.score, exact: true }).stat;
+  const spreads = [['point', calPoint], ['upper', calUpper]];
+  const binary = (base) => (rand) => {
+    const units = binaryRun(calUpper, { layout, seeds: SEEDS }, rand, { base, shift: nullValue });
+    return byCoding((c) => SCORERS.repeat(units[c]));
+  };
+  const cells = spec.resampled?.filter((c) => c.seed <= SEEDS);
+  const resampled = (rand) => {
+    if (cells === undefined) throw new Error(`levelCells ${spec.test}: the resampled case needs spec.resampled`);
+    return { [CODINGS[0]]: resampledRun(cells, rand, cfg.part) };
+  };
+  return [
+    ...spreads.map(([at, cal]) => [`rule at ${at}`, run(cal, SEEDS, { ...spec.rule, onMiss: cfg.onMiss ?? 'cap' })]),
+    ...spreads.flatMap(([at, cal]) => counts.map((n) => [`${n} seeds at ${at}`, run(cal, n, null)])),
+    ...cfg.bases.map((base) => [`0/1 base ${base} at upper`, binary(base)]),
+    ...(cfg.part === undefined ? [] : [['resampled', resampled]]),
+  ];
+}
+
+/** Every cell of prereg :112 for one test: the p values of `sims` draws per case and coding, each drawn at the test's null and scored by
+ * `scoreTest` at its `T_NULLS` entry. A draw with no estimate counts as p = 1 and in `noEstimate`. `spec.cases` keeps only the named cases.
+ * @param {{test: string, calPoint: object, calUpper: object, layout: {repo: string, k: number}[], rule: object, sims: number, seed: number, label?: string, resampled?: object[], cases?: string[]}} spec */
+export function levelCells(spec) {
+  const cfg = LEVEL_TESTS[spec.test];
+  if (cfg === undefined) throw new Error(`levelCells: test ${spec.test} is not one of ${Object.keys(LEVEL_TESTS).join(', ')}`);
+  const all = levelCases(spec, cfg);
+  const unknown = (spec.cases ?? []).filter((name) => !all.some(([known]) => known === name));
+  if (unknown.length > 0) throw new Error(`levelCells ${spec.test}: no case named ${unknown.join(', ')}`);
+  return all.filter(([name]) => spec.cases === undefined || spec.cases.includes(name)).flatMap(([name, draw]) => {
+    const rand = seededRandom(cellSeed(spec.seed, 'level4', spec.label ?? '', spec.test, name));
+    const cells = cfg.codings.map(() => ({ ps: [], noEstimate: 0 }));
+    for (let i = 0; i < spec.sims; i++) {
+      const stats = draw(rand);
+      cfg.codings.forEach((coding, j) => {
+        const p = stats?.[coding] ? scoreTest(stats[coding], { ...T_NULLS[spec.test], level: ANY_LEVEL }).p : Number.NaN;
+        cells[j].ps.push(Number.isFinite(p) ? p : 1);
+        if (!Number.isFinite(p)) cells[j].noEstimate++;
+      });
+    }
+    return cfg.codings.map((coding, j) => ({ setting: cfg.codings.length > 1 ? `${name} (${coding})` : name, ...cells[j] }));
+  });
+}
+
+/** The largest L = k / 1000 up to the threshold at which every cell's share of p below L is at most the threshold (0 when none), with each
+ * size and its simulation error at L. `setBy` is the cell largest at L + 0.001 when L is under the threshold, else at L.
+ * @param {{setting: string, ps: number[]}[]} cells @param {number} threshold */
+export function levelSearch(cells, threshold) {
+  if (cells.length === 0 || cells.some((c) => c.ps.length === 0)) throw new Error('levelSearch: needs cells that each hold draws');
+  const sizeAt = (c, k) => share(c.ps, (p) => p < k / 1000);
+  let k = Math.round(threshold * 1000);
+  while (k > 0 && cells.some((c) => sizeAt(c, k) > threshold)) k--;
+  const probe = k / 1000 < threshold ? k + 1 : k;
+  const view = (c, size) => ({ setting: c.setting, size, simError: sd((size * (1 - size)) / c.ps.length) });
+  const blocking = cells.map((c) => sizeAt(c, probe));
+  const worst = blocking.indexOf(Math.max(...blocking));
+  return { level: k / 1000, setBy: { ...view(cells[worst], blocking[worst]), at: probe / 1000 }, cells: cells.map((c) => view(c, sizeAt(c, k))) };
 }
 
 function memoized(evaluate) {
