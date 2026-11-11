@@ -47,7 +47,8 @@ describe('cleanup and a hung fake grandchild\'s pid file', () => {
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
     try {
       cleanup();
-      expect(kill.mock.calls.map(([pid]) => pid)).not.toContain(gone.pid);
+      // Signal 0 only asks whether any process holds the pid, so it is the one call allowed.
+      expect(kill.mock.calls.filter(([, signal]) => signal !== 0).map(([pid]) => pid)).not.toContain(gone.pid);
     } finally {
       kill.mockRestore();
     }

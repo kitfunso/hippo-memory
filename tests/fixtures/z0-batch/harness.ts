@@ -68,17 +68,19 @@ function realPath(p: string): string {
   return up === abs ? abs : path.join(realPath(up), path.basename(abs));
 }
 
-/** The Z0_BATCH_KEEP folder a diagnosis run copies case folders into, or undefined; one not strictly under the real temp folder, inside this run's temp root (global teardown removes it) or under C:/z0-runs is refused. */
+/** The Z0_BATCH_KEEP folder a diagnosis run copies case folders into, or undefined; one not strictly under the real temp folder, that is or is inside this run's temp root (global teardown removes it), or is under C:/z0-runs is refused. */
 export function keepDir(keep: string | undefined): string | undefined {
   if (!keep) return undefined;
   const at = realPath(keep).toLowerCase();
-  const under = (root: string) => {
-    const rel = path.relative(realPath(root).toLowerCase(), at);
-    return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  const rel = (root: string) => path.relative(realPath(root).toLowerCase(), at);
+  const atOrIn = (root: string) => {
+    const r = rel(root);
+    return r === '' || (r !== '..' && !r.startsWith(`..${path.sep}`) && !path.isAbsolute(r));
   };
+  const under = (root: string) => rel(root) !== '' && atOrIn(root);
   const realTmp = process.env.HIPPO_TEST_REAL_TMP;
   const runTmp = process.env.HIPPO_TEST_TMP_RUN;
-  if (!path.isAbsolute(keep) || !realTmp || !under(realTmp) || (runTmp && under(runTmp)) || under('C:/z0-runs')) {
+  if (!path.isAbsolute(keep) || !realTmp || !under(realTmp) || (runTmp && atOrIn(runTmp)) || atOrIn('C:/z0-runs')) {
     throw new Error(`Z0_BATCH_KEEP=${keep} is refused: a keep folder is an absolute path under the real temp folder ${realTmp ?? '(HIPPO_TEST_REAL_TMP is unset)'}, outside this run's temp root ${runTmp ?? ''} and C:/z0-runs`);
   }
   return realPath(keep);

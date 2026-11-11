@@ -735,11 +735,8 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
   });
   afterAll(async () => {
     // Teardown releases every hold and kills every case's processes before it waits on any scenario, and each wait has a bound.
-    await stopCases(cases, 60_000);
-    const pending = Promise.allSettled(Object.values(runs).flatMap((s) => s.pending()));
-    const unsettled = await within(pending, 60_000, 'the scenarios to settle once teardown stopped their processes').then(() => '', (e: Error) => e.message);
-    const left = await stopCases(cases, 30_000);
-    const errors = [unsettled, ...[...left].map(([base, pids]) => `${base} still has pids ${pids.join(' ')} after teardown`)].filter((m) => m !== '');
+    // Every step's failure joins one list, thrown at the end, so no failed step hides the ones after it.
+    const errors: string[] = [];
     const attempt = (what: string, fn: () => void) => {
       try {
         fn();
@@ -747,11 +744,17 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
         errors.push(`${what}: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
+    await stopCases(cases, 60_000).catch((e: Error) => errors.push(`the first teardown stop: ${e.message}`));
+    const pending = Promise.allSettled(Object.values(runs).flatMap((s) => s.pending()));
+    await within(pending, 60_000, 'the scenarios to settle once teardown stopped their processes').catch((e: Error) => errors.push(e.message));
+    // With no second read, which cases still hold processes is unknown, so no case folder is removed.
+    const left = await stopCases(cases, 30_000).catch((e: Error) => { errors.push(`the second teardown stop: ${e.message}`); });
+    if (left) for (const [base, pids] of left) errors.push(`${base} still has pids ${pids.join(' ')} after teardown`);
     // Global teardown removes the run's temp root (_real-store-guard.ts), so a diagnosis run copies each case folder, batch log and all, out first.
     const into = keep;
     for (const c of cases) {
       if (into) attempt(`the copy of ${c.base} to ${into}`, () => fs.cpSync(c.base, path.join(into, path.basename(c.base)), { recursive: true }));
-      if (!left.has(c.base)) attempt(`the removal of ${c.base}`, () => c.remove());
+      if (left && !left.has(c.base)) attempt(`the removal of ${c.base}`, () => c.remove());
     }
     const time = process.env.Z0_BATCH_TIME;
     if (time) attempt('the time file', () => fs.writeFileSync(time, `${Math.round((Date.now() - started) / 1000)} s\n`));

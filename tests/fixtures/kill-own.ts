@@ -14,9 +14,11 @@ $marks = @($env:Z0_OWN_MARKS -split '\\|' | Where-Object { $_ })
 $only = @($env:Z0_OWN_ONLY -split ',' | Where-Object { $_ })
 $roots = @($env:Z0_OWN_ROOTS -split ',' | Where-Object { $_ })
 # Each live process (of all, or of $only) that is one of $roots or whose command line names a mark, as the mark's index (-1 for a root) and the process, parents before children.
+# Z0_OWN_LISTED, a test's process table, replaces the live read; PS_KILL refuses it, so no kill acts on a listed pid.
 # A sweep (no $only) adds each one's descendants under its mark; a child counts only if it started at or after its parent, so no process an earlier holder of the parent's pid left is taken.
 function Mine {
   if ($only.Count) { $all = @(Get-CimInstance Win32_Process -Filter (($only | ForEach-Object { "ProcessId=$_" }) -join ' OR ')) }
+  elseif ($env:Z0_OWN_LISTED) { $all = @(($env:Z0_OWN_LISTED | ConvertFrom-Json) | ForEach-Object { [pscustomobject]@{ ProcessId = [uint32]$_.ProcessId; ParentProcessId = [uint32]$_.ParentProcessId; CreationDate = [datetime]$_.CreationDate; CommandLine = [string]$_.CommandLine } }) }
   else { $all = @(Get-CimInstance Win32_Process); if ($all.Count -eq 0) { throw 'the process read listed no process' } }
   $found = [System.Collections.Generic.List[object]]::new()
   foreach ($p in $all) {
@@ -47,6 +49,7 @@ foreach ($m in Mine) { [string]$m.Mark + [char]9 + [string]$m.Proc.ProcessId }
 `;
 // SHORTCUT: a descendant whose Windows parent has exited (an orphan, or an msys program exec'd from a fork) is out of the walk's reach; a job object per case would hold it.
 const PS_KILL = `${PS_MINE}
+if ($env:Z0_OWN_LISTED) { throw 'a kill never acts on a listed process table' }
 # An open handle keeps a pid on its process, so the second read and the kill reach the process the handle holds.
 $held = [System.Collections.Generic.List[object]]::new()
 $out = [System.Collections.Generic.List[string]]::new()
@@ -54,14 +57,14 @@ foreach ($m in Mine) {
   $id = [int]$m.Proc.ProcessId
   $p = Get-Process -Id $id -ErrorAction SilentlyContinue
   if (-not $p) { continue }
-  try { $null = $p.Handle; $held.Add($p) } catch { if (Get-Process -Id $id -ErrorAction SilentlyContinue) { $out.Add("failed $id $($_.Exception.Message)") } }
+  try { $null = $p.Handle; $held.Add([pscustomobject]@{ P = $p; Created = $m.Proc.CreationDate; Id = $id }) } catch { if (Get-Process -Id $id -ErrorAction SilentlyContinue) { $out.Add("failed $id $($_.Exception.Message)") } }
 }
 $still = @(Mine | ForEach-Object { [int]$_.Proc.ProcessId })
-# Children go first, so none outlives its parent and drops out of the next read's walk.
-for ($k = $held.Count - 1; $k -ge 0; $k--) {
-  $p = $held[$k]
+# Oldest first, pid breaking ties: a parent killed first cannot fork a new child while its children die, and each held handle keeps a child's pid its own until its kill.
+foreach ($h in @($held | Sort-Object -Property Created, Id)) {
+  $p = $h.P
   if ($still -notcontains $p.Id) { continue }
-  try { $p.Kill(); $null = $p.WaitForExit(10000); $out.Add("killed $($p.Id)") } catch { $null = $p.WaitForExit(5000); if (-not $p.HasExited) { $out.Add("failed $($p.Id) $($_.Exception.Message)") } }
+  try { $p.Kill(); if ($p.WaitForExit(10000)) { $out.Add("killed $($p.Id)") } else { $out.Add("failed $($p.Id) still running 10 s after its kill") } } catch { $null = $p.WaitForExit(5000); if (-not $p.HasExited) { $out.Add("failed $($p.Id) $($_.Exception.Message)") } }
 }
 $out
 'end'
@@ -75,21 +78,24 @@ function marksOf(marks: string[]) {
 }
 
 /** The script's output lines before its closing `end`; a script that failed or stopped early throws, so a failed read never reads as no process. */
-function ps(script: string, marks: string[], only: number[], what: string, roots: number[] = []) {
+function ps(script: string, marks: string[], only: number[], what: string, roots: number[] = [], listed = '') {
   const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
-    encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 60_000, windowsHide: true, env: { ...process.env, Z0_OWN_MARKS: marks.join('|'), Z0_OWN_ONLY: only.join(','), Z0_OWN_ROOTS: roots.join(',') },
+    encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 60_000, windowsHide: true, env: { ...process.env, Z0_OWN_MARKS: marks.join('|'), Z0_OWN_ONLY: only.join(','), Z0_OWN_ROOTS: roots.join(','), Z0_OWN_LISTED: listed },
   });
   const lines = (r.stdout ?? '').split(/\r?\n/).filter((l) => l !== '');
   if (r.status !== 0 || lines.at(-1) !== 'end') throw new Error(`the ${what} failed: exit ${r.status} ${r.error?.message ?? r.stderr}`);
   return lines.slice(0, -1);
 }
 
-/** For each folder, the live processes whose command line names it and their descendants; a case's folder is unique, so a reused pid never matches. */
-export function procsNaming(dirs: string[]) {
+/** One row of a process table a test lists in place of the live read: the Win32_Process fields the walk reads, CreationDate as an ISO string. */
+export interface ListedProcess { ProcessId: number; ParentProcessId: number; CreationDate: string; CommandLine: string }
+
+/** For each folder, the live processes (or `listed`'s, for a test of the walk) whose command line names it, and their descendants; a case's folder is unique, so a reused pid never matches. */
+export function procsNaming(dirs: string[], listed?: readonly ListedProcess[]) {
   const want = marksOf(dirs);
   if (!win) throw new Error('procsNaming walks descendants through Win32_Process, so it runs on Windows only; no POSIX caller needs it');
   const found = new Map<string, number[]>(dirs.map((d) => [d, []]));
-  for (const l of ps(PS_LIST, want, [], 'process read')) {
+  for (const l of ps(PS_LIST, want, [], 'process read', [], listed ? JSON.stringify(listed) : '')) {
     const [mark, pid] = l.split('\t').map(Number);
     found.get(dirs[mark])?.push(pid);
   }

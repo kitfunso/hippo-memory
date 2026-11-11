@@ -301,7 +301,7 @@ function hang(tag) {
     { type: 'user', message: { role: 'user', content: input } },
     said(`m-hang-${tag}-1`, 10, 5), said(`m-hang-${tag}-1`, 10, 40), said(`m-hang-${tag}-2`, 3, 7),
   ]);
-  // Outlives any run, so only the runner's tree kill can stop it; a test that finds it alive kills it itself.
+  // Outlives any run, so only the runner's tree kill can stop it; z0-harness cleanup ends one still alive, as its command line names this out folder.
   const tick = `const fs=require('fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
   const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
   fs.writeFileSync(path.join(OUT, 'grandchild.pid'), String(child.pid));
