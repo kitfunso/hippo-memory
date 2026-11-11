@@ -39,6 +39,8 @@ const outcomeOf = (c: DriveCase, r: Run) => {
 };
 const git = (dir: string, ...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).stdout.trim();
 const stubArgv = (c: DriveCase, name: string) => c.stubCalls(name).map((x) => x.argv);
+/** True when `flag` stands alone in `text`, so `--run` is not found inside `--runs`. */
+const hasFlag = (text: string, flag: string) => new RegExp(`(?<![\\w-])${flag}(?![\\w-])`).test(text);
 
 /** Every command each step prints, in order, for a fresh dry root (plan :431-441 and the brief). */
 function expectedPrint(c: DriveCase, plans = false) {
@@ -133,13 +135,13 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
         for (const p of args.filter((a) => /^-[A-Z]/.test(a)).map((a) => a.slice(1))) expect(params.has(p), `${step}: -${p} is not in s4-run.ps1's param block`).toBe(true);
         if (name!.endsWith('.sh')) {
           // s4-read.sh belongs to slice R1; its flags are checked once its file is in the tree.
-          if (existsSync(`${LAUNCH}/${name}`)) for (const f of flags) expect(readFileSync(`${LAUNCH}/${name}`, 'utf8'), `${step}: ${f} for ${name}`).toContain(f);
+          if (existsSync(`${LAUNCH}/${name}`)) for (const f of flags) expect(hasFlag(readFileSync(`${LAUNCH}/${name}`, 'utf8'), f), `${step}: ${f} for ${name}`).toBe(true);
         } else if (name!.endsWith('.mjs')) {
           if (!usage.has(name!)) {
             const r = spawnSync(process.execPath, [`${REPO}/scripts/token-eval/${name}`], { encoding: 'utf8', cwd: w.base });
             usage.set(name!, `${r.stdout}${r.stderr}`);
           }
-          for (const f of flags) expect(usage.get(name!), `${step}: ${f} for ${name}`).toContain(f);
+          for (const f of flags) expect(hasFlag(usage.get(name!)!, f), `${step}: ${f} for ${name}`).toBe(true);
         }
         seen.add(name!);
       }
@@ -224,14 +226,14 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(outcomeOf(c, await c.run('smoke', ['--attempt', '2']))).toEqual([3, same]);
     c.writePins({ claudeVersion: '9.9.10' });
     const noSmoke = 'DRIVE: step 1 needs a smoke at 0 on z0-r4-freeze-1 with the current pins';
-    expect(outcomeOf(c, await c.run('1'))).toEqual([3, noSmoke]);
+    expect(outcomeOf(c, await c.run('1', ['--attempt', '2']))).toEqual([3, noSmoke]);
     const smoke = await c.run('smoke', ['--attempt', '2']);
     expect(smoke.code, smoke.out).toBe(0);
     expect(c.entries().at(-1)).toEqual(c.entry({ step: 'smoke', attempt: 2, exit: 0, claudeVersion: '9.9.10' }));
-    const one = await c.run('1');
+    const one = await c.run('1', ['--attempt', '2']);
     expect(one.code, one.out).toBe(0);
     expect(c.stubCalls('z0-pilot')).toHaveLength(1);
-    expect(c.entries().at(-1)).toEqual(c.entry({ step: '1', exit: 0, claudeVersion: '9.9.10' }));
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: '1', attempt: 2, exit: 0, claudeVersion: '9.9.10' }));
 
     const other = mk('cause-other');
     other.plant({ step: 'smoke', exit: 3, stopId: 'smoke-fail' });
@@ -416,6 +418,7 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
       cap: null, capSpend: null, admitted: true, reason: null, maxSeed: null, at: expect.any(String) }]);
     expect(stubArgv(c, 'g1-pins')).toEqual([['--run', `${unit}/run`, '--pins', `${c.root}/pins-r4.json`, '--plan-of', `${unit}/run`, '--out', `${unit}/off-pin.json`, '--strict']]);
     expect(stubArgv(c, 'z0-ledger')).toEqual([]);
+    expect(c.stubLog(), 'the driver logs each stub it runs in place of a real CLI').toEqual(['stub g1-pins']);
     expect(c.entries()).toEqual([c.entry({ step: 'smoke', exit: 0, line: 'g1-pins ok' })]);
     expect((await c.run('smoke', ['--attempt', '2'])).code).toBe(0);
     expect(c.admits().map((a) => [a.attempt, a.units, a.ledgerBefore])).toEqual([[1, ['w1'], 0], [2, ['w2'], 1]]);
@@ -591,16 +594,27 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(outcome(await c.run('plans', [], { root: `${c.dir}/a b` }))).toEqual([1, `DRIVE: root ${c.dir}/a b holds a space or a single quote, which the launcher command cannot carry`]);
   }, 300_000);
 
-  it('22. stage-checks needs HEAD at freeze-2, a dry run log that ends DRY RUN PASS <HEAD>, a passing level check and no change under src or extensions', async () => {
+  it('22. stage-checks needs HEAD at freeze-2, a dry run log whose last line starts DRY RUN PASS <HEAD>:, a passing level check and no change under src or extensions', async () => {
     const c = mk('stage', makeCheckout(w.base, 'stage-co'));
     const head = () => git(c.checkout, 'rev-parse', 'HEAD');
+    // Slice D's line goes on after the commit (plan W4-38).
+    const pass = (commit: string) => `DRY RUN PASS ${commit}: 10 steps, 34 forced cases, 0 paid sessions`;
     const noTag = `DRIVE: stage-checks needs HEAD at z0-r4-freeze-2; HEAD is ${head()}`;
     expect(outcomeOf(c, await c.run('stage-checks'))).toEqual([3, noTag]);
     expect(c.entries()).toEqual([c.entry({ step: 'stage-checks', exit: 3, stopId: 'tag', line: noTag })]);
     git(c.checkout, 'tag', 'z0-r4-freeze-2');
-    const noLog = `DRIVE: stage-checks needs ${c.root}/dryrun.log to end with DRY RUN PASS ${head()}; its last line is empty`;
-    expect(outcomeOf(c, await c.run('stage-checks'))).toEqual([3, noLog]);
-    put(`${c.root}/dryrun.log`, `DRY RUN PASS ${head()}\n`);
+    const refuse = async (log: string | null) => {
+      if (log !== null) put(`${c.root}/dryrun.log`, `${log}\n`);
+      const line = `DRIVE: stage-checks needs a last line of ${c.root}/dryrun.log that starts DRY RUN PASS ${head()}:; its last line is ${log?.split('\n').at(-1) ?? 'empty'}`;
+      expect(outcomeOf(c, await c.run('stage-checks'))).toEqual([3, line]);
+      expect(c.entries().at(-1)).toEqual(c.entry({ step: 'stage-checks', exit: 3, stopId: 'order', tag: 'z0-r4-freeze-2', line }));
+    };
+    await refuse(null);
+    await refuse(`DRY RUN PASS ${head()}`);
+    await refuse(pass('0'.repeat(40)));
+    await refuse(`${pass(head())}\nDRY RUN FAIL ${head()}: step 3`);
+    expect(stubArgv(c, 'z0-size')).toEqual([]);
+    put(`${c.root}/dryrun.log`, `DRY RUN FAIL ${head()}: step 3\n${pass(head())}\n`);
     c.cliKnob('z0-size', [{ stdout: 'CHECK LEVELS PASS' }]);
     expect(outcomeOf(c, await c.run('stage-checks'))).toEqual([0, 'CHECK LEVELS PASS']);
     expect(stubArgv(c, 'z0-size')).toEqual([['--check-levels', `${c.root}/levels/pre-freeze.json`]]);
@@ -611,11 +625,89 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     git(c.checkout, 'commit', '-qm', 'a change under src');
     git(c.checkout, 'tag', '-f', 'z0-r4-freeze-2');
     c.writePins();
-    put(`${c.root}/dryrun.log`, `DRY RUN PASS ${head()}\n`);
+    put(`${c.root}/dryrun.log`, `${pass(head())}\n`);
     // git indents each stat line by one space, which the helper's trim takes off the first line.
     const changed = git(c.checkout, 'diff', '--stat', '04835462b', 'HEAD', '--', 'src', 'extensions').split('\n')[0]!;
     const fault = `DRIVE: stage-checks fault: src or extensions differ from 04835462b:  ${changed}`;
     expect(outcomeOf(c, await c.run('stage-checks'))).toEqual([1, 'CHECK LEVELS PASS', fault]);
     expect(c.entries().at(-1)).toEqual(c.entry({ step: 'stage-checks', exit: 1, stopId: 'fault', tag: 'z0-r4-freeze-2', line: fault }));
+  }, 300_000);
+
+  it('23. after a pilot failure, a version cause and new pins, a smoke with no --attempt is refused with no launch; --attempt 2 runs, and step 1 at attempt 1 is refused too (W4-48)', async () => {
+    const c = mk('fresh-attempt');
+    await c.doneUnit(`${c.root}/smoke/w1`);
+    c.plant({ step: 'smoke', exit: 0 });
+    c.plant({ step: '1', exit: 3, stopId: 'pilot-fail', line: 'STOP: the pilot failed' });
+    expect(outcome(await c.run('cause', ['--kind', 'version', '--words', 'a new version']))).toEqual([0, 'cause version logged for step 1 attempt 1']);
+    c.writePins({ claudeVersion: '9.9.10' });
+    // The done smoke/w1 made before the cause must not stand in for a smoke on the new pins.
+    const needs = 'DRIVE: smoke needs --attempt 2 or above after the cause for attempt 1';
+    expect(outcomeOf(c, await c.run('smoke'))).toEqual([3, needs]);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: 'smoke', exit: 3, stopId: 'order', claudeVersion: '9.9.10', line: needs }));
+    expect([c.launches(), stubArgv(c, 'g1-pins'), existsSync(`${c.root}/smoke/w2`)]).toEqual([[], [], false]);
+    const two = await c.run('smoke', ['--attempt', '2']);
+    expect(two.code, two.out).toBe(0);
+    expect(c.launches()).toEqual(['w2']);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: 'smoke', attempt: 2, exit: 0, claudeVersion: '9.9.10' }));
+    const one = 'DRIVE: step 1 needs --attempt 2 or above after the cause for attempt 1';
+    expect(outcomeOf(c, await c.run('1'))).toEqual([3, one]);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: '1', exit: 3, stopId: 'order', claudeVersion: '9.9.10', line: one }));
+    expect(c.launches()).toEqual(['w2']);
+  }, 400_000);
+
+  it('24. step 1 after a launch failure and a runner failure in one phase: the next call\'s cap-only admit covers the retry and the unit that never started (W4-47)', async () => {
+    const c = mk('shared-phase');
+    await c.doneUnit(`${c.root}/smoke/w1`);
+    c.plant({ step: 'smoke', exit: 0 });
+    c.knob('k1-p1', { fixture: w.fx, plan: w.plan, records: 1, printRecords: false, exit: 1 });
+    c.knob('k2-p1', { fixture: w.fx, plan: w.plan, launchExit: 3 });
+    const ran = 'DRIVE: step 1 unit k1-p1 failed, runner exit 1';
+    const launch = 'DRIVE: step 1 launch failed: k2-p1 the stub launch failed: exit 3';
+    const first = await c.run('1');
+    expect([first.code, ...first.lines.slice(-2)]).toEqual([1, ran, launch]);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: '1', exit: 1, stopId: 'fault', line: ran }));
+    expect(c.launches()).toEqual(['k1-p1', 'k2-p1', 'low-p1', 'high-p1']);
+    expect(existsSync(`${c.root}/pilot/k2-p1/run`)).toBe(false);
+    expect(readFileSync(`${c.root}/pilot/k2-p1/launch.txt`, 'utf8')).toContain('the stub launch failed: exit 3');
+    c.knob('k2-p1', { fixture: w.fx, plan: w.plan });
+    const second = await c.run('1');
+    expect(second.code, second.out).toBe(0);
+    expect(c.admits().map((a) => [a.units, a.cap, a.capSpend, a.admitted])).toEqual([[['k1-p1', 'k2-p1', 'low-p1', 'high-p1'], 40, 0, true], [['k1-p1-a2', 'k2-p1'], 40, 1, true]]);
+    expect(c.launches()).toEqual(['k1-p1', 'k2-p1', 'low-p1', 'high-p1', 'k1-p1-a2', 'k2-p1']);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: '1', exit: 0 }));
+  }, 600_000);
+
+  it('25. a unit that fails in w1, w1-a2 and w1-a3 spends its retries: the next call logs spent and launches nothing, and the call after is refused for the cause it needs', async () => {
+    const c = mk('spent');
+    for (const name of ['w1', 'w1-a2', 'w1-a3']) c.knob(name, { fixture: w.fx, plan: w.plan, records: 1, printRecords: false, exit: 1 });
+    for (const name of ['w1', 'w1-a2', 'w1-a3']) {
+      const r = await c.run('smoke');
+      expect([r.code, r.last], name).toEqual([1, `DRIVE: smoke unit ${name} failed, runner exit 1`]);
+    }
+    expect(c.launches()).toEqual(['w1', 'w1-a2', 'w1-a3']);
+    const spent = 'DRIVE: smoke retries spent: w1-a3';
+    const fourth = await c.run('smoke');
+    expect([fourth.code, fourth.last]).toEqual([1, spent]);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: 'smoke', exit: 1, stopId: 'fault', line: spent, spent: 'w1-a3' }));
+    expect(c.launches()).toHaveLength(3);
+    // The spent retries are a failure to explain, so the gate answers the next call before the driver scans again.
+    const needs = 'DRIVE: smoke needs a cause entry after the failure at smoke attempt 1';
+    expect(outcomeOf(c, await c.run('smoke'))).toEqual([3, needs]);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: 'smoke', exit: 3, stopId: 'order', line: needs }));
+    expect(c.launches()).toHaveLength(3);
+  }, 600_000);
+
+  it('26. step 6 names the batch and the marker when a leak rerun has no done marker, and reads no grading', async () => {
+    const c = ready('g5-marker', '5');
+    c.scale();
+    c.g5Done();
+    const key = BATCH1[0]!;
+    put(`${c.root}/batch1/${key}-w1/leaks.json`, JSON.stringify({ leaks: [{ sequence: 1, seed: 2 }] }));
+    c.cliKnob('z0-read-set', [{ write: { [`${c.root}/seed/read-set.txt`]: `--runs ${c.root}/batch1/${key}-w1/run/runs.jsonl --plan ${c.root}/batch1/${key}-w1/run/plan.json\n` } }]);
+    const line = `DRIVE: step 6: ${c.root}/batch1/done/${key}-e2 is missing; batch 1 did not finish`;
+    const r = await c.run('6');
+    expect([r.code, r.last]).toEqual([1, line]);
+    expect(c.entries().at(-1)).toEqual(c.entry({ step: '6', exit: 1, stopId: 'fault', line }));
+    expect([stubArgv(c, 'z0-grading-combine'), c.admits()]).toEqual([[], []]);
   }, 300_000);
 });

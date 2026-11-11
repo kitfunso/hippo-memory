@@ -36,7 +36,7 @@ export interface StubCall { cli: string; argv: string[] }
 /** One item of a stub CLI's list; the list is used one item per call and its last item stays. */
 export interface CliKnob { exit?: number; stdout?: string; stderr?: string; write?: Record<string, string>; make?: string[]; hangMs?: number }
 /** A stub runner's knob, read by the stub `ab-run.mjs` from the name of its folder. */
-export interface Knob { fixture?: string; plan?: string; records?: number; printRecords?: boolean; exit?: number; startMs?: number; endMs?: number; hang?: boolean }
+export interface Knob { fixture?: string; plan?: string; records?: number; printRecords?: boolean; exit?: number; startMs?: number; endMs?: number; hang?: boolean; launchExit?: number }
 /** One line of budget-log.jsonl: the admit lines carry the unit names and the verdict. */
 export interface BudgetLine { kind: string; step?: string; units?: string[]; admitted?: boolean; reason?: string | null; approved?: number; attempt?: number; ledgerBefore?: number; maxSeed?: number; cap?: number; capSpend?: number; projection?: number }
 export interface PilotJson { schema: string; attempt: number; tag: string; r: Record<string, number>; rArm: string; rMax: number; flag19: boolean; ledgerTotal: number; pilotSpend: number; checks: Record<string, string> }

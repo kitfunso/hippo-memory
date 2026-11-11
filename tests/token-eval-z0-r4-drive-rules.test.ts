@@ -17,7 +17,9 @@ function makeRoot(): string {
 
 type Entry = ReturnType<typeof entryOf>;
 const E = (over: Partial<Entry> & { step: string; exit: number }): Entry => entryOf({ attempt: 1, tag: FREEZE_1, commit: 'c1', pinsSha256: 'p1', claudeVersion: '2.1.288', ...over });
-const CTX = { tag: FREEZE_1, commit: 'c1', pinsSha256: 'p1', claudeVersion: '2.1.288' };
+// attempt 2 is above every failure the cases log at attempt 1, so the attempt rule stays out of the way until a case aims at it.
+interface Ctx { tag: string; commit: string | null; pinsSha256: string; claudeVersion: string; attempt: number }
+const CTX: Ctx = { tag: FREEZE_1, commit: 'c1', pinsSha256: 'p1', claudeVersion: '2.1.288', attempt: 2 };
 const refusal = (entries: Entry[], step: string, over: Partial<typeof CTX> = {}) => gate({ entries, step, ...CTX, ...over });
 const OK = { ok: true, line: null };
 const no = (line: string) => ({ ok: false, line });
@@ -226,7 +228,54 @@ describe('the cause rules for smoke and step 1', () => {
     expect(smoke2([...entries, stageChecks({ exit: 3 })], { tag: FREEZE_2, commit: 'c2' }), 'a stage-checks entry that failed').toEqual(no('DRIVE: smoke needs stage-checks at 0 on c2'));
     expect(smoke2([stageChecks(), ...entries], { tag: FREEZE_2, commit: 'c2' }), 'a stage-checks entry before the cause').toEqual(no('DRIVE: smoke needs stage-checks at 0 on c2'));
     expect(smoke2([...entries, stageChecks()], { tag: FREEZE_2, commit: 'c2' })).toEqual(OK);
-    expect(gate({ entries: [...entries, stageChecks()], step: '1', tag: FREEZE_2, commit: 'c2', pinsSha256: 'p1', claudeVersion: '2.1.288' }), 'step 1 meets the same rule before its smoke rule').toEqual(no(`DRIVE: step 1 needs a smoke at 0 on ${FREEZE_2} with the current pins`));
+    expect(gate({ entries: [...entries, stageChecks()], step: '1', tag: FREEZE_2, commit: 'c2', pinsSha256: 'p1', claudeVersion: '2.1.288', attempt: 2 }), 'step 1 meets the same rule before its smoke rule').toEqual(no(`DRIVE: step 1 needs a smoke at 0 on ${FREEZE_2} with the current pins`));
+  });
+
+  it('never lets a null commit meet a stage-checks entry that has no commit', () => {
+    const entries = [fail(), cause('other'), stageChecks({ commit: null })];
+    expect(smoke2(entries, { tag: FREEZE_2, commit: null })).toEqual(no('DRIVE: smoke needs stage-checks at 0 on none'));
+  });
+
+  it('refuses a smoke or step 1 at or below the failed attempt after any cause (W4-48), and passes the next one', () => {
+    const wants = (step: string, failed: number) => no(`DRIVE: ${step} needs --attempt ${failed + 1} or above after the cause for attempt ${failed}`);
+    const newPins = { claudeVersion: '2.1.289', pinsSha256: 'p2' };
+    const entries = [fail({ claudeVersion: '2.1.288' }), cause('version')];
+    expect(smoke2(entries, { ...newPins, attempt: 1 }), 'the default attempt').toEqual(wants('smoke', 1));
+    expect(smoke2(entries, { ...newPins, attempt: 2 })).toEqual(OK);
+    expect(smoke2(entries, { ...newPins, attempt: 5 })).toEqual(OK);
+    const second = [...entries, fail({ attempt: 2, claudeVersion: '2.1.289' }), cause('version', { attempt: 2 })];
+    const thirdPins = { claudeVersion: '2.1.290', pinsSha256: 'p3' };
+    expect(smoke2(second, { ...thirdPins, attempt: 2 }), 'at the failed attempt of the second failure').toEqual(wants('smoke', 2));
+    expect(smoke2(second, { ...thirdPins, attempt: 3 })).toEqual(OK);
+    const pilot = [E({ step: 'smoke', exit: 0 }), E({ step: '1', exit: 3, stopId: 'pilot-fail', attempt: 2 }), cause('version', { failedStep: '1' }), E({ step: 'smoke', exit: 0, attempt: 3, claudeVersion: '2.1.289', pinsSha256: 'p2' })];
+    expect(gate({ entries: pilot, step: '1', ...CTX, ...newPins, attempt: 2 }), 'step 1 after a pilot failure at attempt 2').toEqual(wants('step 1', 2));
+    expect(gate({ entries: pilot, step: '1', ...CTX, ...newPins, attempt: 3 })).toEqual(OK);
+    const other = [fail(), cause('other'), stageChecks()];
+    expect(smoke2(other, { tag: FREEZE_2, commit: 'c2', attempt: 1 }), 'an other cause is held to it too').toEqual(wants('smoke', 1));
+    expect(smoke2(other, { tag: FREEZE_2, commit: 'c2', attempt: 2 })).toEqual(OK);
+    expect(smoke2([fail()], { attempt: 1 }), 'no cause yet: the cause line comes first').toEqual(no('DRIVE: smoke needs a cause entry after the failure at smoke attempt 1'));
+    expect(smoke2([E({ step: 'smoke', exit: 0 })], { attempt: 1 }), 'no failure, no attempt rule').toEqual(OK);
+  });
+
+  it('keeps a failure open past a cause entry that failed to log (a fault is no cause)', () => {
+    const entries = [fail(), E({ step: 'cause', exit: 1, stopId: 'fault', kind: 'version', failedStep: 'smoke' })];
+    expect(smoke2(entries, { claudeVersion: '2.1.289', pinsSha256: 'p2' })).toEqual(no('DRIVE: smoke needs a cause entry after the failure at smoke attempt 1'));
+    const root = makeRoot();
+    logFile(root, 'drive-log.jsonl', entries);
+    expect(cli(['failure', '--root', root]), 'the failure command still reads it open').toEqual({ code: 0, stdout: `smoke 1 ${FREEZE_1}\n`, stderr: '' });
+    expect(cli(['cause', '--root', root, '--kind', 'version']), 'and a cause can still be logged for it').toEqual({ code: 0, stdout: 'cause version logged for smoke attempt 1\n', stderr: '' });
+  });
+
+  it('takes --attempt on the gate command, refuses a missing or bad one, and reads --commit none as no commit', () => {
+    const root = makeRoot();
+    logFile(root, 'drive-log.jsonl', [fail(), cause('version')]);
+    const gateAt = (...rest: string[]) => cli(['gate', '--root', root, '--step', 'smoke', '--tag', FREEZE_1, '--commit', 'c1', '--pins-sha256', 'p2', '--claude-version', '2.1.289', ...rest]);
+    expect(gateAt('--attempt', '1')).toEqual({ code: 3, stdout: '', stderr: 'DRIVE: smoke needs --attempt 2 or above after the cause for attempt 1\n' });
+    expect(gateAt('--attempt', '2')).toEqual({ code: 0, stdout: 'ok\n', stderr: '' });
+    for (const bad of [[], ['--attempt', '0'], ['--attempt', 'x'], ['--attempt', '']]) expect(gateAt(...bad).code, bad.join(' ')).toBe(1);
+    logFile(root, 'drive-log.jsonl', [fail(), cause('other'), stageChecks({ commit: null })]);
+    const none = cli(['gate', '--root', root, '--step', 'smoke', '--tag', FREEZE_2, '--commit', 'none', '--pins-sha256', 'p1', '--claude-version', '2.1.288', '--attempt', '2']);
+    expect(none, 'a commit of none matches no stage-checks entry').toEqual({ code: 3, stdout: '', stderr: 'DRIVE: smoke needs stage-checks at 0 on none\n' });
   });
 
   it('decides a cause through the cause command: no failure exits 1, version and other exit 0, no-version and a second other cause exit 3', () => {
@@ -325,7 +374,7 @@ describe('torn last lines', () => {
     const root = makeRoot();
     logFile(root, 'drive-log.jsonl', [E({ step: '3', exit: 3, stopId: 'g2' })], '{"step":"4","exit":3,"stopId":"t1-po');
     expect(cli(['terminal', '--root', root]).stdout).toBe('g2 3\n');
-    expect(cli(['gate', '--root', root, '--step', 'smoke', '--tag', FREEZE_1, '--commit', 'c1', '--pins-sha256', 'p1', '--claude-version', '2.1.288']))
+    expect(cli(['gate', '--root', root, '--step', 'smoke', '--tag', FREEZE_1, '--commit', 'c1', '--pins-sha256', 'p1', '--claude-version', '2.1.288', '--attempt', '1']))
       .toEqual({ code: 3, stdout: '', stderr: 'DRIVE: the run stopped at g2; no claim\n' });
     logFile(root, 'drive-log.jsonl', [E({ step: 'smoke', exit: 0 })], '{"step":"smoke","exit":3');
     expect(cli(['last-smoke', '--root', root]).stdout).toBe('1\n');
@@ -391,8 +440,8 @@ describe('the entry and the append command', () => {
 
   it('records the entry\'s pins fields through gate flags that say none, and refuses an empty flag value', () => {
     const root = makeRoot();
-    expect(cli(['gate', '--root', root, '--step', 'smoke', '--tag', 'none', '--commit', 'c1', '--pins-sha256', 'none', '--claude-version', 'none'])).toEqual({ code: 0, stdout: 'ok\n', stderr: '' });
-    expect(cli(['gate', '--root', root, '--step', 'smoke', '--tag', '', '--commit', 'c1', '--pins-sha256', 'p', '--claude-version', 'v']).code).toBe(1);
+    expect(cli(['gate', '--root', root, '--step', 'smoke', '--tag', 'none', '--commit', 'c1', '--pins-sha256', 'none', '--claude-version', 'none', '--attempt', '1'])).toEqual({ code: 0, stdout: 'ok\n', stderr: '' });
+    expect(cli(['gate', '--root', root, '--step', 'smoke', '--tag', '', '--commit', 'c1', '--pins-sha256', 'p', '--claude-version', 'v', '--attempt', '1']).code).toBe(1);
   });
 });
 

@@ -463,7 +463,7 @@ smoke_warmups() {
 }
 
 step_1() {
-  local spec base keys k e units=() plans=() retries=() rplans=() item L i
+  local spec base keys k e units=() plans=() queued=() rplans=() item L first f
   UNITS=()
   if [ "$PRINT" = 1 ] && [ ! -f "$ROOT/pilot-tasks/repos.json" ]; then keys=('<k>'); else
     keys=$(zd pilot-keys --root "$ROOT" 2>&1 < /dev/null) || bail "DRIVE: $LABEL: ${keys%%$'\n'*}"
@@ -473,7 +473,9 @@ step_1() {
   for e in low high; do UNITS+=("effort|effort|$ROOT/effort/$e-p$ATTEMPT|O1,S1|-MaxPosition 1 -Effort $e"); done
   for spec in "${UNITS[@]}"; do IFS='|' read -r _ _ base _ <<< "$spec"; units+=("$base"); plans+=("$base/dry/plan.json"); done
   smoke_warmups
+  first=0
   if [ "$PRINT" = 1 ] || ! any_started "${units[@]}"; then
+    first=1
     for spec in "${UNITS[@]}"; do
       IFS='|' read -r _ _ base _ <<< "$spec"
       unit_flags "$spec" "$base"
@@ -489,20 +491,19 @@ step_1() {
     phase_print
   else
     phase_scan
-    # A retry phase checks the pilot's own cap alone, on the attempt's spend so far.
+    # Every phase after the first checks the pilot's own cap alone, on the attempt's spend so far, over each queued unit: a retry and a first launch that failed to start alike.
     for item in "${QUEUE[@]}"; do
-      [ "${item##*|}" = R ] || continue
-      spec=${item%|*|*}
-      IFS='|' read -r _ _ base _ <<< "$spec"
-      retries+=("${item%|*}") rplans+=("$base/dry/plan.json")
+      [ "$first" = 0 ] || break
+      IFS='|' read -r _ _ base _ <<< "${item%|*|*}"
+      f=${item%|*}
+      queued+=("${f##*|}") rplans+=("$base/dry/plan.json")
     done
-    if [ ${#retries[@]} -gt 0 ]; then
+    if [ ${#queued[@]} -gt 0 ]; then
       ledger_all
       L=$LEDGER
       ledger_attempt
       admit_flags "$L"
-      for i in "${!retries[@]}"; do retries[$i]=${retries[$i]##*|}; done
-      rep --units "${retries[@]}"; units=("${REP[@]}")
+      rep --units "${queued[@]}"; units=("${REP[@]}")
       rep --plans "${rplans[@]}"; plans=("${REP[@]}")
       cli z0-budget admit --step pilot --cap-only --attempt-ledger "$LEDGER" "${units[@]}" "${plans[@]}" --warmups "$WARM" "${ADM[@]}"; check admit
     fi
@@ -599,6 +600,8 @@ step_5() {
   done_ok
 }
 
+# A marker of batch $2 that s4-batch.sh writes whole; its absence means the batch did not finish.
+need() { [ -f "$1" ] || bail "DRIVE: $LABEL: $1 is missing; batch $2 did not finish"; }
 # The G5 folders of batches 1 and 2, as s4-batch.sh lists them: each key's first run, then its leak reruns by seed.
 g5_folders() {
   local n b k first s out seeds
@@ -607,11 +610,11 @@ g5_folders() {
     b=batch$n
     keys_of "$n"
     for k in "${KEYS[@]}"; do
-      [ -f "$ROOT/$b/done/$k" ] || bail "DRIVE: $LABEL: $ROOT/$b/done/$k is missing; batch $n did not finish"
+      need "$ROOT/$b/done/$k" "$n"
       first=$ROOT/$b/$(< "$ROOT/$b/done/$k")
       G5+=("$first")
       seeds=$(ur seeds "$first/leaks.json" 2>&1 < /dev/null) || bail "DRIVE: $LABEL: ${seeds%%$'\n'*}"
-      for s in $seeds; do G5+=("$ROOT/$b/$(< "$ROOT/$b/done/$k-e$s")"); done
+      for s in $seeds; do need "$ROOT/$b/done/$k-e$s" "$n"; G5+=("$ROOT/$b/$(< "$ROOT/$b/done/$k-e$s")"); done
     done
   done
 }
@@ -695,7 +698,8 @@ step_cause() {
   out=$(zd cause --root "$ROOT" --kind "$KIND" 2>&1 < /dev/null)
   rc=$?
   [ -z "$out" ] || echo "$out"
-  [ "$rc" = 1 ] && exit 1
+  # Only the two stops (exit 3) are logged; any other exit is an input error and ends the call with no entry.
+  [ "$rc" = 0 ] || [ "$rc" = 3 ] || exit 1
   info=$(zd failure --root "$ROOT" 2>&1 < /dev/null) || { echo "DRIVE: cause could not read its failure: ${info%%$'\n'*}"; exit 1; }
   read -r FAILED_STEP ATTEMPT TAG <<< "$info"
   [ "$TAG" != none ] || TAG=''
@@ -709,13 +713,10 @@ step_stage_checks() {
   local diff rc freeze
   if [ "$PRINT" != 1 ]; then
     freeze=$(git -C "$CHECKOUT" rev-parse -q --verify 'refs/tags/z0-r4-freeze-2^{commit}' 2> /dev/null)
-    if [ -z "$freeze" ] || [ "$freeze" != "$COMMIT" ]; then
-      stop3 tag "DRIVE: stage-checks needs HEAD at z0-r4-freeze-2; HEAD is ${COMMIT:-unknown}"
-    fi
+    [ -n "$freeze" ] && [ "$freeze" = "$COMMIT" ] || stop3 tag "DRIVE: stage-checks needs HEAD at z0-r4-freeze-2; HEAD is ${COMMIT:-unknown}"
     last_line "$ROOT/dryrun.log"
-    if [ "$LAST" != "DRY RUN PASS $COMMIT" ]; then
-      stop3 order "DRIVE: stage-checks needs $ROOT/dryrun.log to end with DRY RUN PASS $COMMIT; its last line is ${LAST:-empty}"
-    fi
+    # Slice D's line goes on after the commit (plan :388), so the line matches by its prefix.
+    case $LAST in "DRY RUN PASS $COMMIT:"*) ;; *) stop3 order "DRIVE: stage-checks needs a last line of $ROOT/dryrun.log that starts DRY RUN PASS $COMMIT:; its last line is ${LAST:-empty}" ;; esac
   fi
   cli z0-size --check-levels "$ROOT/levels/pre-freeze.json"; check -
   if [ "$PRINT" = 1 ]; then echo "git -C $CHECKOUT diff --stat $BASE_COMMIT HEAD -- src extensions"; return 0; fi
@@ -763,12 +764,9 @@ case $STEP in
   smoke | 1 | 3 | 5 | 6)
     want=${TAG:-z0-r4-freeze-1}
     tagged=$(git -C "$CHECKOUT" rev-parse -q --verify "refs/tags/$want^{commit}" 2> /dev/null)
-    if [ -z "$tagged" ] || [ "$tagged" != "$COMMIT" ]; then
-      stop3 tag "DRIVE: $LABEL must run on $want; HEAD is ${COMMIT:-unknown}"
-    fi
-    if [ -n "$(git -C "$CHECKOUT" status --porcelain 2> /dev/null)" ]; then
-      stop3 tag "DRIVE: $LABEL must run on a clean $want; $CHECKOUT has changes"
-    fi ;;
+    [ -n "$tagged" ] && [ "$tagged" = "$COMMIT" ] || stop3 tag "DRIVE: $LABEL must run on $want; HEAD is ${COMMIT:-unknown}"
+    dirty=$(git -C "$CHECKOUT" status --porcelain 2> /dev/null) || bail "DRIVE: $LABEL fault: git status exit $?"
+    [ -z "$dirty" ] || stop3 tag "DRIVE: $LABEL must run on a clean $want; $CHECKOUT has changes" ;;
 esac
 
 # Exit 3 of the pins check is its first PINS: line; any other failure is a fault.
@@ -787,7 +785,7 @@ if [ "$STEP" = 2 ] && started_in batch1; then
   exit 3
 fi
 
-verdict=$(zd gate --root "$ROOT" --step "$STEP" --tag "${TAG:-none}" --commit "${COMMIT:-none}" --pins-sha256 "$PINS_SHA" --claude-version "$CLAUDE_V" 2>&1 < /dev/null)
+verdict=$(zd gate --root "$ROOT" --step "$STEP" --tag "${TAG:-none}" --commit "${COMMIT:-none}" --pins-sha256 "$PINS_SHA" --claude-version "$CLAUDE_V" --attempt "$ATTEMPT" 2>&1 < /dev/null)
 rc=$?
 case $rc in
   0) ;;

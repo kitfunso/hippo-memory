@@ -94,13 +94,15 @@ export function terminalOf(entries) {
   return entry === undefined ? null : { id: entry.stopId, step: entry.step === 'cause' ? entry.failedStep : entry.step };
 }
 
+// A cause entry that failed to log (a fault) explains nothing.
+const isCause = (e) => e.step === 'cause' && e.stopId !== 'fault';
 const isFailure = (e) => (e.step === 'smoke' || e.step === '1') && (e.stopId === 'smoke-fail' || e.stopId === 'pilot-fail' || (e.spent ?? null) !== null);
 
 /** The last smoke or step 1 failure (a smoke-fail, a pilot-fail or a spent retry) that no cause entry follows.
  * @returns {{ entry: any, index: number } | null} */
 export function lastFailure(entries) {
   const index = entries.findLastIndex((e) => isOutcome(e) && isFailure(e));
-  if (index < 0 || entries.slice(index + 1).some((e) => e.step === 'cause')) return null;
+  if (index < 0 || entries.slice(index + 1).some(isCause)) return null;
   return { entry: entries[index], index };
 }
 
@@ -123,11 +125,11 @@ const ORDER = { 2: '1', 3: '2', 4: '3', 5: '4', 6: '5', 7: '6' };
 const FOLLOWS_EXIT_4 = { 3: 'whole-run', 5: 'power' };
 const TERMINAL_REFUSED = new Set(['smoke', '1', '2', '3', '4', '5', '6', '7', 'stage-checks']);
 
-/** @typedef {{ entries: DriveEntry[], step: string, tag: string | null, commit: string | null, pinsSha256: string | null, claudeVersion: string | null }} GateInput */
+/** @typedef {{ entries: DriveEntry[], step: string, tag: string | null, commit: string | null, pinsSha256: string | null, claudeVersion: string | null, attempt?: number }} GateInput */
 
 /** The refusal rules in their order (plan :404-424): TERMINAL_STOPS, a stop that waits on a founder go, the cause rules, then the order rule.
  * @param {GateInput} input @returns {{ ok: true, line: null } | { ok: false, line: string }} */
-export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersion }) {
+export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersion, attempt = 1 }) {
   const no = (line) => ({ ok: false, line });
   const entries = all.filter(isOutcome);
   const lastOf = (s) => entries.findLast((e) => e.step === s);
@@ -150,7 +152,10 @@ export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersio
     if (cause !== null && failure !== undefined) {
       if (cause.kind === 'version' && failure.claudeVersion === claudeVersion) return no(`DRIVE: a version cause needs a new claudeVersion; pins-r4.json still names ${claudeVersion}`);
       if (cause.kind === 'other' && tag !== FREEZE_2) return no(`DRIVE: an other-cause failure needs ${FREEZE_2}`);
-      if (cause.kind === 'other' && !entries.slice(causeIndex + 1).some((e) => e.step === 'stage-checks' && e.exit === 0 && e.commit === commit)) return no(`DRIVE: ${shown} needs stage-checks at 0 on ${commit}`);
+      if (cause.kind === 'other' && !entries.slice(causeIndex + 1).some((e) => e.step === 'stage-checks' && e.exit === 0 && commit !== null && e.commit === commit)) return no(`DRIVE: ${shown} needs stage-checks at 0 on ${commit ?? 'none'}`);
+      // A cause is always followed by fresh folders (W4-48): a done unit made before it must never meet the smoke rule or feed pilot.json.
+      const failed = failure.attempt ?? 1;
+      if (attempt <= failed) return no(`DRIVE: ${shown} needs --attempt ${failed + 1} or above after the cause for attempt ${failed}`);
     }
     if (step === '1' && !entries.slice(causeIndex + 1).some((e) => e.step === 'smoke' && e.exit === 0 && e.tag === tag && e.pinsSha256 === pinsSha256)) {
       return no(`DRIVE: step 1 needs a smoke at 0 on ${tag} with the current pins`);
@@ -181,7 +186,7 @@ export function stopIdOf({ step, cmd, exit, budgetLog = [], block = null, kind =
 
 /* ------------------------------------------------------------------------------------------------ the CLI */
 
-const USAGE = 'usage: z0-drive.mjs gate --root <r> --step <s> --tag <t|none> --commit <sha> --pins-sha256 <h|none> --claude-version <v|none>\n'
+const USAGE = 'usage: z0-drive.mjs gate --root <r> --step <s> --tag <t|none> --commit <sha> --pins-sha256 <h|none> --claude-version <v|none> --attempt <n>\n'
   + '       z0-drive.mjs stop-id --root <r> --step <s> --cmd <name> --exit <n> [--kind <k>]\n'
   + '       z0-drive.mjs append --root <r> --step <s> --exit <n> [--attempt <n>] [--stop-id <id>] [--line <text>] [--tag <t>] [--commit <sha>] [--pins-sha256 <h>] [--claude-version <v>]\n'
   + '                           [--question <q>] [--figure <usd>] [--stop true|false] [--kind <k>] [--failed-step <s>] [--spent <folder>]\n'
@@ -190,7 +195,7 @@ const USAGE = 'usage: z0-drive.mjs gate --root <r> --step <s> --tag <t|none> --c
 
 const ROOT_ONLY = { values: ['--root'], required: ['--root'] };
 const SPECS = {
-  gate: { values: ['--root', '--step', '--tag', '--commit', '--pins-sha256', '--claude-version'], required: ['--root', '--step', '--tag', '--commit', '--pins-sha256', '--claude-version'] },
+  gate: { values: ['--root', '--step', '--tag', '--commit', '--pins-sha256', '--claude-version', '--attempt'], required: ['--root', '--step', '--tag', '--commit', '--pins-sha256', '--claude-version', '--attempt'] },
   'stop-id': { values: ['--root', '--step', '--cmd', '--exit', '--kind'], required: ['--root', '--step', '--cmd', '--exit'] },
   append: {
     values: ['--root', '--step', '--exit', '--attempt', '--stop-id', '--tag', '--commit', '--pins-sha256', '--claude-version', '--question', '--figure', '--stop', '--kind', '--failed-step', '--spent'],
@@ -224,7 +229,7 @@ const rootFolder = (raw) => {
 
 const COMMANDS = {
   gate(f, root) {
-    const verdict = gate({ entries: readEntries(path.join(root, 'drive-log.jsonl')), step: stepOf(f.step), tag: noneIsNull(f.tag), commit: f.commit, pinsSha256: noneIsNull(f.pinsSha256), claudeVersion: noneIsNull(f.claudeVersion) });
+    const verdict = gate({ entries: readEntries(path.join(root, 'drive-log.jsonl')), step: stepOf(f.step), tag: noneIsNull(f.tag), commit: noneIsNull(f.commit), pinsSha256: noneIsNull(f.pinsSha256), claudeVersion: noneIsNull(f.claudeVersion), attempt: whole('--attempt', f.attempt, 1) });
     if (!verdict.ok) throw new Stop(verdict.line);
     return 'ok\n';
   },

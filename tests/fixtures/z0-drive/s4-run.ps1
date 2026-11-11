@@ -1,5 +1,5 @@
 # Stub of s4-run.ps1 for the s4-drive.sh tests: the 2b param block and layout rule, a dry plan from the knob's `plan` file, and a launch of the stub ab-run.mjs beside it.
-# Knobs come from $env:Z0_STUB_KNOBS/<folder name>.json, else default.json: plan (a plan.json to copy), planExit, and the stub runner's own (fixture, records, exit, hang ...).
+# Knobs come from $env:Z0_STUB_KNOBS/<folder name>.json, else default.json: plan (a plan.json to copy), planExit, launchExit (a launch that fails before any run starts), and the stub runner's own (fixture, records, exit, hang ...).
 param(
   [Parameter(Mandatory)][string]$Checkout,
   [Parameter(Mandatory)][string]$Root,
@@ -26,7 +26,7 @@ $name = switch ($Batch) {
 }
 if ($Retry -ge 2) { $name = "$name-a$Retry" }
 if ($Folder -ne "$Root/$name") { Write-Output "-Folder $Folder does not match the layout for batch $Batch; expected $Root/$name"; exit 1 }
-if (-not $PlanOnly -and ((Test-Path -LiteralPath "$Folder/run") -or (Test-Path -LiteralPath "$Folder/run.log"))) { Write-Output "$Folder already holds a run (run/ or run.log); pick a new -Attempt or -Retry"; exit 1 }
+if ((Test-Path -LiteralPath "$Folder/run") -or (Test-Path -LiteralPath "$Folder/run.log")) { Write-Output "$Folder already holds a run (run/ or run.log); pick a new -Attempt or -Retry"; exit 1 }
 New-Item -ItemType Directory -Force $Folder | Out-Null
 $flat = @{}
 foreach ($k in $bound.Keys) { $flat[$k] = "$($bound[$k])" }
@@ -45,6 +45,7 @@ if ($PlanOnly) {
   Write-Output "wrote $Folder/dry/plan.json"
   exit 0
 }
+if ($knobs.launchExit) { Write-Output "the stub launch failed: exit $($knobs.launchExit)"; exit $knobs.launchExit }
 
 $p = Start-Process -FilePath (Get-Command node).Source -ArgumentList @("$PSScriptRoot/ab-run.mjs", '--out', "$Folder/run") -RedirectStandardOutput (Join-Path $Folder 'run.log') -RedirectStandardError (Join-Path $Folder 'run.err') -WindowStyle Hidden -PassThru
 $null = $p.Handle
