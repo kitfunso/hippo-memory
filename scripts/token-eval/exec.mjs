@@ -19,6 +19,7 @@ export function sh(cmd, cwd, env, timeoutMs = 30 * 60_000, input = undefined) {
 }
 
 const MAX_OUTPUT = 1 << 28;
+const STOP_TREE = path.join(HERE, 'stop-tree.ps1');
 
 /** Kill `pid` and everything under it; a kill that fails is said in the returned text, never thrown. */
 async function killTree(child) {
@@ -31,8 +32,16 @@ async function killTree(child) {
       return `\n[kill -${child.pid}: ${err.code ?? err.message}]`;
     }
   }
+  // Node holds the child's handle until it sees the exit, so a seen exit may have freed the pid, and a root that started after startedBy holds a freed pid.
+  if (child.exitCode !== null || child.signalCode !== null) return '';
+  const startedBy = new Date().toISOString();
   const said = await new Promise((resolve) => {
-    execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], (err, _out, stderr) => resolve(err ? `\n[taskkill: ${String(stderr).trim() || err.message}]` : ''));
+    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', STOP_TREE, '-RootPid', String(child.pid), '-StartedBy', startedBy];
+    execFile('powershell', args, { windowsHide: true, timeout: 120_000 }, (err, out, stderr) => {
+      const lines = String(out).split(/\r?\n/).filter((l) => l && l !== 'end');
+      const why = lines.filter((l) => /^(failed|error) /.test(l)).join('; ') || lines.at(-1) || String(stderr).trim() || err?.message;
+      resolve(err ? `\n[stop-tree: ${why}]` : '');
+    });
   });
   if (said) child.kill('SIGKILL');
   return said;

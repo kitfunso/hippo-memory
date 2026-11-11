@@ -68,8 +68,9 @@ batch_lines() {
 }
 
 # A runner that printed its Records: line but has not exited for Z0_GRACE_S seconds is stopped with its tree (r3-wave1.sh:24); its unit stays done.
+# The pid comes from a scan seconds old, so stop-tree.ps1 kills only a process whose command line names the unit; a failed stop is said and the next poll tries again.
 stop_finished() {
-  local prefix=${1,,} grace=${Z0_GRACE_S:-600} pid role path rec mtime now
+  local prefix=${1,,} grace=${Z0_GRACE_S:-600} pid role path rec mtime now out rc line last
   now=$(date +%s)
   while read -r pid role path; do
     [ "$role" = ab-run ] && [[ $path == "$prefix"/* ]] || continue
@@ -78,7 +79,12 @@ stop_finished() {
     mtime=$(stat -c %Y "$path/run.log" 2> /dev/null) || continue
     [ $((now - mtime)) -ge "$grace" ] || continue
     say "${path##*/} finished but did not exit, stopping pid $pid"
-    taskkill //T //F //PID "$pid" > /dev/null 2>&1 < /dev/null
+    out=$(timeout 120 powershell -NoProfile -ExecutionPolicy Bypass -File "$Z0_CHECKOUT/scripts/token-eval/stop-tree.ps1" -RootPid "$pid" -Mark "$path" 2>&1 < /dev/null)
+    rc=$?
+    out=$(printf '%s\n' "$out" | tr -d '\r')
+    while IFS= read -r line; do [ -z "$line" ] || say "${path##*/} stop: $line"; done <<< "$out"
+    last=${out%$'\n'end}
+    [ "$rc" -eq 0 ] || say "${path##*/} stop exit $rc: ${last##*$'\n'}"
   done <<< "$UNITS_LIST"
 }
 
