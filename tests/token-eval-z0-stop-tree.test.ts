@@ -136,12 +136,14 @@ describe.skipIf(!win)('stop-tree.ps1', () => {
 });
 
 describe.skipIf(!win)('stop-tree.ps1 over a listed process table', () => {
-  // Z0_STOP_TREE_LISTED holds one table per round, the last one repeating; a row's HandleStart is what a handle opened right after that read would report (absent: its CreationDate; null: gone). The script runs its real rounds but opens no handle and kills nothing.
+  // Z0_STOP_TREE_LISTED is {root, reads}: root is the start a handle on the root reports (null: gone), reads one table per round, the last one repeating.
+  // A row's HandleStart is what a handle opened right after that read would report (absent: its CreationDate; null: gone). The script runs its real rounds but opens no handle and kills nothing.
   const mark = 'C:/z0-listed-mark';
   const at = (s: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, s)).toISOString();
   const row = (id: number, parent: number, s: number, line = 'node x.js') => ({ ProcessId: id, ParentProcessId: parent, CreationDate: at(s), CommandLine: line });
   const root = row(101, 4, 10, `node ${mark}/run.js`);
-  const listedRun = (rounds: object[][], flags = ['-Mark', mark]) => stopTree(101, flags, { ...process.env, Z0_STOP_TREE_LISTED: JSON.stringify(rounds) });
+  const listedRun = (reads: object[][], flags = ['-Mark', mark], rootStart: string | null = at(10)) =>
+    stopTree(101, flags, { ...process.env, Z0_STOP_TREE_LISTED: JSON.stringify({ root: rootStart, reads }) });
 
   it('takes a child only if it started at or after its parent, and nothing under a child it refused, oldest first with pid breaking ties', () => {
     const r = listedRun([[root, row(102, 101, 20), row(103, 101, 5), row(104, 103, 30), row(105, 101, 10), row(106, 102, 25), row(107, 101, 15)]]);
@@ -177,21 +179,34 @@ describe.skipIf(!win)('stop-tree.ps1 over a listed process table', () => {
     expect([r.code, r.lines], r.stderr).toEqual([4, ['listed 101', 'listed 102', 'listed 104', 'end']]);
   });
 
-  it('fails (exit 1) when a sixth round still finds a new child', () => {
+  // Neither caller gets another chance at a sixth round's nominees, so they are killed before the stop fails.
+  it('kills a sixth round\'s new child, then fails (exit 1) as still spawning', () => {
     const chain = (n: number) => [root, ...Array.from({ length: n }, (_, i) => row(201 + i, i === 0 ? 101 : 200 + i, 20 + i))];
     const r = listedRun([1, 2, 3, 4, 5, 6].map(chain));
-    expect([r.code, r.lines], r.stderr).toEqual([1, ['listed 101', 'listed 201', 'listed 202', 'listed 203', 'listed 204', 'listed 205', 'failed 206 still spawning after 5 rounds', 'end']]);
+    expect([r.code, r.lines], r.stderr).toEqual([1, ['listed 101', 'listed 201', 'listed 202', 'listed 203', 'listed 204', 'listed 205', 'listed 206', 'failed 206 still spawning after 5 rounds', 'end']]);
+  });
+
+  // The root's start comes from its handle, opened before the first read, so a root that exits after that is walked like any held pid.
+  it('walks from a root that exited after its handle opened, whether or not a read lists it', () => {
+    for (const reads of [[[row(102, 101, 20)]], [[root], [row(102, 101, 20)]]]) {
+      const r = listedRun(reads, ['-StartedBy', at(15)]);
+      expect([r.code, r.lines], `${JSON.stringify(reads)} ${r.stderr}`).toEqual([4, ['listed 101', 'listed 102', 'end']]);
+    }
+  });
+
+  it('refuses (exit 3) a root no read lists when -Mark needs its command line', () => {
+    for (const reads of [[[]], [[row(102, 4, 10, `node ${mark}/run.js`), row(103, 101, 20)]]]) {
+      const r = listedRun(reads);
+      expect([r.code, r.lines], `${JSON.stringify(reads)} ${r.stderr}`).toEqual([3, ['not-mine 101 exited before its command line was read', 'end']]);
+    }
   });
 
   // Exit 0 tells exec.mjs the child is stopped, so a leaked table must never give it.
-  it('exits 4, never 0, over an empty listed table', () => {
-    const r = listedRun([[]]);
-    expect([r.code, r.lines], r.stderr).toEqual([4, ['gone 101', 'end']]);
-  });
-
-  it('exits 4, never 0, over a listed table with no row for the root', () => {
-    const r = listedRun([[row(102, 4, 10, `node ${mark}/run.js`), row(103, 102, 20)]]);
-    expect([r.code, r.lines], r.stderr).toEqual([4, ['gone 101', 'end']]);
+  it('exits 4, never 0, for a root gone before its handle opens, whatever the tables list', () => {
+    for (const reads of [[[]], [[root, row(102, 101, 20)]]]) {
+      const r = listedRun(reads, ['-Mark', mark], null);
+      expect([r.code, r.lines], `${JSON.stringify(reads)} ${r.stderr}`).toEqual([4, ['gone 101', 'end']]);
+    }
   });
 
   // exec.mjs passes the time it still held the child's handle, so a root that started later holds a freed pid.

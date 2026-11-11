@@ -21,25 +21,29 @@ try {
   function Utc($d) { if ($null -eq $d) { return $null }; return ([datetime]$d).ToUniversalTime() }
   # WMI keeps whole microseconds, so a row's start and a handle's start are compared at that precision.
   function Micro([datetime]$d) { return $d.Ticks - ($d.Ticks % 10) }
-  # Z0_STOP_TREE_LISTED, a test's JSON array of process tables, replaces the live read, one table per round and the last one repeating.
+  # Z0_STOP_TREE_LISTED, a test's JSON {root, reads}, replaces the live handles and reads: root is the start a handle on the root reports (null: gone), reads one table per round, the last repeating.
   # A row's HandleStart is what a handle opened right after that read would report: absent means its CreationDate, null means the process is gone.
-  $script:tables = $null
+  $script:tables = [System.Collections.Generic.List[object]]::new()
   $script:reads = 0
+  $listedRoot = $null
+  if ($listed) {
+    $doc = $env:Z0_STOP_TREE_LISTED | ConvertFrom-Json
+    $keys = @($doc.PSObject.Properties.Name)
+    if ($keys -notcontains 'root' -or $keys -notcontains 'reads') { throw 'Z0_STOP_TREE_LISTED is not a {root, reads} object' }
+    $listedRoot = $doc.root
+    foreach ($t in $doc.reads) {
+      $rows = foreach ($r in $t) {
+        $start = if ($r.PSObject.Properties.Name -notcontains 'HandleStart') { [datetime]$r.CreationDate } elseif ($null -ne $r.HandleStart) { [datetime]$r.HandleStart } else { $null }
+        [pscustomobject]@{ ProcessId = [uint32]$r.ProcessId; ParentProcessId = [uint32]$r.ParentProcessId; CreationDate = [datetime]$r.CreationDate; CommandLine = [string]$r.CommandLine; HandleStart = $start }
+      }
+      $script:tables.Add(@($rows))
+    }
+  }
   function Table {
     if (-not $listed) {
       $all = @(Get-CimInstance Win32_Process)
       if ($all.Count -eq 0) { throw 'the process read listed no process' }
       return $all
-    }
-    if ($null -eq $script:tables) {
-      $script:tables = [System.Collections.Generic.List[object]]::new()
-      foreach ($t in ($env:Z0_STOP_TREE_LISTED | ConvertFrom-Json)) {
-        $rows = foreach ($r in $t) {
-          $start = if ($r.PSObject.Properties.Name -notcontains 'HandleStart') { [datetime]$r.CreationDate } elseif ($null -ne $r.HandleStart) { [datetime]$r.HandleStart } else { $null }
-          [pscustomobject]@{ ProcessId = [uint32]$r.ProcessId; ParentProcessId = [uint32]$r.ParentProcessId; CreationDate = [datetime]$r.CreationDate; CommandLine = [string]$r.CommandLine; HandleStart = $start }
-        }
-        $script:tables.Add(@($rows))
-      }
     }
     if ($script:tables.Count -eq 0) { return }
     $i = [Math]::Min($script:reads, $script:tables.Count - 1)
@@ -68,21 +72,27 @@ public static string[] Split(string line) {
     foreach ($word in [Z0.Argv]::Split($line)) { $n = Norm $word; if ($n -eq $want -or $n.StartsWith("$want/")) { return $true } }
     return $false
   }
-  # A handle on the process a row nominates, or $null after a gone or failed line; a handle start that differs from the row's means the pid changed hands since the read.
-  function Hold($row, [datetime]$made) {
-    $id = [int]$row.ProcessId
-    $q = $null
-    $start = $null
-    if ($listed) { $start = Utc $row.HandleStart }
-    else {
-      $q = Get-Process -Id $id -ErrorAction SilentlyContinue
-      if ($q) {
-        try { $null = $q.Handle; $start = $q.StartTime.ToUniversalTime() }
-        catch { if (Get-Process -Id $id -ErrorAction SilentlyContinue) { Say "failed $id $($_.Exception.Message)"; $script:failed = $true; return $null } }
+  # A handle on $id and the start it reports at once, or $null after a gone or failed line; .NET reads StartTime through the open handle, so the start holds after an exit.
+  function Open([int]$id) {
+    $q = Get-Process -Id $id -ErrorAction SilentlyContinue
+    if ($q) {
+      try { $null = $q.Handle }
+      catch {
+        if (Get-Process -Id $id -ErrorAction SilentlyContinue) { Say "failed $id $($_.Exception.Message)"; $script:failed = $true; return $null }
+        $q = $null
       }
     }
-    if ($null -eq $start -or (Micro $start) -ne (Micro $made)) { Say "gone $id"; return $null }
-    return [pscustomobject]@{ P = $q; Start = $start; Id = $id; Done = $false }
+    if (-not $q) { Say "gone $id"; return $null }
+    return [pscustomobject]@{ P = $q; Start = $q.StartTime.ToUniversalTime(); Id = $id; Done = $false }
+  }
+  # The process a row nominates, held through its own handle, or $null after a gone or failed line; a handle start that differs from the row's means the pid changed hands since the read.
+  function Hold($row, [datetime]$made) {
+    $id = [int]$row.ProcessId
+    if (-not $listed) { $h = Open $id }
+    elseif ($null -eq $row.HandleStart) { Say "gone $id"; $h = $null }
+    else { $h = [pscustomobject]@{ P = $null; Start = Utc $row.HandleStart; Id = $id; Done = $false } }
+    if ($h -and (Micro $h.Start) -ne (Micro $made)) { Say "gone $id"; return $null }
+    return $h
   }
   # Breadth-first from every held pid, alive or exited: its open handle keeps the pid its own, so a row that names it as parent and started at or after its start is its child.
   function Grow($table) {
@@ -123,33 +133,27 @@ public static string[] Split(string line) {
     $by = $t
   }
 
-  # The root's handle opens before the first read, so its row and its kill reach the process it holds, never a later holder of its pid.
-  $p = $null
-  if (-not $listed) {
-    $p = Get-Process -Id $root -ErrorAction SilentlyContinue
-    if ($p) { try { $null = $p.Handle } catch { if (Get-Process -Id $root -ErrorAction SilentlyContinue) { Say "failed $root $($_.Exception.Message)"; Say 'end'; Done 1 }; $p = $null } }
-    if (-not $p) { Say "gone $root"; Say 'end'; Done 0 }
-  }
+  # The root's handle and its start come before the first read, so a root that exits later is still walked and its pid stays its own.
+  $failed = $false
+  $top = if (-not $listed) { Open $root } elseif ($null -eq $listedRoot) { Say "gone $root"; $null } else { [pscustomobject]@{ P = $null; Start = Utc $listedRoot; Id = $root; Done = $false } }
+  if (-not $top) { Say 'end'; if ($failed) { Done 1 }; Done 0 }
+  # The caller held the root's handle at -StartedBy, so a root that started later holds a pid the caller's process gave up.
+  if ($by -and $top.Start -gt $by) { Say "not-mine $root started after $StartedBy"; Say 'end'; Done 3 }
   $first = @(Table)
   $row = $first | Where-Object { [int]$_.ProcessId -eq $root } | Select-Object -First 1
-  $rootStart = if ($listed) { Utc $row.HandleStart } elseif ($row -and -not $p.HasExited) { $p.StartTime.ToUniversalTime() } else { $null }
-  if (-not $row -or $null -eq $rootStart) { Say "gone $root"; Say 'end'; Done 0 }
-  # The caller held the root's handle at -StartedBy, so a root that started later holds a pid the caller's process gave up.
-  if ($by -and $rootStart -gt $by) { Say "not-mine $root started after $StartedBy"; Say 'end'; Done 3 }
+  if ($want -and -not $row) { Say "not-mine $root exited before its command line was read"; Say 'end'; Done 3 }
   if ($want -and -not (Names $row.CommandLine $want)) { Say "not-mine $root its command line names no $want"; Say 'end'; Done 3 }
 
   # Each round reads once, holds what it finds under a held pid, then kills every held process not yet killed; a kill can race a fork, so the next read looks again.
   # $held keeps every handle to the end, which keeps each held pid its own.
   $rounds = 5
-  $failed = $false
   $held = @{}
-  $held[$root] = [pscustomobject]@{ P = $p; Start = $rootStart; Id = $root; Done = $false }
+  $held[$root] = $top
   for ($round = 1; $round -le $rounds + 1; $round++) {
     $table = if ($round -eq 1) { $first } else { @(Table) }
     $new = Grow $table
     $todo = @($held.Values | Where-Object { -not $_.Done })
     if ($todo.Count -eq 0) { break }
-    if ($round -gt $rounds) { foreach ($h in $new) { Say "failed $($h.Id) still spawning after $rounds rounds" }; $failed = $true; break }
     # SHORTCUT: a descendant whose Windows parent exited before its handle opened (an orphan, or an msys program exec'd from a fork) is out of reach, as under taskkill /T; a job object per unit would hold it.
     # Oldest first by handle start, pid breaking ties: a parent killed first cannot fork a new child while its children die.
     foreach ($h in @($todo | Sort-Object -Property Start, Id)) {
@@ -165,6 +169,8 @@ public static string[] Split(string line) {
         if ($q.HasExited) { Say "gone $($h.Id)" } else { Say "failed $($h.Id) $($_.Exception.Message)"; $failed = $true }
       }
     }
+    # A sixth round's nominees pass the same handle check, so they die too, but a tree that still spawns may have more, so the stop fails.
+    if ($round -gt $rounds) { foreach ($h in $new) { Say "failed $($h.Id) still spawning after $rounds rounds" }; $failed = $true }
   }
   Say 'end'
   if ($failed) { Done 1 }
