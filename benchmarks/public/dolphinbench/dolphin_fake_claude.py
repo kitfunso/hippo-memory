@@ -16,7 +16,9 @@ import time
 import uuid
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "hippo-bench" / "dolphinbench"))
+from dolphin_home import ROOT
+
+sys.path.insert(0, str(ROOT))
 from examples.mcp_connection import connect_apps  # noqa: E402
 
 ORDER = {"restaurant": "Blue Bottle Coffee", "items": ["small latte"], "notes": "pickup"}
