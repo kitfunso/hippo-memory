@@ -751,6 +751,8 @@ describe('usage errors', () => {
     expect(admit(flat, { step: 'smoke', extra: plans }).stderr).toContain('meanPerRecord must be a number above 0');
     const noR = makeRoot({ pilot: { rMax: null } });
     expect(admit(noR, { step: 'whole-run', extra: ['--pilot', noR.pilot] }).stderr).toContain('rMax must be a number above 0');
+    const failedR = runCli(['report', '--log', noR.log, '--ledger-total', '40', '--approved', '2140', '--pins', noR.pins, '--pilot', noR.pilot]);
+    expect([failedR.code, failedR.stdout]).toEqual([0, expect.stringContaining('pilot: $36.50 against $40')]);
   });
 });
 

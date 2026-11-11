@@ -129,9 +129,10 @@ export function readBasis(file) {
   return basis;
 }
 
-function readPilot(file) {
+// A pilot whose r check failed has rMax null; report still prints it, every admit refuses it.
+function readPilot(file, { needR = true } = {}) {
   const pilot = readSchema(file, 'pilot', PILOT_SCHEMA);
-  if (!Number.isFinite(pilot.rMax) || pilot.rMax <= 0) throw new Error(`pilot ${file}: rMax must be a number above 0`);
+  if (needR && (!Number.isFinite(pilot.rMax) || pilot.rMax <= 0)) throw new Error(`pilot ${file}: rMax must be a number above 0`);
   return pilot;
 }
 
@@ -466,7 +467,7 @@ function report(args, cwd) {
   const stopped = optional(args, '--stopped');
   if (stopped !== null) lines.push(`stopped: ${stopped} at step ${need(args, '--step')}`);
   const pilotFile = optional(args, '--pilot');
-  const pilot = pilotFile !== null && fs.existsSync(path.resolve(cwd, pilotFile)) ? readPilot(path.resolve(cwd, pilotFile)) : null;
+  const pilot = pilotFile !== null && fs.existsSync(path.resolve(cwd, pilotFile)) ? readPilot(path.resolve(cwd, pilotFile), { needR: false }) : null;
   if (pilot === null) lines.push('pilot: none');
   else lines.push(`pilot: $${money(pilot.pilotSpend)} against $${PILOT_BUDGET}`, ...Object.entries(pilot.r).map(([arm, r]) => `r ${arm}: ${r}`));
   lines.push(`effort: ${readPins(filePath(args, '--pins', cwd)).effort}`);
