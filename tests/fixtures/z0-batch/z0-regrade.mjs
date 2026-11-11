@@ -1,9 +1,9 @@
 // Stub of z0-regrade.mjs for the s4-batch.sh tests: the listing counts it by its file name and `--out <folder>/run`.
-// Knobs come from `$Z0_STUB_KNOBS/<folder name>.json` (else default.json), keyed by call: { durationS, lock, errorRows, hangOnce, keyNoLine, exit, real }.
+// Knobs come from `$Z0_STUB_KNOBS/<folder name>.json` (else default.json), keyed by call: { durationS, release, lock, errorRows, hangOnce, keyNoLine, exit, real }.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { knobsOf } from './ab-run.mjs';
+import { hangBounded, holdUntil, knobsOf } from './ab-run.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv[argv.indexOf(name) + 1];
@@ -38,9 +38,10 @@ const hangFile = path.join(folder, `${call}.hang-done`);
 if (knob.lock || knob.hangOnce) put(lock, `${process.pid}`);
 if (knob.hangOnce && !fs.existsSync(hangFile)) {
   put(hangFile, '');
-  setInterval(() => {}, 1000);
+  hangBounded(`regrade ${call} hang`);
   await new Promise(() => {});
 }
+if (knob.release) await holdUntil(knob.release, `regrade ${call} release`);
 await sleep((knob.durationS ?? 0) * 1000);
 if (knob.exit) {
   process.stderr.write(`stub ${call} failed on purpose\n`);

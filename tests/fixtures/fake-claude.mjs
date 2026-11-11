@@ -18,7 +18,7 @@ const stop = (code, message) => {
   console.error(`fake-claude: ${message}`);
   process.exit(code);
 };
-const KNOB_KEYS = ['schema', 'token', 'calls', 'prices', 'version', 'usage', 'effortScale', 'outcome', 'leaks', 'offPin', 'fail', 'warmupFail'];
+const KNOB_KEYS = ['schema', 'token', 'calls', 'costs', 'prices', 'version', 'usage', 'effortScale', 'outcome', 'leaks', 'offPin', 'fail', 'warmupFail'];
 
 async function readKnobs(file) {
   const { FAKE_KNOBS_SCHEMA } = await import('../../scripts/token-eval/z0-records.mjs');
@@ -43,9 +43,13 @@ const knobs = knobsAt < 0 ? null : await readKnobs(rawArgv[knobsAt + 1]);
 const knobsDir = knobs ? path.dirname(path.resolve(rawArgv[knobsAt + 1])) : null;
 const { modelRow } = knobs ? await import('../../scripts/token-eval/z0-prices.mjs') : {};
 const { priceUsage } = knobs ? await import('../../dist/eval/eval-stats.js') : {};
+const TAG = knobs ? randomUUID() : process.pid;
+let priced = null;
+// One line per knobs call as it exits: the figure it billed (its result's total_cost_usd, written or not), 0 when it wrote no usage.
+if (knobs?.costs) process.on('exit', () => fs.appendFileSync(knobs.costs, `${JSON.stringify({ call: TAG, model: priced ? Object.keys(priced.modelUsage)[0] : null, usage: priced?.usage ?? null, totalCostUsd: priced?.total_cost_usd ?? 0 })}\n`));
 if (knobs) {
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  const line = { argv, tokenPrefix: token ? token.slice(0, 9) : null, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL ?? null, configDir: process.env.CLAUDE_CONFIG_DIR ?? null, subagentModel: process.env.CLAUDE_CODE_SUBAGENT_MODEL ?? null };
+  const line = { call: TAG, argv, tokenPrefix: token ? token.slice(0, 9) : null, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL ?? null, configDir: process.env.CLAUDE_CONFIG_DIR ?? null, subagentModel: process.env.CLAUDE_CODE_SUBAGENT_MODEL ?? null };
   if (knobs.calls) fs.appendFileSync(knobs.calls, `${JSON.stringify(line)}\n`);
   if (knobs.token && token !== knobs.token) stop(1, 'CLAUDE_CODE_OAUTH_TOKEN is not the knobs file\'s token');
 }
@@ -64,7 +68,6 @@ const prompt = resumeId ? fs.readFileSync(path.join(promptsDir, `${resumeId}.pro
 // Knobs mode. A session's cell is read from its config dir (<out>/runs/<seq>/<arm>/seed<n>/claude-config) and its draw u from the cell and the first-session prompt,
 // so a rerun in a new --out draws the same; a call with no --settings is a warm-up and has no cell.
 const pinned = argv.includes('--model') ? argv[argv.indexOf('--model') + 1] : null;
-const TAG = knobs ? randomUUID() : process.pid;
 function cellOf() {
   const [sequence, arm, seedDir] = path.resolve(process.env.CLAUDE_CONFIG_DIR).split(path.sep).slice(-4, -1);
   const seed = Number(seedDir.replace('seed', ''));
@@ -86,7 +89,6 @@ const drawTokens = () => {
   const at = (n, extra = 1) => Math.round(n * spread * extra);
   return { input: at(row.input), output: at(row.output, scale), cacheRead: at(row.cacheRead), cacheWrite: at(row.cacheWrite) };
 };
-let priced = null;
 /** The call's tokens, cost and result usage fields, priced at the --model row; drawn once, so the transcript and the result agree. */
 function callUsage() {
   if (priced) return priced;
@@ -176,6 +178,19 @@ const limitSurfaces = () => {
   if (process.env.HIPPO_HOME) write(path.join(process.env.HIPPO_HOME, 'limit.txt'), 'cut-off attempt\n');
 };
 
+const fixedId = argv.includes('--session-id') ? argv[argv.indexOf('--session-id') + 1] : null;
+const sessionId = resumeId && !prompt.includes('NEW_ID_ON_RESUME') ? resumeId : (fixedId ?? randomUUID());
+const transcript = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${sessionId}.jsonl`);
+// Knobs mode ends each appended turn with the call's usage on one message of its own, so a transcript prices to what the result says.
+const usageLine = () => ({ type: 'assistant', message: { id: `m-${TAG}-u`, model, usage: callUsage().usage, content: [{ type: 'text', text: 'done' }] } });
+const appendTurn = (lines) => {
+  if (prompt.includes('NOTRANSCRIPT')) return;
+  fs.mkdirSync(path.dirname(transcript), { recursive: true });
+  const prefix = fs.existsSync(transcript) && fs.statSync(transcript).size > 0 ? '\n' : '';
+  const turn = knobs ? [...lines, usageLine()] : lines;
+  fs.appendFileSync(transcript, prefix + turn.map((l) => JSON.stringify(l)).join('\n'));
+};
+
 if (prompt.includes('CRASH') && !resumeId) {
   console.error('fake crash before any result');
   process.exit(3);
@@ -196,12 +211,12 @@ if (!resumeId && prompt.includes('LIMIT') && (limitAlways || (limitMarker && !fs
   if (prompt.includes('RM_GIT')) fs.rmSync('.git', { recursive: true, force: true });
   limitSurfaces();
   log('session-limit');
+  // A real cut-off first session has billed its turns before the limit; the ledger finds them under its own id (prereg Ledger row).
+  if (knobs) appendTurn([{ type: 'user', message: { role: 'user', content: input } }]);
   console.log(LIMIT_TEXT);
   process.exit(1);
 }
 
-const fixedId = argv.includes('--session-id') ? argv[argv.indexOf('--session-id') + 1] : null;
-const sessionId = resumeId && !prompt.includes('NEW_ID_ON_RESUME') ? resumeId : (fixedId ?? randomUUID());
 const settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8'));
 let injected = '';
 for (const group of settings.hooks?.UserPromptSubmit ?? []) {
@@ -221,16 +236,6 @@ const toolUse = (name, toolInput) => {
   const message = { id: `m-${TAG}-${toolN}`, usage: {}, content: [{ type: 'tool_use', id: `tu-${process.pid}-${++toolN}`, name, input: toolInput }] };
   if (knobs) message.model = model;
   return { type: 'assistant', message };
-};
-const transcript = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${sessionId}.jsonl`);
-// Knobs mode ends each appended turn with the call's usage on one message of its own, so a transcript prices to what the result says.
-const usageLine = () => ({ type: 'assistant', message: { id: `m-${TAG}-u`, model, usage: callUsage().usage, content: [{ type: 'text', text: 'done' }] } });
-const appendTurn = (lines) => {
-  if (prompt.includes('NOTRANSCRIPT')) return;
-  fs.mkdirSync(path.dirname(transcript), { recursive: true });
-  const prefix = fs.existsSync(transcript) && fs.statSync(transcript).size > 0 ? '\n' : '';
-  const turn = knobs ? [...lines, usageLine()] : lines;
-  fs.appendFileSync(transcript, prefix + turn.map((l) => JSON.stringify(l)).join('\n'));
 };
 // A fail cell dies after its valid request and its transcript, with no result: the request was billed, so the ledger has usage to count.
 if (cell && knobs.fail?.some((e) => forCell(e) && e.positions.includes(cell.position))) {
@@ -301,7 +306,7 @@ function hang(tag) {
     { type: 'user', message: { role: 'user', content: input } },
     said(`m-hang-${tag}-1`, 10, 5), said(`m-hang-${tag}-1`, 10, 40), said(`m-hang-${tag}-2`, 3, 7),
   ]);
-  // Outlives any run, so only the runner's tree kill can stop it; a test that finds it alive kills it itself.
+  // Outlives any run, so only the runner's tree kill can stop it; z0-harness cleanup ends one still alive, as its command line names this out folder.
   const tick = `const fs=require('fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
   const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
   fs.writeFileSync(path.join(OUT, 'grandchild.pid'), String(child.pid));

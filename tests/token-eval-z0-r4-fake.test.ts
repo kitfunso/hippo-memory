@@ -32,13 +32,14 @@ afterEach(() => {
 
 type Json = string | number | boolean | null | undefined | readonly Json[] | { readonly [key: string]: Json };
 type Over = Readonly<Record<string, Json>>;
-interface Call { argv: string[]; tokenPrefix: string | null; effort: string | null; subagentModel: string | null; configDir: string }
+interface Call { call: string; argv: string[]; tokenPrefix: string | null; effort: string | null; subagentModel: string | null; configDir: string }
 interface Knobs { dir: string; file: string; cmd: string; calls: () => Call[] }
 const jsonl = <T>(file: string): T[] => (existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 /** The runner's fields beyond the z0-record/1 type that these tests read. */
 interface Wire { arm: string; taskId: string; kind: string; claudeVersion: string; envKeys: string[]; lessons: { first: string; final: string }[]; invalid: string | null; resolved: boolean }
 const wire = (out: string) => jsonl<Wire>(join(out, 'runs.jsonl'));
 interface ModelTokens { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; costUSD: number }
+interface Cost { call: string; model: string | null; usage: CallResult['usage'] | null; totalCostUsd: number }
 interface CallResult {
   type: string; is_error: boolean; total_cost_usd: number; usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number };
   modelUsage: Readonly<Record<string, ModelTokens>>;
@@ -141,12 +142,12 @@ describe('the knobs file', () => {
     expect(run(junk).status).toBe(1);
   });
 
-  it('logs every call as { argv, tokenPrefix, effort, subagentModel, configDir }, without its own --fake-knobs pair', async () => {
+  it('logs every call as { call, argv, tokenPrefix, effort, subagentModel, configDir }, without its own --fake-knobs pair', async () => {
     const k = knobs();
     const res = await callFake(k, { effort: 'low' });
     expect(res.status, res.stderr).toBe(0);
     const [line] = k.calls();
-    expect(Object.keys(line!).sort()).toEqual(['argv', 'configDir', 'effort', 'subagentModel', 'tokenPrefix']);
+    expect(Object.keys(line!).sort()).toEqual(['argv', 'call', 'configDir', 'effort', 'subagentModel', 'tokenPrefix']);
     expect(line).toMatchObject({ tokenPrefix: 'fake-tok-', effort: 'low', subagentModel: null, configDir: res.configDir });
     expect(line!.argv).toEqual(['-p', '--output-format', 'json', '--setting-sources', 'project', '--settings', join(res.out, 'settings.json'), '--strict-mcp-config', '--model', SONNET_MODEL]);
     const noEffort = await callFake(k);
@@ -343,6 +344,39 @@ describe('the fake is no kinder than the real CLI', () => {
     expect(priced).toHaveLength(1);
     expect(priced[0]!.message).toMatchObject({ model: SONNET_MODEL });
     expect(priced[0]!.message!.usage!.output_tokens).toBeGreaterThan(0);
+  });
+
+  it('writes one costs line per call as it exits: the billed figure, 0 for --version and a refused token, and a positive figure for a first session cut at the plan limit', async () => {
+    const costs = join(tmp('r4-fake-costs-'), 'costs.jsonl');
+    const k = knobs({ costs });
+    spawnSync(process.execPath, [FAKE, '--fake-knobs', k.file, '--version'], { encoding: 'utf8', env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: TOKEN } });
+    const refused = await callFake(k, { token: 'fake-tok-other' });
+    const plain = await callFake(k);
+    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(tmp('r4-fake-limit-'), 'once');
+    const cut = await callFake(k, { prompt: 'LIMIT look\nFAKE_POS 1' });
+    // The calls ran one after another, so each cost line sits where its call line does, and no id repeats.
+    const lines = jsonl<Cost>(costs);
+    expect(lines.map((l) => l.call)).toEqual(k.calls().map((c) => c.call));
+    expect(new Set(lines.map((l) => l.call)).size).toBe(4);
+    const [version, refusedCost, plainCost, cutCost] = lines;
+    expect(version).toEqual({ call: version!.call, model: null, usage: null, totalCostUsd: 0 });
+    expect(refused.status).toBe(1);
+    expect(refusedCost).toEqual({ call: refusedCost!.call, model: null, usage: null, totalCostUsd: 0 });
+    expect(plain.status).toBe(0);
+    expect(plainCost!.totalCostUsd).toBe(plain.result!.total_cost_usd);
+    expect(plainCost!.usage).toEqual(plain.result!.usage);
+    expect(plainCost!.model).toBe(SONNET_MODEL);
+    expect(cut.status).toBe(1);
+    expect(cut.stdout.trim().split('\n')).toHaveLength(1);
+    expect(cut.result).toMatchObject({ is_error: true, result: expect.stringMatching(/usage limit reached/) });
+    const priced = transcriptLines(cut).filter((l) => l.message?.usage);
+    expect(priced).toHaveLength(1);
+    expect(priced[0]!.message!.model).toBe(SONNET_MODEL);
+    const u = priced[0]!.message!.usage!;
+    const row = Object.entries(PRICES_BY_MODEL.models).find(([id]) => id === SONNET_MODEL)![1];
+    const expected = priceUsage({ inputTokens: u.input_tokens!, cacheWriteTokens: u.cache_creation_input_tokens!, cacheReadTokens: u.cache_read_input_tokens!, outputTokens: u.output_tokens! }, row);
+    expect(cutCost!.totalCostUsd).toBeGreaterThan(0);
+    expect(Math.abs(cutCost!.totalCostUsd - expected)).toBeLessThan(1e-12);
   });
 });
 

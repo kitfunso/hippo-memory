@@ -113,14 +113,11 @@ describe('a session that runs out of time (prereg 165)', () => {
     const tick = join(out, 'tick.txt');
     expect(existsSync(tick)).toBe(true);
     const pid = Number(readFileSync(join(out, 'grandchild.pid'), 'utf8'));
-    try {
-      const before = statSync(tick).size;
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      expect(statSync(tick).size).toBe(before);
-      expect(alive(pid)).toBe(false);
-    } finally {
-      if (alive(pid)) process.kill(pid, 'SIGKILL');
-    }
+    // A grandchild the run left alive is killed by cleanup, which checks that the pid still names this out folder.
+    const before = statSync(tick).size;
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(statSync(tick).size).toBe(before);
+    expect(alive(pid)).toBe(false);
   }, 110_000);
 
   it('a timeout with no transcript stays invalid: no-transcript', async () => {
