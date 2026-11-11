@@ -132,6 +132,24 @@ describe('z0-hookhold under round 4: hookCancels on the S2 and S5 apply sessions
     expect(JSON.parse(fs.readFileSync(out, 'utf8')).hookVoids).toEqual([]);
   });
 
+  it('reads a torn last line of a live runs file as absent, and still stops on the same half line when more follows it (Record model)', () => {
+    const dir = folder();
+    const records = fifty([7, 30]);
+    const whole = write(path.join(dir, 'whole.jsonl'), records);
+    const half = JSON.stringify(rec(99, { hookCancels: cancelled })).slice(0, 40);
+    const torn = path.join(dir, 'torn.jsonl');
+    fs.writeFileSync(torn, `${fs.readFileSync(whole, 'utf8')}${half}`);
+    expect(hold('r4', torn)).toEqual(hold('r4', whole));
+    const [outWhole, outTorn] = [path.join(dir, 'whole-hook.json'), path.join(dir, 'torn-hook.json')];
+    runCli(['--design', 'r4', '--runs', whole, '--sensitivity', outWhole]);
+    runCli(['--design', 'r4', '--runs', torn, '--sensitivity', outTorn]);
+    const dropList = (file: string): unknown[] => JSON.parse(fs.readFileSync(file, 'utf8')).hookVoids;
+    expect(dropList(outTorn)).toEqual(dropList(outWhole));
+    const more = path.join(dir, 'more.jsonl');
+    fs.writeFileSync(more, `${fs.readFileSync(whole, 'utf8')}${half}\n${JSON.stringify(rec(98))}\n`);
+    expect(hold('r4', more)).toMatchObject({ code: 1, stderr: expect.stringContaining(`more.jsonl line 51: not JSON`) });
+  });
+
   it('exits 1 with its usage on the wrong source for the design, both sources, neither mode and both modes', () => {
     const dir = folder();
     const file = write(path.join(dir, 'runs.jsonl'), fifty([]));

@@ -52,9 +52,12 @@ function sessionsOf(sources, design) {
   const found = [];
   for (const { file, out } of sources) {
     const mtime = fs.statSync(file).mtimeMs;
-    fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, i) => {
       if (line.trim() === '') return;
       const r = parseOrNull(line);
+      // A live runs file can end in a half record, since a runner appends it a write at a time; only that last piece is skipped.
+      if (r === null && i === lines.length - 1) return;
       if (r === null) throw new Error(`${file} line ${i + 1}: not JSON`);
       if (!arms.has(r.arm) || !r.sessionId) return;
       if (out === null) checkCancels(r, file, i);
