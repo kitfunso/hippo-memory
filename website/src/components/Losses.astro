@@ -1,0 +1,28 @@
+---
+import { site, losses } from '../content/site';
+import Section from './Section.astro';
+---
+
+<Section title={losses.heading} id="losses" split>
+  <ul class="border-t border-rule" data-reveal>
+    {losses.items.map((l) => (
+      <li class="border-b border-rule">
+        <a
+          href={l.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="group flex items-start gap-3 py-4 text-zinc-300 transition-colors hover:text-zinc-100"
+        >
+          <span class="mt-2.5 size-1.5 shrink-0 rounded-full bg-warn" aria-hidden="true"></span>
+          <span class="min-w-0 flex-1">{l.text}<span class="sr-only"> (source, opens in new tab)</span></span>
+          <span class="font-mono text-xs leading-7 text-zinc-500 transition-colors group-hover:text-accent-light" aria-hidden="true">↗</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+  <p>
+    <a class="link" href={site.links.evals} target="_blank" rel="noopener noreferrer"
+      >{losses.moreLabel}<span class="sr-only"> (opens in new tab)</span></a
+    >
+  </p>
+</Section>

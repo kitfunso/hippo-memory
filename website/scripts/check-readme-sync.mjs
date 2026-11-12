@@ -12,7 +12,6 @@ const normalize = (s) => s.replace(/\\/g, '').replace(/\s+/g, ' ').trim();
 
 const readme = await readFile(join(root, '..', 'README.md'), 'utf8');
 const site = await readFile(join(root, 'src', 'content', 'site.ts'), 'utf8');
-const readmeNorm = normalize(readme);
 const missing = [];
 
 let parsed = '';
@@ -59,26 +58,22 @@ if (!withoutComments(setup).includes('{getStarted.notice}')) missing.push('notic
 if (!withoutComments(quickstart).includes('{getStarted.notice}')) missing.push('notice: quickstart.astro no longer renders the setup limit');
 if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push('availability: teams.astro no longer renders the edition status');
 
-const warns = ['R@5 = 74.0%', '0 outbound HTTP'].filter((c) => !readmeNorm.includes(normalize(c)));
-if (warns.length) {
-  console.warn('[readme-sync] WARN: receipt claim(s) not found verbatim in README (verify wording):', warns.join(' | '));
+// A loss line that links a committed score file may only quote numbers that file holds.
+const scoreFiles = Object.fromEntries(
+  [...site.matchAll(/^\s*(\w+):\s*`\$\{REPO\}\/blob\/master\/(benchmarks\/public\/results\/[^`]+\.txt)`/gm)].map((m) => [m[1], m[2]]),
+);
+let lossLines = 0;
+for (const [, , text, key] of site.matchAll(/\{\s*text:\s*(["'])((?:(?!\1).)*)\1,\s*href:\s*site\.links\.(\w+)\s*\}/g)) {
+  if (!scoreFiles[key]) continue;
+  lossLines++;
+  const held = await readFile(join(root, '..', scoreFiles[key]), 'utf8');
+  for (const n of text.match(/\d+\.\d+/g) ?? []) {
+    if (!held.includes(n)) missing.push(`losses: "${n}" is not in ${scoreFiles[key]}`);
+  }
 }
+if (!lossLines) missing.push('losses: no loss line links a committed score file');
 
-// LoCoMo rows on the benchmarks page must match the README's "### LoCoMo" subsection row for
-// row (category, n and r5 on one table line), so a swapped or copied score cannot pass.
-const bench = await readFile(join(root, 'src', 'pages', 'benchmarks.astro'), 'utf8');
-const locoStart = readme.indexOf('### LoCoMo');
-const locoEnd = locoStart >= 0 ? readme.indexOf('\n### ', locoStart + 3) : -1;
-const locoNorm = normalize(locoStart >= 0 ? readme.slice(locoStart, locoEnd > 0 ? locoEnd : undefined) : '').replace(/\*/g, '');
-const locoBlock = (bench.match(/const locomo = \[([\s\S]*?)\];/) || [])[1] || '';
-const locoRows = [...locoBlock.matchAll(/\{\s*category:\s*'([^']*)',\s*n:\s*'([^']*)',\s*r5:\s*'([^']*)'\s*\}/g)];
-if (!locoRows.length) missing.push('locomo: no rows found in benchmarks.astro');
-for (const [, category, n, r5] of locoRows) {
-  if (!locoNorm.includes(`| ${category} | ${n} | ${r5} |`)) missing.push(`locomo row: | ${category} | ${n} | ${r5} |`);
-}
-
-// Presence anywhere on the site is not the check: the reranker result has to reach the
-// hero, and it never travels without the negative result that bounds it.
+// The hero's Z0 win never travels without its caveat, and the strip always shows a loss.
 // Comments are stripped first so a caveat parked in a code comment cannot satisfy it.
 const hero = await readFile(join(root, 'src', 'components', 'Hero.astro'), 'utf8');
 const proofsRaw = (site.match(/export const proofs\s*(?::[^=]+)?=\s*\[([\s\S]*?)\n\][^\n]*;/) || [])[1] || '';
@@ -86,10 +81,8 @@ const proofsBlock = proofsRaw.replace(/\/\/[^\n]*/g, '');
 if (!proofsRaw) {
   missing.push('proofs: block not found in site.ts (the hero renders it)');
 } else {
-  if (!/reranker/i.test(proofsBlock)) missing.push('proofs: the hero carries no reranker claim');
-  if (!/no answer-rate win was shown/.test(proofsBlock)) {
-    missing.push('proofs: the reranker claim lost its null result');
-  }
+  if (!/lesson capture/.test(proofsBlock)) missing.push('proofs: the Z0 cell lost its lesson-capture caveat');
+  if (!/tone:\s*'loss'/.test(proofsBlock)) missing.push('proofs: the hero strip shows no loss');
 }
 if (!/proofs\.map\(/.test(hero) || !/p\.text/.test(hero)) {
   missing.push('proofs: Hero.astro no longer renders each proof with its text');
@@ -102,4 +95,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${locoRows.length} LoCoMo rows, hero proofs, setup limits and edition availability match README.md.`);
+console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${lossLines} loss lines match their score files, hero proofs, setup limits and edition availability match README.md.`);

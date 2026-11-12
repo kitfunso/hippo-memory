@@ -14,27 +14,15 @@ const isCurrent = (href: string) =>
 // /teams leads with its own filled button (the pilot), so install steps back to an outline there.
 const quietInstall = currentPath === '/teams';
 
-// Mobile chips. Home: section jump targets (root-relative so they survive reuse),
-// includes Receipts so proof stays reachable on mobile. Subpages: page-aware
-// links, because the section ids only exist on the homepage.
+// Phone row: on home the section jumps; elsewhere the same labels as the desktop nav, so there is one set.
 const sectionChips = [
-  { label: 'How', href: '/#how' },
-  { label: 'Get started', href: '/#get-started' },
-  { label: 'Receipts', href: '/#receipts' },
-  { label: 'Compare', href: '/#compare' },
+  { label: 'The test', href: '/#receipts' },
+  { label: 'Losses', href: '/#losses' },
+  { label: 'How it works', href: '/#how' },
+  { label: 'Install', href: '/#get-started' },
   { label: 'FAQ', href: '/#faq' },
 ];
-const pageChips = [
-  { label: 'Home', href: '/' },
-  { label: 'Quickstart', href: '/quickstart/' },
-  { label: 'How it works', href: '/how-it-works/' },
-  { label: 'Benchmarks', href: '/benchmarks/' },
-  { label: 'FAQ', href: '/faq/' },
-  { label: 'Teams', href: '/teams/' },
-  { label: 'Compare', href: '/#compare' },
-  { label: 'Docs', href: site.links.docs },
-];
-const mobileNav = isHome ? sectionChips : pageChips;
+const mobileNav = isHome ? sectionChips : nav;
 ---
 
 <header class="sticky top-0 z-40 border-b border-white/8 glass">
@@ -83,7 +71,7 @@ const mobileNav = isHome ? sectionChips : pageChips;
 </header>
 
 <!-- mobile nav, < md only: outside the sticky header so it scrolls away and the bar stays one row. -->
-<nav aria-label={isHome ? 'Page sections' : 'Pages'} class="border-b border-white/5 md:hidden">
+<nav aria-label={isHome ? 'Page sections' : 'Pages'} class="border-b border-rule md:hidden">
   <ul class="flex gap-2 overflow-x-auto px-5 py-2 text-xs text-zinc-400 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-scroll-x>
     {mobileNav.map((item) => (
       <li class="shrink-0">

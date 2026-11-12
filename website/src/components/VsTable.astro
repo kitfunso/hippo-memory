@@ -1,25 +1,27 @@
 ---
-// Hippo against one system, every row of the README comparison table, so a vs page cannot drift from it.
+// Hippo against one system, on the rows a page picks from the README comparison table, so a vs page cannot drift from it.
 import { comparison } from '../content/site';
-import { mdInline } from '../content/readme';
 
 interface Props {
   system: string;
+  // [README row label, label shown on the page]
+  rows: ReadonlyArray<readonly [string, string]>;
 }
-const { system } = Astro.props;
+const { system, rows: picks } = Astro.props;
 const col = comparison.systems.findIndex((s) => s.name === system);
 if (col < 0) throw new Error(`README comparison has no "${system}" column`);
 const them = comparison.systems[col];
-const rows = comparison.rows.map((r) => ({ feature: r.feature, hippo: r.cells[0], them: r.cells[col] }));
-// Show a footnote only when a cell on this page carries its mark (* or **).
-const marks = new Set(rows.flatMap((r) => [r.hippo, r.them]).flatMap((c) => c.match(/\*+/g) ?? []));
-const footnotes = comparison.footnotes.filter((f) => marks.has((f.match(/^(?:\\\*)+/)?.[0] ?? '').replace(/\\/g, '')));
+const rows = picks.map(([label, shown]) => {
+  const r = comparison.rows.find((x) => x.feature === label);
+  if (!r) throw new Error(`README comparison has no row "${label}"`);
+  return { feature: shown, hippo: r.cells[0], them: r.cells[col] };
+});
 ---
 
 <div class="overflow-hidden rounded-2xl border border-white/8">
   <!-- Fixed equal columns: the rival's column is the point of a vs page, so it never scrolls off a phone. -->
   <table class="w-full table-fixed text-left text-[13px] leading-snug sm:text-sm">
-    <caption class="sr-only">hippo and {them.name}, row by row from the README comparison table</caption>
+    <caption class="sr-only">hippo and {them.name}, selected rows of the README comparison table</caption>
     <colgroup><col class="w-[30%]" /><col class="w-[35%]" /><col class="w-[35%]" /></colgroup>
     <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
       <tr>
@@ -38,7 +40,4 @@ const footnotes = comparison.footnotes.filter((f) => marks.has((f.match(/^(?:\\\
       ))}
     </tbody>
   </table>
-</div>
-<div class="mt-4 space-y-2">
-  {footnotes.map((f) => <p class="copy text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
 </div>

@@ -1,36 +1,11 @@
 ---
-import { localFirst, importsFrom } from '../content/site';
+import { localFirst } from '../content/site';
+import { mdInline } from '../content/readme';
+import Section from './Section.astro';
 ---
 
-<section id="local-first" class="relative border-t border-white/5">
-  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-    <div class="max-w-2xl">
-      <h2 class="text-3xl leading-tight sm:text-4xl">
-        Your memory lives on your <span class="text-gradient">machine.</span>
-      </h2>
-    </div>
-
-    <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-reveal>
-      {localFirst.points.map((p) => (
-        <div class="glass glass-hover flex flex-col rounded-2xl p-6">
-          <span class="font-mono text-2xl font-semibold text-gradient">{p.stat}</span>
-          <span class="mt-1 text-sm font-medium text-zinc-200">{p.label}</span>
-          <p class="mt-3 text-sm leading-relaxed text-zinc-400">{p.body}</p>
-        </div>
-      ))}
-    </div>
-
-    <div class="mt-8 rounded-2xl glass p-6 lg:flex lg:items-center lg:justify-between lg:gap-8" data-reveal>
-      <div class="max-w-xl">
-        <h3 class="text-lg font-semibold">{localFirst.portability.heading}</h3>
-        <p class="mt-2 text-sm leading-relaxed text-zinc-400">{localFirst.portability.body}</p>
-      </div>
-      <div class="mt-4 flex flex-wrap items-center gap-2 lg:mt-0 lg:max-w-sm">
-        <span class="font-mono text-xs uppercase tracking-wider text-zinc-400">imports from</span>
-        {importsFrom.map((s) => (
-          <span class="rounded border border-white/10 bg-white/[0.02] px-2 py-0.5 font-mono text-xs text-zinc-300">{s}</span>
-        ))}
-      </div>
-    </div>
-  </div>
-</section>
+<!-- The empty span keeps the old #local-first anchor working. -->
+<span id="local-first" aria-hidden="true"></span>
+<Section title={localFirst.heading} id="local" split>
+  <p set:html={mdInline(localFirst.body)} />
+</Section>

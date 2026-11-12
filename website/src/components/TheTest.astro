@@ -1,0 +1,19 @@
+---
+// id "receipts" keeps old links to the home proof section working.
+import { site, theTest } from '../content/site';
+import Section from './Section.astro';
+import RepeatMistakes from './RepeatMistakes.astro';
+---
+
+<Section title={theTest.heading} id="receipts" split>
+  <p>{theTest.body}</p>
+  <div class="border-y border-rule py-6" data-reveal>
+    <RepeatMistakes />
+  </div>
+  <p>{theTest.note}</p>
+  <p>
+    <a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer"
+      >{theTest.linkLabel}<span class="sr-only"> (opens in new tab)</span></a
+    >
+  </p>
+</Section>

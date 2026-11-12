@@ -33,6 +33,13 @@
   --color-term-ok: #7ce38b;
   --color-term-fg: #e6ede7;
   --color-term-err: #f2837b;
+
+  /* rules draw rows and cells; decoration only, never a control's only edge */
+  --color-rule: rgb(255 255 255 / 0.08);
+  --color-rule-strong: rgb(255 255 255 / 0.14);
+  /* proof numbers (Geist Mono) and the 17px prose step */
+  --text-proof: 1.375rem;
+  --text-body: 1.0625rem;
 }
 
 /* ---- base ---- */
@@ -161,8 +168,8 @@ header.glass {
   transform: translateY(-50%);
 }
 
-/* ---- inline code in long-form copy (README markdown and the content pages); long config strings wrap on phones ---- */
-.copy code {
+/* ---- inline code in long-form prose only, so a command row (CopyCommand) keeps its own look; long config strings wrap on phones ---- */
+.copy :is(p, li, dd, td, th) code {
   font-family: var(--font-mono);
   font-size: 0.875em;
   color: var(--color-zinc-200);
@@ -204,6 +211,29 @@ nav[aria-label='Pages'] a[aria-current='page'] {
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+/* lg up, the network dims behind the 72rem content column and stays full in the gutters */
+@media (width >= 64rem) {
+  #bg-fx {
+    -webkit-mask-image: linear-gradient(90deg, #000, rgb(0 0 0 / 0.35) calc(50% - 30rem), rgb(0 0 0 / 0.35) calc(50% + 30rem), #000);
+    mask-image: linear-gradient(90deg, #000, rgb(0 0 0 / 0.35) calc(50% - 30rem), rgb(0 0 0 / 0.35) calc(50% + 30rem), #000);
+  }
+}
+/* direction A frame: two 1px lines on the max-w-6xl column edges, xl up, never in print */
+@media screen and (width >= 80rem) {
+  .frame { position: relative; }
+  .frame::before,
+  .frame::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--color-rule);
+    pointer-events: none;
+  }
+  .frame::before { left: calc(50% - 36rem); }
+  .frame::after { right: calc(50% - 36rem); }
 }
 .dot-grid {
   background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);

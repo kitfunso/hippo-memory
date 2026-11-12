@@ -2,17 +2,14 @@
 import { terminal } from '../content/site';
 
 type Kind = (typeof terminal)[number]['kind'];
-// Mint is hippo recalling or saving, amber is the failure it caught (the brand's "marked wrong").
+// Mint marks what hippo prints into the session; the rest is the agent's own output.
 const tone = {
   note: 'text-zinc-500',
   cmd: 'text-term-fg',
   out: 'text-zinc-300',
-  err: 'pl-4 text-term-err',
-  caught: 'pl-4 text-warn',
-  ok: 'pl-4 text-term-ok',
-  mem: 'pl-8 text-zinc-300',
+  hippo: 'border-l-2 border-accent/60 pl-3 text-term-ok',
 } satisfies Record<Kind, string>;
-const glyph = { note: '', cmd: '>', out: '●', err: '⎿', caught: '', ok: '', mem: '·' } satisfies Record<Kind, string>;
+const glyph = { note: '', cmd: '>', out: '●', hippo: '' } satisfies Record<Kind, string>;
 ---
 
 <div class="overflow-hidden rounded-xl border border-zinc-800 bg-term-bg" data-terminal>
@@ -20,7 +17,7 @@ const glyph = { note: '', cmd: '>', out: '●', err: '⎿', caught: '', ok: '', 
     <span class="size-3 rounded-full bg-zinc-700" aria-hidden="true"></span>
     <span class="size-3 rounded-full bg-zinc-700" aria-hidden="true"></span>
     <span class="size-3 rounded-full bg-zinc-700" aria-hidden="true"></span>
-    <span class="ml-3 font-mono text-xs text-zinc-500">claude · with hippo hooks</span>
+    <span class="ml-3 font-mono text-xs text-zinc-500">claude, with hippo hooks</span>
   </div>
 
   <div class="overflow-x-auto px-6 py-5 font-mono text-[13px] leading-6" data-term-body>

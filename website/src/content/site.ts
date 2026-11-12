@@ -1,9 +1,5 @@
-/**
- * Single source of truth for all landing-page copy + claims.
- * EVERY number/claim here is verified against ../../README.md + package.json
- * (audit 2026-06-01). The sequential-learning "78% -> 14%" magnitude is RETRACTED
- * (README v1.7.9) and is deliberately ABSENT. Edit copy here, not in components.
- */
+// Site copy and claims, edited here and not in components. Sources sit beside each number or in the
+// copy deck of 12 Nov 2026. The retracted "78% -> 14%" magnitude (docs/RETRACTION.md) stays out under any name.
 
 import pkg from '../../../package.json';
 import { REPO, readmeComparison, readmeFaq } from './readme';
@@ -20,15 +16,17 @@ export const site = {
   pkg: 'hippo-memory',
   version: pkg.version, // Build-source version; publication is verified separately.
   positioning: pkg.description,
+  title: 'hippo: open-source memory for Claude Code, Codex and Cursor',
+  // The default meta description and the JSON-LD description; package.json's line ships with npm releases.
+  description:
+    'Open-source memory for coding agents. In our own Claude Code test on 29 repositories, adding hippo to built-in memory cut repeat mistakes from 21 in 100 to 11, and the gain held with lesson capture off.',
   tagline: {
-    lead: 'Stop re‑teaching', // non-breaking hyphen keeps the word whole
-    accent: 'your agent.',
+    lead: 'One memory for',
+    accent: 'Claude Code, Codex and Cursor.',
     summary:
-      "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents. It's a critical layer for your AI harness that connects across your different tools (Cursor, Claude Code, Codex). It keeps your proprietary data completely local, and it actually learns over time. By strengthening memories each time they are recalled, Hippo preserves what works, lets mistakes decay, and continuously compounds your agents' intelligence.",
+      "Hippo is open-source and runs on your machine. In our test on 29 repositories, adding it to Claude Code's built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.",
   },
-  description: pkg.description,
   installCmd: 'npm install -g hippo-memory',
-  initCmd: 'hippo init --scan ~',
   // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.
   tests: '3,500+',
   links: {
@@ -36,35 +34,42 @@ export const site = {
     npm: 'https://www.npmjs.com/package/hippo-memory',
     docs: `${REPO}#readme`,
     changelog: `${REPO}/blob/master/CHANGELOG.md`,
-    benchmarks: `${REPO}/tree/master/benchmarks`,
-    longmemeval: `${REPO}/tree/master/benchmarks/longmemeval`,
     license: `${REPO}/blob/master/LICENSE`,
+    evals: `${REPO}/blob/master/docs/evals/README.md`,
     jevEval: `${REPO}/blob/master/docs/evals/2026-09-19-jev-reranker.md`,
     z0Round3: `${REPO}/blob/master/docs/evals/2026-11-08-z0-round3-result.md`,
-    atlas: 'https://neoneye.github.io/agent-memory-atlas/systems/hippo-memory/',
+    locomoScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/locomo-h2h-emb.txt`,
+    dmrScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/dmr-emb.txt`,
+    mechanismAudit: `${REPO}/blob/master/docs/evals/2026-09-23-mechanism-audit-round2-result.md`,
+    decayDefault: `${REPO}/blob/master/docs/evals/2026-09-24-decay-default-result.md`,
     // Pilot requests open a GitHub issue until a booking link exists.
     pilot: `${REPO}/issues/new?title=Pilot%20request&body=Company%2C%20team%20size%2C%20agents%20in%20use%3A`,
     security: `${REPO}/blob/master/SECURITY.md`,
   },
 } as const;
 
-// Hero proof lines, above the fold (audit: lead with capability proof, not adjectives).
-// The reranker line carries its null result inline; the win never travels without it.
-export const proofs = [
+// The Z0 cell keeps its lesson-capture caveat and one cell is a loss; check-readme-sync.mjs fails the build if either goes.
+export const proofs: ReadonlyArray<{ stat: string; text: string; href: string; hrefLabel: string; tone?: 'loss' }> = [
   {
-    stat: 'About half the repeat mistakes',
-    text: "of Claude Code's built-in memory alone, at the same cost: 11 in 100 against 21, 2 to 4 tasks after one correction, on 29 repositories.",
+    stat: '11 repeats in 100',
+    text: 'Against 21 with built-in memory alone, in our Claude Code test. Switching lesson capture off gave the same gain.',
     href: site.links.z0Round3,
     hrefLabel: 'the Z0 round 3 result',
   },
-  { stat: '98.0% R@5', text: 'on LongMemEval-S with a free local embedder (best of five settings).' },
   {
-    stat: 'R@1 0.41 to 0.62',
-    text: 'with the opt-in Jev reranker, against the free local cross-encoder. Ranking only: no answer-rate win was shown.',
-    href: site.links.jevEval,
-    hrefLabel: 'the Jev reranker eval',
+    stat: 'Stored on your machine',
+    text: 'SQLite, no account, and recall stays local. If ANTHROPIC_API_KEY is set, sleep sends text to Anthropic unless switched off.',
+    href: '/faq/#where-does-hippo-keep-my-data',
+    hrefLabel: 'where hippo keeps your data',
   },
-] as const;
+  {
+    stat: 'Mem0 94.9, hippo 89.4',
+    text: 'Answers on LoCoMo, a public test of questions about long conversations. We ran both, and Mem0 won.',
+    href: '/benchmarks/',
+    hrefLabel: 'the benchmarks page',
+    tone: 'loss',
+  },
+];
 
 // Quickstart is the nav's install button, so it is not repeated here.
 export const nav = [
@@ -75,158 +80,96 @@ export const nav = [
   { label: 'Docs', href: site.links.docs },
 ] as const;
 
-/** An illustrated two-day Claude Code session with hippo's hooks; the hippo lines are shortened from what hippo prints.
- *  Kinds: note = day label, cmd = prompt, out = agent output, err = failed tool call, caught = hippo storing it,
- *  ok = hippo, mem = a memory in context. */
-export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' | 'ok' | 'mem'; text: string }> = [
-  { kind: 'note', text: 'Monday · billing-service' },
+// An illustrated session. The hippo lines copy USER_RULES_HEADING and userRuleLine in src/api/context/context-render.ts.
+export const terminal: ReadonlyArray<{ kind: 'note' | 'cmd' | 'out' | 'hippo'; text: string }> = [
+  { kind: 'note', text: 'Monday, billing-service' },
   { kind: 'cmd', text: 'add the refunds endpoint' },
   { kind: 'out', text: 'Bash(npm install stripe)' },
-  { kind: 'err', text: 'lockfile is pnpm-lock.yaml; npm install would rewrite it' },
-  { kind: 'caught', text: 'hippo · stored error memory (observed)' },
-  { kind: 'note', text: 'Tuesday · new session' },
+  { kind: 'cmd', text: 'we use pnpm, never npm, because the lockfile is pnpm-lock.yaml' },
+  { kind: 'out', text: 'Bash(pnpm add stripe) ✓' },
+  { kind: 'note', text: 'Tuesday, new session' },
+  { kind: 'hippo', text: '## Rules from the user' },
+  { kind: 'hippo', text: '- we use pnpm, never npm, because the lockfile is pnpm-lock.yaml' },
   { kind: 'cmd', text: 'add a webhook for failed payments' },
-  { kind: 'ok', text: 'hippo · 2 memories in context' },
-  { kind: 'mem', text: 'billing uses pnpm; never run npm install here' },
-  { kind: 'out', text: 'Bash(pnpm add stripe)  ✓' },
-  { kind: 'cmd', text: '/compact' },
-  { kind: 'ok', text: 'Hippo saved your task snapshot before compacting.' },
+  { kind: 'out', text: 'Bash(pnpm install) ✓' },
 ];
 
-/** The three commands under the hero. Sourced to README: the capture-error hook, `outcome --bad`, `doctor`. */
-export const commands = [
-  { cmd: 'hippo capture-error', body: 'Real failures become lessons. Interrupts, declined permissions and empty searches are skipped.' },
-  { cmd: 'hippo outcome --bad', body: 'Mark a lesson wrong and it stops coming back.' },
-  { cmd: 'hippo doctor', body: 'One command checks the install and names the fix for anything missing.' },
-] as const;
-
-export const problem = {
-  heading: 'Most AI memory saves everything and searches later.',
-  body: [
-    "That's storage with semantic search bolted on. It's why your agent kept hitting the same deploy bug last week. And the week before.",
-    'The system saw the failure four times. It had no way to know it should remember.',
-  ],
-  // README "Why this exists"
-} as const;
-
-export const mechanics = [
-  {
-    title: 'Decay by default',
-    metric: '365d half-life',
-    body: 'Every memory fades on a one-year half-life unless it is used. We did not tune 365 days: it tied with 730 days and with decay off.',
-  },
-  {
-    title: 'Retrieval strengthens',
-    metric: '+2d / recall',
-    body: 'Use it or lose it. Each recall extends the half-life. Memories you reach for survive.',
-  },
-  {
-    title: 'Errors stick',
-    metric: '2x half-life',
-    body: 'Tag a failure once. It decays slower and resurfaces every time you walk back into that code.',
-  },
-  {
-    title: 'Sleep consolidates',
-    metric: '3+ → 1',
-    body: 'On `hippo sleep`, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy; it has not been shown to improve recall.',
-  },
-] as const;
-
-/** Z0 round 3, the agent-session result. Every figure is in docs/evals/2026-11-08-z0-round3-result.md. */
+// Every figure is in docs/evals/2026-11-08-z0-round3-result.md.
 export const repeatMistakes = {
-  stat: 'About half',
-  label: "as many repeat mistakes as Claude Code's built-in memory alone, at the same cost.",
-  note: 'Correct the agent once, then count how often it makes that mistake again 2 to 4 tasks later. Real Claude Code sessions on 29 repositories, registered before the run. Over every first chance to repeat: 14.9 points fewer [5.5, 24.3], cost ratio 1.006. The gain is the same with lesson capture switched off, so round 4 tests how much of it the stored lessons carry.',
   unit: 'in 100',
   bars: [
     { name: 'No memory', rate: 83, lead: false },
     { name: "Claude Code's built-in memory", rate: 21, lead: false },
     { name: 'Built-in memory plus hippo', rate: 11, lead: true },
   ],
-  href: site.links.z0Round3,
 } as const;
 
-export const receipts = [
-  {
-    stat: '98.0%',
-    label: 'R@5 on LongMemEval-S',
-    note: 'Any answer session in the top 5, per haystack, free local MiniLM (an optional install), best of five settings. Requiring every answer session: 86.8 to 88.5%. 99.8% with voyage-3-large (June 2026). BM25 only, older oracle split: 74.0%.',
-    href: site.links.longmemeval,
-  },
-  {
-    stat: '−6.0',
-    tone: 'loss',
-    label: 'points behind BM25, published',
-    note: 'LoCoMo answer accuracy with the old 7-day default, in a Sonnet trial we registered first. The cause was the default; at 365 days the retrieval gap fell from 6.9 points to 1.0.',
-    href: `${REPO}/blob/master/docs/evals/2026-09-24-public-benchmarks-sonnet-trial.md`,
-  },
-  {
-    stat: site.tests,
-    label: 'tests, real DB',
-    note: 'No module mocks and no mocked store. Only paid network calls are stubbed.',
-    href: site.links.benchmarks,
-  },
-  {
-    stat: '0',
-    label: 'runtime deps',
-    note: 'Node 22.16+. SQLite under the hood. Optional embeddings.',
-    href: site.links.repo,
-  },
-] as const;
+export const theTest = {
+  heading: 'We corrected Claude Code once and counted the repeats',
+  body: 'We built hippo and we ran this test, so weigh it accordingly. In real Claude Code sessions on 29 repositories, each run corrects the agent once and then, 2 to 4 tasks later, gives it a task where the same mistake is possible.',
+  note: "The arm with hippo cost the same, a ratio of 1.006. The gain was the same with lesson capture switched off, so we can't yet say why, and round 4 tests how much of it the stored lessons carry. The corrections were scripted and the agent was Claude Code only.",
+  linkLabel: 'Read the full result',
+} as const;
 
-export const worksWith = ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi', 'any MCP client'] as const;
-
-/** The README's MCP config block ("MCP Server"), shown on /cursor/ and /mcp/. */
-export const mcpJson = ['{', '  "mcpServers": {', '    "hippo-memory": {', '      "command": "hippo",', '      "args": ["mcp"]', '    }', '  }', '}'];
-export const importsFrom = ['ChatGPT', 'CLAUDE.md', '.cursorrules', 'Slack', 'markdown'] as const;
-
-export const compare = {
-  heading: 'Learn what is wrong. Stop repeating it.',
-  body: 'How hippo compares with nine other memory tools on the features that define a memory lifecycle.',
-  sourceHref: `${REPO}#comparison`,
-  sourceLabel: 'Every feature, with sources and check dates, on GitHub',
-  // Short forms of the README footnotes; the long ones stay on GitHub and the vs pages.
-  notes: [
-    '* LongMemEval retrieval recall at 5. "Any" counts a hit when one answer session is in the top 5, "all" only when every one is. gbrain leads on "all".',
-    '** Answer accuracy with a reader model, a different metric from recall.',
+export const losses = {
+  heading: 'Where hippo lost',
+  items: [
+    { text: "On LoCoMo, a public test of questions about long conversations, Mem0 scored 94.9 to hippo's 89.4.", href: site.links.locomoScore },
+    { text: 'Handing the model the whole chat beat hippo by 10.5 points on another public test, 83.6 to 73.1.', href: site.links.dmrScore },
+    { text: 'Sleep, the step that merges related memories, lowered recall by 3.6 points on one scorer.', href: site.links.mechanismAudit },
+    { text: 'Decay made no measurable difference to recall on our short synthetic test.', href: site.links.decayDefault },
+    { text: 'The paid Jev reranker, a model that reorders search results, improved ranking but showed no measurable gain in answers.', href: site.links.jevEval },
+    { text: 'Seven smaller experiments failed or stalled, and one early headline number was retracted.', href: site.links.evals },
   ],
+  moreLabel: 'All results',
 } as const;
 
-/** README.md's Comparison table, parsed at build by readme.ts. */
+// Markdown, rendered with mdInline.
+export const how = {
+  heading: 'What hippo does between sessions',
+  body: [
+    'When you state a rule or a tool call fails, hippo keeps it.',
+    'At the start of the next session your rules are printed back to the agent, and memories that match each prompt are added. In our test that came to about 389 tokens a session.',
+    'When a memory turns out wrong, `hippo outcome --bad` pushes it down the ranking and `hippo supersede` replaces it. Unused memories fade on a 365-day half-life.',
+    '`hippo init` sets this up for Claude Code, Codex, Cursor and three more agents, and any MCP client can use the server. What runs automatically differs by agent.',
+  ],
+  linkLabel: 'How each part works',
+} as const;
+
+// The README "MCP Server" config block, shown on /cursor/ and /mcp/.
+export const mcpJson = ['{', '  "mcpServers": {', '    "hippo-memory": {', '      "command": "hippo",', '      "args": ["mcp"]', '    }', '  }', '}'];
+
+// Markdown. Sources: README FAQ 11 and the local-first section.
+export const localFirst = {
+  heading: 'Stored on your machine, and what can leave it',
+  body: 'Memories live in SQLite, in `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read, grep and commit. The package has zero runtime dependencies. Recall makes no network call by default. Text leaves your machine only if you turn on an API embedder or a reranker, run `hippo refine`, or have `ANTHROPIC_API_KEY` set when `hippo sleep` runs, and one config line switches that last one off.',
+} as const;
+
+// Markdown; `links` keeps the three vs links on the site instead of sending them to GitHub.
+export const compare = {
+  heading: 'Who should use something else',
+  body: "Hippo is for one developer's coding agents on one machine. [Mem0](/vs/mem0/) fits better when the memory belongs to your app's end users, [Zep](/vs/zep/) when you want a managed knowledge graph built from business data, and [Letta Code](/vs/letta/) when you want an agent that edits its own memory.",
+  links: { '/vs/mem0/': '/vs/mem0/', '/vs/zep/': '/vs/zep/', '/vs/letta/': '/vs/letta/' },
+} as const;
+
+// README.md's Comparison table, parsed at build by readme.ts; the vs pages show their rows of it.
 export const comparison = readmeComparison;
 
-/** Get started = quickstart + the zero-config auto-install differentiator. */
+// check-readme-sync.mjs holds `notice` to README and llms.txt.
 export const getStarted = {
-  heading: 'Zero config. It wires itself in.',
-  body: 'Install it, run init in your repo, and hippo detects your agent framework and patches the right config file. Next session, your agent just uses it.',
-  notice: 'Package installation alone does not enable automatic preservation on every agent. Complete the documented setup and required host trust; capture and compaction coverage depend on the integration.',
+  heading: 'Try it on the repository you have open',
+  body: "Run two commands, and `hippo doctor` will name anything that's missing. If hippo misses a rule you expected it to keep, open an issue with an example.",
+  notice: 'Installing the package alone captures nothing, and what runs after init depends on the agent.',
   steps: [site.installCmd, 'hippo init'],
-  autoInstall: {
-    heading: 'Detected and patched automatically',
-    frameworks: ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi'],
-    note: 'In a repo, init patches the instruction file each agent already has (CLAUDE.md, AGENTS.md) and adds session hooks where the agent supports them. hippo init --scan ~ gives every git repo under your home folder a store and installs the Claude Code hooks and the OpenCode plugin, but patches no instruction files. hippo init --no-hooks --no-schedule skips the hooks and the daily run.',
-  },
+  askLabel: 'Or ask your agent first:',
+  prompt:
+    'Read https://hippo-memory.com/llms-full.txt and tell me if hippo-memory fits this repo, what it stores, and what it sends over the network.',
 } as const;
 
-/** Local-first / privacy. Every receipt sourced verbatim to README (L46/L57/L58). */
-export const localFirst = {
-  points: [
-    { stat: '0', label: 'outbound HTTP', body: 'Proven by a globalThis.fetch spy that throws on call, across the 1000-event ingestion smoke. Not a hardcoded zero. The default recall path makes no network call either; opt-in features such as the Jev reranker, the LLM reranker and the API embedders do.' },
-    { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store with markdown mirrors you can read, grep, and commit. No cloud and no account. One default to know: hippo sleep sends text to Anthropic for fact extraction when ANTHROPIC_API_KEY is set, and one config line turns that off.' },
-    { stat: '1 call', label: 'to forget', body: 'Right-to-be-forgotten is a single API call. Every row carries kind, scope, owner, and provenance.' },
-    { stat: 'tenant-safe', label: 'by default', body: 'Multi-tenant keys are scrypt-hashed with an audit log on every mutation. Tenant A cannot see tenant B, proven by a negative test.' },
-  ],
-  portability: {
-    heading: "And it's not locked to one tool.",
-    body: "Your ChatGPT memories don't travel to Claude; your .cursorrules don't travel to Codex. Hippo is one store behind all of them.",
-  },
-} as const;
-
-/** The README's FAQ word for word, so the site, GitHub and npm answer alike. Answers are markdown:
- *  render them with mdInline, or mdText for JSON-LD. */
+// The README's FAQ word for word, so the site, GitHub and npm answer alike. Answers are markdown.
 export const faq = readmeFaq;
 
-/** Picks FAQ entries by question and fails the build when one is missing, so a renamed README question cannot vanish quietly. */
+// Fails the build when a picked question is missing, so a renamed README question cannot vanish quietly.
 export function faqPick(questions: readonly string[]) {
   return questions.map((q) => {
     const item = faq.find((f) => f.q === q);

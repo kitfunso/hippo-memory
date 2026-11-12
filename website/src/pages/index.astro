@@ -2,40 +2,31 @@
 import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
 import Hero from '../components/Hero.astro';
-import Problem from '../components/Problem.astro';
-import HowItWorks from '../components/HowItWorks.astro';
-import GetStarted from '../components/GetStarted.astro';
+import TheTest from '../components/TheTest.astro';
+import Losses from '../components/Losses.astro';
+import HomeHow from '../components/HomeHow.astro';
 import LocalFirst from '../components/LocalFirst.astro';
-import Receipts from '../components/Receipts.astro';
 import Compare from '../components/Compare.astro';
 import Faq from '../components/Faq.astro';
-import InstallCta from '../components/InstallCta.astro';
+import GetStarted from '../components/GetStarted.astro';
 import Footer from '../components/Footer.astro';
-import { faqPick } from '../content/site';
+import { site, faqPick } from '../content/site';
 
 // The home FAQ is a sample; /faq/ holds every question and the FAQPage markup.
-const homeFaq = faqPick([
-  'Is this just RAG?',
-  'Which agents does hippo work with?',
-  'Where does hippo keep my data?',
-  'How is hippo different from mem0?',
-  'What happens when a memory turns out to be wrong?',
-  'Has hippo been shown to make agents better at their work?',
-]);
+const homeFaq = faqPick(['Do I still need CLAUDE.md?', 'What does hippo cost?']);
 ---
 
-<Base>
+<Base title={site.title}>
   <Nav />
-  <main id="main">
+  <main id="main" class="frame">
     <Hero />
-    <Problem />
-    <HowItWorks />
-    <GetStarted />
+    <TheTest />
+    <Losses />
+    <HomeHow />
     <LocalFirst />
-    <Receipts />
     <Compare />
     <Faq items={homeFaq} moreHref="/faq/" />
-    <InstallCta />
+    <GetStarted />
   </main>
   <Footer />
 </Base>

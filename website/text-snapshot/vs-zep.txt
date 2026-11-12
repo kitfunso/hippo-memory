@@ -1,69 +1,50 @@
-hippo vs Zep: a local Zep alternative | hippo-memory
+hippo vs Zep: a local Zep alternative
 Skip to content ~/hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
 N install
-Home
-Quickstart
 How it works
-Benchmarks
-FAQ
 Teams
+Benchmarks
 Compare
 Docs
-hippo vs Zep: a local Zep alternative
+hippo vs Zep
 Zep is a managed context service for agents, built on Graphiti, its open-source temporal knowledge graph. Its self-hosted Community Edition is deprecated, so Zep today means Zep Cloud, or your own cloud on the Enterprise plan. Hippo runs on your machine with no account, and wires itself into the coding agents it finds.
-Both keep an old fact when a newer one replaces it. Graphiti gives facts validity windows and invalidates old ones rather than deleting them. Hippo links a superseded memory to its replacement and leaves it out of recall, and hippo recall --as-of <date> shows what was current on a given date.
+The one test both have numbers on
+On DMR, a public memory test of N questions, Zep publishes N and hippo scored N when we ran it. The setups differ. A whole-chat baseline that is published at N scored N in our run, so the size of the gap is rough. Zep's published score is higher, and we have not run Zep under the same conditions. Zep's other published scores vary by source, so we quote none of them here.
 Feature by feature
-Every row of the README comparison table, hippo against Zep.
-hippo and Zep, row by row from the README comparison table Feature hippo Zep
+The Zep column was checked against Zep's own pages on N September N The full table is on GitHub (opens in new tab).
+hippo and Zep, selected rows of the README comparison table Feature hippo Zep
 Decay by default Yes No
-Retrieval strengthening Yes No
-Reward-proportional decay Yes No
-Hybrid search (BMN + embeddings) Yes Yes (graph + vec)
-Schema acceleration / knowledge graph Yes (schema) Yes (temporal KG)
-Conflict detection + resolution Yes Yes (auto-invalidate stale facts)
-Multi-agent shared memory Yes Yes
-Transfer scoring Yes No
+Recall strengthens a memory Yes No
 Outcome tracking Yes No
-Confidence tiers Yes No
-Spatial organization No No
-Lossless compression No No
-Cross-tool import (ChatGPT/Claude/Cursor) Yes ?
-Auto-hook install Yes No
+Conflict detection Yes Yes (auto-invalidate stale facts)
+Knowledge graph Yes (schema) Yes (temporal KG)
+Shared between agents Yes Yes
+Installs its own hooks Yes No
 MCP server Yes Yes (hosted, needs an account)
-Zero runtime deps Yes No (managed service)
-LongMemEval (best published) N% any / N% all R@N* (local MiniLM; N% any-evidence with voyage-N-large; s_cleaned, per-haystack) N% accuracy** (LoCoMo N%)
-Git-friendly Yes No
-Framework agnostic Yes Yes
-License MIT Proprietary cloud (Graphiti: Apache-N)
-* Hippo's figures are on longmemeval_s_cleaned with a per-question haystack, each the best of five retrieval settings in the benchmark scripts, not hippo recall. Any-evidence R@N counts a hit when any answer session is in the top N over all N questions: N% with the free local MiniLM embedder (an optional install) and N% with voyage-N-large (measured N-N-N not re-run). All-evidence R@N counts a hit only when every answer session is in the top N over the N questions that have an answer: N to N% with MiniLM. gbrain first published N%, an any-evidence score over all N; its report (opens in new tab) now leads with all-evidence, N% (N of N) with the paid Voyage rerank-N reranker and N% without it. On all-evidence recall gbrain is ahead. The June N build scored N any-evidence; docs/evals/N-N-N-longmemeval-reproduction.md (opens in new tab) has both runs. An older hippo number, N% R@N on longmemeval_oracle under pooled (non-per-haystack) retrieval, is not comparable to per-haystack figures.
-** Different metric: these are end-to-end answer scores, not retrieval R@N MemN's N comes from its hosted platform, which its README says includes optimizations the open-source SDK lacks. Zep's N% and N% are accuracy figures from its homepage. Memoria's N% and EverMind's N% are overall accuracy with a reader LLM. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@N numbers above. The MemN Zep and Letta columns were last checked against each vendor's own pages on N-N-N
-What Zep ships today (checked N-N-N)
-Zep Cloud, which in Zep's words "unifies business data, documents, and conversations into shared, governed context so agents can complete tasks correctly" (getzep.com (opens in new tab)). Enterprise customers can run it in their own cloud.
-No self-hosted Zep: Community Edition is deprecated and no longer supported (Zep FAQ (opens in new tab)).
-Graphiti, Apache-N for building your own: it needs a graph database (NeoNj, FalkorDB or Amazon Neptune) and defaults to OpenAI for inference and embeddings (Graphiti README (opens in new tab)).
-A hosted Memory MCP Server that needs sign-in through an identity provider and a Zep project, with MCP seats per account (docs (opens in new tab)).
-Plans from a free tier of N credits a month to Flex at $N and Flex Plus at $N a month, then Enterprise (pricing (opens in new tab)).
+Zero runtime dependencies Yes No (managed service)
+Licence MIT Proprietary cloud (Graphiti: Apache-N)
+Both keep the old fact
+Graphiti gives facts validity windows and invalidates old ones instead of deleting them. Hippo links a superseded memory to its replacement and leaves it out of recall, and hippo recall --as-of <date> shows what was current on a given day.
+What Zep ships today
+Zep Cloud is the product, and Enterprise customers can run it in their own cloud. There is no self-hosted Zep, because Community Edition is deprecated and no longer supported. Graphiti is Apache-N if you want to build your own, and it needs a graph database and defaults to OpenAI for inference and embeddings. Zep's MCP server is hosted and needs sign-in (Zep's pages (opens in new tab), checked N September N).
 When to pick which
 Pick hippo
-The memory is for coding agents on your machine. You want no account, graph database or model to run, lessons you can mark wrong, and markdown mirrors you can read and commit.
+Pick hippo when the memory is for coding agents on your machine, and you want no account, graph database or model to run.
 Pick Zep
-You want a managed service that turns business data, documents and conversations into a knowledge graph for your agents, with someone else running it.
-Get started with hippo All questions
+Pick Zep when you want a managed service that turns business data, documents and conversations into a knowledge graph for your agents, with someone else running it.
+Get started with hippo
 hippo and Zep, asked directly
+All N questions →
 Can I still self-host Zep? +
-Not Zep itself. Zep's FAQ says Zep Community Edition, the version you could host locally, is deprecated and no longer supported (checked N-N-N); Enterprise customers can run Zep in their own cloud. Graphiti, the open-source framework under Zep, is Apache-N and runs anywhere, but it needs a graph database such as NeoNj or FalkorDB and a language model key, OpenAI by default.
-Is hippo a Zep alternative? +
-Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, stores memories in SQLite in your project, needs no account, graph database or model, and hippo init wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. Zep fits when you want a managed service that builds a knowledge graph from business data, documents and conversations.
-Is Zep's N% on LongMemEval comparable to hippo's N%? +
-No. Zep's homepage reports N% accuracy on LongMemEval, which scores whether answers were right. Hippo's figure is retrieval: on LongMemEval-S with a per-question haystack, using the benchmark scripts and a free local embedder rather than hippo recall, an answer session was in the top five results N% of the time. Different metrics, so neither number beats the other.
+Not Zep itself. Zep's FAQ says Community Edition, the version you could host locally, is deprecated and no longer supported (checked N September N). Graphiti, the open-source framework under Zep, runs anywhere, and needs a graph database and a language-model key.
 ~/hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
-GitHubnpmDocsChangelogLicense (MIT)
-hippo-memory vN · MIT · built by kitfunso
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso

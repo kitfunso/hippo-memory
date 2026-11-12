@@ -3,30 +3,26 @@ import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import PageIntro from '../components/PageIntro.astro';
-import { faq, site } from '../content/site';
+import { faq } from '../content/site';
 import { faqPageLd, mdParagraphs } from '../content/readme';
 import { slug } from '../lib/slug';
 
-const title = 'hippo-memory FAQ: agent memory questions answered';
-const description = `${faq.length} answers about hippo: memory for Claude Code, Cursor and Codex, the MCP server, where your data lives, what it costs and what is not yet shown.`;
+const title = 'hippo FAQ: setup, data, cost and test results';
+const description =
+  'Fourteen questions about hippo-memory: setup for Claude Code, Cursor and Codex, where your data is kept, what it costs, and what our tests did and did not show.';
 ---
 
 <Base title={title} description={description} crumb="FAQ" schema={[faqPageLd(faq)]}>
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">Questions about hippo, <span class="text-gradient">answered.</span></Fragment>
-      <p>
-        These are the answers in the
-        <a class="link" href={`${site.links.repo}#faq`} target="_blank" rel="noopener noreferrer">README's FAQ<span class="sr-only"> (opens in new tab)</span></a>,
-        word for word, so this page, GitHub and npm give the same answer.
-      </p>
+      <Fragment slot="title">Questions about hippo</Fragment>
     </PageIntro>
 
-    <section class="relative border-t border-white/5" aria-label="Questions and answers">
+    <section class="relative border-t border-rule" aria-label="Questions and answers">
       <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
         {faq.map((item) => (
-          <article id={slug(item.q)} class="max-w-3xl border-b border-white/5 py-8 first:pt-0 last:border-b-0 last:pb-0">
+          <article id={slug(item.q)} class="max-w-3xl border-b border-rule py-8 first:pt-0 last:border-b-0 last:pb-0">
             <h2 class="text-xl leading-snug text-zinc-100 sm:text-2xl">
               <a href={`#${slug(item.q)}`} class="transition hover:text-accent-light">{item.q}</a>
             </h2>

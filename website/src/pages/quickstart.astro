@@ -6,33 +6,15 @@ import Cmd from '../components/Cmd.astro';
 import CopyButton from '../components/CopyButton.astro';
 import { getStarted, site } from '../content/site';
 
-const title = 'hippo quickstart: memory for Claude Code, Cursor and MCP';
+const title = 'hippo quickstart: two commands';
 const description =
-  'Install hippo in two commands: persistent local memory for Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, plus an MCP server for other clients.';
-
-// What hippo init patches per agent: README "Framework Integrations".
-const integrations = [
-  { name: 'Claude Code', href: '/claude-code/', note: 'A block in CLAUDE.md plus hooks: pinned memories each turn, sleep on exit, a snapshot before compaction, failed tool calls stored as errors.' },
-  { name: 'Cursor', href: '/cursor/', note: "A block in the project's AGENTS.md, which Cursor reads; the MCP server gives the agent the memory tools." },
-  { name: 'Codex', href: '/codex/', note: 'A block in AGENTS.md. hippo hook install codex wraps the Codex launcher to capture sessions.' },
-  { name: 'OpenClaw', note: 'A native plugin that injects context and, with autoSleep on, runs sleep when the session ends.' },
-  { name: 'OpenCode', note: 'A block in AGENTS.md plus a TypeScript plugin that runs when a session starts and goes idle.' },
-  { name: 'Pi', note: 'A block in AGENTS.md; copy the Pi extension from the repo for session hooks.' },
-  { name: 'Any MCP client', href: '/mcp/', note: 'hippo mcp serves 13 tools over stdio to Windsurf (now Devin Desktop), Cline, Claude Desktop and others.' },
-];
-
-// Hero "at a glance" card: mirrors the page's real steps (and the HowTo JSON-LD below).
-const heroSteps = [
-  { n: '01', label: 'Install', cmd: site.installCmd, prompt: true },
-  { n: '02', label: 'Initialize', cmd: 'hippo init', prompt: true },
-  { n: '03', label: 'Use the loop', cmd: 'remember · recall · outcome · sleep', prompt: false },
-];
+  'Install hippo-memory from npm and run hippo init in a project. It needs Node 22.16 or later, no account and no API key, and it stores memories in SQLite on your machine.';
 
 const loop = [
-  { cmd: 'hippo remember "deploy failed: forgot migrations" --error', note: 'Store a memory. Errors get a longer half-life and stick.' },
-  { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Retrieve within a token budget, ranked by relevance and strength.' },
-  { cmd: 'hippo outcome --good', note: 'Tell hippo the recall helped. Useful memories decay slower.' },
-  { cmd: 'hippo sleep', note: 'Consolidate repeats into patterns, decay the unused, flag conflicts.' },
+  { cmd: 'hippo remember "deploy failed: forgot migrations" --error', note: 'Stores a memory. Errors get twice the half-life.' },
+  { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Returns the matches that fit a token budget.' },
+  { cmd: 'hippo outcome --good', note: 'Marks the last recall as useful.' },
+  { cmd: 'hippo sleep', note: 'Merges related memories and lets unused ones fade.' },
 ];
 
 const howTo = {
@@ -41,8 +23,8 @@ const howTo = {
   description,
   step: [
     { '@type': 'HowToStep', name: 'Install', text: site.installCmd },
-    { '@type': 'HowToStep', name: 'Initialize', text: "Run hippo init in a project. It creates the project's .hippo store and adds hippo's instructions to the agent files it finds there, such as CLAUDE.md and AGENTS.md." },
-    { '@type': 'HowToStep', name: 'Use the loop', text: 'hippo remember, hippo recall, hippo outcome and hippo sleep form the memory loop.' },
+    { '@type': 'HowToStep', name: 'Initialize', text: "Run hippo init in a project. It creates a .hippo store, adds a short block to an existing CLAUDE.md or AGENTS.md, installs Claude Code's hooks and schedules a daily run." },
+    { '@type': 'HowToStep', name: 'Run the four commands', text: 'hippo remember, hippo recall, hippo outcome and hippo sleep store, return, mark and merge memories.' },
   ],
 };
 ---
@@ -54,64 +36,39 @@ const howTo = {
       <div class="mx-auto flex max-w-6xl items-start justify-between gap-10 px-5 pb-12 pt-10 sm:pt-12">
         <div>
           <h1 class="max-w-3xl font-display text-4xl font-semibold leading-(--leading-display) tracking-tight sm:text-5xl">
-            Add memory in <span class="text-gradient">two commands</span>.
+            <span class="text-gradient">Two commands</span>, then carry on working
           </h1>
           <p class="mt-5 leading-relaxed text-zinc-400">
-            hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, run <code>hippo init</code> in a project, and it wires itself into the agents that project uses.
+            Hippo is an MIT-licensed npm package with zero runtime dependencies. It needs Node 22.16 or later, no account and no API key.
           </p>
-          <p class="mt-4 text-sm leading-relaxed text-zinc-400">{getStarted.notice}</p>
         </div>
-        <!-- Setup-at-a-glance card fills the hero's right side on wide viewports. -->
-        <aside class="hidden w-[19rem] shrink-0 rounded-2xl border border-white/8 bg-term-bg p-5 lg:block" aria-label="Setup at a glance: 3 steps, about 2 minutes">
-          <ol class="space-y-3.5">
-            {heroSteps.map((step) => (
-              <li class="grid grid-cols-[1.5rem_1fr] gap-x-2">
-                <span class="font-mono text-xs leading-6 text-accent-light" aria-hidden="true">{step.n}</span>
-                <span class="text-sm font-medium text-zinc-200">{step.label}</span>
-                <code class="col-start-2 mt-0.5 font-mono text-xs leading-relaxed text-zinc-400">{step.prompt ? <><span class="text-term-prompt">$</span> {step.cmd}</> : step.cmd}</code>
-              </li>
-            ))}
-          </ol>
-        </aside>
       </div>
     </section>
 
-    <section id="install" class="relative border-t border-white/5 bg-white/[0.02]">
+    <section id="install" class="relative border-t border-rule bg-white/[0.02]">
       <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-3xl leading-tight sm:text-4xl">Install</h2>
-        <div class="mt-6"><Cmd lines={[site.installCmd, 'hippo init']} copy /></div>
+        <div><Cmd lines={[site.installCmd, 'hippo init']} copy /></div>
         <p class="mt-4 text-sm leading-relaxed text-zinc-400">
-          <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init</code> creates a <code>.hippo/</code> store in the project and adds hippo's instructions to the agent files it finds there, such as <code>CLAUDE.md</code> and <code>AGENTS.md</code> (which Codex, Cursor, OpenClaw, OpenCode and Pi read), plus Claude Code's session hooks. To register every git repo under a folder at once, run <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">{site.initCmd}</code>, which gives each repo a store seeded from its git history.
+          <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init</code> creates a <code>.hippo/</code> store in the project, adds a short block to an existing <code>CLAUDE.md</code> or <code>AGENTS.md</code>, installs Claude Code's hooks and schedules a daily run at 6:15am that stores lessons from the day's commits. <code>--no-hooks</code> and <code>--no-schedule</code> skip those parts. <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init --scan ~</code> gives every git repository under your home folder a store.
         </p>
         <p class="mt-3 text-sm leading-relaxed text-zinc-400">
-          Memories are stored in SQLite with markdown mirrors, and recall makes no network call by default. No account.
-          <a class="link" href="/faq/#where-does-hippo-keep-my-data">Where hippo keeps your data</a> lists the opt-in features that send text to a provider.
+          {getStarted.notice} Codex runs hippo's hooks only once you trust them in <code>/hooks</code>. <code>hippo doctor</code> checks the install.
         </p>
       </div>
     </section>
 
-    <section id="works-with-your-agents" class="relative border-t border-white/5">
+    <section id="works-with-your-agents" class="relative border-t border-rule">
       <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-3xl leading-tight sm:text-4xl">Works with your agents</h2>
-        <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {integrations.map((i, n) => (
-            <div class:list={['glass rounded-2xl p-5', n === integrations.length - 1 && 'sm:col-span-2 lg:col-span-3']}>
-              {i.href
-                ? <a href={i.href} class="link tap text-sm font-medium">{i.name}</a>
-                : <span class="text-sm font-medium text-zinc-200">{i.name}</span>}
-              <span class="mt-2 block text-xs leading-relaxed text-zinc-400">{i.note}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-
-    <section id="the-memory-loop" class="relative border-t border-white/5 bg-white/[0.02]">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-3xl leading-tight sm:text-4xl">The memory loop</h2>
+        <h2 class="text-3xl leading-tight sm:text-4xl">What each agent gets</h2>
         <p class="mt-4 leading-relaxed text-zinc-400">
-          Four commands. Memories decay on a half-life unless something keeps them alive: a retrieval, a good outcome, an error tag, or consolidation during sleep.
+          Claude Code gets a block in <code>CLAUDE.md</code> and seven hooks. Codex gets a block in <code>AGENTS.md</code> and two hooks. Cursor and Pi read the <code>AGENTS.md</code> block, OpenClaw and OpenCode use a plugin, and any MCP client can run <code>hippo mcp</code>.
         </p>
+      </div>
+    </section>
+
+    <section id="the-memory-loop" class="relative border-t border-rule bg-white/[0.02]">
+      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
+        <h2 class="text-3xl leading-tight sm:text-4xl">Four commands you can run yourself</h2>
         <div class="mt-8 space-y-3">
           {loop.map((step) => (
             <div class="rounded-2xl border border-white/8 p-5">

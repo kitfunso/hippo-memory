@@ -16,7 +16,7 @@ the design rules and `README.md` the dev and deploy commands. Read both before a
   background canvas script.
 - **Tokens** live in `src/styles/global.css`: `accent`, `accent-light`, `warn`, the tinted `zinc`
   scale, `--duration-fast`, `--duration-medium`, `--ease-standard`, `--leading-display`,
-  `--measure`, `--section-y`. Use them; do not write a hex or a duration in a component.
+  `--measure`, `--section-y`, and `rule`, `rule-strong`, `text-proof`, `text-body`. Use them; do not write a hex or a duration in a component.
   Two files draw outside CSS and carry their own hexes: `src/components/DecayCurve.tsx` and
   `scripts/make-images.mjs`. Change them with the token.
 - **A copy button** goes only on a command block a reader can run as shown (`<Cmd copy>`).
@@ -26,13 +26,13 @@ the design rules and `README.md` the dev and deploy commands. Read both before a
 
 - `Nav`, `Footer`, `BackgroundFx`: on every page. `Nav` reads build-time stats from `src/lib/stats.ts`.
 - `PageIntro`: the h1 and lead of a content page. `Section`: one titled block; its id is the
-  slug of its title (`src/lib/slug.ts`).
+  slug of its title (`src/lib/slug.ts`), and `split` puts the heading in a left column from lg up.
 - `Cmd`: a terminal or config block. `CopyCommand`: one command in a row with a copy button.
   `CopyButton`: the button both use; the click handler is in `src/layouts/Base.astro`.
 - `VsTable`: hippo against one system, from the README table. `Faq`: a pick of README answers.
-- `RepeatMistakes`: the Z0 round 3 card. `DecayCurve.tsx`: the only Preact island.
-- Home only: `Hero`, `Terminal`, `Problem`, `HowItWorks`, `GetStarted`, `LocalFirst`, `Receipts`,
-  `Compare`, `InstallCta`.
+- `RepeatMistakes`: the three Z0 round 3 bars, with no words of its own. `DecayCurve.tsx`: the only Preact island.
+- `HowItWorks`: the three stores and the decay curve on /how-it-works/.
+- Home only: `Hero`, `Terminal`, `TheTest`, `Losses`, `HomeHow`, `LocalFirst`, `Compare`, `GetStarted`.
 
 ## Checks before a PR
 
@@ -42,5 +42,5 @@ npm --prefix website run build   # README guard, astro build, then scripts/check
 ```
 
 `check-build.mjs` fails on a word glued to a link or inline code, a duplicate id, a `DESIGN.md`
-colour the code does not use, and visible text that differs from `text-snapshot/`. After a
+colour the code does not use, an American spelling, and visible text that differs from `text-snapshot/`. After a
 deploy, run Lighthouse on the changed pages: every page scores 100 in each category today.

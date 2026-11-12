@@ -5,121 +5,68 @@ import Footer from '../../components/Footer.astro';
 import PageIntro from '../../components/PageIntro.astro';
 import Section from '../../components/Section.astro';
 import VsTable from '../../components/VsTable.astro';
+import data from '../../data/public-benchmarks.json';
+import { REPO, site } from '../../content/site';
 import Faq from '../../components/Faq.astro';
 import { faqPageLd } from '../../content/readme';
 
-const title = 'hippo vs mem0: an open-source mem0 alternative';
+const title = 'hippo vs mem0: a local, open-source alternative';
 const description =
-  'hippo vs mem0, checked 2026-09-28. mem0 runs as a library, a server or a hosted platform. hippo runs on your machine, with no account and no API key.';
+  "hippo and mem0 compared by the hippo team. On LoCoMo answers, both run here with one answer model, Mem0 leads hippo by 5.6 points; hippo stored the test with no model calls. Features checked 28 September 2026.";
+const rows = [
+  ['Decay by default', 'Decay by default'],
+  ['Retrieval strengthening', 'Recall strengthens a memory'],
+  ['Outcome tracking', 'Outcome tracking'],
+  ['Conflict detection + resolution', 'Conflict detection'],
+  ['Hybrid search (BM25 + embeddings)', 'Hybrid search'],
+  ['Cross-tool import (ChatGPT/Claude/Cursor)', 'Import from other tools'],
+  ['Auto-hook install', 'Installs its own hooks'],
+  ['MCP server', 'MCP server'],
+  ['Zero runtime deps', 'Zero runtime dependencies'],
+  ['License', 'Licence'],
+] as const;
+// The LoCoMo result file the benchmarks data uses.
+const locomoFile = `${site.links.repo}/blob/master/${data.benches.find((b) => b.name === 'LoCoMo')!.file}`;
 
-// Each figure states its corpus and its limit before the number; the two are different metrics.
-const strip = [
-  {
-    who: 'hippo',
-    metric: 'retrieval recall@5',
-    corpus: 'LongMemEval-S, per-question haystack',
-    limit: 'benchmark scripts with a free local embedder, not hippo recall',
-    num: '98.0%',
-  },
-  {
-    who: 'mem0',
-    metric: 'end-to-end answer score',
-    corpus: 'LongMemEval',
-    limit: "mem0's hosted platform, top-200 retrieval, per its README",
-    num: '94.4',
-  },
-];
-
-// Answers only this page gives; the shared questions live on /faq/ with their own markup.
 const qa = [
   {
-    q: 'Is hippo an open-source mem0 alternative?',
-    a: "Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, keeps memories in SQLite in your project, needs no account or API key, and `hippo init` wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. mem0 is Apache-2.0 and runs as a library, a self-hosted server or a hosted platform; its open-source library calls a language model to extract memories, OpenAI by default.",
-  },
-  {
-    q: "Is mem0's 94.4 on LongMemEval better than hippo's 98.0%?",
-    a: "Neither beats the other, because they measure different things. Hippo's 98.0% is retrieval recall@5 on LongMemEval-S with a per-question haystack: whether an answer session is in the top five results. It comes from the benchmark scripts with a free local embedder, not `hippo recall`. mem0's 94.4 is an end-to-end answer score: whether a model answered correctly from what came back. mem0's README says it comes from its hosted platform at a top-200 retrieval budget, with optimizations the open-source SDK lacks.",
+    q: "Is hippo an open-source mem0 alternative?",
+    a: "Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, keeps memories in SQLite in your project and needs no account or API key. mem0 is Apache-2.0 and runs as a library, a self-hosted server or a hosted platform.",
   },
 ];
 ---
 
-<Base
-  title={title}
-  description={description}
-  crumb="hippo vs mem0"
-  published="2026-06-09"
-  schema={[faqPageLd(qa)]}
->
+<Base title={title} description={description} crumb="hippo vs mem0" published="2026-06-09" schema={[faqPageLd(qa)]}>
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">hippo vs mem0: an open-source <span class="text-gradient">mem0 alternative</span></Fragment>
+      <Fragment slot="title">hippo vs <span class="text-gradient">mem0</span></Fragment>
       <p>
-        Both are open-source memory for AI agents. mem0 uses a language model to extract memories, and memories stored
-        through its hosted MCP server live in your Mem0 account. Hippo keeps memories in SQLite on your machine, needs no
-        account and no model, and wires itself into the coding agents it finds.
-      </p>
-      <p>
-        Both mark an older fact superseded when a newer one replaces it; mem0 does that on its hosted platform. Hippo also
-        lets you mark a recalled memory wrong with <code>hippo outcome --bad</code>, and it drops out of the top results.
+        Both are open-source memory for AI agents, and they suit different jobs. mem0 uses a language model to extract memories, and memories stored through its hosted MCP server live in your Mem0 account. Hippo keeps memories in SQLite on your machine, needs no account and no model, and wires itself into the coding agents it finds.
       </p>
     </PageIntro>
 
-    <section id="two-published-numbers-two-different-metrics" class="relative" aria-labelledby="numbers">
-      <div class="mx-auto max-w-6xl px-5 pb-(--section-y)">
-        <h2 id="numbers" class="text-balance text-3xl leading-tight sm:text-4xl">Two published numbers, two different metrics</h2>
-        <div class="mt-6 grid gap-4 sm:grid-cols-2">
-          {strip.map((s) => (
-            <div class="glass flex flex-col rounded-2xl p-6">
-              <span class="font-mono text-xs uppercase tracking-wider text-accent-light">{s.who} · {s.metric}</span>
-              <span class="mt-3 text-sm leading-relaxed text-zinc-300">{s.corpus}</span>
-              <span class="text-sm leading-relaxed text-zinc-400">{s.limit}</span>
-              <span class:list={['mt-3 font-mono text-4xl font-semibold tracking-tight', s.who === 'hippo' ? 'text-gradient' : 'text-zinc-200']}>{s.num}</span>
-            </div>
-          ))}
-        </div>
-        <p class="mt-4 text-sm leading-relaxed text-zinc-400">
-          Recall@5 asks whether an answer session is in the top five results. An answer score asks whether a model answered
-          correctly from what came back. They are not comparable, so this is not a head-to-head. Hippo's method is on the
-          <a class="link" href="/benchmarks/">benchmarks page</a>; mem0's figure is from its
-          <a class="link" href="https://github.com/mem0ai/mem0" target="_blank" rel="noopener noreferrer">README<span class="sr-only"> (opens in new tab)</span></a>,
-          checked 2026-09-28.
-        </p>
-      </div>
-    </section>
+    <Section title="One test we ran on both" id="two-published-numbers-two-different-metrics">
+      <p>
+        LoCoMo is a public test of questions about long, multi-session conversations. We ran both systems on it with the same answer model and scorer. Mem0 scored 94.9 and hippo 89.4. Paired question by question, hippo trails by 5.6 points [3.0, 8.1]. A second judge model gave 95.7 and 91.1. With less context the gap grows, to 7.1 points at the top 50 memories. Storing the conversations took Mem0 5,882 language-model calls and hippo none. Mem0 answers more of these questions, and hippo stores them without a model.
+      </p>
+      <p>
+        <a class="link" href={locomoFile} target="_blank" rel="noopener noreferrer">The LoCoMo score file<span class="sr-only"> (opens in new tab)</span></a>
+      </p>
+    </Section>
 
     <Section title="Feature by feature" alt>
       <p>
-        Every row of the README comparison table, hippo against mem0. The Mem0 column was last checked against mem0's own
-        pages on 2026-09-28.
+        The Mem0 column was checked against mem0's own pages on 28 September 2026. The full table is on
+        <a class="link" href={`${REPO}#comparison`} target="_blank" rel="noopener noreferrer">GitHub<span class="sr-only"> (opens in new tab)</span></a>.
       </p>
-      <VsTable system="Mem0" />
+      <VsTable system="Mem0" rows={rows} />
     </Section>
 
-    <Section title="What mem0 ships today (checked 2026-09-28)">
-      <ul class="list-disc space-y-2 pl-5">
-        <li>
-          Three ways to run it: a library (<code>pip install mem0ai</code> or <code>npm install mem0ai</code>), a
-          self-hosted server on Postgres with pgvector, and the hosted Mem0 platform
-          (<a class="link" href="https://docs.mem0.ai/open-source/overview" target="_blank" rel="noopener noreferrer">docs<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>The open-source library needs a key for a language model provider, OpenAI by default.</li>
-        <li>
-          Its MCP server is hosted and needs a Mem0 Platform account and API key. In mem0's words, memories stored this way
-          "live in your Mem0 account, not on your computer"
-          (<a class="link" href="https://docs.mem0.ai/platform/mem0-mcp" target="_blank" rel="noopener noreferrer">mem0 MCP docs<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          On the hosted platform, a background process called Dream marks an older memory superseded and links it to the
-          fact that replaced it
-          (<a class="link" href="https://docs.mem0.ai/platform/features/dream" target="_blank" rel="noopener noreferrer">Dream docs<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          Graph memory (entity linking) is listed on the Pro plan
-          (<a class="link" href="https://mem0.ai/pricing" target="_blank" rel="noopener noreferrer">pricing<span class="sr-only"> (opens in new tab)</span></a>).
-          The licence is Apache-2.0.
-        </li>
-      </ul>
+    <Section title="What mem0 ships today">
+      <p>
+        mem0 runs three ways, as a library, as a self-hosted server on Postgres, and as the hosted Mem0 platform. The open-source library needs a key for a language-model provider, OpenAI by default. Its MCP server is hosted and needs a Mem0 account and API key. On the hosted platform a background process marks an older memory superseded when a newer fact replaces it (<a class="link" href="https://docs.mem0.ai/open-source/overview" target="_blank" rel="noopener noreferrer">mem0 docs<span class="sr-only"> (opens in new tab)</span></a>, checked 28 September 2026).
+      </p>
     </Section>
 
     <Section title="When to pick which" alt>
@@ -127,26 +74,22 @@ const qa = [
         <div class="glass rounded-2xl p-6">
           <h3 class="text-base font-medium text-zinc-100">Pick hippo</h3>
           <p class="mt-2 text-sm leading-relaxed">
-            The memory is for coding agents on your machine. You want no account, no API key and no model in the loop, a
-            store that <code>hippo init</code> wires into the agents you already run, lessons you can mark wrong, and
-            markdown mirrors you can read and commit.
+            Pick hippo when the memory is for coding agents on your machine, and you want no account, no API key and no model in the loop, with lessons you can mark wrong and files you can commit.
           </p>
         </div>
         <div class="glass rounded-2xl p-6">
           <h3 class="text-base font-medium text-zinc-100">Pick mem0</h3>
           <p class="mt-2 text-sm leading-relaxed">
-            You are building an app whose memory belongs to your end users, the case mem0 describes as "customer support
-            chatbots, AI assistants, and autonomous systems", and a hosted platform or a Postgres server fits your stack.
+            Pick mem0 when you are building an app whose memory belongs to your end users, the case mem0 describes as "customer support chatbots, AI assistants, and autonomous systems", or when its higher answer score matters more to you than running locally.
           </p>
         </div>
       </div>
       <div class="flex flex-wrap gap-3 pt-4">
         <a href="/quickstart/" class="rounded-lg bg-zinc-100 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-900 transition hover:bg-white">Get started with hippo</a>
-        <a href="/faq/" class="rounded-lg border border-white/12 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-200 transition hover:border-white/25">All questions</a>
       </div>
     </Section>
 
-    <Faq items={qa} heading="hippo and mem0, asked directly" />
+    <Faq items={qa} heading="hippo and mem0, asked directly" moreHref="/faq/" />
   </main>
   <Footer />
 </Base>

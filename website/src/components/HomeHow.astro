@@ -1,0 +1,15 @@
+---
+// The home summary; /how-it-works/ carries each mechanism with what was measured.
+import { how } from '../content/site';
+import { mdInline } from '../content/readme';
+import Section from './Section.astro';
+---
+
+<Section title={how.heading} id="how" split>
+  <ol class="border-t border-rule" data-reveal>
+    {how.body.map((md) => (
+      <li class="border-b border-rule py-4" set:html={mdInline(md)} />
+    ))}
+  </ol>
+  <p><a class="link" href="/how-it-works/">{how.linkLabel}</a></p>
+</Section>
