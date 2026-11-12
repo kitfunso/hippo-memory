@@ -1,5 +1,4 @@
 /** A round 4 `<root>` for s4-read.sh: slice 6's corpus in the Run layout, one merged key, one rerun, one failed attempt, G5 files and a results repository. */
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -10,6 +9,7 @@ import { runCli as leaks } from '../../scripts/token-eval/z0-leaks.mjs';
 import { runCli as merge } from '../../scripts/token-eval/z0-merge.mjs';
 import { jsonl, planOf, type Generated, type Z0Record } from './z0-gen.js';
 import { r4Corpus } from './z0-r4-corpus.js';
+import { testGit } from './test-git.js';
 import { KEYS, PINS, PRICES4, R4, drift, levelsFile, loose, raise, seedRule } from './z0-r4-read.js';
 
 /** `pairs` is the reader pairs of each G5 folder (8 gives 40 or more in all, which G5 passes); `raiseTo` lays out a raise to that seed; `abandoned` cuts rn-repo2's first run short of its plan;
@@ -54,7 +54,7 @@ function g5(dir: string, pairs: number): void {
 
 function resultsRepo(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
-  const git = (...args: string[]): void => void execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+  const git = (...args: string[]): void => void testGit(dir, ...args);
   git('init', '-q', '-b', 'z0/r4-results');
   git('config', 'user.name', 'z0 test');
   git('config', 'user.email', 'z0@example.invalid');

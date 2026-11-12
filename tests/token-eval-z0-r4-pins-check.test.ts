@@ -7,13 +7,14 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MANIFEST, manifestText, runCli } from '../scripts/token-eval/z0-pins-check.mjs';
+import { testGit } from './fixtures/test-git.js';
 
 const sha = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const put = (dir: string, rel: string, text: string) => {
   fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
   fs.writeFileSync(path.join(dir, rel), text);
 };
-const git = (dir: string, ...args: string[]) => childProcess.execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const git = (dir: string, ...args: string[]) => testGit(dir, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args);
 
 type Pins = Record<string, string | undefined>;
 let work: string;

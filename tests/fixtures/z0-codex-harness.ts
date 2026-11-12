@@ -2,13 +2,13 @@
 import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { codexContext, writeCodexHome } from '../../scripts/token-eval/codex.mjs';
 import { runDirs, freshRunDirs } from '../../scripts/token-eval/homes.mjs';
 import { armEnv } from '../../scripts/token-eval/arms.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
+import { testGit } from './test-git.js';
 import { tmp, isolate, readRecords, fixtureEnv, CHECKS, CLAUDE, family, lesson, teach, apply } from './z0-harness.js';
 import type { FixtureRepo, FamilyDef, TaskDef, RunExtra, RunRecord } from './z0-harness.js';
 
@@ -62,7 +62,7 @@ export type CodexCtx = ReturnType<typeof codexCtx>;
 export function codexRun(ctx: CodexCtx, out: string, arm = 'X1', seed = 1) {
   const dirs = runDirs(out, 'seqX', arm, seed);
   freshRunDirs(dirs);
-  execFileSync('git', ['init', '-q'], { cwd: dirs.work });
+  testGit(dirs.work, 'init', '-q');
   const env = armEnv(arm, dirs, { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'zq-claude-token-0000' }, { passEnv: fixtureEnv() });
   const rawDir = join(out, 'raw', 'seqX', arm, `seed${seed}`);
   mkdirSync(rawDir, { recursive: true });

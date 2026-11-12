@@ -2,8 +2,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { apply, cleanup, family, find, isolate, lesson, makeRepo, oneLesson, plain, readRecords, run, spec, teach, tmp } from './fixtures/z0-harness.js';
+import { testGit } from './fixtures/test-git.js';
 
 describe('per-cell grading save', () => {
   afterEach(cleanup);
@@ -20,7 +20,7 @@ describe('per-cell grading save', () => {
 
     // A fresh repo holding only the stub's history takes the bundle, so nothing depends on the rebuilt workspace.
     const fresh = tmp('z0-grade-fresh-');
-    const g = (...args: string[]) => execFileSync('git', args, { cwd: fresh, encoding: 'utf8' }).trim();
+    const g = (...args: string[]) => testGit(fresh, ...args).trim();
     g('init', '-q');
     g('fetch', '-q', join(out, 'repo-cache', 'seqF'), `${grade.stubRef}:refs/stub`);
     g('fetch', '-q', join(dir, 't1.bundle'), 'refs/z0/grade/*:refs/grade/*');
@@ -71,7 +71,7 @@ describe('per-cell grading save', () => {
     expect(new Set([grade.first, grade.stale, grade.finalCheck]).size).toBe(3);
     expect(grade.commandsStale).toEqual(expect.any(Array));
     const fresh = tmp('z0-grade-gc-');
-    const g = (...args: string[]) => execFileSync('git', args, { cwd: fresh, encoding: 'utf8' }).trim();
+    const g = (...args: string[]) => testGit(fresh, ...args).trim();
     g('init', '-q');
     g('fetch', '-q', join(out, 'repo-cache', 'seqF'), `${grade.stubRef}:refs/stub`);
     g('fetch', '-q', join(dir, 'a3.bundle'), 'refs/z0/grade/*:refs/grade/*');

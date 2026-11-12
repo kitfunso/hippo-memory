@@ -1,11 +1,11 @@
 // Round 4 slice 4b: the unblinded round 4 read through runCli, with the git pattern of the round 3 CLI test.
-import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { runDirs } from '../scripts/token-eval/homes.mjs';
 import * as analyze from '../scripts/token-eval/z0-analyze.mjs';
 import { R4, R4_ARGV, cleanUp, corpus, levelsFile, loose, workspace } from './fixtures/z0-r4-read.js';
+import { testGit } from './fixtures/test-git.js';
 
 afterAll(cleanUp);
 
@@ -28,7 +28,7 @@ function ledgerFolder(dir: string, name: string): string {
 
 function gitWorkspace(over: Record<string, string> = {}) {
   const dir = workspace(g, over);
-  const git = (...a: string[]) => execFileSync('git', a, { cwd: dir, stdio: 'pipe' });
+  const git = (...a: string[]) => testGit(dir, ...a);
   git('init', '-q');
   for (const [k, v] of [['user.name', 'z0 test'], ['user.email', 'z0@example.invalid'], ['core.hooksPath', '.no-hooks'], ['commit.gpgsign', 'false']]) git('config', k!, v!);
   git('add', 'drop.json', 'grading.json');

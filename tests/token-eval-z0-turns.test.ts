@@ -14,6 +14,7 @@ import { runScreen } from '../scripts/token-eval/screen.mjs';
 import { loadHippo } from '../scripts/token-eval/runs.mjs';
 import { hippoBuild } from '../scripts/token-eval/pins.mjs';
 import { fixtureEnv } from './fixtures/z0-harness.js';
+import { testGit } from './fixtures/test-git.js';
 import { validateCorpus, type Z0Record, type Z0PlanCell } from './fixtures/z0-contract.js';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
@@ -57,7 +58,7 @@ interface FixtureRepo { repo: string; base: string; fix: string }
 
 function makeRepo(): FixtureRepo {
   const repo = tmp('z0-turns-repo-');
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  const git = (...args: string[]): string => testGit(repo, ...args).trim();
   git('init', '-q');
   git('config', 'user.email', 't@example.com');
   git('config', 'user.name', 'T');
@@ -129,7 +130,7 @@ describe('runner git', () => {
     writeFileSync(cfg, `[core]\n\thooksPath = ${hooks.replace(/\\/g, '/')}\n[i18n]\n\tcommitEncoding = ISO-8859-1\n`);
     process.env.GIT_CONFIG_GLOBAL = cfg;
     // The control: plain git under this config does run the hook.
-    execFileSync('git', ['update-ref', 'refs/z0/probe', r.base], { cwd: r.repo });
+    testGit(r.repo, 'update-ref', 'refs/z0/probe', r.base);
     expect(existsSync(marker)).toBe(true);
     rmSync(marker);
     holdPre(r.repo, r.base);
@@ -142,7 +143,7 @@ describe('runner git', () => {
   it('stateCommit keeps a tracked edit outside a sparse-checkout cone the agent turned on', () => {
     isolate('sparse');
     const r = makeRepo();
-    execFileSync('git', ['config', 'core.sparseCheckout', 'true'], { cwd: r.repo });
+    testGit(r.repo, 'config', 'core.sparseCheckout', 'true');
     mkdirSync(join(r.repo, '.git', 'info'), { recursive: true });
     writeFileSync(join(r.repo, '.git', 'info', 'sparse-checkout'), '/elsewhere/\n');
     writeFileSync(join(r.repo, 'lib.js'), 'edited outside the cone\n');
@@ -157,7 +158,7 @@ describe('runner git', () => {
     const marker = join(d, 'ran').replace(/\\/g, '/');
     const script = join(d, 'fsmon.sh');
     writeFileSync(script, `#!/bin/sh\necho ran >> "${marker}"\n`, { mode: 0o755 });
-    execFileSync('git', ['config', 'core.fsmonitor', script.replace(/\\/g, '/')], { cwd: r.repo });
+    testGit(r.repo, 'config', 'core.fsmonitor', script.replace(/\\/g, '/'));
     // The control: plain git status in the workspace does run it.
     execFileSync('git', ['status', '--porcelain'], { cwd: r.repo });
     expect(existsSync(marker)).toBe(true);
@@ -180,8 +181,8 @@ describe('runner git', () => {
     const r = makeRepo();
     const d = tmp('z0-turns-filter-');
     const marker = join(d, 'ran').replace(/\\/g, '/');
-    execFileSync('git', ['config', "filter.z0'agent.clean", `sh -c 'echo ran >> "${marker}"; cat'`], { cwd: r.repo });
-    execFileSync('git', ['config', "filter.z0'agent.required", 'true'], { cwd: r.repo });
+    testGit(r.repo, 'config', "filter.z0'agent.clean", `sh -c 'echo ran >> "${marker}"; cat'`);
+    testGit(r.repo, 'config', "filter.z0'agent.required", 'true');
     writeFileSync(join(r.repo, '.gitattributes'), "* filter=z0'agent\n");
     // Same bytes, a new mtime: status must read the file through the filter to see it is unchanged.
     const restat = () => {
@@ -749,8 +750,10 @@ describe('family screen', () => {
   it('a screen task with a symlinked instruction file stops the screen before any session', async () => {
     const { out, log } = isolate('screen-link');
     const r = makeRepo();
-    const g = (...args: string[]): string => execFileSync('git', args, { cwd: r.repo, encoding: 'utf8' }).trim();
-    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: 'policy.md', encoding: 'utf8' }).trim();
+    const g = (...args: string[]): string => testGit(r.repo, ...args).trim();
+    const src = join(tmp('z0-link-target-'), 'target');
+    writeFileSync(src, 'policy.md');
+    const blob = testGit(r.repo, 'hash-object', '-w', '--no-filters', src).trim();
     g('update-index', '--add', '--cacheinfo', `120000,${blob},docs/AGENTS.md`);
     g('commit', '-qm', 'link');
     const fam = { ...family('fL', [lesson('fL-l1', 'Write the fL file')]), screen: { id: 'fL-screen', baseRef: g('rev-parse', 'HEAD'), fixRef: r.fix, prompt: 'x', test: 'node test.js', testFiles: ['test.js'] } };

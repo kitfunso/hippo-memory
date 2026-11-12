@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync, readFileSync, readdirSync, renameSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { agentGit } from '../scripts/token-eval/checks.mjs';
 import { readerDiff } from '../scripts/token-eval/grading.mjs';
 import { runCli as analyze } from '../scripts/token-eval/z0-analyze.mjs';
@@ -14,6 +14,7 @@ import { g5 } from '../scripts/token-eval/z0-gates.mjs';
 import { cellKey } from '../scripts/token-eval/z0-records.mjs';
 import { CHECKS, cleanup, tmp } from './fixtures/z0-harness.js';
 import { GRADING, PRICES, generate, jsonl } from './fixtures/z0-gen.js';
+import { testGit } from './fixtures/test-git.js';
 import { PHRASE, SEQ, bundledOut, cli, gradeDir, readJson, rowOf, runRoot, sealedKey, storedRecord, synthOut, writeRows, type Cell, type Verdict } from './fixtures/z0-g5.js';
 
 const win = process.platform === 'win32';
@@ -138,7 +139,7 @@ describe('reader sample draw', () => {
     expect(pairsOf(s.out)[0]).toMatchObject({ droppedCommands: 5 });
 
     const repo = tmp('z0-g5-hide-');
-    const git = (...a: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...a], { cwd: repo, encoding: 'utf8' }).trim();
+    const git = (...a: string[]) => testGit(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...a).trim();
     git('init', '-q');
     writeFileSync(join(repo, 'lib.js'), '1\n');
     git('add', '-A');

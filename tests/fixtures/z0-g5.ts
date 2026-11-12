@@ -1,13 +1,13 @@
 // Synthetic G5 out dirs for the reader and stored sample tests: grade.json, diffs and done rows written directly, no fake run.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { agentGit } from '../../scripts/token-eval/checks.mjs';
 import { readerDiff } from '../../scripts/token-eval/grading.mjs';
 import { cellKey } from '../../scripts/token-eval/z0-records.mjs';
 import { runCli } from '../../scripts/token-eval/z0-regrade.mjs';
 import { generate, type Z0Record } from './z0-gen.js';
 import { tmp } from './z0-harness.js';
+import { testGit } from './test-git.js';
 
 export type Verdict = 'pass' | 'fail' | 'na';
 export interface Cell { arm: string; position: number; seed?: number; kind?: 'teach' | 'apply'; first?: Verdict; final?: Verdict; finalChecked?: boolean; diff?: string; commands?: string[]; resume?: string[] }
@@ -70,7 +70,7 @@ export function synthOut(cells: Cell[], prefix = 'z0-g5-out-') {
   return { out, grades, tasks: writeTasks(out, cells.map((c) => c.position)) };
 }
 
-const gitIn = (cwd: string) => (...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' }).trim();
+const gitIn = (cwd: string) => (...args: string[]) => testGit(cwd, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args).trim();
 
 /** One apply cell with a real stub, bundle and first.diff, laid out as saveGrading writes them. */
 export function bundledOut() {
@@ -85,7 +85,7 @@ export function bundledOut() {
   const stub = c('rev-parse', 'HEAD');
   c('update-ref', `refs/eval/${SEQ}/t0`, stub);
   const work = join(out, 'runs', SEQ, 'A0', 'seed1', 'work');
-  execFileSync('git', ['clone', '-q', cache, work]);
+  testGit(cache, 'clone', '-q', cache, work);
   const w = gitIn(work);
   w('commit', '-q', '--allow-empty', '-m', 'pre');
   const pre = w('rev-parse', 'HEAD');

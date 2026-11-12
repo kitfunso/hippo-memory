@@ -1,11 +1,12 @@
 // Round 4 slice R1: s4-read.sh on slice 6's corpus laid out as a root with a results repository (plan: Slice R, Failure model, Record model).
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { gitBash } from '../scripts/token-eval/homes.mjs';
 import { cleanUpRoots, readRoot } from './fixtures/z0-read-root.js';
+import { testGit } from './fixtures/test-git.js';
 
 afterAll(cleanUpRoots);
 
@@ -45,7 +46,7 @@ const put = (file: string, text: string): void => {
 };
 const report = (file: string): Report => JSON.parse(read(file));
 const posix = (p: string): string => p.replace(/\\/g, '/');
-const git = (root: string, ...args: string[]): string => execFileSync('git', ['-C', `${root}/results`, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trimEnd();
+const git = (root: string, ...args: string[]): string => testGit(`${root}/results`, ...args).trimEnd();
 const roleCounts = (r: Report) => {
   const counts = new Map<string, number>();
   for (const h of r.hashes) if (h.role !== 'source') counts.set(h.role, (counts.get(h.role) ?? 0) + 1);

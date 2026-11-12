@@ -8,6 +8,7 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { promisify } from 'node:util';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
 import { HIPPO_JS, git } from '../scripts/token-eval/exec.mjs';
+import { testGit } from './fixtures/test-git.js';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
 
@@ -39,7 +40,7 @@ interface GitRepo {
 /** A git repo with `files` committed as `base`, then `fix` changing lib.js. */
 async function gitRepo(files: Record<string, string>): Promise<GitRepo> {
   const repo = tmp('z0-repo-');
-  const g = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  const g = (...args: string[]): string => testGit(repo, ...args).trim();
   // Async children: without one real await per test, the file's sync tests run as one event-loop turn past vitest's 60 s RPC timeout.
   const ga = async (...args: string[]): Promise<string> => (await execFileAsync('git', args, { cwd: repo, encoding: 'utf8' })).stdout.trim();
   await ga('init', '-q');
@@ -57,8 +58,8 @@ async function gitRepo(files: Record<string, string>): Promise<GitRepo> {
 /** An empty work repo set up the way the runner sets one up. */
 function workRepo(): string {
   const work = tmp('z0-work-');
-  execFileSync('git', ['init', '-q'], { cwd: work });
-  for (const [k, v] of [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf']]) execFileSync('git', ['config', k, v], { cwd: work });
+  testGit(work, 'init', '-q');
+  for (const [k, v] of [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf']]) testGit(work, 'config', k, v);
   return work;
 }
 
@@ -202,7 +203,7 @@ describe('armSettings', () => {
 describe('stub base commit', () => {
   it('is deterministic, replaces the root CLAUDE.md and keeps the rest of the base tree', () => {
     const repo = tmp('z0-stub-');
-    const g = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+    const g = (...args: string[]): string => testGit(repo, ...args).trim();
     g('init', '-q');
     g('config', 'user.email', 't@example.com');
     g('config', 'user.name', 'T');
@@ -296,7 +297,7 @@ describe('applyInstructions', () => {
 
   it('merges the same under a global git config the agent shares, whether it sets diff3 or is broken', () => {
     const outDir = tmp('z0-outdir-');
-    execFileSync('git', ['init', '-q'], { cwd: outDir });
+    testGit(outDir, 'init', '-q');
     const home = tmp('z0-agent-home-');
     for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) delete process.env[k];
     Object.assign(process.env, { HOME: home, USERPROFILE: home });
@@ -354,7 +355,7 @@ describe('workspace checkout', () => {
   it.each(['A0', 'A2'])('%s: leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs, worktrees and nested repos', async (arm) => {
     const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
-    const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
+    const wg = (...args: string[]): string => testGit(work, ...args).trim();
     checkoutBase(repo, work, 'seqP', { id: 'p1', baseRef: fix }, arm);
     mkdirSync(join(work, '.hippo'));
     writeFileSync(join(work, '.hippo', 'store.db'), 'hippo store\n');
@@ -372,7 +373,7 @@ describe('workspace checkout', () => {
     rmSync(join(wtRoot, 'nogit', '.git'));
     wg('clone', '-q', '--no-checkout', '.', 'backup');
     mkdirSync(join(work, 'scratch'));
-    const sg = (...args: string[]): string => execFileSync('git', ['-c', 'user.email=a@b', '-c', 'user.name=a', ...args], { cwd: join(work, 'scratch'), encoding: 'utf8' });
+    const sg = (...args: string[]): string => testGit(join(work, 'scratch'), '-c', 'user.email=a@b', '-c', 'user.name=a', ...args);
     sg('init', '-q');
     writeFileSync(join(work, 'scratch', 'notes.md'), 'the fix that a later task must never see\n');
     sg('add', '.');
@@ -401,7 +402,7 @@ describe('workspace checkout', () => {
   it('rebuilds a .git the agent replaced with a gitfile, keeping the runner config and a clean detached HEAD', async () => {
     const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
-    const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
+    const wg = (...args: string[]): string => testGit(work, ...args).trim();
     checkoutBase(repo, work, 'seqG', { id: 'g1', baseRef: fix }, 'A0');
     const moved = join(tmp('z0-moved-'), 'git');
     renameSync(join(work, '.git'), moved);
@@ -456,7 +457,9 @@ describe('workspace checkout', () => {
   /** gitRepo plus one commit adding `links` as 120000 entries; returns that commit. */
   const withLinks = (r: GitRepo, links: Record<string, string>): string => {
     for (const [rel, target] of Object.entries(links)) {
-      const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: target, encoding: 'utf8' }).trim();
+      const src = join(tmp('z0-link-target-'), 'target');
+      writeFileSync(src, target);
+      const blob = testGit(r.repo, 'hash-object', '-w', '--no-filters', src).trim();
       r.g('update-index', '--add', '--cacheinfo', `120000,${blob},${rel}`);
     }
     r.g('commit', '-qm', 'link');
@@ -534,7 +537,7 @@ describe('workspace checkout', () => {
     }
     writeFileSync(join(home, '.gitconfig'), '');
     writeFileSync(join(repo, '.git', 'info', 'attributes'), '* diff=x\n');
-    for (const [k, v] of [['color.ui', 'always'], ['diff.external', run], ['diff.x.textconv', run]]) execFileSync('git', ['config', k, v], { cwd: repo });
+    for (const [k, v] of [['color.ui', 'always'], ['diff.external', run], ['diff.x.textconv', run]]) testGit(repo, 'config', k, v);
     expect(goldLines(repo, t), 'cache repo config').toEqual(clean);
     expect(existsSync(marker), 'cache repo config').toBe(false);
   });
@@ -544,7 +547,7 @@ describe('workspace checkout', () => {
     const work = workRepo();
     checkoutBase(repo, work, 'seqU', { id: 'u1', baseRef: fix }, 'A0');
     const decoy = tmp('z0-decoy-');
-    execFileSync('git', ['init', '-q'], { cwd: decoy });
+    testGit(decoy, 'init', '-q');
     const home = tmp('z0-agent-home-');
     writeFileSync(join(home, '.gitconfig'), `[url "${decoy.replace(/\\/g, '/')}"]\n\tinsteadOf = ${repo.replace(/\\/g, '\\\\')}\n`);
     for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) delete process.env[k];
@@ -607,7 +610,7 @@ describe('workspace checkout', () => {
   it('A2: drops every repo piece, bundle and link a kept .hippo holds, and keeps the hippo store', async () => {
     const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
-    const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
+    const wg = (...args: string[]): string => testGit(work, ...args).trim();
     checkoutBase(repo, work, 'seqH', { id: 'h1', baseRef: fix }, 'A2');
     const hippo = join(work, '.hippo');
     const store = ['hippo.db', 'hippo.db-wal', 'config.json', 'index.json', 'stats.json', 'embeddings.json', 'buffer/a.md', 'episodic/b.md', 'semantic/c.md', 'conflicts/d.json', 'compactions-spool/e.json'];
@@ -646,7 +649,7 @@ describe('workspace checkout', () => {
   it.runIf(win)('A2 on win32: drops repo pieces whatever the case of their names, as NTFS and Git for Windows read them', async () => {
     const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
-    const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
+    const wg = (...args: string[]): string => testGit(work, ...args).trim();
     checkoutBase(repo, work, 'seqN', { id: 'n1', baseRef: fix }, 'A2');
     const hippo = join(work, '.hippo');
     mkdirSync(hippo);
@@ -858,7 +861,7 @@ describe('homes check (built CLI, no claude session)', () => {
 
     const run = runDirs(out, 'seqH', 'A2', 1);
     freshRunDirs(run);
-    execFileSync('git', ['init', '-q'], { cwd: run.work });
+    testGit(run.work, 'init', '-q');
     const env = { ...childEnv(armEnv('A2', run, process.env)), HOME: out, USERPROFILE: out };
     for (const args of [['init', '--no-schedule'], ['import', '--agents']]) execFileSync(process.execPath, [HIPPO_JS, ...args], { cwd: run.work, env, stdio: 'pipe' });
     expect(existsSync(join(run.work, '.hippo'))).toBe(true);

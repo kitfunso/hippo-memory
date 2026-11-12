@@ -3,11 +3,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { runCli as pinsCli } from '../scripts/token-eval/z0-pins-check.mjs';
 import { SONNET_MODEL } from '../scripts/token-eval/arms.mjs';
 import { cleanup, makeRepo } from './fixtures/z0-harness.js';
 import { PRICES_BY_MODEL } from './fixtures/z0-gen.js';
+import { testGit } from './fixtures/test-git.js';
 
 const REPO = resolve(__dirname, '..');
 const LAUNCH = join(REPO, 'scripts', 'token-eval', 'r4-launch');
@@ -159,7 +160,7 @@ beforeAll(() => {
   const [shebang, ...body] = readFileSync(runner, 'utf8').split('\n');
   const probe = `import { appendFileSync as logCwd } from 'node:fs'; logCwd(${JSON.stringify(`${base}/runner-cwd.log`)}, process.cwd() + String.fromCharCode(10));`;
   writeFileSync(runner, [shebang, probe, ...body].join('\n'));
-  const git = (...args: string[]) => execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8' });
+  const git = (...args: string[]) => testGit(checkout, ...args);
   git('init', '-q');
   git('config', 'user.email', 't@example.com');
   git('config', 'user.name', 'T');

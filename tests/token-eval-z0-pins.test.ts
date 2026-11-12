@@ -3,8 +3,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { treeHash, hippoBuild, pinMismatches, claudePinned, refuseOffPins } from '../scripts/token-eval/pins.mjs';
+import { testGit } from './fixtures/test-git.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -42,7 +42,7 @@ describe('treeHash', () => {
 describe('hippoBuild', () => {
   it('names the commit and dist hash, and reads dirty once the tree differs from the commit', () => {
     const repo = tmp();
-    const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+    const git = (...args: string[]) => testGit(repo, ...args).trim();
     git('init', '-q');
     git('config', 'user.email', 't@example.com');
     git('config', 'user.name', 'T');

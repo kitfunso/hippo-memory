@@ -16,6 +16,7 @@ import { binaryRun, levelCells, predictedSe, repeatRun, seedsNeeded } from '../s
 import { runCli as sizeCli } from '../scripts/token-eval/z0-size.mjs';
 import { THRESHOLDS, minLevels } from '../scripts/token-eval/z0-verdict-r4.mjs';
 import { PRICES, PRICES_BY_MODEL, generate, jsonl, wholePlanFiles, type Z0Record } from './fixtures/z0-gen.js';
+import { testGit } from './fixtures/test-git.js';
 
 // Each `it` runs 20 to 50 draws per case; a shared runner can be slow, so the limit is a minute.
 vi.setConfig({ testTimeout: 60_000 });
@@ -620,7 +621,7 @@ describe('round 3 and the round 4 flags', () => {
 });
 
 describe('the commit a levels file records', () => {
-  const git = (cwd: string, ...argv: string[]) => spawnSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...argv], { cwd, encoding: 'utf8' });
+  const git = (cwd: string, ...argv: string[]) => testGit(cwd, '-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...argv);
 
   it('is null, with the reason, when the folder holds an uncommitted change or git has no repository', () => {
     const root = tmp('z0-r4-head-');
@@ -631,7 +632,7 @@ describe('the commit a levels file records', () => {
     git(root, 'init');
     git(root, 'add', '.');
     git(root, 'commit', '-m', 'one');
-    const head = git(root, 'rev-parse', 'HEAD').stdout.trim();
+    const head = git(root, 'rev-parse', 'HEAD').trim();
     expect(headCommit(sub)).toEqual({ commit: head, why: null });
     fs.writeFileSync(path.join(root, 'elsewhere.txt'), 'x\n');
     expect(headCommit(sub)).toEqual({ commit: head, why: null });

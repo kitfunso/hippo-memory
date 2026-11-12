@@ -1,5 +1,4 @@
 // Round 4 corpus row (prereg line 105): one corpus through every round 4 CLI, each run once.
-import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -12,6 +11,7 @@ import { runCli as seedRuleCli } from '../scripts/token-eval/z0-seed-rule.mjs';
 import { runCli as sizeCli } from '../scripts/token-eval/z0-size.mjs';
 import { R3_FIGURE, WHOLE_PLANS, corpusWorkspace, ledgerFolder, pilotArgv, r4Corpus, raisedReadSet } from './fixtures/z0-r4-corpus.js';
 import { PRICES4, R4, cleanUp, raise } from './fixtures/z0-r4-read.js';
+import { testGit } from './fixtures/test-git.js';
 
 // The unblind's 10,000 resamples make this file about 10 s.
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -26,7 +26,7 @@ const ANALYZE = ['--design', 'r4', '--read-set', 'rs2.txt', '--prices', 'prices.
 const readJson = (dir: string, name: string) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
 
 function commitGates(dir: string): void {
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+  const git = (...args: string[]) => testGit(dir, ...args);
   git('init', '-q');
   for (const [key, value] of Object.entries({ 'user.name': 'z0 test', 'user.email': 'z0@example.invalid', 'core.hooksPath': '.no-hooks', 'commit.gpgsign': 'false' })) git('config', key, value);
   git('add', 'drop.json', 'grading.json');

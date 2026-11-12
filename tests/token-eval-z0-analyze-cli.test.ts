@@ -1,7 +1,6 @@
 /** Z0 analyzer CLI and blind mode on generated records; numbers in test names follow the plan's test list. */
 import { describe, it, expect, afterAll } from 'vitest';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -10,6 +9,7 @@ import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { pooledVoids, sourceRows } from '../scripts/token-eval/z0-blind.mjs';
 import { analyzeZ0, runCli } from '../scripts/token-eval/z0-analyze.mjs';
 import { ARMS, GRADING, PRICES, at, generate, jsonl, type Generated } from './fixtures/z0-gen.js';
+import { testGit } from './fixtures/test-git.js';
 
 const BASE = generate();
 const fresh = (): Generated => structuredClone(BASE);
@@ -64,7 +64,7 @@ describe('Z0 CLI and blind mode', () => {
 
   it('17: unblind needs a committed drop list and grading file and a passing G5', () => {
     const dir = workspace(generate({ repos: 3 }));
-    const git = (...a: string[]) => execFileSync('git', a, { cwd: dir, stdio: 'pipe' });
+    const git = (...a: string[]) => testGit(dir, ...a);
     git('init', '-q');
     for (const [k, v] of [['user.name', 'z0 test'], ['user.email', 'z0@example.invalid'], ['core.hooksPath', '.no-hooks'], ['commit.gpgsign', 'false']]) git('config', k!, v!);
     const unblind = (extra: string[] = []) => runCli([...ARGS, '--drop-list', 'drop.json', '--unblind', ...extra], dir);

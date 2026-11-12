@@ -1,6 +1,6 @@
 // Set-up for the s4-drive.sh tests: a fixture checkout (a git repository with the freeze tag), a dry root with real pins and a spend basis, a "scored" folder holding the real driver
 // beside the stubs, and a spawned driver. Only the budget, pins, unit-record and drive CLIs run real; every other CLI, the launcher, the batch and the read are stubs.
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -10,6 +10,7 @@ import { PILOT_CHECKS } from '../../../scripts/token-eval/z0-budget.mjs';
 import { runCli as pinsCli } from '../../../scripts/token-eval/z0-pins-check.mjs';
 import { BASIS, BATCH1, BATCH2, BATCH2_SEQ, MEAN, SEQ } from '../../_helpers/z0-r4-spend.js';
 import { PRICES_BY_MODEL, generate, planOf } from '../z0-gen.js';
+import { testGit } from '../test-git.js';
 import { replay } from '../z0-batch/ab-run.mjs';
 import { CHECKOUT as REPO, fwd, isAlive, json, lines, makeFixture, put, read, sleep, until } from '../z0-batch/harness.js';
 import { killNaming, killOwnTree, procsNaming } from '../kill-own.js';
@@ -44,17 +45,7 @@ export interface BudgetLine { kind: string; step?: string; units?: string[]; adm
 export interface PilotJson { schema: string; attempt: number; tag: string; r: Record<string, number>; rArm: string; rMax: number; flag19: boolean; ledgerTotal: number; pilotSpend: number; checks: Record<string, string> }
 export interface World { base: string; checkout: string; commit: string; fx: string; plan: string }
 
-// A virus scanner can hold a new object file for a moment on this box ("unable to write file ... Permission denied"), so a failed git call is tried again.
-const git = (dir: string, ...args: string[]): string => {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-    } catch (err) {
-      if (attempt === 10) throw err;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
-    }
-  }
-};
+const git = (dir: string, ...args: string[]): string => testGit(dir, ...args).trim();
 const sha256 = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 /** A fixture checkout under `base`: the repository's scripts, bin and dist in a clean git repository; `tagged` gives it the freeze-1 tag. Never tags or commits in the worktree. */

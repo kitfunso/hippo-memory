@@ -2,8 +2,8 @@
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { killNaming } from './kill-own.js';
+import { testGit } from './test-git.js';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
 import type { Z0Record, Z0PlanCell } from './z0-contract.js';
@@ -75,7 +75,7 @@ export interface FixtureRepo { repo: string; base: string; fix: string }
 
 export function makeRepo(extra: Record<string, string> = {}): FixtureRepo {
   const repo = tmp('z0-surf-repo-');
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  const git = (...args: string[]): string => testGit(repo, ...args).trim();
   git('init', '-q');
   git('config', 'user.email', 't@example.com');
   git('config', 'user.name', 'T');

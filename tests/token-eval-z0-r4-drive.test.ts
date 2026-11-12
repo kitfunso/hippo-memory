@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import { BATCH1, BATCH2 } from './_helpers/z0-r4-spend.js';
 import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type Started, type World } from './fixtures/z0-drive/harness.js';
 import { killOwnTree } from './fixtures/kill-own.js';
+import { testGit } from './fixtures/test-git.js';
 
 // A case's afterEach scans for its processes up to 20 times, far past the eval config's 30 s hookTimeout.
 vi.setConfig({ hookTimeout: 180_000 });
@@ -43,7 +44,7 @@ const outcomeOf = (c: DriveCase, r: Run) => {
   expect(r.lines[0], r.out).toBe(`pins ok: 7 files and folders, hippo build ${c.entry({ step: '1', exit: 0 }).commit}`);
   return [r.code, ...r.lines.slice(1)];
 };
-const git = (dir: string, ...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).stdout.trim();
+const git = (dir: string, ...args: string[]) => testGit(dir, ...args).trim();
 const stubArgv = (c: DriveCase, name: string) => c.stubCalls(name).map((x) => x.argv);
 /** True when `flag` stands alone in `text`, so `--run` is not found inside `--runs`. */
 const hasFlag = (text: string, flag: string) => new RegExp(`(?<![\\w-])${flag}(?![\\w-])`).test(text);

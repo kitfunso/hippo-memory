@@ -3,14 +3,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { checkoutBase, instructionSnapshot, commitInstructions, INSTRUCTIONS_MESSAGE, STUB_CLAUDE_MD } from '../scripts/token-eval/workspace.mjs';
 import { stateCommit } from '../scripts/token-eval/checks.mjs';
 import { cleanup, tmp, isolate, makeRepo } from './fixtures/z0-harness.js';
+import { testGit } from './fixtures/test-git.js';
 
 afterEach(cleanup);
 
-const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trimEnd();
+const git = (cwd: string, ...args: string[]): string => testGit(cwd, ...args).trimEnd();
 
 describe('commitInstructions', () => {
   it('commits what git shows of the runner writes only; the pre tree is the same and pre..HEAD stays empty', () => {

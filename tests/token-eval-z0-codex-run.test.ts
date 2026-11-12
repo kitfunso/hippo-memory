@@ -2,17 +2,17 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { cacheTaskRepos } from '../scripts/token-eval/runs.mjs';
 import { STUB_CLAUDE_MD, X3_STUB, stubRefOf, checkoutBase } from '../scripts/token-eval/workspace.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { cleanup, makeRepo, lesson, family, teach, apply, find, logLines, runRoot, workDir, tmp } from './fixtures/z0-harness.js';
 import { xSpec, xRun, xTrio, xIsolate, xRecords, xLimit, fakeSeen, X_IDS } from './fixtures/z0-codex-harness.js';
+import { testGit } from './fixtures/test-git.js';
 
 afterEach(cleanup);
 
 const ZERO = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
-const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' });
+const git = (cwd: string, ...args: string[]) => testGit(cwd, ...args);
 
 describe('set X end to end (test 6)', () => {
   it('runs teaches in Claude and applies once each in Codex, as records the contract takes', async () => {
