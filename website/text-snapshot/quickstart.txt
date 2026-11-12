@@ -1,51 +1,36 @@
-hippo quickstart: memory for Claude Code, Cursor and MCP
-Skip to content ~/hippo How it works
+hippo quickstart: two commands
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
-Home
-Quickstart
+N Install
 How it works
-Benchmarks
-FAQ
 Teams
+Benchmarks
 Compare
 Docs
-Add memory in two commands.
-hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, run hippo init in a project, and it wires itself into the agents that project uses.
-Package installation alone does not enable automatic preservation on every agent. Complete the documented setup and required host trust; capture and compaction coverage depend on the integration.
-N Install $ npm install -g hippo-memory
-N Initialize $ hippo init
-N Use the loop remember · recall · outcome · sleep
-Install
+Two commands, then carry on working
+Hippo is an MIT-licensed npm package with zero runtime dependencies. It needs Node N or later, no account and no API key.
 $ npm install -g hippo-memory $ hippo init Copy
-hippo init creates a .hippo/ store in the project and adds hippo's instructions to the agent files it finds there, such as CLAUDE.md and AGENTS.md (which Codex, Cursor, OpenClaw, OpenCode and Pi read), plus Claude Code's session hooks. To register every git repo under a folder at once, run hippo init --scan ~, which gives each repo a store seeded from its git history.
-Memories are stored in SQLite with markdown mirrors, and recall makes no network call by default. No account. Where hippo keeps your data lists the opt-in features that send text to a provider.
-Works with your agents
-Claude Code A block in CLAUDE.md plus hooks: pinned memories each turn, sleep on exit, a snapshot before compaction, failed tool calls stored as errors.
-Cursor A block in the project's AGENTS.md, which Cursor reads; the MCP server gives the agent the memory tools.
-Codex A block in AGENTS.md. hippo hook install codex wraps the Codex launcher to capture sessions.
-OpenClaw A native plugin that injects context and, with autoSleep on, runs sleep when the session ends.
-OpenCode A block in AGENTS.md plus a TypeScript plugin that runs when a session starts and goes idle.
-Pi A block in AGENTS.md; copy the Pi extension from the repo for session hooks.
-Any MCP client hippo mcp serves N tools over stdio to Windsurf (now Devin Desktop), Cline, Claude Desktop and others.
-The memory loop
-Four commands. Memories decay on a half-life unless something keeps them alive: a retrieval, a good outcome, an error tag, or consolidation during sleep.
+hippo init creates a .hippo/ store in the project, adds a short block to an existing CLAUDE.md or AGENTS.md, installs Claude Code's hooks and schedules a daily run at N:Nam that stores lessons from the day's commits. --no-hooks and --no-schedule skip those parts. hippo init --scan ~ gives every git repository under your home folder a store.
+Installing the package alone captures nothing, and what runs after init depends on the agent. Codex runs hippo's hooks only once you trust them in /hooks. hippo doctor checks the install.
+What each agent gets
+Claude Code gets a block in CLAUDE.md and eight hooks. Codex gets a block in AGENTS.md and two hooks. Cursor and Pi read the AGENTS.md block, OpenClaw and OpenCode use a plugin, and any MCP client can run hippo mcp.
+Four commands you can run yourself
 $ hippo remember "deploy failed: forgot migrations" --error Copy
-Store a memory. Errors get a longer half-life and stick.
+Stores a memory. Errors get twice the half-life.
 $ hippo recall "why did the deploy break" --budget N Copy
-Retrieve within a token budget, ranked by relevance and strength.
+Returns the matches that fit a token budget.
 $ hippo outcome --good Copy
-Tell hippo the recall helped. Useful memories decay slower.
+Marks the last recall as useful.
 $ hippo sleep Copy
-Consolidate repeats into patterns, decay the unused, flag conflicts.
+Merges related memories and lets unused ones fade.
 Full docs (opens in new tab) See the benchmarks
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
-GitHubnpmDocsChangelogLicense (MIT)
-hippo-memory vN · MIT · built by kitfunso
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso

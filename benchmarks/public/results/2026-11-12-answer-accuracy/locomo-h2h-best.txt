@@ -1,0 +1,42 @@
+answers 800, primary questions 395
+judge = Claude Sonnet 5, the registered judge, secondary: 800 valid verdicts of 800
+judge2 = codex gpt-5.6-sol, secondary: 800 valid verdicts of 800
+
+=== top 50 ===
+hippo-best  n=395  F1  25.3  judge  85.8  judge2  86.6  memories   50.0  input tokens    6926
+
+=== top 10 ===
+hippo-best  n=395  F1  29.7  judge  80.8  judge2  80.5  memories   10.0  input tokens    3882
+
+=== hippo-best minus each arm of locomo-h2h, paired by question, all secondary (dated notes 5) ===
+top  50 hippo-best - hippo365 (22.4 in locomo-h2h)     F1:  +3.0 pp [ +0.8,  +5.0] n=395 over 395 units  unresolved
+top  50 hippo-best - hippo365 (84.1 in locomo-h2h)  judge:  +1.8 pp [ -0.8,  +4.3] n=395 over 395 units  unresolved
+top  50 hippo-best - hippo365 (85.6 in locomo-h2h) judge2:  +1.0 pp [ -1.5,  +3.5] n=395 over 395 units  unresolved
+top  50 hippo-best - bm25 (24.5 in locomo-h2h)     F1:  +0.8 pp [ -1.4,  +2.9] n=395 over 395 units  matches
+top  50 hippo-best - bm25 (84.3 in locomo-h2h)  judge:  +1.5 pp [ -1.3,  +4.3] n=395 over 395 units  unresolved
+top  50 hippo-best - bm25 (85.1 in locomo-h2h) judge2:  +1.5 pp [ -1.3,  +4.6] n=395 over 395 units  unresolved
+top  50 hippo-best - mem0 (23.6 in locomo-h2h)     F1:  +1.7 pp [ -0.7,  +4.2] n=395 over 395 units  unresolved
+top  50 hippo-best - mem0 (92.2 in locomo-h2h)  judge:  -6.3 pp [ -9.6,  -2.8] n=395 over 395 units  trails
+top  50 hippo-best - mem0 (92.9 in locomo-h2h) judge2:  -6.3 pp [ -9.6,  -3.0] n=395 over 395 units  trails
+top  10 hippo-best - hippo365 (26.4 in locomo-h2h)     F1:  +3.2 pp [ +0.5,  +5.9] n=395 over 395 units  beats
+top  10 hippo-best - hippo365 (68.4 in locomo-h2h)  judge: +12.4 pp [ +8.4, +16.5] n=395 over 395 units  beats
+top  10 hippo-best - hippo365 (70.6 in locomo-h2h) judge2:  +9.9 pp [ +6.1, +13.7] n=395 over 395 units  beats
+top  10 hippo-best - bm25 (25.9 in locomo-h2h)     F1:  +3.8 pp [ +1.0,  +6.5] n=395 over 395 units  beats
+top  10 hippo-best - bm25 (71.1 in locomo-h2h)  judge:  +9.6 pp [ +5.8, +13.7] n=395 over 395 units  beats
+top  10 hippo-best - bm25 (73.4 in locomo-h2h) judge2:  +7.1 pp [ +3.3, +11.1] n=395 over 395 units  beats
+top  10 hippo-best - mem0 (25.9 in locomo-h2h)     F1:  +3.8 pp [ +1.2,  +6.4] n=395 over 395 units  beats
+top  10 hippo-best - mem0 (79.0 in locomo-h2h)  judge:  +1.8 pp [ -2.5,  +6.1] n=395 over 395 units  unresolved
+top  10 hippo-best - mem0 (80.0 in locomo-h2h) judge2:  +0.5 pp [ -3.8,  +4.6] n=395 over 395 units  unresolved
+
+=== hippo-best minus each arm of locomo-h2h-emb, paired by question, all secondary (dated notes 5) ===
+top  50 hippo-best - hippo-emb (24.9 in locomo-h2h-emb)     F1:  +0.4 pp [ -1.5,  +2.3] n=395 over 395 units  matches
+top  50 hippo-best - hippo-emb (85.1 in locomo-h2h-emb)  judge:  +0.8 pp [ -1.8,  +3.3] n=395 over 395 units  unresolved
+top  50 hippo-best - hippo-emb (86.6 in locomo-h2h-emb) judge2:  +0.0 pp [ -2.3,  +2.3] n=395 over 395 units  matches
+top  10 hippo-best - hippo-emb (27.0 in locomo-h2h-emb)     F1:  +2.7 pp [ +0.2,  +5.1] n=395 over 395 units  unresolved
+top  10 hippo-best - hippo-emb (71.9 in locomo-h2h-emb)  judge:  +8.9 pp [ +5.3, +12.4] n=395 over 395 units  beats
+top  10 hippo-best - hippo-emb (73.4 in locomo-h2h-emb) judge2:  +7.1 pp [ +3.5, +10.6] n=395 over 395 units  beats
+
+smoke items left out of every primary: conv4_q177, conv6_q141, conv8_q21, conv8_q73, conv8_q85
+answers exhausted after 3 asks, scored wrong: 0
+judge verdicts exhausted after 3 asks, scored wrong: 0
+judge2 verdicts exhausted after 3 asks, scored wrong: 0

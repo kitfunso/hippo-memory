@@ -12,7 +12,6 @@ const normalize = (s) => s.replace(/\\/g, '').replace(/\s+/g, ' ').trim();
 
 const readme = await readFile(join(root, '..', 'README.md'), 'utf8');
 const site = await readFile(join(root, 'src', 'content', 'site.ts'), 'utf8');
-const readmeNorm = normalize(readme);
 const missing = [];
 
 let parsed = '';
@@ -59,41 +58,53 @@ if (!withoutComments(setup).includes('{getStarted.notice}')) missing.push('notic
 if (!withoutComments(quickstart).includes('{getStarted.notice}')) missing.push('notice: quickstart.astro no longer renders the setup limit');
 if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push('availability: teams.astro no longer renders the edition status');
 
-const warns = ['R@5 = 74.0%', '0 outbound HTTP'].filter((c) => !readmeNorm.includes(normalize(c)));
-if (warns.length) {
-  console.warn('[readme-sync] WARN: receipt claim(s) not found verbatim in README (verify wording):', warns.join(' | '));
+// A loss line that links a committed score file may only quote numbers that file holds.
+const scoreFiles = Object.fromEntries(
+  [...site.matchAll(/^\s*(\w+):\s*`\$\{REPO\}\/blob\/master\/(benchmarks\/public\/results\/[^`]+\.(?:txt|json))`/gm)].map((m) => [m[1], m[2]]),
+);
+let lossLines = 0;
+for (const [, , text, key] of site.matchAll(/\{\s*text:\s*(["'])((?:(?!\1).)*)\1,\s*href:\s*site\.links\.(\w+)\s*\}/g)) {
+  if (!scoreFiles[key]) continue;
+  lossLines++;
+  const held = await readFile(join(root, '..', scoreFiles[key]), 'utf8');
+  for (const n of text.match(/\d+\.\d+/g) ?? []) {
+    if (!held.includes(n)) missing.push(`losses: "${n}" is not in ${scoreFiles[key]}`);
+  }
 }
+if (!lossLines) missing.push('losses: no loss line links a committed score file');
 
-// LoCoMo rows on the benchmarks page must match the README's "### LoCoMo" subsection row for
-// row (category, n and r5 on one table line), so a swapped or copied score cannot pass.
-const bench = await readFile(join(root, 'src', 'pages', 'benchmarks.astro'), 'utf8');
-const locoStart = readme.indexOf('### LoCoMo');
-const locoEnd = locoStart >= 0 ? readme.indexOf('\n### ', locoStart + 3) : -1;
-const locoNorm = normalize(locoStart >= 0 ? readme.slice(locoStart, locoEnd > 0 ? locoEnd : undefined) : '').replace(/\*/g, '');
-const locoBlock = (bench.match(/const locomo = \[([\s\S]*?)\];/) || [])[1] || '';
-const locoRows = [...locoBlock.matchAll(/\{\s*category:\s*'([^']*)',\s*n:\s*'([^']*)',\s*r5:\s*'([^']*)'\s*\}/g)];
-if (!locoRows.length) missing.push('locomo: no rows found in benchmarks.astro');
-for (const [, category, n, r5] of locoRows) {
-  if (!locoNorm.includes(`| ${category} | ${n} | ${r5} |`)) missing.push(`locomo row: | ${category} | ${n} | ${r5} |`);
-}
-
-// Presence anywhere on the site is not the check: the reranker result has to reach the
-// hero, and it never travels without the negative result that bounds it.
-// Comments are stripped first so a caveat parked in a code comment cannot satisfy it.
+// A hero proof that links a committed results file may only quote numbers that file holds (commas dropped).
+// Comments are stripped first so a number or caveat parked in a code comment cannot satisfy a check.
 const hero = await readFile(join(root, 'src', 'components', 'Hero.astro'), 'utf8');
 const proofsRaw = (site.match(/export const proofs\s*(?::[^=]+)?=\s*\[([\s\S]*?)\n\][^\n]*;/) || [])[1] || '';
 const proofsBlock = proofsRaw.replace(/\/\/[^\n]*/g, '');
+const noCommas = (t) => t.replace(/(\d),(\d{3})/g, '$1$2');
+let proofLines = 0;
 if (!proofsRaw) {
   missing.push('proofs: block not found in site.ts (the hero renders it)');
 } else {
-  if (!/reranker/i.test(proofsBlock)) missing.push('proofs: the hero carries no reranker claim');
-  if (!/no answer-rate win was shown/.test(proofsBlock)) {
-    missing.push('proofs: the reranker claim lost its null result');
+  const proofRe = /stat:\s*(["'])((?:(?!\1).)*)\1,\s*text:\s*(["'])((?:(?!\3).)*)\3,\s*href:\s*site\.links\.(\w+)/g;
+  for (const [, , stat, , text, key] of proofsBlock.matchAll(proofRe)) {
+    if (!scoreFiles[key]) continue;
+    proofLines++;
+    const held = noCommas(await readFile(join(root, '..', scoreFiles[key]), 'utf8'));
+    for (const n of noCommas(`${stat} ${text}`).match(/\d+\.\d+|\d{3,}/g) ?? []) {
+      if (!held.includes(n)) missing.push(`proofs: "${n}" is not in ${scoreFiles[key]}`);
+    }
   }
+  if (!proofLines) missing.push('proofs: no hero proof links a committed results file');
 }
 if (!/proofs\.map\(/.test(hero) || !/p\.text/.test(hero)) {
   missing.push('proofs: Hero.astro no longer renders each proof with its text');
 }
+
+// The Z0 win never travels without its caveat, and the home shows the losses under the public tests.
+const testBlock = ((site.match(/export const theTest = \{([\s\S]*?)\n\} as const;/) || [])[1] || '').replace(/\/\/[^\n]*/g, '');
+if (!/lesson capture/.test(testBlock)) missing.push('theTest: the Z0 result lost its lesson-capture caveat');
+const theTestCmp = await readFile(join(root, 'src', 'components', 'TheTest.astro'), 'utf8');
+if (!withoutComments(theTestCmp).includes('theTest.note')) missing.push('theTest: TheTest.astro no longer renders the caveat');
+const homeBench = await readFile(join(root, 'src', 'components', 'HomeBench.astro'), 'utf8');
+if (!/losses\.items/.test(withoutComments(homeBench))) missing.push('losses: HomeBench.astro no longer shows the losses');
 
 if (missing.length) {
   console.error('[readme-sync] DRIFT: website copy no longer matches README.md:');
@@ -102,4 +113,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${locoRows.length} LoCoMo rows, hero proofs, setup limits and edition availability match README.md.`);
+console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${lossLines} loss lines and ${proofLines} hero proofs match their files, setup limits and edition availability match README.md.`);

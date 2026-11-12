@@ -1,0 +1,27 @@
+---
+// id "receipts" keeps old links to the home proof section working. The chart is the page's one data moment.
+import { site, theTest } from '../content/site';
+import RepeatMistakes from './RepeatMistakes.astro';
+---
+
+<section id="receipts" class="border-t border-rule">
+  <div class="wrap grid gap-12 py-(--section-y) lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+    <div class="copy min-w-0 space-y-4 text-body leading-relaxed text-ink-2">
+      <h2 class="mb-6 text-ink">{theTest.heading}</h2>
+      <p>{theTest.body}</p>
+      <p>{theTest.note}</p>
+      <p>
+        <a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer"
+          >{theTest.linkLabel}<span class="sr-only"> (opens in new tab)</span></a
+        >
+      </p>
+    </div>
+    <figure class="min-w-0 self-center rounded-xl border border-rule bg-paper-2 p-6 sm:p-8">
+      <figcaption class="mb-8 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+        <span class="font-medium text-ink">Repeat-mistake rate</span>
+        <span class="font-mono text-xs text-ink-3">Claude Code, 29 repositories</span>
+      </figcaption>
+      <RepeatMistakes />
+    </figure>
+  </div>
+</section>

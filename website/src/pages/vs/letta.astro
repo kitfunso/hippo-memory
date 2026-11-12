@@ -5,21 +5,29 @@ import Footer from '../../components/Footer.astro';
 import PageIntro from '../../components/PageIntro.astro';
 import Section from '../../components/Section.astro';
 import VsTable from '../../components/VsTable.astro';
+import { REPO } from '../../content/site';
 import Faq from '../../components/Faq.astro';
 import { faqPageLd } from '../../content/readme';
 
-const title = 'hippo vs Letta: a Letta alternative for coding agents';
+const title = 'hippo vs Letta: memory for the agents you already run';
 const description =
-  'hippo vs Letta, checked 2026-09-28. Letta Code is a stateful agent harness that edits its own memory blocks. hippo adds memory to Claude Code, Codex and Cursor.';
+  "hippo and Letta compared by the hippo team, features checked 28 September 2026. Letta Code is an agent with its memory built in; hippo adds a shared local store to Claude Code, Codex and Cursor.";
+const rows = [
+  ['Decay by default', 'Decay by default'],
+  ['Retrieval strengthening', 'Recall strengthens a memory'],
+  ['Outcome tracking', 'Outcome tracking'],
+  ['Conflict detection + resolution', 'Conflict detection'],
+  ['Multi-agent shared memory', 'Shared between agents'],
+  ['Cross-tool import (ChatGPT/Claude/Cursor)', 'Import from other tools'],
+  ['MCP server', 'MCP server'],
+  ['Git-friendly', 'Git-friendly'],
+  ['License', 'Licence'],
+] as const;
 
 const qa = [
   {
-    q: 'Is Letta the same as MemGPT?',
-    a: 'Letta grew out of MemGPT; its GitHub README calls it "Letta (f.k.a. MemGPT)". Active development has moved to Letta Code, a stateful agent harness, and the original Letta server now sits on an archive branch (checked 2026-09-28).',
-  },
-  {
-    q: 'Is hippo a Letta alternative?',
-    a: 'It depends on what you want from Letta. Letta Code is a stateful agent harness with its memory built in. Hippo is memory for the agents you already use: Claude Code, Codex, Cursor and any MCP client share one store, on your machine with no account, and you can mark a lesson wrong or supersede an old fact. If you want an agent that manages its own memory blocks, that is Letta Code.',
+    q: "Is Letta the same as MemGPT?",
+    a: 'Letta grew out of MemGPT, and its GitHub README calls it "Letta (f.k.a. MemGPT)". Active development has moved to Letta Code, and the original server now sits on an archive branch (checked 28 September 2026).',
   },
 ];
 ---
@@ -28,83 +36,59 @@ const qa = [
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">hippo vs Letta: a <span class="text-gradient">Letta alternative</span> for coding agents</Fragment>
+      <Fragment slot="title">hippo vs <span class="text-ink">Letta</span></Fragment>
       <p>
-        Letta, formerly MemGPT, now builds Letta Code, a stateful agent harness whose memory lives in blocks the agent edits itself.
-        Hippo is memory for the agents you already run, such as Claude Code, Codex and Cursor, in one store they share.
-      </p>
-      <p>
-        Both keep memory where you can see it: Letta Code tracks its context in git, and hippo writes markdown mirrors you
-        can commit. They differ in who edits memory. In Letta, the agent rewrites its own blocks with built-in tools. In
-        hippo, memories come from hooks, the CLI and MCP tools, and you can mark a recalled one wrong or supersede an old
-        fact.
+        Letta, formerly MemGPT, now builds Letta Code, an agent harness whose memory lives in blocks the agent edits itself. Hippo is memory for the agents you already run, such as Claude Code, Codex and Cursor, in one store they share. So the choice is mostly about whether you want to switch agents.
       </p>
     </PageIntro>
 
-    <Section title="Feature by feature" alt>
+    <Section title="Who edits the memory">
       <p>
-        Every row of the README comparison table, hippo against Letta. The Letta column was last checked against Letta's
-        own pages on 2026-09-28.
+        Both keep memory where you can see it. Letta Code tracks its context in git, and hippo writes markdown mirrors you can commit. In Letta the agent rewrites its own memory blocks with built-in tools. In hippo, memories come from hooks, the CLI and MCP tools, and you can mark a recalled one wrong or replace an old fact.
       </p>
-      <VsTable system="Letta" />
     </Section>
 
-    <Section title="What Letta ships today (checked 2026-09-28)">
-      <ul class="list-disc space-y-2 pl-5">
-        <li>
-          Letta Code, Apache-2.0, installed with <code>npm install -g @letta-ai/letta-code</code>. You connect your own
-          model API keys with <code>/connect</code>
-          (<a class="link" href="https://github.com/letta-ai/letta-code" target="_blank" rel="noopener noreferrer">Letta Code<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          Without signing in, "your agents are stored only on local disk"; <code>/login</code> backs them up to Letta's
-          cloud
-          (<a class="link" href="https://docs.letta.com/letta-agent/quickstart" target="_blank" rel="noopener noreferrer">quickstart<span class="sr-only"> (opens in new tab)</span></a>).
-          All context, memory blocks included, is tracked in git
-          (<a class="link" href="https://github.com/letta-ai/letta-code" target="_blank" rel="noopener noreferrer">Letta Code<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          In Letta's legacy V1 SDK, memory blocks are what the agent reads and updates with built-in tools. Writing a
-          block replaces its whole content, and when two processes write the same block at once, the last write wins
-          (<a class="link" href="https://docs.letta.com/v1-sdk/memory/memory-blocks" target="_blank" rel="noopener noreferrer">V1 SDK memory blocks docs<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          A hosted MCP server, used with a Letta API key, that lets an MCP agent create and message your Letta agents
-          (<a class="link" href="https://docs.letta.com/platform/hosted-mcp" target="_blank" rel="noopener noreferrer">docs<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          The original Letta server, the MemGPT line, is retired to an archive branch of
-          <a class="link" href="https://github.com/letta-ai/letta" target="_blank" rel="noopener noreferrer">letta-ai/letta<span class="sr-only"> (opens in new tab)</span></a>.
-          Letta Code has a free plan that uses your own API keys, and paid plans from $20 a month
-          (<a class="link" href="https://docs.letta.com/letta-code/pricing" target="_blank" rel="noopener noreferrer">pricing<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-      </ul>
+    <Section title="Published scores, loosely compared" alt>
+      <p>
+        On DMR, a public memory test of 495 questions, MemGPT published 93.4 and hippo scored 77.6 when we ran it with its local reranker on. On LoCoMo, a test of questions about long conversations, the published Letta figure is 74.0 and hippo scored 89.4. Each number comes from a different setup and answer model, so neither settles much.
+      </p>
     </Section>
 
-    <Section title="When to pick which" alt>
+    <Section title="Feature by feature">
+      <p>
+        The Letta column was checked against Letta's own pages on 28 September 2026. The full table is on
+        <a class="link" href={`${REPO}#comparison`} target="_blank" rel="noopener noreferrer">GitHub<span class="sr-only"> (opens in new tab)</span></a>.
+      </p>
+      <VsTable system="Letta" rows={rows} />
+    </Section>
+
+    <Section title="What Letta ships today" alt>
+      <p>
+        Letta Code is Apache-2.0 and you connect your own model keys. Without signing in your agents are stored on local disk, and <code>/login</code> backs them up to Letta's cloud. The original Letta server, the MemGPT line, is retired to an archive branch (<a class="link" href="https://github.com/letta-ai/letta-code" target="_blank" rel="noopener noreferrer">Letta's pages<span class="sr-only"> (opens in new tab)</span></a>, checked 28 September 2026).
+      </p>
+    </Section>
+
+    <Section title="When to pick which">
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div class="glass rounded-2xl p-6">
-          <h3 class="text-base font-medium text-zinc-100">Pick hippo</h3>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick hippo</h3>
           <p class="mt-2 text-sm leading-relaxed">
-            You already use Claude Code, Codex or Cursor and want them to share one store of lessons that you can correct,
-            on your machine with no account.
+            Pick hippo when you already use Claude Code, Codex or Cursor and want them to share one store of lessons you can correct, on your machine with no account.
           </p>
         </div>
-        <div class="glass rounded-2xl p-6">
-          <h3 class="text-base font-medium text-zinc-100">Pick Letta</h3>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick Letta</h3>
           <p class="mt-2 text-sm leading-relaxed">
-            You want a coding agent whose memory is part of the agent, one that edits its own memory blocks, and you are
-            ready to switch agents to get it.
+            Pick Letta when you want a coding agent whose memory is part of the agent, and you are ready to switch agents to get it.
           </p>
         </div>
       </div>
       <div class="flex flex-wrap gap-3 pt-4">
-        <a href="/quickstart/" class="rounded-lg bg-zinc-100 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-900 transition hover:bg-white">Get started with hippo</a>
-        <a href="/faq/" class="rounded-lg border border-white/12 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-200 transition hover:border-white/25">All questions</a>
+        <a href="/quickstart/" class="btn">Get started with hippo</a>
       </div>
     </Section>
 
-    <Faq items={qa} heading="hippo and Letta, asked directly" />
+    <Faq items={qa} heading="hippo and Letta, asked directly" moreHref="/faq/" />
   </main>
   <Footer />
 </Base>

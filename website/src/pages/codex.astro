@@ -8,29 +8,9 @@ import Cmd from '../components/Cmd.astro';
 import Faq from '../components/Faq.astro';
 import { faqPick, site } from '../content/site';
 
-const title = 'Codex CLI memory across sessions | hippo-memory';
+const title = 'Codex CLI memory across sessions | hippo';
 const description =
-  'Codex CLI memory across sessions: hippo adds a block to AGENTS.md and keeps lessons in a local store you can correct, shared with Claude Code and Cursor.';
-
-// The Codex entry of the hook templates in src/hooks/hook-blocks.ts, up to its closing capture note.
-const fence = '```';
-const block = [
-  '## Project Memory (Hippo)',
-  '',
-  "When Hippo's prompt hook is installed, it injects pinned rules and the",
-  'memories that match each prompt, so never load them yourself. If no hippo',
-  'memory block has appeared in this session, run this at the start of a task',
-  'and read the output before writing any code:',
-  `${fence}bash`,
-  'hippo context --auto --budget 1500',
-  fence,
-  '',
-  'On errors or unexpected behaviour, record it right then, while you work,',
-  'never as a closing step:',
-  `${fence}bash`,
-  'hippo remember "<description of what went wrong>" --error',
-  fence,
-];
+  'Hippo adds a block to AGENTS.md and two hooks for Codex, and can capture Codex sessions if you opt in. Memories stay in SQLite on your machine. Our agent test ran on Claude Code only, so there is no measured Codex result.';
 const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
 ---
 
@@ -38,78 +18,54 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">Codex CLI memory <span class="text-gradient">across sessions</span></Fragment>
+      <Fragment slot="title">Codex CLI memory <span class="text-ink">across sessions</span></Fragment>
       <p>
-        Codex reads <code>AGENTS.md</code> files before it starts work. <code>hippo init</code> adds a short block there.
-        The block tells Codex that Hippo's prompt hook injects pinned rules and matching memories. It tells Codex to run
-        <code>hippo context --auto</code> at the start of a task only when no hippo memory block has appeared in the
-        session. Either way, lessons from earlier sessions, and from your other agents, come back when they match the
-        task.
+        Codex reads <code>AGENTS.md</code> before it starts work, so that is where <code>hippo init</code> adds its
+        block. Lessons from earlier sessions, and from your other agents, then come back when they match the task. Our
+        repeat-mistake test ran on Claude Code only, so we have no measured result for Codex.
       </p>
     </PageIntro>
 
     <Section title="Set it up">
-      <Cmd lines={[site.installCmd, 'hippo init', '# optional: capture Codex sessions too', 'hippo hook install codex']} copy={[site.installCmd, 'hippo init']} />
+      <Cmd lines={[site.installCmd, 'hippo init', 'hippo hook install codex']} copy />
       <p>
-        Capturing Codex sessions is opt-in. <code>hippo hook install codex</code> wraps the Codex launcher,
-        <code>hippo hook uninstall codex</code> removes the wrapper, and <code>hippo init</code> prints the command when it
-        detects Codex. <code>hippo doctor</code> checks the install.
+        Init adds two hook entries for Codex, and Codex runs them only after you trust them in <code>/hooks</code>. The
+        prompt hook sends up to 5 memories that match each prompt. Capturing sessions is a separate, opt-in step.
+        <code>hippo hook install codex</code> wraps the Codex launcher, and <code>hippo hook uninstall codex</code>
+        removes the wrapper.
       </p>
     </Section>
 
     <Section title="What hippo adds to AGENTS.md" alt>
-      <Cmd lines={block} prompt={false} />
       <p>
-        It closes with a note that session-end capture runs by itself once the Codex wrapper is installed, and a
-        <code>hippo capture --stdin</code> command for a manual summary when it is not. The block sits between
-        <code>&lt;!-- hippo:start --&gt;</code> and <code>&lt;!-- hippo:end --&gt;</code> markers, so the rest of your
-        <code>AGENTS.md</code> stays yours.
+        The block sits between <code>&lt;!-- hippo:start --&gt;</code> and <code>&lt;!-- hippo:end --&gt;</code> markers,
+        so the rest of your <code>AGENTS.md</code> stays yours. It tells Codex that the prompt hook injects pinned rules
+        and matching memories, and to run <code>hippo context --auto --budget 1500</code> only when no memory block has
+        appeared in the session.
       </p>
     </Section>
 
-    <Section title="Codex memories and hippo">
+    <Section title="Codex's own memories" id="codex-memories-and-hippo">
       <p>
-        Codex has a Memories feature of its own: it can turn useful context from eligible prior chats into local memory
-        files under <code>~/.codex/memories/</code>. OpenAI's docs say to keep required team guidance in
-        <code>AGENTS.md</code> or checked-in documentation, and to treat memories as a helpful recall layer, not as the only
-        source for rules that must always apply
+        Codex has a Memories feature of its own, off by default, that writes local memory files under
+        <code>~/.codex/memories/</code>
         (<a class="link" href={codexMemories} target="_blank" rel="noopener noreferrer">OpenAI docs<span class="sr-only"> (opens in new tab)</span></a>,
-        checked 2026-09-28).
-      </p>
-      <p>
-        Codex memories are off by default. Turn them on with <code>memories = true</code> under <code>[features]</code>
-        in <code>config.toml</code>, and use <code>/memories</code> in a session to choose whether that chat uses them
-        (<a class="link" href={codexMemories} target="_blank" rel="noopener noreferrer">OpenAI docs<span class="sr-only"> (opens in new tab)</span></a>,
-        checked 2026-10-25).
-      </p>
-      <p>
-        When they are on, hippo reads them too. <code>hippo init</code>, every <code>hippo sleep</code> and the daily run
-        import the User Profile, preferences and general tips from <code>~/.codex/memories/memory_summary.md</code> into
-        your global store, so your other agents can recall them. Hippo only reads that file and never writes to Codex's
-        folders.
-      </p>
-      <p>
-        Hippo is a recall layer too, with two differences. You can mark a lesson wrong with <code>hippo outcome --bad</code>
-        or replace one with <code>hippo supersede</code>. And the store sits in your project, with markdown mirrors you can
-        commit, shared with Claude Code, Cursor and any MCP client.
+        checked 25 October 2026). When it is on, hippo reads <code>memory_summary.md</code> from that folder at init, at
+        every sleep and in the daily run, and copies it into your global store so your other agents can recall it. Hippo
+        never writes to Codex's folders. Notes that look like secrets are skipped, and email addresses are masked.
       </p>
     </Section>
 
-    <Section title="What the Codex wrapper does" alt>
+    <Section title="What the wrapper does" id="what-the-codex-wrapper-does" alt>
       <p>
-        After <code>hippo hook install codex</code>, each Codex launch goes through <code>hippo codex-run</code>. It shows
-        the summary of the last session-end run, notes where Codex's <code>history.jsonl</code> ends, and then starts the
-        real Codex.
-      </p>
-      <p>
-        When Codex exits, a background worker takes over. If the folder has its own store, the worker runs
-        <code>hippo sleep</code> on it. Then it finds this session's transcript and captures lessons from it into the
-        folder's store, or into the global store when the folder has none. With no store at all, it does nothing.
+        After <code>hippo hook install codex</code>, each launch goes through <code>hippo codex-run</code>, which starts
+        the real Codex. When Codex exits, a background worker runs <code>hippo sleep</code> and captures lessons from the
+        session transcript into the folder's store, or into the global store when the folder has none.
       </p>
     </Section>
 
     <Faq
-      items={faqPick(['How do I give Codex memory across sessions?', 'Which agents does hippo work with?', 'What happens when a memory turns out to be wrong?'])}
+      items={faqPick(['How do I give Codex memory across sessions?'])}
       heading="Codex questions"
       moreHref="/faq/"
     />

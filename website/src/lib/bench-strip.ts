@@ -1,8 +1,10 @@
 // Layout for one benchmark's field strip: a published lane of rings over a run-here lane of dots, one shared axis.
+import data from '../data/public-benchmarks.json';
+
 export interface Rival { name: string; value: number; diff: number; lo: number; hi: number }
 export interface Published { name: string; system: string; value: number; kind: string; src: string }
 export interface Bench {
-  name: string; unit: string; n: number; hippo: number; file: string;
+  name: string; unit: string; n: number; hippo: number; setting: string; file: string;
   rivals: Rival[]; published: Published[]; rank: number | null; field: number | null;
 }
 type Anchor = 'start' | 'middle' | 'end';
@@ -12,6 +14,8 @@ export interface Strip {
   w: number; h: number; gridTop: number; gridBottom: number; divY: number; hereY: number;
   ticks: { x: number; v: number; anchor: Anchor }[]; dots: Dot[]; labels: Label[];
 }
+// site_data.py writes this file; typing it here makes a field it stops writing a type error, not a runtime one.
+export const publicBenches: readonly Bench[] = data.benches;
 
 const CHAR = 7.4; // Geist Mono at 12px, with a little room
 // Published values keep their second decimal (93.05 stays 93.05); ours carry one.
@@ -77,8 +81,8 @@ export function strip(b: Bench, w: number): Strip {
   }
 
   const gridBottom = Math.max(...labels.map((l) => l.y)) + 10;
-  const ticks = [];
-  for (let v = lo; v <= 100; v += 10) ticks.push({ x: x(v), v, anchor: (v === lo ? 'start' : v === 100 ? 'end' : 'middle') as Anchor });
+  const ticks: Strip['ticks'] = [];
+  for (let v = lo; v <= 100; v += 10) ticks.push({ x: x(v), v, anchor: v === lo ? 'start' : v === 100 ? 'end' : 'middle' });
   return { w, h: gridBottom + 18, gridTop: 20, gridBottom, divY, hereY, ticks, dots, labels };
 }
 

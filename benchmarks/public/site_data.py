@@ -11,15 +11,18 @@ ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "benchmarks/public/results/2026-11-12-answer-accuracy"
 OUT = ROOT / "website/src/data/public-benchmarks.json"
 PAIR = r"\s*{metric}:\s+([+-][\d.]+) pp \[\s*([+-][\d.]+),\s*([+-][\d.]+)\] n=(\d+)"
-# name, score file, hippo's value pattern, the paired-line prefix and metric, the unit shown
+# name, score-file stem, hippo's value pattern, the paired-line prefix and metric, the unit shown, hippo's settings answered at
+# the card's cutoff. The card shows the higher setting and names it; LoCoMo and LongMemEval-S ran hippo-best only at 50 and 10.
 BENCHES = [
-    ("LoCoMo", "locomo-h2h-emb.txt", r"=== top 200 ===\nhippo-emb\s+n=\d+\s+F1\s+[\d.]+\s+judge\s+([\d.]+)", "top 200 ", "judge", "%"),
-    ("LongMemEval-S", "longmemeval-s-emb.txt", r"hippo-emb\s+acc@200\s+n=\d+\s+mean\s+([\d.]+)", "secondary acc@200 ", "", "%"),
-    ("PersonaMem v1", "personamem_v1-emb.txt", r"hippo-emb\s+accuracy\s+([\d.]+)", "secondary ", "", "%"),
-    ("DMR", "dmr-emb.txt", r"hippo-emb\s+accuracy\s+([\d.]+)", "secondary ", "", "%"),
-    ("HotPotQA-24 (Cognee)", "hotpotqa24-emb.txt", r"hippo-emb\s+EM\s+[\d.]+\s+F1\s+([\d.]+)", "secondary ", " F1", "F1"),
+    ("LoCoMo", "locomo-h2h", r"=== top 200 ===\n{arm}\s+n=\d+\s+F1\s+[\d.]+\s+judge\s+([\d.]+)", "top 200 ", "judge", "%", ("hippo-emb",)),
+    ("LongMemEval-S", "longmemeval-s", r"{arm}\s+acc@200\s+n=\d+\s+mean\s+([\d.]+)", "secondary acc@200 ", "", "%", ("hippo-emb",)),
+    ("PersonaMem v1", "personamem_v1", r"{arm}\s+accuracy\s+([\d.]+)", "secondary ", "", "%", ("hippo-emb", "hippo-best")),
+    ("DMR", "dmr", r"{arm}\s+accuracy\s+([\d.]+)", "secondary ", "", "%", ("hippo-emb", "hippo-best")),
+    ("HotPotQA-24 (Cognee)", "hotpotqa24", r"{arm}\s+EM\s+[\d.]+\s+F1\s+([\d.]+)", "secondary ", " F1", "F1", ("hippo-emb", "hippo-best")),
 ]
-ARM = {"hippo365": "hippo, embeddings off", "bm25": "BM25", "mem0": "Mem0", "full": "Full chat"}
+SETTING = {"hippo-emb": "local embedder", "hippo-best": "local embedder and reranker"}
+ARM = {"hippo365": "hippo, embeddings off", "hippo-emb": "hippo, embedder only", "bm25": "BM25", "mem0": "Mem0",
+       "full": "Full chat"}
 MEMORY_SYSTEMS_HERE = {"Mem0"}  # rivals run here that are memory products; BM25 and full chat are controls
 SKIP = re.compile(r"recall|R@|not answer accuracy|retrieval|^F1$|DeepEval", re.I)  # measures other than answer accuracy
 FOLD = {"Mem0g": "Mem0", "Mastra RAG": "Mastra", "Mastra Observational Memory": "Mastra"}  # one row per vendor
@@ -47,11 +50,11 @@ def product(name: str) -> str:
     return FOLD.get(base, base)
 
 
-def ours(text: str, pattern: str, prefix: str, metric: str) -> tuple[float, list[dict], int]:
-    m = re.search(pattern, text, re.M)
+def ours(text: str, pattern: str, prefix: str, metric: str, arm: str) -> tuple[float, list[dict], int]:
+    m = re.search(pattern.format(arm=arm), text, re.M)
     if not m:
-        sys.exit(f"hippo's score line not found ({pattern}): the score file format changed, update BENCHES")
-    pair = re.compile(rf"^{prefix}hippo-emb - (\w+) \(([\d.]+) in [\w-]+\)" + PAIR.format(metric=metric), re.M)
+        sys.exit(f"hippo's score line not found ({pattern}, {arm}): the score file format changed, update BENCHES")
+    pair = re.compile(rf"^{prefix}{arm} - ([\w-]+) \(([\d.]+) in [\w-]+\)" + PAIR.format(metric=metric), re.M)
     rivals = [{"name": ARM[a], "value": float(v), "diff": float(d), "lo": float(lo), "hi": float(hi)}
               for a, v, d, lo, hi, _ in pair.findall(text)]
     ns = {int(n) for *_, n in pair.findall(text)}
@@ -95,13 +98,18 @@ def main() -> None:
         sys.exit("mem0-locomo-ingest-gate.json: the gate did not pass or has no extraction-call count")
     rel = res.resolve().relative_to(ROOT).as_posix()
     benches = []
-    for name, file, pattern, prefix, metric, unit in BENCHES:
-        hippo, rivals, n = ours((res / file).read_text(encoding="utf-8"), pattern, prefix, metric)
+    for name, stem, pattern, prefix, metric, unit, arms in BENCHES:
+        files = {arm: f"{stem}-{arm.removeprefix('hippo-')}.txt" for arm in arms}
+        scored = {arm: ours((res / f).read_text(encoding="utf-8"), pattern, prefix, metric, arm) for arm, f in files.items()}
+        arm = max(arms, key=lambda a: scored[a][0])
+        hippo, rivals, n = scored[arm]
         pub = published(comp, name)
         place = rank(hippo, rivals, pub)
-        benches.append({"name": name, "unit": unit, "n": n, "hippo": hippo, "file": f"{rel}/{file}", "rivals": rivals,
-                        "published": pub, "rank": place[0] if place else None, "field": place[1] if place else None})
-        print(json.dumps({"bench": name, "hippo": hippo, "n": n, "rank": place, "rivals": len(rivals), "published": len(pub)}))
+        benches.append({"name": name, "unit": unit, "n": n, "hippo": hippo, "setting": SETTING[arm], "file": f"{rel}/{files[arm]}",
+                        "rivals": rivals, "published": pub, "rank": place[0] if place else None,
+                        "field": place[1] if place else None})
+        print(json.dumps({"bench": name, "hippo": hippo, "setting": SETTING[arm], "n": n, "rank": place, "rivals": len(rivals),
+                          "published": len(pub)}))
     out = {"answerModel": "Claude Sonnet 5", "receipts": rel, "benches": benches,
            "storeCalls": {"bench": "LoCoMo", "mem0": int(calls.group(1)), "hippo": 0,
                           "file": f"{rel}/mem0-locomo-ingest-gate.json"}}

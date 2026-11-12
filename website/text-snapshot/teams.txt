@@ -1,52 +1,28 @@
-hippo for teams: memory your platform team can approve
-Skip to content ~/hippo How it works
+hippo for teams: what exists today and what is planned
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
-Home
-Quickstart
+N Install
 How it works
-Benchmarks
-FAQ
 Teams
+Benchmarks
 Compare
 Docs
-Enterprise vN · in development · pilots open The memory layer your platform team can approve.
-The commercial edition is planned; its private repository is a scaffold, not a released enterprise product. One plugin turns on shared memory for every agent seat. It runs inside your network, recalls only what each developer can already see, and logs every write. No usage beacon, nothing sent home.
-Ask about a N-week pilot Security policy
-How it deploys
-Claude Code
-Copilot
-Cursor
-Codex
-MCP over OAuth, signed in as the developer
-YOUR NETWORK
-hippo server Postgres · Helm · SSO · audit log
-GitHub
-GitLab
-Jira
-Slack
-Today: the MIT core, the HTTP server with tenants, API keys and an audit log, and GitHub and Slack connectors. Postgres, Helm, SSO and more sources are in development.
-in development Recall respects access
-A memory learned in a private repository only reaches developers who can open that repository.
-in development Leads approve what spreads
-A lesson moves from one repository to a team, or to the whole company, only after a tech lead approves it.
-shipped Every write is on the record
-An audit log of who stored, recalled, changed or forgot what. Keys scoped to tenants and roles.
-Measured on your work, against a holdout.
-For four weeks, a random share of sessions runs without memory. Both groups work on the same days, with the same people and models, so a model price change or a quiet week cannot fake a saving. The numbers come from your agent’s own telemetry, computed inside your network.
-If there is no difference, the report says so. We publish our own losses too.
-Cost per merged PR from your agent’s own billing telemetry
-Read tokens per session the share spent re-reading files
-Repeat-error rate the same failure seen again in a later session
-Guardrails reverts, rejected reviews and CI failures must not rise
-with hippo vs holdout · N% interval · your result
-~/hippo
+Hippo for teams is planned. Here is what exists today.
+The commercial edition is planned; its private repository is a scaffold, not a released enterprise product.
+What you can run today
+The MIT core includes an HTTP server with tenants, API keys, admin and member roles, per-key scope grants and an audit log on every change. Keys are stored scrypt-hashed, and one API call deletes a memory. Slack and GitHub connectors bring in what your team has already written down.
+What is planned
+SSO, SCIM, SIEM export, a hosted service and an SLA are planned, with Jira and Notion connectors next. None of it is released.
+How we would measure it with you
+The fair test is a holdout, where a random share of sessions runs without memory and you compare cost per merged PR and repeat errors between the two groups. We have no team result to show. If your team wants to try, open an issue and tell us what you'd need.
+Open an issue (opens in new tab) Security policy (opens in new tab)
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
-GitHubnpmDocsChangelogLicense (MIT)
-hippo-memory vN · MIT · built by kitfunso
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso

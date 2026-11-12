@@ -1,68 +1,47 @@
-Memory decay for AI agents: how hippo works | hippo-memory
-Skip to content ~/hippo How it works
+How hippo works: recall, decay and what we measured
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
-Home
-Quickstart
+N Install
 How it works
-Benchmarks
-FAQ
 Teams
+Benchmarks
 Compare
 Docs
-How hippo decides what your agent forgets
-Every memory has a strength. It fades on a half-life, grows each time the memory is recalled, and drops when you mark the memory wrong. A newer fact can supersede an older one, and memories that contradict each other are flagged.
-The design borrows from the hippocampus, but that is inspiration, not evidence. In our mechanism audit, outcome marks and retrieval strengthening measured helping; supersession is not measured yet, and decay and sleep have not been shown to make recall better.
-Memories decay. Retrieval makes them stronger.
-The layers borrow from the brain as design inspiration. On our tests, decay made no measurable difference to recall and sleep cost a little. Outcome marks and retrieval strengthening are what measured helpful; supersession is not measured yet.
-Buffer New information lands here. Session-only, no decay.
-encode
-Episodic Timestamped, decays by default. Retrieval strengthens it; errors stick.
-sleep
-Semantic Repeated episodes compress into stable patterns. The originals decay.
+How hippo decides what your agent remembers
+Every memory has a strength. It fades on a half-life, grows each time the memory is recalled, and drops when you mark it wrong. The hippocampus inspired the design, and we tested each part on its own. On synthetic tests, outcome marks and recall strengthening helped and decay made no measurable difference. Sleep lowered recall on one scorer, and the rest is unmeasured.
+day N · recalled N · unused N
+Buffer
+New information lands here for the session.
+Episodic
+Timestamped memories that fade unless they are used.
+Semantic
+Patterns merged from related episodes during sleep.
 N½N
 recallmarked wrong×supersededrecalledleft alone
 savedN moN yrN moN yr
-Nd half-life Decay by default
-Every memory fades on a one-year half-life unless it is used. We did not tune N days: it tied with N days and with decay off.
-+Nd / recall Retrieval strengthens
-Use it or lose it. Each recall extends the half-life. Memories you reach for survive.
-Nx half-life Errors stick
-Tag a failure once. It decays slower and resurfaces every time you walk back into that code.
-N+ → N Sleep consolidates
-On hippo sleep, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy; it has not been shown to improve recall.
-Each mechanism, with what was measured
-Decay: a N-day half-life
-Every memory has a half-life, N days by default, and its strength halves each time one passes without use. Until N the default was N days. On a pre-registered test, the current version of a fact was in the top five N% of the time at N days and N% at N days, and N days and decay switched off both tied with N (result (opens in new tab)). So N was not tuned, and on that test decay made no measurable difference to recall. Set defaultHalfLifeDays in .hippo/config.json to choose your own, or pin a memory so it never decays.
-Recall strengthens
-Each recall adds N days to a memory's half-life. Recall ranks memories by relevance, strength and recency, and the strongest matches fill the token budget first.
-Errors stick
-A memory stored with --error, or captured from a failed tool call, gets twice the half-life.
-Outcome marks
-hippo outcome --good or --bad marks the memories from the last recall. After N good marks and no bad ones, a memory's effective half-life is about N% longer; after N bad marks and no good ones, it decays nearly twice as fast. On the synthetic EN test, where every mark is correct, plain BMN plus the outcome mark cut how often a marked-bad memory stayed in the top five from N% to N% (mechanism audit, round N (opens in new tab)). Real marks are noisier, because --bad marks the whole recall batch.
-Supersession and invalidation
-hippo supersede <id> "<new fact>" stores the new version and links the old one to it; the old one leaves recall but stays on record. hippo decide "<decision>" --supersedes <id> replaces an earlier architectural decision, halving its half-life and marking it stale. hippo learn --git weakens memories about a tool that a migration commit replaced, and hippo reject <id> --reason "<why>" stops a value from coming back at all.
-Conflicts
-When two memories overlap in content and contradict each other, hippo records an open conflict; shared tags alone do not count. hippo sleep refreshes the list, hippo conflicts shows it, and each conflict is mirrored under .hippo/conflicts/. Resolving one keeps one memory and weakens or deletes the other.
-Sleep and dormant memories
-hippo sleep merges three or more related episodes into one pattern, and the originals decay. It keeps the store tidy but has not been shown to improve recall: in round N of the mechanism audit, a slept LongMemEval store scored N points lower at hit@N than the same store never slept. A memory that fades below the threshold goes dormant instead of being deleted. hippo dormant restore <id> brings it back, and a dormant memory nobody restores is deleted after N days by default.
-Confidence
-Each memory is verified, observed, inferred or stale, and hippo context shows the level beside each memory. A memory unretrieved for N days or more is marked stale at the next sleep, and a recall wakes it back to observed.
+Marking a recall good or bad
+hippo outcome --good or --bad marks the memories from the last recall. After N good marks and no bad ones, a memory's half-life is about N% longer. After N bad marks and no good ones it decays N times as fast. On a synthetic test where every mark was correct, a bad mark cut how often a wrong memory stayed in the top five from N% to N%. Real marks are noisier, because --bad marks the whole recall batch.
+Recall makes a memory last longer
+Each recall adds N days to a memory's half-life, so N days becomes N and then N Recall ranks memories by relevance, strength and recency, and the strongest matches fill the token budget first. In the first round of our audit this helped on the synthetic test, in its best case.
+Errors last twice as long
+A memory stored with --error, or captured from a failed tool call, gets a N-day half-life against the usual N We haven't measured whether that helps.
+Decay, on a N-day half-life
+A memory's strength halves each time a half-life passes without use. The default used to be N days, which turned out to be a bug. On a test we registered first, the current version of a fact was in the top five N% of the time at N days and N% at N We did not tune N It tied with N days and with decay switched off, so on that test decay made no measurable difference. Set defaultHalfLifeDays in .hippo/config.json to choose your own, or pin a memory so it never decays.
+Sleep merges related memories
+hippo sleep merges two or more related episodes into one pattern, and the originals fade. It keeps the store tidy. It has not been shown to improve recall, and on one scorer a slept store scored N points lower than the same store never slept. A memory that fades below the threshold goes dormant, hippo dormant restore <id> brings it back, and a dormant memory nobody restores is deleted after N days by default.
+Replacing a fact, and spotting contradictions
+hippo supersede <id> "<new fact>" stores the new version and links the old one to it. The old one leaves recall and stays on record, and hippo recall --as-of <date> shows what was current on a given day. hippo reject <id> --reason "<why>" stops a value coming back at all. When two memories overlap in content and contradict each other, hippo records a conflict that hippo conflicts lists. Each memory also carries a confidence level of verified, observed, inferred or stale. None of this is measured yet.
 Questions about how it works
 All N questions →
-What happens when a memory turns out to be wrong? +
-Mark it, and it drops out of the top results. hippo outcome --bad weakens the memories from the last recall, hippo supersede <id> "<new fact>" replaces one with a newer version, and hippo reject <id> --reason "<why>" stops that value from returning at all. On the synthetic EN test, where every mark is correct, plain BMN plus the outcome mark cut how often a marked-bad memory stayed in the top five from N% to N%. Real marks are noisier, because --bad marks the whole recall batch.
 Is this just RAG? +
-No. RAG searches a fixed corpus. Hippo's store changes as your agent works: a memory marked wrong drops out of the top results, a newer fact supersedes the old one, and memories that keep getting recalled last longer while unused ones fade on a half-life. Recall itself is search: BMN plus embeddings if you install them.
-Does it need embeddings? +
-No. Recall runs on BMN out of the box, with no model and no network call, and a default install has no embedder. Embeddings are an optional install for hybrid search. On LongMemEval-S, where each question gets its own haystack, the benchmark scripts (not hippo recall) fuse BMN with the free local MiniLM embedder and reach N% recall@N counting a hit when any answer session is in the top five. On LongMemEval's oracle split with one pooled store, BMN alone scored N% recall@N in vN The two runs use different setups, so they are not a before and after.
-~/hippo
+Partly. Recall is search, BMN plus embeddings if you install them. The difference is that the store changes as your agent works. A memory you mark wrong drops down the results, a newer fact replaces an old one, and unused memories fade.
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
-GitHubnpmDocsChangelogLicense (MIT)
-hippo-memory vN · MIT · built by kitfunso
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso

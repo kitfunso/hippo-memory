@@ -1,36 +1,23 @@
 ---
+// The pain, as scenes a developer recognises; heading left, a ruled list right from lg up.
 import { problem } from '../content/site';
+import { mdInline } from '../content/readme';
+import Band from './Band.astro';
 ---
 
-<section id="problem" class="relative border-t border-white/5 bg-white/[0.02]">
-  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-    <div class="grid grid-cols-1 gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
-      <div>
-        <h2 class="max-w-xl text-3xl leading-tight sm:text-4xl">
-          {problem.heading}
-        </h2>
-        <div class="mt-6 max-w-lg space-y-4 text-lg leading-relaxed text-zinc-400">
-          {problem.body.map((p) => <p>{p}</p>)}
-        </div>
-      </div>
-
-      <!-- the "saw it four times" motif: repeated faded failures, one finally remembered -->
-      <div class="flex min-w-0 items-center" data-reveal>
-        <div class="w-full min-w-0 space-y-3 font-mono text-sm" aria-hidden="true">
-          {[1, 2, 3].map((n) => (
-            <div class="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.015] px-4 py-3 text-zinc-400">
-              <span class="text-rose-400/60">✗</span>
-              <span class="min-w-0 flex-1">deploy failed: forgot migrations</span>
-              <span class="shrink-0 text-zinc-400">run #{n}</span>
-            </div>
-          ))}
-          <div class="ring-grad flex items-center gap-3 rounded-lg bg-white/[0.03] px-4 py-3 text-zinc-200">
-            <span class="text-emerald-400">✓</span>
-            <span class="min-w-0 flex-1">remembered · surfaced before run #4</span>
-            <span class="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-300">[verified]</span>
-          </div>
-        </div>
-      </div>
+<Band id="problem">
+  <div class="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+    <div class="lg:sticky lg:top-24 lg:self-start">
+      <h2>{problem.heading}</h2>
+      <p class="mt-5 text-body leading-relaxed text-ink-2">{problem.intro}</p>
     </div>
+    <ol class="border-t border-rule">
+      {problem.items.map((item) => (
+        <li class="border-b border-rule py-6">
+          <h3 class="text-[1.0625rem] text-ink">{item.title}</h3>
+          <p class="copy mt-2 leading-relaxed text-ink-2" set:html={mdInline(item.text)} />
+        </li>
+      ))}
+    </ol>
   </div>
-</section>
+</Band>

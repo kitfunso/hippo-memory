@@ -15,8 +15,8 @@ const Wrap = copy ? 'div' : Fragment;
 ---
 
 <Wrap class="relative">
-<pre class:list={['whitespace-pre-wrap rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg [overflow-wrap:anywhere]', copy && 'pr-20']}><code>{lines.map((line, i) => (
-  <Fragment>{i > 0 && '\n'}{!prompt ? line : line.startsWith('#') ? <span class="text-zinc-400">{line}</span> : <Fragment><span class="select-none text-term-prompt">$ </span>{line}</Fragment>}</Fragment>
+<pre class:list={['whitespace-pre-wrap rounded-xl border border-rule bg-paper-3 p-5 font-mono text-sm leading-relaxed text-ink [overflow-wrap:anywhere]', copy && 'pr-20']}><code>{lines.map((line, i) => (
+  <Fragment>{i > 0 && '\n'}{!prompt ? line : line.startsWith('#') ? <span class="text-ink-2">{line}</span> : <Fragment><span class="select-none text-accent">$ </span>{line}</Fragment>}</Fragment>
 ))}</code></pre>
 {copy && <div class="absolute right-3 top-3"><CopyButton text={copied.join('\n')} label={label} /></div>}
 </Wrap>

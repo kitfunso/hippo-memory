@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>hero render</title>
+<style>
+@font-face { font-family: "Geist Mono"; font-weight: 400; src: url(/node_modules/@fontsource/geist-mono/files/geist-mono-latin-400-normal.woff2); }
+@font-face { font-family: "Geist Mono"; font-weight: 600; src: url(/node_modules/@fontsource/geist-mono/files/geist-mono-latin-600-normal.woff2); }
+@font-face { font-family: Newsreader; font-weight: 500; src: url(/node_modules/@fontsource/newsreader/files/newsreader-latin-500-normal.woff2); }
+html, body { margin: 0; background: #fff; }
+canvas { display: block; }
+</style>
+<script type="importmap">{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }</script>
+<canvas id="c"></canvas>
+<script type="module">
+import { mount } from './cabinet.js';
+const q = new URLSearchParams(location.search);
+const c = document.getElementById('c');
+c.style.width = `${q.get('w')}px`;
+c.style.height = `${q.get('h')}px`;
+await Promise.all([document.fonts.load('600 100px "Geist Mono"'), document.fonts.load('400 50px "Geist Mono"'), document.fonts.load('500 76px Newsreader')]);
+const api = await mount(c, { still: true, capture: true, dpr: 1, mono: '"Geist Mono", monospace', serif: 'Newsreader, Georgia, serif' });
+window.frameAt = (t) => { api.renderAt(t); return c.toDataURL('image/png'); };
+window.ready = true;
+</script>

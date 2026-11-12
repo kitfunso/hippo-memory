@@ -2,40 +2,46 @@
 import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
 import Hero from '../components/Hero.astro';
+import HeroScene from '../components/HeroScene.astro';
 import Problem from '../components/Problem.astro';
-import HowItWorks from '../components/HowItWorks.astro';
-import GetStarted from '../components/GetStarted.astro';
+import Session from '../components/Session.astro';
+import HomeHow from '../components/HomeHow.astro';
+import Different from '../components/Different.astro';
+import TheTest from '../components/TheTest.astro';
+import HomeBench from '../components/HomeBench.astro';
+import HomeTeams from '../components/HomeTeams.astro';
 import LocalFirst from '../components/LocalFirst.astro';
-import Receipts from '../components/Receipts.astro';
 import Compare from '../components/Compare.astro';
 import Faq from '../components/Faq.astro';
-import InstallCta from '../components/InstallCta.astro';
+import GetStarted from '../components/GetStarted.astro';
 import Footer from '../components/Footer.astro';
-import { faqPick } from '../content/site';
+import { site, faqPick } from '../content/site';
 
 // The home FAQ is a sample; /faq/ holds every question and the FAQPage markup.
-const homeFaq = faqPick([
-  'Is this just RAG?',
-  'Which agents does hippo work with?',
-  'Where does hippo keep my data?',
-  'How is hippo different from mem0?',
-  'What happens when a memory turns out to be wrong?',
-  'Has hippo been shown to make agents better at their work?',
-]);
+const homeFaq = faqPick(['Do I still need CLAUDE.md?', 'What does hippo cost?']);
 ---
 
-<Base>
+<Base title={site.title}>
   <Nav />
   <main id="main">
-    <Hero />
+    <Hero>
+      <HeroScene slot="figure" />
+    </Hero>
     <Problem />
-    <HowItWorks />
-    <GetStarted />
-    <LocalFirst />
-    <Receipts />
-    <Compare />
+    <Session />
+    <TheTest />
+    <HomeHow />
+    <Different />
+    <HomeBench />
+    <HomeTeams />
+    <section class="border-t border-rule bg-paper-2">
+      <div class="wrap grid gap-14 py-(--section-y) lg:grid-cols-2 lg:gap-16">
+        <LocalFirst />
+        <Compare />
+      </div>
+    </section>
     <Faq items={homeFaq} moreHref="/faq/" />
-    <InstallCta />
+    <GetStarted />
   </main>
   <Footer />
 </Base>

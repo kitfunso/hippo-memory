@@ -1,8 +1,8 @@
 # 🦛 Hippo
 
-**Stop re-teaching your agent.**
+**Your corrections, remembered by Claude Code, Codex and Cursor.**
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents. It's a critical layer for your AI harness that connects across your different tools (Cursor, Claude Code, Codex). It keeps your proprietary data completely local, and it actually learns over time. By strengthening memories each time they are recalled, Hippo preserves what works, lets mistakes decay, and continuously compounds your agents' intelligence.
+Hippo is open-source memory that runs on your machine and gives the rules it captured back to the agent when a new session starts. In our Claude Code test on 29 repositories, adding it to built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.
 
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![npm downloads](https://img.shields.io/npm/dm/hippo-memory)](https://npmjs.com/package/hippo-memory)
@@ -24,7 +24,7 @@ npm install -g hippo-memory && hippo init
 
 Setting up every git repo under a folder in one go is a second step. The [Quick start](#quick-start) says what it changes, then gives the command.
 
-Package installation alone does not enable automatic preservation on every agent. Complete the documented setup and required host trust; capture and compaction coverage depend on the integration.
+Installing the package alone captures nothing, and what runs after init depends on the agent.
 
 Having an AI agent install it? Point it at [llms-install.md](llms-install.md): it installs, wires hippo into the agents it finds, and verifies with `hippo doctor`.
 
@@ -88,7 +88,7 @@ npm install -g hippo-memory
 hippo init
 ```
 
-**Optional: many repos at once.** Read what it changes first. `hippo init --scan <folder>` looks for git repos in the folder and up to three levels below it, skipping dot-folders and `node_modules`. Each repo gets a `.hippo/` store, seeded with lessons from the last 365 days of its commits and with its [agent memories](#agent-memories), and is added to the daily run's list. For the agents it finds, it installs the same user-level hooks as `hippo init`: 7 Claude Code hook entries in `~/.claude/settings.json` and the OpenCode plugin. It also sets up the daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`. `--no-hooks`, `--no-schedule` and `--no-learn` leave out the hooks, the daily run and the history import.
+**Optional: many repos at once.** Read what it changes first. `hippo init --scan <folder>` looks for git repos in the folder and up to three levels below it, skipping dot-folders and `node_modules`. Each repo gets a `.hippo/` store, seeded with lessons from the last 365 days of its commits and with its [agent memories](#agent-memories), and is added to the daily run's list. For the agents it finds, it installs the same user-level hooks as `hippo init`: 8 Claude Code hook entries in `~/.claude/settings.json` and the OpenCode plugin. It also sets up the daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`. `--no-hooks`, `--no-schedule` and `--no-learn` leave out the hooks, the daily run and the history import.
 
 ```bash
 hippo init --scan ~
@@ -119,7 +119,7 @@ Run `hippo init` inside one project. This is everything it writes, in the projec
 
 - **The project's store.** A `.hippo/` folder: SQLite plus markdown mirrors. On the first run in a git repo it learns lessons from the last 30 days of commits.
 - **Instruction files.** A block between `<!-- hippo:start -->` and `<!-- hippo:end -->` in the project's `CLAUDE.md` or `AGENTS.md`, only if that file already exists. Codex, Cursor, OpenClaw, OpenCode and Pi read `AGENTS.md`.
-- **Claude Code,** when the project has `CLAUDE.md` or `.claude/settings.json`: 7 hook entries in `~/.claude/settings.json`, one each on SessionEnd, UserPromptSubmit, PreCompact, PostCompact and PostToolUseFailure and two on SessionStart. [Framework Integrations](#framework-integrations) says what each one runs.
+- **Claude Code,** when the project has `CLAUDE.md` or `.claude/settings.json`: 8 hook entries in `~/.claude/settings.json`, one each on SessionEnd, UserPromptSubmit, PreCompact, PostCompact and PostToolUseFailure and three on SessionStart. [Framework Integrations](#framework-integrations) says what each one runs.
 - **OpenCode,** when the project has `.opencode/` or `opencode.json`: a plugin at `~/.config/opencode/plugins/hippo.ts`.
 - **Codex,** when the project has `AGENTS.md` or `.codex` and Codex is installed (`$CODEX_HOME`, else `~/.codex`, exists): 2 hook entries in Codex's `hooks.json`, one on UserPromptSubmit that sends your pinned memories plus up to 5 that match the prompt with every prompt and one on SessionStart after a compaction. **Codex runs them only after you trust them once in `/hooks`.** Init also prints `hippo hook install codex`, the opt-in that wraps the Codex launcher to capture sessions; `hippo hook uninstall codex` removes hippo's hooks and the wrapper.
 - **A daily run at 6:15am,** one per machine: a crontab line on Linux and macOS, a scheduled task named `hippo-daily-runner` on Windows. It runs `hippo learn --git --days 1` and then `hippo sleep` in every project listed in `~/.hippo/workspaces.json`, and init adds this project to that list.
@@ -773,7 +773,7 @@ The command runs with no shell, so each argument reaches the program as written.
 | `hippo decide "<decision>" --context "<why>"` | Include reasoning |
 | `hippo decide "<decision>" --supersedes <id>` | Supersede a previous decision |
 | `hippo hook list` | Show available framework hooks |
-| `hippo hook install <target>` | Install hook (claude-code also adds its 7 settings.json hook entries: session start and end, each prompt, compaction, failed tool calls) |
+| `hippo hook install <target>` | Install hook (claude-code also adds its 8 settings.json hook entries: session start and end, each prompt, compaction, failed tool calls) |
 | `hippo hook uninstall <target>` | Remove hook |
 | `hippo handoff create --summary "..."` | Create a session handoff |
 | `hippo handoff latest` | Show the most recent handoff |
@@ -813,7 +813,7 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 
 | Framework | Detected by | Patches |
 |-----------|------------|---------|
-| Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
+| Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 8 hook entries in `~/.claude/settings.json` (listed below) |
 | Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + `UserPromptSubmit`/`SessionStart(compact)` hooks in Codex's `hooks.json` when Codex is installed (trust them once in `/hooks`); session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
 | Cursor | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
 | OpenClaw | `.openclaw` or `AGENTS.md` | `AGENTS.md`; the native plugin is a separate install: `openclaw plugins install hippo-memory` |
@@ -829,7 +829,7 @@ Setup guides on the website: [Claude Code](https://hippo-memory.com/claude-code/
 If you prefer explicit control:
 
 ```bash
-hippo hook install claude-code   # patches CLAUDE.md + adds the 7 settings.json hook entries listed below
+hippo hook install claude-code   # patches CLAUDE.md + adds the 8 settings.json hook entries listed below
 hippo hook install codex         # patches AGENTS.md + adds hooks to Codex's hooks.json + wraps the detected Codex launcher
 hippo hook install cursor        # patches AGENTS.md
 hippo hook install openclaw      # patches AGENTS.md
@@ -844,9 +844,10 @@ This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the
 
 The block asks for nothing a hook already does, because each extra tool call re-reads the whole context. Re-running `hippo init` swaps a block an older hippo wrote for the current one, as long as nobody edited it. It leaves an edited block alone and says so, and never touches text outside the markers.
 
-For Claude Code, it also adds 7 hook entries to `~/.claude/settings.json`:
+For Claude Code, it also adds 8 hook entries to `~/.claude/settings.json`:
 - a `SessionEnd` hook that runs `hippo sleep` and then `hippo capture` when the session exits. Capture matches the last 20 user and 10 assistant messages of the transcript against word patterns for decisions, rules, errors and preferences. It uses no model unless you turn on `capture.followUpRules` (see Conversation Capture) and does not read earlier turns, so a correction older than that window needs a `hippo remember` by hand.
 - a `SessionStart` hook that prints the previous session's consolidation log on stderr, where `claude --debug` shows it. When the last sleep failed or a compaction summary was set aside, it shows you one line that points to `hippo doctor`.
+- a second `SessionStart` hook that runs `hippo session-rules`, which prints the rules you taught under `## Rules from the user` and nothing else. It has no matcher, so a resumed or cleared session and a compaction get the rules again.
 - a `UserPromptSubmit` hook that runs `hippo context --pinned-only --include-recent 5 --format additional-context` every turn. It re-injects pinned memories (`hippo remember <text> --pin`) plus up to 5 memories that share words with your prompt. When nothing matches, it adds only the pinned ones. Since 1.55.0 this replaces the 5 newest memories, which cut the median block from 847 to 533 tokens in our eval. `{"pinnedInject":{"promptRecall":false}}` brings back the 5 newest, so fresh same-session lessons appear on the next prompt whatever you ask. The block is rendered without live strength percentages, so it stays byte-identical while its memories do not change, and it is sent only when it changed since the session's last prompt: an unchanged block is skipped, resent every 10 skips (`pinnedInject.refreshTurns`, `0` never resends) and resent after compaction. The prompt-matched memories go in a separate block that is never skipped, so they are sent on every prompt they match. `{"pinnedInject":{"skipUnchanged":false}}` sends the pinned block every turn as before. `{"pinnedInject":{"excludeTags":["session-digest"]}}` leaves out every memory that carries a listed tag, whether it is pinned, recent or matched to the prompt; the list is empty by default. Opt out entirely with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
 - a `PreCompact` hook that runs `hippo pre-compact` before the transcript gets summarized. It records the compaction in the store, saves a working-state snapshot (task/summary/next step) so mid-session compaction can't drop it, and asks the summariser to end its summary with a "Memories for hippo" list: the lessons, decisions and corrections from the session that should outlive it. The `SessionEnd` hook still owns extracting durable memories from the transcript.
 - a second `SessionStart` hook (matcher `compact`) that runs `hippo compact-resume`, printing that snapshot back into context right after compaction, if it is under 15 minutes old.
@@ -1107,59 +1108,59 @@ node run.mjs --adapter all
 
 ### How do I give Claude Code memory between sessions?
 
-Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block saying the prompt hook injects pinned rules and matching memories, and asking Claude to run `hippo context --auto` at the start of a task only if no hippo memory block has appeared. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. `hippo init --scan ~` gives every git repo under your home folder a store and installs the same hooks, but adds no block to any `CLAUDE.md`. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both.
+Run `npm install -g hippo-memory`, then `hippo init` in the project. Init adds a short block to an existing `CLAUDE.md` and installs hooks that keep pinned memories in context, save your task before compaction, store failed tool calls and run `hippo sleep` when the session ends.
 
 ### How do I give Cursor memory between sessions?
 
-`hippo init` adds its instructions to `AGENTS.md` if the project has one, and Cursor reads that file from the project root. The [MCP server](#mcp-server) gives Cursor's agent tools to recall and store memories once you add `hippo mcp` to `.cursor/mcp.json`. Older hippo versions wrote the block to `.cursorrules`; `hippo hook uninstall cursor` removes it from there, and from `AGENTS.md` only when the block there is Cursor's own and unedited (`hippo hook install cursor` puts it back). A block written for Codex or another agent stays, since Cursor reads it too, and so does an edited block, since hippo cannot tell whose it is. `hippo import --cursor .cursor/rules` turns your existing rules into memories; it reads an older single `.cursorrules` file too.
+`hippo init` adds its instructions to `AGENTS.md` if the project has one, which Cursor reads. Add `hippo mcp` to `.cursor/mcp.json` and Cursor's agent gets tools to recall and store memories. `hippo import --cursor .cursor/rules` turns your existing rules into memories.
 
 ### How do I give Codex memory across sessions?
 
-`hippo init` adds its instructions to your `AGENTS.md`, which Codex reads before it starts work. Capturing Codex sessions is opt-in: `hippo hook install codex` wraps the Codex launcher, and `hippo hook uninstall codex` removes the wrapper.
+`hippo init` adds its instructions to your `AGENTS.md`, which Codex reads before it starts work. Capturing Codex sessions is opt-in, with `hippo hook install codex`.
 
 ### Which agents does hippo work with?
 
-`hippo init` detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, and wires itself into each one's instruction file, hooks or plugin. It only patches instruction files that already exist. Any MCP client can use the [MCP server](#mcp-server), and other tools can call the CLI or the HTTP API that `hippo serve` starts.
+`hippo init` detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, and wires itself into each one's instruction file, hooks or plugin. What runs automatically differs by agent. Any MCP client can use the [MCP server](#mcp-server), and anything else can call the CLI.
 
 ### Can I use hippo as an MCP memory server?
 
-Yes. `hippo mcp` runs the server over stdio, and `npx -y hippo-memory mcp` runs it without a global install. Add it to the MCP config of Claude Desktop, Cursor, Windsurf (now Devin Desktop), Cline or any other client (example [above](#mcp-server)); in Claude Code, run `claude mcp add hippo-memory -- hippo mcp`. The agent gets tools such as `hippo_recall`, `hippo_remember` and `hippo_outcome`.
+Yes. `hippo mcp` runs the server over stdio. Add it to the MCP config of Cursor, Claude Desktop, Windsurf (now Devin Desktop), Cline or any other client, or in Claude Code run `claude mcp add hippo-memory -- hippo mcp`.
 
 ### How is hippo different from mem0?
 
-mem0 uses a language model to extract memories, OpenAI by default in its open-source library, and memories stored through its hosted MCP server live in your Mem0 account ([mem0 docs](https://docs.mem0.ai/platform/mem0-mcp), checked 2026-09-28). Hippo stores memories in SQLite on your machine, needs no account and no model, and `hippo init` wires it into the coding agents it finds. mem0's platform and hippo both mark an older fact superseded when a newer one replaces it. Hippo also lets you mark a recalled memory wrong with `hippo outcome --bad`, and it drops out of the top results.
+mem0 uses a language model to extract memories, and its hosted MCP server keeps them in your Mem0 account ([mem0 docs](https://docs.mem0.ai/platform/mem0-mcp), checked 2026-09-28). Hippo stores memories in SQLite on your machine and needs no account and no model. On LoCoMo, a public test of questions about long conversations, Mem0 scored 94.9 and hippo 89.4 when we ran both.
 
 ### Is this just RAG?
 
-No. RAG searches a fixed corpus. Hippo's store changes as your agent works: a memory marked wrong drops out of the top results, a newer fact supersedes the old one, and memories that keep getting recalled last longer while unused ones fade on a half-life. Recall itself is search: BM25, plus embeddings if you install them.
+Partly. Recall is search, BM25 plus embeddings if you install them. The difference is that the store changes as your agent works. A memory you mark wrong drops down the results, a newer fact replaces an old one, and unused memories fade.
 
 ### Does it need embeddings?
 
-No. Recall runs on BM25 out of the box, with no model and no network call, and a default install has no embedder. Embeddings are an optional install for hybrid search. On LongMemEval-S, where each question gets its own haystack, the benchmark scripts (not `hippo recall`) fuse BM25 with the free local MiniLM embedder and reach 98.0% recall@5, counting a hit when any answer session is in the top five. On LongMemEval's oracle split with one pooled store, BM25 alone scored 74.0% recall@5 in v0.11. The two runs use different setups, so they are not a before and after.
+No. Recall runs on BM25 out of the box, with no model and no network call. With the optional free local embedder on, hippo scored higher than without it on two of five public answer tests, by 3.4 and 11.9 points, with no clear difference on the other three.
 
 ### Do I still need CLAUDE.md?
 
-Yes, for short standing rules such as build commands, code style and things never to do. Claude Code loads `CLAUDE.md` and its auto memory into every session, and its [memory docs](https://code.claude.com/docs/en/memory) say that when two rules contradict each other, Claude may pick one arbitrarily. Hippo holds the lessons that pile up, recalls the ones that match the task, and retires the ones marked wrong or replaced. `hippo init` adds its block to `CLAUDE.md`, and `hippo import --claude CLAUDE.md` turns existing notes into memories.
+Yes, for short standing rules such as build commands and code style. Claude Code's [memory docs](https://code.claude.com/docs/en/memory) say that when two rules contradict each other, Claude may pick one arbitrarily. Hippo holds the lessons that pile up and recalls the ones that match the task.
 
 ### What happens when a memory turns out to be wrong?
 
-Mark it, and it drops out of the top results. `hippo outcome --bad` weakens the memories from the last recall, `hippo supersede <id> "<new fact>"` replaces one with a newer version, and `hippo reject <id> --reason "<why>"` stops that value from returning at all. On the synthetic E1 test, where every mark is correct, plain BM25 plus the outcome mark cut how often a marked-bad memory stayed in the top five from 71.9% to 0.0%. Real marks are noisier, because `--bad` marks the whole recall batch.
+`hippo outcome --bad` weakens the memories from the last recall, and `hippo supersede <id> "<new fact>"` replaces one. On a synthetic test where every mark was correct, a bad mark cut how often a wrong memory stayed in the top five from 71.9% to 0.0%. Real marks are noisier.
 
 ### Where does hippo keep my data?
 
-On your machine, in SQLite: `.hippo/hippo.db` in each project, plus a global store in `~/.hippo/` for lessons shared across projects, with markdown mirrors you can read and commit. Recall makes no network call by default. Text goes to an outside provider only through features that use one: an API embedder, the Jev or LLM reranker, `hippo refine`, and the fact extraction `hippo sleep` runs through Anthropic's API whenever `ANTHROPIC_API_KEY` is set in its environment. To turn that last one off, set `{"extraction":{"enabled":false}}` in `.hippo/config.json`.
+On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (`capture.followUpRules`), `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that last one off.
 
 ### What does hippo cost?
 
-Nothing. Hippo is MIT-licensed and needs no account or API key. Optional features that call an outside provider bill through it: the Jev reranker costs about 0.0004 USD a recall, and API embedders and sleep's fact extraction bill your own keys. Memory text handed to your agent uses context tokens, and `hippo tokens` shows how many.
+Nothing. Hippo is MIT-licensed and needs no account or API key. Optional features that call an outside provider bill through it. The Jev reranker costs about 0.0004 USD a recall, and API embedders and sleep's fact extraction use your own keys.
 
 ### Is it production-ready?
 
-Judge it by what is tested. 3,500+ tests run against a real database, with no module mocks and no mocked store, and a negative test checks that one tenant cannot read another's memories. It is MIT-licensed and has zero runtime dependencies. For what it does to an agent's work, see the next question.
+Judge it by what is tested. 3,500+ tests run against a real database, with no module mocks and no mocked store. It has zero runtime dependencies. The next question covers what it does to an agent's work.
 
 ### Has hippo been shown to make agents better at their work?
 
-On repeat mistakes, yes. Z0 round 3 ran real Claude Code sessions on 29 repositories, with hippo and with Claude Code's built-in memory alone. An agent corrected once repeated that mistake about half as often with hippo installed: 11 times in 100 against 21, 2 to 4 tasks after the correction, at the same cost. Over every first chance to repeat, the pre-registered read is 14.9 points fewer [5.5, 24.3] ([result](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/2026-11-08-z0-round3-result.md)). On tasks with no lesson to apply, hippo changed neither the cost nor the share solved. The gain was the same with lesson capture switched off, so round 4 tests how much of it the stored lessons carry. The other published numbers measure retrieval. Every measurement, including failed runs and one retracted claim, is indexed in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md).
+On repeat mistakes, yes, in [one test of our own](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/2026-11-08-z0-round3-result.md). We corrected Claude Code once on 29 repositories and counted repeats 2 to 4 tasks later, finding 11 in 100 with hippo added, against 21 with built-in memory alone, at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. Failed runs are in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md) too.
 
 ---
 
