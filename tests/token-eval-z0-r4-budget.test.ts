@@ -737,7 +737,7 @@ describe('report', () => {
 });
 
 describe('project', () => {
-  it('prints the lines of r4-projection.py that the plan\'s checks name, at 2 decimals', () => {
+  it('prints the lines of r4-projection.py that the plan\'s checks name, at 2 decimals with each figure rounded up to the cent', () => {
     const root = makeRoot();
     const r = runCli(['project', '--spend-basis', root.basis, '--pins', root.pins]);
     expect(r.code).toBe(0);

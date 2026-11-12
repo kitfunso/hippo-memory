@@ -35,8 +35,11 @@ const USAGE = 'usage: z0-budget.mjs admit --step <smoke|pilot|whole-run|batch-1|
   + 'exit 0 pass, 1 input error, 3 or 4 or 5 or 6 a refusal named by its line';
 
 const sum = (xs) => xs.reduce((s, x) => s + x, 0);
-/** Rounds up to the cent so a printed figure never reads below the true one; rounding to a millionth first keeps float noise from adding a cent. */
-export const money = (x) => (Math.ceil(Math.round(x * 1e6) / 1e4) / 100).toFixed(2);
+/** Whole cents at a millionth of a dollar's resolution, so float noise moves no cent: a need rounds up and an approval rounds down. */
+export const ceilCents = (x) => Math.ceil(Math.round(x * 1e6) / 1e4);
+export const floorCents = (x) => Math.floor(Math.round(x * 1e6) / 1e4);
+/** Rounds up to the cent as the admit rounds a need, so the admit compares these same cents and a go at a printed need admits. */
+export const money = (x) => (ceilCents(x) / 100).toFixed(2);
 
 /* ------------------------------------------------------------------------------------------ projection */
 
@@ -73,10 +76,10 @@ export function stepProjection({ plans, meanPerRecord, warmupUsd }) {
   return sessions * meanPerRecord + warmups * (warmupUsd ?? meanPerRecord);
 }
 
-/** The one check: ledger + margin x projection fits the figure, and where the step has a cap, capSpend + projection fits it; a null figure or cap skips that test. */
+/** The one check, in the whole cents `money` prints: ledger + margin x projection fits the figure, and where the step has a cap, capSpend + projection fits it; a null figure or cap skips that test. */
 export function admissionOk({ ledger, projection, margin, figure, cap, capSpend }) {
-  const figureOk = figure === null || figure === undefined || ledger + margin * projection <= figure;
-  const capOk = cap === null || cap === undefined || (capSpend ?? 0) + projection <= cap;
+  const figureOk = figure === null || figure === undefined || ceilCents(ledger + margin * projection) <= floorCents(figure);
+  const capOk = cap === null || cap === undefined || ceilCents((capSpend ?? 0) + projection) <= floorCents(cap);
   return figureOk && capOk;
 }
 
@@ -391,7 +394,7 @@ function admit(args, cwd, now) {
   const sealFile = seal === null ? null : path.resolve(cwd, seal);
   checkNotStarted(units, sealFile, SCOPES[step]);
   const entries = readLog(log);
-  const named = yesGos(entries, 'figure').some((e) => e.figure >= approved);
+  const named = yesGos(entries, 'figure').some((e) => floorCents(e.figure) >= ceilCents(approved));
   if (approved > APPROVED_FIGURE && !named) throw new Error(`--approved ${need(args, '--approved')} is above $${APPROVED_FIGURE.toLocaleString('en-US')}.00 and no founder go names it`);
 
   const ctx = { entries, attempt, ledger, approved };
@@ -483,7 +486,7 @@ function report(args, cwd) {
   return answer(0, lines.join('\n'));
 }
 
-/** The lines of `r4-projection.py` that round 3's spend basis feeds, in its words, at 2 decimals. */
+/** The lines of `r4-projection.py` that round 3's spend basis feeds, in its words, with each figure rounded up to the cent. */
 function project(args, cwd) {
   const [basis, pins] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd))];
   const keys = listOf(pins, 'batch1Keys');

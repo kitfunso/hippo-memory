@@ -1,9 +1,9 @@
 // Round 4 prereg item 12 and the plan's Budget model: the spend projection and the one admission check, as pure functions.
 import { describe, it, expect } from 'vitest';
-import { admissionOk, projectSpend, sequenceGap, stepProjection, wholeRun } from '../scripts/token-eval/z0-budget.mjs';
+import { admissionOk, ceilCents, floorCents, projectSpend, sequenceGap, stepProjection, wholeRun } from '../scripts/token-eval/z0-budget.mjs';
 import { ALL_ARMS, BASIS, BATCH1, MEAN, SEQ, cents, plan, rule, sumsOver } from './_helpers/z0-r4-spend.js';
 
-describe('projectSpend on round 3\'s unrounded bases, as r4-projection.py prints it', () => {
+describe('projectSpend on round 3\'s unrounded bases, as r4-projection.py prints it, with each figure rounded up to the cent', () => {
   const gap = sequenceGap(SEQ, BATCH1);
   const batch1 = sumsOver(SEQ, BATCH1);
   const spend = (over: { basisByArm?: Record<string, number>; gapByArm?: Record<string, number>; r?: number; seedsByArm?: Record<string, number>; pilotUsd?: number; scale?: number }) => projectSpend({ basisByArm: BASIS, gapByArm: {}, r: 1, seedsByArm: {}, pilotUsd: 0, scale: 1, ...over });
@@ -108,5 +108,23 @@ describe('admissionOk, the one check', () => {
     expect(ok({ margin: 1, cap: 40, capSpend: 10 })).toBe(true);
     expect(ok({ figure: null, margin: 1, cap: 40, capSpend: 9 })).toBe(true);
     expect(ok({ ledger: 5000, figure: null, margin: 1, cap: 40, capSpend: 11 })).toBe(false);
+  });
+
+  it('admits a need within a millionth of a dollar of the cap, and the printed figure matches the cap', () => {
+    expect(ok({ ledger: 0, projection: 40.0000004, margin: 1, figure: null, cap: 40 })).toBe(true);
+    expect(cents(40.0000004)).toBe('40.00');
+  });
+
+  it('refuses a need of 40.004 at a cap of 40 and admits it at the printed 40.01', () => {
+    expect([ok({ ledger: 0, projection: 40.004, margin: 1, figure: null, cap: 40 }), ok({ ledger: 0, projection: 40.004, margin: 1, figure: null, cap: Number(cents(40.004)) })]).toEqual([false, true]);
+  });
+
+  it('admits a need of 0.1 + 0.2 at a figure of 0.30', () => {
+    expect(ok({ ledger: 0, projection: 0.1 + 0.2, margin: 1, figure: 0.3 })).toBe(true);
+  });
+
+  it('refuses a typed figure of 2140.004 against a need of 2140.004: 214000 whole cents against 214001', () => {
+    expect([floorCents(2140.004), ceilCents(2140.004)]).toEqual([214000, 214001]);
+    expect(ok({ ledger: 0, projection: 2140.004, margin: 1, figure: 2140.004 })).toBe(false);
   });
 });
