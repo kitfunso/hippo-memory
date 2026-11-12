@@ -826,8 +826,11 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
       expect(c.flags('bx-w1').BoxCheck).toBe(box);
       const calls = ['regrade', 'reader-draw', 'stored-draw'].map((call) => json(`${c.dir('bx-w1')}/g5-${call}.launcher.json`));
       expect(calls.map((x) => x.BoxCheck)).toEqual([box, box, box]);
+      expect(calls.map((x) => x.BoxCheckBound)).toEqual([true, true, true]);
       const plain = await runs.Pb.get();
       expect(plain.c.flags('pa-w1')).not.toHaveProperty('BoxCheck');
+      // A bound empty -BoxCheck would read the same as none by its value, so the stub records whether the parameter was bound.
+      expect(json(`${plain.c.dir('pa-w1')}/g5-regrade.launcher.json`).BoxCheckBound).toBe(false);
     });
 
     it('a relative root exits 1 asking for an absolute one, so two spellings of one root cannot both run', async () => {

@@ -3,6 +3,7 @@
 PATH=/usr/bin:/mingw64/bin:$PATH
 HERE=$(cygpath -m "$(dirname "$0")")
 # With a list-root knob file it lists its root as the real batch does, once at its start and again when the test puts list-again, so a test sees what a batch sees of its own driver.
+# The second listing has no clock: the test puts list-again only once its own stand-ins are up, and its case cleanup kills this bash if it never does.
 if [ -f "$Z0_STUB_KNOBS/list-root" ]; then
   . "$HERE/s4-units.sh"
   # The file appears only once the scan is done, so a test that waits for it reads a whole listing.
@@ -11,8 +12,7 @@ if [ -f "$Z0_STUB_KNOBS/list-root" ]; then
     echo "$LISTED" > "$Z0_STUB_KNOBS/$1"
   }
   list_root listed-1.txt "$@"
-  i=0
-  while [ ! -f "$Z0_STUB_KNOBS/list-again" ] && [ "$i" -lt 600 ]; do sleep 0.2; i=$((i + 1)); done
+  until [ -f "$Z0_STUB_KNOBS/list-again" ] || [ ! -d "$Z0_STUB_KNOBS" ]; do sleep 0.2; done
   [ ! -f "$Z0_STUB_KNOBS/list-again" ] || list_root listed-2.txt "$@"
 fi
 Z0_STUB_NAME=s4-batch node "$HERE/stub-cli.mjs" "$@" < /dev/null

@@ -128,6 +128,27 @@ async function standIn(c: DriveCase, role: 's4-drive' | 's4-batch') {
 }
 /** The `<role> <path>` of each listing line, with the pids left out, so a bash wrapper and its forks read as one. */
 const rolesOf = (text: string) => new Set(text.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '').map((l) => l.trim().split(' ').slice(1).join(' ')));
+/** The pid of each listing line. */
+const pidsOf = (text: string) => text.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '').map((l) => Number(l.trim().split(' ')[0]));
+/** A batch-shaped bash whose parent link is dead, as the batch of a driver has (a Git Bash exec leaves a dead process above it). Once told, it sources s4-units.sh as the batch does and prints the listing of the case's root with Z0_DRIVER_WINPID set to `named`. */
+async function batchCaller(c: DriveCase, tag: string) {
+  const dir = `${c.dir}/${tag}-caller`;
+  const call = `${dir}/call`;
+  put(`${dir}/s4-batch.sh`, [
+    '#!/usr/bin/env bash', 'PATH=/usr/bin:/mingw64/bin:$PATH', 'export Z0_CHECKOUT=$2', 'touch "$4.up"',
+    'until [ -f "$4.go" ]; do sleep 0.2; done', 'named=$(< "$4.named")', 'unset Z0_DRIVER_WINPID', '[ -z "$named" ] || export Z0_DRIVER_WINPID=$named',
+    '. "$5/s4-units.sh"', 'if units_scan; then root_lines "$3" > "$4.part"; else echo "scan failed: $UNITS_ERR" > "$4.part"; fi', 'mv "$4.part" "$4.out"', '',
+  ].join('\n'));
+  put(`${dir}/start.sh`, '#!/usr/bin/env bash\nbash "$@" < /dev/null > /dev/null 2>&1 &\n');
+  c.orphan(`${dir}/start.sh`, [`${dir}/s4-batch.sh`, '1', c.checkout, c.root, call, c.scored]);
+  await wait(`the ${tag} caller`, () => existsSync(`${call}.up`));
+  return async (named?: number) => {
+    put(`${call}.named`, named === undefined ? '' : String(named));
+    put(`${call}.go`, '');
+    await wait(`the ${tag} caller's listing`, () => existsSync(`${call}.out`));
+    return read(`${call}.out`);
+  };
+}
 
 describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and the round 4 poetry folder', () => {
   it('1. --print gives each step\'s command lines, runs nothing, logs nothing, and runs beside a live driver', async () => {
@@ -904,7 +925,8 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(read(`${c.knobs}/listed-1.txt`).trim()).toBe('');
     const again = read(`${c.knobs}/listed-2.txt`);
     expect(rolesOf(again)).toEqual(new Set([`s4-drive ${c.root.toLowerCase()}`]));
-    expect(again.split('\n').some((l) => l.startsWith(`${second} `))).toBe(true);
+    expect(pidsOf(again)).toContain(second);
+    expect(pidsOf(again)).not.toContain(c.driverPid());
   }, 300_000);
 
   it('32. a live second driver of the root, one that did not call the scan, still stops the driver', async () => {
@@ -918,7 +940,9 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
 
   it('33. Z0_DRIVER_WINPID hides only a live s4-drive.sh bash with its wrapper and forks; a pid of another process, a dead pid or a bad value hides nothing', async () => {
     const c = mk('list-var');
-    const [driver, batch] = [await standIn(c, 's4-drive'), await standIn(c, 's4-batch')];
+    const driver = await standIn(c, 's4-drive');
+    const release = await batchCaller(c, 'older');
+    const batch = await standIn(c, 's4-batch');
     const root = c.root.toLowerCase();
     const listed = (winpid: string | number | undefined) => {
       const env: NodeJS.ProcessEnv = { ...c.env(), Z0_CHECKOUT: c.checkout };
@@ -930,8 +954,18 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     const both = new Set([`s4-drive ${root}`, `s4-batch ${root}`]);
     // Each of these is a pid or text that is not an s4-drive.sh bash: the batch-shaped bash, this test's node, a dead pid, a bad number, a negative one, none.
     for (const v of [undefined, '', 'abc', '12abc', '-1', '0', 2_147_483_646, batch, process.pid]) expect(listed(v), `Z0_DRIVER_WINPID=${String(v)}`).toEqual(both);
-    expect(listed(driver)).toEqual(new Set([`s4-batch ${root}`]));
-  }, 300_000);
+    // The driver stand-in is older than the batch-shaped caller, so the caller's value hides it, and the batch stand-in stays.
+    expect(rolesOf(await release(driver))).toEqual(new Set([`s4-batch ${root}`]));
+  }, 600_000);
+
+  it('35. a live s4-drive.sh bash created after the batch is never hidden by the batch\'s Z0_DRIVER_WINPID, as a pid a dead driver left behind and the system reused would not be', async () => {
+    const c = mk('list-reused');
+    const release = await batchCaller(c, 'first');
+    const reused = await standIn(c, 's4-drive');
+    const text = await release(reused);
+    expect(rolesOf(text)).toEqual(new Set([`s4-drive ${c.root.toLowerCase()}`]));
+    expect(pidsOf(text)).toContain(reused);
+  }, 600_000);
 
   it('34. Z0_BOX_CHECK on a dry root reaches every launcher call of smoke and step 1, the plan-only ones included, and is absent without it', async () => {
     const c = mk('box-check');

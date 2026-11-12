@@ -58,24 +58,28 @@ public static string[] Split(string line) {
   }
 
   # A Git Bash exec leaves a dead process between a batch and the driver that called it, so the parent links stop short of the driver; s4-drive.sh names itself in Z0_DRIVER_WINPID.
-  # The value counts only when it is a live s4-drive.sh bash.exe, so a stale or wrong one hides nothing.
-  $seeds = @([int]$PID)
-  $named = 0
-  if ([int]::TryParse([string]$env:Z0_DRIVER_WINPID, [ref]$named) -and $byPid.ContainsKey($named)) {
-    $driver = $byPid[$named]
-    $driverArgv = if ($driver.Name -ieq 'bash.exe') { ArgvOf $driver } else { $null }
-    if ($driverArgv -and $driverArgv.Count -gt 4 -and (Leaf $driverArgv[1]) -eq 's4-drive.sh') { $seeds += $named }
-  }
+  # The value counts only for a live s4-drive.sh bash.exe no younger than the oldest live process of this chain, as a driver is older than its batch: a reused pid names a younger process and hides nothing, and a wrong value hides at most an older s4-drive.sh with its wrapper and forks.
   $drop = @{}
-  foreach ($seed in $seeds) {
+  # Drops the seed and each live parent created no later than its child; returns the creation time of the oldest one dropped.
+  function Climb([int]$seed) {
     $drop[$seed] = $true
     $cur = $byPid[$seed]
+    $oldest = $cur.CreationDate
     while ($cur) {
       $parent = $byPid[[int]$cur.ParentProcessId]
       if (-not $parent -or $drop.ContainsKey([int]$parent.ProcessId) -or -not $parent.CreationDate -or $parent.CreationDate -gt $cur.CreationDate) { break }
       $drop[[int]$parent.ProcessId] = $true
       $cur = $parent
+      $oldest = $cur.CreationDate
     }
+    return $oldest
+  }
+  $oldest = Climb ([int]$PID)
+  $named = 0
+  if ([int]::TryParse([string]$env:Z0_DRIVER_WINPID, [ref]$named) -and $byPid.ContainsKey($named)) {
+    $driver = $byPid[$named]
+    $driverArgv = if ($driver.Name -ieq 'bash.exe') { ArgvOf $driver } else { $null }
+    if ($driverArgv -and $driverArgv.Count -gt 4 -and (Leaf $driverArgv[1]) -eq 's4-drive.sh' -and $oldest -and $driver.CreationDate -and $driver.CreationDate -le $oldest) { [void](Climb $named) }
   }
   # Git Bash shows every fork of a script with the script's own command line, so a fork under a bash ancestor is the batch's own.
   foreach ($id in @($drop.Keys)) {
