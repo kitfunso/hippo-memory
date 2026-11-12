@@ -242,6 +242,13 @@ function usdFlag(args, flag) {
   return n;
 }
 
+/** A figure a person types is whole cents, so the admit, a go and the print all read the same number; the rule is the driver script's own. */
+function centsFlag(args, flag) {
+  const raw = need(args, flag);
+  if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(raw)) throw usage(`${flag} ${raw} is not a USD figure with at most 2 decimals`);
+  return Number(raw);
+}
+
 function countFlag(args, flag) {
   const n = Number(need(args, flag));
   if (!Number.isInteger(n) || n < 1) throw usage(`${flag} ${need(args, flag)} is not a whole number from 1`);
@@ -387,14 +394,14 @@ function writeMark(file, entry) {
 function admit(args, cwd, now) {
   const step = need(args, '--step');
   if (!STEPS.has(step)) throw usage(`--step ${step} is not one of ${[...STEPS].join(', ')}`);
-  const [attempt, approved, ledger] = [countFlag(args, '--attempt'), usdFlag(args, '--approved'), usdFlag(args, '--ledger-total')];
+  const [attempt, approved, ledger] = [countFlag(args, '--attempt'), centsFlag(args, '--approved'), usdFlag(args, '--ledger-total')];
   const [log, pinsFile] = [filePath(args, '--log', cwd), filePath(args, '--pins', cwd)];
   const [units, seal] = [listFlag(args, '--units').map((u) => path.resolve(cwd, u)), step === 'seeds' ? need(args, '--seal') : optional(args, '--seal')];
   const mark = ['batch-1', 'batch-2', 'seeds'].includes(step) ? filePath(args, '--mark', cwd) : null;
   const sealFile = seal === null ? null : path.resolve(cwd, seal);
   checkNotStarted(units, sealFile, SCOPES[step]);
   const entries = readLog(log);
-  const named = yesGos(entries, 'figure').some((e) => floorCents(e.figure) >= ceilCents(approved));
+  const named = yesGos(entries, 'figure').some((e) => floorCents(e.figure) >= floorCents(approved));
   if (approved > APPROVED_FIGURE && !named) throw new Error(`--approved ${need(args, '--approved')} is above $${APPROVED_FIGURE.toLocaleString('en-US')}.00 and no founder go names it`);
 
   const ctx = { entries, attempt, ledger, approved };
@@ -451,7 +458,7 @@ function founderGo(args, cwd, now) {
   const stop = args.flags.has('--stop');
   // A stop answer names no figure; a go on the figure or the pilot names the one it lifts.
   const needsFigure = !stop && (question === 'figure' || question === 'pilot');
-  const figure = (needsFigure || optional(args, '--figure') !== null) ? usdFlag(args, '--figure') : null;
+  const figure = (needsFigure || optional(args, '--figure') !== null) ? centsFlag(args, '--figure') : null;
   const attempt = question === 'pilot' ? countFlag(args, '--attempt') : (optional(args, '--attempt') === null ? null : countFlag(args, '--attempt'));
   const log = filePath(args, '--log', cwd);
   const lastWhole = readLog(log).filter((e) => e.kind === 'admit' && e.step === 'whole-run').at(-1);
@@ -464,7 +471,7 @@ function founderGo(args, cwd, now) {
 }
 
 function report(args, cwd) {
-  const [ledgerTotal, approved] = [usdFlag(args, '--ledger-total'), usdFlag(args, '--approved')];
+  const [ledgerTotal, approved] = [usdFlag(args, '--ledger-total'), centsFlag(args, '--approved')];
   const admits = readLog(filePath(args, '--log', cwd)).filter((e) => e.kind === 'admit');
   const lines = [];
   admits.forEach((e, i) => {

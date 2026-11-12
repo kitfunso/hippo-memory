@@ -213,6 +213,33 @@ describe('admit: a started scope and the approved figure', () => {
     expect(smoke(root, { approved: '2600.01' }).code).toBe(1);
   });
 
+  it('exits 1 at --approved 2600.004, naming the flag and at most 2 decimals, and logs nothing', () => {
+    const root = makeRoot();
+    const r = smoke(root, { approved: '2600.004' });
+    expect([r.code, r.stderr]).toEqual([1, expect.stringContaining('--approved 2600.004 is not a USD figure with at most 2 decimals')]);
+    expect(fs.existsSync(root.log)).toBe(false);
+  });
+
+  it('exits 1 at founder-go --figure 2600.004, naming the flag and at most 2 decimals, and logs nothing', () => {
+    const root = makeRoot();
+    const r = goFigure(root, '2600.004');
+    expect([r.code, r.stderr]).toEqual([1, expect.stringContaining('--figure 2600.004 is not a USD figure with at most 2 decimals')]);
+    expect(fs.existsSync(root.log)).toBe(false);
+  });
+
+  it('admits a $2 smoke at --approved 2600.00 after a figure go at 2600.00', () => {
+    const root = makeRoot();
+    expect(goFigure(root, '2600.00').code).toBe(0);
+    expect(smoke(root, { approved: '2600.00' }).code).toBe(0);
+  });
+
+  it('refuses --approved 2600.00 as not named after a figure go at 2599.99', () => {
+    const root = makeRoot();
+    expect(goFigure(root, '2599.99').code).toBe(0);
+    const r = smoke(root, { approved: '2600.00' });
+    expect([r.code, r.stderr]).toEqual([1, expect.stringContaining('--approved 2600.00 is above $2,140.00 and no founder go names it')]);
+  });
+
   it('reads only the figure goes: a pilot go of 9000 names no figure', () => {
     const root = makeRoot();
     runCli(['founder-go', '--question', 'pilot', '--figure', '9000', '--attempt', '1', '--words', 'go on', '--log', root.log]);
