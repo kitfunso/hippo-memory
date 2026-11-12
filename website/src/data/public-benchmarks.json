@@ -7,6 +7,7 @@
    "unit": "%",
    "n": 395,
    "hippo": 89.4,
+   "setting": "local embedder",
    "file": "benchmarks/public/results/2026-11-12-answer-accuracy/locomo-h2h-emb.txt",
    "rivals": [
     {
@@ -139,6 +140,7 @@
    "unit": "%",
    "n": 495,
    "hippo": 88.5,
+   "setting": "local embedder",
    "file": "benchmarks/public/results/2026-11-12-answer-accuracy/longmemeval-s-emb.txt",
    "rivals": [
     {
@@ -250,6 +252,7 @@
    "unit": "%",
    "n": 584,
    "hippo": 72.4,
+   "setting": "local embedder",
    "file": "benchmarks/public/results/2026-11-12-answer-accuracy/personamem_v1-emb.txt",
    "rivals": [
     {
@@ -339,29 +342,37 @@
    "name": "DMR",
    "unit": "%",
    "n": 495,
-   "hippo": 73.1,
-   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/dmr-emb.txt",
+   "hippo": 77.6,
+   "setting": "local embedder and reranker",
+   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/dmr-best.txt",
    "rivals": [
     {
      "name": "hippo, embeddings off",
      "value": 61.2,
-     "diff": 11.9,
-     "lo": 8.1,
-     "hi": 15.8
+     "diff": 16.4,
+     "lo": 11.7,
+     "hi": 20.8
     },
     {
      "name": "BM25",
      "value": 61.4,
-     "diff": 11.7,
-     "lo": 8.1,
-     "hi": 15.6
+     "diff": 16.2,
+     "lo": 11.7,
+     "hi": 20.6
+    },
+    {
+     "name": "hippo, embedder only",
+     "value": 73.1,
+     "diff": 4.4,
+     "lo": 0.6,
+     "hi": 8.3
     },
     {
      "name": "Full chat",
      "value": 83.6,
-     "diff": -10.5,
-     "lo": -14.7,
-     "hi": -6.5
+     "diff": -6.1,
+     "lo": -9.7,
+     "hi": -2.4
     }
    ],
    "published": [
@@ -401,22 +412,30 @@
    "name": "HotPotQA-24 (Cognee)",
    "unit": "F1",
    "n": 19,
-   "hippo": 92.1,
-   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/hotpotqa24-emb.txt",
+   "hippo": 95.6,
+   "setting": "local embedder and reranker",
+   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/hotpotqa24-best.txt",
    "rivals": [
     {
      "name": "hippo, embeddings off",
      "value": 85.1,
-     "diff": 7.0,
-     "lo": -7.0,
-     "hi": 22.8
+     "diff": 10.5,
+     "lo": 0.0,
+     "hi": 26.3
     },
     {
      "name": "BM25",
      "value": 85.1,
-     "diff": 7.0,
-     "lo": -7.0,
-     "hi": 22.8
+     "diff": 10.5,
+     "lo": 0.0,
+     "hi": 26.3
+    },
+    {
+     "name": "hippo, embedder only",
+     "value": 92.1,
+     "diff": 3.5,
+     "lo": 0.0,
+     "hi": 10.5
     }
    ],
    "published": [],

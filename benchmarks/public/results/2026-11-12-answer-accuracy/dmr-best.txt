@@ -1,0 +1,10 @@
+DMR (MSC-Self-Instruct): 500 questions, 495 in the primary, top 20, answers 500, 500 judged by model, 0 by match
+hippo-best  accuracy  77.6  memories  20.0  input tokens    1595
+secondary hippo-best - hippo365 (61.2 in dmr): +16.4 pp [+11.7, +20.8] n=495 over 495 units  beats
+secondary hippo-best - bm25 (61.4 in dmr): +16.2 pp [+11.7, +20.6] n=495 over 495 units  beats
+secondary hippo-best - hippo-emb (73.1 in dmr-emb):  +4.4 pp [ +0.6,  +8.3] n=495 over 495 units  beats
+secondary hippo-best - full (83.6 in dmr-full):  -6.1 pp [ -9.7,  -2.4] n=495 over 495 units  trails
+
+smoke items left out of every primary: dmr-000, dmr-100, dmr-200, dmr-300, dmr-400
+answers exhausted after 3 asks, scored wrong: 0
+verdicts exhausted after 3 asks, scored wrong: 0

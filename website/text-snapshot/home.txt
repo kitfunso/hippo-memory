@@ -18,7 +18,7 @@ Monday. You tell Claude Code "we use pnpm, never npm". Hippo files the rule.
 Tuesday. A new session opens with the rule printed in, before your first prompt.
 Works with Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi and any MCP client.
 N in N (the ZN round N result, opens in new tab) Repeat mistakes N to N tasks after a correction, with hippo added to Claude Code's built-in memory. Built-in memory alone gave N in our test on N repositories.
-+N points (the DMR score file, opens in new tab) Answer accuracy over BMN keyword search on DMR, a public memory test. Hippo with its optional local embedder scored N% against N%, with the same answer model.
++N points (the DMR score file, opens in new tab) Answer accuracy over BMN keyword search on DMR, a public memory test. Hippo with its optional local embedder and reranker scored N% against N%, with the same answer model.
 N language-model calls (the MemN store-call log, opens in new tab) To store the LoCoMo test conversations. MemN made N to store the same ones, one for each turn.
 You have explained this before
 You already keep a CLAUDE.md, and the agent keeps notes of its own. A new session can still repeat a mistake you corrected last week, and in our test Claude Code with its built-in memory did so N times in N
@@ -78,7 +78,7 @@ Hippo needs no account and no API key, and recall makes no network call by defau
 One store behind every agent
 Claude Code, Codex and Cursor read the same .hippo/ store in a project, so what one agent was told is there for the others. Hippo also imports the notes that Claude Code, Codex, Gemini CLI and three other tools keep for themselves, and the import never changes those notes. The memory text it adds to a prompt is paid for as input tokens, and in our test the arm with hippo cost the same as the arm without, a ratio of N
 On public question-answering tests
-These tests ask questions about long conversations, a different job from stopping a repeated mistake, so we show them as supporting evidence. Within each test, every system we ran used the same answer model and the same scorer, and hippo ran with its optional local embedder. Answer model: Claude Sonnet N
+These tests ask questions about long conversations, a different job from stopping a repeated mistake, so we show them as supporting evidence. Within each test, every system we ran used the same answer model and the same scorer. Hippo ran with its optional local embedder, and on DMR with its local reranker too. Answer model: Claude Sonnet N
 Answer accuracy on four public memory tests Test hippo BMN hippo minus BMN Strongest other run
 DMR N questions N N +N [+N +N] Full chat N
 PersonaMem vN N questions N N +N [+N +N] none

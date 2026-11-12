@@ -15,7 +15,7 @@ Letta, formerly MemGPT, now builds Letta Code, an agent harness whose memory liv
 Who edits the memory
 Both keep memory where you can see it. Letta Code tracks its context in git, and hippo writes markdown mirrors you can commit. In Letta the agent rewrites its own memory blocks with built-in tools. In hippo, memories come from hooks, the CLI and MCP tools, and you can mark a recalled one wrong or replace an old fact.
 Published scores, loosely compared
-On DMR, a public memory test of N questions, MemGPT published N and hippo scored N when we ran it. On LoCoMo, a test of questions about long conversations, the published Letta figure is N and hippo scored N Each number comes from a different setup and answer model, so neither settles much.
+On DMR, a public memory test of N questions, MemGPT published N and hippo scored N when we ran it with its local reranker on. On LoCoMo, a test of questions about long conversations, the published Letta figure is N and hippo scored N Each number comes from a different setup and answer model, so neither settles much.
 Feature by feature
 The Letta column was checked against Letta's own pages on N September N The full table is on GitHub (opens in new tab).
 hippo and Letta, selected rows of the README comparison table Feature hippo Letta

@@ -46,7 +46,7 @@ const codeCls = 'rounded bg-paper-3 px-1.5 py-0.5 font-mono text-sm text-ink-2';
       <div class="wrap py-(--section-y)">
         <h2 class="text-balance">Five public tests of answering from memory</h2>
         <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-ink-2">
-          Hippo 3.5.1 retrieves with its free local embedder, Claude Sonnet 5 answers, and each benchmark's own scorer marks the answer. BM25 is plain keyword search, the baseline to beat. Gaps are paired question by question before rounding, and intervals are 95%.
+          Hippo 3.5.1 retrieves with its free local embedder, plus its free local reranker where a card says so. Claude Sonnet 5 answers, and each benchmark's own scorer marks the answer. BM25 is plain keyword search, the baseline to beat. Gaps are paired question by question before rounding, and intervals are 95%.
         </p>
         <PublicBenchmarks />
       </div>
@@ -63,7 +63,10 @@ const codeCls = 'rounded bg-paper-3 px-1.5 py-0.5 font-mono text-sm text-ink-2';
 
     <section id="reranker" class="relative border-t border-rule">
       <div class="wrap py-(--section-y)">
-        <h2 class="text-balance">A paid reranker improved ranking, with no measurable gain in answers</h2>
+        <h2 class="text-balance">What the two rerankers bought</h2>
+        <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
+          <code class={codeCls}>--reranker cross-encoder</code> reorders the top 50 memories with a free model on your machine, and is off by default. <a class="link" href={site.links.dmrScore} target="_blank" rel="noopener noreferrer">On DMR<span class="sr-only"> (the score file, opens in new tab)</span></a> it lifted hippo's answers from 73.1 with the embedder alone to 77.6, by 4.4 points [0.6, 8.3]. On PersonaMem v1 and HotPotQA-24 the change was within the noise.
+        </p>
         <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
           <code class={codeCls}>--reranker jev</code> sends the top candidates to the hosted TypeSafe Jev API, and is off by default. On 300 developer queries from a private store, the right memory ranked first for 62% of them, against 41% with the free local cross-encoder. <a class="link" href={site.links.jevEval} target="_blank" rel="noopener noreferrer">Three graded-answer tests<span class="sr-only"> (opens in new tab)</span></a> showed no better answer rate. It buys a shorter context for about 0.0004 USD a recall, and it sends your query and candidate text to a third party.
         </p>

@@ -13,7 +13,7 @@ Docs
 hippo vs Zep
 Zep is a managed context service for agents, built on Graphiti, its open-source temporal knowledge graph. Its self-hosted Community Edition is deprecated, so Zep today means Zep Cloud, or your own cloud on the Enterprise plan. Hippo runs on your machine with no account, and wires itself into the coding agents it finds.
 The one test both have numbers on
-On DMR, a public memory test of N questions, Zep publishes N and hippo scored N when we ran it. The setups differ. A whole-chat baseline that is published at N scored N in our run, so the size of the gap is rough. Zep's published score is higher, and we have not run Zep under the same conditions. Zep's other published scores vary by source, so we quote none of them here.
+On DMR, a public memory test of N questions, Zep publishes N and hippo scored N when we ran it with its local reranker on. The setups differ. A whole-chat baseline that is published at N scored N in our run, so the size of the gap is rough. Zep's published score is higher, and we have not run Zep under the same conditions. Zep's other published scores vary by source, so we quote none of them here.
 Feature by feature
 The Zep column was checked against Zep's own pages on N September N The full table is on GitHub (opens in new tab).
 hippo and Zep, selected rows of the README comparison table Feature hippo Zep

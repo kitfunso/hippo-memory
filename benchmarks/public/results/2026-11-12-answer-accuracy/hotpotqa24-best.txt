@@ -1,0 +1,11 @@
+HotPotQA-24 (Cognee): 24 questions, 19 in the primary, top 15, main score F1, exact match secondary (cognee metrics, no model call); unit the question: one store holds all 24
+hippo-best  EM  78.9  F1  95.6
+secondary hippo-best - hippo365 (85.1 in hotpotqa24) F1: +10.5 pp [ +0.0, +26.3] n=19 over 19 units  unresolved
+secondary hippo-best - hippo365 (68.4 in hotpotqa24) EM: +10.5 pp [-10.5, +31.6] n=19 over 19 units  unresolved
+secondary hippo-best - bm25 (85.1 in hotpotqa24) F1: +10.5 pp [ +0.0, +26.3] n=19 over 19 units  unresolved
+secondary hippo-best - bm25 (73.7 in hotpotqa24) EM:  +5.3 pp [-10.5, +21.1] n=19 over 19 units  unresolved
+secondary hippo-best - hippo-emb (92.1 in hotpotqa24-emb) F1:  +3.5 pp [ +0.0, +10.5] n=19 over 19 units  unresolved
+secondary hippo-best - hippo-emb (84.2 in hotpotqa24-emb) EM:  -5.3 pp [-15.8,  +0.0] n=19 over 19 units  unresolved
+
+smoke items left out of every primary: hotpot24-00, hotpot24-04, hotpot24-08, hotpot24-12, hotpot24-16
+answers exhausted after 3 asks, scored wrong: 0

@@ -2,7 +2,7 @@
 export interface Rival { name: string; value: number; diff: number; lo: number; hi: number }
 export interface Published { name: string; system: string; value: number; kind: string; src: string }
 export interface Bench {
-  name: string; unit: string; n: number; hippo: number; file: string;
+  name: string; unit: string; n: number; hippo: number; setting: string; file: string;
   rivals: Rival[]; published: Published[]; rank: number | null; field: number | null;
 }
 type Anchor = 'start' | 'middle' | 'end';

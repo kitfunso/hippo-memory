@@ -20,14 +20,14 @@ Built-in memory plus hippo Nin N
 The chart counts first chances N to N tasks after the correction. The registered measure, the first chance in each mistake family over N units, gives N points fewer repeats with hippo [N N], at the same cost, a ratio of N [N N]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
 What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round N tests that. The corrections were scripted, the agent was Claude Code only, and the test code and run records are not in the public repo. The round before was inconclusive, at N points fewer on N repositories.
 Five public tests of answering from memory
-Hippo N retrieves with its free local embedder, Claude Sonnet N answers, and each benchmark's own scorer marks the answer. BMN is plain keyword search, the baseline to beat. Gaps are paired question by question before rounding, and intervals are N%.
+Hippo N retrieves with its free local embedder, plus its free local reranker where a card says so. Claude Sonnet N answers, and each benchmark's own scorer marks the answer. BMN is plain keyword search, the baseline to beat. Gaps are paired question by question before rounding, and intervals are N%.
 hippo
 run here, same answer model and scorer
 published, each team's own setup
 PersonaMem vN N questions about N personas
 source ↗ (the PersonaMem vN score file, opens in new tab)
-Hippo scored N ahead of BMN at N by N points [N N].
-N% hippo answer accuracy, N questions Ahead of BMN by N points
+Hippo scored N ahead of BMN at N by N points [N N]. Every published score we found is lower, led by MemOS at N though each comes from its own setup and answer model.
+N% hippo answer accuracy, local embedder, N questions Ahead of BMN by N points
 All scores
 SystemSetupScore
 hippo Run here N%
@@ -45,7 +45,7 @@ MIRIX Published N%
 LoCoMo, N questions about long conversations
 source ↗ (the LoCoMo score file, opens in new tab)
 With up to N memories a question, MemN scored N hippo N and BMN N Hippo trails MemN by N points [N N], and by N at N memories, and is level with BMN Storing the conversations took MemN N language-model calls and hippo none.
-N% hippo answer accuracy, N questions Level with BMN
+N% hippo answer accuracy, local embedder, N questions Level with BMN
 Behind MemN by N points
 All scores
 SystemSetupScore
@@ -69,8 +69,8 @@ OpenAI Memory Published N%
 A-Mem Published N%
 LongMemEval-S, N questions, each with its own earlier chat sessions
 source ↗ (the LongMemEval-S score file, opens in new tab)
-With nearly every session in context, hippo scored N level with BMN at N Given only the top N memories, hippo's N beat BMN's N by N points [N N].
-N% hippo answer accuracy, N questions Level with BMN
+With nearly every session in context, hippo scored N level with BMN at N Given only the top N memories, hippo with its local reranker beat BMN by N points [N N], N to N
+N% hippo answer accuracy, local embedder, N questions Level with BMN
 All scores
 SystemSetupScore
 Mastra Published N%
@@ -90,8 +90,8 @@ Zep Published N%
 Full chat Published N%
 DMR, N questions
 source ↗ (the DMR score file, opens in new tab)
-Hippo scored N ahead of BMN at N by N points [N N]. Handing the model the whole chat scored N which beats hippo by N points [N N]. Zep publishes N and MemGPT N
-N% hippo answer accuracy, N questions Ahead of BMN by N points
+With its local reranker on, hippo scored N ahead of BMN at N by N points [N N]. Handing the model the whole chat scored N which beats hippo by N points [N N]. Zep publishes N and MemGPT N
+N% hippo answer accuracy, local embedder and reranker, N questions Ahead of BMN by N points
 Behind Full chat by N points
 All scores
 SystemSetupScore
@@ -100,21 +100,24 @@ Full chat Published N%
 MemGPT Published N%
 Full chat Run here N%
 hippo Run here N%
+hippo, embedder only Run here N%
 BMN Run here N%
 hippo, embeddings off Run here N%
 Recursive Summarization Published N%
 HotPotQA-N N questions
 source ↗ (the HotPotQA-N score file, opens in new tab)
 Too few questions to separate hippo's FN a score for word overlap with the expected answer, of N from BMN's N
-FN N hippo answer FN N questions Level with BMN
+FN N hippo answer FN local embedder and reranker, N questions Level with BMN
 All scores
 SystemSetupScore
 hippo Run here FN N
+hippo, embedder only Run here FN N
 hippo, embeddings off Run here FN N
 BMN Run here FN N
 Finding the right session
 On LongMemEval-S, hippo's benchmark scripts put an answer session in the top five for N% of N questions with the free local MiniLM embedder. That is the best of five settings, chosen after the run, on a measure close to its ceiling. Requiring every answer session, the same runs score N to N%, and gbrain is ahead at N% with a paid reranker. The hippo recall command on a default install scores N% [N N]. On one store of all N sessions, recall fell to N% in June N
-A paid reranker improved ranking, with no measurable gain in answers
+What the two rerankers bought
+--reranker cross-encoder reorders the top N memories with a free model on your machine, and is off by default. On DMR (the score file, opens in new tab) it lifted hippo's answers from N with the embedder alone to N by N points [N N]. On PersonaMem vN and HotPotQA-N the change was within the noise.
 --reranker jev sends the top candidates to the hosted TypeSafe Jev API, and is off by default. On N developer queries from a private store, the right memory ranked first for N% of them, against N% with the free local cross-encoder. Three graded-answer tests (opens in new tab) showed no better answer rate. It buys a shorter context for about N USD a recall, and it sends your query and candidate text to a third party.
 What didn't work
 Sleep lowered recall by N points [N N] on one scorer and raised it a little on another, so we claim no benefit for it.

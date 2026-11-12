@@ -38,7 +38,7 @@ export const site = {
     jevEval: `${REPO}/blob/master/docs/evals/2026-09-19-jev-reranker.md`,
     z0Round3: `${REPO}/blob/master/docs/evals/2026-11-08-z0-round3-result.md`,
     locomoScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/locomo-h2h-emb.txt`,
-    dmrScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/dmr-emb.txt`,
+    dmrScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/dmr-best.txt`,
     storeCalls: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/mem0-locomo-ingest-gate.json`,
     // Pilot requests open a GitHub issue until a booking link exists.
     pilot: `${REPO}/issues/new?title=Pilot%20request&body=Company%2C%20team%20size%2C%20agents%20in%20use%3A`,
@@ -55,8 +55,8 @@ export const proofs: ReadonlyArray<{ stat: string; text: string; href: string; h
     hrefLabel: 'the Z0 round 3 result',
   },
   {
-    stat: '+11.7 points',
-    text: 'Answer accuracy over BM25 keyword search on DMR, a public memory test. Hippo with its optional local embedder scored 73.1% against 61.4%, with the same answer model.',
+    stat: '+16.2 points',
+    text: 'Answer accuracy over BM25 keyword search on DMR, a public memory test. Hippo with its optional local embedder and reranker scored 77.6% against 61.4%, with the same answer model.',
     href: site.links.dmrScore,
     hrefLabel: 'the DMR score file',
   },
@@ -129,7 +129,7 @@ export const session = {
 // The home summary of the public tests; rows come from data/public-benchmarks.json, and the first two losses below sit under them.
 export const publicTests = {
   heading: 'On public question-answering tests',
-  body: 'These tests ask questions about long conversations, a different job from stopping a repeated mistake, so we show them as supporting evidence. Within each test, every system we ran used the same answer model and the same scorer, and hippo ran with its optional local embedder.',
+  body: 'These tests ask questions about long conversations, a different job from stopping a repeated mistake, so we show them as supporting evidence. Within each test, every system we ran used the same answer model and the same scorer. Hippo ran with its optional local embedder, and on DMR with its local reranker too.',
   linkLabel: 'Every result, and where hippo lost',
 } as const;
 
@@ -137,7 +137,7 @@ export const publicTests = {
 export const losses = {
   items: [
     { text: "On LoCoMo, a public test of questions about long conversations, Mem0 scored 94.9 to hippo's 89.4.", href: site.links.locomoScore },
-    { text: 'Handing the model the whole chat beat hippo by 10.5 points on another public test, 83.6 to 73.1.', href: site.links.dmrScore },
+    { text: 'Handing the model the whole chat beat hippo by 6.1 points on another public test, 83.6 to 77.6.', href: site.links.dmrScore },
   ],
 } as const;
 
