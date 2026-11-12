@@ -35,7 +35,8 @@ const USAGE = 'usage: z0-budget.mjs admit --step <smoke|pilot|whole-run|batch-1|
   + 'exit 0 pass, 1 input error, 3 or 4 or 5 or 6 a refusal named by its line';
 
 const sum = (xs) => xs.reduce((s, x) => s + x, 0);
-const money = (x) => x.toFixed(2);
+/** Rounds up to the cent so a printed figure never reads below the true one; rounding to a millionth first keeps float noise from adding a cent. */
+export const money = (x) => (Math.ceil(Math.round(x * 1e6) / 1e4) / 100).toFixed(2);
 
 /* ------------------------------------------------------------------------------------------ projection */
 

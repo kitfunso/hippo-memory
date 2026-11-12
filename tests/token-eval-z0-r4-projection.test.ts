@@ -8,20 +8,20 @@ describe('projectSpend on round 3\'s unrounded bases, as r4-projection.py prints
   const batch1 = sumsOver(SEQ, BATCH1);
   const spend = (over: { basisByArm?: Record<string, number>; gapByArm?: Record<string, number>; r?: number; seedsByArm?: Record<string, number>; pilotUsd?: number; scale?: number }) => projectSpend({ basisByArm: BASIS, gapByArm: {}, r: 1, seedsByArm: {}, pilotUsd: 0, scale: 1, ...over });
 
-  it('gives 1284.83, 1714.02 and 2143.21 at r = 1, 1.5 and 2 with the $40 pilot', () => {
-    expect([1, 1.5, 2].map((r) => cents(spend({ r, pilotUsd: 40 })))).toEqual(['1284.83', '1714.02', '2143.21']);
+  it('gives 1284.84, 1714.03 and 2143.22 at r = 1, 1.5 and 2 with the $40 pilot', () => {
+    expect([1, 1.5, 2].map((r) => cents(spend({ r, pilotUsd: 40 })))).toEqual(['1284.84', '1714.03', '2143.22']);
   });
 
-  it('gives the 5206.29 ceiling with the four rule arms at 9 seeds at r = 2', () => {
-    expect(cents(spend({ r: 2, pilotUsd: 40, seedsByArm: rule(9) }))).toBe('5206.29');
+  it('gives the 5206.30 ceiling with the four rule arms at 9 seeds at r = 2', () => {
+    expect(cents(spend({ r: 2, pilotUsd: 40, seedsByArm: rule(9) }))).toBe('5206.30');
   });
 
-  it('gives batch 1\'s 376.34 and 635.94 from its sequence sums with no gap', () => {
-    expect([1, 2].map((r) => cents(spend({ r, basisByArm: batch1 })))).toEqual(['376.34', '635.94']);
+  it('gives batch 1\'s 376.35 and 635.95 from its sequence sums with no gap', () => {
+    expect([1, 2].map((r) => cents(spend({ r, basisByArm: batch1 })))).toEqual(['376.35', '635.95']);
   });
 
-  it('gives batch 1 with q145\'s gap 412.81 at r = 1 and 697.03 at r = 2', () => {
-    expect([1, 2].map((r) => cents(spend({ r, basisByArm: batch1, gapByArm: gap })))).toEqual(['412.81', '697.03']);
+  it('gives batch 1 with q145\'s gap 412.82 at r = 1 and 697.03 at r = 2', () => {
+    expect([1, 2].map((r) => cents(spend({ r, basisByArm: batch1, gapByArm: gap })))).toEqual(['412.82', '697.03']);
   });
 
   it('multiplies every projection by the scale and adds the pilot once, unscaled', () => {
@@ -43,8 +43,8 @@ describe('projectSpend on round 3\'s unrounded bases, as r4-projection.py prints
     expect(() => spend({ basisByArm: without })).toThrow(/no spend for A4/);
   });
 
-  it('gives the q145 gaps A0 8.67, A1 11.86, A2 11.49, A4 6.65 and A5 10.56', () => {
-    expect(Object.fromEntries(Object.entries(gap).map(([a, x]) => [a, cents(x)]))).toEqual({ A0: '8.67', A1: '11.86', A2: '11.49', A4: '6.65', A5: '10.56' });
+  it('gives the q145 gaps A0 8.68, A1 11.86, A2 11.49, A4 6.65 and A5 10.57', () => {
+    expect(Object.fromEntries(Object.entries(gap).map(([a, x]) => [a, cents(x)]))).toEqual({ A0: '8.68', A1: '11.86', A2: '11.49', A4: '6.65', A5: '10.57' });
   });
 
   it('refuses a gap that cannot be taken: q145 missing from the keys or from the sequences, or a key with no row', () => {
@@ -55,9 +55,9 @@ describe('projectSpend on round 3\'s unrounded bases, as r4-projection.py prints
     expect(() => sequenceGap(SEQ, [...BATCH1, 'q999'])).toThrow(/no row for q999/);
   });
 
-  it('gives the whole-run check 1641.63 and 2464.81 at r = 1 and 2745.37 and 4059.80 at r = 2, for 3 and 5 seeds, with the pilot and the 1.25 margin', () => {
+  it('gives the whole-run check 1641.64 and 2464.81 at r = 1 and 2745.38 and 4059.80 at r = 2, for 3 and 5 seeds, with the pilot and the 1.25 margin', () => {
     const need = (r: number, seeds: number) => cents(40 + 1.25 * wholeRun({ basisByArm: BASIS, gapByArm: gap, r, seeds }));
-    expect([need(1, 3), need(1, 5), need(2, 3), need(2, 5)]).toEqual(['1641.63', '2464.81', '2745.37', '4059.80']);
+    expect([need(1, 3), need(1, 5), need(2, 3), need(2, 5)]).toEqual(['1641.64', '2464.81', '2745.38', '4059.80']);
   });
 });
 describe('step projections at the measured mean per record', () => {
@@ -65,16 +65,16 @@ describe('step projections at the measured mean per record', () => {
     expect(cents(stepProjection({ plans: [plan(6, ALL_ARMS)], meanPerRecord: MEAN, warmupUsd: undefined }))).toBe('2.76');
   });
 
-  it('projects the pilot, 108 sessions and 4 effort sessions, at $38.63 before its 8 warm-ups', () => {
+  it('projects the pilot, 108 sessions and 4 effort sessions, at $38.64 before its 8 warm-ups', () => {
     const plans = [plan(54, ['O1', 'S1', 'S2']), plan(54, ['O1', 'S1', 'S2']), plan(2, ['O1', 'S1']), plan(2, ['O1', 'S1'])];
-    expect(cents(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0 }))).toBe('38.63');
+    expect(cents(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0 }))).toBe('38.64');
     expect(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0.17 })).toBeCloseTo(112 * MEAN + 8 * 0.17, 9);
     expect(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0.17 })).toBeLessThan(40);
   });
 
-  it('projects 118 sessions, 2 more positions in one pilot repository, at $40.70', () => {
+  it('projects 118 sessions, 2 more positions in one pilot repository, at $40.71', () => {
     const plans = [plan(60, ['O1', 'S1', 'S2']), plan(54, ['O1', 'S1', 'S2']), plan(2, ['O1', 'S1']), plan(2, ['O1', 'S1'])];
-    expect(cents(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0 }))).toBe('40.70');
+    expect(cents(stepProjection({ plans, meanPerRecord: MEAN, warmupUsd: 0 }))).toBe('40.71');
   });
 
   it('counts one warm-up per distinct model of each plan\'s Claude Code arms, and prices it at the mean when there is no measured cost', () => {

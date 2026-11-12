@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import { appendJsonLine, readSealed } from '../scripts/token-eval/atomic-write.mjs';
-import { projectSpend, runCli, sequenceGap, wholeRun } from '../scripts/token-eval/z0-budget.mjs';
+import { money, projectSpend, runCli, sequenceGap, wholeRun } from '../scripts/token-eval/z0-budget.mjs';
 import { ALL_ARMS, BASIS, BATCH1, BATCH2, BATCH2_SEQ, MEAN, SEQ, cents, plan, rule, sumsOver } from './_helpers/z0-r4-spend.js';
 
 const RULE_ARMS = ['O1', 'S1', 'S2', 'S5'];
@@ -56,6 +56,12 @@ const goFigure = (root: Root, figure: string) => runCli(['founder-go', '--questi
 const units = (root: Root, sub: string, keys: readonly string[], tail = 'w1') => keys.flatMap((k) => ['--units', path.join(root.dir, sub, `${k}-${tail}`)]);
 const gapOf = sequenceGap(SEQ, BATCH1);
 
+describe('money: a printed USD figure rounds up to the cent', () => {
+  it.each([[2.76, '2.76'], [40.004, '40.01'], [0.1 + 0.2, '0.30'], [2464.8101, '2464.82'], [0, '0.00'], [39.999999999, '40.00']])('prints %s as %s', (x, want) => {
+    expect(money(x)).toBe(want);
+  });
+});
+
 describe('admit: the smoke and the pilot', () => {
   it('admits the smoke at margin 1 and logs one entry with every field', () => {
     const root = makeRoot();
@@ -91,6 +97,17 @@ describe('admit: the smoke and the pilot', () => {
     expect(pilot({ ledger: '0', approved: '2000' }).code).toBe(0);
     expect(last(root)).toMatchObject({ admitted: true, cap: 45 });
     expect(pilot({ ledger: '0', approved: '2000', attempt: '2' }).code).toBe(4);
+  });
+
+  it('prints a $40.004 pilot as $40.01, so a pilot go at the printed figure admits it', () => {
+    const root = makeRoot({ spend: { meanPerRecord: 1 } });
+    const pilot = () => admit(root, { step: 'pilot', extra: ['--plans', planFile(root, 'p.json', plan(39, ['O1'])), '--warmups', warmups(root, { 'claude-opus-5-5': 1.004 })] });
+    const refused = pilot();
+    expect(refused.code).toBe(4);
+    expect(refused.stderr).toContain('FOUNDER: the pilot projects $40.01 at r = 2, above its $40 budget: go on or stop');
+    expect(runCli(['founder-go', '--question', 'pilot', '--figure', '40.01', '--attempt', '1', '--words', 'go on', '--log', root.log]).stdout).toContain('founder-go pilot logged at $40.01');
+    expect(pilot().code).toBe(0);
+    expect(last(root)).toMatchObject({ admitted: true, cap: 40.01 });
   });
 
   it('prices the pilot\'s warm-ups at the largest <model>.json cost and ignores the .start.json files', () => {
@@ -235,6 +252,17 @@ describe('admit: the whole run', () => {
     expect(last(root)).toMatchObject({ admitted: false, reason: 'figure' });
   });
 
+  it('prints a need of $2150.004 as $2150.01, so a figure go at the printed need admits the run', () => {
+    const root = makeRoot({ pilot: SLOW });
+    const ledger = String(2150.004 - need(0.3, 5, 0));
+    const refused = whole(root, { approved: '2140', ledger });
+    expect(refused.code).toBe(4);
+    expect(refused.stderr).toContain('FOUNDER: the whole run needs $2150.01; approved $2140.00');
+    expect(goFigure(root, '2150.01').code).toBe(0);
+    expect(whole(root, { approved: '2150.01', ledger }).code).toBe(0);
+    expect(last(root)).toMatchObject({ admitted: true, approved: 2150.01 });
+  });
+
   it('refuses a fitting run whose pilot flags r of 1.9 with exit 4, reason r, naming the arm', () => {
     const root = makeRoot({ pilot: HOT });
     expect(goFigure(root, '5000').code).toBe(0);
@@ -288,8 +316,8 @@ describe('admit: the whole run', () => {
 describe('admit: batches', () => {
   const batch1Args = (root: Root, over: readonly string[] = []) => ['--pilot', root.pilot, '--mark', path.join(root.dir, 'batch1', 'ADMITTED'), ...units(root, 'batch1', BATCH1), ...over];
 
-  it('projects batch 1 over its keys with q145\'s gap and pilotUsd 0: 412.81 at r = 1 and 697.03 at r = 2', () => {
-    for (const [r, want] of [[1, '412.81'], [2, '697.03']] as const) {
+  it('projects batch 1 over its keys with q145\'s gap and pilotUsd 0: 412.82 at r = 1 and 697.03 at r = 2', () => {
+    for (const [r, want] of [[1, '412.82'], [2, '697.03']] as const) {
       const root = makeRoot({ pilot: { r: { S1: r, S2: r }, rMax: r } });
       expect(admit(root, { step: 'batch-1', ledger: '40', extra: batch1Args(root) }).code).toBe(0);
       expect(cents(entries(root)[0]!.projection)).toBe(want);
@@ -329,7 +357,7 @@ describe('admit: batches', () => {
     const root = makeRoot();
     const extra = batch1Args(root, ['--units', path.join(root.dir, 'batch1', 'q12-w1-a2'), '--units', path.join(root.dir, 'batch1', 'q12-e2'), '--units', path.join(root.dir, 'batch1', 'q12-e2-a3')]);
     expect(admit(root, { step: 'batch-1', ledger: '40', extra }).code).toBe(0);
-    expect(cents(entries(root)[0]!.projection)).toBe('412.81');
+    expect(cents(entries(root)[0]!.projection)).toBe('412.82');
   });
 
   it('exits 1 naming both lists when the unit keys differ from the pins file\'s batch1Keys, and logs nothing', () => {
@@ -714,10 +742,10 @@ describe('project', () => {
     const r = runCli(['project', '--spend-basis', root.basis, '--pins', root.pins]);
     expect(r.code).toBe(0);
     expect(r.stdout.trim().split('\n')).toEqual([
-      'projection at r=1, with the pilot: 1284.83', 'projection at r=1.5, with the pilot: 1714.02', 'projection at r=2, with the pilot: 2143.21', 'ceiling at r=2, with the pilot: 5206.29',
-      'batch 1 at r=1, no pilot: 376.34', 'batch 1 at r=2, no pilot: 635.94',
-      'q145 gap, A0: 8.67', 'q145 gap, A1: 11.86', 'q145 gap, A2: 11.49', 'q145 gap, A4: 6.65', 'q145 gap, A5: 10.56',
-      'figure the whole-run check needs at r=1, 3 and 5 seeds: 1641.63, 2464.81', 'figure the whole-run check needs at r=2, 3 and 5 seeds: 2745.37, 4059.80',
+      'projection at r=1, with the pilot: 1284.84', 'projection at r=1.5, with the pilot: 1714.03', 'projection at r=2, with the pilot: 2143.22', 'ceiling at r=2, with the pilot: 5206.30',
+      'batch 1 at r=1, no pilot: 376.35', 'batch 1 at r=2, no pilot: 635.95',
+      'q145 gap, A0: 8.68', 'q145 gap, A1: 11.86', 'q145 gap, A2: 11.49', 'q145 gap, A4: 6.65', 'q145 gap, A5: 10.57',
+      'figure the whole-run check needs at r=1, 3 and 5 seeds: 1641.64, 2464.81', 'figure the whole-run check needs at r=2, 3 and 5 seeds: 2745.38, 4059.80',
     ]);
   });
 });

@@ -1,5 +1,6 @@
 // Round 3's recorded spend by arm and sequence, and the plan cells, that the round 4 budget tests share.
 import { DESIGNS } from '../../scripts/token-eval/arms.mjs';
+import { money } from '../../scripts/token-eval/z0-budget.mjs';
 
 // Round 3's recorded spend by arm and by batch 1 sequence (r3-bases.py on the round 3 run), unrounded.
 export const BASIS = { A0: 314.93659099999996, A1: 386.4545920000009, A2: 385.2113900000005, A4: 256.7379992000001, A5: 373.4189512000002 };
@@ -19,7 +20,7 @@ export const BATCH2_SEQ = { qa: { A0: 30, A1: 40, A2: 40, A4: 20, A5: 40 }, qb: 
 export const MEAN = 0.3449386223427768;
 export const BATCH1 = Object.keys(SEQ);
 export const BATCH2 = Object.keys(BATCH2_SEQ);
-export const cents = (x: number): string => x.toFixed(2);
+export const cents = (x: number): string => money(x);
 const sum = (xs: readonly number[]): number => xs.reduce((s, x) => s + x, 0);
 export const rule = (n: number) => ({ O1: n, S1: n, S2: n, S5: n });
 export const sumsOver = (table: Record<string, Record<string, number>>, keys: readonly string[]) => Object.fromEntries(Object.keys(BASIS).map((a) => [a, sum(keys.map((k) => table[k]![a]!))]));
