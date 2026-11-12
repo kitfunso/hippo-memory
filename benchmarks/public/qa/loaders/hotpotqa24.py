@@ -136,14 +136,16 @@ def _harness():
     return harness
 
 
-def match_scores(out: Path, arm: str | None = None, pairs_with: tuple[Path, ...] = ()):
+def match_scores(out: Path, arm: str | None = None, pairs_with: tuple[Path, ...] = (), arms: dict | None = None):
     """(the run's namespace, ids, primary ids, smoke note, answers, {(arm, qid): (EM, F1)}) from the call log; an
-    exhausted answer scores 0 on both."""
+    exhausted answer scores 0 on both. arms: a paired run's own arms, from its config.json."""
     harness = _harness()
 
     a = argparse.Namespace(stage="score", bench="hotpotqa24", out=out, limit=0, slots=1, port_base=0, arm=arm,
                            pairs_with=list(pairs_with))
     mod, qs = harness.setup(a)
+    if arms:
+        a.arms = arms
     answers = harness.all_answers(a, mod, qs)
     ids, by_id = [q["qid"] for q in qs], {q["qid"]: q for q in qs}
     sc = {(arm_, i): (0.0, 0.0) if (ans := answers[(arm_, i)]["answer"]) is None else
@@ -165,7 +167,7 @@ def score(out: Path, bonferroni: int | None = None, arm: str | None = None, pair
                      f"F1 {100 * sum(sc[(arm_, i)][1] for i in primary) / len(primary):5.1f}")
     if arm:
         for run in pairs_with:
-            r, r_ids, _, _, _, rsc = match_scores(run)
+            r, r_ids, _, _, _, rsc = match_scores(run, arms=harness.load(run / "config.json")["arms"])
             if r_ids != ids:
                 sys.exit(f"{run} holds another question set than {out}")
             for other in r.arms:

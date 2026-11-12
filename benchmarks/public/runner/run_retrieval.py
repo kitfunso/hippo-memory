@@ -28,13 +28,13 @@ HIPPO = HERE.parents[2]
 RUNNER = Path.home() / "hippo-bench" / "memory-benchmarks"
 SERVER = HIPPO / "benchmarks" / "public" / "hippo-mem0-server.mjs"
 sys.path.insert(0, str(HERE.parent))
-from server_arms import FLAGS, SERVER_ARM, health_ok, want_health  # noqa: E402
+from server_arms import FELL_BACK, FLAGS, SERVER_ARM, health_ok, want_health  # noqa: E402
 BENCH = {
     "beam-100k": ("beam", "100K"), "beam-500k": ("beam", "500K"), "beam-1m": ("beam", "1M"), "beam-10m": ("beam", "10M"),
     "longmemeval-s": ("lme", "longmemeval_s_cleaned.json"), "longmemeval-m": ("lme", "longmemeval_m_cleaned.json"),
 }
 LME_SMOKE_TYPES = "single-session-user,single-session-assistant,multi-session,knowledge-update,temporal-reasoning"
-BAD_LOG = re.compile(r"failed|error|traceback|exception|fell back", re.I)  # "fell back": a search on BM25 alone
+BAD_LOG = re.compile(rf"failed|error|traceback|exception|{FELL_BACK.pattern}", re.I)
 SEARCH_RETRY = re.compile(r"SEARCH attempt \d+/\d+ failed")  # a search never changes a store: the retry's result stands
 ADD_RETRY = re.compile(r"ADD attempt \d+/\d+ failed \(user=([^)]+)\)")  # a retried add may be stored twice
 DEAD_URL = "http://127.0.0.1:9/v1"  # port 9 (discard) refuses connections: no model call can leave this machine
@@ -328,12 +328,17 @@ def check(pred: Path, ids: list[str], runner_logs: list[Path], server_logs: list
             "seconds": round(time.time() - started, 1)}
 
 
-def same_set(pred: Path, other: Path, ids: list[str]) -> list[str]:
-    """Dated notes 9: MMR and the cross-encoder re-order only the first 100 rows, so at 200 hippo-best must show the
-    memories hippo-emb showed. Text and date, as ids are new in every store. Returns the questions that differ."""
-    def shown(d: Path, i: str) -> list:
+MMR_ROWS = 100  # src/domain/search/rerank.ts: MMR re-orders the first 100 rows, the cross-encoder the first 50
+
+
+def same_shown(pred: Path, other: Path, ids: list[str]) -> list[str]:
+    """Dated notes 9: hippo-best must show hippo-emb's first 100 memories in any order, then its rows 101 to 200 in the
+    same order, which neither re-ranker touches, so another query or store shows there. Text and date, as ids are new
+    in every store. Returns the questions that differ."""
+    def shown(d: Path, i: str) -> tuple:
         res = json.loads((d / f"{i}.json").read_text(encoding="utf-8"))["retrieval"]["search_results"]
-        return sorted((r["memory"], r.get("created_at")) for r in res)
+        rows = [(r["memory"], r.get("created_at")) for r in res]
+        return sorted(rows[:MMR_ROWS]), rows[MMR_ROWS:]
     return [i for i in ids if not (pred / f"{i}.json").exists() or shown(pred, i) != shown(other, i)]
 
 
@@ -380,9 +385,10 @@ def main() -> None:
             res["runner_restarts"] = sum(sh.runner_restarts for sh in shards)
             if any(rcs):
                 res["pass"], res["problems"] = False, [f"runner exit codes {rcs}", *res["problems"]]
-            if arm == "hippo-best" and (off := same_set(pred, a.same_set_as, ids)):
+            if arm == "hippo-best" and (off := same_shown(pred, a.same_set_as, ids)):
                 res["pass"] = False
-                res["problems"].append(f"{len(off)} questions show other memories at 200 than hippo-emb, e.g. {off[0]}")
+                res["problems"].append(f"{len(off)} questions differ from hippo-emb in the first 100 memories or in rows "
+                                       f"101 to 200, e.g. {off[0]}")
             (arm_dir / "retrieval-check.json").write_text(json.dumps(res, indent=1), encoding="utf-8")
             verdict[arm] = res
     finally:

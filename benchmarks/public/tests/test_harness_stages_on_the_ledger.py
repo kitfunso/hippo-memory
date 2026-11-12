@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import types
 from pathlib import Path
@@ -266,27 +267,74 @@ def test_the_hippo_best_arm_adds_the_reranker_and_rank_score_to_the_embeddings()
 
 
 class Fixed:
-    """A server that returns the same results for every search."""
+    """A server that returns the same results for every search; write= a file it writes into the user's store."""
 
-    def __init__(self, arm: str, results: list[dict]) -> None:
-        self.arm, self.results = arm, results
+    def __init__(self, arm: str, results: list[dict], data: Path | None = None, write: str = "") -> None:
+        self.arm, self.results, self.data, self.write = arm, results, data, write
 
     def search(self, user: str, query: str, limit: int) -> list[dict]:
+        if self.write:
+            (harness.store_dir(self.data, user) / self.write).write_text("x", encoding="utf-8")
         return [dict(r) for r in self.results]
 
 
+def old_store(data: Path, user: str) -> None:
+    """A store whose one file is older than any search."""
+    root = harness.store_dir(data, user)
+    root.mkdir(parents=True)
+    (root / "hippo.db").write_text("rows", encoding="utf-8")
+    os.utime(root / "hippo.db", ns=(10**18, 10**18))
+
+
 def test_a_replay_writes_the_new_arm_only_while_the_hippo_emb_search_gives_back_the_saved_file(tmp_path):
-    src, out = tmp_path / "emb", tmp_path / "best"
+    src, out, data = tmp_path / "emb", tmp_path / "best", tmp_path / "data"
     saved = [{"id": "a", "memory": "m", "score": 0.5, "created_at": None}]
+    old_store(data, "u0")
     harness.write_pred(src, "hippo-emb", QS[0], saved, 5, 3)
     mod, turns = fake_loader(), [{"role": "r", "content": "x"}]
     best = Fixed("hippo-best", [{"id": "b", "memory": "n", "score": 1.0, "created_at": None}])
-    rec = harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved), src)
+    rec = harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data), src)
     assert rec["phase"] == "retrieve"
     assert json.loads(harness.pred_path(out, "hippo-best", "q0").read_text(encoding="utf-8"))["results"][0]["id"] == "b"
     moved = [{**saved[0], "score": 0.4}]
     with pytest.raises(RuntimeError, match="replay differs"):
-        harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", moved), src)
+        harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", moved, data), src)
+
+
+def test_a_replay_stops_on_a_store_newer_than_the_search_or_one_the_replay_writes(tmp_path):
+    src, out, data = tmp_path / "emb", tmp_path / "best", tmp_path / "data"
+    saved = [{"id": "a", "memory": "m", "score": 0.5, "created_at": None}]
+    old_store(data, "u0")
+    harness.write_pred(src, "hippo-emb", QS[0], saved, 5, 3)
+    mod, turns = fake_loader(), [{"role": "r", "content": "x"}]
+    best = Fixed("hippo-best", saved)
+    harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data, "x-shm"), src)
+    with pytest.raises(RuntimeError, match="replay changed"):
+        harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data, "new.db"), src)
+    with pytest.raises(RuntimeError, match="changed after"):  # new.db is newer than the hippo-emb search
+        harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data), src)
+    with pytest.raises(RuntimeError, match="missing"):
+        harness.run_unit(best, mod, out, "u1", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data), src)
+
+
+def test_the_store_dir_is_the_servers_root_for_the_user(tmp_path):
+    root = harness.store_dir(tmp_path, "dmr-000")
+    assert root == tmp_path / f"dmr-000-{hashlib.sha256(b'dmr-000').hexdigest()[:10]}" / ".hippo"
+    assert harness.store_dir(tmp_path, "a b/c").parent.name.startswith("a_b_c-")
+
+
+def test_no_manifest_while_a_server_log_of_an_embeddings_arm_says_it_fell_back(bench, tmp_path, monkeypatch):
+    a, mod, qs = bench
+    monkeypatch.setattr(harness, "run_arm", lambda *args: None)
+    monkeypatch.setattr(harness, "ARMS", {"hippo-emb": "hippo"})
+    r = argparse.Namespace(**{**vars(a), "stage": "retrieve", "arm": "hippo-emb", "arms": {"hippo-emb": "hippo"},
+                              "shards": 1, "out": tmp_path / "emb"})
+    (r.out / "ingest" / "hippo-emb").mkdir(parents=True)
+    (r.out / "ingest" / "hippo-emb" / "server.log").write_text("warn: hybrid search fell back to BM25 only: x\n",
+                                                              encoding="utf-8")
+    with pytest.raises(SystemExit, match="BM25 alone"):
+        harness.stage_ingest_retrieve(r, mod, qs)
+    assert not (r.out / "predicted" / "manifest.json").exists()
 
 
 def test_a_replay_refuses_a_benchmark_that_asks_mid_history(bench, tmp_path, monkeypatch):

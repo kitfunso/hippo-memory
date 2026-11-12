@@ -105,3 +105,21 @@ def test_a_merged_file_no_shard_owns_stops_the_resume(tmp_path):
     (src / "q9.json").write_text("{}", encoding="utf-8")
     with pytest.raises(SystemExit, match="belongs to no shard"):
         rr.unmerge("longmemeval-m", tmp_path, [{"q1"}])
+
+
+def rows(d, qid: str, memories: list[str]) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    res = [{"memory": m, "created_at": "2023-01-01", "score": 1.0} for m in memories]
+    (d / f"{qid}.json").write_text(json.dumps({"retrieval": {"search_results": res}}), encoding="utf-8")
+
+
+def test_hippo_best_may_reorder_the_first_100_but_must_show_rows_101_to_200_as_hippo_emb(tmp_path):
+    emb = [f"m{i}" for i in range(200)]
+    rows(tmp_path / "emb", "q", emb)
+    rows(tmp_path / "ok", "q", emb[:100][::-1] + emb[100:])
+    rows(tmp_path / "tail", "q", emb[:100] + emb[100:][::-1])
+    rows(tmp_path / "set", "q", emb[:99] + [emb[150]] + emb[100:150] + [emb[99]] + emb[151:])
+    assert rr.same_shown(tmp_path / "ok", tmp_path / "emb", ["q"]) == []
+    assert rr.same_shown(tmp_path / "tail", tmp_path / "emb", ["q"]) == ["q"]
+    assert rr.same_shown(tmp_path / "set", tmp_path / "emb", ["q"]) == ["q"]
+    assert rr.same_shown(tmp_path / "none", tmp_path / "emb", ["q"]) == ["q"]

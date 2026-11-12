@@ -41,7 +41,7 @@ from claude_llm import Claude  # noqa: E402
 from h2h import load, paired, primary_lines, read_jsonl, reading, run_all, sha, tokens_in  # noqa: E402,F401
 from qa.ledger import (ANSWERER, JUDGE, Item, Ledger, exhausted_lines, require, smoke_excluded, trail,  # noqa: E402
                        unsettled)
-from server_arms import FLAGS, SERVER_ARM as SERVER_ARMS, health_ok, want_health  # noqa: E402
+from server_arms import FLAGS, SERVER_ARM as SERVER_ARMS, fallback_logs, health_ok, want_health  # noqa: E402
 
 ARMS = {"hippo365": "hippo", "bm25": "bm25"}  # arm -> the server's --arm
 SERVER = PUBLIC / "hippo-mem0-server.mjs"
@@ -165,6 +165,28 @@ def add_turns(srv: Server, user: str, turns: list[dict]) -> int:
     return sum(srv.add(user, t) for t in turns)
 
 
+def store_dir(data: Path, user: str) -> Path:
+    """hippo-mem0-server.mjs rootFor: the user's store under a server's data directory."""
+    slug = re.sub(r"[^A-Za-z0-9_-]", "_", user)[:40]
+    return data / f"{slug}-{hashlib.sha256(user.encode()).hexdigest()[:10]}" / ".hippo"
+
+
+def store_files(root: Path) -> dict:
+    """Size and write time of each file of a store; SQLite's -shm and -journal files hold no rows."""
+    return {str(p.relative_to(root)): (s.st_size, s.st_mtime_ns) for p in sorted(root.rglob("*"))
+            if p.is_file() and not p.name.endswith(("-shm", "-journal")) and (s := p.stat())}
+
+
+def frozen_store(data: Path, user: str, src: Path, qs: list[dict]) -> dict:
+    """Codex on dated notes 9: a replay searches the store hippo-emb searched only if no file of it is newer than that
+    run's first search there. The files, for the check that the replay wrote nothing."""
+    files = store_files(store_dir(data, user))
+    first = min(pred_path(src, "hippo-emb", q["qid"]).stat().st_mtime_ns for q in qs)
+    if not files or max(m for _, m in files.values()) > first:
+        raise RuntimeError(f"{user}'s store is missing or changed after {src} searched it: stop")
+    return files
+
+
 def run_unit(srv: Server, mod, out: Path, user: str, turns: list[dict], qs: list[dict], phase: str,
              gate: Server | None = None, src: Path | None = None) -> dict:
     """ingest: add every turn; a user with a mid-history question is searched as turns go in (phase "sweep").
@@ -172,11 +194,14 @@ def run_unit(srv: Server, mod, out: Path, user: str, turns: list[dict], qs: list
     arm, n = srv.arm, len(turns)
     expected = sum(1 for t in turns if t["content"].strip())
     if phase == "retrieve":
+        frozen = frozen_store(gate.data, user, src, qs) if gate else None
         for q in qs:
             if gate and search_for(gate, q, mod.TOPK, expected) != load(pred_path(src, "hippo-emb", q["qid"]))["results"]:
                 raise RuntimeError(f"the hippo-emb replay differs from {src} on {q['qid']}, so the store is not the "
                                    f"one that run searched: stop")
             write_pred(out, arm, q, search_for(srv, q, mod.TOPK, expected), mod.TOPK, n)
+        if gate and store_files(store_dir(gate.data, user)) != frozen:
+            raise RuntimeError(f"the read-only replay changed {user}'s store: stop")
         return {"user": user, "phase": "retrieve", "turns": n, "stored": expected, "questions": len(qs)}
     srv.delete(user)
     sweep = any(q["ask_after"] is not None for q in qs)
@@ -313,6 +338,9 @@ def stage_ingest_retrieve(a: argparse.Namespace, mod, qs: list[dict]) -> None:
         for f in futs:
             f.result()
     if a.stage == "retrieve":
+        if bad := fallback_logs(p for arm in a.arms if "--embeddings" in FLAGS.get(arm, [])
+                                for p in sorted((a.out / "ingest" / arm).glob("*.log"))):
+            sys.exit(f"a search ran on BM25 alone: hippo logged 'fell back' in {bad[0]}, so no manifest")
         manifest = {arm: {q["qid"]: sha_bytes(pred_path(a.out, arm, q["qid"]).read_bytes()) for q in qs} for arm in a.arms}
         (a.out / "predicted" / "manifest.json").write_text(json.dumps(manifest, indent=0), encoding="utf-8")
         print(f"retrieved {len(qs)} questions for {len(a.arms)} arms; manifest written")

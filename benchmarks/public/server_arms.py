@@ -2,6 +2,9 @@
 Every harness starts its servers from here, so an arm has one flag set."""
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 SERVER_ARM = {"hippo365": "hippo", "bm25": "bm25", "hippo-emb": "hippo", "hippo-best": "hippo", "hippo-rank": "hippo"}
 FLAGS = {"hippo-emb": ["--embeddings", "1"],
          "hippo-best": ["--embeddings", "1", "--reranker-top-k", "50", "--rank-score"],
@@ -19,3 +22,12 @@ def want_health(arm: str, read_only: bool = False) -> dict:
 def health_ok(arm: str, health: dict, read_only: bool = False) -> bool:
     want = want_health(arm, read_only)
     return {k: health.get(k) for k in want} == want
+
+
+# hippo's warn line for a search on BM25 alone (src/domain/search/vector.ts warnBm25Fallback); /health cannot show it
+FELL_BACK = re.compile(r"fell back", re.IGNORECASE)
+
+
+def fallback_logs(logs) -> list[str]:
+    """The server logs that hold a search on BM25 alone; hippo writes the first of each reason at warn."""
+    return [str(p) for p in logs if FELL_BACK.search(Path(p).read_text(encoding="utf-8", errors="replace"))]
