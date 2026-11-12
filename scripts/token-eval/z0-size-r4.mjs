@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { seededRandom } from '../../dist/eval/eval-stats.js';
-import { ARM_TABLE, DESIGNS, designName, hasPair, isRound4Design as isRealR4, pairOf } from './arms.mjs';
+import { ARM_TABLE, DESIGNS, designByName, designName, hasPair, isRound4Design as isRealR4, pairOf } from './arms.mjs';
 import { sourceRows } from './z0-blind.mjs';
 import { cellValues, costCells, partBValues } from './z0-cost-solved.mjs';
 import { filterOpts, filteredInput, withoutRuns } from './z0-filters.mjs';
@@ -201,9 +201,13 @@ export function readWholePlans(files, cwd) {
   });
 }
 
-/** The whole-plan files' rows, one repository per file, named by position. @param {{file: string, cells: any[]}[]} wholePlans @param {string[]} arms */
-function wholeRows(wholePlans, arms, dropped) {
-  return wholePlans.flatMap(({ cells }, i) => repoRows(cells.filter((c) => !dropped.has(c.familyId)), arms).map((r) => ({ ...r, repo: `w${i + 1}` })));
+/** The whole-plan files' rows for test `name`, one repository per file, named by position; a file with no cell of `arms` is not a plan for them.
+ * @param {{file: string, cells: any[]}[]} wholePlans @param {string} name @param {string[]} arms @param {Set<string>} dropped */
+function wholeRows(wholePlans, name, arms, dropped) {
+  return wholePlans.flatMap(({ file, cells }, i) => {
+    if (!cells.some((c) => arms.includes(c.arm))) throw new Error(`${name}: --whole-plan ${file} holds no cell of ${arms.join(', ')}, the pair ${name} reads in a whole plan`);
+    return repoRows(cells.filter((c) => !dropped.has(c.familyId)), arms).map((r) => ({ ...r, repo: `w${i + 1}` }));
+  });
 }
 
 const toUnits = (cells, values) => cells.map((c, i) => ({ repo: c.repo, family: c.family, seed: c.seed, value: values[i] }));
@@ -242,8 +246,10 @@ export function prepareR4(records, planCells, prices, opts) {
   const wholePlans = opts.wholePlans ?? [];
   const pairs = Object.fromEntries([...RULE_TESTS, HARM_TEST].map((t) => [t, pairOf(design, t)]));
   for (const [t, pair] of Object.entries(pairs)) if (!pair.every((a) => filtered.arms.includes(a))) throw new Error(`${t}: ${pair.join(', ')} are not all in the plan`);
-  const rowsOf = (pair) => (wholePlans.length > 0 ? wholeRows(wholePlans, pair, dropped) : repoRows(cells, pair));
-  const layoutOf = (pair, tasks) => rowsOf(pair).map((r) => ({ repo: r.repo, k: r.families + (tasks ? r.tasks : 0) })).filter((e) => e.k >= 1);
+  // A whole plan holds the arms of the design it was written for, so its layouts read that design's pair; the calibration keeps its own.
+  const wholeDesign = design.wholePlanDesign === undefined ? design : designByName(design.wholePlanDesign);
+  const rowsOf = (name) => (wholePlans.length > 0 ? wholeRows(wholePlans, name, pairOf(wholeDesign, name), dropped) : repoRows(cells, pairs[name]));
+  const layoutOf = (name, tasks) => rowsOf(name).map((r) => ({ repo: r.repo, k: r.families + (tasks ? r.tasks : 0) })).filter((e) => e.k >= 1);
   const scored = filtered.scored;
   const tests = {};
   for (const name of ['T1', 'T3', 'T2c']) {
@@ -251,29 +257,30 @@ export function prepareR4(records, planCells, prices, opts) {
     const keep = ARM_TABLE[pair[0]].tool === 'codex' ? codexApply : firstApplyR;
     const cal = repeatCalibration(scored, ...pair, keep, bound);
     if (cal.reason !== undefined) throw new Error(`${name}: ${cal.reason}`);
-    tests[name] = { name, pair, cal, lists: CODINGS.map((c) => repeatMistakeUnits(scored, ...pair, c, keep).units), codings: CODINGS, score: 'repeat', layout: layoutOf(pair, false) };
+    tests[name] = { name, pair, cal, lists: CODINGS.map((c) => repeatMistakeUnits(scored, ...pair, c, keep).units), codings: CODINGS, score: 'repeat', layout: layoutOf(name, false) };
   }
   const resampledPair = hasPair(design, 'resampled') ? pairOf(design, 'resampled') : null;
   for (const [name, part, score] of [['T2a', 'a', 'ratio'], ['T2b', 'b', 'repeat']]) {
     const r = partReading(name, part, scored, pairs[name], prices, design, bound, cells);
     const resampled = resampledPair === null ? undefined : (part === 'a' ? costCells(scored, resampledPair, prices, inSets('R', 'N'), { design }) : partBValues(scored, resampledPair, inSets('R', 'N')));
-    tests[name] = { name, pair: pairs[name], cal: { sim: r.sim, simUpper: r.simUpper }, lists: [r.units], codings: CODINGS.slice(0, 1), score, layout: layoutOf(pairs[name], true), resampled, part };
+    tests[name] = { name, pair: pairs[name], cal: { sim: r.sim, simUpper: r.simUpper }, lists: [r.units], codings: CODINGS.slice(0, 1), score, layout: layoutOf(name, true), resampled, part };
   }
   const harm = calibrate(filtered, prices, bound, { design }).H4;
   if (harm.sim === undefined) throw new Error(`${HARM_TEST}: ${harm.reason}`);
   // Round 4 sizes set N at the whole plan's repositories and mean tasks; round 3's read sizes it at the units' own.
-  const harmRows = rowsOf(pairs.H4).filter((r) => r.tasks > 0);
+  const harmRows = rowsOf(HARM_TEST).filter((r) => r.tasks > 0);
   const harmUnits = () => harmDesign(taskUnits(scored, ...pairs.H4, prices, inSets('N'), { design }));
   tests.H4 = { name: HARM_TEST, pair: pairs.H4, cal: harm, lists: [], design: isRealR4(design) && harmRows.length > 0 ? { repos: harmRows.length, tasks: Math.round(mean(harmRows.map((r) => r.tasks))) } : harmUnits() };
   return {
     design, bound, filtered, prices, scored, tests, wholeRun: wholePlans.length > 0,
-    ruleLayout: isRealR4(design) && opts.noLayout !== true, miss: missReading(records, planCells, prices, opts, bound),
+    ruleLayout: isRealR4(design) && opts.noLayout !== true, miss: missReading(records, planCells, prices, opts, bound, wholePlans.length > 0 ? tests.T2a.layout : undefined),
     usable: withoutRuns(counted, abandoned), records: counted.length, abandoned: [...abandoned.values()].sort(), repos: tests.T1.layout.length,
   };
 }
 
-/** Part (a)'s reading on the `T2aMiss` pair with every family kept, as `r3-parta-se.mjs` reads it (the design's drops would remove the miss). */
-function missReading(records, planCells, prices, opts, bound) {
+/** Part (a)'s reading on the `T2aMiss` pair with every family kept, as `r3-parta-se.mjs` reads it (the design's drops would remove the miss).
+ * `wholeLayout` is T2a's whole-plan layout, which part (a) runs on under whole plans whatever pair it calibrates on. */
+function missReading(records, planCells, prices, opts, bound, wholeLayout) {
   const design = opts.design;
   if (!hasPair(design, 'T2aMiss')) return null;
   const pair = pairOf(design, 'T2aMiss');
@@ -282,8 +289,8 @@ function missReading(records, planCells, prices, opts, bound) {
   const all = filteredInput(records, planCells, every, { dropAbandoned: true });
   const cells = withoutRuns(all.planCells, all.abandoned);
   const r = partReading('T2aMiss', 'a', all.filtered.scored, pair, prices, design, bound, cells);
-  const rows = repoRows(cells, pair);
-  return { pair, units: r.units, cal: { sim: r.sim, simUpper: r.simUpper }, layout: rows.map((x) => ({ repo: x.repo, k: x.families + x.tasks })).filter((e) => e.k >= 1) };
+  const layout = wholeLayout ?? repoRows(cells, pair).map((x) => ({ repo: x.repo, k: x.families + x.tasks })).filter((e) => e.k >= 1);
+  return { pair, units: r.units, cal: { sim: r.sim, simUpper: r.simUpper }, layout };
 }
 
 /* --------------------------------------------------------------------------------------------------- counts and sizer */

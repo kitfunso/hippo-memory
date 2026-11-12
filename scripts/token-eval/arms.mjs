@@ -162,6 +162,7 @@ export const DESIGNS = deepFreeze({
     prices: 'model',
     dropFamilies: ['hu3-f2', 'q133-f2', 'q14-f3', 'q256-f1'],
     maxSeed: 3,
+    wholePlanDesign: 'r4',
   },
 });
 
@@ -176,6 +177,8 @@ const DESIGN_FIELDS = {
   prices: (v) => v === 'tool' || v === 'model',
   maxSeed: (v) => v === null || (Number.isInteger(v) && v >= 1),
 };
+// Optional, so a design whose whole plans share its own arms leaves it out and round 3's literal does not move.
+const OPTIONAL_FIELDS = { wholePlanDesign: isString };
 
 /** Every arm code a design names, as [field, code]; the `arms` field itself is the planned list. */
 function codeRefs(d) {
@@ -218,6 +221,7 @@ function checkNames(d, table, designs, fail) {
   if (d.seedRule.length > 0 && (grouped.size !== wanted.length || wanted.some((c) => !grouped.has(c)))) {
     fail('seedRule', `its groups cover ${[...grouped].join(', ')} but the arms whose row has seedRule are ${wanted.join(', ')}`);
   }
+  if (own(d, 'wholePlanDesign') && !own(designs, d.wholePlanDesign)) fail('wholePlanDesign', `design ${d.wholePlanDesign} is not a design`);
   if (d.drift === null) return;
   if (!own(designs, d.drift.design)) fail('drift', `design ${d.drift.design} is not a design`);
   else if (!designs[d.drift.design].arms.includes(d.drift.against)) fail('drift', `${d.drift.against} is not in the arms of design ${d.drift.design}`);
@@ -230,8 +234,9 @@ export function checkDesigns(designs = DESIGNS, table = ARM_TABLE) {
       throw new Error(`DESIGNS.${name}.${field}: ${message}`);
     };
     for (const f of Object.keys(DESIGN_FIELDS)) if (!own(d, f)) fail(f, 'the field is missing');
-    for (const f of Object.keys(d)) if (!own(DESIGN_FIELDS, f)) fail(f, 'the field is not a design field');
+    for (const f of Object.keys(d)) if (!own(DESIGN_FIELDS, f) && !own(OPTIONAL_FIELDS, f)) fail(f, 'the field is not a design field');
     for (const f of Object.keys(DESIGN_FIELDS)) if (!DESIGN_FIELDS[f](d[f])) fail(f, 'the value has the wrong type');
+    for (const f of Object.keys(OPTIONAL_FIELDS)) if (own(d, f) && !OPTIONAL_FIELDS[f](d[f])) fail(f, 'the value has the wrong type');
     checkArms(d, table, fail);
     checkNames(d, table, designs, fail);
   }

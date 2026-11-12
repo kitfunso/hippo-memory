@@ -11,7 +11,7 @@ import { sourceRows } from '../scripts/token-eval/z0-blind.mjs';
 import { filterOpts } from '../scripts/token-eval/z0-filters.mjs';
 import { LEVELS_SCHEMA, SEED_PREVIEW_SCHEMA, parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { runCli as seedRuleCli, seedRule } from '../scripts/token-eval/z0-seed-rule.mjs';
-import { R4_SEED, figureOf, headCommit, levelCheckR4, levelOf, powerStop, prepareR4, testSeeds } from '../scripts/token-eval/z0-size-r4.mjs';
+import { R4_SEED, figureOf, headCommit, levelCheckR4, levelOf, powerStop, prepareR4, readWholePlans, testSeeds } from '../scripts/token-eval/z0-size-r4.mjs';
 import { binaryRun, levelCells, predictedSe, repeatRun, seedsNeeded } from '../scripts/token-eval/z0-size-sim.mjs';
 import { runCli as sizeCli } from '../scripts/token-eval/z0-size.mjs';
 import { THRESHOLDS, minLevels } from '../scripts/token-eval/z0-verdict-r4.mjs';
@@ -415,8 +415,107 @@ describe('a whole plan', () => {
   });
 });
 
+describe('a round 4 whole plan under r4-on-r3', () => {
+  const DESIGN = DESIGNS['r4-on-r3'];
+  const AB_RUN = path.resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs');
+  const R4_TESTS: Record<string, string[]> = DESIGNS.r4.tests;
+  type PlanCell = { arm: string; set: string; familyId: string | null; taskId: string };
+
+  /** A tasks file of 2 families and 4 set N tasks on one sequence; a dry run needs no repository. */
+  const tasksFor = (k: number) => {
+    const task = (id: string, kind: string, extra: Record<string, string> = {}) => ({ id, kind, baseRef: 'b', fixRef: 'f', prompt: `do ${id}`, test: 'node test.js', testFiles: [], ...extra });
+    const family = (id: string) => ({
+      id, sequence: `seq${k}`, lessonSource: 'maintainer', screen: { id: `${id}-screen`, baseRef: 'b', fixRef: 'f', prompt: 'screen', test: 'node test.js', testFiles: [] },
+      lessons: [{ id: `${id}-l1`, rule: `Rule ${id} lives in ${id}.txt`, reason: 'the release script reads it', keyPhrase: `${id}.txt`, check: { script: 'checks/lesson.mjs' } }],
+    });
+    const [fa, fb] = ['fa', 'fb'].map((f) => ({ familyId: f, lessonId: `${f}-l1` }));
+    const tasks = [
+      task('ta', 'teach', fa), task('n1', 'no-lesson'), task('n2', 'no-lesson'), task('a1', 'apply', fa), task('a2', 'apply', fa),
+      task('tb', 'teach', fb), task('n3', 'no-lesson'), task('n4', 'no-lesson'), task('a3', 'apply', fb), task('a4', 'apply', fb),
+    ];
+    return { families: [family('fa'), family('fb')], sequences: [{ id: `seq${k}`, cluster: 'c', repo: `repo${k}`, fixedOrder: true, tasks }] };
+  };
+
+  /** `n` whole plans from the round 4 plan writer, the call `s4-drive.sh plans` makes: ab-run --design r4 --seeds 3 --dry-run. */
+  function roundFourPlans(n: number): Record<string, string> {
+    const root = tmp('z0-r4-wp-');
+    fs.mkdirSync(path.join(root, 'checks'));
+    fs.writeFileSync(path.join(root, 'checks', 'lesson.mjs'), 'process.exit(0);\n');
+    return Object.fromEntries(Array.from({ length: n }, (_, i) => {
+      const [file, out] = [path.join(root, `tasks-${i + 1}.json`), path.join(root, `out-${i + 1}`)];
+      fs.writeFileSync(file, JSON.stringify(tasksFor(i + 1)));
+      const res = spawnSync(process.execPath, [AB_RUN, '--tasks', file, '--out', out, '--design', 'r4', '--seeds', '3', '--dry-run'], { encoding: 'utf8', env: { ...process.env, Z0_ANCESTOR_STOP: root } });
+      if (res.status !== 0) throw new Error(`ab-run exited ${res.status}: ${res.stderr}`);
+      return [`whole-${i + 1}.json`, fs.readFileSync(path.join(out, 'plan.json'), 'utf8')];
+    }));
+  }
+
+  const g = generate({ arms: R3_ARMS });
+  const calibration = { 'runs.jsonl': jsonl(g.records), 'plan.json': JSON.stringify(g.plan), 'prices.json': JSON.stringify(PRICES_BY_MODEL) };
+  const whole = roundFourPlans(3);
+  const NAMES = Object.keys(whole);
+  const dir = dirWith({ ...calibration, ...whole });
+  const POWER = ['--design', 'r4-on-r3', '--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--sims', '20', '--power', '--cost-ratio', '1'];
+  const argvOf = (names: string[]) => [...POWER, ...names.flatMap((f) => ['--whole-plan', f])];
+  const read = { ...filterOpts({ design: DESIGN }), spreadBound: 0.8 };
+  const prepared = (names: string[] | null, cwd = dir) => prepareR4(parse(g.records), g.plan, PRICES_BY_MODEL, names === null ? read : { ...read, wholePlans: readWholePlans(names, cwd) });
+  const cellsOf = (file: string): PlanCell[] => JSON.parse(whole[file]!);
+
+  it('reads plans written with the round 4 arms, which the calibration design does not name', () => {
+    for (const file of NAMES) expect(new Set(cellsOf(file).map((c) => c.arm))).toEqual(new Set(DESIGNS.r4.arms));
+    expect(DESIGN.arms.some((a: string) => DESIGNS.r4.arms.includes(a))).toBe(false);
+  });
+
+  it('prints the three T2 power lines for 3 whole plans, where it stopped on an empty layout', () => {
+    const run = sizeCli(argvOf(NAMES), dir);
+    expect([run.code, run.stderr]).toEqual([0, '']);
+    expect(run.stdout.split('\n')[0]).toBe('3 repositories');
+    for (const [part, seeds] of [['T2a', 3], ['T2b', 3], ['T2c', 5]] as const) expect(lineOf(run.stdout, new RegExp(`^${part} at `)), part).toMatch(new RegExp(`^${part} at ${seeds} seeds: `));
+  });
+
+  it('lays each test out from what the round 4 plan holds for that test\'s round 4 pair', () => {
+    const held = (test: string, tasks: boolean) => NAMES.map((file, i) => {
+      const cells = cellsOf(file).filter((c) => R4_TESTS[test]!.includes(c.arm));
+      const [families, n] = [new Set(cells.filter((c) => c.set === 'R').map((c) => c.familyId)).size, new Set(cells.filter((c) => c.set === 'N').map((c) => c.taskId)).size];
+      return { repo: `w${i + 1}`, k: families + (tasks ? n : 0) };
+    });
+    const p = prepared(NAMES);
+    for (const [test, tasks, k] of [['T1', false, 2], ['T3', false, 2], ['T2c', false, 2], ['T2a', true, 6], ['T2b', true, 6]] as const) {
+      expect(p.tests[test].layout, test).toEqual(held(test, tasks));
+      expect(p.tests[test].layout, test).toEqual(NAMES.map((_, i) => ({ repo: `w${i + 1}`, k })));
+    }
+    expect(p.repos).toBe(3);
+  });
+
+  it('puts T2aMiss on T2a\'s whole-plan layout, and on its own pair of the calibration plan without whole plans', () => {
+    const p = prepared(NAMES);
+    expect(p.miss.layout).toEqual(NAMES.map((_, i) => ({ repo: `w${i + 1}`, k: 6 })));
+    expect(p.miss.layout).toEqual(p.tests.T2a.layout);
+    const alone = prepared(null);
+    expect(alone.miss.pair).toEqual(['A0', 'A1']);
+    expect(alone.miss.layout.map((e: { repo: string }) => e.repo)).toEqual(Array.from({ length: 6 }, (_, i) => `repo${i + 1}`));
+  });
+
+  it('stops on a plan that holds none of a test\'s arms, naming the test, its pair and the file', () => {
+    const stale = wholePlanFiles(DESIGN, 4)['whole-4.json']!;
+    const withStale = dirWith({ ...calibration, ...whole, 'whole-4.json': stale });
+    const run = sizeCli(argvOf([...NAMES, 'whole-4.json']), withStale);
+    expect([run.code, run.stdout, run.stderr]).toEqual([1, '', 'T1: --whole-plan whole-4.json holds no cell of S2, S1, the pair T1 reads in a whole plan\n']);
+    const noT3 = JSON.stringify(cellsOf('whole-2.json').filter((c) => !['S2', 'S5'].includes(c.arm)));
+    const cut = dirWith({ ...calibration, ...whole, 'whole-2.json': noT3 });
+    expect(() => prepared(NAMES, cut)).toThrow('T3: --whole-plan whole-2.json holds no cell of S2, S5, the pair T3 reads in a whole plan');
+  });
+
+  it('gives --level-check without --whole-plan the stdout it gave before the whole-plan read moved', () => {
+    const run = sizeCli(['--design', 'r4-on-r3', '--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--level-check', '--level-sims', '20', '--out', 'levels.json'], dir);
+    // Recorded on the commit before this change; the commit and timing lines differ per checkout and run.
+    const kept = run.stdout.split('\n').filter((l) => !/^(commit |LEVEL MS )/.test(l)).join('\n');
+    expect([run.code, sha(kept)]).toEqual([3, 'dbb2ea9fbcffd4f77322d1dd390f9907d7491c25232313324c60fe95f97ebf93']);
+  });
+});
+
 describe('the power read', () => {
-  const FIGURES = { T1: 0.9, T3: 0.9, T2a: 0.9, T2b: 0.9, T2c: 0.9 };
+  const FIGURES ={ T1: 0.9, T3: 0.9, T2a: 0.9, T2b: 0.9, T2c: 0.9 };
 
   it('gives exit 3 and a STOP line when T1 is under 0.8, whatever else is', () => {
     expect(powerStop({ ...FIGURES, T1: 0.79, T3: 0.5, T2a: 0.5 })).toEqual({ code: 3, lines: ['STOP: T1 power 0.790'] });
