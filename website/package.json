@@ -12,18 +12,18 @@
     "deploy": "node scripts/check-deploy-source.mjs && npm run build && wrangler pages deploy dist --project-name hippo-memory --branch main"
   },
   "dependencies": {
-    "@astrojs/preact": "^6.1.1",
+    "@astrojs/preact": "^6.1.2",
     "@astrojs/sitemap": "^3.7.4",
     "@fontsource/geist": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/newsreader": "^5.3.0",
-    "@tailwindcss/vite": "^4.3.3",
-    "astro": "^7.4.4",
-    "preact": "^11.1.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "astro": "^7.4.8",
+    "preact": "^11.2.0",
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
     "three": "^0.187.0",
-    "wrangler": "^4.156.0"
+    "wrangler": "^4.159.0"
   }
 }
