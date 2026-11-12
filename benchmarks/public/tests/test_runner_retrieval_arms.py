@@ -69,6 +69,19 @@ def test_a_user_with_a_retried_add_in_the_last_launch_is_redone_whole(tmp_path, 
     assert deleted == ["http://127.0.0.1:1/memories?user_id=u1"]
 
 
+def test_a_question_whose_search_failed_is_redone_whole(tmp_path, monkeypatch):
+    pred = tmp_path / "pred"
+    pred.mkdir()
+    for q, uid, hits in (("q1", "u1", []), ("q2", "u2", [{"id": "m1"}])):
+        (pred / f"{q}.json").write_text(json.dumps({"user_id": uid, "retrieval": {"search_results": hits}}), encoding="utf-8")
+        write_q(pred, f"_ingestion_{q}.json", uid)
+    deleted = []
+    monkeypatch.setattr(rr.urllib.request, "urlopen", lambda req, timeout: deleted.append(req.full_url) or io.BytesIO(b"{}"))
+    assert rr.drop_failed_searches(pred, 1) == 1
+    assert sorted(p.name for p in pred.iterdir()) == ["_ingestion_q2.json", "q2.json"]
+    assert deleted == ["http://127.0.0.1:1/memories?user_id=u1"]
+
+
 def test_the_check_keeps_a_retried_search_but_fails_a_retried_add(tmp_path):
     pred, log = tmp_path / "pred", tmp_path / "runner.log"
     pred.mkdir()

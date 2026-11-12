@@ -134,6 +134,26 @@ def drop_partial_users(pred: Path, port: int) -> int:
     return n
 
 
+def drop_failed_searches(pred: Path, port: int) -> int:
+    """On --resume: a question whose search failed (the runner writes it with no results) is deleted with its ingestion
+    file and its user's store, so the runner ingests and searches it again; the check would fail it forever otherwise."""
+    n = 0
+    for p in sorted(pred.glob("*.json")):
+        if p.name.startswith("_"):
+            continue
+        d = json.loads(p.read_text(encoding="utf-8"))
+        if d.get("retrieval", {}).get("search_results"):
+            continue
+        uid = d.get("user_id")
+        if uid:
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/memories?user_id={uid}", method="DELETE")
+            urllib.request.urlopen(req, timeout=600).read()
+        (pred / f"_ingestion_{p.name}").unlink(missing_ok=True)
+        p.unlink()
+        n += 1
+    return n
+
+
 class Shard:
     """One server and one runner process, supervised: a killed server or runner is started again and the run resumes.
 
@@ -184,6 +204,9 @@ class Shard:
             redone = drop_retried_users(self.pred, self.rlog_path, self.port)
             if redone:
                 self._note(f"{redone} users with a retried add dropped, to be redone whole")
+            failed = drop_failed_searches(self.pred, self.port)
+            if failed:
+                self._note(f"{failed} questions with a failed search dropped, to be redone whole")
         rlog = self.rlog_path.open("ab")
         rlog.write(f"\n=== {time.ctime()} {' '.join(self.cmd)}\n".encode())
         rlog.flush()
