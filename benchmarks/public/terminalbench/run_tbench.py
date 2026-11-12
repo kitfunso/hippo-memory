@@ -30,7 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 HARBOR = os.environ.get("HARBOR_EXE", "harbor")
-TASKS = Path(os.environ.get("TBENCH_TASKS", "C:/Users/skf_s/hippo-bench/tbench/data/terminal-bench"))
+TASKS = Path(os.environ.get("TBENCH_TASKS", Path.home() / "hippo-bench/tbench/data/terminal-bench"))
 MODEL = "anthropic/claude-sonnet-5"
 EFFORT = "medium"
 CLAUDE_VERSION = "2.1.321"  # pinned so a multi-day run never changes agent build mid-way
