@@ -8,7 +8,8 @@ Usage: python h2h.py {answer,judge,score} --run SCRATCH_DIR --out RESULTS_DIR [-
   [--bonferroni K]
 Smoke only: --limit N [--cutoff C] needs an --out path with a "smoke" folder, and keeps the call logs under --out.
 Extra arm (dated notes 5): --arm hippo-emb --pairs-with RUN OUT, in its own --run and --out with its own blind key; score
-adds the arm minus each registered arm of RUN and OUT, re-made from that run's call logs, all secondary.
+adds the arm minus each registered arm of RUN and OUT, re-made from that run's call logs, all secondary. hippo-best (dated
+notes 9) is answered at 50 and 10 alone: at 200 it shows hippo-emb's memories.
 """
 from __future__ import annotations
 
@@ -28,7 +29,9 @@ HERE = Path(__file__).resolve().parent
 RUNNER = Path.home() / "hippo-bench" / "memory-benchmarks"
 LOCOMO = Path.home() / "hippo-bench" / "locomo"
 RETRIEVAL = Path.home() / "hippo-bench" / "retrieval-v3-locomo"  # hippo 3.5.1 retrieval (Amendment 6 rev. 1 item 1)
-RETRIEVAL_OF = {"hippo-emb": Path.home() / "hippo-bench" / "retrieval-emb-locomo"}  # extra arms (dated notes 5)
+RETRIEVAL_OF = {"hippo-emb": Path.home() / "hippo-bench" / "retrieval-emb-locomo",  # extra arms (dated notes 5 and 9)
+                "hippo-best": Path.home() / "hippo-bench" / "retrieval-best-locomo"}
+ARM_CUTOFFS = {"hippo-best": (50, 10)}
 SAMPLE = HERE.parent / "results" / "2026-09-25-lane-a" / "locomo" / "sample.json"
 ARMS, CUTOFFS, LABELS = ("hippo365", "bm25", "mem0"), (200, 50, 10), ("CORRECT", "WRONG")
 INGEST = {"mem0": "ingest"}  # the Mem0 arm's ingestion under --run, gated
@@ -432,7 +435,7 @@ def main() -> None:
     if a.limit and (a.limit < 1 or "smoke" not in (p.lower() for p in a.out.resolve().parts)):
         ap.error("--limit is for smoke runs: it needs a positive N and an --out path with a folder named smoke")
     sample = load(SAMPLE)
-    a.qids, a.cutoffs = (sample[:a.limit] if a.limit else sample), ((a.cutoff,) if a.cutoff else CUTOFFS)
+    a.qids, a.cutoffs = (sample[:a.limit] if a.limit else sample), ((a.cutoff,) if a.cutoff else ARM_CUTOFFS.get(a.arm, CUTOFFS))
     a.logs = a.out if a.limit else a.run  # a smoke run never writes into the real run's call logs
     a.out.mkdir(parents=True, exist_ok=True)
     {"answer": answer, "judge": judge, "score": score}[a.stage](a)

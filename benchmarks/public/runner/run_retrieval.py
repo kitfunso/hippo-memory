@@ -27,13 +27,14 @@ HERE = Path(__file__).resolve().parent
 HIPPO = HERE.parents[2]
 RUNNER = Path.home() / "hippo-bench" / "memory-benchmarks"
 SERVER = HIPPO / "benchmarks" / "public" / "hippo-mem0-server.mjs"
-SERVER_ARM = {"hippo365": "hippo", "bm25": "bm25", "hippo-emb": "hippo"}  # only hippo-emb has embeddings on (notes 5)
+sys.path.insert(0, str(HERE.parent))
+from server_arms import FLAGS, SERVER_ARM, health_ok, want_health  # noqa: E402
 BENCH = {
     "beam-100k": ("beam", "100K"), "beam-500k": ("beam", "500K"), "beam-1m": ("beam", "1M"), "beam-10m": ("beam", "10M"),
     "longmemeval-s": ("lme", "longmemeval_s_cleaned.json"), "longmemeval-m": ("lme", "longmemeval_m_cleaned.json"),
 }
 LME_SMOKE_TYPES = "single-session-user,single-session-assistant,multi-session,knowledge-update,temporal-reasoning"
-BAD_LOG = re.compile(r"failed|error|traceback|exception", re.I)
+BAD_LOG = re.compile(r"failed|error|traceback|exception|fell back", re.I)  # "fell back": a search on BM25 alone
 SEARCH_RETRY = re.compile(r"SEARCH attempt \d+/\d+ failed")  # a search never changes a store: the retry's result stands
 ADD_RETRY = re.compile(r"ADD attempt \d+/\d+ failed \(user=([^)]+)\)")  # a retried add may be stored twice
 DEAD_URL = "http://127.0.0.1:9/v1"  # port 9 (discard) refuses connections: no model call can leave this machine
@@ -79,7 +80,7 @@ def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[lis
 
 
 def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
-    """Waits for /health, then stops unless the server runs the arm's backend with embeddings on exactly for hippo-emb."""
+    """Waits for /health, then stops unless the server runs the arm's backend with the arm's flags (server_arms)."""
     for _ in range(120):
         if proc.poll() is not None:
             sys.exit(f"hippo-mem0-server on {port} exited with {proc.returncode}")
@@ -88,9 +89,10 @@ def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
         except OSError:
             time.sleep(0.5)
             continue
-        if health.get("arm") != SERVER_ARM[arm] or bool(health.get("embeddings")) != (arm == "hippo-emb"):
+        if not health_ok(arm, health):
             proc.terminate()
-            sys.exit(f"server on {port} is not the {arm} arm (hippo-emb needs @huggingface/transformers): {health}")
+            sys.exit(f"server on {port} is not the {arm} arm {want_health(arm)} (embeddings and the cross-encoder need "
+                     f"@huggingface/transformers and their models): {health}")
         return
     sys.exit(f"hippo-mem0-server on {port} did not answer /health in 60 s")
 
@@ -171,7 +173,7 @@ class Shard:
     def _start_server(self) -> subprocess.Popen:
         slog = (self.dir / "server.log").open("ab")
         return subprocess.Popen(["node", str(SERVER), "--arm", SERVER_ARM[self.arm], "--port", str(self.port),
-                                 "--data-dir", str(self.store), "--embeddings", "1" if self.arm == "hippo-emb" else "0"],
+                                 "--data-dir", str(self.store), *FLAGS.get(self.arm, [])],
                                 stdout=slog, stderr=slog)
 
     def _launch(self) -> None:
@@ -326,6 +328,15 @@ def check(pred: Path, ids: list[str], runner_logs: list[Path], server_logs: list
             "seconds": round(time.time() - started, 1)}
 
 
+def same_set(pred: Path, other: Path, ids: list[str]) -> list[str]:
+    """Dated notes 9: MMR and the cross-encoder re-order only the first 100 rows, so at 200 hippo-best must show the
+    memories hippo-emb showed. Text and date, as ids are new in every store. Returns the questions that differ."""
+    def shown(d: Path, i: str) -> list:
+        res = json.loads((d / f"{i}.json").read_text(encoding="utf-8"))["retrieval"]["search_results"]
+        return sorted((r["memory"], r.get("created_at")) for r in res)
+    return [i for i in ids if not (pred / f"{i}.json").exists() or shown(pred, i) != shown(other, i)]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--bench", required=True, choices=sorted(BENCH))
@@ -335,10 +346,15 @@ def main() -> None:
     ap.add_argument("--limit-convs", type=int, default=0, help="smoke: BEAM conversations 0..N-1")
     ap.add_argument("--limit-questions", type=int, default=0, help="smoke: LongMemEval questions, one per type")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--same-set-as", type=Path, metavar="DIR",
+                    help="hippo-best: hippo-emb's predicted_* directory, which its top 200 must equal (dated notes 9)")
     a = ap.parse_args()
     arms, ports = a.arms.split(","), [int(p) for p in a.ports.split(",")]
     if set(arms) - set(SERVER_ARM):
         sys.exit(f"--arms takes {', '.join(SERVER_ARM)}")
+    if ("hippo-best" in arms) != bool(a.same_set_as) or (a.same_set_as and a.limit_questions + a.limit_convs == 0
+                                                          and not a.same_set_as.is_dir()):
+        sys.exit("--arms hippo-best goes with --same-set-as DIR, hippo-emb's predicted_* directory")
     if len(ports) % len(arms) or any(not 8911 <= p <= 8949 for p in ports) or len(set(ports)) != len(ports):
         sys.exit("--ports needs the same count of distinct ports in 8911-8949 for every arm")
     n_shards = len(ports) // len(arms)
@@ -364,6 +380,9 @@ def main() -> None:
             res["runner_restarts"] = sum(sh.runner_restarts for sh in shards)
             if any(rcs):
                 res["pass"], res["problems"] = False, [f"runner exit codes {rcs}", *res["problems"]]
+            if arm == "hippo-best" and (off := same_set(pred, a.same_set_as, ids)):
+                res["pass"] = False
+                res["problems"].append(f"{len(off)} questions show other memories at 200 than hippo-emb, e.g. {off[0]}")
             (arm_dir / "retrieval-check.json").write_text(json.dumps(res, indent=1), encoding="utf-8")
             verdict[arm] = res
     finally:

@@ -2,9 +2,11 @@
 
 Stages, run in order, each resumable: ingest, retrieve, answer, judge, score.
   python -I harness.py <stage> --bench <loader> --out DIR [--limit N] [--slots 10] [--port-base 8921] [--bonferroni K]
-  --arm full|hippo-emb --pairs-with RUN [RUN ...]: one extra arm in a new --out, scored paired with each registered run.
-  `full` (dated notes 4) shows every turn and has no store, so it starts at retrieve; `hippo-emb` (dated notes 5) is
-  hippo with its local embeddings on.
+  --arm full|hippo-emb|hippo-best --pairs-with RUN [RUN ...]: one extra arm in a new --out, scored paired with each
+  registered run. `full` (dated notes 4) shows every turn and has no store, so it starts at retrieve; `hippo-emb` (dated
+  notes 5) is hippo with its local embeddings on; `hippo-best` (dated notes 9) adds the cross-encoder at top 50 and a
+  score that follows the rank. retrieve --store-from RUN searches RUN's hippo-emb store read-only and stops on the first
+  question where the hippo-emb flags do not give back RUN's file.
 Each arm gets its own hippo-mem0-server on its own data dir under DIR. Answers are Claude Sonnet 5 at medium effort
 (claude_llm.Claude), verdicts gpt-5.6-sol at medium (codex_judge.CodexJudge) or a match, with the authors' prompts from
 the loader. A question asked mid-history is searched in a store that holds only the turns before it, so ingestion and
@@ -28,6 +30,7 @@ import time
 import urllib.parse
 import http.client
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -38,9 +41,9 @@ from claude_llm import Claude  # noqa: E402
 from h2h import load, paired, primary_lines, read_jsonl, reading, run_all, sha, tokens_in  # noqa: E402,F401
 from qa.ledger import (ANSWERER, JUDGE, Item, Ledger, exhausted_lines, require, smoke_excluded, trail,  # noqa: E402
                        unsettled)
+from server_arms import FLAGS, SERVER_ARM as SERVER_ARMS, health_ok, want_health  # noqa: E402
 
 ARMS = {"hippo365": "hippo", "bm25": "bm25"}  # arm -> the server's --arm
-SERVER_ARMS = {**ARMS, "hippo-emb": "hippo"}  # hippo-emb runs the hippo arm with --embeddings 1
 SERVER = PUBLIC / "hippo-mem0-server.mjs"
 
 
@@ -54,16 +57,16 @@ def atomic(path: Path, data: bytes) -> None:
     tmp.replace(path)  # whole or absent
 
 
-def server_args(arm: str, port: int, data: Path) -> list[str]:
+def server_args(arm: str, port: int, data: Path, read_only: bool = False) -> list[str]:
     return [str(SERVER), "--arm", SERVER_ARMS[arm], "--port", str(port), "--host", "127.0.0.1", "--data-dir", str(data),
-            *(["--embeddings", "1"] if arm == "hippo-emb" else [])]
+            *FLAGS.get(arm, []), *(["--read-only"] if read_only else [])]
 
 
 class Server:
     """One hippo-mem0-server on a port and data dir, stopped on exit."""
 
-    def __init__(self, arm: str, port: int, data: Path, log: Path) -> None:
-        self.arm, self.port, self.data, self.log = arm, port, data, log
+    def __init__(self, arm: str, port: int, data: Path, log: Path, read_only: bool = False) -> None:
+        self.arm, self.port, self.data, self.log, self.read_only = arm, port, data, log, read_only
         self.conn: http.client.HTTPConnection | None = None
         self.last = 0.0
 
@@ -72,9 +75,11 @@ class Server:
         with socket.socket() as probe:  # a server already on the port would answer the health check for ours
             if probe.connect_ex(("127.0.0.1", self.port)) == 0:
                 sys.exit(f"port {self.port} is already in use; pick another --port-base")
+        if self.read_only and not self.data.is_dir():
+            sys.exit(f"{self.data} holds no store to search")
         self.data.mkdir(parents=True, exist_ok=True)
         self.log_f = self.log.open("ab")
-        self.proc = subprocess.Popen([node, *server_args(self.arm, self.port, self.data)], stdout=self.log_f,
+        self.proc = subprocess.Popen([node, *server_args(self.arm, self.port, self.data, self.read_only)], stdout=self.log_f,
                                      stderr=self.log_f)
         for _ in range(120):
             time.sleep(0.5)
@@ -88,11 +93,11 @@ class Server:
         else:
             self.__exit__()
             sys.exit(f"server for {self.arm} did not answer on port {self.port}; see {self.log}")
-        emb = self.arm == "hippo-emb"
-        if self.health.get("arm") != SERVER_ARMS[self.arm] or bool(self.health.get("embeddings")) != emb:
+        if not health_ok(self.arm, self.health, self.read_only):
             self.__exit__()
-            sys.exit(f"server on port {self.port} is not the {self.arm} arm with embeddings {'on' if emb else 'off'} "
-                     f"(on needs @huggingface/transformers installed): {self.health}")
+            sys.exit(f"server on port {self.port} is not the {self.arm} arm {want_health(self.arm, self.read_only)} "
+                     f"(embeddings and the cross-encoder "
+                     f"need @huggingface/transformers and their models): {self.health}")
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -160,13 +165,17 @@ def add_turns(srv: Server, user: str, turns: list[dict]) -> int:
     return sum(srv.add(user, t) for t in turns)
 
 
-def run_unit(srv: Server, mod, out: Path, user: str, turns: list[dict], qs: list[dict], phase: str) -> dict:
+def run_unit(srv: Server, mod, out: Path, user: str, turns: list[dict], qs: list[dict], phase: str,
+             gate: Server | None = None, src: Path | None = None) -> dict:
     """ingest: add every turn; a user with a mid-history question is searched as turns go in (phase "sweep").
-    retrieve: search a user already ingested."""
+    retrieve: search a user already ingested; with a gate, first replay the hippo-emb search of run src."""
     arm, n = srv.arm, len(turns)
     expected = sum(1 for t in turns if t["content"].strip())
     if phase == "retrieve":
         for q in qs:
+            if gate and search_for(gate, q, mod.TOPK, expected) != load(pred_path(src, "hippo-emb", q["qid"]))["results"]:
+                raise RuntimeError(f"the hippo-emb replay differs from {src} on {q['qid']}, so the store is not the "
+                                   f"one that run searched: stop")
             write_pred(out, arm, q, search_for(srv, q, mod.TOPK, expected), mod.TOPK, n)
         return {"user": user, "phase": "retrieve", "turns": n, "stored": expected, "questions": len(qs)}
     srv.delete(user)
@@ -192,11 +201,13 @@ def run_arm(a: argparse.Namespace, mod, arm: str, port: int, qs_by_user: dict, c
     adir = out / "ingest" / arm
     done_path = adir / "done.jsonl"
     done = {r["user"]: r for r in read_jsonl(done_path)} if done_path.exists() else {}
+    src = a.store_from / "ingest" / "hippo-emb" if a.store_from else adir  # a replay searches that store, read-only
+    ingested = {r["user"]: r for r in read_jsonl(src / "done.jsonl")} if (src / "done.jsonl").exists() else {}
     todo = []
     for user in qs_by_user:
         d = done.get(user)
-        if phase == "retrieve" and not d:
-            sys.exit(f"{arm}: {user} is not ingested; run the ingest stage first")
+        if phase == "retrieve" and not ingested.get(user):
+            sys.exit(f"{arm}: {user} is not ingested in {src}; run the ingest stage first")
         # a user's last record wins: "sweep" and "retrieve" mean both phases are done, "ingest" only the first
         have = {"ingest": ("ingest", "sweep", "retrieve"), "retrieve": ("sweep", "retrieve")}[phase]
         if not (d and d["turns"] == len(convs[user]) and d["phase"] in have):
@@ -209,9 +220,12 @@ def run_arm(a: argparse.Namespace, mod, arm: str, port: int, qs_by_user: dict, c
 
     def shard(k: int, users: list[str]) -> None:
         """One server over its own users; each user is its own store, so shards never share one."""
-        with Server(arm, port + k, adir / "data", adir / f"server-{k}.log" if k else adir / "server.log") as srv:
+        def log(name: str) -> Path:
+            return adir / (f"{name}-{k}.log" if k else f"{name}.log")
+        gate = Server("hippo-emb", port + a.shards + k, src / "data", log("gate"), True) if a.store_from else nullcontext()
+        with Server(arm, port + k, src / "data", log("server"), bool(a.store_from)) as srv, gate as g:
             for user in users:
-                rec = run_unit(srv, mod, out, user, convs[user], qs_by_user[user], phase)
+                rec = run_unit(srv, mod, out, user, convs[user], qs_by_user[user], phase, g, a.store_from)
                 with lock:
                     with done_path.open("a", encoding="utf-8") as f:
                         f.write(json.dumps(rec) + "\n")
@@ -232,7 +246,7 @@ def setup(a: argparse.Namespace):
     a.arms = {a.arm: SERVER_ARMS.get(a.arm, "none")} if a.arm else ARMS
     a.out.mkdir(parents=True, exist_ok=True)
     qfile = a.out / "questions.json"
-    if a.stage == "ingest" or (a.arm == "full" and a.stage == "retrieve"):
+    if a.stage == "ingest" or (a.stage == "retrieve" and (a.arm == "full" or a.store_from)):
         qs = mod.questions()
         if len({q["qid"] for q in qs}) != len(qs):
             sys.exit("loader gives duplicate qids")
@@ -246,13 +260,18 @@ def setup(a: argparse.Namespace):
             qs = qs[::step][:a.limit]
         if qfile.exists() and load(qfile)["qids"] != [q["qid"] for q in qs]:
             sys.exit(f"{qfile} holds another question set; use a new --out")
+        if a.store_from and load(a.store_from / "questions.json")["qids"] != [q["qid"] for q in qs]:
+            sys.exit(f"{a.store_from} asked another question set")
+        if a.store_from and any(q["ask_after"] is not None for q in qs):
+            sys.exit("a question asked mid-history needs the store as it was then: run ingest, not --store-from")
         pkg = json.loads((REPO / "package.json").read_text(encoding="utf-8"))["version"]
         head = subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         cfg = {"bench": a.bench, "name": mod.NAME, "topk": mod.TOPK, "licence": mod.LICENCE, "limit": a.limit,
                "arms": a.arms, "hippo_memory": pkg, "repo_head": head, "loader_sha256": sha_bytes(Path(mod.__file__).read_bytes()),
                "data_sha256": {p.name: sha_bytes(p.read_bytes()) for p in mod.DATA_FILES},
                "answerer": "claude-sonnet-5 medium", "judge": "gpt-5.6-sol medium (llm items), match otherwise",
-               **({"pairs_with": [str(r) for r in a.pairs_with]} if a.arm else {})}
+               **({"pairs_with": [str(r) for r in a.pairs_with]} if a.arm else {}),
+               **({"store_from": str(a.store_from)} if a.store_from else {})}
         qfile.write_text(json.dumps({"qids": [q["qid"] for q in qs]}), encoding="utf-8")
         (a.out / "config.json").write_text(json.dumps(cfg, indent=1), encoding="utf-8")
     elif not qfile.exists():
@@ -515,13 +534,18 @@ def main() -> None:
     ap.add_argument("--port-base", type=int, default=8921, help="arm i shard k listens on port-base + i * shards + k")
     ap.add_argument("--shards", type=int, default=1, help="ingest and retrieve: servers per arm, each on its own users")
     ap.add_argument("--bonferroni", type=int, metavar="K", help="score: also the primary's interval at 1 - 0.05/K")
-    ap.add_argument("--arm", choices=("full", "hippo-emb"), help="one extra arm in a new --out (dated notes 4 and 5)")
+    ap.add_argument("--arm", choices=("full", "hippo-emb", "hippo-best"),
+                    help="one extra arm in a new --out (dated notes 4, 5 and 9)")
+    ap.add_argument("--store-from", type=Path, metavar="RUN",
+                    help="retrieve --arm hippo-best over RUN's hippo-emb store, read-only, after the replay gate")
     ap.add_argument("--pairs-with", type=Path, nargs="+", default=[], metavar="RUN", help="registered runs --arm pairs with")
     a = ap.parse_args()
     if bool(a.arm) != bool(a.pairs_with):
         ap.error("--arm and --pairs-with go together")
     if a.arm and any(r.resolve() == a.out.resolve() for r in a.pairs_with):
         ap.error("--arm runs in a new --out, never in a paired run's folder")
+    if a.store_from and (a.arm != "hippo-best" or a.stage != "retrieve"):
+        ap.error("--store-from goes with --arm hippo-best and the retrieve stage")
     if a.arm == "full" and a.stage == "ingest":
         ap.error("--arm full starts at retrieve: it has no store")
     if a.bonferroni is not None and (a.stage != "score" or a.bonferroni < 1):

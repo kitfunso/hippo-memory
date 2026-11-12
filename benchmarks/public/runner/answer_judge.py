@@ -42,6 +42,13 @@ from qa.ledger import ANSWERER, JUDGE, Choice, Item, Ledger, require, trail  # n
 codex_judge.PREAMBLE = ("You are a grading function. Do NOT use any tool. Do NOT read, open, view or write any file. "
                         "Everything you need is in this message. Reply in exactly the format the instructions ask for.\n\n")
 LME_CUTOFFS, BEAM_CUTOFFS = [200, 10], [100]
+# Dated notes 9: at 200 (LongMemEval) and 100 (BEAM) hippo-best shows the memories hippo-emb shows, so it is answered
+# at LongMemEval's 10 alone and never on BEAM.
+NOT_ON_BEAM = {"hippo-best"}
+
+
+def lme_cutoffs(arm: str) -> list[int]:
+    return [10] if arm == "hippo-best" else LME_CUTOFFS
 BEAM_SIZES = {"beam-100k": "100K", "beam-500k": "500K", "beam-1m": "1M", "beam-10m": "10M"}
 BENCHES = ("longmemeval-s", "longmemeval-m", *BEAM_SIZES)
 CTX: contextvars.ContextVar[tuple[str, str]] = contextvars.ContextVar("ctx")  # (arm, question id) of the running task
@@ -221,7 +228,8 @@ async def evaluate(bench: str, saved: dict, be: Backend, pool: ThreadPoolExecuto
     try:
         if kind_of(bench) == "lme":
             res = json.loads(json.dumps(saved))
-            await lme.apply_longmemeval_answerer_judge_to_saved_result(res, ans, jdg, LME_CUTOFFS)  # type: ignore[arg-type]
+            await lme.apply_longmemeval_answerer_judge_to_saved_result(res, ans, jdg,  # type: ignore[arg-type]
+                                                                       lme_cutoffs(CTX.get()[0]))
         else:
             res = await beam.process_question(
                 question_data=beam_question(saved), qi=saved["question_type_idx"], chat_size=saved["chat_size"],
@@ -325,6 +333,8 @@ def verify(bench: str, arms: dict[str, Path], out: Path, ids: list[str]) -> dict
 
 
 def run(bench: str, arms: dict[str, Path], out: Path, a: argparse.Namespace) -> None:
+    if kind_of(bench) == "beam" and NOT_ON_BEAM & set(arms):
+        sys.exit(f"{sorted(NOT_ON_BEAM & set(arms))} is not answered on BEAM: at cutoff 100 it shows hippo-emb's memories")
     ids = pick(bench, arms, a.smoke)
     out.mkdir(parents=True, exist_ok=True)
     if not a.smoke:  # a smoke run answers a subset, which the manifest does not cover

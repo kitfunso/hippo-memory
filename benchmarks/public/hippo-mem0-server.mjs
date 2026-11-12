@@ -23,6 +23,9 @@
  * Optional: --dist DIR serves another hippo build (default: this checkout's dist),
  * --host ADDR binds one address (default: all), --read-only answers only
  * POST /search and GET /health and refuses every other route with 403.
+ * --reranker-top-k N re-orders the top N with hippo's local cross-encoder (`hippo recall
+ * --reranker cross-encoder`); --rank-score returns 1 - rank/limit as the score, so a client
+ * that sorts by score keeps hippo's final order (dated notes 9).
  */
 import * as http from 'node:http';
 import * as fs from 'node:fs';
@@ -45,6 +48,9 @@ const { batchWriteAndDeleteWire: batchWriteAndDelete } = await distImport('entry
 const { hybridSearchWire: hybridSearch } = await distImport('entry/testing.js');
 const { embedMemoryWire: embedMemory } = await distImport('entry/testing.js');
 const { isEmbeddingAvailable } = await distImport('base/embeddings/local.js');
+const { getEmbedding } = await distImport('infra/local-embedder.js');
+const { createCrossEncoderReranker } = await distImport('domain/rerankers/cross-encoder.js');
+const { transformersCrossEncoder } = await distImport('infra/cross-encoder.js');
 
 const ARM = arg('arm', 'hippo');
 const PORT = Number(arg('port', '8888'));
@@ -57,6 +63,24 @@ const DAY_MS = 86_400_000;
 if (!['hippo', 'bm25'].includes(ARM)) throw new Error(`--arm must be hippo or bm25, got ${ARM}`);
 // Amendment 2 fixes "no embeddings on any arm" regardless of what's installed locally.
 const EMBED = ARM === 'hippo' && isEmbeddingAvailable() && arg('embeddings', '0') === '1';
+const RERANK_K = Number(arg('reranker-top-k', '0'));
+const RANK_SCORE = args.includes('--rank-score');
+if (!Number.isInteger(RERANK_K) || RERANK_K < 0) throw new Error(`--reranker-top-k must be a whole number, got ${RERANK_K}`);
+if (RERANK_K > 0 && ARM !== 'hippo') throw new Error('--reranker-top-k needs --arm hippo');
+// A cold model can outlast the 5 s query-embedding deadline, and that search then runs on BM25 alone.
+if (EMBED && (await getEmbedding('probe')).length === 0) throw new Error('the local embedder returned no vector');
+// hippo keeps the base score for a candidate the cross-encoder fails on; the bench counts those and fails the search.
+let crossEncoderFailures = 0;
+const crossEncoder = transformersCrossEncoder();
+async function countedCrossEncoder() {
+  const pipe = await crossEncoder().catch((err) => { crossEncoderFailures++; throw err; });
+  return async (query, text) => pipe(query, text).catch((err) => { crossEncoderFailures++; throw err; });
+}
+const RERANKER = RERANK_K > 0 ? createCrossEncoderReranker(countedCrossEncoder) : undefined;
+if (RERANKER) {
+  const score = await (await countedCrossEncoder())('probe', 'probe text');
+  if (!Number.isFinite(score)) throw new Error('cross-encoder self-check returned a non-finite score');
+}
 
 /** Per-user store root. The user id is hashed so any string is a safe path. */
 function rootFor(userId) {
@@ -104,20 +128,25 @@ async function search(body) {
   const limit = Math.max(1, Math.min(Number(body.limit) || 200, 1000));
   const latest = Math.max(...entries.map((e) => Date.parse(e.created)));
   const now = new Date(latest + DAY_MS);
+  const failuresBefore = crossEncoderFailures;
   const results = await hybridSearch(String(body.query ?? ''), entries, {
     budget: 100_000_000,
     minResults: limit,
     now,
     hippoRoot: rootFor(body.user_id),
+    ...(RERANKER && { reranker: RERANKER, rerankerOptions: { topK: RERANK_K } }),
   });
+  if (crossEncoderFailures !== failuresBefore) {
+    throw new Error(`the cross-encoder failed on ${crossEncoderFailures - failuresBefore} candidates`);
+  }
   const ranked = ARM === 'bm25'
     ? results.slice().sort((a, b) => (b.bm25 - a.bm25) || a.entry.id.localeCompare(b.entry.id))
     : results;
   return {
-    results: ranked.slice(0, limit).map((r) => ({
+    results: ranked.slice(0, limit).map((r, i) => ({
       id: r.entry.id,
       memory: r.entry.content,
-      score: ARM === 'bm25' ? r.bm25 : r.score,
+      score: ARM === 'bm25' ? r.bm25 : RANK_SCORE ? 1 - i / limit : r.score,
       created_at: r.entry.created,
     })),
   };
@@ -158,7 +187,7 @@ const server = http.createServer((req, res) => {
       if (req.method === 'POST' && url.pathname === '/memories') out = await addChunk(await readBody(req));
       else if (req.method === 'POST' && url.pathname === '/search') out = await search(await readBody(req));
       else if (req.method === 'DELETE' && url.pathname === '/memories') out = deleteUser(url.searchParams.get('user_id') ?? '');
-      else if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) out = { status: 'ok', arm: ARM, embeddings: EMBED, halfLifeDays: HALF_LIFE_DAYS ?? null, readOnly: READ_ONLY };
+      else if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) out = { status: 'ok', arm: ARM, embeddings: EMBED, halfLifeDays: HALF_LIFE_DAYS ?? null, readOnly: READ_ONLY, rerankerTopK: RERANK_K, rankScore: RANK_SCORE };
       else { res.writeHead(404); res.end(); return; }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(out));
@@ -172,4 +201,4 @@ const server = http.createServer((req, res) => {
 server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;
 if (!READ_ONLY) fs.mkdirSync(DATA_DIR, { recursive: true });
-server.listen({ port: PORT, host: HOST }, () => console.error(`hippo-mem0-server arm=${ARM} embeddings=${EMBED} halfLifeDays=${HALF_LIFE_DAYS ?? 'default'} readOnly=${READ_ONLY} host=${HOST ?? 'all'} port=${PORT} data=${DATA_DIR} dist=${DIST}`));
+server.listen({ port: PORT, host: HOST }, () => console.error(`hippo-mem0-server arm=${ARM} embeddings=${EMBED} halfLifeDays=${HALF_LIFE_DAYS ?? 'default'} rerankerTopK=${RERANK_K} rankScore=${RANK_SCORE} readOnly=${READ_ONLY} host=${HOST ?? 'all'} port=${PORT} data=${DATA_DIR} dist=${DIST}`));

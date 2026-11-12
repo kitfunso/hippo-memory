@@ -31,6 +31,10 @@ X, Y = "hippo365", "bm25"
 POOLED = "beam"  # --bench value for the four BEAM sizes scored as one primary
 
 
+def lme_metrics(arm: str) -> tuple[str, ...]:
+    return tuple(f"acc@{c}" for c in aj.lme_cutoffs(arm))
+
+
 def unit_of(bench: str):
     """The unit that owns a store: a LongMemEval question has its own haystack; a BEAM id is <size>_<conv>_q<i>_<type>."""
     return str if aj.kind_of(bench) == "lme" else (lambda qid: qid.rsplit("_q", 1)[0])
@@ -43,14 +47,14 @@ def per_question(bench: str, recs: dict) -> dict[str, dict]:
         res = r["result"]
         m["type"][qid] = res["question_type"]
         if "cutoff_results" not in res:
-            for metric in ("acc@200", "acc@10") if aj.kind_of(bench) == "lme" else ("score", "pass"):
+            for metric in lme_metrics(arm) if aj.kind_of(bench) == "lme" else ("score", "pass"):
                 m[metric][(arm, qid)] = 0.0
             continue
         if aj.kind_of(bench) == "lme":
-            for lab in ("top_200", "top_10"):
-                c = res["cutoff_results"][lab]
-                m[f"acc@{lab[4:]}"][(arm, qid)] = c["score"]
-                m[f"memories@{lab[4:]}"][(arm, qid)] = c["memories_evaluated"]
+            for cut in aj.lme_cutoffs(arm):
+                c = res["cutoff_results"][f"top_{cut}"]
+                m[f"acc@{cut}"][(arm, qid)] = c["score"]
+                m[f"memories@{cut}"][(arm, qid)] = c["memories_evaluated"]
         else:
             c = res["cutoff_results"]["top_100"]
             m["score"][(arm, qid)] = c["score"]
@@ -107,7 +111,8 @@ def load_size(bench: str, arms: dict[str, Path], out: Path):
 def memory_lines(m: dict, arms: list[str]) -> list[str]:
     lines = []
     for arm in arms:
-        mem = [v for (ar, _), v in m.get("memories@200", m.get("memories", {})).items() if ar == arm]
+        key = next(k for k in ("memories@200", "memories@10", "memories") if any(ar == arm for ar, _ in m.get(k, {})))
+        mem = [v for (ar, _), v in m[key].items() if ar == arm]  # the arm's widest answered cutoff
         lines.append(f"{arm:>9}  memories per answer at the primary cutoff {sum(mem) / len(mem):6.1f}")
     if "tau_missing" in m:
         lines.append("event-ordering questions whose tau-b step failed and was dropped: " + ", ".join(
@@ -136,7 +141,7 @@ def extra_arm(bench: str, arms: dict[str, Path], out: Path, runs: list[Path]) ->
     over the primary's questions with the benchmark's unit. Each run is loaded and checked as `single` loads it."""
     ids, recs, notes, m, smoke = load_size(bench, arms, out)
     kept, unit, (arm,) = [q for q in ids if q not in smoke], unit_of(bench), arms
-    metrics = ("acc@200", "acc@10") if aj.kind_of(bench) == "lme" else ("score", "pass")
+    metrics = lme_metrics(arm) if aj.kind_of(bench) == "lme" else ("score", "pass")
     body: list[str] = []
     pairs: dict = {}
     for run in runs:

@@ -18,12 +18,21 @@ class Proc:
         pass
 
 
+OFF = {"readOnly": False, "rankScore": False, "rerankerTopK": 0}
+BEST = {"arm": "hippo", "embeddings": True, "readOnly": False, "rankScore": True, "rerankerTopK": 50}
+
+
 @pytest.mark.parametrize("arm, health, ok", [
-    ("hippo-emb", {"arm": "hippo", "embeddings": True}, True),
-    ("hippo-emb", {"arm": "hippo", "embeddings": False}, False),
-    ("hippo365", {"arm": "hippo", "embeddings": False}, True),
-    ("hippo365", {"arm": "hippo", "embeddings": True}, False),
-    ("bm25", {"arm": "hippo", "embeddings": False}, False),
+    ("hippo-emb", {"arm": "hippo", "embeddings": True, **OFF}, True),
+    ("hippo-emb", {"arm": "hippo", "embeddings": False, **OFF}, False),
+    ("hippo365", {"arm": "hippo", "embeddings": False, **OFF}, True),
+    ("hippo365", {"arm": "hippo", "embeddings": True, **OFF}, False),
+    ("bm25", {"arm": "hippo", "embeddings": False, **OFF}, False),
+    ("hippo-best", BEST, True),
+    ("hippo-best", {**BEST, "embeddings": False}, False),  # the cross-encoder over a store with no vectors
+    ("hippo-best", {**BEST, "rerankerTopK": 0}, False),
+    ("hippo-best", {**BEST, "rankScore": False}, False),  # the runner's sort by score would undo the reranker
+    ("hippo-emb", {"arm": "hippo", "embeddings": True, "readOnly": False}, False),  # a server too old to report them
 ])
 def test_the_health_check_matches_the_arm_and_its_embeddings(monkeypatch, arm, health, ok):
     monkeypatch.setattr(rr.urllib.request, "urlopen", lambda url, timeout: io.BytesIO(json.dumps(health).encode()))

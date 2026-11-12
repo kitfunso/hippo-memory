@@ -7,6 +7,7 @@ import hashlib
 import json
 import sys
 import types
+from pathlib import Path
 
 import pytest
 from conftest import RUNNER, rec, write_log
@@ -53,7 +54,7 @@ def bench(tmp_path, monkeypatch):
     (out / "questions.json").write_text(json.dumps({"qids": [q["qid"] for q in QS]}), encoding="utf-8")
     (out / "config.json").write_text(json.dumps({"limit": 0, "arms": harness.ARMS}), encoding="utf-8")
     a = argparse.Namespace(stage="score", bench="fakebench", out=out, limit=0, slots=2, port_base=0, bonferroni=4,
-                           arm=None, pairs_with=[])
+                           arm=None, pairs_with=[], store_from=None)
     mod, qs = harness.setup(a)
     return a, mod, qs
 
@@ -168,7 +169,7 @@ def test_full_context_shows_the_whole_chat_and_scores_paired_with_the_registered
     a, mod, qs = bench
     full_log(a.out, {q["qid"]: "yes" for q in QS}, {**{q["qid"]: "yes" for q in QS}, "q0": "no"})
     f = argparse.Namespace(stage="retrieve", bench="fakebench", out=tmp_path / "full", limit=0, slots=2, port_base=0,
-                           bonferroni=None, arm="full", pairs_with=[a.out])
+                           bonferroni=None, arm="full", pairs_with=[a.out], store_from=None)
     mod, qs = harness.setup(f)
     harness.stage_ingest_retrieve(f, mod, qs)
     pred = json.loads(harness.pred_path(f.out, "full", "q2").read_text(encoding="utf-8"))
@@ -189,7 +190,9 @@ def test_full_context_shows_the_whole_chat_and_scores_paired_with_the_registered
 
 @pytest.mark.parametrize("argv", [["ingest", "--arm", "full", "--pairs-with", "REG"],
                                   ["retrieve", "--arm", "full", "--pairs-with", "OUT"],
-                                  ["ingest", "--arm", "hippo-emb"], ["ingest", "--pairs-with", "REG"]])
+                                  ["ingest", "--arm", "hippo-emb"], ["ingest", "--pairs-with", "REG"],
+                                  ["retrieve", "--arm", "hippo-emb", "--pairs-with", "REG", "--store-from", "REG"],
+                                  ["ingest", "--arm", "hippo-best", "--pairs-with", "REG", "--store-from", "REG"]])
 def test_an_extra_arm_needs_its_pair_and_a_new_folder(tmp_path, monkeypatch, argv):
     argv = [str(tmp_path / "registered") if x == "REG" else str(tmp_path) if x == "OUT" else x for x in argv]
     monkeypatch.setattr(sys, "argv", ["harness.py", *argv, "--bench", "fakebench", "--out", str(tmp_path)])
@@ -207,7 +210,7 @@ def test_a_memory_arm_prints_itself_minus_each_paired_arm(bench, tmp_path):
     a, mod, qs = bench
     full_log(a.out, {q["qid"]: "yes" for q in QS}, {**{q["qid"]: "yes" for q in QS}, "q0": "no", "q1": "no"})
     e = argparse.Namespace(stage="score", bench="fakebench", out=tmp_path / "emb", limit=0, slots=2, port_base=0,
-                           bonferroni=None, arm="hippo-emb", pairs_with=[a.out])
+                           bonferroni=None, arm="hippo-emb", pairs_with=[a.out], store_from=None)
     manifest = {}
     for q in QS:
         pth = harness.pred_path(e.out, "hippo-emb", q["qid"])
@@ -231,7 +234,7 @@ def test_shards_split_the_users_and_record_each_once(tmp_path, monkeypatch):
     ports: list[int] = []
 
     class FakeServer:
-        def __init__(self, arm, port, data, log) -> None:
+        def __init__(self, arm, port, data, log, read_only=False) -> None:
             self.health = {"arm": arm}
             ports.append(port)
 
@@ -242,12 +245,54 @@ def test_shards_split_the_users_and_record_each_once(tmp_path, monkeypatch):
             pass
 
     monkeypatch.setattr(harness, "Server", FakeServer)
-    monkeypatch.setattr(harness, "run_unit", lambda srv, mod, out, user, turns, qs, phase:
+    monkeypatch.setattr(harness, "run_unit", lambda srv, mod, out, user, turns, qs, phase, gate, src:
                         {"user": user, "phase": "ingest", "turns": len(turns), "stored": len(turns), "questions": 0})
     users = {f"u{i}": [{"qid": f"q{i}"}] for i in range(7)}
-    a = argparse.Namespace(out=tmp_path, shards=3)
+    a = argparse.Namespace(out=tmp_path, shards=3, store_from=None)
     harness.run_arm(a, None, "hippo365", 9000, users, {u: [{}] for u in users}, "ingest")
     done = [json.loads(line)["user"] for line in (tmp_path / "ingest" / "hippo365" / "done.jsonl").read_text().splitlines()]
     assert sorted(done) == sorted(users) and sorted(ports) == [9000, 9001, 9002]
     harness.run_arm(a, None, "hippo365", 9000, users, {u: [{}] for u in users}, "ingest")  # all done: no server starts
     assert len(ports) == 3
+
+
+def test_the_hippo_best_arm_adds_the_reranker_and_rank_score_to_the_embeddings():
+    best = harness.server_args("hippo-best", 1, Path("d"), read_only=True)
+    assert best[-6:] == ["--embeddings", "1", "--reranker-top-k", "50", "--rank-score", "--read-only"]
+    assert harness.want_health("hippo-best", True) == {"arm": "hippo", "embeddings": True, "readOnly": True,
+                                                       "rankScore": True, "rerankerTopK": 50}
+    assert harness.want_health("hippo-emb", False) == {"arm": "hippo", "embeddings": True, "readOnly": False,
+                                                       "rankScore": False, "rerankerTopK": 0}
+
+
+class Fixed:
+    """A server that returns the same results for every search."""
+
+    def __init__(self, arm: str, results: list[dict]) -> None:
+        self.arm, self.results = arm, results
+
+    def search(self, user: str, query: str, limit: int) -> list[dict]:
+        return [dict(r) for r in self.results]
+
+
+def test_a_replay_writes_the_new_arm_only_while_the_hippo_emb_search_gives_back_the_saved_file(tmp_path):
+    src, out = tmp_path / "emb", tmp_path / "best"
+    saved = [{"id": "a", "memory": "m", "score": 0.5, "created_at": None}]
+    harness.write_pred(src, "hippo-emb", QS[0], saved, 5, 3)
+    mod, turns = fake_loader(), [{"role": "r", "content": "x"}]
+    best = Fixed("hippo-best", [{"id": "b", "memory": "n", "score": 1.0, "created_at": None}])
+    rec = harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved), src)
+    assert rec["phase"] == "retrieve"
+    assert json.loads(harness.pred_path(out, "hippo-best", "q0").read_text(encoding="utf-8"))["results"][0]["id"] == "b"
+    moved = [{**saved[0], "score": 0.4}]
+    with pytest.raises(RuntimeError, match="replay differs"):
+        harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", moved), src)
+
+
+def test_a_replay_refuses_a_benchmark_that_asks_mid_history(bench, tmp_path, monkeypatch):
+    a, mod, qs = bench
+    monkeypatch.setattr(mod, "questions", lambda: [{**q, "ask_after": 1} for q in QS])
+    r = argparse.Namespace(stage="retrieve", bench="fakebench", out=tmp_path / "best", limit=0, slots=2, port_base=0,
+                           bonferroni=None, arm="hippo-best", pairs_with=[a.out], store_from=a.out)
+    with pytest.raises(SystemExit, match="mid-history"):
+        harness.setup(r)

@@ -191,7 +191,7 @@ if __name__ == "__main__":
     ap.add_argument("cmd", choices=("score",))
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--bonferroni", type=int, metavar="K", help="also the primary's interval at 1 - 0.05/K")
-    ap.add_argument("--arm", choices=("hippo-emb",), help="dated notes 5: the extra arm's run in --out")
+    ap.add_argument("--arm", choices=("hippo-emb", "hippo-best"), help="dated notes 5 and 9: the extra arm's run in --out")
     ap.add_argument("--pairs-with", type=Path, nargs="+", default=[], metavar="RUN", help="registered runs it pairs with")
     args = ap.parse_args()
     if bool(args.arm) != bool(args.pairs_with):
