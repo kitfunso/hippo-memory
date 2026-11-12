@@ -1,0 +1,17 @@
+{
+  "locomo": ["conv4_q177", "conv6_q141", "conv8_q21", "conv8_q73", "conv8_q85"],
+  "dmr": ["dmr-000", "dmr-100", "dmr-200", "dmr-300", "dmr-400"],
+  "personamem_v1": ["273ed74c-6547-40f1-9e82-459826e00b6b", "2c85c2a6-07ec-4ab1-92cc-06dc775f4fe8", "67bec3f4-df73-4dbe-9dc2-74be96ebc51c", "8659e747-044a-47fa-a410-f5be842f4f7c", "acd74206-37dc-4756-94a8-b99a395d9a21"],
+  "hotpotqa24": ["hotpot24-00", "hotpot24-04", "hotpot24-08", "hotpot24-12", "hotpot24-16"],
+  "longmemeval-s": ["6ade9755", "6c49646a", "e48988bc", "ef66a6e5", "f685340e"],
+  "beam-100k": ["100K_0_q1_abstention", "100K_0_q5_event_ordering", "100K_0_q7_information_extraction", "100K_0_q9_instruction_following", "100K_0_q14_preference_following"],
+  "beam-500k": [],
+  "beam-1m": [],
+  "beam-10m": [],
+  "longmemeval-m": [],
+  "halumem": ["2f1f897e-d67f-dbc5-6a7b-b7634a9e294f-q0000", "348492a7-cfe4-ee1d-73c3-c276d6ba8277-q0035", "4fd09df4-d0df-ff7e-bb39-5f4faedfac2c-q0000", "5c005ed8-0d18-99f8-a20e-6a776a7ea30a-q0172", "dd27d8ab-7d2d-acbe-de11-9bc249ea3829-q0136"],
+  "convomem": ["cm-abstention-e1-048-284435190-25", "cm-assistant-e1-048-158715165-1", "cm-changing-e2-048-266185859-10", "cm-preference-e1-049-31133299-4", "cm-user-e1-048-193850355-3"],
+  "evermembench": ["F_SH_Top01_001", "F_TP_Top01_005", "MA_C_Top01_049", "MA_P_Top01_063", "P_Style_Top01_012"],
+  "prefeval": ["education_learning_styles-000", "entertain_shows-008", "lifestyle_dietary-041", "shop_fashion-004", "travel_activities-014"],
+  "personamem_v2": ["pm2-0000", "pm2-1000", "pm2-2000", "pm2-3000", "pm2-4000"]
+}

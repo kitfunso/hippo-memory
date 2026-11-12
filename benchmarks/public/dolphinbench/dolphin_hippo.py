@@ -1,4 +1,4 @@
-"""DolphinBench adapter for hippo-memory v1.52.3, run in WSL: arms hippo and bm25 behind one hippo-mem0-server
+"""DolphinBench adapter for hippo-memory 3.5.1 (9d2a57529), run in WSL: arms hippo and bm25 behind one hippo-mem0-server
 store per persona, Claude Code 2.1.259 as the agent. Plan: dolphinbench-feasibility.md. Commands: dolphinbench-runbook.md.
 Stages: ingest | run (judge + both arms + check) | arm | judge | check | compare | selftest."""
 from __future__ import annotations
@@ -29,23 +29,31 @@ from pathlib import Path
 from typing import Any, NoReturn
 from unittest import mock
 
+from dolphin_home import BENCH, BENCH_ENV, CODEX_DIR, ROOT  # the clone, its venv and every output sit outside this checkout
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-# The benchmark clone, its venv and every output live in hippo-bench, beside this checkout, never inside it.
-BENCH = HERE.parents[3] / "hippo-bench"
-ROOT = BENCH / "dolphinbench"
-SERVER = HERE.parent / "hippo-mem0-server.mjs"
-ADAPTER_FILES = ("dolphin_hippo.py", "dolphin_memory.py", "dolphin_smoke.py", "dolphin_fake_claude.py")
+ADAPTER_FILES = ("dolphin_hippo.py", "dolphin_home.py", "dolphin_memory.py", "dolphin_smoke.py", "dolphin_fake_claude.py")
 # This checkout's files a run executes, compare's bootstrap included; a real-agent run needs every one committed.
-OURS = (*(HERE / name for name in ADAPTER_FILES), SERVER, HERE.parent / "evidence_recall.py")
-CODEX_PACKAGE = HERE.parents[3] / "AppData/Roaming/npm/node_modules/@openai/codex/package.json"  # dolphin_smoke.CODEX_JS
+OURS = (*(HERE / name for name in ADAPTER_FILES), HERE.parent / "evidence_recall.py")
+CODEX_PACKAGE = CODEX_DIR / "package.json"
 JUDGE_RUNS = BENCH / "runs"  # the judge proxy's work files, judge-<label>/
 BASE = Path.home() / "dolphin"
-HIPPO = BASE / "hippo-v1.52.3"
-HIPPO_COMMIT = "fcd432e73c9752fce4180269dfb5ff08ea71f389"
+# The server file, the dist it loads and the lockfile come from this one commit, built in a clean clone of it.
+# Run records hold what was found; check and compare refuse any record that differs from the pin.
+HIPPO = BASE / "hippo-v3.5.1"
+HIPPO_VERSION = "3.5.1"
+HIPPO_COMMIT = "9d2a57529b8240bd17f129d6fb56dc56f4b20daa"
+HIPPO_PIN = {
+    "server_sha256": "11a30f331ccdd3545d21b56141f070d7e78259dec441325c7ad37d1a76323d28",
+    "dist_sha256": "b2c049d40ec7911ead6d3c167ad75e694d64d57c926711ec25909cd408642f9a",
+    "lock_sha256": "42b79dc53f70d7438e2f50978de27074e876577ec8e1a435201add44f6a2bb11",
+}
+SERVER = HIPPO / "benchmarks/public/hippo-mem0-server.mjs"
 CLAUDE = BASE / "claude-code" / "bin" / "claude"
 CLAUDE_VERSION = "2.1.259"
-STORES, RUNS, LOGS = BASE / "stores", BASE / "runs", BASE / "logs"
+# Fresh folders: the v1.52.3 stores, runs and logs stay as they are, since a newer build migrates a store on open.
+STORES, RUNS, LOGS = BASE / "stores-v3", BASE / "runs-v3", BASE / "logs-v3"
 WORK = Path("/tmp/dolphin-work")
 PERSONAS = ("morgan", "alex", "riley")
 ARMS = ("hippo", "bm25")
@@ -80,13 +88,13 @@ USAGE_KEYS = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache
 MODEL_USAGE_KEYS = ("inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens")
 ZERO = dict.fromkeys(USAGE_KEYS, 0)
 # Benchmark data and run files; the venv and app servers the agent's own processes run from are left out, so ps passes.
-DATASET_PATH = re.compile(r"/dolphin/(runs|stores)/|hippo-bench/(?!\.venv|dolphinbench/mock_mcp/(repair_)?server\.py)"
+DATASET_PATH = re.compile(r"/dolphin/(runs|stores)(-v3)?/|hippo-bench/(?!\.venv|dolphinbench/mock_mcp/(repair_)?server\.py)"
                           r"|life_sim|facts\.yaml|\b(tests|grades|hooks|apps|deferred)/(morgan|alex|riley)/")
 WEB_TOOLS = ("WebSearch", "WebFetch")  # the bare name "dolphinbench" counts only in their arguments
 APP_SERVER_NAMES = ("dolphinbench_apps", "dolphinbench-apps")  # tool and server names, not file paths
 LOCAL_TOOLS = ("Bash", "Read", "Grep", "Glob")  # listed per pilot test for the hand read
 # claude_driver.py:47's list, plus HOME and the WSL interop socket that git.exe and the codex judge need.
-CHILD_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR", "WSL_INTEROP")
+CHILD_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR", "WSL_INTEROP", BENCH_ENV)
 OVERRIDES = re.compile(r"(HIPPO|DOLPHINBENCH)_\w*|DOLPHIN_JUDGE_MODEL|(ANTHROPIC|CLAUDE_CODE|OPENAI|CODEX)_\w*MODEL\w*"
                        r"|MAX_THINKING_TOKENS|CLAUDE_CODE_EFFORT_LEVEL")
 log = logging.getLogger("dolphin_hippo")
@@ -188,12 +196,38 @@ def source_state(agent: str) -> dict:
     return {"commit": git("log", "-1", "--format=%H", "--", *paths).decode().strip(), "uncommitted": uncommitted}
 
 
+def file_sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def tree_sha(root: Path) -> str:
+    """One hash over every file under root, names and contents, so an edited or rebuilt tree shows."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(f"{path.relative_to(root).as_posix()}\0{file_sha(path)}\n".encode())
+    return digest.hexdigest()
+
+
 def hippo_identity() -> dict:
+    """The pinned commit's clone as found: commit, a clean tree, and the hashes of the server file, the dist and the
+    lockfile. The hashes must equal HIPPO_PIN, so a run never starts on another build or server."""
     commit = run_text(["git", "-C", str(HIPPO), "rev-parse", "HEAD"])
-    if commit != HIPPO_COMMIT or not (HIPPO / "dist" / "search.js").is_file():
-        raise SystemExit(f"{HIPPO} must be the built v1.52.3 clone at {HIPPO_COMMIT}, found {commit}")
-    return {"version": "1.52.3", "commit": commit, "node": run_text([node(), "--version"]),
+    dirty = run_text(["git", "-C", str(HIPPO), "status", "--porcelain"])  # dist and node_modules are git-ignored
+    if commit != HIPPO_COMMIT or dirty or not (HIPPO / "dist" / "entry" / "testing.js").is_file():
+        raise SystemExit(f"{HIPPO} must be a clean, built clone at {HIPPO_COMMIT}, found {commit} {dirty[:200]}")
+    found = {"server_sha256": file_sha(SERVER), "dist_sha256": tree_sha(HIPPO / "dist"),
+             "lock_sha256": file_sha(HIPPO / "package-lock.json")}
+    if found != HIPPO_PIN:
+        raise SystemExit(f"{HIPPO} differs from the pin: found {found}, pinned {HIPPO_PIN}")
+    return {"version": HIPPO_VERSION, "commit": commit, **found, "node": run_text([node(), "--version"]),
             "embeddings": False, "half_life": "shipped default"}
+
+
+def pin_problems(hippo: Any) -> list[str]:
+    """What differs between a run record's hippo identity and the pin."""
+    hippo = hippo if isinstance(hippo, dict) else {}
+    wanted = {"version": HIPPO_VERSION, "commit": HIPPO_COMMIT, **HIPPO_PIN}
+    return [f"{key} {str(hippo.get(key))[:12]} not {value[:12]}" for key, value in wanted.items() if hippo.get(key) != value]
 
 
 def code_hashes() -> dict[str, str]:
@@ -203,7 +237,7 @@ def code_hashes() -> dict[str, str]:
              *sorted((ROOT / "examples/reference").glob("*")), ROOT / "harness/benchmark_soul.md",
              *sorted((ROOT / "mock_mcp/manifests").glob("*.yaml")),
              *sorted((ROOT / "mock_mcp/state").glob("*_baseline.json"))]
-    ours = [*OURS, *sorted((HIPPO / "dist").rglob("*.js"))]
+    ours = [*OURS, SERVER, *sorted((HIPPO / "dist").rglob("*.js"))]
     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in [*stock, *ours] if not p.name.startswith("test_")}
 
@@ -221,7 +255,7 @@ def hippo_server(arm: str, label: str) -> Iterator[None]:
     port_free(port)
     LOGS.mkdir(parents=True, exist_ok=True)
     read_only = arm != "ingest"
-    # This checkout's server, serving the pinned v1.52.3 build; only ingestion may write to the stores.
+    # The pinned commit's own server file and dist (hippo_identity checked both); only ingestion may write to the stores.
     command = [node(), str(SERVER), "--dist", str(HIPPO / "dist"), "--arm", SERVER_ARM[arm], "--host", "127.0.0.1",
                "--port", str(port), "--data-dir", str(STORES), "--embeddings", "0", *(["--read-only"] if read_only else [])]
     with (LOGS / f"{label}-server-{arm}.log").open("a") as out:
@@ -554,6 +588,8 @@ class HippoAdapter:
         command = [str(CLAUDE)] if self.agent == "claude" else [sys.executable, str(HERE / "dolphin_fake_claude.py")]
         # run_claude copies this process's environment (claude_driver.py:46), so only the allowlist is left in it.
         allowed = child_env(*(["DOLPHIN_FAKE_FAIL"] if self.agent == "fake" else []))
+        if self.agent == "claude":
+            allowed.pop(BENCH_ENV, None)  # the agent's env shows no benchmark path beyond PATH
         try:
             with mock.patch.dict(os.environ, allowed, clear=True):
                 result = run_claude(
@@ -817,11 +853,12 @@ def arm_report(label: str, arm: str, persona: str, full: bool) -> dict:
     graded = {item: t["attempts"][-1] for item, t in tests.items()}
     ran = {item: a for item, a in graded.items() if a["outcome"] in ("usable", "failed")}
     judge = config.get("judge", {}).get("model")
+    pin = pin_problems(config.get("hippo"))
     local = {item: calls for item, t in tests.items() if (calls := [
         f"{c['name']}: {json.dumps(c['arguments'])[:300]}" for m in t["row"]["messages"]
         for c in m.get("tool_calls", []) if c["name"] in LOCAL_TOOLS])}
     return {
-        "agent": config.get("agent"), "tests": len(tests), "grades": len(grades),
+        "agent": config.get("agent"), "pin_problems": pin, "tests": len(tests), "grades": len(grades),
         "passed": sum(map(passed, grades.values())), "paused": (run_dir / "paused.json").is_file(),
         "deferred": sorted({p.stem for p in (run_dir / "deferred" / persona).glob("*.json")} - set(tests)),
         "latency_s_mean": round(statistics.fmean(t["row"]["duration_ms"] for t in tests.values()) / 1000, 1)
@@ -848,6 +885,14 @@ def arm_report(label: str, arm: str, persona: str, full: bool) -> dict:
         "costs_file": (run_dir / "costs" / "tests.json").is_file(), "run_dir": str(run_dir)}
 
 
+def ingest_pin_problems(persona: str) -> list[str]:
+    """How the persona's stores were ingested: the ingest record must name the pinned build."""
+    path = RUNS / f"ingest-{persona}" / "run.json"
+    if not path.is_file():
+        return ["no ingest record"]
+    return pin_problems(json.loads(path.read_text())["configuration"].get("hippo"))
+
+
 def check(label: str, persona: str, expected: int) -> dict:
     """Per-arm counts and the machine gate. Integrity parts hold in every run; the pilot adds alarms on memory found,
     benchmark files and closed tests, which in the full run fail the test in its arm and are listed. Every saved
@@ -863,6 +908,8 @@ def check(label: str, persona: str, expected: int) -> dict:
     leaks = [str(p) for p in scanned if any(secret in p.read_bytes() for secret in secrets)]
     unscanned = not token and any(a["agent"] == "claude" for a in arms.values())
 
+    pin_bad = {**{arm: a["pin_problems"] for arm, a in arms.items()}, "ingest": ingest_pin_problems(persona)}
+
     def failing(key: str) -> str:
         return ", ".join(f"{arm} {' '.join(a[key])}" for arm, a in arms.items() if a[key])
 
@@ -874,6 +921,8 @@ def check(label: str, persona: str, expected: int) -> dict:
         "memory_context": (failing("not_injected") or "in every session file", not failing("not_injected")),
         "model": (failing("model_flags") or f"{MODEL} at medium effort", not failing("model_flags")),
         "judge": (failing("judge_mismatch") or "every grade", not failing("judge_mismatch")),
+        "pin": ("; ".join(f"{who} {', '.join(bad)}" for who, bad in pin_bad.items() if bad)
+                or f"server, dist and lockfile of {HIPPO_COMMIT[:9]} in both arms and the ingest", not any(pin_bad.values())),
     }
     if not full:
         parts |= {
@@ -925,12 +974,17 @@ def pooled(reports: dict[str, dict]) -> dict:
 
 
 def verify_records(label: str, personas: list[str]) -> None:
-    """compare's inputs: one configuration over arms and personas, the real agent and the codex judge, and each of
-    OURS recorded with the hash of the committed file, which is also the file compare runs now."""
-    configs = [json.loads((RUNS / f"{label}-{arm}-{persona}" / "run.json").read_text())["configuration"]
-               for arm in ARMS for persona in personas]
+    """compare's inputs: one configuration over arms and personas, the real agent and the codex judge, the pinned
+    hippo build in every arm and ingest record, and each of OURS recorded with the hash of the committed file, which
+    is also the file compare runs now."""
+    records = {(arm, persona): json.loads((RUNS / f"{label}-{arm}-{persona}" / "run.json").read_text())["configuration"]
+               for arm in ARMS for persona in personas}
+    configs = list(records.values())
     shared = [{k: v for k, v in c.items() if k not in ("arm", "ingest_run")} for c in configs]
-    config, problems = configs[0], []
+    config = configs[0]
+    pinned = {f"{arm} {persona}": pin_problems(c.get("hippo")) for (arm, persona), c in records.items()}
+    pinned |= {f"ingest {persona}": ingest_pin_problems(persona) for persona in personas}
+    problems = [f"{who} is not the pinned hippo build ({', '.join(found)})" for who, found in pinned.items() if found]
     if any(s != shared[0] for s in shared):
         problems.append("the arms or personas ran different configurations")
     if config.get("agent") != "claude" or config.get("judge", {}).get("model") != judge_label("codex"):
@@ -1096,8 +1150,8 @@ def selftest_outcomes(tmp: Path) -> None:
               ("Bash", {"command": "ls -la ~/.claude"}, "dolphinbench-native-memory-settings.json\nprojects"),
               ("Bash", {"command": "ps aux"}, "/mnt/c/u/hippo-bench/.venv-dolphin-wsl/bin/python "
                                               "/mnt/c/u/hippo-bench/dolphinbench/mock_mcp/server.py\nnode "
-                                              "hippo-mem0-server.mjs --dist /home/u/dolphin/hippo-v1.52.3/dist "
-                                              "--data-dir /home/u/dolphin/stores --read-only"),
+                                              "hippo-mem0-server.mjs --dist /home/u/dolphin/hippo-v3.5.1/dist "
+                                              "--data-dir /home/u/dolphin/stores-v3 --read-only"),
               ("mcp__dolphinbench_apps__place_order", {"notes": "pickup"}, "ok from dolphinbench_apps")]
     assert not any(hits(*case) for case in benign), [hits(*case) for case in benign]
     relative = ("Bash", {"command": "cd /home/u/dolphin && cat runs/t-bm25-morgan/hooks/morgan/007-0.json"}, "{}")
@@ -1106,6 +1160,8 @@ def selftest_outcomes(tmp: Path) -> None:
             ("Read", {"file_path": "/tmp/x"}, "see /mnt/c/u/hippo-bench/dolphinbench/mock_mcp/manifests/morgan.yaml"),
             ("Bash", {"command": "ls"}, "facts.yaml"), ("WebSearch", {"query": "DolphinBench answers"}, "")]
     assert all(hits(*case) for case in real), [hits(*case) for case in real]
+    assert hits("Bash", {"command": "cat /home/u/dolphin/runs-v3/t-bm25-morgan/state.json"}, "{}")
+    assert hits("Bash", {"command": "ls /home/u/dolphin/stores-v3/"}, "{}")
 
 
 def selftest_gate() -> None:
@@ -1145,13 +1201,15 @@ def selftest_gate() -> None:
         raise AssertionError("compare ran on a run it must refuse")
 
     globals()["git"] = fake_git
-    config = {"agent": "claude", "judge": {"kind": "codex", "model": judge_label("codex"), "codex": "0"},
+    pinned = {"version": HIPPO_VERSION, "commit": HIPPO_COMMIT, **HIPPO_PIN}
+    config = {"agent": "claude", "judge": {"kind": "codex", "model": judge_label("codex"), "codex": "0"}, "hippo": pinned,
               "code": {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in OURS},
               "source": {"commit": "c0ffee", "uncommitted": []}}
     usable = {"outcome": "usable", "memory_results": 3, "message_models": [MODEL], "effort": ["medium"],
               "injected": "full", "tool_calls": [MEMORY_TOOL], "total_cost_usd": 0.0, "duration_ms": 1000,
               "model_usage": {MODEL: {"inputTokens": 10, "outputTokens": 5}, "helper-model": {"inputTokens": 2}}}
     configure()
+    put(RUNS / "ingest-morgan" / "run.json", {"configuration": {"hippo": pinned}})
     for arm in ARMS:
         for n in range(1, FULL_TESTS + 1):
             put_test(arm, n, usable, passed=arm == "hippo" or n % 2 == 0)
@@ -1168,8 +1226,24 @@ def selftest_gate() -> None:
         grade.unlink()
         assert "the gate fails" in refusal()
         put(grade, kept)
-        configure(code={**config["code"], str(SERVER): "0" * 64})
-        assert "hippo-mem0-server.mjs differs" in refusal()
+        configure(code={**config["code"], str(HERE / "dolphin_hippo.py"): "0" * 64})
+        assert "dolphin_hippo.py differs" in refusal()
+        # A record whose server file, dist, lockfile or commit differs from the pin fails check's gate and compare.
+        for key in ("server_sha256", "dist_sha256", "lock_sha256", "commit"):
+            configure(hippo={**pinned, key: "0" * 40})
+            assert not check("t", "morgan", FULL_TESTS)["parts"]["pin"], key
+            assert "the gate fails" in refusal(), key
+            try:
+                verify_records("t", ["morgan"])
+                raise AssertionError(f"verify_records accepted a changed {key}")
+            except SystemExit as exc:
+                assert "not the pinned hippo build" in str(exc) and key in str(exc), str(exc)
+        configure(hippo={k: v for k, v in pinned.items() if k != "dist_sha256"})
+        assert not check("t", "morgan", FULL_TESTS)["parts"]["pin"]
+        configure()
+        (RUNS / "ingest-morgan" / "run.json").write_text(json.dumps({"configuration": {"hippo": {**pinned, "dist_sha256": "0"}}}))
+        assert not check("t", "morgan", FULL_TESTS)["parts"]["pin"]
+        (RUNS / "ingest-morgan" / "run.json").write_text(json.dumps({"configuration": {"hippo": pinned}}))
         configure(agent="fake")
         assert "not claude with codex" in refusal()
         configure()
@@ -1193,7 +1267,7 @@ def selftest_gate() -> None:
     with mock.patch.dict(os.environ, {TOKEN_ENV: "selftest-token-value"}):
         report, pilot = check("t", "morgan", FULL_TESTS), check("t", "morgan", 20)
     assert report["parts"] == {"complete": True, "token": False, "memory_context": False, "model": False,
-                               "judge": False}, report["parts"]
+                               "judge": False, "pin": True}, report["parts"]
     hippo, bm25 = report["arms"]["hippo"], report["arms"]["bm25"]
     assert list(bm25["closed_by_adapter"]) == ["002", "004"] and bm25["mismatch_closed"] == ["002"]
     assert hippo["no_memory_context"] == ["003"] and hippo["dataset_touches"] == {"004": ["Bash: /dolphin/runs/"]}

@@ -14,10 +14,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-HERE = Path(__file__).resolve().parent
-# The benchmark clone, its venv and every output live in hippo-bench, beside this checkout, never inside it.
-BENCH = HERE.parents[3] / "hippo-bench"
-ROOT = BENCH / "dolphinbench"
+from dolphin_home import BENCH, CODEX_DIR, ROOT  # the clone, its venv and every output live outside this checkout
+
 JUDGE = sys.argv[1] if len(sys.argv) > 1 else "stub"
 PORT = 18765
 MODEL = os.environ.get("DOLPHIN_JUDGE_MODEL", "gpt-6-astra")
@@ -35,7 +33,7 @@ from harness.adapter import InteractionRecord  # noqa: E402
 from harness.runner import Runner  # noqa: E402
 from harness.submission import read_release  # noqa: E402
 
-CODEX_JS = HERE.parents[3] / "AppData/Roaming/npm/node_modules/@openai/codex/bin/codex.js"
+CODEX_JS = CODEX_DIR / "bin/codex.js"
 PREAMBLE = ("You are a JSON-only grading function. Do NOT use any tool. Do NOT read, open, view or write any "
             "file. Everything you need is in this message. Reply with the JSON object only.\n\n")
 ORDER = {"restaurant": "Blue Bottle Coffee", "items": ["small latte"], "notes": "pickup"}

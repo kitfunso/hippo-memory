@@ -5,13 +5,12 @@ import json
 import statistics as st
 import sys
 from collections import Counter
-from pathlib import Path
 
 import tiktoken
 import yaml
 
-BENCH = Path(__file__).resolve().parents[4] / "hippo-bench"  # the clone and evidence stay outside this checkout
-ROOT = BENCH / "dolphinbench"
+from dolphin_home import BENCH, ROOT  # the clone and evidence stay outside this checkout
+
 PERSONAS = ("morgan", "alex", "riley")
 
 

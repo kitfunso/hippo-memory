@@ -2,6 +2,7 @@
 
 Every call is logged. A usage limit is waited out, a call that still fails raises, and no reply is ever made up.
 Proxy: `python claude_llm.py --work DIR --log calls.jsonl --port 8790 --effort low` serves /v1/chat/completions.
+With --judge-log, requests for gpt-5.6-sol go to codex (qa/codex_judge.py) and the rest to `claude -p`.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -43,6 +45,14 @@ def json_reply(text: str) -> dict | None:
     return None
 
 
+class ToolUse(RuntimeError):
+    """A reply whose run used a tool: logged as an ask that is never valid (prereg Amendment 6 revision 1 item 7)."""
+
+    def __init__(self, rec: dict) -> None:
+        super().__init__(f"{rec['tag']}: the reply used a tool: {rec['tools']}")
+        self.rec = rec
+
+
 class Claude:
     def __init__(self, work: Path, log: Path, slots: int) -> None:
         self.exe = shutil.which("claude")
@@ -55,7 +65,12 @@ class Claude:
         self.lock = threading.Lock()
         self.slots = threading.BoundedSemaphore(slots)
         self.env = {k: v for k, v in os.environ.items() if k.upper() in KEEP_ENV}
+        # Benchmark load goes on the founder's subscription token, never the interactive login (Amendment 6).
+        if os.environ.get("BENCH_CLAUDE_OAUTH_TOKEN"):
+            self.env["CLAUDE_CODE_OAUTH_TOKEN"] = os.environ["BENCH_CLAUDE_OAUTH_TOKEN"]
         self.env["DISABLE_AUTOUPDATER"] = "1"  # one CLI version for the whole run
+        ver = subprocess.run([self.exe, "--version"], capture_output=True, env=self.env, timeout=60)
+        self.cli = ver.stdout.decode("utf-8", "replace").strip()  # stamped on every record for the frozen manifest
 
     def _log(self, rec: dict) -> None:
         rec["ts"] = round(time.time(), 3)
@@ -98,7 +113,8 @@ class Claude:
 
     def ask(self, system: str, user: str, *, effort: str, tag: str, want_json: bool = False) -> dict:
         sys_file, sys_sha = self._system_file(system)
-        base = {"tag": tag, "sys": sys_sha, "user": hashlib.sha256(user.encode()).hexdigest()[:16], "effort": effort}
+        base = {"tag": tag, "sys": sys_sha, "user": hashlib.sha256(user.encode()).hexdigest()[:16], "effort": effort,
+                "cli": self.cli}
         failures = misses = attempt = waited = 0
         deadline = time.monotonic() + DEADLINE_S
         while True:
@@ -128,6 +144,11 @@ class Claude:
                     self._fail(base, f"{failures} failed attempts: {detail}")
                 time.sleep(min(10 * failures, max(0.0, deadline - time.monotonic())))
                 continue
+            if res.get("tools"):  # only codex_judge reports tools; the caller counts the ask and may ask again
+                rec = {**base, "event": "tool-use", "tools": res["tools"], "models": sorted(res.get("modelUsage") or {}),
+                       "usage": res.get("usage"), "text": text}
+                self._log(rec)
+                raise ToolUse(rec)
             if want_json and json_reply(text) is None:
                 misses += 1
                 self._log({**base, "event": "json-miss", "text": text[:2000]})
@@ -141,7 +162,8 @@ class Claude:
             return rec
 
 
-def serve(claude: Claude, port: int, effort: str) -> None:
+def serve(claude: Claude, port: int, effort: str, judge: Claude | None = None, tag: str = "extract",
+          answer_model: str | None = None, judge_effort: str = "medium") -> None:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args: object) -> None:
             pass
@@ -164,8 +186,13 @@ def serve(claude: Claude, port: int, effort: str) -> None:
             if len(rest) != 1 or rest[0].get("role") != "user" or not isinstance(rest[0].get("content"), str):
                 return self._send(400, {"error": {"message": "expected system messages and one text user message"}})
             want_json = (req.get("response_format") or {}).get("type") == "json_object"
+            model = req.get("model", MODEL)
+            llm, kw = (judge, {"effort": judge_effort, "tag": "judge"}) if judge and model == judge.model else (
+                claude, {"effort": effort, "tag": tag})
+            if llm is claude and answer_model and model != answer_model:
+                return self._send(400, {"error": {"message": f"model {model} is neither {answer_model} nor the judge"}})
             try:
-                r = claude.ask(system, rest[0]["content"], effort=effort, tag="extract", want_json=want_json)
+                r = llm.ask(system, rest[0]["content"], want_json=want_json, **kw)
             except RuntimeError as e:
                 return self._send(502, {"error": {"message": str(e)}})
             u = r.get("usage") or {}
@@ -188,8 +215,17 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--slots", type=int, default=10, help="concurrent claude processes")
     ap.add_argument("--effort", default="low")
+    ap.add_argument("--tag", default="extract", help="call-log tag of the claude route")
+    ap.add_argument("--answer-model", help="the only model name the claude route accepts (default: any)")
+    ap.add_argument("--judge-log", type=Path, help="JSONL call log of the codex judge; enables the gpt-5.6-sol route")
+    ap.add_argument("--judge-slots", type=int, help="concurrent codex processes (default: codex_judge's)")
     a = ap.parse_args()
-    serve(Claude(a.work, a.log, a.slots), a.port, a.effort)
+    judge = None
+    if a.judge_log:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qa"))
+        from codex_judge import DEFAULT_SLOTS, CodexJudge
+        judge = CodexJudge(a.judge_log, a.judge_slots or DEFAULT_SLOTS)
+    serve(Claude(a.work, a.log, a.slots), a.port, a.effort, judge, a.tag, a.answer_model)
 
 
 if __name__ == "__main__":
