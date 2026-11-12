@@ -116,6 +116,46 @@ const wait = (what: string, test: () => boolean) => until(what, test, 120_000);
 const HELD = { Z0_STUB_HOLD_S: '120' };
 /** True once the output of a started call holds a line that matches. */
 const sawLine = (s: Started, line: RegExp) => line.test(read(s.outFile).replace(/\r/g, ''));
+/** A live bash that the process listing reads as an `s4-drive.sh` or `s4-batch.sh` of the case's root, as `bash <role>.sh 1 <checkout> <root> <stop file>`; returns its Windows pid. */
+async function standIn(c: DriveCase, role: 's4-drive' | 's4-batch', tag = '') {
+  const file = `${c.dir}/${role}-shaped${tag}/${role}.sh`;
+  const pidFile = `${c.dir}/${role}-shaped${tag}/stop.pid`;
+  put(file, '#!/usr/bin/env bash\nPATH=/usr/bin:/mingw64/bin:$PATH\ncat /proc/$$/winpid > "$4.pid"\nuntil [ -f "$4" ]; do sleep 0.5; done\n');
+  c.orphan(file, ['1', c.checkout, c.root, `${c.dir}/${role}-shaped${tag}/stop`]);
+  await wait(`the ${role}-shaped process`, () => existsSync(pidFile) && /^\d+/.test(read(pidFile)));
+  return Number(read(pidFile).trim());
+}
+/** The `<role> <path>` of each listing line, with the pids left out, so a bash wrapper and its forks read as one. */
+const rolesOf = (text: string) => new Set(text.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '').map((l) => l.trim().split(' ').slice(1).join(' ')));
+/** The pid of each listing line. */
+const pidsOf = (text: string) => text.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '').map((l) => Number(l.trim().split(' ')[0]));
+/** The creation time of a live process as UTC ticks, read the way s4-drive.sh reads its own. */
+function ticksOf(pid: number) {
+  const out = ps(`(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CreationDate.ToUniversalTime().Ticks`)?.stdout.trim() ?? '';
+  if (!/^\d+$/.test(out)) throw new Error(`no creation time for pid ${pid}: ${out}`);
+  return out;
+}
+/** A batch-shaped bash whose parent link is dead, as the batch of a driver has (a Git Bash exec leaves a dead process above it). Once told, it sources s4-units.sh as the batch does and prints the listing of the case's root with Z0_DRIVER_WINPID and Z0_DRIVER_STARTED set to `named` and `started`. */
+async function batchCaller(c: DriveCase, tag: string) {
+  const dir = `${c.dir}/${tag}-caller`;
+  const call = `${dir}/call`;
+  put(`${dir}/s4-batch.sh`, [
+    '#!/usr/bin/env bash', 'PATH=/usr/bin:/mingw64/bin:$PATH', 'export Z0_CHECKOUT=$2', 'touch "$4.up"',
+    'until [ -f "$4.go" ]; do sleep 0.2; done', 'named=$(< "$4.named")', 'started=$(< "$4.started")', 'unset Z0_DRIVER_WINPID Z0_DRIVER_STARTED',
+    '[ -z "$named" ] || export Z0_DRIVER_WINPID=$named', '[ -z "$started" ] || export Z0_DRIVER_STARTED=$started',
+    '. "$5/s4-units.sh"', 'if units_scan; then root_lines "$3" > "$4.part"; else echo "scan failed: $UNITS_ERR" > "$4.part"; fi', 'mv "$4.part" "$4.out"', '',
+  ].join('\n'));
+  put(`${dir}/start.sh`, '#!/usr/bin/env bash\nbash "$@" < /dev/null > /dev/null 2>&1 &\n');
+  c.orphan(`${dir}/start.sh`, [`${dir}/s4-batch.sh`, '1', c.checkout, c.root, call, c.scored]);
+  await wait(`the ${tag} caller`, () => existsSync(`${call}.up`));
+  return async (named?: number | string, started?: string) => {
+    put(`${call}.named`, named === undefined ? '' : String(named));
+    put(`${call}.started`, started ?? '');
+    put(`${call}.go`, '');
+    await wait(`the ${tag} caller's listing`, () => existsSync(`${call}.out`));
+    return read(`${call}.out`);
+  };
+}
 
 describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and the round 4 poetry folder', () => {
   it('1. --print gives each step\'s command lines, runs nothing, logs nothing, and runs beside a live driver', async () => {
@@ -312,6 +352,10 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     await refused('6', ['--rule', fake], `DRIVE: --rule and --level-sims are for a DRYRUN root; ${real} has no DRYRUN file`, { root: real });
     await refused('4', ['--level-sims', '5'], `DRIVE: --rule and --level-sims are for a DRYRUN root; ${real} has no DRYRUN file`, { root: real });
     await refused('plans', [], `DRIVE: Z0_DRIVE_STUBS is set, but ${real} holds no DRYRUN file; only a dry root may use it`, { root: real });
+    await refused('plans', [], `DRIVE: Z0_BOX_CHECK is set, but ${real} holds no DRYRUN file; only a dry root may use it`, { root: real, env: { Z0_DRIVE_STUBS: undefined, Z0_BOX_CHECK: fake } });
+    await refused('plans', [], `DRIVE: Z0_BOX_CHECK ${c.dir}/nope.sh is not a file`, { env: { Z0_BOX_CHECK: `${c.dir}/nope.sh` } });
+    put(`${c.dir}/box check.sh`, '');
+    await refused('plans', [], `DRIVE: Z0_BOX_CHECK ${c.dir}/box check.sh holds a space or a single quote, which the launcher command cannot carry`, { env: { Z0_BOX_CHECK: `${c.dir}/box check.sh` } });
     await refused('plans', [], 'DRIVE: Z0_GRACE_S abc must be a whole number of seconds', { env: { Z0_GRACE_S: 'abc' } });
     await refused('plans', [], `DRIVE: root ${c.dir}/nope is not a folder`, { root: `${c.dir}/nope` });
     const usage = await c.run('smoke', ['--attempt', '0']);
@@ -873,5 +917,86 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     pilot.plant({ step: 'smoke', attempt: 2, exit: 0 });
     await pilot.doneUnit(`${pilot.root}/pilot/k1-p2`);
     await refused(pilot, '1', 'step 1');
+  }, 600_000);
+
+  it('31. a batch the driver calls lists none of that driver or its forks for its root, and still lists a second driver of the root', async () => {
+    const c = ready('list-own', '2');
+    c.script('s4-batch', [{ make: [`${c.root}/batch1/q12-w1/run`] }]);
+    put(`${c.knobs}/list-root`, '');
+    const running = c.start('3');
+    await wait('the stub batch\'s first listing', () => existsSync(`${c.knobs}/listed-1.txt`));
+    const second = await standIn(c, 's4-drive');
+    put(`${c.knobs}/list-again`, '');
+    const run = await running.done;
+    expect(run.code, run.out).toBe(0);
+    expect(read(`${c.knobs}/listed-1.txt`).trim()).toBe('');
+    const again = read(`${c.knobs}/listed-2.txt`);
+    expect(rolesOf(again)).toEqual(new Set([`s4-drive ${c.root.toLowerCase()}`]));
+    expect(pidsOf(again)).toContain(second);
+    expect(pidsOf(again)).not.toContain(c.driverPid());
+  }, 300_000);
+
+  it('32. a live second driver of the root, one that did not call the scan, still stops the driver', async () => {
+    const c = ready('list-second', '2');
+    const second = await standIn(c, 's4-drive');
+    put(`${c.root}/drive.log`, `01-01 00:00:00 call 3 ${c.checkout} ${c.root} attempt 1 pid ${second}\n`);
+    const r = await c.run('3');
+    expect([r.code, r.lines]).toEqual([1, [`DRIVE: driver ${second} already runs on ${c.root}`]]);
+    expect(c.entries()).toHaveLength(1);
+  }, 300_000);
+
+  it('33. Z0_DRIVER_WINPID and Z0_DRIVER_STARTED hide only a live s4-drive.sh bash with that creation time, with its wrapper and forks; another process, a dead pid, a bad value or no creation time hides nothing', async () => {
+    const c = mk('list-var');
+    const driver = await standIn(c, 's4-drive');
+    const batch = await standIn(c, 's4-batch');
+    const root = c.root.toLowerCase();
+    const driverTicks = ticksOf(driver);
+    // Pid and ticks: a dead pid, a bad number, a negative one, none; the batch stand-in and this test's node with their own exact ticks, so only the argv and image rules refuse them; the driver with no usable ticks.
+    const bad: [number | string | undefined, string | undefined][] = [
+      [undefined, undefined], ['', ''], ['abc', '1'], ['12abc', '1'], ['-1', '1'], ['0', '1'], [2_147_483_646, '1'],
+      [batch, ticksOf(batch)], [process.pid, ticksOf(process.pid)], [driver, undefined], [driver, ''], [driver, 'abc'],
+    ];
+    const callers = await Promise.all(Array.from({ length: bad.length + 1 }, (_, i) => batchCaller(c, `v${i}`)));
+    const both = new Set([`s4-drive ${root}`, `s4-batch ${root}`]);
+    // The pids are read as well as the roles, because the live callers are batch-shaped too and would keep the batch role listed if the batch stand-in were hidden.
+    for (const [i, [pid, started]] of bad.entries()) {
+      const label = `Z0_DRIVER_WINPID=${String(pid)} Z0_DRIVER_STARTED=${String(started)}`;
+      const text = await callers[i]!(pid, started);
+      expect(rolesOf(text), label).toEqual(both);
+      expect(pidsOf(text), label).toEqual(expect.arrayContaining([driver, batch]));
+    }
+    // The driver stand-in with its own creation time is dropped, and the batch stand-in stays.
+    const hidden = pidsOf(await callers[bad.length]!(driver, driverTicks));
+    expect(hidden).toContain(batch);
+    expect(hidden).not.toContain(driver);
+  }, 600_000);
+
+  it('35. a live s4-drive.sh bash is never hidden by a creation time that is not its own, as the process that reuses the pid of a dead driver would not be', async () => {
+    const c = mk('list-reused');
+    const first = await standIn(c, 's4-drive');
+    const callers = await Promise.all([0, 1, 2].map((i) => batchCaller(c, `r${i}`)));
+    const later = await standIn(c, 's4-drive', '-later');
+    const [firstTicks, laterTicks] = [ticksOf(first), ticksOf(later)];
+    // The bash made before the callers, named with the ticks of one made after it and of one made before it; the bash made after the callers, named with the ticks of the first.
+    const cases: [number, string][] = [[first, laterTicks], [first, ticksOf(process.pid)], [later, firstTicks]];
+    for (const [i, [pid, started]] of cases.entries()) expect(pidsOf(await callers[i]!(pid, started)), `pid ${pid} named with ticks ${started}`).toContain(pid);
+  }, 600_000);
+
+  it('34. Z0_BOX_CHECK on a dry root reaches every launcher call of smoke and step 1, the plan-only ones included, and is absent without it', async () => {
+    const c = mk('box-check');
+    const box = `${c.dir}/box-ok.sh`;
+    put(box, '#!/usr/bin/env bash\nexit 0\n');
+    c.cliKnob('g1-pins', [{ stdout: 'g1-pins ok' }]);
+    const env = { Z0_BOX_CHECK: box };
+    const [smoke, pilot] = [await c.run('smoke', [], { env }), await c.run('1', [], { env })];
+    expect([smoke.code, pilot.code], smoke.out + pilot.out).toEqual([0, 0]);
+    const folders = ['smoke/w1', 'pilot/k1-p1', 'pilot/k2-p1', 'effort/low-p1', 'effort/high-p1'].map((f) => `${c.root}/${f}`);
+    for (const folder of folders) {
+      expect(c.launcherCalls(folder), folder).toEqual(['plan', 'launch']);
+      expect(c.launcherArgs(folder).BoxCheck, folder).toBe(box);
+    }
+    const off = mk('box-check-off');
+    expect((await off.run('smoke')).code).toBe(0);
+    expect(off.launcherArgs(`${off.root}/smoke/w1`)).not.toHaveProperty('BoxCheck');
   }, 600_000);
 });

@@ -74,15 +74,28 @@ else
   [ -z "$RULE$SIMS" ] || refuse "DRIVE: --rule and --level-sims are for a DRYRUN root; $ROOT has no DRYRUN file"
   # Z0_DRIVE_STUBS swaps the CLIs, so only a dry root may use it, as s4-batch.sh does for Z0_REPOS_FILE.
   [ -z "${Z0_DRIVE_STUBS:-}" ] || refuse "DRIVE: Z0_DRIVE_STUBS is set, but $ROOT holds no DRYRUN file; only a dry root may use it"
+  # Z0_BOX_CHECK stands in for the launcher's box check, which s4-run.ps1 refuses on a real root too.
+  [ -z "${Z0_BOX_CHECK:-}" ] || refuse "DRIVE: Z0_BOX_CHECK is set, but $ROOT holds no DRYRUN file; only a dry root may use it"
 fi
 if [ -n "$FAKE" ]; then
   [ -f "$FAKE" ] || refuse "DRIVE: --fake $FAKE is not a file"
   plain --fake "$FAKE"
 fi
+if [ -n "${Z0_BOX_CHECK:-}" ]; then
+  [ -f "$Z0_BOX_CHECK" ] || refuse "DRIVE: Z0_BOX_CHECK $Z0_BOX_CHECK is not a file"
+  plain Z0_BOX_CHECK "$Z0_BOX_CHECK"
+fi
 [ -z "$RULE" ] || [ -f "$RULE" ] || refuse "DRIVE: --rule $RULE is not a file"
 [[ ${Z0_GRACE_S:-600} =~ ^[0-9]+$ ]] || refuse "DRIVE: Z0_GRACE_S ${Z0_GRACE_S} must be a whole number of seconds"
 [ -z "${Z0_DRIVE_STUBS:-}" ] || [ -d "$Z0_DRIVE_STUBS" ] || refuse "DRIVE: Z0_DRIVE_STUBS $Z0_DRIVE_STUBS is not a folder"
 export Z0_CHECKOUT=$CHECKOUT
+# The listing a batch of this driver runs cannot reach the driver through parent links, so s4-procs.ps1 reads its pid from here; without it a batch waits on its own driver.
+# The creation time goes with the pid, so a process that reuses the pid is told apart from this driver.
+WINPID=$(< /proc/$$/winpid) || WINPID=
+[[ $WINPID =~ ^[0-9]+$ ]] || refuse "DRIVE: cannot read this driver's Windows pid from /proc/$$/winpid"
+STARTED=$(powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=$WINPID').CreationDate.ToUniversalTime().Ticks" < /dev/null 2> /dev/null | tr -d '\r') || STARTED=
+[[ $STARTED =~ ^[0-9]+$ ]] || refuse "DRIVE: cannot read the creation time of driver pid $WINPID from Win32_Process"
+export Z0_DRIVER_WINPID=$WINPID Z0_DRIVER_STARTED=$STARTED
 case $STEP in [1-8]) LABEL="step $STEP" ;; *) LABEL=$STEP ;; esac
 POETRY=C:/z0-runs/r4/poetry-2.5.1
 BASE_COMMIT=04835462b
@@ -252,6 +265,7 @@ unit_flags() {
   FLAGS+=("${more[@]}")
   case $2 in *-a[23]) FLAGS+=(-Retry "${2##*-a}") ;; esac
   [ -z "$FAKE" ] || FLAGS+=(-FakeAgent "$FAKE")
+  [ -z "${Z0_BOX_CHECK:-}" ] || FLAGS+=(-BoxCheck "$Z0_BOX_CHECK")
 }
 # Starts s4-run.ps1 detached through Start-Process, as s4-batch.sh does, so it outlives this call; the new pid comes back through a file.
 launch_unit() {
@@ -746,7 +760,7 @@ if [ "$PRINT" = 1 ]; then
   exit 0
 fi
 
-say "call $STEP $CHECKOUT $ROOT attempt $ATTEMPT pid $(< /proc/$$/winpid)"
+say "call $STEP $CHECKOUT $ROOT attempt $ATTEMPT pid $Z0_DRIVER_WINPID"
 scan
 orphan_check
 case $STEP in plans | founder-go | cause | stage-checks) ;; *) wait_quiet ;; esac
