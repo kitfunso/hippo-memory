@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
+import { money } from '../scripts/token-eval/z0-budget.mjs';
 import { BATCH1, BATCH2 } from './_helpers/z0-r4-spend.js';
 import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type Started, type World } from './fixtures/z0-drive/harness.js';
 import { killOwnTree } from './fixtures/kill-own.js';
@@ -36,7 +37,6 @@ afterEach(async () => {
 afterAll(() => dropWorld(w));
 
 const sha = (data: Buffer) => createHash('sha256').update(data).digest('hex');
-const money = (x: number) => x.toFixed(2);
 /** The exit code and every output line of a run, for one `toEqual`. */
 const outcome = (r: Run) => [r.code, ...r.lines];
 /** The outcome of a step that reaches the pins check, which prints its own pass line first. */

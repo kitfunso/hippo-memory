@@ -35,7 +35,11 @@ const USAGE = 'usage: z0-budget.mjs admit --step <smoke|pilot|whole-run|batch-1|
   + 'exit 0 pass, 1 input error, 3 or 4 or 5 or 6 a refusal named by its line';
 
 const sum = (xs) => xs.reduce((s, x) => s + x, 0);
-const money = (x) => x.toFixed(2);
+/** Whole cents at a millionth of a dollar's resolution, so float noise moves no cent: a need rounds up and an approval rounds down. */
+export const ceilCents = (x) => Math.ceil(Math.round(x * 1e6) / 1e4);
+export const floorCents = (x) => Math.floor(Math.round(x * 1e6) / 1e4);
+/** Rounds up to the cent as the admit rounds a need, so the admit compares these same cents and a go at a printed need admits. */
+export const money = (x) => (ceilCents(x) / 100).toFixed(2);
 
 /* ------------------------------------------------------------------------------------------ projection */
 
@@ -72,10 +76,10 @@ export function stepProjection({ plans, meanPerRecord, warmupUsd }) {
   return sessions * meanPerRecord + warmups * (warmupUsd ?? meanPerRecord);
 }
 
-/** The one check: ledger + margin x projection fits the figure, and where the step has a cap, capSpend + projection fits it; a null figure or cap skips that test. */
+/** The one check, in the whole cents `money` prints: ledger + margin x projection fits the figure, and where the step has a cap, capSpend + projection fits it; a null figure or cap skips that test. */
 export function admissionOk({ ledger, projection, margin, figure, cap, capSpend }) {
-  const figureOk = figure === null || figure === undefined || ledger + margin * projection <= figure;
-  const capOk = cap === null || cap === undefined || (capSpend ?? 0) + projection <= cap;
+  const figureOk = figure === null || figure === undefined || ceilCents(ledger + margin * projection) <= floorCents(figure);
+  const capOk = cap === null || cap === undefined || ceilCents((capSpend ?? 0) + projection) <= floorCents(cap);
   return figureOk && capOk;
 }
 
@@ -238,6 +242,13 @@ function usdFlag(args, flag) {
   return n;
 }
 
+/** A figure a person types is whole cents, so the admit, a go and the print all read the same number; the rule is the driver script's own. */
+function centsFlag(args, flag) {
+  const raw = need(args, flag);
+  if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(raw)) throw usage(`${flag} ${raw} is not a USD figure with at most 2 decimals`);
+  return Number(raw);
+}
+
 function countFlag(args, flag) {
   const n = Number(need(args, flag));
   if (!Number.isInteger(n) || n < 1) throw usage(`${flag} ${need(args, flag)} is not a whole number from 1`);
@@ -383,14 +394,14 @@ function writeMark(file, entry) {
 function admit(args, cwd, now) {
   const step = need(args, '--step');
   if (!STEPS.has(step)) throw usage(`--step ${step} is not one of ${[...STEPS].join(', ')}`);
-  const [attempt, approved, ledger] = [countFlag(args, '--attempt'), usdFlag(args, '--approved'), usdFlag(args, '--ledger-total')];
+  const [attempt, approved, ledger] = [countFlag(args, '--attempt'), centsFlag(args, '--approved'), usdFlag(args, '--ledger-total')];
   const [log, pinsFile] = [filePath(args, '--log', cwd), filePath(args, '--pins', cwd)];
   const [units, seal] = [listFlag(args, '--units').map((u) => path.resolve(cwd, u)), step === 'seeds' ? need(args, '--seal') : optional(args, '--seal')];
   const mark = ['batch-1', 'batch-2', 'seeds'].includes(step) ? filePath(args, '--mark', cwd) : null;
   const sealFile = seal === null ? null : path.resolve(cwd, seal);
   checkNotStarted(units, sealFile, SCOPES[step]);
   const entries = readLog(log);
-  const named = yesGos(entries, 'figure').some((e) => e.figure >= approved);
+  const named = yesGos(entries, 'figure').some((e) => floorCents(e.figure) >= floorCents(approved));
   if (approved > APPROVED_FIGURE && !named) throw new Error(`--approved ${need(args, '--approved')} is above $${APPROVED_FIGURE.toLocaleString('en-US')}.00 and no founder go names it`);
 
   const ctx = { entries, attempt, ledger, approved };
@@ -447,7 +458,7 @@ function founderGo(args, cwd, now) {
   const stop = args.flags.has('--stop');
   // A stop answer names no figure; a go on the figure or the pilot names the one it lifts.
   const needsFigure = !stop && (question === 'figure' || question === 'pilot');
-  const figure = (needsFigure || optional(args, '--figure') !== null) ? usdFlag(args, '--figure') : null;
+  const figure = (needsFigure || optional(args, '--figure') !== null) ? centsFlag(args, '--figure') : null;
   const attempt = question === 'pilot' ? countFlag(args, '--attempt') : (optional(args, '--attempt') === null ? null : countFlag(args, '--attempt'));
   const log = filePath(args, '--log', cwd);
   const lastWhole = readLog(log).filter((e) => e.kind === 'admit' && e.step === 'whole-run').at(-1);
@@ -460,7 +471,7 @@ function founderGo(args, cwd, now) {
 }
 
 function report(args, cwd) {
-  const [ledgerTotal, approved] = [usdFlag(args, '--ledger-total'), usdFlag(args, '--approved')];
+  const [ledgerTotal, approved] = [usdFlag(args, '--ledger-total'), centsFlag(args, '--approved')];
   const admits = readLog(filePath(args, '--log', cwd)).filter((e) => e.kind === 'admit');
   const lines = [];
   admits.forEach((e, i) => {
@@ -482,7 +493,7 @@ function report(args, cwd) {
   return answer(0, lines.join('\n'));
 }
 
-/** The lines of `r4-projection.py` that round 3's spend basis feeds, in its words, at 2 decimals. */
+/** The lines of `r4-projection.py` that round 3's spend basis feeds, in its words, with each figure rounded up to the cent. */
 function project(args, cwd) {
   const [basis, pins] = [readBasis(filePath(args, '--spend-basis', cwd)), readPins(filePath(args, '--pins', cwd))];
   const keys = listOf(pins, 'batch1Keys');

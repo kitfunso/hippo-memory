@@ -9,7 +9,7 @@ import { ARM_TABLE, DESIGNS, OPUS_MODEL, allowlistOf, envAllowSet } from './arms
 import { writeFileAtomic } from './atomic-write.mjs';
 import { Stop, parseFlags, readJson, runCommand, runMain } from './free-cli.mjs';
 import { inputHashes, sha256 } from './z0-blind.mjs';
-import { BASE_SEEDS, GATE_MARGIN, PILOT_BUDGET, PILOT_CHECKS, R_FLAG, listOf, readBasis, readPins, sequenceGap, wholeRun, wholeRunSeeds } from './z0-budget.mjs';
+import { BASE_SEEDS, GATE_MARGIN, PILOT_BUDGET, PILOT_CHECKS, R_FLAG, listOf, money, readBasis, readPins, sequenceGap, wholeRun, wholeRunSeeds } from './z0-budget.mjs';
 import { usageRatio } from './z0-cost-solved.mjs';
 import { readVoids } from './z0-filters.mjs';
 import { checkPrices, costOf } from './z0-prices.mjs';
@@ -35,7 +35,6 @@ const EFFORT_ARMS = ARMS.filter((a) => DESIGNS.r4.pairs.S1vO1.includes(a));
 const bad = (message) => new Error(`${message}\n${USAGE}`);
 const plain = (v) => v !== undefined && v !== null && v.constructor === Object;
 const isName = (v) => isString(v) && v.trim() !== '';
-const money = (x) => x.toFixed(2);
 const sum = (xs) => xs.reduce((s, x) => s + x, 0);
 const kebab = (key) => `--${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
 const folderKey = (cwd, p) => (process.platform === 'win32' ? path.resolve(cwd, p).toLowerCase() : path.resolve(cwd, p));

@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { ARM_TABLE, DESIGNS } from '../scripts/token-eval/arms.mjs';
-import { BASE_SEEDS, GATE_MARGIN, PILOT_CHECKS, R_FLAG, listOf, readBasis, readPins, runCli as budgetCli, sequenceGap, wholeRun, wholeRunSeeds } from '../scripts/token-eval/z0-budget.mjs';
+import { BASE_SEEDS, GATE_MARGIN, PILOT_CHECKS, R_FLAG, listOf, money, readBasis, readPins, runCli as budgetCli, sequenceGap, wholeRun, wholeRunSeeds } from '../scripts/token-eval/z0-budget.mjs';
 import { costOf } from '../scripts/token-eval/z0-prices.mjs';
 import { rSummary, runCli } from '../scripts/token-eval/z0-pilot.mjs';
 import { cellKey } from '../scripts/token-eval/z0-records.mjs';
@@ -448,8 +448,8 @@ describe('z0-pilot: cells, spend and the whole-run line', () => {
     const gapByArm = sequenceGap(SPEND.bySequence, listOf(pins, 'batch1Keys'));
     const at = (n: number): number => wholeRun({ basisByArm: readBasis(c.basis).basisByArm, gapByArm, r: 1, seeds: n });
     const lines = linesOf(r.stdout);
-    for (const n of [3, Number(seeds), 9]) expect(lines).toContain(`projection at r 1, ${n} seeds: $${at(n).toFixed(2)}`);
-    expect(lines).toContain(`whole-run at r 1, ${seeds} seeds: $${at(Number(seeds)).toFixed(2)}; the check needs $${(40 + GATE_MARGIN * at(Number(seeds))).toFixed(2)}`);
+    for (const n of [3, Number(seeds), 9]) expect(lines).toContain(`projection at r 1, ${n} seeds: $${money(at(n))}`);
+    expect(lines).toContain(`whole-run at r 1, ${seeds} seeds: $${money(at(Number(seeds)))}; the check needs $${money(40 + GATE_MARGIN * at(Number(seeds)))}`);
   });
 });
 
