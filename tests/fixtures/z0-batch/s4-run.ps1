@@ -7,7 +7,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Key,
   [Parameter(Mandatory = $true)][string]$Toolchain,
   [Parameter(Mandatory = $true)][string]$Folder,
-  [string]$Retry = '', [string]$FakeAgent = '', [string]$Arms = '', [string]$Seeds = '', [string]$OnlySeed = '', [string]$SeedRule = '', [string]$MaxSeed = ''
+  [string]$Retry = '', [string]$FakeAgent = '', [string]$Arms = '', [string]$Seeds = '', [string]$OnlySeed = '', [string]$SeedRule = '', [string]$MaxSeed = '', [string]$BoxCheck = ''
 )
 $ErrorActionPreference = 'Stop'
 $name = Split-Path -Leaf $Folder

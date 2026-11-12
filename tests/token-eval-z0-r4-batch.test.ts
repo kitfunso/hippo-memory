@@ -583,6 +583,8 @@ const Q = async () => {
   const emptyFake = bashRun([...ok, '--fake', '']);
   fs.rmSync(`${c.root}/DRYRUN`);
   const notDry = bashRun(ok);
+  // Z0_REPOS_FILE is unset here so its own refusal does not speak first.
+  const notDryBox = bashRun(ok, { Z0_REPOS_FILE: '', Z0_BOX_CHECK: fake });
   put(`${c.root}/DRYRUN`, '');
   // A single quote cannot reach the script through bash.exe's own argument parsing, so the file name here holds a space; the script's pattern covers both.
   const quoted = `${c.base}/fake knobs.json`;
@@ -593,10 +595,21 @@ const Q = async () => {
     checkout: bashRun([c.n, 'C:/a b/checkout', c.root]),
     fake: bashRun([...ok, '--fake', quoted]),
     grace: bashRun(ok, { Z0_GRACE_S: 'abc' }),
+    boxFile: bashRun(ok, { Z0_BOX_CHECK: `${c.base}/nope.sh` }),
+    boxSpace: bashRun(ok, { Z0_BOX_CHECK: quoted }),
   };
   const launcher = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-File', `${c.scored}/s4-run.ps1`, '-Checkout', CHECKOUT, '-Root', c.root, '-Batch', '1', '-Key', 'qa1', '-Folder', c.dir('qa1-w1')], { encoding: 'utf8', input: '', cwd: c.base });
   const regradeLauncher = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NonInteractive', '-File', `${c.scored}/s4-regrade.ps1`, '-Checkout', CHECKOUT, '-Root', c.root, '-Key', 'qa1', '-Folder', c.dir('qa1-w1'), '-Call', 'regrade'], { encoding: 'utf8', input: '', cwd: c.base });
-  return { c, noAdmit, regraded, slashed, posix, usage, badN, emptyFake, notDry, quoted, refused, launcher, regradeLauncher, launchedAny: fs.existsSync(`${c.dir('qa1-w1')}/launcher-args.json`), fake };
+  return { c, noAdmit, regraded, slashed, posix, usage, badN, emptyFake, notDry, notDryBox, quoted, refused, launcher, regradeLauncher, launchedAny: fs.existsSync(`${c.dir('qa1-w1')}/launcher-args.json`), fake };
+};
+
+/** A dry batch run with Z0_BOX_CHECK set: its launch and its G5 regrade calls are the launcher commands it makes. */
+const Bx = async () => {
+  const c = track(new Case({ name: 'Bx', keys1: ['bx'] }));
+  c.knob('bx-w1', { fixture: KEY_FX(c, 'bx') });
+  const box = `${c.base}/box-ok.sh`;
+  put(box, '#!/usr/bin/env bash\nexit 0\n');
+  return { c, box, r: await c.run([], { Z0_BOX_CHECK: box }) };
 };
 
 const TWO = ['q145', 'q14'];
@@ -722,7 +735,7 @@ function lazy<T>(fn: () => Promise<T>) {
 }
 const runs = { A: lazy(A), B: lazy(B), H: lazy(H), BX: lazy(BX), K: lazy(K), L: lazy(L), G: lazy(G), G2: lazy(G2), T: lazy(T), D: lazy(D), Z: lazy(Z), R: lazy(R), RN: lazy(RN), Pq: lazy(Pq), Pf: lazy(Pf),
   W1: lazy(W1), W2: lazy(W2), W3: lazy(W3), W4: lazy(W4), W5a: lazy(W5a), W5b: lazy(W5b), S: lazy(S), Q: lazy(Q),
-  E: lazy(E), Sl: lazy(Sl), Pt: lazy(Pt), Pb: lazy(Pb), Pr: lazy(Pr), Pd: lazy(Pd), Ql: lazy(Ql), Zr: lazy(Zr) };
+  E: lazy(E), Bx: lazy(Bx), Sl: lazy(Sl), Pt: lazy(Pt), Pb: lazy(Pb), Pr: lazy(Pr), Pd: lazy(Pd), Ql: lazy(Ql), Zr: lazy(Zr) };
 const only = process.env.Z0_BATCH_ONLY?.split(',');
 
 describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs Windows processes, PowerShell 5.1 and Git Bash)', () => {
@@ -798,6 +811,23 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
       expect(notDry.stdout.trim()).toBe(`BATCH 1: Z0_REPOS_FILE is set, but ${c.root} holds no DRYRUN file; only a dry root may use it`);
       const b = await runs.Pb.get();
       expect(b.c.log().filter((l) => l.startsWith('repos file '))).toEqual([`repos file ${b.c.base}/repos.json`]);
+    });
+
+    it('Z0_BOX_CHECK on a root with no DRYRUN file exits 1 naming the variable; on a dry root a missing file or a path with a space exits 1 too', async () => {
+      const { notDryBox, refused, c, quoted } = await runs.Q.get();
+      expect([notDryBox.status, notDryBox.stdout.trim()]).toEqual([1, `BATCH 1: Z0_BOX_CHECK is set, but ${c.root} holds no DRYRUN file; only a dry root may use it`]);
+      expect([refused.boxFile.status, refused.boxFile.stdout.trim()]).toEqual([1, `BATCH 1: Z0_BOX_CHECK ${c.base}/nope.sh is not a file`]);
+      expect([refused.boxSpace.status, refused.boxSpace.stdout.trim()]).toEqual([1, `BATCH 1: Z0_BOX_CHECK ${quoted} holds a space or a single quote, which the launcher command cannot carry`]);
+    });
+
+    it('Z0_BOX_CHECK on a dry root reaches the launcher of every unit and every G5 regrade call, and no call without it', async () => {
+      const { c, box, r } = await runs.Bx.get();
+      expect(r.code, r.out).toBe(7);
+      expect(c.flags('bx-w1').BoxCheck).toBe(box);
+      const calls = ['regrade', 'reader-draw', 'stored-draw'].map((call) => json(`${c.dir('bx-w1')}/g5-${call}.launcher.json`));
+      expect(calls.map((x) => x.BoxCheck)).toEqual([box, box, box]);
+      const plain = await runs.Pb.get();
+      expect(plain.c.flags('pa-w1')).not.toHaveProperty('BoxCheck');
     });
 
     it('a relative root exits 1 asking for an absolute one, so two spellings of one root cannot both run', async () => {

@@ -324,6 +324,10 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     await refused('6', ['--rule', fake], `DRIVE: --rule and --level-sims are for a DRYRUN root; ${real} has no DRYRUN file`, { root: real });
     await refused('4', ['--level-sims', '5'], `DRIVE: --rule and --level-sims are for a DRYRUN root; ${real} has no DRYRUN file`, { root: real });
     await refused('plans', [], `DRIVE: Z0_DRIVE_STUBS is set, but ${real} holds no DRYRUN file; only a dry root may use it`, { root: real });
+    await refused('plans', [], `DRIVE: Z0_BOX_CHECK is set, but ${real} holds no DRYRUN file; only a dry root may use it`, { root: real, env: { Z0_DRIVE_STUBS: undefined, Z0_BOX_CHECK: fake } });
+    await refused('plans', [], `DRIVE: Z0_BOX_CHECK ${c.dir}/nope.sh is not a file`, { env: { Z0_BOX_CHECK: `${c.dir}/nope.sh` } });
+    put(`${c.dir}/box check.sh`, '');
+    await refused('plans', [], `DRIVE: Z0_BOX_CHECK ${c.dir}/box check.sh holds a space or a single quote, which the launcher command cannot carry`, { env: { Z0_BOX_CHECK: `${c.dir}/box check.sh` } });
     await refused('plans', [], 'DRIVE: Z0_GRACE_S abc must be a whole number of seconds', { env: { Z0_GRACE_S: 'abc' } });
     await refused('plans', [], `DRIVE: root ${c.dir}/nope is not a folder`, { root: `${c.dir}/nope` });
     const usage = await c.run('smoke', ['--attempt', '0']);
@@ -928,4 +932,22 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     for (const v of [undefined, '', 'abc', '12abc', '-1', '0', 2_147_483_646, batch, process.pid]) expect(listed(v), `Z0_DRIVER_WINPID=${String(v)}`).toEqual(both);
     expect(listed(driver)).toEqual(new Set([`s4-batch ${root}`]));
   }, 300_000);
+
+  it('34. Z0_BOX_CHECK on a dry root reaches every launcher call of smoke and step 1, the plan-only ones included, and is absent without it', async () => {
+    const c = mk('box-check');
+    const box = `${c.dir}/box-ok.sh`;
+    put(box, '#!/usr/bin/env bash\nexit 0\n');
+    c.cliKnob('g1-pins', [{ stdout: 'g1-pins ok' }]);
+    const env = { Z0_BOX_CHECK: box };
+    const [smoke, pilot] = [await c.run('smoke', [], { env }), await c.run('1', [], { env })];
+    expect([smoke.code, pilot.code], smoke.out + pilot.out).toEqual([0, 0]);
+    const folders = ['smoke/w1', 'pilot/k1-p1', 'pilot/k2-p1', 'effort/low-p1', 'effort/high-p1'].map((f) => `${c.root}/${f}`);
+    for (const folder of folders) {
+      expect(c.launcherCalls(folder), folder).toEqual(['plan', 'launch']);
+      expect(c.launcherArgs(folder).BoxCheck, folder).toBe(box);
+    }
+    const off = mk('box-check-off');
+    expect((await off.run('smoke')).code).toBe(0);
+    expect(off.launcherArgs(`${off.root}/smoke/w1`)).not.toHaveProperty('BoxCheck');
+  }, 600_000);
 });

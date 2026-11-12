@@ -74,10 +74,16 @@ else
   [ -z "$RULE$SIMS" ] || refuse "DRIVE: --rule and --level-sims are for a DRYRUN root; $ROOT has no DRYRUN file"
   # Z0_DRIVE_STUBS swaps the CLIs, so only a dry root may use it, as s4-batch.sh does for Z0_REPOS_FILE.
   [ -z "${Z0_DRIVE_STUBS:-}" ] || refuse "DRIVE: Z0_DRIVE_STUBS is set, but $ROOT holds no DRYRUN file; only a dry root may use it"
+  # Z0_BOX_CHECK stands in for the launcher's box check, which s4-run.ps1 refuses on a real root too.
+  [ -z "${Z0_BOX_CHECK:-}" ] || refuse "DRIVE: Z0_BOX_CHECK is set, but $ROOT holds no DRYRUN file; only a dry root may use it"
 fi
 if [ -n "$FAKE" ]; then
   [ -f "$FAKE" ] || refuse "DRIVE: --fake $FAKE is not a file"
   plain --fake "$FAKE"
+fi
+if [ -n "${Z0_BOX_CHECK:-}" ]; then
+  [ -f "$Z0_BOX_CHECK" ] || refuse "DRIVE: Z0_BOX_CHECK $Z0_BOX_CHECK is not a file"
+  plain Z0_BOX_CHECK "$Z0_BOX_CHECK"
 fi
 [ -z "$RULE" ] || [ -f "$RULE" ] || refuse "DRIVE: --rule $RULE is not a file"
 [[ ${Z0_GRACE_S:-600} =~ ^[0-9]+$ ]] || refuse "DRIVE: Z0_GRACE_S ${Z0_GRACE_S} must be a whole number of seconds"
@@ -254,6 +260,7 @@ unit_flags() {
   FLAGS+=("${more[@]}")
   case $2 in *-a[23]) FLAGS+=(-Retry "${2##*-a}") ;; esac
   [ -z "$FAKE" ] || FLAGS+=(-FakeAgent "$FAKE")
+  [ -z "${Z0_BOX_CHECK:-}" ] || FLAGS+=(-BoxCheck "$Z0_BOX_CHECK")
 }
 # Starts s4-run.ps1 detached through Start-Process, as s4-batch.sh does, so it outlives this call; the new pid comes back through a file.
 launch_unit() {

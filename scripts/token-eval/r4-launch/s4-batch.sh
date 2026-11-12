@@ -43,6 +43,12 @@ plain 'script folder' "$HERE"
 [[ ${Z0_GRACE_S:-600} =~ ^[0-9]+$ ]] || die "BATCH $N: Z0_GRACE_S ${Z0_GRACE_S} must be a whole number of seconds"
 # Z0_REPOS_FILE swaps the toolchain table, so only a dry root may use it, as -BoxCheck is dry only.
 [ -z "${Z0_REPOS_FILE:-}" ] || [ -f "$ROOT/DRYRUN" ] || die "BATCH $N: Z0_REPOS_FILE is set, but $ROOT holds no DRYRUN file; only a dry root may use it"
+# Z0_BOX_CHECK stands in for the launchers' box check, which s4-run.ps1 and s4-regrade.ps1 refuse on a real root too; BOXARGS carries it to both.
+[ -z "${Z0_BOX_CHECK:-}" ] || [ -f "$ROOT/DRYRUN" ] || die "BATCH $N: Z0_BOX_CHECK is set, but $ROOT holds no DRYRUN file; only a dry root may use it"
+[ -z "${Z0_BOX_CHECK:-}" ] || [ -f "$Z0_BOX_CHECK" ] || die "BATCH $N: Z0_BOX_CHECK $Z0_BOX_CHECK is not a file"
+[ -z "${Z0_BOX_CHECK:-}" ] || plain Z0_BOX_CHECK "$Z0_BOX_CHECK"
+BOXARGS=()
+[ -z "${Z0_BOX_CHECK:-}" ] || BOXARGS=(-BoxCheck "$Z0_BOX_CHECK")
 [ -f "$CHECKOUT/scripts/token-eval/z0-unit-record.mjs" ] || die "BATCH $N: $CHECKOUT holds no scripts/token-eval/z0-unit-record.mjs"
 . "$HERE/s4-units.sh"
 
@@ -219,6 +225,7 @@ unit_flags() {
   FLAGS=(-Checkout "$CHECKOUT" -Root "$ROOT" -Batch "$N" -Key "$k" -Toolchain "${TC[$k]}" -Folder "$folder")
   case $folder in *-a[23]) FLAGS+=(-Retry "${folder##*-a}") ;; esac
   [ -z "$FAKE" ] || FLAGS+=(-FakeAgent "$FAKE")
+  FLAGS+=("${BOXARGS[@]}")
   if [ "$kind" = first ]; then
     if [ "$N" = raise ]; then arms_of first raise; FLAGS+=(-Arms "$ARMS_OUT" -SeedRule "$ROOT/seed-rule.json" -MaxSeed "$MAXSEED"); else FLAGS+=(-Arms "$ARMS_FIRST" -Seeds 3); fi
   else
@@ -373,7 +380,7 @@ g5_call() {
     fi
     s=$(call_state "$folder" "$call") || die "BATCH $N: ${s#"call error $folder $call "}"
     if [[ $s == "call done "* ]]; then g5_sealed "$folder" "$call"; return 0; fi
-    powershell -NoProfile -ExecutionPolicy Bypass -File "$HERE/s4-regrade.ps1" -Checkout "$CHECKOUT" -Root "$ROOT" -Key "$k" -Toolchain "${TC[$k]}" -Folder "$folder" -Call "$call" < /dev/null > "$folder/g5-$call.launch.txt" 2>&1
+    powershell -NoProfile -ExecutionPolicy Bypass -File "$HERE/s4-regrade.ps1" -Checkout "$CHECKOUT" -Root "$ROOT" -Key "$k" -Toolchain "${TC[$k]}" -Folder "$folder" -Call "$call" "${BOXARGS[@]}" < /dev/null > "$folder/g5-$call.launch.txt" 2>&1
     rc=$?
     last_line "$folder/g5-$call.launch.txt"
     out=$LAST

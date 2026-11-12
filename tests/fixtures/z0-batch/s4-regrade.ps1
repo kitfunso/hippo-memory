@@ -5,7 +5,8 @@ param(
   [Parameter(Mandatory = $true)][string]$Key,
   [Parameter(Mandatory = $true)][string]$Toolchain,
   [Parameter(Mandatory = $true)][string]$Folder,
-  [Parameter(Mandatory = $true)][ValidateSet('regrade', 'reader-draw', 'stored-draw', 'reader-score', 'stored-score', 'grading')][string]$Call
+  [Parameter(Mandatory = $true)][ValidateSet('regrade', 'reader-draw', 'stored-draw', 'reader-score', 'stored-score', 'grading')][string]$Call,
+  [string]$BoxCheck = ''
 )
 $ErrorActionPreference = 'Stop'
 $tasks = "$(Split-Path -Parent (Split-Path -Parent $Folder))/tasks/$Key/tasks-run.json"
@@ -19,7 +20,7 @@ $modeArgs = switch ($Call) {
   'grading' { @('grading', '--out', "$Folder/run") }
 }
 Set-Content -Encoding ascii (Join-Path $Folder "g5-$Call.launcher.pid") $PID
-@{ Toolchain = $Toolchain; Call = $Call; Args = $modeArgs } | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $Folder "g5-$Call.launcher.json")
+@{ Toolchain = $Toolchain; Call = $Call; Args = $modeArgs; BoxCheck = $BoxCheck } | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $Folder "g5-$Call.launcher.json")
 $p = Start-Process -FilePath (Get-Command node).Source -ArgumentList (@("$PSScriptRoot/z0-regrade.mjs") + $modeArgs) -RedirectStandardOutput (Join-Path $Folder "g5-$Call.log") -RedirectStandardError (Join-Path $Folder "g5-$Call.err") -WindowStyle Hidden -PassThru
 $null = $p.Handle
 Add-Content -Encoding ascii (Join-Path (Split-Path -Parent $Folder) 'regrade-pids.txt') "$Key $($p.Id) $Folder $Call"
