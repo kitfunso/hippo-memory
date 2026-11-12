@@ -1,10 +1,10 @@
 hippo vs memN: a local, open-source alternative
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -40,7 +40,7 @@ hippo and memN asked directly
 All N questions →
 Is hippo an open-source memN alternative? +
 Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, keeps memories in SQLite in your project and needs no account or API key. memN is Apache-N and runs as a library, a self-hosted server or a hosted platform.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

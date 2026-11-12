@@ -60,7 +60,7 @@ if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push(
 
 // A loss line that links a committed score file may only quote numbers that file holds.
 const scoreFiles = Object.fromEntries(
-  [...site.matchAll(/^\s*(\w+):\s*`\$\{REPO\}\/blob\/master\/(benchmarks\/public\/results\/[^`]+\.txt)`/gm)].map((m) => [m[1], m[2]]),
+  [...site.matchAll(/^\s*(\w+):\s*`\$\{REPO\}\/blob\/master\/(benchmarks\/public\/results\/[^`]+\.(?:txt|json))`/gm)].map((m) => [m[1], m[2]]),
 );
 let lossLines = 0;
 for (const [, , text, key] of site.matchAll(/\{\s*text:\s*(["'])((?:(?!\1).)*)\1,\s*href:\s*site\.links\.(\w+)\s*\}/g)) {
@@ -73,20 +73,38 @@ for (const [, , text, key] of site.matchAll(/\{\s*text:\s*(["'])((?:(?!\1).)*)\1
 }
 if (!lossLines) missing.push('losses: no loss line links a committed score file');
 
-// The hero's Z0 win never travels without its caveat, and the strip always shows a loss.
-// Comments are stripped first so a caveat parked in a code comment cannot satisfy it.
+// A hero proof that links a committed results file may only quote numbers that file holds (commas dropped).
+// Comments are stripped first so a number or caveat parked in a code comment cannot satisfy a check.
 const hero = await readFile(join(root, 'src', 'components', 'Hero.astro'), 'utf8');
 const proofsRaw = (site.match(/export const proofs\s*(?::[^=]+)?=\s*\[([\s\S]*?)\n\][^\n]*;/) || [])[1] || '';
 const proofsBlock = proofsRaw.replace(/\/\/[^\n]*/g, '');
+const noCommas = (t) => t.replace(/(\d),(\d{3})/g, '$1$2');
+let proofLines = 0;
 if (!proofsRaw) {
   missing.push('proofs: block not found in site.ts (the hero renders it)');
 } else {
-  if (!/lesson capture/.test(proofsBlock)) missing.push('proofs: the Z0 cell lost its lesson-capture caveat');
-  if (!/tone:\s*'loss'/.test(proofsBlock)) missing.push('proofs: the hero strip shows no loss');
+  const proofRe = /stat:\s*(["'])((?:(?!\1).)*)\1,\s*text:\s*(["'])((?:(?!\3).)*)\3,\s*href:\s*site\.links\.(\w+)/g;
+  for (const [, , stat, , text, key] of proofsBlock.matchAll(proofRe)) {
+    if (!scoreFiles[key]) continue;
+    proofLines++;
+    const held = noCommas(await readFile(join(root, '..', scoreFiles[key]), 'utf8'));
+    for (const n of noCommas(`${stat} ${text}`).match(/\d+\.\d+|\d{3,}/g) ?? []) {
+      if (!held.includes(n)) missing.push(`proofs: "${n}" is not in ${scoreFiles[key]}`);
+    }
+  }
+  if (!proofLines) missing.push('proofs: no hero proof links a committed results file');
 }
 if (!/proofs\.map\(/.test(hero) || !/p\.text/.test(hero)) {
   missing.push('proofs: Hero.astro no longer renders each proof with its text');
 }
+
+// The Z0 win never travels without its caveat, and the home shows the losses under the public tests.
+const testBlock = ((site.match(/export const theTest = \{([\s\S]*?)\n\} as const;/) || [])[1] || '').replace(/\/\/[^\n]*/g, '');
+if (!/lesson capture/.test(testBlock)) missing.push('theTest: the Z0 result lost its lesson-capture caveat');
+const theTestCmp = await readFile(join(root, 'src', 'components', 'TheTest.astro'), 'utf8');
+if (!withoutComments(theTestCmp).includes('theTest.note')) missing.push('theTest: TheTest.astro no longer renders the caveat');
+const homeBench = await readFile(join(root, 'src', 'components', 'HomeBench.astro'), 'utf8');
+if (!/losses\.items/.test(withoutComments(homeBench))) missing.push('losses: HomeBench.astro no longer shows the losses');
 
 if (missing.length) {
   console.error('[readme-sync] DRIFT: website copy no longer matches README.md:');
@@ -95,4 +113,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${lossLines} loss lines match their score files, hero proofs, setup limits and edition availability match README.md.`);
+console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${lossLines} loss lines and ${proofLines} hero proofs match their files, setup limits and edition availability match README.md.`);

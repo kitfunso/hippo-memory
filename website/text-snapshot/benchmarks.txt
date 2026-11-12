@@ -1,10 +1,10 @@
 hippo benchmarks: the wins and the losses
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -14,9 +14,9 @@ What we measured, and where hippo lost
 We built hippo and ran these tests, so read them as a vendor's numbers. We ran rivals on the same answer model where we could. Scores marked published come from each team's own setup, so we give no ranks.
 Repeat mistakes in real Claude Code sessions
 Each run corrects Claude Code once and then, N to N tasks later, gives it a task where the same mistake is possible. We ran it on N repositories, registered first (opens in new tab).
-No memory N in N
-Claude Code's built-in memory N in N
-Built-in memory plus hippo N in N
+No memory Nin N
+Claude Code's built-in memory Nin N
+Built-in memory plus hippo Nin N
 The chart counts first chances N to N tasks after the correction. The registered measure, the first chance in each mistake family over N units, gives N points fewer repeats with hippo [N N], at the same cost, a ratio of N [N N]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
 What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round N tests that. The corrections were scripted, the agent was Claude Code only, and the test code and run records are not in the public repo. The round before was inconclusive, at N points fewer on N repositories.
 Five public tests of answering from memory
@@ -27,7 +27,7 @@ published, each team's own setup
 PersonaMem vN N questions about N personas
 source ↗ (the PersonaMem vN score file, opens in new tab)
 Hippo scored N ahead of BMN at N by N points [N N].
-N% hippo answer accuracy, N questions ahead of BMN +N
+N% hippo answer accuracy, N questions Ahead of BMN by N points
 All scores
 SystemSetupScore
 hippo Run here N%
@@ -45,8 +45,8 @@ MIRIX Published N%
 LoCoMo, N questions about long conversations
 source ↗ (the LoCoMo score file, opens in new tab)
 With up to N memories a question, MemN scored N hippo N and BMN N Hippo trails MemN by N points [N N], and by N at N memories, and is level with BMN Storing the conversations took MemN N language-model calls and hippo none.
-N% hippo answer accuracy, N questions level with BMN
-behind MemN −N
+N% hippo answer accuracy, N questions Level with BMN
+Behind MemN by N points
 All scores
 SystemSetupScore
 MemN Run here N%
@@ -70,7 +70,7 @@ A-Mem Published N%
 LongMemEval-S, N questions, each with its own earlier chat sessions
 source ↗ (the LongMemEval-S score file, opens in new tab)
 With nearly every session in context, hippo scored N level with BMN at N Given only the top N memories, hippo's N beat BMN's N by N points [N N].
-N% hippo answer accuracy, N questions level with BMN
+N% hippo answer accuracy, N questions Level with BMN
 All scores
 SystemSetupScore
 Mastra Published N%
@@ -91,8 +91,8 @@ Full chat Published N%
 DMR, N questions
 source ↗ (the DMR score file, opens in new tab)
 Hippo scored N ahead of BMN at N by N points [N N]. Handing the model the whole chat scored N which beats hippo by N points [N N]. Zep publishes N and MemGPT N
-N% hippo answer accuracy, N questions ahead of BMN +N
-behind Full chat −N
+N% hippo answer accuracy, N questions Ahead of BMN by N points
+Behind Full chat by N points
 All scores
 SystemSetupScore
 Zep Published N%
@@ -106,7 +106,7 @@ Recursive Summarization Published N%
 HotPotQA-N N questions
 source ↗ (the HotPotQA-N score file, opens in new tab)
 Too few questions to separate hippo's FN a score for word overlap with the expected answer, of N from BMN's N
-FN N hippo answer FN N questions level with BMN
+FN N hippo answer FN N questions Level with BMN
 All scores
 SystemSetupScore
 hippo Run here FN N
@@ -125,7 +125,7 @@ One early headline number did not reproduce, and we retracted it.
 Check our work
 The score files for the five public tests and their write-ups are in the repo, under benchmarks/public.
 Benchmark results (opens in new tab) Eval documents (opens in new tab) Report a mistake (opens in new tab)
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

@@ -1,10 +1,10 @@
 Cursor memory between sessions, with MCP | hippo
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -25,7 +25,7 @@ Cursor questions
 All N questions →
 How do I give Cursor memory between sessions? +
 hippo init adds its instructions to AGENTS.md if the project has one, which Cursor reads. Add hippo mcp to .cursor/mcp.json and Cursor's agent gets tools to recall and store memories. hippo import --cursor .cursor/rules turns your existing rules into memories.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

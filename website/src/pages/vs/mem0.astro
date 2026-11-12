@@ -40,7 +40,7 @@ const qa = [
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">hippo vs <span class="text-gradient">mem0</span></Fragment>
+      <Fragment slot="title">hippo vs <span class="text-ink">mem0</span></Fragment>
       <p>
         Both are open-source memory for AI agents, and they suit different jobs. mem0 uses a language model to extract memories, and memories stored through its hosted MCP server live in your Mem0 account. Hippo keeps memories in SQLite on your machine, needs no account and no model, and wires itself into the coding agents it finds.
       </p>
@@ -71,21 +71,21 @@ const qa = [
 
     <Section title="When to pick which" alt>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div class="glass rounded-2xl p-6">
-          <h3 class="text-base font-medium text-zinc-100">Pick hippo</h3>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick hippo</h3>
           <p class="mt-2 text-sm leading-relaxed">
             Pick hippo when the memory is for coding agents on your machine, and you want no account, no API key and no model in the loop, with lessons you can mark wrong and files you can commit.
           </p>
         </div>
-        <div class="glass rounded-2xl p-6">
-          <h3 class="text-base font-medium text-zinc-100">Pick mem0</h3>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick mem0</h3>
           <p class="mt-2 text-sm leading-relaxed">
             Pick mem0 when you are building an app whose memory belongs to your end users, the case mem0 describes as "customer support chatbots, AI assistants, and autonomous systems", or when its higher answer score matters more to you than running locally.
           </p>
         </div>
       </div>
       <div class="flex flex-wrap gap-3 pt-4">
-        <a href="/quickstart/" class="rounded-lg bg-zinc-100 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-900 transition hover:bg-white">Get started with hippo</a>
+        <a href="/quickstart/" class="btn">Get started with hippo</a>
       </div>
     </Section>
 

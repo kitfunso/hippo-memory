@@ -34,7 +34,7 @@ const tools = [
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">MCP memory server for <span class="text-gradient">Claude Code, Cursor and Windsurf</span></Fragment>
+      <Fragment slot="title">MCP memory server for <span class="text-ink">Claude Code, Cursor and Windsurf</span></Fragment>
       <p>
         <code>hippo mcp</code> runs a memory server over stdio on your machine, with no account and no API key. Any MCP
         client can use it, including Claude Code, Cursor, Windsurf (now Devin Desktop), Cline and Claude Desktop. The
@@ -59,21 +59,21 @@ const tools = [
     </Section>
 
     <Section title="The 13 tools" alt>
-      <div class="overflow-x-auto rounded-2xl border border-white/8" data-scroll-x>
+      <div class="overflow-x-auto rounded-xl border border-rule" data-scroll-x>
         <table class="w-full text-left text-sm">
           <caption class="sr-only">Tools the hippo MCP server exposes</caption>
-          <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+          <thead class="border-b border-rule-strong text-xs text-ink-3">
             <tr>
               <th scope="col" class="px-3 py-3 font-medium sm:px-5">Tool</th>
               <th scope="col" class="px-3 py-3 font-medium sm:px-5">What it does</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-white/5">
+          <tbody class="divide-y divide-rule">
             {tools.map((t) => (
               <tr class="align-top">
                 {/* break points after underscores give the description column room on a phone */}
-                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-accent-light sm:whitespace-nowrap sm:px-5">{t.name.split('_').map((part, i, all) => <Fragment>{part}{i < all.length - 1 && <Fragment>_<wbr /></Fragment>}</Fragment>)}</th>
-                <td class="px-3 py-3 text-zinc-300 sm:px-5">{t.does}</td>
+                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-accent sm:whitespace-nowrap sm:px-5">{t.name.split('_').map((part, i, all) => <Fragment>{part}{i < all.length - 1 && <Fragment>_<wbr /></Fragment>}</Fragment>)}</th>
+                <td class="px-3 py-3 text-ink-2 sm:px-5">{t.does}</td>
               </tr>
             ))}
           </tbody>

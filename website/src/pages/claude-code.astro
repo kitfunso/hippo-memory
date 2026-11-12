@@ -31,7 +31,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">Claude Code memory <span class="text-gradient">between sessions</span></Fragment>
+      <Fragment slot="title">Claude Code memory <span class="text-ink">between sessions</span></Fragment>
       <p>
         Claude Code already loads your <code>CLAUDE.md</code> files and its own auto memory notes into every session.
         Hippo runs beside them and keeps what comes up as you work, such as a rule you stated, a tool call that failed or
@@ -44,7 +44,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
     <Section title="Set it up" id="set-it-up-in-two-commands">
       <Cmd lines={[site.installCmd, 'hippo init']} copy />
       <p>
-        <code>hippo init</code> adds a short block to the project's <code>CLAUDE.md</code> if it has one, adds seven hook
+        <code>hippo init</code> adds a short block to the project's <code>CLAUDE.md</code> if it has one, adds eight hook
         entries to <code>~/.claude/settings.json</code>, and schedules a daily run at 6:15am that stores lessons from the
         day's commits. <code>hippo init --no-hooks --no-schedule</code> skips both, and <code>hippo doctor</code> checks
         the install.
@@ -52,20 +52,20 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
     </Section>
 
     <Section title="What each hook does" id="what-the-hooks-do" alt>
-      <div class="overflow-x-auto rounded-2xl border border-white/8" data-scroll-x>
+      <div class="overflow-x-auto rounded-xl border border-rule" data-scroll-x>
         <table class="w-full text-left text-sm">
           <caption class="sr-only">Claude Code hooks that hippo init installs</caption>
-          <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+          <thead class="border-b border-rule-strong text-xs text-ink-3">
             <tr>
               <th scope="col" class="px-3 py-3 font-medium sm:px-5">Hook</th>
               <th scope="col" class="px-3 py-3 font-medium sm:px-5">What it does</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-white/5">
+          <tbody class="divide-y divide-rule">
             {hooks.map((h) => (
               <tr class="align-top">
-                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-accent-light sm:whitespace-nowrap sm:px-5">{h.event}</th>
-                <td class="copy px-3 py-3 text-zinc-300 sm:px-5" set:html={mdInline(h.does)} />
+                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-accent sm:whitespace-nowrap sm:px-5">{h.event}</th>
+                <td class="copy px-3 py-3 text-ink-2 sm:px-5" set:html={mdInline(h.does)} />
               </tr>
             ))}
           </tbody>

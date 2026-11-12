@@ -11,10 +11,10 @@ const { items = faq, heading = 'Questions', moreHref } = Astro.props;
 ---
 
 <section id="faq" class="relative border-t border-rule">
-  <div class="mx-auto grid max-w-6xl gap-8 px-5 py-(--section-y) lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+  <div class="wrap grid gap-8 py-(--section-y) lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
     <!-- sticky only from lg up: on a phone a pinned heading would cover the answer that has focus -->
     <div class="lg:sticky lg:top-24 lg:self-start">
-      <h2 class="text-balance text-3xl leading-tight sm:text-4xl">{heading}</h2>
+      <h2>{heading}</h2>
       {moreHref && (
         <p class="mt-6 text-sm">
           <a class="link tap" href={moreHref}>All {faq.length} questions<span aria-hidden="true"> →</span></a>
@@ -22,14 +22,14 @@ const { items = faq, heading = 'Questions', moreHref } = Astro.props;
       )}
     </div>
 
-    <div class="border-t border-rule" data-reveal>
+    <div class="border-t border-rule">
       {items.map((item) => (
         <details class="group border-b border-rule [&>summary]:list-none">
-          <summary class="flex cursor-pointer items-center justify-between gap-4 py-5 text-left text-base font-medium text-zinc-100 transition-colors hover:text-accent-light">
+          <summary class="flex cursor-pointer items-center justify-between gap-4 py-5 text-left text-base font-medium text-ink transition-colors hover:text-accent">
             <span>{item.q}</span>
-            <span class="shrink-0 text-xl leading-none text-accent-light transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
+            <span class="shrink-0 text-xl leading-none text-ink-3 transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
           </summary>
-          <div class="copy max-w-2xl space-y-3 pb-5 text-[15px] leading-relaxed text-zinc-400">
+          <div class="copy max-w-2xl space-y-3 pb-5 text-[15px] leading-relaxed text-ink-2">
             {mdParagraphs(item.a).map((html) => <p set:html={html} />)}
           </div>
         </details>

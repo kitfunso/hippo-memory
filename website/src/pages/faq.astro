@@ -20,13 +20,13 @@ const description =
     </PageIntro>
 
     <section class="relative border-t border-rule" aria-label="Questions and answers">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
+      <div class="wrap py-(--section-y)">
         {faq.map((item) => (
           <article id={slug(item.q)} class="max-w-3xl border-b border-rule py-8 first:pt-0 last:border-b-0 last:pb-0">
-            <h2 class="text-xl leading-snug text-zinc-100 sm:text-2xl">
-              <a href={`#${slug(item.q)}`} class="transition hover:text-accent-light">{item.q}</a>
+            <h2 class="text-xl leading-snug text-ink sm:text-2xl">
+              <a href={`#${slug(item.q)}`} class="transition hover:text-accent">{item.q}</a>
             </h2>
-            <div class="copy mt-4 space-y-3 leading-relaxed text-zinc-400">
+            <div class="copy mt-4 space-y-3 leading-relaxed text-ink-2">
               {mdParagraphs(item.a).map((html) => <p set:html={html} />)}
             </div>
           </article>

@@ -4,6 +4,7 @@ import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import Cmd from '../components/Cmd.astro';
 import CopyButton from '../components/CopyButton.astro';
+import PageIntro from '../components/PageIntro.astro';
 import { getStarted, site } from '../content/site';
 
 const title = 'hippo quickstart: two commands';
@@ -32,57 +33,49 @@ const howTo = {
 <Base title={title} description={description} crumb="Quickstart" schema={[howTo]}>
   <Nav />
   <main id="main">
-    <section class="relative">
-      <div class="mx-auto flex max-w-6xl items-start justify-between gap-10 px-5 pb-12 pt-10 sm:pt-12">
-        <div>
-          <h1 class="max-w-3xl font-display text-4xl font-semibold leading-(--leading-display) tracking-tight sm:text-5xl">
-            <span class="text-gradient">Two commands</span>, then carry on working
-          </h1>
-          <p class="mt-5 leading-relaxed text-zinc-400">
-            Hippo is an MIT-licensed npm package with zero runtime dependencies. It needs Node 22.16 or later, no account and no API key.
-          </p>
-        </div>
-      </div>
-    </section>
+    <PageIntro>
+      <Fragment slot="title">Two commands, then carry on working</Fragment>
+      <p>Hippo is an MIT-licensed npm package with zero runtime dependencies. It needs Node 22.16 or later, no account and no API key.</p>
+    </PageIntro>
 
-    <section id="install" class="relative border-t border-rule bg-white/[0.02]">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
+    <section id="install" class="relative border-t border-rule bg-paper-3">
+      <div class="wrap py-(--section-y)">
         <div><Cmd lines={[site.installCmd, 'hippo init']} copy /></div>
-        <p class="mt-4 text-sm leading-relaxed text-zinc-400">
-          <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init</code> creates a <code>.hippo/</code> store in the project, adds a short block to an existing <code>CLAUDE.md</code> or <code>AGENTS.md</code>, installs Claude Code's hooks and schedules a daily run at 6:15am that stores lessons from the day's commits. <code>--no-hooks</code> and <code>--no-schedule</code> skip those parts. <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init --scan ~</code> gives every git repository under your home folder a store.
+        <p class="mt-4 text-sm leading-relaxed text-ink-2">
+          <code class="rounded bg-paper-3 px-1.5 py-0.5 font-mono text-ink-2">hippo init</code> creates a <code>.hippo/</code> store in the project, adds a short block to an existing <code>CLAUDE.md</code> or <code>AGENTS.md</code>, installs Claude Code's hooks and schedules a daily run at 6:15am that stores lessons from the day's commits. <code>--no-hooks</code> and <code>--no-schedule</code> skip those parts. <code class="rounded bg-paper-3 px-1.5 py-0.5 font-mono text-ink-2">hippo init --scan ~</code> gives every git repository under your home folder a store.
         </p>
-        <p class="mt-3 text-sm leading-relaxed text-zinc-400">
+        <p class="mt-3 text-sm leading-relaxed text-ink-2">
           {getStarted.notice} Codex runs hippo's hooks only once you trust them in <code>/hooks</code>. <code>hippo doctor</code> checks the install.
         </p>
       </div>
     </section>
 
     <section id="works-with-your-agents" class="relative border-t border-rule">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-3xl leading-tight sm:text-4xl">What each agent gets</h2>
-        <p class="mt-4 leading-relaxed text-zinc-400">
-          Claude Code gets a block in <code>CLAUDE.md</code> and seven hooks. Codex gets a block in <code>AGENTS.md</code> and two hooks. Cursor and Pi read the <code>AGENTS.md</code> block, OpenClaw and OpenCode use a plugin, and any MCP client can run <code>hippo mcp</code>.
+      <div class="wrap py-(--section-y)">
+        <h2>What each agent gets</h2>
+        <p class="mt-4 leading-relaxed text-ink-2">
+          Claude Code gets a block in <code>CLAUDE.md</code> and eight hooks. Codex gets a block in <code>AGENTS.md</code> and two hooks. Cursor and Pi read the <code>AGENTS.md</code> block, OpenClaw and OpenCode use a plugin, and any MCP client can run <code>hippo mcp</code>.
         </p>
       </div>
     </section>
 
-    <section id="the-memory-loop" class="relative border-t border-rule bg-white/[0.02]">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-3xl leading-tight sm:text-4xl">Four commands you can run yourself</h2>
+    <section id="the-memory-loop" class="relative border-t border-rule bg-paper-3">
+      <div class="wrap py-(--section-y)">
+        <h2>Four commands you can run yourself</h2>
         <div class="mt-8 space-y-3">
           {loop.map((step) => (
-            <div class="rounded-2xl border border-white/8 p-5">
+            <div class="rounded-xl border border-rule p-5">
               <div class="flex items-start gap-3">
-                <code class="block min-w-0 flex-1 overflow-x-auto font-mono text-sm text-zinc-200" data-scroll-x><span class="select-none text-term-prompt">$</span> {step.cmd}</code>
+                <code class="block min-w-0 flex-1 overflow-x-auto font-mono text-sm text-ink" data-scroll-x><span class="select-none text-accent">$</span> {step.cmd}</code>
                 <CopyButton text={step.cmd} label={`Copy command: ${step.cmd}`} />
               </div>
-              <span class="mt-2 block text-xs leading-relaxed text-zinc-400">{step.note}</span>
+              <span class="mt-2 block text-xs leading-relaxed text-ink-2">{step.note}</span>
             </div>
           ))}
         </div>
         <div class="mt-8 flex flex-wrap gap-3">
-          <a href={site.links.docs} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-900 transition hover:bg-white">Full docs<span class="sr-only"> (opens in new tab)</span></a>
-          <a href="/benchmarks/" class="rounded-lg border border-white/12 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-200 transition hover:border-white/25">See the benchmarks</a>
+          <a href={site.links.docs} target="_blank" rel="noopener noreferrer" class="btn">Full docs<span class="sr-only"> (opens in new tab)</span></a>
+          <a href="/benchmarks/" class="btn-quiet">See the benchmarks</a>
         </div>
       </div>
     </section>

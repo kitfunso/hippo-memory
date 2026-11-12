@@ -10,17 +10,17 @@ const layers = [
 ---
 
 <section id="layers" class="relative border-t border-rule">
-  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-    <ol class="grid border-y border-rule sm:grid-cols-3" data-reveal>
+  <div class="wrap py-(--section-y)">
+    <ol class="grid border-y border-rule sm:grid-cols-3">
       {layers.map((l, i) => (
         <li class:list={['flex flex-col py-5 sm:px-5', i > 0 && 'border-t border-rule sm:border-t-0 sm:border-l', i === 0 && 'sm:pl-0']}>
-          <span class="font-mono text-xs uppercase tracking-wider text-accent-light">{l.name}</span>
-          <p class="mt-2 text-sm leading-relaxed text-zinc-400">{l.body}</p>
+          <p class="text-[1.0625rem] font-medium text-ink">{l.name}</p>
+          <p class="mt-2 text-sm leading-relaxed text-ink-2">{l.body}</p>
         </li>
       ))}
     </ol>
 
-    <div class="mt-10 rounded-2xl border border-rule p-6 sm:p-8">
+    <div class="mt-10 rounded-xl border border-rule p-6 sm:p-8">
       <DecayCurve client:visible />
     </div>
   </div>

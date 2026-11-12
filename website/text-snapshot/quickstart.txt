@@ -1,10 +1,10 @@
 hippo quickstart: two commands
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -16,7 +16,7 @@ $ npm install -g hippo-memory $ hippo init Copy
 hippo init creates a .hippo/ store in the project, adds a short block to an existing CLAUDE.md or AGENTS.md, installs Claude Code's hooks and schedules a daily run at N:Nam that stores lessons from the day's commits. --no-hooks and --no-schedule skip those parts. hippo init --scan ~ gives every git repository under your home folder a store.
 Installing the package alone captures nothing, and what runs after init depends on the agent. Codex runs hippo's hooks only once you trust them in /hooks. hippo doctor checks the install.
 What each agent gets
-Claude Code gets a block in CLAUDE.md and seven hooks. Codex gets a block in AGENTS.md and two hooks. Cursor and Pi read the AGENTS.md block, OpenClaw and OpenCode use a plugin, and any MCP client can run hippo mcp.
+Claude Code gets a block in CLAUDE.md and eight hooks. Codex gets a block in AGENTS.md and two hooks. Cursor and Pi read the AGENTS.md block, OpenClaw and OpenCode use a plugin, and any MCP client can run hippo mcp.
 Four commands you can run yourself
 $ hippo remember "deploy failed: forgot migrations" --error Copy
 Stores a memory. Errors get twice the half-life.
@@ -27,7 +27,7 @@ Marks the last recall as useful.
 $ hippo sleep Copy
 Merges related memories and lets unused ones fade.
 Full docs (opens in new tab) See the benchmarks
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

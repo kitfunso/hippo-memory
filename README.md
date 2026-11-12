@@ -1,8 +1,8 @@
 # 🦛 Hippo
 
-**One memory for Claude Code, Codex and Cursor.**
+**Your corrections, remembered by Claude Code, Codex and Cursor.**
 
-Hippo is open-source and runs on your machine. In our test on 29 repositories, adding it to Claude Code's built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.
+Hippo is open-source memory that runs on your machine and gives the rules it captured back to the agent when a new session starts. In our Claude Code test on 29 repositories, adding it to built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.
 
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![npm downloads](https://img.shields.io/npm/dm/hippo-memory)](https://npmjs.com/package/hippo-memory)
@@ -88,7 +88,7 @@ npm install -g hippo-memory
 hippo init
 ```
 
-**Optional: many repos at once.** Read what it changes first. `hippo init --scan <folder>` looks for git repos in the folder and up to three levels below it, skipping dot-folders and `node_modules`. Each repo gets a `.hippo/` store, seeded with lessons from the last 365 days of its commits and with its [agent memories](#agent-memories), and is added to the daily run's list. For the agents it finds, it installs the same user-level hooks as `hippo init`: 7 Claude Code hook entries in `~/.claude/settings.json` and the OpenCode plugin. It also sets up the daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`. `--no-hooks`, `--no-schedule` and `--no-learn` leave out the hooks, the daily run and the history import.
+**Optional: many repos at once.** Read what it changes first. `hippo init --scan <folder>` looks for git repos in the folder and up to three levels below it, skipping dot-folders and `node_modules`. Each repo gets a `.hippo/` store, seeded with lessons from the last 365 days of its commits and with its [agent memories](#agent-memories), and is added to the daily run's list. For the agents it finds, it installs the same user-level hooks as `hippo init`: 8 Claude Code hook entries in `~/.claude/settings.json` and the OpenCode plugin. It also sets up the daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`. `--no-hooks`, `--no-schedule` and `--no-learn` leave out the hooks, the daily run and the history import.
 
 ```bash
 hippo init --scan ~
@@ -119,7 +119,7 @@ Run `hippo init` inside one project. This is everything it writes, in the projec
 
 - **The project's store.** A `.hippo/` folder: SQLite plus markdown mirrors. On the first run in a git repo it learns lessons from the last 30 days of commits.
 - **Instruction files.** A block between `<!-- hippo:start -->` and `<!-- hippo:end -->` in the project's `CLAUDE.md` or `AGENTS.md`, only if that file already exists. Codex, Cursor, OpenClaw, OpenCode and Pi read `AGENTS.md`.
-- **Claude Code,** when the project has `CLAUDE.md` or `.claude/settings.json`: 7 hook entries in `~/.claude/settings.json`, one each on SessionEnd, UserPromptSubmit, PreCompact, PostCompact and PostToolUseFailure and two on SessionStart. [Framework Integrations](#framework-integrations) says what each one runs.
+- **Claude Code,** when the project has `CLAUDE.md` or `.claude/settings.json`: 8 hook entries in `~/.claude/settings.json`, one each on SessionEnd, UserPromptSubmit, PreCompact, PostCompact and PostToolUseFailure and three on SessionStart. [Framework Integrations](#framework-integrations) says what each one runs.
 - **OpenCode,** when the project has `.opencode/` or `opencode.json`: a plugin at `~/.config/opencode/plugins/hippo.ts`.
 - **Codex,** when the project has `AGENTS.md` or `.codex` and Codex is installed (`$CODEX_HOME`, else `~/.codex`, exists): 2 hook entries in Codex's `hooks.json`, one on UserPromptSubmit that sends your pinned memories plus up to 5 that match the prompt with every prompt and one on SessionStart after a compaction. **Codex runs them only after you trust them once in `/hooks`.** Init also prints `hippo hook install codex`, the opt-in that wraps the Codex launcher to capture sessions; `hippo hook uninstall codex` removes hippo's hooks and the wrapper.
 - **A daily run at 6:15am,** one per machine: a crontab line on Linux and macOS, a scheduled task named `hippo-daily-runner` on Windows. It runs `hippo learn --git --days 1` and then `hippo sleep` in every project listed in `~/.hippo/workspaces.json`, and init adds this project to that list.
@@ -773,7 +773,7 @@ The command runs with no shell, so each argument reaches the program as written.
 | `hippo decide "<decision>" --context "<why>"` | Include reasoning |
 | `hippo decide "<decision>" --supersedes <id>` | Supersede a previous decision |
 | `hippo hook list` | Show available framework hooks |
-| `hippo hook install <target>` | Install hook (claude-code also adds its 7 settings.json hook entries: session start and end, each prompt, compaction, failed tool calls) |
+| `hippo hook install <target>` | Install hook (claude-code also adds its 8 settings.json hook entries: session start and end, each prompt, compaction, failed tool calls) |
 | `hippo hook uninstall <target>` | Remove hook |
 | `hippo handoff create --summary "..."` | Create a session handoff |
 | `hippo handoff latest` | Show the most recent handoff |
@@ -813,7 +813,7 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 
 | Framework | Detected by | Patches |
 |-----------|------------|---------|
-| Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
+| Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 8 hook entries in `~/.claude/settings.json` (listed below) |
 | Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + `UserPromptSubmit`/`SessionStart(compact)` hooks in Codex's `hooks.json` when Codex is installed (trust them once in `/hooks`); session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
 | Cursor | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
 | OpenClaw | `.openclaw` or `AGENTS.md` | `AGENTS.md`; the native plugin is a separate install: `openclaw plugins install hippo-memory` |
@@ -829,7 +829,7 @@ Setup guides on the website: [Claude Code](https://hippo-memory.com/claude-code/
 If you prefer explicit control:
 
 ```bash
-hippo hook install claude-code   # patches CLAUDE.md + adds the 7 settings.json hook entries listed below
+hippo hook install claude-code   # patches CLAUDE.md + adds the 8 settings.json hook entries listed below
 hippo hook install codex         # patches AGENTS.md + adds hooks to Codex's hooks.json + wraps the detected Codex launcher
 hippo hook install cursor        # patches AGENTS.md
 hippo hook install openclaw      # patches AGENTS.md
@@ -844,9 +844,10 @@ This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the
 
 The block asks for nothing a hook already does, because each extra tool call re-reads the whole context. Re-running `hippo init` swaps a block an older hippo wrote for the current one, as long as nobody edited it. It leaves an edited block alone and says so, and never touches text outside the markers.
 
-For Claude Code, it also adds 7 hook entries to `~/.claude/settings.json`:
+For Claude Code, it also adds 8 hook entries to `~/.claude/settings.json`:
 - a `SessionEnd` hook that runs `hippo sleep` and then `hippo capture` when the session exits. Capture matches the last 20 user and 10 assistant messages of the transcript against word patterns for decisions, rules, errors and preferences. It uses no model unless you turn on `capture.followUpRules` (see Conversation Capture) and does not read earlier turns, so a correction older than that window needs a `hippo remember` by hand.
 - a `SessionStart` hook that prints the previous session's consolidation log on stderr, where `claude --debug` shows it. When the last sleep failed or a compaction summary was set aside, it shows you one line that points to `hippo doctor`.
+- a second `SessionStart` hook that runs `hippo session-rules`, which prints the rules you taught under `## Rules from the user` and nothing else. It has no matcher, so a resumed or cleared session and a compaction get the rules again.
 - a `UserPromptSubmit` hook that runs `hippo context --pinned-only --include-recent 5 --format additional-context` every turn. It re-injects pinned memories (`hippo remember <text> --pin`) plus up to 5 memories that share words with your prompt. When nothing matches, it adds only the pinned ones. Since 1.55.0 this replaces the 5 newest memories, which cut the median block from 847 to 533 tokens in our eval. `{"pinnedInject":{"promptRecall":false}}` brings back the 5 newest, so fresh same-session lessons appear on the next prompt whatever you ask. The block is rendered without live strength percentages, so it stays byte-identical while its memories do not change, and it is sent only when it changed since the session's last prompt: an unchanged block is skipped, resent every 10 skips (`pinnedInject.refreshTurns`, `0` never resends) and resent after compaction. The prompt-matched memories go in a separate block that is never skipped, so they are sent on every prompt they match. `{"pinnedInject":{"skipUnchanged":false}}` sends the pinned block every turn as before. `{"pinnedInject":{"excludeTags":["session-digest"]}}` leaves out every memory that carries a listed tag, whether it is pinned, recent or matched to the prompt; the list is empty by default. Opt out entirely with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
 - a `PreCompact` hook that runs `hippo pre-compact` before the transcript gets summarized. It records the compaction in the store, saves a working-state snapshot (task/summary/next step) so mid-session compaction can't drop it, and asks the summariser to end its summary with a "Memories for hippo" list: the lessons, decisions and corrections from the session that should outlive it. The `SessionEnd` hook still owns extracting durable memories from the transcript.
 - a second `SessionStart` hook (matcher `compact`) that runs `hippo compact-resume`, printing that snapshot back into context right after compaction, if it is under 15 minutes old.
@@ -1147,7 +1148,7 @@ Yes, for short standing rules such as build commands and code style. Claude Code
 
 ### Where does hippo keep my data?
 
-On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set, which `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns off.
+On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (`capture.followUpRules`), `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that last one off.
 
 ### What does hippo cost?
 

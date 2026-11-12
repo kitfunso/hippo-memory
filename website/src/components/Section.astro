@@ -11,23 +11,23 @@ interface Props {
 const { title, id = slug(title.replace(/\s*\([^)]*\)/g, '')), alt = false, split = false } = Astro.props;
 ---
 
-<section id={id} class:list={['relative border-t border-rule', alt && 'bg-white/[0.02]']}>
+<section id={id} class:list={['relative border-t border-rule', alt && 'bg-paper-2']}>
   <div
     class:list={[
-      'mx-auto max-w-6xl px-5 py-(--section-y)',
+      'wrap py-(--section-y)',
       split && 'lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16',
     ]}
   >
     <h2
       class:list={[
-        'max-w-3xl text-balance text-3xl leading-tight sm:text-4xl',
+        'max-w-3xl',
         split && 'lg:sticky lg:top-24 lg:self-start',
       ]}
     >{title}</h2>
     <div
       class:list={[
-        'copy max-w-3xl space-y-4 leading-relaxed text-zinc-400',
-        split ? 'mt-6 text-body lg:mt-0' : 'mt-6',
+        'copy max-w-3xl space-y-4 leading-relaxed text-ink-2',
+        split ? 'mt-6 text-body lg:mt-1' : 'mt-6',
       ]}
     >
       <slot />

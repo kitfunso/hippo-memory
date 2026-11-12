@@ -1,10 +1,10 @@
 Codex CLI memory across sessions | hippo
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -25,7 +25,7 @@ Codex questions
 All N questions →
 How do I give Codex memory across sessions? +
 hippo init adds its instructions to your AGENTS.md, which Codex reads before it starts work. Capturing Codex sessions is opt-in, with hippo hook install codex.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

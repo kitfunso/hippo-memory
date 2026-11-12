@@ -36,7 +36,7 @@ const qa = [
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">hippo vs <span class="text-gradient">Letta</span></Fragment>
+      <Fragment slot="title">hippo vs <span class="text-ink">Letta</span></Fragment>
       <p>
         Letta, formerly MemGPT, now builds Letta Code, an agent harness whose memory lives in blocks the agent edits itself. Hippo is memory for the agents you already run, such as Claude Code, Codex and Cursor, in one store they share. So the choice is mostly about whether you want to switch agents.
       </p>
@@ -70,21 +70,21 @@ const qa = [
 
     <Section title="When to pick which">
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div class="glass rounded-2xl p-6">
-          <h3 class="text-base font-medium text-zinc-100">Pick hippo</h3>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick hippo</h3>
           <p class="mt-2 text-sm leading-relaxed">
             Pick hippo when you already use Claude Code, Codex or Cursor and want them to share one store of lessons you can correct, on your machine with no account.
           </p>
         </div>
-        <div class="glass rounded-2xl p-6">
-          <h3 class="text-base font-medium text-zinc-100">Pick Letta</h3>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick Letta</h3>
           <p class="mt-2 text-sm leading-relaxed">
             Pick Letta when you want a coding agent whose memory is part of the agent, and you are ready to switch agents to get it.
           </p>
         </div>
       </div>
       <div class="flex flex-wrap gap-3 pt-4">
-        <a href="/quickstart/" class="rounded-lg bg-zinc-100 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-900 transition hover:bg-white">Get started with hippo</a>
+        <a href="/quickstart/" class="btn">Get started with hippo</a>
       </div>
     </Section>
 

@@ -1,9 +1,10 @@
 ---
+// The other half of the pair: who should pick another tool, linking each vs page.
 import { compare } from '../content/site';
 import { mdInline } from '../content/readme';
-import Section from './Section.astro';
 ---
 
-<Section title={compare.heading} id="compare" split>
-  <p set:html={mdInline(compare.body, compare.links)} />
-</Section>
+<div id="compare" class="min-w-0">
+  <h2>{compare.heading}</h2>
+  <p class="copy mt-5 leading-relaxed text-ink-2" set:html={mdInline(compare.body, compare.links)} />
+</div>

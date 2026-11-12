@@ -1,0 +1,79 @@
+---
+// The poster paints first; the video loads only once the figure is on screen and the browser is idle, never under reduced motion or Save-Data.
+// Both are rendered from the three.js scene in scripts/hero/ and sit on white, which mix-blend-multiply turns into the page's paper.
+import { heroScene } from '../content/site';
+---
+
+<figure class="hero-scene relative" data-day="tuesday">
+  <div class="relative aspect-[4/3] w-full">
+    <img
+      src="/hero-cabinet.webp"
+      alt={heroScene.alt}
+      width="1072"
+      height="804"
+      fetchpriority="high"
+      decoding="async"
+      class="absolute inset-0 h-full w-full object-contain mix-blend-multiply"
+    />
+    <video
+      class="absolute inset-0 h-full w-full object-contain opacity-0 mix-blend-multiply transition-opacity duration-500"
+      muted
+      loop
+      playsinline
+      disablepictureinpicture
+      preload="none"
+      aria-hidden="true"
+      tabindex="-1"
+      data-src="/hero-cabinet.mp4"
+    ></video>
+  </div>
+  <figcaption class="mt-2 grid gap-3 sm:grid-cols-2 sm:gap-6">
+    {heroScene.days.map((d) => (
+      <p data-step={d.key} class="border-t-2 pt-3 text-[15px] leading-6 transition-colors duration-500">
+        <span class="font-medium">{d.day}.</span> {d.text}
+      </p>
+    ))}
+  </figcaption>
+</figure>
+
+<style>
+  .hero-scene [data-step] {
+    border-color: var(--color-rule);
+    color: var(--color-ink-3);
+  }
+  .hero-scene[data-day='monday'] [data-step='monday'],
+  .hero-scene[data-day='tuesday'] [data-step='tuesday'] {
+    border-color: var(--color-accent);
+    color: var(--color-ink);
+  }
+</style>
+
+<script>
+  import { STILL_T, dayAt } from '../scripts/hero-timeline.js';
+
+  const fig = document.querySelector<HTMLElement>('.hero-scene');
+  const video = fig?.querySelector('video');
+  const quiet =
+    matchMedia('(prefers-reduced-motion: reduce)').matches ||
+    (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+
+  if (fig && video && !quiet) {
+    // The video's first frame is the poster, at STILL_T on the loop's clock.
+    const sync = () => (fig.dataset.day = dayAt(STILL_T + video.currentTime));
+    video.addEventListener('timeupdate', sync);
+    video.addEventListener('playing', () => video.classList.remove('opacity-0'), { once: true });
+    let started = false;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return void video.pause();
+      if (started) return void video.play().catch(() => {});
+      started = true;
+      const go = () => {
+        video.src = video.dataset.src!;
+        // A refused autoplay (iOS Low Power Mode, for one) leaves the poster in place.
+        video.play().catch((err) => console.warn('hero video stayed on the poster:', err));
+      };
+      'requestIdleCallback' in window ? requestIdleCallback(go, { timeout: 1500 }) : setTimeout(go, 300);
+    });
+    io.observe(fig);
+  }
+</script>

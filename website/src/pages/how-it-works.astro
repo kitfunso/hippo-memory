@@ -4,6 +4,7 @@ import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import PageIntro from '../components/PageIntro.astro';
 import HowItWorks from '../components/HowItWorks.astro';
+import CardCabinet from '../components/CardCabinet.astro';
 import Section from '../components/Section.astro';
 import Faq from '../components/Faq.astro';
 import { faqPick, REPO } from '../content/site';
@@ -24,6 +25,7 @@ const decayResult = `${REPO}/blob/master/docs/evals/2026-09-24-decay-default-res
       <p>
         Every memory has a strength. It fades on a half-life, grows each time the memory is recalled, and drops when you mark it wrong. The hippocampus inspired the design, and we tested each part on its own. On synthetic tests, outcome marks and recall strengthening helped and decay made no measurable difference. Sleep lowered recall on one scorer, and the rest is unmeasured.
       </p>
+      <CardCabinet slot="figure" />
     </PageIntro>
 
     <HowItWorks />

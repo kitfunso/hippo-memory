@@ -1,17 +1,17 @@
 ---
-// The three Z0 round 3 rates only; each page that shows them writes its own words around them.
+// The three Z0 round 3 rates; each page that shows them writes its own words around them. Only hippo's row takes the accent.
 import { repeatMistakes as z } from '../content/site';
 ---
 
-<ul class="space-y-5">
+<ul class="space-y-7">
   {z.bars.map((b) => (
-    <li>
-      <span class="flex items-baseline justify-between gap-3">
-        <span class:list={['text-sm', b.lead ? 'font-medium text-zinc-100' : 'text-zinc-400']}>{b.name}</span>
-        <span class:list={['font-mono text-sm tabular-nums', b.lead ? 'text-accent-light' : 'text-zinc-300']}>{b.rate} {z.unit}</span>
+    <li class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-6 gap-y-3">
+      <span class:list={['text-sm', b.lead ? 'font-medium text-ink' : 'text-ink-2']}>{b.name}</span>
+      <span class:list={['row-span-2 self-end font-display text-[2.75rem] leading-[0.85] tabular-nums', b.lead ? 'text-accent' : 'text-ink']}>
+        {b.rate}<span class="ml-1.5 font-sans text-sm text-ink-3">{z.unit}</span>
       </span>
-      <span class="mt-2 block h-2.5 overflow-hidden rounded-full bg-white/5" aria-hidden="true">
-        <span class:list={['block h-full rounded-full', b.lead ? 'bg-accent-light' : 'bg-zinc-600']} style={`width: ${b.rate}%`}></span>
+      <span class="block h-3 rounded-[4px] bg-paper-3" aria-hidden="true">
+        <span class:list={['block h-full rounded-[4px]', b.lead ? 'bg-accent' : 'bg-ink-3/45']} style={`width: ${b.rate}%`}></span>
       </span>
     </li>
   ))}

@@ -1,10 +1,10 @@
 hippo FAQ: setup, data, cost and test results
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -32,14 +32,14 @@ Yes, for short standing rules such as build commands and code style. Claude Code
 What happens when a memory turns out to be wrong?
 hippo outcome --bad weakens the memories from the last recall, and hippo supersede <id> "<new fact>" replaces one. On a synthetic test where every mark was correct, a bad mark cut how often a wrong memory stayed in the top five from N% to N%. Real marks are noisier.
 Where does hippo keep my data?
-On your machine, in SQLite, as .hippo/hippo.db in each project and a global store in ~/.hippo/, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, hippo refine, or hippo sleep when ANTHROPIC_API_KEY is set, which {"extraction":{"enabled":false}} in .hippo/config.json turns off.
+On your machine, in SQLite, as .hippo/hippo.db in each project and a global store in ~/.hippo/, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (capture.followUpRules), hippo refine, or hippo sleep when ANTHROPIC_API_KEY is set. {"extraction":{"enabled":false}} in .hippo/config.json turns that last one off.
 What does hippo cost?
 Nothing. Hippo is MIT-licensed and needs no account or API key. Optional features that call an outside provider bill through it. The Jev reranker costs about N USD a recall, and API embedders and sleep's fact extraction use your own keys.
 Is it production-ready?
 Judge it by what is tested. N+ tests run against a real database, with no module mocks and no mocked store. It has zero runtime dependencies. The next question covers what it does to an agent's work.
 Has hippo been shown to make agents better at their work?
 On repeat mistakes, yes, in one test of our own (opens in new tab). We corrected Claude Code once on N repositories and counted repeats N to N tasks later, finding N in N with hippo added, against N with built-in memory alone, at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. Failed runs are in docs/evals (opens in new tab) too.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

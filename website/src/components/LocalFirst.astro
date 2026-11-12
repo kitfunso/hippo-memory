@@ -1,11 +1,11 @@
 ---
+// One half of the local and compare pair; the empty span keeps the old #local-first anchor working.
 import { localFirst } from '../content/site';
 import { mdInline } from '../content/readme';
-import Section from './Section.astro';
 ---
 
-<!-- The empty span keeps the old #local-first anchor working. -->
-<span id="local-first" aria-hidden="true"></span>
-<Section title={localFirst.heading} id="local" split>
-  <p set:html={mdInline(localFirst.body)} />
-</Section>
+<div id="local" class="min-w-0">
+  <span id="local-first" aria-hidden="true"></span>
+  <h2>{localFirst.heading}</h2>
+  <p class="copy mt-5 leading-relaxed text-ink-2" set:html={mdInline(localFirst.body)} />
+</div>

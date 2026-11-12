@@ -1,0 +1,14 @@
+---
+// One home section: a hairline on top, the shared vertical rhythm, and a paper or card-paper ground.
+interface Props {
+  id: string;
+  tone?: 'paper' | 'paper-2';
+}
+const { id, tone = 'paper' } = Astro.props;
+---
+
+<section id={id} class:list={['border-t border-rule', tone === 'paper-2' && 'bg-paper-2']}>
+  <div class="wrap py-(--section-y)">
+    <slot />
+  </div>
+</section>

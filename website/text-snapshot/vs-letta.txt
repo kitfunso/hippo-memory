@@ -1,10 +1,10 @@
 hippo vs Letta: memory for the agents you already run
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -40,7 +40,7 @@ hippo and Letta, asked directly
 All N questions →
 Is Letta the same as MemGPT? +
 Letta grew out of MemGPT, and its GitHub README calls it "Letta (f.k.a. MemGPT)". Active development has moved to Letta Code, and the original server now sits on an archive branch (checked N September N).
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

@@ -52,9 +52,9 @@ const y = (s: number) => (TOP - s) * 100;
 const path = (pts: Pt[]) => pts.map(([d, s], i) => `${i ? 'L' : 'M'}${d},${y(s).toFixed(2)}`).join(' ');
 const pos = (day: number, s: number) => ({ left: `${(day / END) * 100}%`, top: `${((TOP - s) / TOP) * 100}%` });
 
-const MINT = '#7ce38b';
-const AMBER = '#f2b84b';
-const GREY = '#9aa79e';
+const RECALLED = '#1d5b43';
+const WRONG = '#a3402a';
+const ALONE = '#6b6256';
 
 const ticks = [
   { day: 0, label: 'saved' },
@@ -67,7 +67,7 @@ const ticks = [
 function Dot({ day, s, color }: { day: number; s: number; color: string }) {
   return (
     <span
-      class="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 ring-zinc-900"
+      class="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 ring-paper"
       style={{ ...pos(day, s), background: color }}
     />
   );
@@ -123,7 +123,7 @@ export default function DecayCurve() {
       aria-label="Memory strength over two years. Left alone, a memory falls to half strength after a year. Each recall restores it to full. Marked wrong, it halves and fades faster; superseded, it leaves recall."
       class="grid grid-cols-[auto_1fr] gap-x-3"
     >
-      <div class="relative h-56 font-mono text-xs text-zinc-400 sm:h-72" aria-hidden="true">
+      <div class="relative h-56 font-mono text-xs text-ink-2 sm:h-72" aria-hidden="true">
         {[1, 0.5, 0].map((s) => (
           <span class="absolute right-0 -translate-y-1/2" style={{ top: pos(0, s).top }}>{s === 0.5 ? '½' : s}</span>
         ))}
@@ -132,30 +132,30 @@ export default function DecayCurve() {
       <div class="relative h-56 sm:h-72" aria-hidden="true">
         <svg viewBox={`0 0 ${END} ${TOP * 100}`} preserveAspectRatio="none" class="absolute inset-0 h-full w-full overflow-visible">
           {[1, 0.5].map((s) => (
-            <line x1="0" x2={END} y1={y(s)} y2={y(s)} stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 6" vector-effect="non-scaling-stroke" />
+            <line x1="0" x2={END} y1={y(s)} y2={y(s)} stroke="rgba(31,27,22,0.08)" stroke-dasharray="4 6" vector-effect="non-scaling-stroke" />
           ))}
-          <line x1="0" x2={END} y1={y(0)} y2={y(0)} stroke="rgba(255,255,255,0.14)" vector-effect="non-scaling-stroke" />
+          <line x1="0" x2={END} y1={y(0)} y2={y(0)} stroke="rgba(31,27,22,0.2)" vector-effect="non-scaling-stroke" />
           <g style={reveal}>
-            <path d={path(alone)} fill="none" stroke={GREY} stroke-width="2" stroke-dasharray="5 5" vector-effect="non-scaling-stroke" />
-            <path d={path(wrongPts)} fill="none" stroke={AMBER} stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
-            <path d={path(recalled)} fill="none" stroke={MINT} stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            <path d={path(alone)} fill="none" stroke={ALONE} stroke-width="2" stroke-dasharray="5 5" vector-effect="non-scaling-stroke" />
+            <path d={path(wrongPts)} fill="none" stroke={WRONG} stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            <path d={path(recalled)} fill="none" stroke={RECALLED} stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
           </g>
         </svg>
 
         <div style={fade(0.9)}>
-          {RECALLS.map((day) => <Dot day={day} s={1} color={MINT} />)}
+          {RECALLS.map((day) => <Dot day={day} s={1} color={RECALLED} />)}
           <span class={`${label} -translate-x-1/2 -translate-y-[calc(100%+10px)] text-accent`} style={pos(RECALLS[0], 1)}>recall</span>
-          <Dot day={WRONG_AT} s={wrongBefore} color={AMBER} />
+          <Dot day={WRONG_AT} s={wrongBefore} color={WRONG} />
           <span class={`${label} -translate-x-[calc(100%+10px)] -translate-y-1/2 text-warn`} style={pos(WRONG_AT, wrongAfter)}>marked wrong</span>
           <span class="absolute -translate-x-1/2 -translate-y-1/2 text-lg leading-none text-warn" style={pos(SUPERSEDED_AT, supersededS)}>×</span>
           <span class={`${label} -translate-x-1/2 translate-y-[12px] text-warn`} style={pos(SUPERSEDED_AT, supersededS)}>superseded</span>
           <span class={`${label} -translate-x-full translate-y-[8px] text-accent`} style={pos(END, strengthAt(recalled, END))}>recalled</span>
-          <span class={`${label} -translate-x-full translate-y-[8px] text-zinc-400`} style={pos(END, strengthAt(alone, END))}>left alone</span>
+          <span class={`${label} -translate-x-full translate-y-[8px] text-ink-2`} style={pos(END, strengthAt(alone, END))}>left alone</span>
         </div>
       </div>
 
       <span />
-      <div class="relative mt-2 h-4 font-mono text-xs text-zinc-400" aria-hidden="true">
+      <div class="relative mt-2 h-4 font-mono text-xs text-ink-2" aria-hidden="true">
         {ticks.map((t, i) => (
           <span
             class={`absolute whitespace-nowrap ${i === 0 ? '' : i === ticks.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}

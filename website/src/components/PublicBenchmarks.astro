@@ -33,32 +33,32 @@ const rows = (b: Bench) => [
 ].sort((p, q) => q.value - p.value);
 ---
 
-<ul class="flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs text-zinc-400">
-  <li class="flex items-center gap-2"><span class="inline-block size-3.5 rounded-full border-2 border-zinc-950 bg-accent" aria-hidden="true"></span>hippo</li>
-  <li class="flex items-center gap-2"><span class="inline-block size-2.5 rounded-full bg-zinc-400" aria-hidden="true"></span>run here, same answer model and scorer</li>
-  <li class="flex items-center gap-2"><span class="inline-block size-2.5 rounded-full border-[1.5px] border-zinc-400" aria-hidden="true"></span>published, each team's own setup</li>
+<ul class="flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs text-ink-2">
+  <li class="flex items-center gap-2"><span class="inline-block size-3.5 rounded-full border-2 border-paper bg-accent" aria-hidden="true"></span>hippo</li>
+  <li class="flex items-center gap-2"><span class="inline-block size-2.5 rounded-full bg-ink-3" aria-hidden="true"></span>run here, same answer model and scorer</li>
+  <li class="flex items-center gap-2"><span class="inline-block size-2.5 rounded-full border-[1.5px] border-ink-3" aria-hidden="true"></span>published, each team's own setup</li>
 </ul>
 
 <div class="mt-5 grid gap-6 lg:grid-cols-2">
   {benches.map((b) => (
-    <article class="glass flex flex-col rounded-2xl p-6 sm:p-8">
+    <article class="flex flex-col rounded-xl border border-rule bg-paper-2 p-6 sm:p-8">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h3 class="text-xl font-medium text-zinc-100">{heads[shortName(b)].h}</h3>
-        <a class="tap ml-auto font-mono text-xs text-zinc-400 hover:text-accent-light" href={blob(b.file)} target="_blank" rel="noopener noreferrer">source ↗<span class="sr-only"> (the {shortName(b)} score file, opens in new tab)</span></a>
+        <h3 class="text-xl font-medium text-ink">{heads[shortName(b)].h}</h3>
+        <a class="tap ml-auto font-mono text-xs text-ink-2 hover:text-accent" href={blob(b.file)} target="_blank" rel="noopener noreferrer">source ↗<span class="sr-only"> (the {shortName(b)} score file, opens in new tab)</span></a>
       </div>
-      <p class="mt-3 text-sm leading-relaxed text-zinc-300">{heads[shortName(b)].p}</p>
-      <span class="mt-4 font-mono text-[clamp(2rem,8vw,3rem)] font-medium leading-none tracking-tight text-gradient">{fmt(b, b.hippo)}</span>
-      <span class="mt-2 text-sm text-zinc-400">hippo answer {b.unit === 'F1' ? 'F1' : 'accuracy'}, {b.n} questions</span>
-      <ul class="mt-4 flex flex-wrap gap-2">
+      <p class="mt-3 text-sm leading-relaxed text-ink-2">{heads[shortName(b)].p}</p>
+      <span class="mt-5 font-display text-[3rem] leading-none tabular-nums text-ink">{fmt(b, b.hippo)}</span>
+      <span class="mt-2 text-sm text-ink-2">hippo answer {b.unit === 'F1' ? 'F1' : 'accuracy'}, {b.n} questions</span>
+      <ul class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
         {rivalsOf(b).map((r) => (
           <li
             class:list={[
-              'rounded-full px-2.5 py-1 font-mono text-xs',
-              { 'bg-accent/10 text-accent-light': verdict(r) === 'win', 'bg-warn/10 text-warn': verdict(r) === 'loss', 'bg-white/5 text-zinc-300': verdict(r) === 'tie' },
+              'tabular-nums',
+              { 'text-accent': verdict(r) === 'win', 'text-warn': verdict(r) === 'loss', 'text-ink-2': verdict(r) === 'tie' },
             ]}
             title={`hippo minus ${r.name}, paired by question: ${signed(r.diff)} points, 95% interval ${signed(r.lo)} to ${signed(r.hi)}`}
           >
-            {verdict(r) === 'win' ? `ahead of ${r.name} ${signed(r.diff)}` : verdict(r) === 'loss' ? `behind ${r.name} ${signed(r.diff)}` : `level with ${r.name}`}
+            {verdict(r) === 'win' ? `Ahead of ${r.name} by ${r.diff.toFixed(1)} points` : verdict(r) === 'loss' ? `Behind ${r.name} by ${(-r.diff).toFixed(1)} points` : `Level with ${r.name}`}
           </li>
         ))}
       </ul>
@@ -67,40 +67,40 @@ const rows = (b: Bench) => [
           const s = strip(b, w);
           return (
             <svg viewBox={`0 0 ${s.w} ${s.h}`} class:list={['h-auto w-full font-mono text-xs', cls]} role="img" aria-label={`${shortName(b)}: published scores and scores run here, also in the table below`}>
-              {s.ticks.map((t) => <line x1={t.x} x2={t.x} y1={s.gridTop} y2={s.gridBottom} class="stroke-zinc-800" />)}
-              {s.ticks.map((t) => <text x={t.x} y={s.h - 4} text-anchor={t.anchor} class="fill-zinc-400">{t.v}</text>)}
-              <line x1="0" x2={s.w} y1={s.divY} y2={s.divY} class="stroke-zinc-700" />
-              <text x="0" y="12" class="fill-zinc-400">{b.published.length ? 'Published' : 'Published: none'}</text>
-              <text x="0" y={s.divY + 16} class="fill-zinc-400">Run here</text>
+              {s.ticks.map((t) => <line x1={t.x} x2={t.x} y1={s.gridTop} y2={s.gridBottom} class="stroke-rule" />)}
+              {s.ticks.map((t) => <text x={t.x} y={s.h - 4} text-anchor={t.anchor} class="fill-ink-3">{t.v}</text>)}
+              <line x1="0" x2={s.w} y1={s.divY} y2={s.divY} class="stroke-rule-strong" />
+              <text x="0" y="12" class="fill-ink-3">{b.published.length ? 'Published' : 'Published: none'}</text>
+              <text x="0" y={s.divY + 16} class="fill-ink-3">Run here</text>
               {s.dots.map((d) => (
                 <circle
                   cx={d.x}
                   cy={d.y}
                   r={d.r}
                   stroke-width={d.tone === 'pub' ? 1.5 : 2}
-                  class:list={{ 'fill-zinc-950 stroke-zinc-400': d.tone === 'pub', 'fill-zinc-400 stroke-zinc-950': d.tone === 'here', 'fill-accent stroke-zinc-950': d.tone === 'hippo' }}
+                  class:list={{ 'fill-paper stroke-ink-3': d.tone === 'pub', 'fill-ink-3 stroke-paper': d.tone === 'here', 'fill-accent stroke-paper': d.tone === 'hippo' }}
                 >
                   <title>{d.title}</title>
                 </circle>
               ))}
-              {s.labels.map((l) => <text x={l.x} y={l.y} text-anchor={l.anchor} class={l.strong ? 'fill-zinc-100' : 'fill-zinc-300'}>{l.text}</text>)}
+              {s.labels.map((l) => <text x={l.x} y={l.y} text-anchor={l.anchor} class={l.strong ? 'fill-ink' : 'fill-ink-2'}>{l.text}</text>)}
             </svg>
           );
         })}
       </div>
       <details class="mt-4">
-        <summary class="inline-flex min-h-11 cursor-pointer items-center font-mono text-xs text-zinc-400 hover:text-accent-light">All scores</summary>
-        <div class="mt-2 overflow-x-auto rounded-xl border border-white/8" data-scroll-x>
+        <summary class="inline-flex min-h-11 cursor-pointer items-center font-mono text-xs text-ink-2 hover:text-accent">All scores</summary>
+        <div class="mt-2 overflow-x-auto rounded-xl border border-rule" data-scroll-x>
           <table class="w-full text-left text-sm">
-            <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+            <thead class="border-b border-rule-strong text-xs text-ink-3">
               <tr><th scope="col" class="px-4 py-2.5 font-medium">System</th><th scope="col" class="px-4 py-2.5 font-medium">Setup</th><th scope="col" class="px-4 py-2.5 text-right font-medium">Score</th></tr>
             </thead>
-            <tbody class="divide-y divide-white/5">
+            <tbody class="divide-y divide-rule">
               {rows(b).map((r) => (
-                <tr class={r.me ? 'text-zinc-100' : 'text-zinc-300'}>
+                <tr class={r.me ? 'text-ink' : 'text-ink-2'}>
                   <th scope="row" class:list={['px-4 py-2.5 text-left', r.me ? 'font-medium' : 'font-normal']}>{r.name}</th>
-                  <td class="px-4 py-2.5 text-zinc-400"><span class="flex items-center gap-2"><span class:list={['inline-block size-2.5 shrink-0 rounded-full', r.setup === 'Run here' ? 'bg-zinc-400' : 'border-[1.5px] border-zinc-400']} aria-hidden="true"></span>{r.setup}</span></td>
-                  <td class:list={['px-4 py-2.5 text-right font-mono tabular-nums', { 'text-accent-light': r.me }]}>{fmt(b, r.value)}</td>
+                  <td class="px-4 py-2.5 text-ink-2"><span class="flex items-center gap-2"><span class:list={['inline-block size-2.5 shrink-0 rounded-full', r.setup === 'Run here' ? 'bg-ink-3' : 'border-[1.5px] border-ink-3']} aria-hidden="true"></span>{r.setup}</span></td>
+                  <td class:list={['px-4 py-2.5 text-right font-mono tabular-nums', { 'text-accent': r.me }]}>{fmt(b, r.value)}</td>
                 </tr>
               ))}
             </tbody>

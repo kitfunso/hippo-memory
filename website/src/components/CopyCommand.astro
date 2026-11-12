@@ -7,12 +7,12 @@ interface Props {
 }
 const { command, size = 'sm' } = Astro.props;
 // 14px like the mockup's command box, so the install line fits one row on a 390px phone.
-const pad = size === 'lg' ? 'px-4 py-4 text-sm sm:px-5' : 'px-4 py-3 text-sm';
+const pad = size === 'lg' ? 'min-h-14 px-4 py-3 text-sm sm:px-5' : 'min-h-12 px-4 py-2.5 text-sm';
 ---
 
-<div class:list={['group flex items-center gap-3 rounded-xl glass font-mono', pad]}>
-  <span class="select-none text-accent-light">$</span>
+<div class:list={['group flex items-center gap-3 rounded-xl border border-rule-strong bg-paper-2 font-mono', pad]}>
+  <span class="select-none text-ink-3">$</span>
   <!-- each word is an inline-block: lines break between words, and inside one (hippo-memory at its hyphen) only when it cannot fit a line alone -->
-  <code class="min-w-0 flex-1 break-words text-zinc-200">{command.split(' ').map((word, i) => <Fragment>{i > 0 && ' '}<span class="inline-block max-w-full">{word}</span></Fragment>)}</code>
+  <code class="min-w-0 flex-1 break-words text-ink">{command.split(' ').map((word, i) => <Fragment>{i > 0 && ' '}<span class="inline-block max-w-full">{word}</span></Fragment>)}</code>
   <CopyButton text={command} label={`Copy command: ${command}`} />
 </div>

@@ -1,10 +1,10 @@
 MCP memory server for Claude Code, Cursor and Windsurf | hippo
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -39,7 +39,7 @@ MCP questions
 All N questions →
 Can I use hippo as an MCP memory server? +
 Yes. hippo mcp runs the server over stdio. Add it to the MCP config of Cursor, Claude Desktop, Windsurf (now Devin Desktop), Cline or any other client, or in Claude Code run claude mcp add hippo-memory -- hippo mcp.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

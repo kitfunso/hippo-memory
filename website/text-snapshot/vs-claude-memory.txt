@@ -1,10 +1,10 @@
 CLAUDE.md vs MEMORY.md vs hippo: what goes where
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -25,9 +25,9 @@ hippo
 What comes up as you work, such as a failed command or a fact that changed. It is recalled when it matches the task and shared with your other agents.
 Measured against built-in memory
 Hippo runs beside Claude Code's own memory, so the fair test is built-in memory alone against built-in memory plus hippo on the same tasks. We ran it on N repositories, registered first.
-No memory N in N
-Claude Code's built-in memory N in N
-Built-in memory plus hippo N in N
+No memory Nin N
+Claude Code's built-in memory Nin N
+Built-in memory plus hippo Nin N
 Built-in memory does most of the work, taking repeats from N in N to N Adding hippo took them to N at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. One early clue, from a debugging read and no verdict, is that in the capture-off arm Claude Code's own memory already held the taught rule at N of N first chances to repeat.
 The round N result (opens in new tab)
 Bringing CLAUDE.md notes into hippo
@@ -36,7 +36,7 @@ CLAUDE.md questions
 All N questions →
 Do I still need CLAUDE.md? +
 Yes, for short standing rules such as build commands and code style. Claude Code's memory docs (opens in new tab) say that when two rules contradict each other, Claude may pick one arbitrarily. Hippo holds the lessons that pile up and recalls the ones that match the task.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

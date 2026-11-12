@@ -1,15 +1,26 @@
 ---
-// The home summary; /how-it-works/ carries each mechanism with what was measured.
+// The mechanism as five index cards: three across, then two, each with the command that drives it when there is one.
 import { how } from '../content/site';
 import { mdInline } from '../content/readme';
-import Section from './Section.astro';
+import Band from './Band.astro';
 ---
 
-<Section title={how.heading} id="how" split>
-  <ol class="border-t border-rule" data-reveal>
-    {how.body.map((md) => (
-      <li class="border-b border-rule py-4" set:html={mdInline(md)} />
+<Band id="how">
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+    <h2>{how.heading}</h2>
+    <p class="self-end text-body leading-relaxed text-ink-2">{how.intro}</p>
+  </div>
+  <ol class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+    {how.items.map((item, i) => (
+      <li class:list={['flex flex-col rounded-xl border border-rule bg-paper-2 p-6', i < 3 ? 'lg:col-span-2' : 'lg:col-span-3']}>
+        <span class="font-mono text-xs tabular-nums text-ink-3">{String(i + 1).padStart(2, '0')}</span>
+        <h3 class="mt-4 text-[1.0625rem] text-ink">{item.title}</h3>
+        <p class="copy mt-2 flex-1 leading-relaxed text-ink-2" set:html={mdInline(item.text)} />
+        {item.command && (
+          <code class="mt-5 block border-t border-rule pt-4 font-mono text-[13px] text-ink">{item.command}</code>
+        )}
+      </li>
     ))}
   </ol>
-  <p><a class="link" href="/how-it-works/">{how.linkLabel}</a></p>
-</Section>
+  <p class="mt-8 text-sm"><a class="link tap" href="/how-it-works/">{how.linkLabel}</a></p>
+</Band>

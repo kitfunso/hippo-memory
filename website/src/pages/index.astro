@@ -2,9 +2,14 @@
 import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
 import Hero from '../components/Hero.astro';
-import TheTest from '../components/TheTest.astro';
-import Losses from '../components/Losses.astro';
+import HeroScene from '../components/HeroScene.astro';
+import Problem from '../components/Problem.astro';
+import Session from '../components/Session.astro';
 import HomeHow from '../components/HomeHow.astro';
+import Different from '../components/Different.astro';
+import TheTest from '../components/TheTest.astro';
+import HomeBench from '../components/HomeBench.astro';
+import HomeTeams from '../components/HomeTeams.astro';
 import LocalFirst from '../components/LocalFirst.astro';
 import Compare from '../components/Compare.astro';
 import Faq from '../components/Faq.astro';
@@ -18,13 +23,23 @@ const homeFaq = faqPick(['Do I still need CLAUDE.md?', 'What does hippo cost?'])
 
 <Base title={site.title}>
   <Nav />
-  <main id="main" class="frame">
-    <Hero />
+  <main id="main">
+    <Hero>
+      <HeroScene slot="figure" />
+    </Hero>
+    <Problem />
+    <Session />
     <TheTest />
-    <Losses />
     <HomeHow />
-    <LocalFirst />
-    <Compare />
+    <Different />
+    <HomeBench />
+    <HomeTeams />
+    <section class="border-t border-rule bg-paper-2">
+      <div class="wrap grid gap-14 py-(--section-y) lg:grid-cols-2 lg:gap-16">
+        <LocalFirst />
+        <Compare />
+      </div>
+    </section>
     <Faq items={homeFaq} moreHref="/faq/" />
     <GetStarted />
   </main>

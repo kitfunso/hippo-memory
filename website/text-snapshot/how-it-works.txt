@@ -1,10 +1,10 @@
 How hippo works: recall, decay and what we measured
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -12,9 +12,13 @@ Compare
 Docs
 How hippo decides what your agent remembers
 Every memory has a strength. It fades on a half-life, grows each time the memory is recalled, and drops when you mark it wrong. The hippocampus inspired the design, and we tested each part on its own. On synthetic tests, outcome marks and recall strengthening helped and decay made no measurable difference. Sleep lowered recall on one scorer, and the rest is unmeasured.
-Buffer New information lands here for the session.
-Episodic Timestamped memories that fade unless they are used.
-Semantic Patterns merged from related episodes during sleep.
+day N · recalled N · unused N
+Buffer
+New information lands here for the session.
+Episodic
+Timestamped memories that fade unless they are used.
+Semantic
+Patterns merged from related episodes during sleep.
 N½N
 recallmarked wrong×supersededrecalledleft alone
 savedN moN yrN moN yr
@@ -34,7 +38,7 @@ Questions about how it works
 All N questions →
 Is this just RAG? +
 Partly. Recall is search, BMN plus embeddings if you install them. The difference is that the store changes as your agent works. A memory you mark wrong drops down the results, a newer fact replaces an old one, and unused memories fade.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

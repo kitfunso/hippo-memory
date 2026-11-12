@@ -93,7 +93,7 @@ hippo init
 
 Hippo auto-detects Claude Code and:
 1. Patches `CLAUDE.md` with hippo's own block, which is shorter than the snippet above
-2. Adds 7 hooks to `~/.claude/settings.json`; the `SessionEnd` one runs `hippo sleep` on session exit
+2. Adds 8 hooks to `~/.claude/settings.json`; the `SessionEnd` one runs `hippo sleep` on session exit
 
 No copy-paste needed, no cron required.
 

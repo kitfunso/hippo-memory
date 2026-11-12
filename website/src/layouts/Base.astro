@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { Font } from 'astro:assets';
 import { site } from '../content/site';
 import { pageDate } from '../lib/page-dates.mjs';
-import BackgroundFx from '../components/BackgroundFx.astro';
 
 interface Props {
   title?: string;
@@ -118,10 +117,11 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <!-- preload only the faces the first screen paints; 600 loads on use -->
+    <Font cssVariable="--font-newsreader" preload={[{ weight: '400' }]} />
     <Font cssVariable="--font-geist" preload={[{ weight: '400' }, { weight: '500' }]} />
     <Font cssVariable="--font-geist-mono" preload={[{ weight: '400' }]} />
-    <meta name="theme-color" content="#0b0f0c" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#f7f4ee" />
+    <meta name="color-scheme" content="light" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
@@ -148,14 +148,13 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
   <body class="min-h-screen antialiased">
     <a
       href="#main"
-      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-zinc-900 focus:px-4 focus:py-2 focus:text-sm focus:text-zinc-100"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-ink focus:px-4 focus:py-2 focus:text-sm focus:text-paper"
     >
       Skip to content
     </a>
-    <BackgroundFx />
     <slot />
     <div id="copy-live" class="sr-only" aria-live="polite"></div>
-    <!-- Lives in the layout because the components that carry data-copy and data-reveal appear on many pages. -->
+    <!-- Lives in the layout because the components that carry data-copy appear on many pages. -->
     <script is:inline>
       (function () {
         // copy-to-clipboard
@@ -198,26 +197,6 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
           window.addEventListener('resize', update);
           update();
         });
-
-        // scroll-reveal: reveal [data-reveal] blocks as they enter view (.js gate hides
-        // them first; no-JS / no-IO shows everything). Reveals are applied to INNER
-        // blocks only (never section roots or h2 wrappers), and the fail-open below
-        // force-shows anything still hidden so print/screenshot/preview never blanks.
-        var reveals = document.querySelectorAll('[data-reveal]');
-        if (!reveals.length) return;
-        setTimeout(function () {
-          reveals.forEach(function (el) { el.classList.add('is-visible'); });
-        }, 1500);
-        if (!('IntersectionObserver' in window)) {
-          reveals.forEach(function (el) { el.classList.add('is-visible'); });
-          return;
-        }
-        var io = new IntersectionObserver(function (entries) {
-          entries.forEach(function (e) {
-            if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); }
-          });
-        }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
-        reveals.forEach(function (el) { io.observe(el); });
       })();
     </script>
     {beaconToken && (

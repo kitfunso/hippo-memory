@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import Section from '../components/Section.astro';
+import PageIntro from '../components/PageIntro.astro';
 import { enterprise, site, REPO } from '../content/site';
 ---
 
@@ -13,35 +14,30 @@ import { enterprise, site, REPO } from '../content/site';
 >
   <Nav />
   <main id="main">
-    <section class="relative overflow-hidden">
-      <div class="pointer-events-none absolute inset-0 -z-10 hero-glow"></div>
-      <div class="mx-auto max-w-6xl px-5 pb-12 pt-10 sm:pt-12">
-        <h1 class="max-w-3xl text-balance font-display text-4xl font-medium leading-(--leading-display) tracking-tight sm:text-5xl">
-          Hippo for teams is planned. Here is what exists today.
-        </h1>
-        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-zinc-400">{enterprise.availability}</p>
-      </div>
-    </section>
+    <PageIntro>
+      <Fragment slot="title">Hippo for teams is planned. Here is what exists today.</Fragment>
+      <p>{enterprise.availability}</p>
+    </PageIntro>
 
-    <Section title="What you can run today" alt>
+    <Section title="What you can run today" alt split>
       <p>
         The MIT core includes an HTTP server with tenants, API keys, admin and member roles, per-key scope grants and an audit log on every change. Keys are stored scrypt-hashed, and one API call deletes a memory. Slack and GitHub connectors bring in what your team has already written down.
       </p>
     </Section>
 
-    <Section title="What is planned">
+    <Section title="What is planned" split>
       <p>
         SSO, SCIM, SIEM export, a hosted service and an SLA are planned, with Jira and Notion connectors next. None of it is released.
       </p>
     </Section>
 
-    <Section title="How we would measure it with you" id="measured-on-your-work-against-a-holdout" alt>
+    <Section title="How we would measure it with you" id="measured-on-your-work-against-a-holdout" alt split>
       <p>
         The fair test is a holdout, where a random share of sessions runs without memory and you compare cost per merged PR and repeat errors between the two groups. We have no team result to show. If your team wants to try, open an issue and tell us what you'd need.
       </p>
       <div class="flex flex-wrap gap-3 pt-2">
-        <a href={`${REPO}/issues/new`} target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:opacity-90">Open an issue<span class="sr-only"> (opens in new tab)</span></a>
-        <a href={site.links.security} target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-white/12 px-5 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/5">Security policy<span class="sr-only"> (opens in new tab)</span></a>
+        <a href={`${REPO}/issues/new`} target="_blank" rel="noopener noreferrer" class="btn">Open an issue<span class="sr-only"> (opens in new tab)</span></a>
+        <a href={site.links.security} target="_blank" rel="noopener noreferrer" class="btn-quiet">Security policy<span class="sr-only"> (opens in new tab)</span></a>
       </div>
     </Section>
   </main>

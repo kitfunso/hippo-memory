@@ -1,10 +1,10 @@
 hippo vs Zep: a local Zep alternative
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -41,7 +41,7 @@ hippo and Zep, asked directly
 All N questions →
 Can I still self-host Zep? +
 Not Zep itself. Zep's FAQ says Community Edition, the version you could host locally, is deprecated and no longer supported (checked N September N). Graphiti, the open-source framework under Zep, runs anywhere, and needs a graph database and a language-model key.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

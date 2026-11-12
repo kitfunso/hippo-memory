@@ -6,15 +6,15 @@ import CopyCommand from './CopyCommand.astro';
 import CopyButton from './CopyButton.astro';
 ---
 
-<Section title={getStarted.heading} id="get-started" split>
+<Section title={getStarted.heading} id="get-started" split alt>
   <p set:html={mdInline(getStarted.body)} />
   <div class="space-y-3">
     {getStarted.steps.map((cmd) => <CopyCommand command={cmd} />)}
   </div>
   <p class="text-sm">{getStarted.notice}</p>
   <p>{getStarted.askLabel}</p>
-  <div class="flex items-start gap-3 rounded-xl border border-rule-strong bg-term-bg p-4 font-mono text-sm leading-6">
-    <p class="min-w-0 flex-1 break-words text-zinc-200">{getStarted.prompt}</p>
+  <div class="flex items-start gap-3 rounded-xl border border-rule-strong bg-paper p-4 font-mono text-sm leading-6">
+    <p class="min-w-0 flex-1 break-words text-ink">{getStarted.prompt}</p>
     <CopyButton text={getStarted.prompt} label="Copy the prompt for your agent" />
   </div>
   <p class="flex flex-wrap gap-x-6 gap-y-2">

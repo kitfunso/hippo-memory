@@ -1,0 +1,71 @@
+---
+// The public tests in one table: hippo, BM25 run here, the gap with its 95% interval, and the strongest other system run here.
+// HotPotQA-24 stays on /benchmarks/: 19 questions cannot separate anyone. The two public-test losses sit under the table.
+import data from '../data/public-benchmarks.json';
+import { site, publicTests, losses } from '../content/site';
+import { type Bench, f1, shortName } from '../lib/bench-strip';
+
+const order = ['DMR', 'PersonaMem v1', 'LongMemEval-S', 'LoCoMo'];
+const benches = (data.benches as Bench[])
+  .filter((b) => order.includes(shortName(b)))
+  .sort((a, b) => order.indexOf(shortName(a)) - order.indexOf(shortName(b)));
+const rows = benches.map((b) => {
+  const bm25 = b.rivals.find((r) => r.name === 'BM25')!;
+  const other = b.rivals.filter((r) => !r.name.startsWith('hippo') && r.name !== 'BM25').sort((p, q) => q.value - p.value)[0];
+  return { name: shortName(b), n: b.n, hippo: b.hippo, bm25, other, ahead: bm25.lo > 0 };
+});
+const signed = (v: number) => `${v > 0 ? '+' : '−'}${f1(Math.abs(v))}`;
+---
+
+<section id="public-tests" class="border-t border-rule bg-paper-2">
+  <div class="wrap py-(--section-y)">
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+      <h2>{publicTests.heading}</h2>
+      <p class="self-end text-body leading-relaxed text-ink-2">{publicTests.body} Answer model: {data.answerModel}.</p>
+    </div>
+
+    <div class="mt-10 overflow-x-auto" data-scroll-x>
+      <table class="w-full min-w-[40rem] border-collapse text-left text-sm">
+        <caption class="sr-only">Answer accuracy on four public memory tests</caption>
+        <thead>
+          <tr class="border-b border-rule-strong text-ink-3">
+            <th scope="col" class="py-3 pr-4 font-normal">Test</th>
+            <th scope="col" class="px-4 py-3 text-right font-normal">hippo</th>
+            <th scope="col" class="px-4 py-3 text-right font-normal">BM25</th>
+            <th scope="col" class="px-4 py-3 text-right font-normal">hippo minus BM25</th>
+            <th scope="col" class="py-3 pl-4 text-right font-normal">Strongest other run</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr class="border-b border-rule">
+              <th scope="row" class="py-4 pr-4 font-normal">
+                <span class="block text-ink">{r.name}</span>
+                <span class="block text-xs text-ink-3">{r.n} questions</span>
+              </th>
+              <td class="px-4 py-4 text-right font-mono text-base tabular-nums text-ink">{f1(r.hippo)}</td>
+              <td class="px-4 py-4 text-right font-mono tabular-nums text-ink-2">{f1(r.bm25.value)}</td>
+              <td class="px-4 py-4 text-right font-mono tabular-nums">
+                {r.ahead
+                  ? <span class="text-accent">{signed(r.bm25.diff)}</span>
+                  : <span class="text-ink-3">level</span>}
+                <span class="ml-2 text-xs text-ink-3">[{signed(r.bm25.lo)}, {signed(r.bm25.hi)}]</span>
+              </td>
+              <td class="py-4 pl-4 text-right font-mono tabular-nums text-ink-2">{r.other ? `${r.other.name} ${f1(r.other.value)}` : 'none'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <ul class="mt-8 space-y-2 text-[15px] leading-6 text-ink-2">
+      {losses.items.map((l) => (
+        <li class="flex gap-3">
+          <span class="mt-2.5 size-1.5 shrink-0 rounded-full bg-warn" aria-hidden="true"></span>
+          <span>{l.text}</span>
+        </li>
+      ))}
+    </ul>
+    <p class="mt-6 text-sm"><a class="link tap" href="/benchmarks/">{publicTests.linkLabel}</a></p>
+  </div>
+</section>

@@ -1,10 +1,10 @@
 Claude Code memory between sessions | hippo
-Skip to content ~/hippo How it works
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
+N Install
 How it works
 Teams
 Benchmarks
@@ -14,7 +14,7 @@ Claude Code memory between sessions
 Claude Code already loads your CLAUDE.md files and its own auto memory notes into every session. Hippo runs beside them and keeps what comes up as you work, such as a rule you stated, a tool call that failed or a fact that changed. In our test on N repositories, Claude Code with hippo added repeated a corrected mistake N times in N against N with built-in memory alone, at the same cost. We can't yet say how much of that the stored lessons carry.
 Set it up
 $ npm install -g hippo-memory $ hippo init Copy
-hippo init adds a short block to the project's CLAUDE.md if it has one, adds seven hook entries to ~/.claude/settings.json, and schedules a daily run at N:Nam that stores lessons from the day's commits. hippo init --no-hooks --no-schedule skips both, and hippo doctor checks the install.
+hippo init adds a short block to the project's CLAUDE.md if it has one, adds eight hook entries to ~/.claude/settings.json, and schedules a daily run at N:Nam that stores lessons from the day's commits. hippo init --no-hooks --no-schedule skips both, and hippo doctor checks the install.
 What each hook does
 Claude Code hooks that hippo init installs Hook What it does
 SessionStart Prints the rules you've stated and what the last sleep did.
@@ -36,7 +36,7 @@ Claude Code questions
 All N questions →
 How do I give Claude Code memory between sessions? +
 Run npm install -g hippo-memory, then hippo init in the project. Init adds a short block to an existing CLAUDE.md and installs hooks that keep pinned memories in context, save your task before compaction, store failed tool calls and run hippo sleep when the session ends.
-~/hippo
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site

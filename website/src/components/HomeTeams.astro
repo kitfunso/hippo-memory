@@ -1,0 +1,25 @@
+---
+// The engineering-lead case: what runs today, with the edition status beside it, and one way to the teams page.
+import { teams, enterprise } from '../content/site';
+import { mdInline } from '../content/readme';
+import Band from './Band.astro';
+---
+
+<Band id="teams">
+  <div class="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+    <div>
+      <h2>{teams.heading}</h2>
+      <p class="copy mt-5 text-body leading-relaxed text-ink-2" set:html={mdInline(teams.intro)} />
+      <p class="mt-4 text-sm leading-6 text-ink-3">{enterprise.availability}</p>
+      <a href="/teams/" class="btn-quiet mt-8">{teams.ctaLabel}</a>
+    </div>
+    <ol class="border-t border-rule">
+      {teams.items.map((item) => (
+        <li class="border-b border-rule py-6">
+          <h3 class="text-[1.0625rem] text-ink">{item.title}</h3>
+          <p class="copy mt-2 leading-relaxed text-ink-2" set:html={mdInline(item.text)} />
+        </li>
+      ))}
+    </ol>
+  </div>
+</Band>

@@ -15,7 +15,7 @@ const description =
 const publicDir = `${site.links.repo}/tree/master/benchmarks/public`;
 const evalIndexUrl = `${site.links.repo}/blob/master/docs/evals/README.md`;
 const reportUrl = `${site.links.repo}/issues/new`;
-const codeCls = 'rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300';
+const codeCls = 'rounded bg-paper-3 px-1.5 py-0.5 font-mono text-sm text-ink-2';
 ---
 
 <Base title={title} description={description} crumb="Benchmarks" published="2026-06-09" modified="2026-11-12">
@@ -27,53 +27,53 @@ const codeCls = 'rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zi
     </PageIntro>
 
     <section id="agent-sessions" class="relative border-t border-rule">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Repeat mistakes in real Claude Code sessions</h2>
-        <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-zinc-400">
+      <div class="wrap py-(--section-y)">
+        <h2 class="text-balance">Repeat mistakes in real Claude Code sessions</h2>
+        <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-ink-2">
           Each run corrects Claude Code once and then, 2 to 4 tasks later, gives it a task where the same mistake is possible. We ran it on 29 repositories, <a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer">registered first<span class="sr-only"> (opens in new tab)</span></a>.
         </p>
         <RepeatMistakes />
-        <p class="mt-8 max-w-3xl leading-relaxed text-zinc-400">
+        <p class="mt-8 max-w-3xl leading-relaxed text-ink-2">
           The chart counts first chances 2 to 4 tasks after the correction. The registered measure, the first chance in each mistake family over 148 units, gives 14.9 points fewer repeats with hippo [5.5, 24.3], at the same cost, a ratio of 1.006 [0.964, 1.049]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
         </p>
-        <p class="mt-4 max-w-3xl leading-relaxed text-zinc-400">
+        <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
           What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round 4 tests that. The corrections were scripted, the agent was Claude Code only, and the test code and run records are not in the public repo. The round before was inconclusive, at 8.9 points fewer on 16 repositories.
         </p>
       </div>
     </section>
 
     <section id="public" class="relative border-t border-rule">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Five public tests of answering from memory</h2>
-        <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-zinc-400">
+      <div class="wrap py-(--section-y)">
+        <h2 class="text-balance">Five public tests of answering from memory</h2>
+        <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-ink-2">
           Hippo 3.5.1 retrieves with its free local embedder, Claude Sonnet 5 answers, and each benchmark's own scorer marks the answer. BM25 is plain keyword search, the baseline to beat. Gaps are paired question by question before rounding, and intervals are 95%.
         </p>
         <PublicBenchmarks />
       </div>
     </section>
 
-    <section id="retrieval" class="relative border-t border-rule bg-white/[0.02]">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Finding the right session</h2>
-        <p class="mt-4 max-w-3xl leading-relaxed text-zinc-400">
+    <section id="retrieval" class="relative border-t border-rule bg-paper-3">
+      <div class="wrap py-(--section-y)">
+        <h2 class="text-balance">Finding the right session</h2>
+        <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
           On LongMemEval-S, hippo's benchmark scripts put an answer session in the top five for 98.0% of 500 questions with the free local MiniLM embedder. That is the best of five settings, chosen after the run, on a measure close to its ceiling. Requiring every answer session, the same runs score 86.8 to 88.5%, and gbrain is ahead at 95.53% with a paid reranker. The <code class={codeCls}>hippo recall</code> command on a default install scores 85.6% [82.4, 88.6]. On one store of all 19,195 sessions, recall fell to 47.2% in June 2026.
         </p>
       </div>
     </section>
 
     <section id="reranker" class="relative border-t border-rule">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">A paid reranker improved ranking, with no measurable gain in answers</h2>
-        <p class="mt-4 max-w-3xl leading-relaxed text-zinc-400">
+      <div class="wrap py-(--section-y)">
+        <h2 class="text-balance">A paid reranker improved ranking, with no measurable gain in answers</h2>
+        <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
           <code class={codeCls}>--reranker jev</code> sends the top candidates to the hosted TypeSafe Jev API, and is off by default. On 300 developer queries from a private store, the right memory ranked first for 62% of them, against 41% with the free local cross-encoder. <a class="link" href={site.links.jevEval} target="_blank" rel="noopener noreferrer">Three graded-answer tests<span class="sr-only"> (opens in new tab)</span></a> showed no better answer rate. It buys a shorter context for about 0.0004 USD a recall, and it sends your query and candidate text to a third party.
         </p>
       </div>
     </section>
 
-    <section id="losses" class="relative border-t border-rule bg-white/[0.02]">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">What didn't work</h2>
-        <ul class="mt-6 max-w-3xl list-disc space-y-3 pl-5 leading-relaxed text-zinc-400">
+    <section id="losses" class="relative border-t border-rule bg-paper-3">
+      <div class="wrap py-(--section-y)">
+        <h2 class="text-balance">What didn't work</h2>
+        <ul class="mt-6 max-w-3xl list-disc space-y-3 pl-5 leading-relaxed text-ink-2">
           <li>Sleep lowered recall by 3.6 points [1.4, 5.8] on one scorer and raised it a little on another, so we claim no benefit for it.</li>
           <li>Decay made no measurable difference, on a synthetic test that gives a 365-day half-life little time to act.</li>
           <li>The old 7-day default was a bug that cost recall, so the default moved to 365 days.</li>
@@ -84,15 +84,15 @@ const codeCls = 'rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zi
     </section>
 
     <section id="reproduce" class="relative border-t border-rule">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Check our work</h2>
-        <p class="mt-4 max-w-3xl leading-relaxed text-zinc-400">
+      <div class="wrap py-(--section-y)">
+        <h2 class="text-balance">Check our work</h2>
+        <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
           The score files for the five public tests and their write-ups are in the repo, under <code class={codeCls}>benchmarks/public</code>.
         </p>
         <div class="mt-7 flex flex-wrap gap-3">
-          <a href={publicDir} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-900 transition hover:bg-white">Benchmark results<span class="sr-only"> (opens in new tab)</span></a>
-          <a href={evalIndexUrl} target="_blank" rel="noopener noreferrer" class="rounded-lg border border-white/12 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-200 transition hover:border-white/25">Eval documents<span class="sr-only"> (opens in new tab)</span></a>
-          <a href={reportUrl} target="_blank" rel="noopener noreferrer" class="rounded-lg border border-white/12 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-200 transition hover:border-white/25">Report a mistake<span class="sr-only"> (opens in new tab)</span></a>
+          <a href={publicDir} target="_blank" rel="noopener noreferrer" class="btn">Benchmark results<span class="sr-only"> (opens in new tab)</span></a>
+          <a href={evalIndexUrl} target="_blank" rel="noopener noreferrer" class="btn-quiet">Eval documents<span class="sr-only"> (opens in new tab)</span></a>
+          <a href={reportUrl} target="_blank" rel="noopener noreferrer" class="btn-quiet">Report a mistake<span class="sr-only"> (opens in new tab)</span></a>
         </div>
       </div>
     </section>
