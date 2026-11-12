@@ -7,117 +7,82 @@ import Section from '../../components/Section.astro';
 import Cmd from '../../components/Cmd.astro';
 import Faq from '../../components/Faq.astro';
 import RepeatMistakes from '../../components/RepeatMistakes.astro';
-import { faqPick } from '../../content/site';
-import { faqPageLd } from '../../content/readme';
+import { faqPick, site } from '../../content/site';
 
-const title = 'CLAUDE.md vs MEMORY.md: when to use hippo | hippo-memory';
+const title = 'CLAUDE.md vs MEMORY.md vs hippo: what goes where';
 const description =
-  'CLAUDE.md holds rules you write; auto memory holds notes Claude writes itself. What each loads, where it lives, and where a lesson store like hippo fits.';
+  "What belongs in CLAUDE.md, what Claude Code's auto memory keeps, and where hippo fits. In our own test on 29 repositories, against built-in memory alone, adding hippo took repeat mistakes from 21 in 100 to 11.";
 const docs = 'https://code.claude.com/docs/en/memory';
 
-// Only this page's answers get FAQPage markup here; the README question is marked up once, on /faq/.
-const qa = [
-  {
-    q: 'What is the difference between CLAUDE.md and auto memory?',
-    a: "`CLAUDE.md` files hold instructions you write; auto memory holds notes Claude writes itself from your corrections and preferences. Both load at the start of every conversation, as context rather than enforced configuration. `CLAUDE.md` can sit at user, project and local level, and the project file can be checked in; auto memory stays on the machine, in `~/.claude/projects/<project>/memory/` (Claude Code's memory docs, checked 2026-09-28).",
-  },
-  {
-    q: "How much of Claude Code's auto memory loads each session?",
-    a: "The first 200 lines of `MEMORY.md` or the first 25KB, whichever comes first, per Claude Code's memory docs (checked 2026-09-28). `MEMORY.md` is the index of auto memory, with one topic file per memory beside it.",
-  },
-];
 const cards = [
-  {
-    name: 'CLAUDE.md',
-    body: 'Rules you write for every session: build and test commands, code style, things never to do. The project file can be checked in, so your team shares it.',
-  },
-  {
-    name: 'Auto memory',
-    body: "Notes Claude writes itself from your corrections and preferences. On by default, loaded at the start of each conversation, and kept on this machine.",
-  },
+  { name: 'CLAUDE.md', body: 'Rules you write for every session, such as build commands and code style.' },
+  { name: 'Auto memory', body: 'Leave this to Claude, which notes your corrections and preferences.' },
   {
     name: 'hippo',
-    body: 'Lessons that pile up as you work: what failed, what fixed it, which facts changed. Recalled when they match the task, marked wrong or superseded when they stop being true, and shared with Codex, Cursor and your other agents.',
+    body: 'What comes up as you work, such as a failed command or a fact that changed. It is recalled when it matches the task and shared with your other agents.',
   },
 ];
 ---
 
-<Base title={title} description={description} crumb="CLAUDE.md vs memory" published="2026-09-28" schema={[faqPageLd(qa)]}>
+<Base title={title} description={description} crumb="CLAUDE.md vs memory" published="2026-09-28">
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">CLAUDE.md vs MEMORY.md: <span class="text-gradient">what goes where</span></Fragment>
+      <Fragment slot="title">CLAUDE.md, auto memory and hippo: <span class="text-ink">what goes where</span></Fragment>
       <p>
-        If you are working out how to deal with a <code>CLAUDE.md</code> file properly, most of the answer is deciding
-        what belongs in it and what belongs somewhere else. Claude Code has two memories of its own: the
-        <code>CLAUDE.md</code> files you write and the auto memory it writes. Hippo adds a third kind, a store of lessons
-        that are recalled when they match the task.
+        Claude Code has two memories of its own, the <code>CLAUDE.md</code> files you write and the auto memory it writes. Hippo runs beside both. This page says what belongs in each, and what we measured when hippo was added.
       </p>
     </PageIntro>
 
-    <Section title="Claude Code's two memories (checked 2026-09-28)">
+    <Section title="Claude Code's two memories">
       <ul class="list-disc space-y-2 pl-5">
         <li>
-          <code>CLAUDE.md</code> files hold instructions you write. They can sit at four levels: managed policy, user
-          (<code>~/.claude/CLAUDE.md</code>), project (<code>./CLAUDE.md</code> or <code>./.claude/CLAUDE.md</code>) and
-          local (<code>./CLAUDE.local.md</code>). Every file found is added to context; none overrides another.
+          <code>CLAUDE.md</code> files hold instructions you write, at managed, user, project and local level. Every file found is added to context, and none overrides another.
         </li>
         <li>
-          Auto memory holds notes Claude writes itself from your corrections and preferences: a <code>MEMORY.md</code>
-          index and one topic file per memory, in <code>~/.claude/projects/&lt;project&gt;/memory/</code>. It is on by
-          default and stays on the machine.
+          Auto memory holds notes Claude writes from your corrections and preferences, in a <code>MEMORY.md</code> index with one topic file per memory. It is on by default and stays on the machine. Each session loads the first 200 lines of <code>MEMORY.md</code> or the first 25KB, whichever comes first.
         </li>
         <li>
-          Both load at the start of every conversation, as context rather than enforced configuration. For auto memory,
-          that is the first 200 lines of <code>MEMORY.md</code> or the first 25KB, whichever comes first.
-        </li>
-        <li>
-          When two rules contradict each other, Claude may pick one arbitrarily. <code>/doctor prompt-audit</code> looks
-          for contradictions and stale instructions and proposes edits.
+          Both are context, and neither is enforced. When two rules contradict each other, Claude may pick one arbitrarily (<a class="link" href={docs} target="_blank" rel="noopener noreferrer">Claude Code's memory docs<span class="sr-only"> (opens in new tab)</span></a>, checked 12 November 2026).
         </li>
       </ul>
-      <p>
-        Source: Claude Code's
-        <a class="link" href={docs} target="_blank" rel="noopener noreferrer">memory docs<span class="sr-only"> (opens in new tab)</span></a>.
-      </p>
     </Section>
 
     <Section title="What goes where" alt>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {cards.map((c) => (
-          <div class="glass rounded-2xl p-6">
-            <h3 class="text-base font-medium text-zinc-100">{c.name}</h3>
+          <div class="rounded-xl border border-rule bg-paper-2 p-6">
+            <h3 class="text-base font-medium text-ink">{c.name}</h3>
             <p class="mt-2 text-sm leading-relaxed">{c.body}</p>
           </div>
         ))}
       </div>
     </Section>
 
-    <section id="measured-against-built-in-memory" class="relative border-t border-white/5">
-      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-        <h2 class="max-w-3xl text-balance text-3xl leading-tight sm:text-4xl">Measured against built-in memory</h2>
-        <p class="mt-6 mb-8 max-w-3xl leading-relaxed text-zinc-400">
-          Hippo runs beside Claude Code's own memory, so the fair test is built-in memory alone against built-in memory
-          plus hippo, on the same tasks.
+    <section id="measured-against-built-in-memory" class="relative border-t border-rule">
+      <div class="wrap py-(--section-y)">
+        <h2 class="max-w-3xl text-balance">Measured against built-in memory</h2>
+        <p class="mt-6 mb-8 max-w-3xl leading-relaxed text-ink-2">
+          Hippo runs beside Claude Code's own memory, so the fair test is built-in memory alone against built-in memory plus hippo on the same tasks. We ran it on 29 repositories, registered first.
         </p>
         <RepeatMistakes />
+        <p class="mt-8 max-w-3xl leading-relaxed text-ink-2">
+          Built-in memory does most of the work, taking repeats from 83 in 100 to 21. Adding hippo took them to 11 at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. One early clue, from a debugging read and no verdict, is that in the capture-off arm Claude Code's own memory already held the taught rule at 112 of 162 first chances to repeat.
+        </p>
+        <p class="mt-4 max-w-3xl">
+          <a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer">The round 3 result<span class="sr-only"> (opens in new tab)</span></a>
+        </p>
       </div>
     </section>
 
     <Section title="Bringing CLAUDE.md notes into hippo" alt>
-      <Cmd lines={['# preview first, then import', 'hippo import --claude CLAUDE.md --dry-run', 'hippo import --claude CLAUDE.md']} />
+      <Cmd lines={['hippo import --claude CLAUDE.md --dry-run', 'hippo import --claude CLAUDE.md']} />
       <p>
-        The import skips hippo's own block and any duplicates. After that, <code>hippo sleep</code> at the end of each
-        session also imports new entries from Claude Code's <code>MEMORY.md</code> files, so auto memory notes reach the
-        store your other agents read. <code>hippo init</code> adds a short block to <code>CLAUDE.md</code> saying the
-        prompt hook injects pinned rules and matching memories, and asking Claude to run
-        <code>hippo context --auto</code> at the start of a task only if no hippo memory block has appeared. It leaves
-        the rest of the file alone. The
-        <a class="link" href="/claude-code/">Claude Code page</a> covers the hooks.
+        The import skips hippo's own block and any duplicates. After that, <code>hippo sleep</code> at the end of each session also imports new auto memory notes, so they reach the store your other agents read.
       </p>
     </Section>
 
-    <Faq items={[...qa, ...faqPick(['Do I still need CLAUDE.md?'])]} heading="CLAUDE.md questions" moreHref="/faq/" />
+    <Faq items={faqPick(['Do I still need CLAUDE.md?'])} heading="CLAUDE.md questions" moreHref="/faq/" />
   </main>
   <Footer />
 </Base>

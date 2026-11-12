@@ -1,4 +1,4 @@
-// Post-build guard: glued inline tags, duplicate ids, DESIGN.md colour drift, locked visible text.
+// Post-build guard: glued inline tags, duplicate ids, DESIGN.md colour drift, American spelling, locked visible text.
 // Run by `npm run build`; `--update` rewrites text-snapshot/ instead of comparing against it.
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
@@ -11,6 +11,9 @@ const UPDATE = process.argv.includes('--update');
 const GLUE = [/[A-Za-z0-9:;,.)]<(a|code|strong|em)[ >]/g, /<\/(a|code|strong|em)>[A-Za-z(]/g];
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', nbsp: ' ', middot: '·' };
 const TEXT_FIX = 'Site wording is locked: if this change is meant, run "npm --prefix website run snapshot" and commit website/text-snapshot.';
+// Site prose is British English with -ise endings (DESIGN.md Copy rules); proper names keep their own spelling.
+const US_UK = JSON.parse(readFileSync(join(SITE, 'scripts', 'us-uk.json'), 'utf8'));
+const KEEP = ['MIT License', 'Recursive Summarization'];
 /** @type {string[]} */
 const fails = [];
 
@@ -82,6 +85,18 @@ function visibleText(html) {
     .replace(/\d[\d,.]*[kM]?/g, 'N');
 }
 
+/** @param {string} html @returns {string[]} "us -> uk" for each American spelling in prose, titles, descriptions and alt text */
+function americanSpellings(html) {
+  const meta = [...html.matchAll(/<meta\b[^>]*>/gi)]
+    .map((m) => m[0])
+    .filter((t) => /(name|property)="(description|og:description|twitter:description|og:title|twitter:title)"/i.test(t))
+    .map((t) => (t.match(/content="([^"]*)"/i) || [])[1] ?? '');
+  const alt = [...html.matchAll(/\salt="([^"]*)"/gi)].map((m) => m[1]);
+  const prose = KEEP.reduce((s, k) => s.replaceAll(k, ''), [visibleText(strip(html, ['pre', 'code', 'kbd'])), ...meta, ...alt].join('\n'));
+  const hits = (prose.match(/[A-Za-z]+/g) ?? []).filter((w) => Object.hasOwn(US_UK, w.toLowerCase()));
+  return [...new Set(hits.map((w) => `${w} -> ${US_UK[w.toLowerCase()]}`))];
+}
+
 /** @param {string} want @param {string} got @returns {string} empty when equal */
 function firstDiff(want, got) {
   const a = want.split('\n');
@@ -118,13 +133,15 @@ function main() {
     const glued = gluedSnippets(html);
     if (glued.length) fail(`${slug}: ${glued.length} inline tags glued to a word, e.g. "${glued[0]}". Fix: put the tag on the same source line as the word, or keep compressHTML: true in astro.config.mjs.`);
     duplicateIds(html).forEach((id) => fail(`${slug}: id="${id}" appears twice on the page. Fix: give each element a unique id.`));
+    const us = americanSpellings(html);
+    if (us.length) fail(`${slug}: American spelling (${us.join(', ')}). Fix: use the British form, or add a proper name to KEEP in check-build.mjs.`);
   }
   const hexes = designHexes();
   unusedHexes(hexes).forEach((h) => fail(`DESIGN.md: ${h} is in the front matter but nowhere in src/ or scripts/. Fix: correct DESIGN.md or the code.`));
   if (UPDATE) syncSnapshots(pages); else compareSnapshots(pages);
   if (fails.length) { console.error(fails.join('\n')); process.exit(1); }
   const tail = UPDATE ? `wrote ${pages.length} text snapshots` : 'text matches snapshot';
-  console.log(`[check-build] OK: ${pages.length} pages, 0 glued inline tags, 0 duplicate ids, ${hexes.length} design hexes found, ${tail}`);
+  console.log(`[check-build] OK: ${pages.length} pages, 0 glued inline tags, 0 duplicate ids, 0 American spellings, ${hexes.length} design hexes found, ${tail}`);
 }
 
 main();

@@ -1,0 +1,452 @@
+{
+ "answerModel": "Claude Sonnet 5",
+ "receipts": "benchmarks/public/results/2026-11-12-answer-accuracy",
+ "benches": [
+  {
+   "name": "LoCoMo",
+   "unit": "%",
+   "n": 395,
+   "hippo": 89.4,
+   "setting": "local embedder",
+   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/locomo-h2h-emb.txt",
+   "rivals": [
+    {
+     "name": "hippo, embeddings off",
+     "value": 88.6,
+     "diff": 0.8,
+     "lo": -1.8,
+     "hi": 3.3
+    },
+    {
+     "name": "BM25",
+     "value": 87.3,
+     "diff": 2.0,
+     "lo": -0.5,
+     "hi": 4.6
+    },
+    {
+     "name": "Mem0",
+     "value": 94.9,
+     "diff": -5.6,
+     "lo": -8.1,
+     "hi": -3.0
+    }
+   ],
+   "published": [
+    {
+     "name": "EverMemOS",
+     "system": "EverMemOS / EverOS (EverMind)",
+     "value": 93.05,
+     "kind": "product",
+     "src": "https://evermind.ai/blogs/everos-sota-results-across-four-memory-benchmarks-and-what-it-means-for-llm-agents"
+    },
+    {
+     "name": "Mem0",
+     "system": "Mem0 (April 2026 algorithm)",
+     "value": 92.5,
+     "kind": "product",
+     "src": "https://mem0.ai/research-3"
+    },
+    {
+     "name": "Backboard",
+     "system": "Backboard",
+     "value": 90.0,
+     "kind": "product",
+     "src": "https://backboard.io/blog/best-ai-memory-score-in-the-world"
+    },
+    {
+     "name": "Honcho",
+     "system": "Honcho (Plastic Labs)",
+     "value": 89.9,
+     "kind": "product",
+     "src": "https://espirai-blog.pages.dev/research/Benchmarking-Honcho"
+    },
+    {
+     "name": "Hindsight",
+     "system": "Hindsight (Gemini-3 Pro answer generator)",
+     "value": 89.61,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2512.12818v1"
+    },
+    {
+     "name": "Full chat",
+     "system": "Full-context (MIRIX paper upper bound)",
+     "value": 87.52,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.07957"
+    },
+    {
+     "name": "MIRIX",
+     "system": "MIRIX",
+     "value": 85.38,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.07957"
+    },
+    {
+     "name": "Zep",
+     "system": "Zep (later post)",
+     "value": 80.0,
+     "kind": "product",
+     "src": "https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/"
+    },
+    {
+     "name": "gbrain",
+     "system": "gbrain (gbrain-defaults)",
+     "value": 80.0,
+     "kind": "product",
+     "src": "https://github.com/garrytan/gbrain-evals"
+    },
+    {
+     "name": "LangMem",
+     "system": "LangMem (re-run in MIRIX paper)",
+     "value": 78.05,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.07957"
+    },
+    {
+     "name": "Memobase",
+     "system": "Memobase v0.0.37",
+     "value": 75.78,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2512.12818v1"
+    },
+    {
+     "name": "Letta",
+     "system": "Letta (filesystem agent)",
+     "value": 74.0,
+     "kind": "product",
+     "src": "https://www.letta.com/blog/benchmarking-ai-agent-memory"
+    },
+    {
+     "name": "OpenAI Memory",
+     "system": "OpenAI Memory (as measured in Mem0 paper)",
+     "value": 52.9,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2504.19413"
+    },
+    {
+     "name": "A-Mem",
+     "system": "A-Mem (as measured in Mem0 paper)",
+     "value": 48.38,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2504.19413"
+    }
+   ],
+   "rank": 6,
+   "field": 14
+  },
+  {
+   "name": "LongMemEval-S",
+   "unit": "%",
+   "n": 495,
+   "hippo": 88.5,
+   "setting": "local embedder",
+   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/longmemeval-s-emb.txt",
+   "rivals": [
+    {
+     "name": "hippo, embeddings off",
+     "value": 86.7,
+     "diff": 1.8,
+     "lo": -1.2,
+     "hi": 4.6
+    },
+    {
+     "name": "BM25",
+     "value": 86.1,
+     "diff": 2.4,
+     "lo": -0.4,
+     "hi": 5.3
+    }
+   ],
+   "published": [
+    {
+     "name": "Mastra",
+     "system": "Mastra Observational Memory",
+     "value": 94.87,
+     "kind": "product",
+     "src": "https://mastra.ai/research/observational-memory"
+    },
+    {
+     "name": "gbrain",
+     "system": "gbrain (Opus 5.5 reader)",
+     "value": 94.8,
+     "kind": "product",
+     "src": "https://github.com/garrytan/gbrain-evals"
+    },
+    {
+     "name": "Mem0",
+     "system": "Mem0 (April 2026 algorithm)",
+     "value": 94.4,
+     "kind": "product",
+     "src": "https://mem0.ai/blog/locomo-benchmark"
+    },
+    {
+     "name": "Backboard",
+     "system": "Backboard",
+     "value": 93.4,
+     "kind": "product",
+     "src": "https://backboard.io/blog/backboard-io-becomes-first-ai-platform-to-lead-both-major-memory-benchmarks"
+    },
+    {
+     "name": "Honcho",
+     "system": "Honcho (Plastic Labs)",
+     "value": 92.6,
+     "kind": "product",
+     "src": "https://espirai-blog.pages.dev/research/Benchmarking-Honcho"
+    },
+    {
+     "name": "Hindsight",
+     "system": "Hindsight (Gemini-3 Pro answer generator)",
+     "value": 91.4,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2512.12818v1"
+    },
+    {
+     "name": "Memoria",
+     "system": "Memoria (reader claude-opus-4.6)",
+     "value": 88.78,
+     "kind": "product",
+     "src": "https://dev.to/origin_matrix_b790e656217/benchmarking-memoria-on-longmemeval-strong-memory-retrieval-clear-reader-separation-435b"
+    },
+    {
+     "name": "EmergenceMem Internal",
+     "system": "EmergenceMem Internal",
+     "value": 86.0,
+     "kind": "product",
+     "src": "https://www.emergence.ai/blog/sota-on-longmemeval-with-rag"
+    },
+    {
+     "name": "Supermemory",
+     "system": "Supermemory",
+     "value": 85.2,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2512.12818v1"
+    },
+    {
+     "name": "EverMemOS",
+     "system": "EverMemOS / EverOS (EverMind)",
+     "value": 83.0,
+     "kind": "product",
+     "src": "https://evermind.ai/blogs/everos-sota-results-across-four-memory-benchmarks-and-what-it-means-for-llm-agents"
+    },
+    {
+     "name": "Zep",
+     "system": "Zep",
+     "value": 71.2,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2501.13956v1"
+    },
+    {
+     "name": "Full chat",
+     "system": "Full-context GPT-4o with Chain-of-Note (LongMemEval paper)",
+     "value": 64.0,
+     "kind": "paper-baseline",
+     "src": "https://arxiv.org/html/2410.10813"
+    }
+   ],
+   "rank": 8,
+   "field": 12
+  },
+  {
+   "name": "PersonaMem v1",
+   "unit": "%",
+   "n": 584,
+   "hippo": 72.4,
+   "setting": "local embedder",
+   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/personamem_v1-emb.txt",
+   "rivals": [
+    {
+     "name": "hippo, embeddings off",
+     "value": 69.0,
+     "diff": 3.4,
+     "lo": 0.5,
+     "hi": 6.4
+    },
+    {
+     "name": "BM25",
+     "value": 68.0,
+     "diff": 4.5,
+     "lo": 0.9,
+     "hi": 8.0
+    }
+   ],
+   "published": [
+    {
+     "name": "MemOS",
+     "system": "MemOS-1031",
+     "value": 61.2,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.03724v4"
+    },
+    {
+     "name": "Memobase",
+     "system": "Memobase",
+     "value": 58.9,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.03724v4"
+    },
+    {
+     "name": "Zep",
+     "system": "Zep",
+     "value": 57.8,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.03724v4"
+    },
+    {
+     "name": "MemU",
+     "system": "MemU",
+     "value": 56.8,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.03724v4"
+    },
+    {
+     "name": "Supermemory",
+     "system": "Supermemory",
+     "value": 53.9,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.03724v4"
+    },
+    {
+     "name": "GPT-4.5 and Gemini-1.5",
+     "system": "GPT-4.5 and Gemini-1.5 (full context, paper baseline)",
+     "value": 52.0,
+     "kind": "paper-baseline",
+     "src": "https://arxiv.org/html/2504.14225"
+    },
+    {
+     "name": "Mem0",
+     "system": "Mem0",
+     "value": 43.1,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.03724v4"
+    },
+    {
+     "name": "Llama-4-Maverick",
+     "system": "Llama-4-Maverick (paper baseline)",
+     "value": 43.0,
+     "kind": "paper-baseline",
+     "src": "https://arxiv.org/html/2504.14225"
+    },
+    {
+     "name": "MIRIX",
+     "system": "MIRIX",
+     "value": 38.4,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2507.03724v4"
+    }
+   ],
+   "rank": 1,
+   "field": 8
+  },
+  {
+   "name": "DMR",
+   "unit": "%",
+   "n": 495,
+   "hippo": 77.6,
+   "setting": "local embedder and reranker",
+   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/dmr-best.txt",
+   "rivals": [
+    {
+     "name": "hippo, embeddings off",
+     "value": 61.2,
+     "diff": 16.4,
+     "lo": 11.7,
+     "hi": 20.8
+    },
+    {
+     "name": "BM25",
+     "value": 61.4,
+     "diff": 16.2,
+     "lo": 11.7,
+     "hi": 20.6
+    },
+    {
+     "name": "hippo, embedder only",
+     "value": 73.1,
+     "diff": 4.4,
+     "lo": 0.6,
+     "hi": 8.3
+    },
+    {
+     "name": "Full chat",
+     "value": 83.6,
+     "diff": -6.1,
+     "lo": -9.7,
+     "hi": -2.4
+    }
+   ],
+   "published": [
+    {
+     "name": "Zep",
+     "system": "Zep",
+     "value": 98.2,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2501.13956v1"
+    },
+    {
+     "name": "Full chat",
+     "system": "Full-conversation baseline",
+     "value": 98.0,
+     "kind": "paper-baseline",
+     "src": "https://arxiv.org/html/2501.13956v1"
+    },
+    {
+     "name": "MemGPT",
+     "system": "MemGPT",
+     "value": 93.4,
+     "kind": "product",
+     "src": "https://arxiv.org/html/2501.13956v1"
+    },
+    {
+     "name": "Recursive Summarization",
+     "system": "Recursive Summarization (MemGPT-paper baseline)",
+     "value": 35.3,
+     "kind": "paper-baseline",
+     "src": "https://arxiv.org/html/2501.13956v1"
+    }
+   ],
+   "rank": 3,
+   "field": 3
+  },
+  {
+   "name": "HotPotQA-24 (Cognee)",
+   "unit": "F1",
+   "n": 19,
+   "hippo": 95.6,
+   "setting": "local embedder and reranker",
+   "file": "benchmarks/public/results/2026-11-12-answer-accuracy/hotpotqa24-best.txt",
+   "rivals": [
+    {
+     "name": "hippo, embeddings off",
+     "value": 85.1,
+     "diff": 10.5,
+     "lo": 0.0,
+     "hi": 26.3
+    },
+    {
+     "name": "BM25",
+     "value": 85.1,
+     "diff": 10.5,
+     "lo": 0.0,
+     "hi": 26.3
+    },
+    {
+     "name": "hippo, embedder only",
+     "value": 92.1,
+     "diff": 3.5,
+     "lo": 0.0,
+     "hi": 10.5
+    }
+   ],
+   "published": [],
+   "rank": null,
+   "field": null
+  }
+ ],
+ "storeCalls": {
+  "bench": "LoCoMo",
+  "mem0": 5882,
+  "hippo": 0,
+  "file": "benchmarks/public/results/2026-11-12-answer-accuracy/mem0-locomo-ingest-gate.json"
+ }
+}

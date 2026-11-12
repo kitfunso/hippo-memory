@@ -1,73 +1,99 @@
-/* hippo-memory design system, "Terminal Native": ink ground, mint = recalled, amber = marked wrong.
-   Geist sets text and headings, Geist Mono code, terminal and nav (faces come from astro.config fonts).
-   accent: recalled, the brand mint. accent-light: links and the focus ring. warn: marked wrong and published losses. */
+/* hippo-memory design system, "Card catalogue": warm paper, typed ink, one bottle-green accent.
+   Newsreader sets h1 and h2; Geist sets everything else; Geist Mono sets code and figures.
+   Rationale and the do-not list live in DESIGN.md. */
 
 @import 'tailwindcss';
 
 @theme {
-  --font-display: var(--font-geist);
+  --font-display: var(--font-newsreader);
   --font-sans: var(--font-geist);
   --font-mono: var(--font-geist-mono);
 
-  /* brand accents: mint = recalled, amber = marked wrong */
-  --color-accent: #7ce38b;
-  --color-accent-light: #a7f0b1;
-  --color-warn: #f2b84b;
+  /* one warm ramp: page, card, raised; three text roles (ink-3 holds 4.5:1 on paper-3) */
+  --color-paper: #f7f4ee;
+  --color-paper-2: #fdfbf7;
+  --color-paper-3: #efe9df;
+  --color-ink: #1f1b16;
+  --color-ink-2: #5e554a;
+  --color-ink-3: #6b6256;
+  --color-rule: rgb(31 27 22 / 0.1);
+  --color-rule-strong: rgb(31 27 22 / 0.2);
 
-  /* neutrals tinted toward the ink ground (overrides Tailwind's zinc scale sitewide) */
-  --color-zinc-50: #f2f5f2;
-  --color-zinc-100: #e6ede7;
-  --color-zinc-200: #d3dcd5;
-  --color-zinc-300: #b5c1b8;
-  --color-zinc-400: #9aa79e;
-  --color-zinc-500: #75827a;
-  --color-zinc-600: #56625a;
-  --color-zinc-700: #3a443d;
-  --color-zinc-800: #1f2a22;
-  --color-zinc-900: #141b16;
-  --color-zinc-950: #0b0f0c;
+  /* accent: links, the primary figure, focus; warn: published losses and "marked wrong" */
+  --color-accent: #1d5b43;
+  --color-accent-deep: #14402f;
+  --color-warn: #a3402a;
 
-  /* terminal palette */
-  --color-term-bg: #0f1411;
-  --color-term-prompt: #7ce38b;
-  --color-term-ok: #7ce38b;
-  --color-term-fg: #e6ede7;
-  --color-term-err: #f2837b;
+  --text-body: 1.0625rem;
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ---- base ---- */
+/* The one page column every section, the nav and the footer share. */
+@utility wrap {
+  margin-inline: auto;
+  max-width: var(--container-6xl);
+  padding-inline: 1.25rem;
+  @media (width >= 40rem) {
+    padding-inline: 2rem;
+  }
+}
+
+/* The two button looks; the nav's small Install button keeps its own size. */
+@utility btn {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding-inline: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+  transition: background-color 150ms;
+  &:hover {
+    background-color: var(--color-accent-deep);
+  }
+}
+@utility btn-quiet {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-rule-strong);
+  padding-inline: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--color-ink);
+  transition: background-color 150ms;
+  &:hover {
+    background-color: var(--color-paper-3);
+  }
+}
+
 @layer base {
   :root {
-    color-scheme: dark;
-    --bg: #0b0f0c;
-    /* em, not ch: Geist averages ~0.45em a character, so 30em holds about 70 per line at any text size */
-    --measure: 30em;
-    /* DESIGN section_padding_y: one vertical rhythm, used as py-(--section-y) on every section */
-    --section-y: 2.5rem;
-    /* two durations and one curve for all motion (Astryx bands: hover 125-175ms, entrance 300-410ms) */
+    color-scheme: light;
+    /* em, not ch: Geist averages ~0.45em a character, so 34em holds about 75 per line */
+    --measure: 34em;
+    --section-y: 4rem;
     --duration-fast: 150ms;
     --duration-medium: 400ms;
     --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
-    /* DESIGN h1_leading: one display leading for every h1 */
-    --leading-display: 1.1;
-  }
-  @media (width >= 48rem) {
-    :root { --section-y: 3.5rem; }
+    --leading-display: 1.05;
   }
   @media (width >= 64rem) {
-    :root { --section-y: 4.5rem; }
+    :root { --section-y: 6rem; }
   }
 
   html {
-    /* bg lives on html and body stays transparent, so the fixed z-index -1
-       background canvas (BackgroundFx.astro) reads through site-long. */
-    background-color: var(--bg);
+    background-color: var(--color-paper);
     scroll-behavior: smooth;
     /* keeps focused and anchored targets clear of the 64px sticky header (WCAG 2.4.11) */
     scroll-padding-top: 5rem;
   }
 
-  /* DESIGN prose_measure; mono captions are labels, not running text */
   p:not(.font-mono, .flex),
   .list-disc > li,
   dd {
@@ -75,80 +101,55 @@
   }
 
   body {
-    background-color: transparent;
-    color: theme(--color-zinc-100);
+    color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  h1, h2, h3 {
+  h1, h2 {
     font-family: var(--font-display);
-    letter-spacing: -0.025em;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+  }
+  /* one h2 size sitewide, so sections never pick their own */
+  h2 {
+    font-size: 2rem;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+  @media (width >= 40rem) {
+    h2 { font-size: 2.5rem; }
+  }
+  h3 {
+    font-family: var(--font-sans);
     font-weight: 500;
+    letter-spacing: 0;
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--color-accent) 40%, transparent);
-    color: #fff;
+    background: rgb(29 91 67 / 0.18);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-accent-light);
+    outline: 2px solid var(--color-accent);
     outline-offset: 3px;
     border-radius: 4px;
   }
 }
 
-/* ---- gradient text (pinned @supports fallback so it never renders transparent) ---- */
-.text-gradient {
-  color: #7ce38b; /* mint, passes AA on the ink ground */
-}
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  .text-gradient {
-    background-image: linear-gradient(110deg, var(--color-accent) 0%, var(--color-accent-light) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    color: transparent;
-  }
-}
-
-/* ---- glass surface ----
-   Standard property only: prefixing is the build toolchain's job. A hand-written
-   -webkit- duplicate made LightningCSS collapse the pair and ship a build whose
-   .glass had no standard backdrop-filter at all (audit 2026-06-10, high). */
-.glass {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(14px) saturate(140%);
-}
-/* Sticky header only: dark fallback so page text never reads through where
-   backdrop-filter is unsupported. The ~40 .glass content cards keep the light fill. */
-header.glass {
-  background: rgba(11, 15, 12, 0.88);
-}
-.glass-hover {
-  transition: border-color var(--duration-fast) ease, background var(--duration-fast) ease, transform var(--duration-fast) ease;
-}
-.glass-hover:hover {
-  border-color: rgba(124, 227, 139, 0.35);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-/* ---- prose links (DESIGN.md links token) ----
-   One treatment sitewide: mint with a 45% underline at rest, full on hover/focus.
-   Applied per-link via this class - deliberately NOT a blanket `a` rule, so nav
-   pills, CTAs, and card links keep their own treatments. */
+/* one prose-link treatment sitewide, applied per link so buttons and nav keep their own */
 .link {
-  color: var(--color-accent-light);
+  color: var(--color-accent);
   text-decoration-line: underline;
-  text-decoration-color: rgba(167, 240, 177, 0.45);
+  text-decoration-color: rgb(29 91 67 / 0.35);
+  text-decoration-thickness: 1px;
   text-underline-offset: 4px;
+  transition: text-decoration-color var(--duration-fast) var(--ease-standard);
 }
 .link:hover,
 .link:focus-visible {
-  text-decoration-color: var(--color-accent-light);
+  text-decoration-color: var(--color-accent);
 }
 /* a text link that stands alone gets a 24px tap area; the text does not move */
 .tap { position: relative; display: inline-block; }
@@ -161,20 +162,15 @@ header.glass {
   transform: translateY(-50%);
 }
 
-/* ---- inline code in long-form copy (README markdown and the content pages); long config strings wrap on phones ---- */
-.copy code {
+/* inline code in long-form prose only, so a command row keeps its own look; long strings wrap on phones */
+.copy :is(p, li, dd, td, th) code {
   font-family: var(--font-mono);
   font-size: 0.875em;
-  color: var(--color-zinc-200);
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 0.25rem;
+  color: var(--color-ink);
+  background: var(--color-paper-3);
+  border-radius: 4px;
   padding: 0.1em 0.35em;
   overflow-wrap: anywhere;
-}
-
-/* wide tables on phones: fade the right edge while more columns sit off-screen (flag set in Base.astro) */
-[data-scroll-x][data-more] {
-  mask-image: linear-gradient(to right, #000 calc(100% - 3.5rem), transparent);
 }
 .copy pre code {
   font-size: inherit;
@@ -183,134 +179,42 @@ header.glass {
   padding: 0;
 }
 
-/* ---- current-page nav markers (aria-current set in Nav.astro) ---- */
+/* wide tables on phones: fade the right edge while more columns sit off-screen (flag set in Base.astro) */
+[data-scroll-x][data-more] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 3.5rem), transparent);
+}
+
 nav a[aria-current='page'] {
-  color: var(--color-accent-light);
+  color: var(--color-ink);
 }
-/* the mobile chip rail additionally gets a mint border + faint fill */
 nav[aria-label='Pages'] a[aria-current='page'] {
-  border-color: rgba(124, 227, 139, 0.55);
-  background: rgba(124, 227, 139, 0.08);
+  border-color: var(--color-ink);
 }
 
-/* ---- decorative backgrounds ---- */
-/* fixed background canvas (BackgroundFx.astro): behind everything, never
-   intercepts input. width/height are explicit because inset alone doesn't
-   stretch a replaced element. */
-#bg-fx {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-.dot-grid {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 75%);
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 75%);
-}
-.hero-glow {
-  background:
-    radial-gradient(50% 45% at 70% 12%, rgba(124, 227, 139, 0.12), transparent 70%),
-    radial-gradient(55% 50% at 25% 20%, rgba(124, 227, 139, 0.06), transparent 70%);
-}
-
-/* hairline gradient divider */
-.rule-gradient {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(124, 227, 139, 0.5), rgba(167, 240, 177, 0.5), transparent);
-}
-
-/* gradient ring/border via padding box trick for CTA + cards */
-.ring-grad {
-  position: relative;
-}
-.ring-grad::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(120deg, var(--color-accent), var(--color-accent-light));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* ---- entrance animation (staggered reveal on load / scroll) ---- */
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(16px); }
+/* the single entrance: the hero fades and rises once on load */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-.reveal {
-  animation: fade-up var(--duration-medium) var(--ease-standard) both;
+.rise {
+  animation: rise var(--duration-medium) var(--ease-standard) both;
 }
 
-/* ---- scroll-reveal (below-fold). Gated on .js so no-JS shows everything; the IO
-   script adds .is-visible when the element scrolls into view. ---- */
-.js [data-reveal] {
-  opacity: 0;
-  transform: translateY(16px);
-}
-.js [data-reveal].is-visible {
-  opacity: 1;
-  transform: none;
-  transition:
-    opacity var(--duration-medium) var(--ease-standard),
-    transform var(--duration-medium) var(--ease-standard);
-}
-@media (prefers-reduced-motion: reduce) {
-  .js [data-reveal] { opacity: 1; transform: none; }
-}
-
-/* ---- print and "Save as PDF": paper drops backgrounds, so the dark theme's light text needs dark ink ---- */
 @media print {
-  /* a dark color-scheme keeps the page canvas dark even with no background */
-  html { background: #fff !important; color-scheme: light; scroll-padding-top: 0; }
+  html { background: #fff !important; scroll-padding-top: 0; }
   *, *::before, *::after {
-    color: #111 !important;
-    -webkit-text-fill-color: currentColor !important;
-    background: transparent !important;
-    border-color: #c8c8c8 !important;
     box-shadow: none !important;
-    backdrop-filter: none !important;
-    mask-image: none !important;
     animation: none !important;
     transition: none !important;
   }
-  /* reveal, the typed terminal lines and the curve labels start at opacity 0 and would print blank */
-  .reveal, .js [data-reveal], [style*='opacity'] { opacity: 1 !important; transform: none !important; }
   header.sticky { position: static; }
-  #bg-fx, nav[aria-label='Pages'], [data-copy], .caret { display: none !important; }
-  svg text { fill: #111 !important; }
+  nav[aria-label='Pages'], [data-copy] { display: none !important; }
   a { text-decoration: underline; }
-  h2, h3, tr, pre, .glass { break-inside: avoid; }
+  h2, h3, tr, pre, figure { break-inside: avoid; }
+  .hero-scene canvas { display: none; }
+  .hero-scene img { opacity: 1 !important; }
 }
 
-@keyframes caret-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-.caret {
-  display: inline-block;
-  width: 0.6ch;
-  background: var(--color-term-prompt);
-  animation: caret-blink 1.05s step-end infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
-}
-/* recall-dot pulse via CSS (not SMIL) so the reduced-motion rule below stops it */
-.decay-dot {
-  animation: pulse-dot 2.2s ease-in-out infinite;
-}
-
-/* ---- reduced motion: kill all motion, show final state ---- */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {
@@ -318,5 +222,4 @@ nav[aria-label='Pages'] a[aria-current='page'] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
-  .caret { animation: none; opacity: 1; }
 }

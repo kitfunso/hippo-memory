@@ -11,7 +11,7 @@ const { text, label } = Astro.props;
   type="button"
   data-copy={text}
   aria-label={label}
-  class="relative shrink-0 rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-400 transition after:absolute after:-inset-2 after:content-[''] hover:border-accent/50 hover:text-zinc-100 focus-visible:text-zinc-100"
+  class="relative shrink-0 rounded-md border border-rule-strong bg-paper-2 px-2.5 py-1 font-sans text-xs font-medium text-ink-2 transition-colors duration-150 after:absolute after:-inset-2 after:content-[''] hover:border-ink hover:text-ink focus-visible:text-ink active:scale-[0.97]"
 >
   <span data-copy-label>Copy</span>
 </button>

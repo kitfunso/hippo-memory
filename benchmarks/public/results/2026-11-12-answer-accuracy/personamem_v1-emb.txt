@@ -1,0 +1,7 @@
+PersonaMem v1 (32k): 589 questions, 584 in the primary, top 20, answers 589, 0 judged by model, 589 by match
+hippo-emb  accuracy  72.4  memories  20.0  input tokens    6459
+secondary hippo-emb - hippo365 (69.0 in personamem_v1):  +3.4 pp [ +0.5,  +6.4] n=584 over 37 units  beats
+secondary hippo-emb - bm25 (68.0 in personamem_v1):  +4.5 pp [ +0.9,  +8.0] n=584 over 37 units  beats
+
+smoke items left out of every primary: 273ed74c-6547-40f1-9e82-459826e00b6b, 2c85c2a6-07ec-4ab1-92cc-06dc775f4fe8, 67bec3f4-df73-4dbe-9dc2-74be96ebc51c, 8659e747-044a-47fa-a410-f5be842f4f7c, acd74206-37dc-4756-94a8-b99a395d9a21
+answers exhausted after 3 asks, scored wrong: 0

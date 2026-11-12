@@ -1,0 +1,33 @@
+{
+ "pass": true,
+ "checked": "2026-09-28T22:02:57+00:00",
+ "fingerprint": {
+  "calls-extract.jsonl": "32ae6ca80d41f3a67d0b68197fbd8f3f5fbac1f57961d2c5351b699335272642",
+  "server.log": "85fe8fc263b2dcd7801866ec3d6d415f7a77b4e390050384ee155831efef2c06",
+  "runner.log": "2252ac8d686f8da5a4796026b6c8a41dfb496c9604ea7e67dc7cd981789daacd",
+  "predicted": "217a22bfaaa0c33caf9a8bde9b53d9e7d6aa849cf175c10bb5a3b60cc1f4b5cb"
+ },
+ "lines": [
+  "ok   extraction calls: {'ok': 5882, 'json-miss': 6}; one ok call per turn needs 5882",
+  "ok   replies Mem0 would lose memories from: 0 []; memories extracted 8927, replies with none 1161",
+  "ok   server and runner log WARNING/ERROR/Traceback lines: 0 []; batch searches Mem0 redid one query at a time 0",
+  "ok   Mem0's requests answered other than 2xx that it does not redo: []; redone piece by piece {}; embeddings that failed inside a batch 0",
+  "ok   runner requests the server answered: adds 5882 of 5882, searches 1540 of 1540, other than 2xx {}",
+  "ok   conversation 0: 419 of 419 turns, 0 failed, user locomo_0_13912652",
+  "ok   conversation 1: 369 of 369 turns, 0 failed, user locomo_1_13912652",
+  "ok   conversation 2: 663 of 663 turns, 0 failed, user locomo_2_13912652",
+  "ok   conversation 3: 629 of 629 turns, 0 failed, user locomo_3_13912652",
+  "ok   conversation 4: 680 of 680 turns, 0 failed, user locomo_4_13912652",
+  "ok   conversation 5: 675 of 675 turns, 0 failed, user locomo_5_13912652",
+  "ok   conversation 6: 689 of 689 turns, 0 failed, user locomo_6_13912652",
+  "ok   conversation 7: 681 of 681 turns, 0 failed, user locomo_7_13912652",
+  "ok   conversation 8: 509 of 509 turns, 0 failed, user locomo_8_13912652",
+  "ok   conversation 9: 568 of 568 turns, 0 failed, user locomo_9_13912652",
+  "ok   question files: 1540 for 1540 questions asked (1540 registered); missing [], not asked [], not the question asked or not its user's search [], a memory that user has not stored with that text and date []; 10 distinct users for 10 conversations; memories per question min 200, median 200, max 200, questions with none 0",
+  "ok   stored memories: 8922, with BM25 terms other than those their text encodes to 0, hash not of its text 0; stored more often than extracted 0, extracted but never stored 0; per user {'locomo_0_13912652': 650, 'locomo_1_13912652': 530, 'locomo_2_13912652': 1029, 'locomo_3_13912652': 1125, 'locomo_4_13912652': 873, 'locomo_5_13912652': 882, 'locomo_6_13912652': 1158, 'locomo_7_13912652': 1095, 'locomo_8_13912652': 788, 'locomo_9_13912652': 792}",
+  "ok   per user: replies whose memories no one user holds 0, memories not dated at a session of their user's conversation 0, memories whose speaker no reply gave for that text 0; replies whose memories more than one user holds 0",
+  "ok   entity links per user: {'locomo_0_13912652': 391, 'locomo_1_13912652': 274, 'locomo_2_13912652': 532, 'locomo_3_13912652': 518, 'locomo_4_13912652': 633, 'locomo_5_13912652': 474, 'locomo_6_13912652': 631, 'locomo_7_13912652': 560, 'locomo_8_13912652': 439, 'locomo_9_13912652': 489}",
+  "ok   info: Mem0 skipped 5 extracted copies of 5 texts as duplicates of a stored copy; 5 of those texts came from more than one turn, so a later turn's date may be lost; 1 lost an attributed_to that no stored copy has; memories with entities that no entity links 4402",
+  "GATE: PASS"
+ ]
+}

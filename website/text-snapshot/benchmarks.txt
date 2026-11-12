@@ -1,75 +1,137 @@
-hippo benchmarks: LongMemEval retrieval (R@N N / N)
-Skip to content ~/hippo How it works
+hippo benchmarks: the wins and the losses
+Skip to content hippo How it works
 Teams
 Benchmarks
 Compare
 Docs
-N install
-Home
-Quickstart
+N Install
 How it works
-Benchmarks
-FAQ
 Teams
+Benchmarks
 Compare
 Docs
-Numbers, with the methodology.
-hippo's retrieval, measured on LongMemEval (opens in new tab) (ICLR N), the public N-question memory benchmark, and on LoCoMo (opens in new tab), N long multi-session conversations. The harness, the data hash, and the per-question results for both are in the repo so you can rerun them.
-N% R@N free local embedder
-N R@N --reranker jev (dev store)
-N+ tests, real database
-N outbound HTTP
-Agent sessions: repeat mistakes
-Retrieval scores say whether the right memory comes back. This test asks what the agent then does. Each run teaches Claude Code one rule by correcting it, then gives it later tasks where the same mistake is possible, with and without hippo.
-About half as many repeat mistakes as Claude Code's built-in memory alone, at the same cost. Correct the agent once, then count how often it makes that mistake again N to N tasks later. Real Claude Code sessions on N repositories, registered before the run. Over every first chance to repeat: N points fewer [N N], cost ratio N The gain is the same with lesson capture switched off, so round N tests how much of it the stored lessons carry. source ↗ (the ZN round N result, opens in new tab)
-No memory N in N
-Claude Code's built-in memory N in N
-Built-in memory plus hippo N in N
-Standard task: per-question haystack
-Each question ships its own haystack of about N conversation sessions, and the job is to retrieve the session that holds the answer. This is the standard LongMemEval-S setup, the same one published systems report. Recall at N on the _s split:
-Embedder R@N R@N R@N
-MiniLM-LN (local, optional install) N N N
-voyage-N-large (opt-in, June N) N N N
-These scores count a hit when any answer session is in the top N over all N questions. hippo reaches N% that way with a free local embedder, the best of five settings in its benchmark scripts. The June N build scored N%, and the re-measure (opens in new tab) shows both runs.
-The stricter measure counts a hit only when every answer session is in the top N over the N questions that have an answer. The same runs score N to N% there. gbrain first published N%, an any-session score, and its report (opens in new tab) now leads with the strict one: N% (N of N) with the paid Voyage rerank-N reranker, N% without it. On strict recall gbrain is ahead. Any-session recall is near its ceiling on this task; strict recall is not.
-Large store: one unified memory
-Point retrieval at a single store of all N sessions, with no pre-scoped haystack, closer to how an agent's memory actually accumulates. Recall stops being free (measured June N):
-N R@N · MiniLM-LN (local, optional install)
-N R@N · voyage-N-large (opt-in)
-A stronger embedder helps here (N to N) but neither is usable on its own: the answer drowns among thousands of distractors. This is where we expect the memory lifecycle to matter, and measuring it is the next benchmark on the roadmap. It is not shown yet: on our tests so far, decay made no measurable difference and sleep cost recall.
-Reranking: what a paid model bought, and what it did not
-hippo recall "<query>" --reranker jev sends the top N candidates to the hosted TypeSafe Jev (opens in new tab) API and reorders them. It is off by default and the default recall path makes no network call. Ranking on a private N-query developer store, so unlike the two benchmarks above this one is not redistributable and you cannot rerun it. All figures aggregated over N-draw paired bootstrap runs, with N% intervals:
-Metric Base Cross-encoder Jev Jev minus cross-encoder
-R@N N N N +N [N N]
-R@N N N N +N [N N]
-MRR N N N +N [N N]
-recall at the token budget N N N +N [N N], tied
-The R@N margin held in N of N bootstrap seeds, and a permutation null with arm labels shuffled inside each query reached it in N of N runs. The R@N margin replicated on LongMemEval at n=N +N [N N]; R@N tied there. Cost is about N USD a recall, pN N ms over N calls.
-What it did not do
-Better ranking did not produce better answers. Three graded-answer tests on LongMemEval all tied against the free local cross-encoder, and those three share one N-question set, so they are not three independent tries. What Jev buys today is a shorter context: N Jev-ranked memories answer as well as N ranked by the cross-encoder, roughly N fewer tokens a query. Turning it on also sends your query and candidate memory text to a third party.
-Method, every interval, the cost table and the full limits list: the Jev reranker eval (opens in new tab).
-Tested, and local by default
-N% R@N BMN only Zero dependencies, no embeddings required at runtime.
-N+ tests, real database No module mocks and no mocked store. Only paid network calls are stubbed.
-N outbound HTTP Local SQLite, proven by a fetch spy on the ingestion smoke.
-Reproduce it
-The data is longmemeval_s_cleaned.json (SHA-N dNfNeaN), N questions over N sessions. Retrieval is turn-level dense plus BMN fused with reciprocal rank fusion and max-pooled to session, by the scripts in benchmarks/longmemeval rather than hippo recall. Embeddings are LN-normalized; the local embedder is MiniLM (an optional install), with an opt-in pluggable provider for frontier embedders.
-Every measurement hippo has published, pre-registrations kept next to their results, is indexed in docs/evals (opens in new tab). That index includes the runs that failed and the one claim we retracted.
-Benchmark harness & data (opens in new tab) All eval documents (opens in new tab) Repository (opens in new tab)
-LoCoMo: conversational evidence recall
-LoCoMo (opens in new tab) is N long multi-session conversations, N turns and N questions. hippo scores it deterministically: did the gold evidence turn land in the top N recalled memories? No LLM judge. Measured once on vN (N-N-N) with MiniLM-LN the default embedder then and an optional install since N:
-Category n Evidence R@N
-single-hop N N
-multi-hop N N
-temporal-reasoning N N
-open-domain N N
-adversarial N N
-overall N N
-A point estimate, not an exact value: n=N and the run predates the vN determinism fix and a harness fix that lost tags on N% of stored rows. Not comparable to the LLM-as-judge numbers MemN and Letta publish. Informational only, gates no feature. Protocol, caveats and regeneration commands: LOCOMO_INVESTIGATION.md (opens in new tab).
-~/hippo
+What we measured, and where hippo lost
+We built hippo and ran these tests, so read them as a vendor's numbers. We ran rivals on the same answer model where we could. Scores marked published come from each team's own setup, so we give no ranks.
+Repeat mistakes in real Claude Code sessions
+Each run corrects Claude Code once and then, N to N tasks later, gives it a task where the same mistake is possible. We ran it on N repositories, registered first (opens in new tab).
+No memory Nin N
+Claude Code's built-in memory Nin N
+Built-in memory plus hippo Nin N
+The chart counts first chances N to N tasks after the correction. The registered measure, the first chance in each mistake family over N units, gives N points fewer repeats with hippo [N N], at the same cost, a ratio of N [N N]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
+What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round N tests that. The corrections were scripted, the agent was Claude Code only, and the test code and run records are not in the public repo. The round before was inconclusive, at N points fewer on N repositories.
+Five public tests of answering from memory
+Hippo N retrieves with its free local embedder, plus its free local reranker where a card says so. Claude Sonnet N answers, and each benchmark's own scorer marks the answer. BMN is plain keyword search, the baseline to beat. Gaps are paired question by question before rounding, and intervals are N%.
+hippo
+run here, same answer model and scorer
+published, each team's own setup
+PersonaMem vN N questions about N personas
+source ↗ (the PersonaMem vN score file, opens in new tab)
+Hippo scored N ahead of BMN at N by N points [N N]. Every published score we found is lower, led by MemOS at N though each comes from its own setup and answer model.
+N% hippo answer accuracy, local embedder, N questions Ahead of BMN by N points
+All scores
+SystemSetupScore
+hippo Run here N%
+hippo, embeddings off Run here N%
+BMN Run here N%
+MemOS Published N%
+Memobase Published N%
+Zep Published N%
+MemU Published N%
+Supermemory Published N%
+GPT-N and Gemini-N Published N%
+MemN Published N%
+Llama-N-Maverick Published N%
+MIRIX Published N%
+LoCoMo, N questions about long conversations
+source ↗ (the LoCoMo score file, opens in new tab)
+With up to N memories a question, MemN scored N hippo N and BMN N Hippo trails MemN by N points [N N], and by N at N memories, and is level with BMN Storing the conversations took MemN N language-model calls and hippo none.
+N% hippo answer accuracy, local embedder, N questions Level with BMN
+Behind MemN by N points
+All scores
+SystemSetupScore
+MemN Run here N%
+EverMemOS Published N%
+MemN Published N%
+Backboard Published N%
+Honcho Published N%
+Hindsight Published N%
+hippo Run here N%
+hippo, embeddings off Run here N%
+Full chat Published N%
+BMN Run here N%
+MIRIX Published N%
+Zep Published N%
+gbrain Published N%
+LangMem Published N%
+Memobase Published N%
+Letta Published N%
+OpenAI Memory Published N%
+A-Mem Published N%
+LongMemEval-S, N questions, each with its own earlier chat sessions
+source ↗ (the LongMemEval-S score file, opens in new tab)
+With nearly every session in context, hippo scored N level with BMN at N Given only the top N memories, hippo with its local reranker beat BMN by N points [N N], N to N
+N% hippo answer accuracy, local embedder, N questions Level with BMN
+All scores
+SystemSetupScore
+Mastra Published N%
+gbrain Published N%
+MemN Published N%
+Backboard Published N%
+Honcho Published N%
+Hindsight Published N%
+Memoria Published N%
+hippo Run here N%
+hippo, embeddings off Run here N%
+BMN Run here N%
+EmergenceMem Internal Published N%
+Supermemory Published N%
+EverMemOS Published N%
+Zep Published N%
+Full chat Published N%
+DMR, N questions
+source ↗ (the DMR score file, opens in new tab)
+With its local reranker on, hippo scored N ahead of BMN at N by N points [N N]. Handing the model the whole chat scored N which beats hippo by N points [N N]. Zep publishes N and MemGPT N
+N% hippo answer accuracy, local embedder and reranker, N questions Ahead of BMN by N points
+Behind Full chat by N points
+All scores
+SystemSetupScore
+Zep Published N%
+Full chat Published N%
+MemGPT Published N%
+Full chat Run here N%
+hippo Run here N%
+hippo, embedder only Run here N%
+BMN Run here N%
+hippo, embeddings off Run here N%
+Recursive Summarization Published N%
+HotPotQA-N N questions
+source ↗ (the HotPotQA-N score file, opens in new tab)
+Too few questions to separate hippo's FN a score for word overlap with the expected answer, of N from BMN's N
+FN N hippo answer FN local embedder and reranker, N questions Level with BMN
+All scores
+SystemSetupScore
+hippo Run here FN N
+hippo, embedder only Run here FN N
+hippo, embeddings off Run here FN N
+BMN Run here FN N
+Finding the right session
+On LongMemEval-S, hippo's benchmark scripts put an answer session in the top five for N% of N questions with the free local MiniLM embedder. That is the best of five settings, chosen after the run, on a measure close to its ceiling. Requiring every answer session, the same runs score N to N%, and gbrain is ahead at N% with a paid reranker. The hippo recall command on a default install scores N% [N N]. On one store of all N sessions, recall fell to N% in June N
+What the two rerankers bought
+--reranker cross-encoder reorders the top N memories with a free model on your machine, and is off by default. On DMR (the score file, opens in new tab) it lifted hippo's answers from N with the embedder alone to N by N points [N N]. On PersonaMem vN and HotPotQA-N the change was within the noise.
+--reranker jev sends the top candidates to the hosted TypeSafe Jev API, and is off by default. On N developer queries from a private store, the right memory ranked first for N% of them, against N% with the free local cross-encoder. Three graded-answer tests (opens in new tab) showed no better answer rate. It buys a shorter context for about N USD a recall, and it sends your query and candidate text to a third party.
+What didn't work
+Sleep lowered recall by N points [N N] on one scorer and raised it a little on another, so we claim no benefit for it.
+Decay made no measurable difference, on a synthetic test that gives a N-day half-life little time to act.
+The old N-day default was a bug that cost recall, so the default moved to N days.
+Seven smaller experiments failed, stalled or were thrown out, among them a correction detector at N precision against a N bar.
+One early headline number did not reproduce, and we retracted it.
+Check our work
+The score files for the five public tests and their write-ups are in the repo, under benchmarks/public.
+Benchmark results (opens in new tab) Eval documents (opens in new tab) Report a mistake (opens in new tab)
+hippo
 Agents
 Claude CodeCursorCodexMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
-GitHubnpmDocsChangelogLicense (MIT)
-hippo-memory vN · MIT · built by kitfunso
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso

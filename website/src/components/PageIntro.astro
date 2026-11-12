@@ -1,14 +1,18 @@
 ---
-// Header for the content pages: the h1 (named slot "title") and a lead paragraph or two.
+// Header for the content pages: the h1 (named slot "title"), a lead paragraph or two, and an optional figure beside them from lg up.
+const hasFigure = Astro.slots.has('figure');
 ---
 
 <section class="relative">
-  <div class="mx-auto max-w-6xl px-5 pb-12 pt-10 sm:pt-12">
-    <h1 class="max-w-3xl text-balance font-display text-4xl font-semibold leading-(--leading-display) tracking-tight sm:text-5xl">
-      <slot name="title" />
-    </h1>
-    <div class="copy mt-6 max-w-2xl space-y-4 text-lg leading-relaxed text-zinc-400">
-      <slot />
+  <div class:list={['wrap pb-14 pt-14 sm:pt-20', hasFigure && 'grid items-center gap-12 lg:grid-cols-2']}>
+    <div class="min-w-0">
+      <h1 class="rise max-w-3xl text-balance font-display text-[2.5rem] leading-(--leading-display) sm:text-[3.5rem]">
+        <slot name="title" />
+      </h1>
+      <div class="copy mt-6 max-w-2xl space-y-4 text-lg leading-relaxed text-ink-2">
+        <slot />
+      </div>
     </div>
+    {hasFigure && <div class="min-w-0"><slot name="figure" /></div>}
   </div>
 </section>

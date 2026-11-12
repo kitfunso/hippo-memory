@@ -1,34 +1,18 @@
 ---
-// The Z0 round 3 card: one claim and the three rates behind it, shared by the home, benchmarks and comparison pages.
+// The three Z0 round 3 rates; each page that shows them writes its own words around them. Only hippo's row takes the accent.
 import { repeatMistakes as z } from '../content/site';
 ---
 
-<a
-  href={z.href}
-  target="_blank"
-  rel="noopener noreferrer"
-  class="glass glass-hover group grid gap-8 rounded-2xl p-6 sm:p-8 lg:grid-cols-2 lg:items-center"
->
-  <div class="flex flex-col">
-    <span class="font-mono text-[clamp(2rem,9vw,3.5rem)] font-medium leading-none tracking-tight text-gradient">{z.stat}</span>
-    <span class="mt-4 text-lg font-medium leading-snug text-zinc-100">{z.label}</span>
-    <span class="mt-3 text-sm leading-relaxed text-zinc-400">{z.note}</span>
-    <span class="mt-4 inline-flex items-center gap-1 font-mono text-xs text-zinc-400 transition group-hover:text-accent-light">
-      source ↗<span class="sr-only"> (the Z0 round 3 result, opens in new tab)</span>
-    </span>
-  </div>
-
-  <ul class="space-y-5">
-    {z.bars.map((b) => (
-      <li>
-        <span class="flex items-baseline justify-between gap-3">
-          <span class:list={['text-sm', b.lead ? 'font-medium text-zinc-100' : 'text-zinc-400']}>{b.name}</span>
-          <span class:list={['font-mono text-sm tabular-nums', b.lead ? 'text-accent-light' : 'text-zinc-300']}>{b.rate} {z.unit}</span>
-        </span>
-        <span class="mt-2 block h-2.5 overflow-hidden rounded-full bg-white/5" aria-hidden="true">
-          <span class:list={['block h-full rounded-full', b.lead ? 'bg-accent-light' : 'bg-zinc-600']} style={`width: ${b.rate}%`}></span>
-        </span>
-      </li>
-    ))}
-  </ul>
-</a>
+<ul class="space-y-7">
+  {z.bars.map((b) => (
+    <li class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-6 gap-y-3">
+      <span class:list={['text-sm', b.lead ? 'font-medium text-ink' : 'text-ink-2']}>{b.name}</span>
+      <span class:list={['row-span-2 self-end font-display text-[2.75rem] leading-[0.85] tabular-nums', b.lead ? 'text-accent' : 'text-ink']}>
+        {b.rate}<span class="ml-1.5 font-sans text-sm text-ink-3">{z.unit}</span>
+      </span>
+      <span class="block h-3 rounded-[4px] bg-paper-3" aria-hidden="true">
+        <span class:list={['block h-full rounded-[4px]', b.lead ? 'bg-accent' : 'bg-ink-3/45']} style={`width: ${b.rate}%`}></span>
+      </span>
+    </li>
+  ))}
+</ul>

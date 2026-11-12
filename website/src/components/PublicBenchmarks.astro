@@ -1,0 +1,116 @@
+---
+// Public-benchmark answer scores: one field-strip card per benchmark, in the deck's order, with no ranks.
+// Data: website/src/data/public-benchmarks.json, written by benchmarks/public/site_data.py from the score files.
+import { site } from '../content/site';
+import { type Bench, f1, fmt, publicBenches, shortName, strip } from '../lib/bench-strip';
+
+const heads = new Map([
+  ['PersonaMem v1', { h: 'PersonaMem v1, 584 questions about 37 personas', p: 'Hippo scored 72.4, ahead of BM25 at 68.0 by 4.5 points [0.9, 8.0]. Every published score we found is lower, led by MemOS at 61.2, though each comes from its own setup and answer model.' }],
+  ['LoCoMo', { h: 'LoCoMo, 395 questions about long conversations', p: 'With up to 200 memories a question, Mem0 scored 94.9, hippo 89.4 and BM25 87.3. Hippo trails Mem0 by 5.6 points [3.0, 8.1], and by 7.1 at 50 memories, and is level with BM25. Storing the conversations took Mem0 5,882 language-model calls and hippo none.' }],
+  ['LongMemEval-S', { h: 'LongMemEval-S, 495 questions, each with its own earlier chat sessions', p: "With nearly every session in context, hippo scored 88.5, level with BM25 at 86.1. Given only the top 10 memories, hippo with its local reranker beat BM25 by 8.1 points [4.8, 11.5], 86.1 to 78.0." }],
+  ['DMR', { h: 'DMR, 495 questions', p: "With its local reranker on, hippo scored 77.6, ahead of BM25 at 61.4 by 16.2 points [11.7, 20.6]. Handing the model the whole chat scored 83.6, which beats hippo by 6.1 points [2.4, 9.7]. Zep publishes 98.2 and MemGPT 93.4." }],
+  ['HotPotQA-24', { h: 'HotPotQA-24, 19 questions', p: "Too few questions to separate hippo's F1, a score for word overlap with the expected answer, of 95.6 from BM25's 85.1." }],
+]);
+const head = (b: Bench) => {
+  const text = heads.get(shortName(b));
+  if (!text) throw new Error(`PublicBenchmarks: no card text for ${shortName(b)}`);
+  return text;
+};
+const order = [...heads.keys()];
+const benches = publicBenches.slice().sort((a, b) => order.indexOf(shortName(a)) - order.indexOf(shortName(b)));
+const blob = (file: string) => `${site.links.repo}/blob/master/${file}`;
+const signed = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + f1(Math.abs(v));
+const verdict = (r: { lo: number; hi: number }) => (r.lo > 0 ? 'win' : r.hi < 0 ? 'loss' : 'tie');
+const rivalsOf = (b: Bench) => b.rivals.filter((r) => !r.name.startsWith('hippo')).sort((p, q) => q.diff - p.diff);
+
+// One drawing per breakpoint, so 12px labels stay 12px: phone, sm, md (one column), lg (two columns).
+const SIZES = [
+  { w: 272, cls: 'block max-w-[22rem] sm:hidden' },
+  { w: 536, cls: 'hidden sm:block md:hidden' },
+  { w: 664, cls: 'hidden md:block lg:hidden' },
+  { w: 410, cls: 'hidden lg:block' },
+];
+const rows = (b: Bench) => [
+  { name: 'hippo', value: b.hippo, setup: 'Run here', me: true },
+  ...b.rivals.map((r) => ({ name: r.name, value: r.value, setup: 'Run here', me: false })),
+  ...b.published.map((p) => ({ name: p.name, value: p.value, setup: 'Published', me: false })),
+].sort((p, q) => q.value - p.value);
+---
+
+<ul class="flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs text-ink-2">
+  <li class="flex items-center gap-2"><span class="inline-block size-3.5 rounded-full border-2 border-paper bg-accent" aria-hidden="true"></span>hippo</li>
+  <li class="flex items-center gap-2"><span class="inline-block size-2.5 rounded-full bg-ink-3" aria-hidden="true"></span>run here, same answer model and scorer</li>
+  <li class="flex items-center gap-2"><span class="inline-block size-2.5 rounded-full border-[1.5px] border-ink-3" aria-hidden="true"></span>published, each team's own setup</li>
+</ul>
+
+<div class="mt-5 grid gap-6 lg:grid-cols-2">
+  {benches.map((b) => (
+    <article class="flex flex-col rounded-xl border border-rule bg-paper-2 p-6 sm:p-8">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h3 class="text-xl font-medium text-ink">{head(b).h}</h3>
+        <a class="tap ml-auto font-mono text-xs text-ink-2 hover:text-accent" href={blob(b.file)} target="_blank" rel="noopener noreferrer">source ↗<span class="sr-only"> (the {shortName(b)} score file, opens in new tab)</span></a>
+      </div>
+      <p class="mt-3 text-sm leading-relaxed text-ink-2">{head(b).p}</p>
+      <span class="mt-5 font-display text-[3rem] leading-none tabular-nums text-ink">{fmt(b, b.hippo)}</span>
+      <span class="mt-2 text-sm text-ink-2">hippo answer {b.unit === 'F1' ? 'F1' : 'accuracy'}, {b.setting}, {b.n} questions</span>
+      <ul class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+        {rivalsOf(b).map((r) => (
+          <li
+            class:list={[
+              'tabular-nums',
+              { 'text-accent': verdict(r) === 'win', 'text-warn': verdict(r) === 'loss', 'text-ink-2': verdict(r) === 'tie' },
+            ]}
+            title={`hippo minus ${r.name}, paired by question: ${signed(r.diff)} points, 95% interval ${signed(r.lo)} to ${signed(r.hi)}`}
+          >
+            {verdict(r) === 'win' ? `Ahead of ${r.name} by ${r.diff.toFixed(1)} points` : verdict(r) === 'loss' ? `Behind ${r.name} by ${(-r.diff).toFixed(1)} points` : `Level with ${r.name}`}
+          </li>
+        ))}
+      </ul>
+      <div class="mt-6">
+        {SIZES.map(({ w, cls }) => {
+          const s = strip(b, w);
+          return (
+            <svg viewBox={`0 0 ${s.w} ${s.h}`} class:list={['h-auto w-full font-mono text-xs', cls]} role="img" aria-label={`${shortName(b)}: published scores and scores run here, also in the table below`}>
+              {s.ticks.map((t) => <line x1={t.x} x2={t.x} y1={s.gridTop} y2={s.gridBottom} class="stroke-rule" />)}
+              {s.ticks.map((t) => <text x={t.x} y={s.h - 4} text-anchor={t.anchor} class="fill-ink-3">{t.v}</text>)}
+              <line x1="0" x2={s.w} y1={s.divY} y2={s.divY} class="stroke-rule-strong" />
+              <text x="0" y="12" class="fill-ink-3">{b.published.length ? 'Published' : 'Published: none'}</text>
+              <text x="0" y={s.divY + 16} class="fill-ink-3">Run here</text>
+              {s.dots.map((d) => (
+                <circle
+                  cx={d.x}
+                  cy={d.y}
+                  r={d.r}
+                  stroke-width={d.tone === 'pub' ? 1.5 : 2}
+                  class:list={{ 'fill-paper stroke-ink-3': d.tone === 'pub', 'fill-ink-3 stroke-paper': d.tone === 'here', 'fill-accent stroke-paper': d.tone === 'hippo' }}
+                >
+                  <title>{d.title}</title>
+                </circle>
+              ))}
+              {s.labels.map((l) => <text x={l.x} y={l.y} text-anchor={l.anchor} class={l.strong ? 'fill-ink' : 'fill-ink-2'}>{l.text}</text>)}
+            </svg>
+          );
+        })}
+      </div>
+      <details class="mt-4">
+        <summary class="inline-flex min-h-11 cursor-pointer items-center font-mono text-xs text-ink-2 hover:text-accent">All scores</summary>
+        <div class="mt-2 overflow-x-auto rounded-xl border border-rule" data-scroll-x>
+          <table class="w-full text-left text-sm">
+            <thead class="border-b border-rule-strong text-xs text-ink-3">
+              <tr><th scope="col" class="px-4 py-2.5 font-medium">System</th><th scope="col" class="px-4 py-2.5 font-medium">Setup</th><th scope="col" class="px-4 py-2.5 text-right font-medium">Score</th></tr>
+            </thead>
+            <tbody class="divide-y divide-rule">
+              {rows(b).map((r) => (
+                <tr class={r.me ? 'text-ink' : 'text-ink-2'}>
+                  <th scope="row" class:list={['px-4 py-2.5 text-left', r.me ? 'font-medium' : 'font-normal']}>{r.name}</th>
+                  <td class="px-4 py-2.5 text-ink-2"><span class="flex items-center gap-2"><span class:list={['inline-block size-2.5 shrink-0 rounded-full', r.setup === 'Run here' ? 'bg-ink-3' : 'border-[1.5px] border-ink-3']} aria-hidden="true"></span>{r.setup}</span></td>
+                  <td class:list={['px-4 py-2.5 text-right font-mono tabular-nums', { 'text-accent': r.me }]}>{fmt(b, r.value)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </article>
+  ))}
+</div>

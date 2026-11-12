@@ -5,25 +5,30 @@ import Footer from '../../components/Footer.astro';
 import PageIntro from '../../components/PageIntro.astro';
 import Section from '../../components/Section.astro';
 import VsTable from '../../components/VsTable.astro';
+import { REPO } from '../../content/site';
 import Faq from '../../components/Faq.astro';
 import { faqPageLd } from '../../content/readme';
 
-const title = 'hippo vs Zep: a local Zep alternative | hippo-memory';
+const title = 'hippo vs Zep: a local Zep alternative';
 const description =
-  'hippo vs Zep, checked 2026-09-28. Zep is a managed service and its self-hosted Community Edition is deprecated. hippo runs on your machine with no account.';
+  "hippo and Zep compared by the hippo team, features checked 28 September 2026. Zep is a managed service with a knowledge graph; hippo runs on your machine with no account. On DMR, Zep publishes 98.2 and hippo scored 77.6 in our run, on different setups.";
+const rows = [
+  ['Decay by default', 'Decay by default'],
+  ['Retrieval strengthening', 'Recall strengthens a memory'],
+  ['Outcome tracking', 'Outcome tracking'],
+  ['Conflict detection + resolution', 'Conflict detection'],
+  ['Schema acceleration / knowledge graph', 'Knowledge graph'],
+  ['Multi-agent shared memory', 'Shared between agents'],
+  ['Auto-hook install', 'Installs its own hooks'],
+  ['MCP server', 'MCP server'],
+  ['Zero runtime deps', 'Zero runtime dependencies'],
+  ['License', 'Licence'],
+] as const;
 
 const qa = [
   {
-    q: 'Can I still self-host Zep?',
-    a: "Not Zep itself. Zep's FAQ says Zep Community Edition, the version you could host locally, is deprecated and no longer supported (checked 2026-09-28); Enterprise customers can run Zep in their own cloud. Graphiti, the open-source framework under Zep, is Apache-2.0 and runs anywhere, but it needs a graph database such as Neo4j or FalkorDB and a language model key, OpenAI by default.",
-  },
-  {
-    q: 'Is hippo a Zep alternative?',
-    a: 'Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, stores memories in SQLite in your project, needs no account, graph database or model, and `hippo init` wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. Zep fits when you want a managed service that builds a knowledge graph from business data, documents and conversations.',
-  },
-  {
-    q: "Is Zep's 90.2% on LongMemEval comparable to hippo's 98.0%?",
-    a: "No. Zep's homepage reports 90.2% accuracy on LongMemEval, which scores whether answers were right. Hippo's figure is retrieval: on LongMemEval-S with a per-question haystack, using the benchmark scripts and a free local embedder rather than `hippo recall`, an answer session was in the top five results 98.0% of the time. Different metrics, so neither number beats the other.",
+    q: "Can I still self-host Zep?",
+    a: "Not Zep itself. Zep's FAQ says Community Edition, the version you could host locally, is deprecated and no longer supported (checked 28 September 2026). Graphiti, the open-source framework under Zep, runs anywhere, and needs a graph database and a language-model key.",
   },
 ];
 ---
@@ -32,77 +37,59 @@ const qa = [
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">hippo vs Zep: a local <span class="text-gradient">Zep alternative</span></Fragment>
+      <Fragment slot="title">hippo vs <span class="text-ink">Zep</span></Fragment>
       <p>
-        Zep is a managed context service for agents, built on Graphiti, its open-source temporal knowledge graph. Its
-        self-hosted Community Edition is deprecated, so Zep today means Zep Cloud, or your own cloud on the Enterprise
-        plan. Hippo runs on your machine with no account, and wires itself into the coding agents it finds.
-      </p>
-      <p>
-        Both keep an old fact when a newer one replaces it. Graphiti gives facts validity windows and invalidates old ones
-        rather than deleting them. Hippo links a superseded memory to its replacement and leaves it out of recall, and
-        <code>hippo recall --as-of &lt;date&gt;</code> shows what was current on a given date.
+        Zep is a managed context service for agents, built on Graphiti, its open-source temporal knowledge graph. Its self-hosted Community Edition is deprecated, so Zep today means Zep Cloud, or your own cloud on the Enterprise plan. Hippo runs on your machine with no account, and wires itself into the coding agents it finds.
       </p>
     </PageIntro>
 
+    <Section title="The one test both have numbers on">
+      <p>
+        On DMR, a public memory test of 495 questions, Zep publishes 98.2 and hippo scored 77.6 when we ran it with its local reranker on. The setups differ. A whole-chat baseline that is published at 98.0 scored 83.6 in our run, so the size of the gap is rough. Zep's published score is higher, and we have not run Zep under the same conditions. Zep's other published scores vary by source, so we quote none of them here.
+      </p>
+    </Section>
+
     <Section title="Feature by feature" alt>
-      <p>Every row of the README comparison table, hippo against Zep.</p>
-      <VsTable system="Zep" />
+      <p>
+        The Zep column was checked against Zep's own pages on 28 September 2026. The full table is on
+        <a class="link" href={`${REPO}#comparison`} target="_blank" rel="noopener noreferrer">GitHub<span class="sr-only"> (opens in new tab)</span></a>.
+      </p>
+      <VsTable system="Zep" rows={rows} />
     </Section>
 
-    <Section title="What Zep ships today (checked 2026-09-28)">
-      <ul class="list-disc space-y-2 pl-5">
-        <li>
-          Zep Cloud, which in Zep's words "unifies business data, documents, and conversations into shared, governed
-          context so agents can complete tasks correctly"
-          (<a class="link" href="https://www.getzep.com/" target="_blank" rel="noopener noreferrer">getzep.com<span class="sr-only"> (opens in new tab)</span></a>).
-          Enterprise customers can run it in their own cloud.
-        </li>
-        <li>
-          No self-hosted Zep: Community Edition is deprecated and no longer supported
-          (<a class="link" href="https://help.getzep.com/faq" target="_blank" rel="noopener noreferrer">Zep FAQ<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          Graphiti, Apache-2.0, for building your own: it needs a graph database (Neo4j, FalkorDB or Amazon Neptune) and
-          defaults to OpenAI for inference and embeddings
-          (<a class="link" href="https://github.com/getzep/graphiti" target="_blank" rel="noopener noreferrer">Graphiti README<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          A hosted Memory MCP Server that needs sign-in through an identity provider and a Zep project, with MCP seats per
-          account
-          (<a class="link" href="https://help.getzep.com/memory-mcp-server" target="_blank" rel="noopener noreferrer">docs<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-        <li>
-          Plans from a free tier of 10,000 credits a month to Flex at $125 and Flex Plus at $375 a month, then Enterprise
-          (<a class="link" href="https://www.getzep.com/pricing" target="_blank" rel="noopener noreferrer">pricing<span class="sr-only"> (opens in new tab)</span></a>).
-        </li>
-      </ul>
+    <Section title="Both keep the old fact">
+      <p>
+        Graphiti gives facts validity windows and invalidates old ones instead of deleting them. Hippo links a superseded memory to its replacement and leaves it out of recall, and <code>hippo recall --as-of &lt;date&gt;</code> shows what was current on a given day.
+      </p>
     </Section>
 
-    <Section title="When to pick which" alt>
+    <Section title="What Zep ships today" alt>
+      <p>
+        Zep Cloud is the product, and Enterprise customers can run it in their own cloud. There is no self-hosted Zep, because Community Edition is deprecated and no longer supported. Graphiti is Apache-2.0 if you want to build your own, and it needs a graph database and defaults to OpenAI for inference and embeddings. Zep's MCP server is hosted and needs sign-in (<a class="link" href="https://help.getzep.com/faq" target="_blank" rel="noopener noreferrer">Zep's pages<span class="sr-only"> (opens in new tab)</span></a>, checked 28 September 2026).
+      </p>
+    </Section>
+
+    <Section title="When to pick which">
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div class="glass rounded-2xl p-6">
-          <h3 class="text-base font-medium text-zinc-100">Pick hippo</h3>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick hippo</h3>
           <p class="mt-2 text-sm leading-relaxed">
-            The memory is for coding agents on your machine. You want no account, graph database or model to run, lessons
-            you can mark wrong, and markdown mirrors you can read and commit.
+            Pick hippo when the memory is for coding agents on your machine, and you want no account, graph database or model to run.
           </p>
         </div>
-        <div class="glass rounded-2xl p-6">
-          <h3 class="text-base font-medium text-zinc-100">Pick Zep</h3>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick Zep</h3>
           <p class="mt-2 text-sm leading-relaxed">
-            You want a managed service that turns business data, documents and conversations into a knowledge graph for
-            your agents, with someone else running it.
+            Pick Zep when you want a managed service that turns business data, documents and conversations into a knowledge graph for your agents, with someone else running it.
           </p>
         </div>
       </div>
       <div class="flex flex-wrap gap-3 pt-4">
-        <a href="/quickstart/" class="rounded-lg bg-zinc-100 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-900 transition hover:bg-white">Get started with hippo</a>
-        <a href="/faq/" class="rounded-lg border border-white/12 inline-flex min-h-11 items-center px-5 text-sm font-medium text-zinc-200 transition hover:border-white/25">All questions</a>
+        <a href="/quickstart/" class="btn">Get started with hippo</a>
       </div>
     </Section>
 
-    <Faq items={qa} heading="hippo and Zep, asked directly" />
+    <Faq items={qa} heading="hippo and Zep, asked directly" moreHref="/faq/" />
   </main>
   <Footer />
 </Base>

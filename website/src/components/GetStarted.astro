@@ -1,44 +1,28 @@
 ---
-import { getStarted } from '../content/site';
+import { site, getStarted } from '../content/site';
+import { mdInline } from '../content/readme';
+import Section from './Section.astro';
 import CopyCommand from './CopyCommand.astro';
+import CopyButton from './CopyButton.astro';
 ---
 
-<section id="get-started" class="relative border-t border-white/5 bg-white/[0.02]">
-  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-    <!-- On wide screens the commands sit under the intro so the left column is not half empty; on phones the install card still comes first. -->
-    <div class="grid grid-cols-1 gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-x-16 lg:gap-y-8">
-      <div class="lg:col-start-1 lg:row-start-1">
-        <h2 class="text-3xl leading-tight sm:text-4xl">{getStarted.heading}</h2>
-        <p class="mt-5 max-w-md text-lg leading-relaxed text-zinc-400">{getStarted.body}</p>
-        <p class="mt-4 max-w-md text-sm leading-relaxed text-zinc-400">{getStarted.notice}</p>
-      </div>
-
-      <div class="lg:col-start-2 lg:row-span-2 lg:row-start-1" data-reveal>
-        <div class="rounded-2xl glass p-5 break-words">
-          <p class="text-sm font-medium text-zinc-200">{getStarted.autoInstall.heading}</p>
-          <ul class="mt-3 flex flex-wrap gap-2">
-            {getStarted.autoInstall.frameworks.map((f) => (
-              <li class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-xs text-zinc-300">{f}</li>
-            ))}
-          </ul>
-          <p class="mt-3 text-xs leading-relaxed text-zinc-400">{getStarted.autoInstall.note}</p>
-        </div>
-      </div>
-
-      <div class="lg:col-start-1 lg:row-start-2">
-        <ol class="space-y-4">
-          {getStarted.steps.map((cmd, i) => (
-            <li class="flex items-start gap-4">
-              <span class="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 font-mono text-xs text-accent-light">{i + 1}</span>
-              <div class="min-w-0 flex-1"><CopyCommand command={cmd} size="lg" /></div>
-            </li>
-          ))}
-        </ol>
-        <p class="mt-4 pl-11 text-sm leading-relaxed text-zinc-400">
-          Then <code class="font-mono text-zinc-300">hippo sleep</code> tidies the store when a Claude Code
-          session ends, and a daily run at 6:15am learns from the day's commits in every registered project.
-        </p>
-      </div>
-    </div>
+<Section title={getStarted.heading} id="get-started" split alt>
+  <p set:html={mdInline(getStarted.body)} />
+  <div class="space-y-3">
+    {getStarted.steps.map((cmd) => <CopyCommand command={cmd} />)}
   </div>
-</section>
+  <p class="text-sm">{getStarted.notice}</p>
+  <p>{getStarted.askLabel}</p>
+  <div class="flex items-start gap-3 rounded-xl border border-rule-strong bg-paper p-4 font-mono text-sm leading-6">
+    <p class="min-w-0 flex-1 break-words text-ink">{getStarted.prompt}</p>
+    <CopyButton text={getStarted.prompt} label="Copy the prompt for your agent" />
+  </div>
+  <p class="flex flex-wrap gap-x-6 gap-y-2">
+    <a class="link" href={site.links.repo} target="_blank" rel="noopener noreferrer"
+      >View the source<span class="sr-only"> (opens in new tab)</span></a
+    >
+    <a class="link" href={site.links.npm} target="_blank" rel="noopener noreferrer"
+      >View on npm<span class="sr-only"> (opens in new tab)</span></a
+    >
+  </p>
+</Section>

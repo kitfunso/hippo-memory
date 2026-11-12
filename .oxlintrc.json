@@ -19,7 +19,8 @@
     "dist-bench/**",
     "dist-ui/**",
     "ui/dist/**",
-    "tools/oxlint/anti-slop/**"
+    "tools/oxlint/anti-slop/**",
+    "website/scripts/figure/**"
   ],
   "jsPlugins": [
     { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" },

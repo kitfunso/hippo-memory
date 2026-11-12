@@ -1,0 +1,62 @@
+---
+// The terminal lines split at each note: Monday, where the user corrects the agent, and Tuesday, where hippo prints the rule back.
+import { terminal, session } from '../content/site';
+
+type Line = (typeof terminal)[number];
+const days: { title: string; lines: Line[] }[] = [];
+for (const line of terminal) {
+  if (line.kind === 'note') days.push({ title: line.text, lines: [] });
+  else days.at(-1)?.lines.push(line);
+}
+// The correction is the user's line that the next day's hippo block repeats.
+const rule = terminal.find((l) => l.kind === 'hippo' && l.text.startsWith('- '))?.text.slice(2);
+---
+
+<section id="session" class="border-t border-rule bg-paper-2">
+  <div class="wrap py-(--section-y)">
+    <h2 class="max-w-3xl">{session.heading}</h2>
+    <p class="mt-4 max-w-[34rem] text-body leading-relaxed text-ink-2">{session.body}</p>
+
+    <div class="mt-12 grid gap-5 lg:grid-cols-2">
+      {days.map((day) => (
+        <figure class="min-w-0 rounded-xl border border-rule bg-paper">
+          <figcaption class="flex items-center justify-between border-b border-rule px-5 py-3 text-[13px] text-ink-2">
+            <span>{day.title}</span>
+            <span class="font-mono text-xs text-ink-3">claude</span>
+          </figcaption>
+          <div class="space-y-2 px-5 py-5 font-mono text-[13px] leading-6">
+            {day.lines.map((line, i) => {
+              if (line.kind === 'hippo' && day.lines[i - 1]?.kind === 'hippo') return null;
+              if (line.kind === 'hippo') {
+                const block = day.lines.slice(i).filter((l, j, a) => a.slice(0, j + 1).every((x) => x.kind === 'hippo'));
+                return (
+                  <div class="my-3 rounded-lg border border-rule-strong bg-paper-2 px-4 py-3">
+                    {block.map((b, j) => (
+                      <p class="flex justify-between gap-4 break-words text-ink">
+                        <span class="min-w-0">{b.text}</span>
+                        {j === 0 && <span class="shrink-0 text-xs leading-6 text-ink-3">hippo</span>}
+                      </p>
+                    ))}
+                  </div>
+                );
+              }
+              const corrected = line.kind === 'cmd' && line.text === rule;
+              return (
+                <p
+                  class:list={[
+                    'flex gap-2 break-words',
+                    line.kind === 'cmd' ? 'text-ink' : 'text-ink-2',
+                    corrected && 'rounded-md bg-accent/[0.07] -mx-2 px-2 py-1 text-accent-deep',
+                  ]}
+                >
+                  <span class="select-none text-ink-3" aria-hidden="true">{line.kind === 'cmd' ? '>' : ' '}</span>
+                  <span class="min-w-0 flex-1">{line.text}</span>
+                </p>
+              );
+            })}
+          </div>
+        </figure>
+      ))}
+    </div>
+  </div>
+</section>
