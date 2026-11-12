@@ -3,12 +3,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, renameSync, statSync, lstatSync, symlinkSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, delimiter, resolve } from 'node:path';
-import { execFile, execFileSync, spawnSync, spawn } from 'node:child_process';
+import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
-import { promisify } from 'node:util';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
 import { HIPPO_JS, git } from '../scripts/token-eval/exec.mjs';
-import { testGit } from './_helpers/test-git.js';
+import { testGit, testGitAsync } from './_helpers/test-git.js';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
 
@@ -27,7 +26,6 @@ const tmp =(prefix: string): string => {
   return d;
 };
 const win = process.platform === 'win32';
-const execFileAsync = promisify(execFile);
 const esc =(s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 interface GitRepo {
@@ -42,7 +40,7 @@ async function gitRepo(files: Record<string, string>): Promise<GitRepo> {
   const repo = tmp('z0-repo-');
   const g = (...args: string[]): string => testGit(repo, ...args).trim();
   // Async children: without one real await per test, the file's sync tests run as one event-loop turn past vitest's 60 s RPC timeout.
-  const ga = async (...args: string[]): Promise<string> => (await execFileAsync('git', args, { cwd: repo, encoding: 'utf8' })).stdout.trim();
+  const ga = async (...args: string[]): Promise<string> => (await testGitAsync(repo, ...args)).trim();
   await ga('init', '-q');
   for (const [k, v] of [['user.email', 't@example.com'], ['user.name', 'T'], ['commit.gpgsign', 'false']]) await ga('config', k, v);
   for (const [p, text] of Object.entries(files)) writeFileSync(join(repo, p), text);
