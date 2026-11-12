@@ -1,0 +1,90 @@
+answers 3600, primary questions 395
+judge = Claude Sonnet 5, the registered judge, secondary: 3600 valid verdicts of 3600
+judge2 = codex gpt-5.6-sol, secondary: 3600 valid verdicts of 3600
+
+=== top 200 ===
+ hippo365  n=395  F1  24.4  judge  88.6  judge2  88.9  memories  200.0  input tokens   18514
+     bm25  n=395  F1  23.4  judge  87.3  judge2  89.4  memories  200.0  input tokens   18400
+     mem0  n=395  F1  24.1  judge  94.9  judge2  95.7  memories  200.0  input tokens   14419
+PRIMARY hippo365 - mem0     F1         all:  +0.3 pp [ -2.2,  +2.8] n=395 over 395 units  matches
+  secondary, all items with the smoke items:  +0.5 pp [ -2.1,  +3.2] n=400 over 400 units  unresolved
+  sensitivity, conversation unit (dated notes 1):  +0.3 pp [ -2.7,  +3.5] n=395 over 10 units  unresolved
+hippo365 - mem0     F1   multi-hop:  -3.7 pp [ -9.1,  +1.6] n=72 over 72 units  unresolved
+hippo365 - mem0     F1    temporal:  -7.8 pp [-13.4,  -2.3] n=82 over 82 units  trails
+hippo365 - mem0     F1 open-domain:  -2.6 pp [-11.8,  +4.8] n=25 over 25 units  unresolved
+hippo365 - mem0     F1  single-hop:  +5.0 pp [ +1.8,  +8.2] n=216 over 216 units  beats
+hippo365 - mem0  judge         all:  -6.3 pp [ -9.4,  -3.3] n=395 over 395 units  trails
+hippo365 - mem0 judge2         all:  -6.8 pp [ -9.9,  -3.8] n=395 over 395 units  trails
+bm25 - mem0     F1         all:  -0.8 pp [ -3.1,  +1.5] n=395 over 395 units  unresolved
+bm25 - mem0     F1   multi-hop:  -4.2 pp [ -8.4,  -0.1] n=72 over 72 units  trails
+bm25 - mem0     F1    temporal:  -9.2 pp [-14.2,  -4.4] n=82 over 82 units  trails
+bm25 - mem0     F1 open-domain:  -3.9 pp [-12.3,  +2.3] n=25 over 25 units  unresolved
+bm25 - mem0     F1  single-hop:  +3.9 pp [ +0.9,  +7.2] n=216 over 216 units  beats
+bm25 - mem0  judge         all:  -7.6 pp [-10.4,  -4.8] n=395 over 395 units  trails
+bm25 - mem0 judge2         all:  -6.3 pp [ -9.1,  -3.8] n=395 over 395 units  trails
+hippo365 - bm25     F1         all:  +1.1 pp [ -1.0,  +3.1] n=395 over 395 units  unresolved
+hippo365 - bm25     F1   multi-hop:  +0.5 pp [ -4.6,  +5.7] n=72 over 72 units  unresolved
+hippo365 - bm25     F1    temporal:  +1.4 pp [ -1.0,  +4.6] n=82 over 82 units  unresolved
+hippo365 - bm25     F1 open-domain:  +1.3 pp [ -1.5,  +5.3] n=25 over 25 units  unresolved
+hippo365 - bm25     F1  single-hop:  +1.1 pp [ -2.1,  +4.2] n=216 over 216 units  unresolved
+hippo365 - bm25  judge         all:  +1.3 pp [ -0.5,  +3.3] n=395 over 395 units  unresolved
+hippo365 - bm25 judge2         all:  -0.5 pp [ -2.5,  +1.5] n=395 over 395 units  matches
+
+=== top 50 ===
+ hippo365  n=395  F1  22.4  judge  84.1  judge2  85.6  memories   50.0  input tokens    6855
+     bm25  n=395  F1  24.5  judge  84.3  judge2  85.1  memories   50.0  input tokens    6825
+     mem0  n=395  F1  23.6  judge  92.2  judge2  92.9  memories   50.0  input tokens    5943
+PRIMARY hippo365 - mem0     F1         all:  -1.2 pp [ -3.6,  +1.3] n=395 over 395 units  unresolved
+  secondary, all items with the smoke items:  -1.1 pp [ -3.5,  +1.4] n=400 over 400 units  unresolved
+  sensitivity, conversation unit (dated notes 1):  -1.2 pp [ -3.5,  +0.8] n=395 over 10 units  unresolved
+hippo365 - mem0     F1   multi-hop:  -7.1 pp [-11.7,  -2.5] n=72 over 72 units  trails
+hippo365 - mem0     F1    temporal:  -2.6 pp [ -8.1,  +2.8] n=82 over 82 units  unresolved
+hippo365 - mem0     F1 open-domain:  +1.9 pp [ -6.5, +12.3] n=25 over 25 units  unresolved
+hippo365 - mem0     F1  single-hop:  +0.9 pp [ -2.4,  +4.3] n=216 over 216 units  unresolved
+hippo365 - mem0  judge         all:  -8.1 pp [-11.6,  -4.6] n=395 over 395 units  trails
+hippo365 - mem0 judge2         all:  -7.3 pp [-10.4,  -4.3] n=395 over 395 units  trails
+bm25 - mem0     F1         all:  +0.9 pp [ -1.6,  +3.5] n=395 over 395 units  unresolved
+bm25 - mem0     F1   multi-hop:  -4.7 pp [ -9.8,  +0.3] n=72 over 72 units  unresolved
+bm25 - mem0     F1    temporal:  -0.8 pp [ -6.9,  +5.4] n=82 over 82 units  unresolved
+bm25 - mem0     F1 open-domain:  +1.6 pp [ -8.8, +13.9] n=25 over 25 units  unresolved
+bm25 - mem0     F1  single-hop:  +3.4 pp [ -0.1,  +6.8] n=216 over 216 units  unresolved
+bm25 - mem0  judge         all:  -7.8 pp [-11.1,  -4.6] n=395 over 395 units  trails
+bm25 - mem0 judge2         all:  -7.8 pp [-10.9,  -4.8] n=395 over 395 units  trails
+hippo365 - bm25     F1         all:  -2.1 pp [ -3.8,  -0.5] n=395 over 395 units  unresolved
+hippo365 - bm25     F1   multi-hop:  -2.3 pp [ -6.3,  +1.0] n=72 over 72 units  unresolved
+hippo365 - bm25     F1    temporal:  -1.8 pp [ -4.7,  +0.7] n=82 over 82 units  unresolved
+hippo365 - bm25     F1 open-domain:  +0.3 pp [ -8.6,  +7.8] n=25 over 25 units  unresolved
+hippo365 - bm25     F1  single-hop:  -2.5 pp [ -4.9,  -0.2] n=216 over 216 units  unresolved
+hippo365 - bm25  judge         all:  -0.3 pp [ -2.5,  +2.0] n=395 over 395 units  matches
+hippo365 - bm25 judge2         all:  +0.5 pp [ -1.3,  +2.3] n=395 over 395 units  matches
+
+=== top 10 ===
+ hippo365  n=395  F1  26.4  judge  68.4  judge2  70.6  memories   10.0  input tokens    3800
+     bm25  n=395  F1  25.9  judge  71.1  judge2  73.4  memories   10.0  input tokens    3798
+     mem0  n=395  F1  25.9  judge  79.0  judge2  80.0  memories   10.0  input tokens    3634
+hippo365 - mem0     F1         all:  +0.6 pp [ -2.5,  +3.8] n=395 over 395 units  unresolved
+hippo365 - mem0     F1   multi-hop:  -5.8 pp [-10.3,  -1.1] n=72 over 72 units  trails
+hippo365 - mem0     F1    temporal:  -1.6 pp [ -7.7,  +4.6] n=82 over 82 units  unresolved
+hippo365 - mem0     F1 open-domain:  +2.3 pp [-11.8, +16.1] n=25 over 25 units  unresolved
+hippo365 - mem0     F1  single-hop:  +3.3 pp [ -1.3,  +7.8] n=216 over 216 units  unresolved
+hippo365 - mem0  judge         all: -10.6 pp [-15.4,  -5.6] n=395 over 395 units  trails
+hippo365 - mem0 judge2         all:  -9.4 pp [-14.2,  -4.3] n=395 over 395 units  trails
+bm25 - mem0     F1         all:  +0.0 pp [ -2.9,  +3.0] n=395 over 395 units  unresolved
+bm25 - mem0     F1   multi-hop:  -5.1 pp [ -9.6,  -0.4] n=72 over 72 units  trails
+bm25 - mem0     F1    temporal:  +0.1 pp [ -6.8,  +6.6] n=82 over 82 units  unresolved
+bm25 - mem0     F1 open-domain:  +2.1 pp [-10.4, +14.2] n=25 over 25 units  unresolved
+bm25 - mem0     F1  single-hop:  +1.4 pp [ -3.0,  +5.9] n=216 over 216 units  unresolved
+bm25 - mem0  judge         all:  -7.8 pp [-12.9,  -3.0] n=395 over 395 units  trails
+bm25 - mem0 judge2         all:  -6.6 pp [-11.1,  -2.0] n=395 over 395 units  trails
+hippo365 - bm25     F1         all:  +0.6 pp [ -1.2,  +2.4] n=395 over 395 units  matches
+hippo365 - bm25     F1   multi-hop:  -0.7 pp [ -4.4,  +3.2] n=72 over 72 units  unresolved
+hippo365 - bm25     F1    temporal:  -1.6 pp [ -5.8,  +2.4] n=82 over 82 units  unresolved
+hippo365 - bm25     F1 open-domain:  +0.2 pp [ -6.9,  +8.9] n=25 over 25 units  unresolved
+hippo365 - bm25     F1  single-hop:  +1.9 pp [ -0.5,  +4.4] n=216 over 216 units  unresolved
+hippo365 - bm25  judge         all:  -2.8 pp [ -5.1,  -0.5] n=395 over 395 units  unresolved
+hippo365 - bm25 judge2         all:  -2.8 pp [ -5.3,  -0.3] n=395 over 395 units  unresolved
+
+smoke items left out of every primary: conv4_q177, conv6_q141, conv8_q21, conv8_q73, conv8_q85
+answers exhausted after 3 asks, scored wrong: 0
+judge verdicts exhausted after 3 asks, scored wrong: 0
+judge2 verdicts exhausted after 3 asks, scored wrong: 0
