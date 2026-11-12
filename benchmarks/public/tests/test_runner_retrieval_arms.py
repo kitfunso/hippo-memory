@@ -71,3 +71,28 @@ def test_the_check_keeps_a_retried_search_but_fails_a_retried_add(tmp_path):
     assert not res["pass"] and "runner log lines name a failure" in res["problems"][0]
     log.write_text("\n=== launch\nSEARCH failed after 5 attempts for user=u1\n", encoding="utf-8")
     assert not rr.check(pred, ["q1"], [log], [], 0.0)["pass"]
+
+
+@pytest.mark.parametrize("bench, units, files, owners", [
+    ("longmemeval-m", [{"q1", "gpt4_ab"}, {"q2"}], ["q1.json", "_ingestion_q1.json", "gpt4_ab.json", "_progress_q2.json"],
+     [0, 0, 0, 1]),
+    ("beam-1m", [{"1M_0", "1M_2"}, {"1M_1"}], ["1M_0_q3_abstention.json", "_ingestion_1M_1.json", "1M_2_q0_x_y.json"],
+     [0, 1, 0]),
+])
+def test_a_resume_after_a_merge_moves_each_file_back_to_its_shard(tmp_path, bench, units, files, owners):
+    src = tmp_path / f"predicted_{bench}"
+    src.mkdir()
+    for f in files:
+        (src / f).write_text("{}", encoding="utf-8")
+    assert rr.unmerge(bench, tmp_path, units) == len(files)
+    assert not list(src.glob("*.json"))
+    for f, k in zip(files, owners):
+        assert (tmp_path / f"shard{k}" / f"predicted_{bench}" / f).exists()
+
+
+def test_a_merged_file_no_shard_owns_stops_the_resume(tmp_path):
+    src = tmp_path / "predicted_longmemeval-m"
+    src.mkdir()
+    (src / "q9.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="belongs to no shard"):
+        rr.unmerge("longmemeval-m", tmp_path, [{"q1"}])

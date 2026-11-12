@@ -44,8 +44,9 @@ def sha_file(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[list[str], list[list[str]]]:
-    """(every question id, one runner flag list per shard), read from the dataset the way the runner reads it."""
+def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[list[str], list[list[str]], list[set[str]]]:
+    """(every question id, one runner flag list per shard, each shard's units for unit_of), read from the dataset the
+    way the runner reads it."""
     sys.path.insert(0, str(RUNNER))
     kind, what = BENCH[bench]
     if kind == "beam":
@@ -55,15 +56,17 @@ def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[lis
         ids = [f"{what}_{ci}_q{qi}_{q['question_type']}" for ci in range(n)
                for qi, q in enumerate(extract_probing_questions(convs[ci]))]
         picks = [list(range(s, n, shards)) for s in range(shards)]  # round robin: sizes differ a little between convs
-        return ids, [["--chat-sizes", what, "--conversations", ",".join(map(str, p))] for p in picks if p]
+        return (ids, [["--chat-sizes", what, "--conversations", ",".join(map(str, p))] for p in picks if p],
+                [{f"{what}_{ci}" for ci in p} for p in picks if p])
     from benchmarks.longmemeval.run import load_dataset, sample_questions_stratified
     path = RUNNER / "datasets" / "longmemeval" / what
     if shards == 1 and not a.limit_questions:
-        return [q["question_id"] for q in load_dataset(str(path))], [["--all-questions"]]
+        ids = [q["question_id"] for q in load_dataset(str(path))]
+        return ids, [["--all-questions"]], [set(ids)]
     qs = load_dataset(str(path))
     if a.limit_questions:
         qs = sample_questions_stratified(qs, per_type=1, seed=42, selected_types=LME_SMOKE_TYPES.split(","))[:a.limit_questions]
-    flags = []
+    flags, units = [], []
     (out / "slices").mkdir(parents=True, exist_ok=True)
     for s in range(shards):
         part = qs[s::shards]
@@ -71,7 +74,8 @@ def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[lis
             sp = out / "slices" / f"{bench}-slice{s}.json"
             sp.write_text(json.dumps(part, ensure_ascii=False), encoding="utf-8")
             flags.append(["--all-questions", "--dataset-path", str(sp)])
-    return [q["question_id"] for q in qs], flags
+            units.append({q["question_id"] for q in part})
+    return [q["question_id"] for q in qs], flags, units
 
 
 def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
@@ -242,6 +246,31 @@ class Shard:
         self.srv.terminate()
 
 
+def unit_of(bench: str, name: str) -> str:
+    """The shard unit a predicted file belongs to: its LongMemEval question, or its BEAM conversation."""
+    stem = re.sub(r"^_(ingestion|progress)_", "", name.removesuffix(".json"))
+    return stem if BENCH[bench][0] == "lme" else "_".join(stem.split("_")[:2])
+
+
+def unmerge(bench: str, arm_dir: Path, units: list[set[str]]) -> int:
+    """On --resume after a merge: every merged file goes back to its shard, so each runner skips what it already did
+    and drop_retried_users can find its users. Without it a resumed sharded run would redo every question."""
+    src = arm_dir / f"predicted_{bench}"
+    owner = {u: k for k, us in enumerate(units) for u in us}
+    moved = 0
+    for p in sorted(src.glob("*.json")) if src.is_dir() else []:
+        k = owner.get(unit_of(bench, p.name))
+        if k is None:
+            sys.exit(f"{p} belongs to no shard of this plan: resume with the shard count of the first run")
+        dest = arm_dir / f"shard{k}" / f"predicted_{bench}" / p.name
+        if dest.exists():
+            sys.exit(f"{p.name} is in the merged folder and in shard{k}")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(p), dest)
+        moved += 1
+    return moved
+
+
 def merge(bench: str, shards: list[Shard], arm_dir: Path) -> Path:
     """The arm's predicted dir: every shard's files moved into one."""
     dest = arm_dir / f"predicted_{bench}"
@@ -313,12 +342,16 @@ def main() -> None:
     if len(ports) % len(arms) or any(not 8911 <= p <= 8949 for p in ports) or len(set(ports)) != len(ports):
         sys.exit("--ports needs the same count of distinct ports in 8911-8949 for every arm")
     n_shards = len(ports) // len(arms)
-    ids, flag_sets = plan(a.bench, a, n_shards, a.out)
+    ids, flag_sets, units = plan(a.bench, a, n_shards, a.out)
     started = time.time()
     by_arm: dict[str, list[Shard]] = {arm: [] for arm in arms}
     verdict: dict = {}
     try:
         for ai, arm in enumerate(arms):
+            if a.resume and n_shards > 1:
+                moved = unmerge(a.bench, a.out / "retrieval" / arm, units)
+                if moved:
+                    print(f"{arm}: {moved} merged files moved back to their shards", flush=True)
             for si, flags in enumerate(flag_sets):
                 dirp = a.out / "retrieval" / arm / (f"shard{si}" if n_shards > 1 else "")
                 by_arm[arm].append(Shard(a.bench, arm, si, ports[ai * n_shards + si], dirp, flags, a.resume))

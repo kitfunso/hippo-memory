@@ -517,3 +517,12 @@ Dated notes 5 said the LongMemEval, BEAM and LoCoMo scripts get `hippo-emb` in a
 - A LoCoMo rerun started at 01:14 and was stopped once the store comparison showed the first run was whole. Its partial output is kept in `aborted-2-partial-rerun/` and is not used.
 
 **Read before this note.** HotPotQA-24 `hippo-emb` F1 92.1 (both registered arms 85.1), PersonaMem v1 `hippo-emb` 72.4% (`hippo365` 69.0%, `bm25` 68.0%) and DMR `hippo-emb` 73.1% (`hippo365` 61.2%). None of them is a benchmark this note touches. `qa/loaders/hotpotqa24.py score` now takes `--arm` and `--pairs-with` for the F1 lines dated notes 5 registers. On the registered run it rewrites `score_match.txt` byte for byte.
+
+### Amendment 6, dated notes 8 (2026-11-12, before any LongMemEval-M answer): the registered LongMemEval-M redo and resume after a merge
+The registered LongMemEval-M retrieval ran before the keep-alive fix of dated notes 7. Its check failed on retried adds only: 98 `hippo365` users and 61 `bm25` users, each in a single launch. All 500 question files per arm were written. Under the rule of dated notes 7, those users are redone whole with `run_retrieval.py --resume`, on the fixed server.
+
+**Resume after a merge.** A sharded run moves every shard's files into one arm folder when it ends. Before this note, `--resume` then found empty shard folders, so it would have redone every question. Now `--resume` first moves each merged file back to the shard that owns it, by question (LongMemEval) or conversation (BEAM). A file that no shard owns stops the run. No stored data or search changes. Test: `tests/test_runner_retrieval_arms.py`.
+
+**Restart.** Claude Code's low-memory reaper stopped the background lanes at about 07:50 UTC. The LongMemEval-M `hippo-emb` server then failed to start (exit 0xC0000142) before it stored anything, so that run starts clean. Survivors that could no longer start child processes were stopped by pid and relaunched (`results-r2/run-continue.sh`). The answer and judge stages resume from their call logs.
+
+**Read before this note.** LoCoMo `hippo-emb`: 1,200 answers, 1,200 codex verdicts and 675 Sonnet verdicts are logged, none of them read or scored. LongMemEval-S `hippo-emb`: 630 answers, none scored. The group B and BEAM `hippo-emb` retrievals passed their checks. Their question counts match the registered arms. None of them is answered.
