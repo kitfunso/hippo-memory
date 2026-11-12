@@ -504,3 +504,16 @@ Dated notes 5 said the LongMemEval, BEAM and LoCoMo scripts get `hippo-emb` in a
 - Score adds the arm minus `hippo365`, `bm25` and `mem0`, re-made from the registered run's call logs, for F1 and each judge both runs hold, at each cutoff, paired by question. All lines are secondary.
 
 **Read before this note.** HotPotQA-24's `hippo-emb` score (94.7%, the same as both registered arms) was read before this note. It holds nothing about these benchmarks.
+
+### Amendment 6, dated notes 7 (2026-11-12, before any LongMemEval, BEAM or LoCoMo `hippo-emb` answer): retried calls in Mem0's runner
+
+**What happened.** With 8 embedding servers and the registered runs sharing the CPU, Mem0's runner logged calls that failed once and then succeeded on retry. LoCoMo had 13 searches and 1 add. The LongMemEval-S run, still going, had 29 adds by then. The errors are "Server disconnected" and WinError 64, not timeouts: the runner's limit is 300 s (`benchmarks/common/mem0_client.py` line 63). Node closes an idle keep-alive connection after 5 s, while aiohttp keeps an idle pooled connection up to 15 s, so a reused connection can be closed as a request goes out. The registered runs logged none, since their adds were fast.
+
+**Server.** `hippo-mem0-server.mjs` sets `keepAliveTimeout` to 65 s, above aiohttp's 15 s. This changes connection reuse only, not what is stored or searched. Servers started from this commit on have it. The LongMemEval-S servers started before it.
+
+**Rule.** A search never changes a store (`search` in `hippo-mem0-server.mjs` only reads), so a retried search's result stands. A retried add may have been stored twice. A user with a retried add is therefore redone whole, or kept only on direct proof from its store.
+- Runner benchmarks: `run_retrieval.py --resume` deletes every user with a retried add in the last launch, with its question and ingestion files and its store. The runner then ingests and searches that user again. The retrieval check still fails on any retried add, any final failure and any other failure line. Only a retried search is exempt.
+- LoCoMo: `~/hippo-bench/retrieval-emb-locomo/check_and_manifest.py` keeps a conversation with a retried add only if its store holds exactly as many memories as the registered `hippo365` store of that conversation, with no memory twice (same content and date). The registered store has the same data and chunking. Conversation 4, the one with a retried add, holds 680 memories with none twice, the same count as registered. The check passed, and its record is `retrieval-check.json` there.
+- A LoCoMo rerun started at 01:14 and was stopped once the store comparison showed the first run was whole. Its partial output is kept in `aborted-2-partial-rerun/` and is not used.
+
+**Read before this note.** HotPotQA-24 `hippo-emb` F1 92.1 (both registered arms 85.1), PersonaMem v1 `hippo-emb` 72.4% (`hippo365` 69.0%, `bm25` 68.0%) and DMR `hippo-emb` 73.1% (`hippo365` 61.2%). None of them is a benchmark this note touches. `qa/loaders/hotpotqa24.py score` now takes `--arm` and `--pairs-with` for the F1 lines dated notes 5 registers. On the registered run it rewrites `score_match.txt` byte for byte.

@@ -128,28 +128,57 @@ def judge(q: dict, answer: str):
             DIRECT_USER.format(question=q["question"], answer=answer, golden_answer=q["gold"]), parse)
 
 
-def score(out: Path, bonferroni: int | None = None) -> str:
-    """F1 and exact match per arm and hippo365 minus bm25, from the answers the call log settles; an exhausted answer
-    scores 0 on both. Smoke items are left out of the primary (dated notes 1)."""
+def _harness():
+    """qa/harness.py, imported at call time: harness imports this module while it runs."""
     sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
-    import harness  # noqa: E402  (imported here: harness imports this module while it runs)
+    import harness  # noqa: E402
 
-    a = argparse.Namespace(stage="score", bench="hotpotqa24", out=out, limit=0, slots=1, port_base=0)
+    return harness
+
+
+def match_scores(out: Path, arm: str | None = None, pairs_with: tuple[Path, ...] = ()):
+    """(the run's namespace, ids, primary ids, smoke note, answers, {(arm, qid): (EM, F1)}) from the call log; an
+    exhausted answer scores 0 on both."""
+    harness = _harness()
+
+    a = argparse.Namespace(stage="score", bench="hotpotqa24", out=out, limit=0, slots=1, port_base=0, arm=arm,
+                           pairs_with=list(pairs_with))
     mod, qs = harness.setup(a)
     answers = harness.all_answers(a, mod, qs)
     ids, by_id = [q["qid"] for q in qs], {q["qid"]: q for q in qs}
-    sc = {(arm, i): (0.0, 0.0) if (ans := answers[(arm, i)]["answer"]) is None else
-          (exact_match(ans, by_id[i]["gold"]), f1(ans, by_id[i]["gold"])) for arm in harness.ARMS for i in ids}
+    sc = {(arm_, i): (0.0, 0.0) if (ans := answers[(arm_, i)]["answer"]) is None else
+          (exact_match(ans, by_id[i]["gold"]), f1(ans, by_id[i]["gold"])) for arm_ in a.arms for i in ids}
     primary, note = harness.primary_ids(a, mod, ids)
+    return a, ids, primary, note, answers, sc
+
+
+def score(out: Path, bonferroni: int | None = None, arm: str | None = None, pairs_with: tuple[Path, ...] = ()) -> str:
+    """F1 and exact match per arm and hippo365 minus bm25. With an extra arm (dated notes 5): its F1 and EM, then the
+    arm minus each arm of each paired run, re-made from that run's call log. Smoke items stay out of the primary."""
+    harness = _harness()
+
+    a, ids, primary, note, answers, sc = match_scores(out, arm, pairs_with)
     lines = [f"{NAME}: {len(ids)} questions, {len(primary)} in the primary, top {TOPK}, main score F1, exact match "
              f"secondary (cognee metrics, no model call); unit the question: one store holds all 24"]
-    for arm in harness.ARMS:
-        lines.append(f"{arm:>9}  EM {100 * sum(sc[(arm, i)][0] for i in primary) / len(primary):5.1f}  "
-                     f"F1 {100 * sum(sc[(arm, i)][1] for i in primary) / len(primary):5.1f}")
-    diff = [{i: sc[("hippo365", i)][k] - sc[("bm25", i)][k] for i in ids} for k in (0, 1)]
-    lines += harness.primary_lines("hippo365 - bm25 F1", diff[1], primary, ids, str, bonferroni)
-    lines += [f"secondary hippo365 - bm25 EM: {harness.paired(diff[0], primary, str)}", "", note,
-              *harness.exhausted_lines({k: r["choice"] for k, r in answers.items()}, "answers")]
+    for arm_ in a.arms:
+        lines.append(f"{arm_:>9}  EM {100 * sum(sc[(arm_, i)][0] for i in primary) / len(primary):5.1f}  "
+                     f"F1 {100 * sum(sc[(arm_, i)][1] for i in primary) / len(primary):5.1f}")
+    if arm:
+        for run in pairs_with:
+            r, r_ids, _, _, _, rsc = match_scores(run)
+            if r_ids != ids:
+                sys.exit(f"{run} holds another question set than {out}")
+            for other in r.arms:
+                for k, name in ((1, "F1"), (0, "EM")):
+                    acc = 100 * sum(rsc[(other, i)][k] for i in primary) / len(primary)
+                    diff = {i: sc[(arm, i)][k] - rsc[(other, i)][k] for i in ids}
+                    lines.append(f"secondary {arm} - {other} ({acc:.1f} in {run.name}) {name}: "
+                                 f"{harness.paired(diff, primary, str)}")
+    else:
+        diff = [{i: sc[("hippo365", i)][k] - sc[("bm25", i)][k] for i in ids} for k in (0, 1)]
+        lines += harness.primary_lines("hippo365 - bm25 F1", diff[1], primary, ids, str, bonferroni)
+        lines.append(f"secondary hippo365 - bm25 EM: {harness.paired(diff[0], primary, str)}")
+    lines += ["", note, *harness.exhausted_lines({k: r["choice"] for k, r in answers.items()}, "answers")]
     (out / "score_match.jsonl").write_text("".join(json.dumps({"arm": a_, "qid": i, "em": e, "f1": f}) + "\n"
                                                    for (a_, i), (e, f) in sc.items()), encoding="utf-8")
     text = "\n".join(lines)
@@ -162,7 +191,11 @@ if __name__ == "__main__":
     ap.add_argument("cmd", choices=("score",))
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--bonferroni", type=int, metavar="K", help="also the primary's interval at 1 - 0.05/K")
+    ap.add_argument("--arm", choices=("hippo-emb",), help="dated notes 5: the extra arm's run in --out")
+    ap.add_argument("--pairs-with", type=Path, nargs="+", default=[], metavar="RUN", help="registered runs it pairs with")
     args = ap.parse_args()
+    if bool(args.arm) != bool(args.pairs_with):
+        ap.error("--arm and --pairs-with go together")
     if args.bonferroni is not None and args.bonferroni < 1:
         ap.error("--bonferroni K needs K of 1 or more")
-    print(score(args.out, args.bonferroni))
+    print(score(args.out, args.bonferroni, args.arm, tuple(args.pairs_with)))

@@ -168,5 +168,8 @@ const server = http.createServer((req, res) => {
     }
   });
 });
+// Idle connections outlive aiohttp's 15 s pool: Node's 5 s default closed them as the runner reused them (notes 7).
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
 if (!READ_ONLY) fs.mkdirSync(DATA_DIR, { recursive: true });
 server.listen({ port: PORT, host: HOST }, () => console.error(`hippo-mem0-server arm=${ARM} embeddings=${EMBED} halfLifeDays=${HALF_LIFE_DAYS ?? 'default'} readOnly=${READ_ONLY} host=${HOST ?? 'all'} port=${PORT} data=${DATA_DIR} dist=${DIST}`));

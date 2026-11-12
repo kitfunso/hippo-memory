@@ -36,3 +36,38 @@ def test_the_health_check_matches_the_arm_and_its_embeddings(monkeypatch, arm, h
 
 def test_longmemeval_s_reads_the_runner_dataset_the_registered_run_read():
     assert rr.BENCH["longmemeval-s"] == ("lme", "longmemeval_s_cleaned.json")
+
+
+def write_q(pred, name: str, uid: str, n: int = 200) -> None:
+    hits = [{"memory": f"m{i}"} for i in range(n)]
+    pred.joinpath(name).write_text(json.dumps({"user_id": uid, "retrieval": {"search_results": hits, "total_results": n}}),
+                                   encoding="utf-8")
+
+
+def test_a_user_with_a_retried_add_in_the_last_launch_is_redone_whole(tmp_path, monkeypatch):
+    pred, log = tmp_path / "pred", tmp_path / "runner.log"
+    pred.mkdir()
+    for q, uid in (("q1", "u1"), ("q2", "u2"), ("q3", "u3")):
+        write_q(pred, f"{q}.json", uid)
+        write_q(pred, f"_ingestion_{q}.json", uid)
+    log.write_text("\n=== launch 1\nADD attempt 1/5 failed (user=u3): reset\n"
+                   "\n=== launch 2\nADD attempt 1/5 failed (user=u1): [WinError 64]\n"
+                   "SEARCH attempt 1/5 failed (user=u2): Server disconnected\n", encoding="utf-8")
+    deleted = []
+    monkeypatch.setattr(rr.urllib.request, "urlopen", lambda req, timeout: deleted.append(req.full_url) or io.BytesIO(b"{}"))
+    assert rr.drop_retried_users(pred, log, 1) == 1
+    assert sorted(p.name for p in pred.iterdir()) == ["_ingestion_q2.json", "_ingestion_q3.json", "q2.json", "q3.json"]
+    assert deleted == ["http://127.0.0.1:1/memories?user_id=u1"]
+
+
+def test_the_check_keeps_a_retried_search_but_fails_a_retried_add(tmp_path):
+    pred, log = tmp_path / "pred", tmp_path / "runner.log"
+    pred.mkdir()
+    write_q(pred, "q1.json", "u1")
+    log.write_text("\n=== launch\nSEARCH attempt 1/5 failed (user=u1): Server disconnected\n", encoding="utf-8")
+    assert rr.check(pred, ["q1"], [log], [], 0.0)["pass"]
+    log.write_text("\n=== launch\nADD attempt 1/5 failed (user=u1): Server disconnected\n", encoding="utf-8")
+    res = rr.check(pred, ["q1"], [log], [], 0.0)
+    assert not res["pass"] and "runner log lines name a failure" in res["problems"][0]
+    log.write_text("\n=== launch\nSEARCH failed after 5 attempts for user=u1\n", encoding="utf-8")
+    assert not rr.check(pred, ["q1"], [log], [], 0.0)["pass"]

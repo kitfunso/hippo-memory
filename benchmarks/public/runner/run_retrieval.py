@@ -34,6 +34,8 @@ BENCH = {
 }
 LME_SMOKE_TYPES = "single-session-user,single-session-assistant,multi-session,knowledge-update,temporal-reasoning"
 BAD_LOG = re.compile(r"failed|error|traceback|exception", re.I)
+SEARCH_RETRY = re.compile(r"SEARCH attempt \d+/\d+ failed")  # a search never changes a store: the retry's result stands
+ADD_RETRY = re.compile(r"ADD attempt \d+/\d+ failed \(user=([^)]+)\)")  # a retried add may be stored twice
 DEAD_URL = "http://127.0.0.1:9/v1"  # port 9 (discard) refuses connections: no model call can leave this machine
 MAX_RESTARTS = 20
 
@@ -87,6 +89,30 @@ def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
             sys.exit(f"server on {port} is not the {arm} arm (hippo-emb needs @huggingface/transformers): {health}")
         return
     sys.exit(f"hippo-mem0-server on {port} did not answer /health in 60 s")
+
+
+def last_launch(log: Path) -> str:
+    """What the runner's last launch logged: an earlier, killed launch's users were redone from scratch."""
+    return log.read_bytes().decode("utf-8", "replace").split("\n=== ")[-1] if log.exists() else ""
+
+
+def drop_retried_users(pred: Path, log: Path, port: int) -> int:
+    """On --resume: every user with a retried add in the last launch is deleted with its question and ingestion files,
+    so the runner ingests and searches it again whole."""
+    users = set(ADD_RETRY.findall(last_launch(log)))
+    if not users:
+        return 0
+    for p in pred.glob("*.json"):
+        try:
+            uid = json.loads(p.read_text(encoding="utf-8")).get("user_id")
+        except ValueError:
+            continue
+        if uid in users:
+            p.unlink()
+    for uid in users:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/memories?user_id={uid}", method="DELETE")
+        urllib.request.urlopen(req, timeout=600).read()
+    return len(users)
 
 
 def drop_partial_users(pred: Path, port: int) -> int:
@@ -149,6 +175,9 @@ class Shard:
             dropped = drop_partial_users(self.pred, self.port)
             if dropped:
                 print(f"{self.arm}/{self.idx}: {dropped} partial users dropped", flush=True)
+            redone = drop_retried_users(self.pred, self.rlog_path, self.port)
+            if redone:
+                self._note(f"{redone} users with a retried add dropped, to be redone whole")
         rlog = self.rlog_path.open("ab")
         rlog.write(f"\n=== {time.ctime()} {' '.join(self.cmd)}\n".encode())
         rlog.flush()
@@ -254,9 +283,8 @@ def check(pred: Path, ids: list[str], runner_logs: list[Path], server_logs: list
     if failed_ingest:
         problems.append(f"{len(failed_ingest)} ingestions had failed adds, e.g. {failed_ingest[0]}")
     # only each runner's last launch: what an earlier, killed launch logged was redone from scratch for its users
-    bad = [ln for lp in runner_logs
-           for ln in re.split(r"[\r\n]+", lp.read_bytes().decode("utf-8", "replace").split("\n=== ")[-1])
-           if BAD_LOG.search(ln)]
+    bad = [ln for lp in runner_logs for ln in re.split(r"[\r\n]+", last_launch(lp))
+           if BAD_LOG.search(ln) and not SEARCH_RETRY.search(ln)]
     if bad:
         problems.append(f"{len(bad)} runner log lines name a failure, e.g. {bad[0][:200]}")
     slog = [ln for sp in server_logs for ln in sp.read_text(encoding="utf-8", errors="replace").splitlines()
