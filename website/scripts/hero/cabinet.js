@@ -66,7 +66,7 @@ export async function mount(canvas, opts = {}) {
   const drawers = [];
   const recessMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 1 });
   const HOST = 4; // the one drawer that opens; the closed ones get no tray, since nothing inside them shows
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+  for (let r = 0; r < rows; r++) { for (let c = 0; c < cols; c++) {
     const g = new THREE.Group();
     const x = -W / 2 + inset + fw / 2 + c * (fw + gap);
     const y = plinthH + H - inset - fh / 2 - r * (fh + gap);
@@ -95,7 +95,7 @@ export async function mount(canvas, opts = {}) {
       tray.add(card);
       if (i % 6 === 2) { const tab = shadowy(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.008), paperShade)); tab.position.set(((i / 6) % 3 - 1) * cw * 0.32, ch / 2 + 0.04, 0); card.add(tab); }
     }
-  }
+  } }
 
   const heroCard = new THREE.Group(); scene.add(heroCard);
   const cardMat = new THREE.MeshBasicMaterial({ color: 0xf7f2e8, transparent: true, toneMapped: false }); // unlit so the ink stays legible

@@ -55,6 +55,7 @@ import { heroScene } from '../content/site';
   const video = fig?.querySelector('video');
   const quiet =
     matchMedia('(prefers-reduced-motion: reduce)').matches ||
+    // SAFETY: navigator.connection is Chromium-only and absent from lib.dom; the ?. covers every browser without it.
     (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
 
   if (fig && video && !quiet) {
@@ -72,7 +73,8 @@ import { heroScene } from '../content/site';
         // A refused autoplay (iOS Low Power Mode, for one) leaves the poster in place.
         video.play().catch((err) => console.warn('hero video stayed on the poster:', err));
       };
-      'requestIdleCallback' in window ? requestIdleCallback(go, { timeout: 1500 }) : setTimeout(go, 300);
+      if ('requestIdleCallback' in window) requestIdleCallback(go, { timeout: 1500 });
+      else setTimeout(go, 300);
     });
     io.observe(fig);
   }

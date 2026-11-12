@@ -3,10 +3,10 @@
 // HotPotQA-24 stays on /benchmarks/: 19 questions cannot separate anyone. The two public-test losses sit under the table.
 import data from '../data/public-benchmarks.json';
 import { site, publicTests, losses } from '../content/site';
-import { type Bench, f1, shortName } from '../lib/bench-strip';
+import { f1, publicBenches, shortName } from '../lib/bench-strip';
 
 const order = ['DMR', 'PersonaMem v1', 'LongMemEval-S', 'LoCoMo'];
-const benches = (data.benches as Bench[])
+const benches = publicBenches
   .filter((b) => order.includes(shortName(b)))
   .sort((a, b) => order.indexOf(shortName(a)) - order.indexOf(shortName(b)));
 const rows = benches.map((b) => {
