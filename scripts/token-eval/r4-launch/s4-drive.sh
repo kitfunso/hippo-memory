@@ -90,9 +90,12 @@ fi
 [ -z "${Z0_DRIVE_STUBS:-}" ] || [ -d "$Z0_DRIVE_STUBS" ] || refuse "DRIVE: Z0_DRIVE_STUBS $Z0_DRIVE_STUBS is not a folder"
 export Z0_CHECKOUT=$CHECKOUT
 # The listing a batch of this driver runs cannot reach the driver through parent links, so s4-procs.ps1 reads its pid from here; without it a batch waits on its own driver.
+# The creation time goes with the pid, so a process that reuses the pid is told apart from this driver.
 WINPID=$(< /proc/$$/winpid) || WINPID=
 [[ $WINPID =~ ^[0-9]+$ ]] || refuse "DRIVE: cannot read this driver's Windows pid from /proc/$$/winpid"
-export Z0_DRIVER_WINPID=$WINPID
+STARTED=$(powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=$WINPID').CreationDate.ToUniversalTime().Ticks" < /dev/null 2> /dev/null | tr -d '\r') || STARTED=
+[[ $STARTED =~ ^[0-9]+$ ]] || refuse "DRIVE: cannot read the creation time of driver pid $WINPID from Win32_Process"
+export Z0_DRIVER_WINPID=$WINPID Z0_DRIVER_STARTED=$STARTED
 case $STEP in [1-8]) LABEL="step $STEP" ;; *) LABEL=$STEP ;; esac
 POETRY=C:/z0-runs/r4/poetry-2.5.1
 BASE_COMMIT=04835462b
