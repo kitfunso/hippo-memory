@@ -25,7 +25,7 @@ interface DesignCopy {
   arms: string[]; noMemory: string; sets: string[]; hookHold: string[]; tests: Record<string, string[]>; pairs: Record<string, string[]>;
   reported: string[]; seedRule: { arms: string[]; tests: string[] }[]; g2: { claudeCode: HalfCopy | null; codex: HalfCopy | null };
   screen?: { control: string; taught: string } | null; drift: { arm: string; against: string; design: string } | null;
-  prices: string; dropFamilies: string[]; maxSeed: number | string | null; colour?: number;
+  prices: string; dropFamilies: string[]; maxSeed: number | string | null; colour?: number; wholePlanDesign?: string | number;
 }
 type DesignsCopy = Record<'r3' | 'r4' | 'r4-on-r3', DesignCopy>;
 const rows: Readonly<TableCopy> = ARM_TABLE;
@@ -129,6 +129,13 @@ describe('the designs', () => {
     expect(() => checkDesigns(copy)).toThrow(/DESIGNS\.r4-on-r3\.seedRule: its groups cover A1, A2 but the arms whose row has seedRule are A1, A2, A5/);
   });
 
+  it('names r4 as the design whose whole plans r4-on-r3 reads, and leaves the key out of r3 and r4', () => {
+    expect(DESIGNS['r4-on-r3'].wholePlanDesign).toBe('r4');
+    expect(['r3', 'r4'].map((n) => Object.hasOwn(designByName(n), 'wholePlanDesign'))).toEqual([false, false]);
+    const wholeDesign = designByName(DESIGNS['r4-on-r3'].wholePlanDesign);
+    for (const t of ['T1', 'T2a', 'T2b', 'T2c', 'T3', 'H4']) expect(pairOf(wholeDesign, t), t).toEqual(pairOf(DESIGNS.r4, t));
+  });
+
   it('stops, naming the design and the field, on each break made on a deep copy', () => {
     const breaks: [string, (d: DesignsCopy) => void, RegExp][] = [
       ['a missing field', (d) => { delete d.r4.screen; }, /DESIGNS\.r4\.screen: the field is missing/],
@@ -144,6 +151,8 @@ describe('the designs', () => {
       ['a g2 half arm outside the design', (d) => { d.r4.g2.claudeCode!.taught = 'A4'; }, /DESIGNS\.r4\.g2: A4 is not in the design's arms/],
       ['a drift against an arm its design lacks', (d) => { d.r4.drift!.against = 'S1'; }, /DESIGNS\.r4\.drift: S1 is not in the arms of design r3/],
       ['a drift to no design', (d) => { d.r4.drift!.design = 'r9'; }, /DESIGNS\.r4\.drift: design r9 is not a design/],
+      ['a whole-plan design that is no design', (d) => { d['r4-on-r3'].wholePlanDesign = 'r9'; }, /DESIGNS\.r4-on-r3\.wholePlanDesign: design r9 is not a design/],
+      ['a whole-plan design of the wrong type', (d) => { d['r4-on-r3'].wholePlanDesign = 4; }, /DESIGNS\.r4-on-r3\.wholePlanDesign: the value has the wrong type/],
       ['an arm in two seed-rule groups', (d) => { d.r3.seedRule[1]!.arms.push('A1'); }, /DESIGNS\.r3\.seedRule: A1 is in two seed-rule groups/],
       ['a drift arm outside the design\'s arms', (d) => { d.r4.drift!.arm = 'A1'; }, /DESIGNS\.r4\.drift: A1 is not in the design's arms/],
       ['a no-memory arm outside the design', (d) => { d.r4.noMemory = 'A0'; }, /DESIGNS\.r4\.noMemory: A0 is not in the design's arms/],
