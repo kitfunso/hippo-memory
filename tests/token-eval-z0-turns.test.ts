@@ -14,7 +14,7 @@ import { runScreen } from '../scripts/token-eval/screen.mjs';
 import { loadHippo } from '../scripts/token-eval/runs.mjs';
 import { hippoBuild } from '../scripts/token-eval/pins.mjs';
 import { fixtureEnv } from './fixtures/z0-harness.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 import { validateCorpus, type Z0Record, type Z0PlanCell } from './fixtures/z0-contract.js';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');

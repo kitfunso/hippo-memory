@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { checkoutBase, instructionSnapshot, commitInstructions, INSTRUCTIONS_MESSAGE, STUB_CLAUDE_MD } from '../scripts/token-eval/workspace.mjs';
 import { stateCommit } from '../scripts/token-eval/checks.mjs';
 import { cleanup, tmp, isolate, makeRepo } from './fixtures/z0-harness.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 afterEach(cleanup);
 

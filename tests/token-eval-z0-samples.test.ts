@@ -14,7 +14,7 @@ import { g5 } from '../scripts/token-eval/z0-gates.mjs';
 import { cellKey } from '../scripts/token-eval/z0-records.mjs';
 import { CHECKS, cleanup, tmp } from './fixtures/z0-harness.js';
 import { GRADING, PRICES, generate, jsonl } from './fixtures/z0-gen.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 import { PHRASE, SEQ, bundledOut, cli, gradeDir, readJson, rowOf, runRoot, sealedKey, storedRecord, synthOut, writeRows, type Cell, type Verdict } from './fixtures/z0-g5.js';
 
 const win = process.platform === 'win32';

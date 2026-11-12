@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { killNaming } from './kill-own.js';
-import { testGit } from './test-git.js';
+import { testGit } from '../_helpers/test-git.js';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
 import type { Z0Record, Z0PlanCell } from './z0-contract.js';

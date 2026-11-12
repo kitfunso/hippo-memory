@@ -8,7 +8,7 @@ import { runCli as pinsCli } from '../scripts/token-eval/z0-pins-check.mjs';
 import { SONNET_MODEL } from '../scripts/token-eval/arms.mjs';
 import { cleanup, makeRepo } from './fixtures/z0-harness.js';
 import { PRICES_BY_MODEL } from './fixtures/z0-gen.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 const REPO = resolve(__dirname, '..');
 const LAUNCH = join(REPO, 'scripts', 'token-eval', 'r4-launch');

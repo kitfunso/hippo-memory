@@ -10,7 +10,7 @@ import { PILOT_CHECKS } from '../../../scripts/token-eval/z0-budget.mjs';
 import { runCli as pinsCli } from '../../../scripts/token-eval/z0-pins-check.mjs';
 import { BASIS, BATCH1, BATCH2, BATCH2_SEQ, MEAN, SEQ } from '../../_helpers/z0-r4-spend.js';
 import { PRICES_BY_MODEL, generate, planOf } from '../z0-gen.js';
-import { testGit } from '../test-git.js';
+import { testGit } from '../../_helpers/test-git.js';
 import { replay } from '../z0-batch/ab-run.mjs';
 import { CHECKOUT as REPO, fwd, isAlive, json, lines, makeFixture, put, read, sleep, until } from '../z0-batch/harness.js';
 import { killNaming, killOwnTree, procsNaming } from '../kill-own.js';

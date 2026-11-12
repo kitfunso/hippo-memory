@@ -8,7 +8,7 @@ import { runDirs, freshRunDirs } from '../../scripts/token-eval/homes.mjs';
 import { armEnv } from '../../scripts/token-eval/arms.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
-import { testGit } from './test-git.js';
+import { testGit } from '../_helpers/test-git.js';
 import { tmp, isolate, readRecords, fixtureEnv, CHECKS, CLAUDE, family, lesson, teach, apply } from './z0-harness.js';
 import type { FixtureRepo, FamilyDef, TaskDef, RunExtra, RunRecord } from './z0-harness.js';
 

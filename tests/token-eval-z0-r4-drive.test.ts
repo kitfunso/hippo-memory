@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { BATCH1, BATCH2 } from './_helpers/z0-r4-spend.js';
 import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type Started, type World } from './fixtures/z0-drive/harness.js';
 import { killOwnTree } from './fixtures/kill-own.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 // A case's afterEach scans for its processes up to 20 times, far past the eval config's 30 s hookTimeout.
 vi.setConfig({ hookTimeout: 180_000 });

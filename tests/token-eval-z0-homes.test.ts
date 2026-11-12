@@ -8,7 +8,7 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { promisify } from 'node:util';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
 import { HIPPO_JS, git } from '../scripts/token-eval/exec.mjs';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
 

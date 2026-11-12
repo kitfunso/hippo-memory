@@ -9,7 +9,7 @@ import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { pooledVoids, sourceRows } from '../scripts/token-eval/z0-blind.mjs';
 import { analyzeZ0, runCli } from '../scripts/token-eval/z0-analyze.mjs';
 import { ARMS, GRADING, PRICES, at, generate, jsonl, type Generated } from './fixtures/z0-gen.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 const BASE = generate();
 const fresh = (): Generated => structuredClone(BASE);

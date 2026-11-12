@@ -11,7 +11,7 @@ import { runCli as seedRuleCli } from '../scripts/token-eval/z0-seed-rule.mjs';
 import { runCli as sizeCli } from '../scripts/token-eval/z0-size.mjs';
 import { R3_FIGURE, WHOLE_PLANS, corpusWorkspace, ledgerFolder, pilotArgv, r4Corpus, raisedReadSet } from './fixtures/z0-r4-corpus.js';
 import { PRICES4, R4, cleanUp, raise } from './fixtures/z0-r4-read.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 // The unblind's 10,000 resamples make this file about 10 s.
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });

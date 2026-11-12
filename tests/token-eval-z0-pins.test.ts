@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { treeHash, hippoBuild, pinMismatches, claudePinned, refuseOffPins } from '../scripts/token-eval/pins.mjs';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 const dirs: string[] = [];
 afterEach(() => {

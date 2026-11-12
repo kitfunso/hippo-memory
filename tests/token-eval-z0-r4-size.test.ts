@@ -16,7 +16,7 @@ import { binaryRun, levelCells, predictedSe, repeatRun, seedsNeeded } from '../s
 import { runCli as sizeCli } from '../scripts/token-eval/z0-size.mjs';
 import { THRESHOLDS, minLevels } from '../scripts/token-eval/z0-verdict-r4.mjs';
 import { PRICES, PRICES_BY_MODEL, generate, jsonl, wholePlanFiles, type Z0Record } from './fixtures/z0-gen.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 // Each `it` runs 20 to 50 draws per case; a shared runner can be slow, so the limit is a minute.
 vi.setConfig({ testTimeout: 60_000 });

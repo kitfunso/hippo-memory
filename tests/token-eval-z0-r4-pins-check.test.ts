@@ -7,7 +7,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MANIFEST, manifestText, runCli } from '../scripts/token-eval/z0-pins-check.mjs';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 const sha = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const put = (dir: string, rel: string, text: string) => {

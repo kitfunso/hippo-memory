@@ -9,7 +9,7 @@ import { runCli as leaks } from '../../scripts/token-eval/z0-leaks.mjs';
 import { runCli as merge } from '../../scripts/token-eval/z0-merge.mjs';
 import { jsonl, planOf, type Generated, type Z0Record } from './z0-gen.js';
 import { r4Corpus } from './z0-r4-corpus.js';
-import { testGit } from './test-git.js';
+import { testGit } from '../_helpers/test-git.js';
 import { KEYS, PINS, PRICES4, R4, drift, levelsFile, loose, raise, seedRule } from './z0-r4-read.js';
 
 /** `pairs` is the reader pairs of each G5 folder (8 gives 40 or more in all, which G5 passes); `raiseTo` lays out a raise to that seed; `abandoned` cuts rn-repo2's first run short of its plan;

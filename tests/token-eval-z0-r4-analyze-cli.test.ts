@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { runDirs } from '../scripts/token-eval/homes.mjs';
 import * as analyze from '../scripts/token-eval/z0-analyze.mjs';
 import { R4, R4_ARGV, cleanUp, corpus, levelsFile, loose, workspace } from './fixtures/z0-r4-read.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 afterAll(cleanUp);
 

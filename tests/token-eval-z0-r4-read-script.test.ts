@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { gitBash } from '../scripts/token-eval/homes.mjs';
 import { cleanUpRoots, readRoot } from './fixtures/z0-read-root.js';
-import { testGit } from './fixtures/test-git.js';
+import { testGit } from './_helpers/test-git.js';
 
 afterAll(cleanUpRoots);
 
