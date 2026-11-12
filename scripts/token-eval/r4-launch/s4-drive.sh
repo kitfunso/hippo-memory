@@ -83,6 +83,8 @@ fi
 [[ ${Z0_GRACE_S:-600} =~ ^[0-9]+$ ]] || refuse "DRIVE: Z0_GRACE_S ${Z0_GRACE_S} must be a whole number of seconds"
 [ -z "${Z0_DRIVE_STUBS:-}" ] || [ -d "$Z0_DRIVE_STUBS" ] || refuse "DRIVE: Z0_DRIVE_STUBS $Z0_DRIVE_STUBS is not a folder"
 export Z0_CHECKOUT=$CHECKOUT
+# The listing a batch of this driver runs cannot reach the driver through parent links, so s4-procs.ps1 reads its pid from here.
+export Z0_DRIVER_WINPID=$(< /proc/$$/winpid)
 case $STEP in [1-8]) LABEL="step $STEP" ;; *) LABEL=$STEP ;; esac
 POETRY=C:/z0-runs/r4/poetry-2.5.1
 BASE_COMMIT=04835462b
@@ -746,7 +748,7 @@ if [ "$PRINT" = 1 ]; then
   exit 0
 fi
 
-say "call $STEP $CHECKOUT $ROOT attempt $ATTEMPT pid $(< /proc/$$/winpid)"
+say "call $STEP $CHECKOUT $ROOT attempt $ATTEMPT pid $Z0_DRIVER_WINPID"
 scan
 orphan_check
 case $STEP in plans | founder-go | cause | stage-checks) ;; *) wait_quiet ;; esac

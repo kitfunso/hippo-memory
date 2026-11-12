@@ -57,13 +57,25 @@ public static string[] Split(string line) {
     }
   }
 
-  $drop = @{ ([int]$PID) = $true }
-  $cur = $byPid[[int]$PID]
-  while ($cur) {
-    $parent = $byPid[[int]$cur.ParentProcessId]
-    if (-not $parent -or $drop.ContainsKey([int]$parent.ProcessId) -or -not $parent.CreationDate -or $parent.CreationDate -gt $cur.CreationDate) { break }
-    $drop[[int]$parent.ProcessId] = $true
-    $cur = $parent
+  # A Git Bash exec leaves a dead process between a batch and the driver that called it, so the parent links stop short of the driver; s4-drive.sh names itself in Z0_DRIVER_WINPID.
+  # The value counts only when it is a live s4-drive.sh bash.exe, so a stale or wrong one hides nothing.
+  $seeds = @([int]$PID)
+  $named = 0
+  if ([int]::TryParse([string]$env:Z0_DRIVER_WINPID, [ref]$named) -and $byPid.ContainsKey($named)) {
+    $driver = $byPid[$named]
+    $driverArgv = if ($driver.Name -ieq 'bash.exe') { ArgvOf $driver } else { $null }
+    if ($driverArgv -and $driverArgv.Count -gt 4 -and (Leaf $driverArgv[1]) -eq 's4-drive.sh') { $seeds += $named }
+  }
+  $drop = @{}
+  foreach ($seed in $seeds) {
+    $drop[$seed] = $true
+    $cur = $byPid[$seed]
+    while ($cur) {
+      $parent = $byPid[[int]$cur.ParentProcessId]
+      if (-not $parent -or $drop.ContainsKey([int]$parent.ProcessId) -or -not $parent.CreationDate -or $parent.CreationDate -gt $cur.CreationDate) { break }
+      $drop[[int]$parent.ProcessId] = $true
+      $cur = $parent
+    }
   }
   # Git Bash shows every fork of a script with the script's own command line, so a fork under a bash ancestor is the batch's own.
   foreach ($id in @($drop.Keys)) {

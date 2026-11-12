@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
+import { gitBash } from '../scripts/token-eval/homes.mjs';
 import { BATCH1, BATCH2 } from './_helpers/z0-r4-spend.js';
 import { DriveCase, POETRY, TAG_1, dropWorld, fwd, isAlive, lines, makeCheckout, makeWorld, put, read, sleep, until, type Knob, type Run, type Started, type World } from './fixtures/z0-drive/harness.js';
 import { killOwnTree } from './fixtures/kill-own.js';
@@ -116,6 +117,17 @@ const wait = (what: string, test: () => boolean) => until(what, test, 120_000);
 const HELD = { Z0_STUB_HOLD_S: '120' };
 /** True once the output of a started call holds a line that matches. */
 const sawLine = (s: Started, line: RegExp) => line.test(read(s.outFile).replace(/\r/g, ''));
+/** A live bash that the process listing reads as an `s4-drive.sh` or `s4-batch.sh` of the case's root, as `bash <role>.sh 1 <checkout> <root> <stop file>`; returns its Windows pid. */
+async function standIn(c: DriveCase, role: 's4-drive' | 's4-batch') {
+  const file = `${c.dir}/${role}-shaped/${role}.sh`;
+  const pidFile = `${c.dir}/${role}-shaped/stop.pid`;
+  put(file, '#!/usr/bin/env bash\nPATH=/usr/bin:/mingw64/bin:$PATH\ncat /proc/$$/winpid > "$4.pid"\nuntil [ -f "$4" ]; do sleep 0.5; done\n');
+  c.orphan(file, ['1', c.checkout, c.root, `${c.dir}/${role}-shaped/stop`]);
+  await wait(`the ${role}-shaped process`, () => existsSync(pidFile) && /^\d+/.test(read(pidFile)));
+  return Number(read(pidFile).trim());
+}
+/** The `<role> <path>` of each listing line, with the pids left out, so a bash wrapper and its forks read as one. */
+const rolesOf = (text: string) => new Set(text.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '').map((l) => l.trim().split(' ').slice(1).join(' ')));
 
 describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and the round 4 poetry folder', () => {
   it('1. --print gives each step\'s command lines, runs nothing, logs nothing, and runs beside a live driver', async () => {
@@ -874,4 +886,46 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     await pilot.doneUnit(`${pilot.root}/pilot/k1-p2`);
     await refused(pilot, '1', 'step 1');
   }, 600_000);
+
+  it('31. a batch the driver calls lists none of that driver or its forks for its root, and still lists a second driver of the root', async () => {
+    const c = ready('list-own', '2');
+    c.script('s4-batch', [{ make: [`${c.root}/batch1/q12-w1/run`] }]);
+    put(`${c.knobs}/list-root`, '');
+    const running = c.start('3');
+    await wait('the stub batch\'s first listing', () => existsSync(`${c.knobs}/listed-1.txt`));
+    const second = await standIn(c, 's4-drive');
+    put(`${c.knobs}/list-again`, '');
+    const run = await running.done;
+    expect(run.code, run.out).toBe(0);
+    expect(read(`${c.knobs}/listed-1.txt`).trim()).toBe('');
+    const again = read(`${c.knobs}/listed-2.txt`);
+    expect(rolesOf(again)).toEqual(new Set([`s4-drive ${c.root.toLowerCase()}`]));
+    expect(again.split('\n').some((l) => l.startsWith(`${second} `))).toBe(true);
+  }, 300_000);
+
+  it('32. a live second driver of the root, one that did not call the scan, still stops the driver', async () => {
+    const c = ready('list-second', '2');
+    const second = await standIn(c, 's4-drive');
+    put(`${c.root}/drive.log`, `01-01 00:00:00 call 3 ${c.checkout} ${c.root} attempt 1 pid ${second}\n`);
+    const r = await c.run('3');
+    expect([r.code, r.lines]).toEqual([1, [`DRIVE: driver ${second} already runs on ${c.root}`]]);
+    expect(c.entries()).toHaveLength(1);
+  }, 300_000);
+
+  it('33. Z0_DRIVER_WINPID hides only a live s4-drive.sh bash with its wrapper and forks; a pid of another process, a dead pid or a bad value hides nothing', async () => {
+    const c = mk('list-var');
+    const [driver, batch] = [await standIn(c, 's4-drive'), await standIn(c, 's4-batch')];
+    const root = c.root.toLowerCase();
+    const listed = (winpid: string | number | undefined) => {
+      const env: NodeJS.ProcessEnv = { ...c.env(), Z0_CHECKOUT: c.checkout };
+      if (winpid !== undefined) env.Z0_DRIVER_WINPID = String(winpid);
+      const r = spawnSync(gitBash(process.env, []), [`${c.scored}/s4-units.sh`, 'root_lines', c.root], { encoding: 'utf8', env, cwd: c.dir });
+      expect(r.status, r.stdout + r.stderr).toBe(0);
+      return rolesOf(r.stdout);
+    };
+    const both = new Set([`s4-drive ${root}`, `s4-batch ${root}`]);
+    // Each of these is a pid or text that is not an s4-drive.sh bash: the batch-shaped bash, this test's node, a dead pid, a bad number, a negative one, none.
+    for (const v of [undefined, '', 'abc', '12abc', '-1', '0', 2_147_483_646, batch, process.pid]) expect(listed(v), `Z0_DRIVER_WINPID=${String(v)}`).toEqual(both);
+    expect(listed(driver)).toEqual(new Set([`s4-batch ${root}`]));
+  }, 300_000);
 });
