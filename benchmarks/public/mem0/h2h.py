@@ -9,7 +9,8 @@ Usage: python h2h.py {answer,judge,score} --run SCRATCH_DIR --out RESULTS_DIR [-
 Smoke only: --limit N [--cutoff C] needs an --out path with a "smoke" folder, and keeps the call logs under --out.
 Extra arm (dated notes 5): --arm hippo-emb --pairs-with RUN OUT, in its own --run and --out with its own blind key; score
 adds the arm minus each registered arm of RUN and OUT, re-made from that run's call logs, all secondary. hippo-best (dated
-notes 9) is answered at 50 and 10 alone: at 200 it shows hippo-emb's memories.
+notes 9) is answered at 50 and 10 alone: at 200 it shows hippo-emb's memories. --also-pairs-with ARM RUN OUT adds the
+lines against an extra-arm run, as hippo-best against hippo-emb.
 """
 from __future__ import annotations
 
@@ -379,23 +380,27 @@ def score(a: argparse.Namespace) -> None:
 
 
 def pair_lines(a: argparse.Namespace, data: list, primary: list, metric: dict) -> list[str]:
-    """Dated notes 5: the extra arm minus each registered arm, paired by question, at each cutoff and for each metric
-    both runs hold, the registered run re-made from its own call logs and checked as its own score stage checks it."""
-    run, out = a.pairs_with
-    reg = argparse.Namespace(**{**vars(a), "run": run, "out": out, "logs": run, "arms": ARMS, "arm": None})
-    check_gate(run, ARMS)
-    answers = all_answers(reg)
-    key, theirs = judge_key(out, answers), {"F1": f1_scores(answers, data)}
-    for judge, name in (("claude", "judge"), ("codex", "judge2")):
-        if name in metric and (run / JUDGES[judge][1]).exists():
-            theirs[name] = judge_scores(reg, judge, key, answers, data)[0]
-    lines = [f"\n=== {a.arm} minus each arm of {out.name}, paired by question, all secondary (dated notes 5) ==="]
-    for c in a.cutoffs:
-        for other in ARMS:
-            for m, vals in theirs.items():
-                acc = 100 * sum(vals[(other, c, q)] for q in primary) / len(primary)
-                diff = {q: metric[m][(a.arm, c, q)] - vals[(other, c, q)] for q in a.qids}
-                lines.append(f"top {c:>3} {a.arm} - {other} ({acc:.1f} in {out.name}) {m:>6}: {paired(diff, primary, str)}")
+    """Dated notes 5 and 9: the extra arm minus each arm of the registered run and of each --also-pairs-with run,
+    paired by question, at each of the extra arm's cutoffs and for each metric both runs hold. Each run is re-made from
+    its own call logs at its own cutoffs and checked as its own score stage checks it."""
+    lines = []
+    for run, out, arms, arm in [(*a.pairs_with, ARMS, None), *((Path(r), Path(o), (x,), x) for x, r, o in a.also_pairs_with)]:
+        reg = argparse.Namespace(**{**vars(a), "run": run, "out": out, "logs": run, "arms": arms, "arm": arm,
+                                    "cutoffs": ARM_CUTOFFS.get(arm, CUTOFFS)})
+        check_gate(run, arms)
+        answers = all_answers(reg)
+        key, theirs = judge_key(out, answers), {"F1": f1_scores(answers, data)}
+        for judge, name in (("claude", "judge"), ("codex", "judge2")):
+            if name in metric and (run / JUDGES[judge][1]).exists():
+                theirs[name] = judge_scores(reg, judge, key, answers, data)[0]
+        lines.append(f"\n=== {a.arm} minus each arm of {out.name}, paired by question, all secondary (dated notes 5) ===")
+        for c in a.cutoffs:
+            for other in arms:
+                for m, vals in theirs.items():
+                    acc = 100 * sum(vals[(other, c, q)] for q in primary) / len(primary)
+                    diff = {q: metric[m][(a.arm, c, q)] - vals[(other, c, q)] for q in a.qids}
+                    lines.append(f"top {c:>3} {a.arm} - {other} ({acc:.1f} in {out.name}) {m:>6}: "
+                                 f"{paired(diff, primary, str)}")
     return lines
 
 
@@ -420,9 +425,13 @@ def main() -> None:
     ap.add_argument("--arm", choices=tuple(RETRIEVAL_OF), help="dated notes 5: one extra arm in its own --run and --out")
     ap.add_argument("--pairs-with", type=Path, nargs=2, metavar=("RUN", "OUT"), default=[],
                     help="the registered run's --run and --out that --arm is paired with")
+    ap.add_argument("--also-pairs-with", nargs=3, action="append", default=[], metavar=("ARM", "RUN", "OUT"),
+                    help="dated notes 9: an extra-arm run, its --run and --out, that --arm is also paired with")
     a = ap.parse_args()
     if bool(a.arm) != bool(a.pairs_with):
         ap.error("--arm and --pairs-with go together")
+    if any(x not in RETRIEVAL_OF or x == a.arm for x, _, _ in a.also_pairs_with) or (a.also_pairs_with and not a.arm):
+        ap.error("--also-pairs-with names another extra arm's run, with --arm")
     if a.arm and {a.run.resolve(), a.out.resolve()} & {p.resolve() for p in a.pairs_with}:
         ap.error("--arm runs in its own --run and --out, never in the registered run's")
     a.arms = (a.arm,) if a.arm else ARMS

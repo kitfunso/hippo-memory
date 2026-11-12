@@ -51,7 +51,7 @@ def test_the_extra_arm_is_scored_minus_each_registered_arm_from_that_runs_logs(t
     run.mkdir()
     (run / h2h.JUDGES["claude"][1]).write_text("", encoding="utf-8")
     a = argparse.Namespace(arm=EMB, arms=(EMB,), pairs_with=[run, out], qids=qids, cutoffs=cutoffs, run=tmp_path / "e",
-                           out=tmp_path / "eo", logs=tmp_path / "e")
+                           out=tmp_path / "eo", logs=tmp_path / "e", also_pairs_with=[])
     mine = {(EMB, 200, q): 1.0 for q in qids}
     lines = h2h.pair_lines(a, [], qids[:2], {"F1": mine, "judge": mine, "judge2": mine})
     assert ("gate", run, h2h.ARMS) in seen and ("answers", run, run, h2h.ARMS) in seen
@@ -68,3 +68,23 @@ def test_the_arm_needs_its_pair_and_its_own_folders(tmp_path, monkeypatch, extra
                                       *extra])
     with pytest.raises(SystemExit):
         h2h.main()
+
+
+def test_hippo_best_pairs_at_its_own_cutoffs_with_each_run_loaded_at_that_runs_cutoffs(tmp_path, monkeypatch):
+    qids, best = ["conv0_q1", "conv0_q2"], "hippo-best"
+    loaded = []
+    monkeypatch.setattr(h2h, "check_gate", lambda run, arms: None)
+    monkeypatch.setattr(h2h, "all_answers", lambda a: loaded.append((a.run, a.arms, a.cutoffs)) or {})
+    monkeypatch.setattr(h2h, "judge_key", lambda out, answers: {})
+    vals = {(arm, c, q): 0.5 for arm in (*h2h.ARMS, EMB) for c in h2h.CUTOFFS for q in qids}
+    monkeypatch.setattr(h2h, "f1_scores", lambda answers, data: vals)
+    reg, emb = (tmp_path / "reg", tmp_path / "reg-out"), (tmp_path / "emb", tmp_path / "emb-out")
+    a = argparse.Namespace(arm=best, arms=(best,), pairs_with=list(reg), qids=qids, cutoffs=h2h.ARM_CUTOFFS[best],
+                           run=tmp_path / "b", out=tmp_path / "bo", logs=tmp_path / "b",
+                           also_pairs_with=[[EMB, str(emb[0]), str(emb[1])]])
+    mine = {(best, c, q): 1.0 for c in (50, 10) for q in qids}
+    lines = h2h.pair_lines(a, [], qids, {"F1": mine})
+    assert loaded == [(reg[0], h2h.ARMS, h2h.CUTOFFS), (emb[0], (EMB,), h2h.CUTOFFS)]
+    assert not any(x.startswith("top 200") for x in lines)
+    assert any(x.startswith(f"top  50 {best} - {EMB} (50.0 in emb-out)") for x in lines)
+    assert any(x.startswith(f"top  10 {best} - mem0 (50.0 in reg-out)") for x in lines)
