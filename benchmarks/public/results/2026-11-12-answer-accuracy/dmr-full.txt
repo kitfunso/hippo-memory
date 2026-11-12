@@ -1,0 +1,8 @@
+DMR (MSC-Self-Instruct): 500 questions, 495 in the primary, the whole chat, answers 500, 500 judged by model, 0 by match
+     full  accuracy  83.6  memories  62.9  input tokens    3521
+secondary hippo365 (61.2 in the paired run) - full: -22.4 pp [-27.1, -17.8] n=495 over 495 units  trails
+secondary bm25 (61.4 in the paired run) - full: -22.2 pp [-26.9, -17.8] n=495 over 495 units  trails
+
+smoke items left out of every primary: dmr-000, dmr-100, dmr-200, dmr-300, dmr-400
+answers exhausted after 3 asks, scored wrong: 0
+verdicts exhausted after 3 asks, scored wrong: 0

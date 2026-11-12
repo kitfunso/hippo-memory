@@ -25,6 +25,97 @@ About half as many repeat mistakes as Claude Code's built-in memory alone, at th
 No memory N in N
 Claude Code's built-in memory N in N
 Built-in memory plus hippo N in N
+Public benchmarks: answer accuracy
+hippo retrieves with its free local embedder, Claude Sonnet N answers, and each benchmark's scorer marks the answer. Systems run here share that answer model and scorer. Published scores come from each team's own setup and models.
+N% PersonaMem vN Nst of N memory systems
+N LLM calls for hippo to store LoCoMo. MemN made N
++N points over BMN on DMR, same answer model and scorer
+hippo
+run here, same answer model and scorer
+published, each team's own setup
+PersonaMem vN
+Nst of N source ↗ (the PersonaMem vN score file, opens in new tab)
+N% hippo answer accuracy, N questions ahead of BMN +N
+All scores
+SystemSetupScore
+hippo run here N%
+hippo, embeddings off run here N%
+BMN run here N%
+MemOS published N%
+Memobase published N%
+Zep published N%
+MemU published N%
+Supermemory published N%
+GPT-N and Gemini-N published, baseline N%
+MemN published N%
+Llama-N-Maverick published, baseline N%
+MIRIX published N%
+LoCoMo
+source ↗ (the LoCoMo score file, opens in new tab)
+N% hippo answer accuracy, N questions level with BMN
+behind MemN −N
+All scores
+SystemSetupScore
+MemN run here N%
+EverMemOS published N%
+MemN published N%
+Backboard published N%
+Honcho published N%
+Hindsight published N%
+hippo run here N%
+hippo, embeddings off run here N%
+Full chat published, baseline N%
+BMN run here N%
+MIRIX published N%
+Zep published N%
+gbrain published N%
+LangMem published N%
+Memobase published N%
+Letta published N%
+OpenAI Memory published N%
+A-Mem published N%
+LongMemEval-S
+source ↗ (the LongMemEval-S score file, opens in new tab)
+N% hippo answer accuracy, N questions level with BMN
+All scores
+SystemSetupScore
+Mastra published N%
+gbrain published N%
+MemN published N%
+Backboard published N%
+Honcho published N%
+Hindsight published N%
+Memoria published N%
+hippo run here N%
+hippo, embeddings off run here N%
+BMN run here N%
+EmergenceMem Internal published N%
+Supermemory published N%
+EverMemOS published N%
+Zep published N%
+Full chat published, baseline N%
+DMR
+source ↗ (the DMR score file, opens in new tab)
+N% hippo answer accuracy, N questions ahead of BMN +N
+behind Full chat −N
+All scores
+SystemSetupScore
+Zep published N%
+Full chat published, baseline N%
+MemGPT published N%
+Full chat run here N%
+hippo run here N%
+BMN run here N%
+hippo, embeddings off run here N%
+Recursive Summarization published, baseline N%
+HotPotQA-N
+source ↗ (the HotPotQA-N score file, opens in new tab)
+FN N hippo answer FN N questions level with BMN
+All scores
+SystemSetupScore
+hippo run here FN N
+hippo, embeddings off run here FN N
+BMN run here FN N
 Standard task: per-question haystack
 Each question ships its own haystack of about N conversation sessions, and the job is to retrieve the session that holds the answer. This is the standard LongMemEval-S setup, the same one published systems report. Recall at N on the _s split:
 Embedder R@N R@N R@N

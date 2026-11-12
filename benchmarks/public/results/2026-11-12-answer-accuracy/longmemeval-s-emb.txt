@@ -1,0 +1,15 @@
+longmemeval-s: 500 questions, 495 in the primary, results 500, all match the call logs
+hippo-emb: retrieval check passed, manifest matches
+longmemeval-s hippo365: no retrieval-check.json (retrieval from another run, e.g. Lane R)
+longmemeval-s bm25: no retrieval-check.json (retrieval from another run, e.g. Lane R)
+
+hippo-emb  acc@200  n=495  mean  88.5
+hippo-emb  acc@10  n=495  mean  83.4
+secondary acc@200 hippo-emb - hippo365 (86.7 in longmemeval-s):  +1.8 pp [ -1.2,  +4.6] n=495 over 495 units  unresolved
+secondary acc@200 hippo-emb - bm25 (86.1 in longmemeval-s):  +2.4 pp [ -0.4,  +5.3] n=495 over 495 units  unresolved
+secondary acc@10 hippo-emb - hippo365 (79.4 in longmemeval-s):  +4.0 pp [ +1.6,  +6.5] n=495 over 495 units  beats
+secondary acc@10 hippo-emb - bm25 (78.0 in longmemeval-s):  +5.5 pp [ +3.0,  +7.9] n=495 over 495 units  beats
+hippo-emb  memories per answer at the primary cutoff  199.3
+
+smoke items left out of every primary: 6ade9755, 6c49646a, e48988bc, ef66a6e5, f685340e
+questions with a prompt exhausted after 3 asks (that step scored wrong): 0

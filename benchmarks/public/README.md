@@ -4,6 +4,7 @@ This directory lets hippo be scored by Mem0's runner (`mem0ai/memory-benchmarks`
 
 - `hippo-mem0-server.mjs`: answers the runner's three HTTP calls with hippo. Use `--arm hippo` for hippo's ranking, or `--arm bm25` for BM25 alone over the same stored turns.
 - `evidence_recall.py`: a free retrieval check on the runner's `--predict-only` output for LoCoMo, with no model calls.
+- `site_data.py`: turns a results folder's score files into the benchmarks page's data (`website/src/data/public-benchmarks.json`).
 
 ## Run it (on a machine with an OpenAI key)
 
