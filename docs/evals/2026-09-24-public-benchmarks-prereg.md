@@ -564,3 +564,23 @@ This note adds the arm `hippo-best` to every benchmark of groups A and B except 
 **Read before this note.** The LoCoMo sweep above, and a loss analysis of the LoCoMo and LongMemEval-S `hippo-emb` answers. `hippo-emb` scores: LoCoMo 89.4% judge accuracy at 200 (395 primary questions), LongMemEval-S 88.5% at 200 (495), PersonaMem v1 72.4%, DMR 73.1%, HotPotQA-24 F1 92.1. A 25-question DMR server test: the `hippo-emb` replay gave back the saved files on 25 of 25, and `hippo-best` showed another top-20 set on 25 of 25. No `hippo-best` answer exists. The plan had an outside review before this note; its findings are applied above.
 
 **Second review, before any answer.** Codex read this note and its code (2026-11-12) and found five gaps, each fixed above. (1) The qa harness had no check for a BM25-only search; it now has one, and no qa, LoCoMo replay or runner log holds such a line. (2) The LongMemEval check compared sets, so a re-ordered tail passed; it now needs rows 101 to 200 in order. The LongMemEval-S `hippo-best` run had started under the old check, so it is stopped and resumed under this one. (3) A replay could search a store that changed below the saved top-k; the store checks above close that. DMR and HotPotQA-24 had replayed before them, so both replay again under them, and only the new files are answered. (4) HotPotQA-24's F1 lines read a paired `hippo-emb` run with the registered arms and failed; each paired run is now read with the arms its `config.json` names. (5) This note's first sentence named every benchmark of the amendment; it now names groups A and B.
+
+### Amendment 6, dated notes 10 (2026-11-13, before any full answer of the Saturday set): the Saturday set starts now, on three more subscription tokens
+
+**Why.** On 13 Nov 2026 the founder asked to run every remaining benchmark as soon as possible, on the three subscription tokens of the Z0 eval. The set was to start on the parked token at 14 Nov 04:03 UTC.
+
+**What changes.** Only the account that each `claude -p` call bills. The model, effort, prompts, parsing, cutoffs, arms, the order of arms inside each benchmark, and the analysis stay as registered. The CLI version is stamped on every record, as before. Lanes and accounts:
+
+- Q lane (PrefEval, PersonaMem v2, EverMemBench, ConvoMem, HaluMem medium and long; the registered arms, then `hippo-emb`, then `hippo-best`): `Z0_SUB_TOKEN_2`.
+- R lane (LongMemEval-M and the four BEAM sizes; the registered arms, then `hippo-emb`) and the LongMemEval-M `hippo-best` lane: `Z0_SUB_TOKEN_3`.
+- DolphinBench smoke and pilot (Amendment 3) and Terminal-Bench (Amendment 7): `Z0_SUB_TOKEN`. The Z0 round-4 pilot uses the same token.
+
+`run-dolphin.sh` now uses a token that its caller hands in, and reads the parked token only when there is none. Nothing else in the harness changes. The scheduled 04:01 start is disabled, so no lane runs twice.
+
+Update, 13:50 UTC the same day: `Z0_SUB_TOKEN_2` returned its weekly limit (reset 14 Nov 04:00 Europe/London) on its first 8 PrefEval acknowledgement calls, and gave no reply text. The Q lane was stopped and started again on `Z0_SUB_TOKEN`. The parked token has the same weekly limit and reset.
+
+Update, 14:05 UTC: `claude_llm.py` gets an account pool (`Accounts`, tested in `tests/test_claude_accounts.py`). Each lane names its token first, then `Z0_SUB_TOKEN_2`, the parked token, and the others. A call that returns a usage limit gives no reply text, as before, and is logged as a `limit-wait`. Its account then rests for 15 minutes and the call moves to the next account. When every account rests, the call waits. Every record names its account. The Q, R and LongMemEval-M `hippo-best` lanes were stopped and started again with the pool. Their steps resume from their own outputs, so no finished answer was redone. DolphinBench and Terminal-Bench do not use this client and stay on `Z0_SUB_TOKEN`.
+
+Update, 15:50 UTC: the Terminal-Bench smoke 2 failed its hook check. Its seed memory shared no word with the `overfull-hbox` prompt. The recall hook recalls by the prompt (`pinnedInject.promptRecall`, on by default), so it gave no context and nothing reached the session file. The hook command on the `before-74` store snapshot gives an empty reply. Smoke 3 (`smoke/tbench/run3`) seeds a line that names the task, and the same command on a copy of that snapshot returns it. The scored run has no seed memory, so nothing in it changes.
+
+**Read before this note.** No full answer of any benchmark in this set. The BEAM smoke items stay excluded, as listed above.

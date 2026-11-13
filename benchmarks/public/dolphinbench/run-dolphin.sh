@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts one DolphinBench stage in WSL. Usage: run-dolphin.sh ingest|dry|smoke|pilot|full|compare|check [label persona tests]
-# The agent's token is read from the Windows User variable CLAUDE_CODE_OAUTH_TOKEN_DISABLED into this process only:
+# The agent's token is DOLPHIN_CLAUDE_OAUTH_TOKEN if the caller set it, else the Windows User variable CLAUDE_CODE_OAUTH_TOKEN_DISABLED, read into this process only:
 # never printed, never in a command line, never written back to any scope.
 set -euo pipefail
 stage="${1:?stage: ingest|dry|smoke|pilot|full|compare|check}"
@@ -11,6 +11,7 @@ py="$DOLPHIN_BENCH_HOME/.venv-dolphin-wsl/bin/python"
 run=("$py" "$here/dolphin_hippo.py")
 
 load_token() {
+  [ -n "${DOLPHIN_CLAUDE_OAUTH_TOKEN:-}" ] && return 0  # a token the caller hands in (dated notes 10) wins
   local value
   value="$(powershell.exe -NoProfile -NonInteractive -Command \
     "[Environment]::GetEnvironmentVariable('CLAUDE_CODE_OAUTH_TOKEN_DISABLED','User')" | tr -d '\r\n')"

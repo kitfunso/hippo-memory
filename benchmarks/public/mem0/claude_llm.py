@@ -31,6 +31,32 @@ MAX_FAILURES, MAX_JSON_MISSES = 4, 3
 DEADLINE_S = 11 * 3600  # slot waits, runs and retries included, so a call fails inside the 12 h client timeouts
 
 
+class Accounts:
+    """The subscription tokens a run may bill, named by environment variable, in order of preference (dated notes 10).
+    One that returns a usage limit rests for REST_S, so the call moves on to the next instead of waiting."""
+    REST_S = 900.0
+
+    def __init__(self, names: list[str], env: dict[str, str] | os._Environ) -> None:
+        self.names = [n for n in dict.fromkeys(names) if len(env.get(n, "")) >= 100]
+        self.tokens = {n: env[n] for n in self.names}
+        self.until: dict[str, float] = {}
+        self.lock = threading.Lock()
+
+    def pick(self, now: float) -> str | None:
+        """The first account that is not resting, or None when every account rests."""
+        with self.lock:
+            return next((n for n in self.names if self.until.get(n, 0.0) <= now), None)
+
+    def rest(self, name: str, now: float) -> None:
+        with self.lock:
+            self.until[name] = now + self.REST_S
+
+    def wake(self, now: float) -> float:
+        """Seconds until the first resting account may be tried again."""
+        with self.lock:
+            return max(0.0, min((self.until.get(n, 0.0) for n in self.names), default=0.0) - now)
+
+
 def json_reply(text: str) -> dict | None:
     """The JSON object in a reply, found the way Mem0 finds it: a whole-reply code fence, else the outer braces."""
     t = text.strip()
@@ -54,6 +80,8 @@ class ToolUse(RuntimeError):
 
 
 class Claude:
+    accounts: Accounts | None = None  # None: the CLI's own login (CodexJudge never sets it)
+
     def __init__(self, work: Path, log: Path, slots: int) -> None:
         self.exe = shutil.which("claude")
         if not self.exe:
@@ -65,9 +93,15 @@ class Claude:
         self.lock = threading.Lock()
         self.slots = threading.BoundedSemaphore(slots)
         self.env = {k: v for k, v in os.environ.items() if k.upper() in KEEP_ENV}
-        # Benchmark load goes on the founder's subscription token, never the interactive login (Amendment 6).
-        if os.environ.get("BENCH_CLAUDE_OAUTH_TOKEN"):
-            self.env["CLAUDE_CODE_OAUTH_TOKEN"] = os.environ["BENCH_CLAUDE_OAUTH_TOKEN"]
+        # Benchmark load goes on subscription tokens, never the interactive login (Amendment 6, dated notes 10).
+        pool = [n.strip() for n in os.environ.get("BENCH_CLAUDE_TOKEN_POOL", "").split(",") if n.strip()]
+        if not pool and os.environ.get("BENCH_CLAUDE_OAUTH_TOKEN"):
+            pool = ["BENCH_CLAUDE_OAUTH_TOKEN"]
+        if pool:
+            self.accounts = Accounts(pool, os.environ)
+            if not self.accounts.names:
+                raise SystemExit(f"no token is set in any of {pool}")
+            self.env["CLAUDE_CODE_OAUTH_TOKEN"] = self.accounts.tokens[self.accounts.names[0]]
         self.env["DISABLE_AUTOUPDATER"] = "1"  # one CLI version for the whole run
         ver = subprocess.run([self.exe, "--version"], capture_output=True, env=self.env, timeout=60)
         self.cli = ver.stdout.decode("utf-8", "replace").strip()  # stamped on every record for the frozen manifest
@@ -84,15 +118,17 @@ class Claude:
             path.write_bytes(system.encode("utf-8"))  # bytes, so Windows never rewrites the newlines
         return path, sha
 
-    def _run(self, sys_file: Path, user: str, effort: str, deadline: float) -> tuple[dict, str] | None:
-        """One `claude -p` run, or None if no slot frees up before the deadline."""
+    def _run(self, sys_file: Path, user: str, effort: str, deadline: float,
+             account: str | None = None) -> tuple[dict, str] | None:
+        """One `claude -p` run billed to `account`, or None if no slot frees up before the deadline."""
+        env = self.env if account is None else {**self.env, "CLAUDE_CODE_OAUTH_TOKEN": self.accounts.tokens[account]}
         cmd = [self.exe, "-p", "--safe-mode", "--permission-mode", "manual", "--system-prompt-file", str(sys_file),
                "--tools", "", "--model", MODEL, "--effort", effort, "--no-session-persistence", "--output-format", "json"]
         if not self.slots.acquire(timeout=max(0.0, deadline - time.monotonic())):
             return None
         try:
             limit = max(1.0, min(900.0, deadline - time.monotonic()))
-            p = subprocess.run(cmd, input=user.encode("utf-8"), capture_output=True, env=self.env, cwd=self.cwd,
+            p = subprocess.run(cmd, input=user.encode("utf-8"), capture_output=True, env=env, cwd=self.cwd,
                                timeout=limit)
         except subprocess.TimeoutExpired:
             return {"is_error": True, "result": f"timeout after {limit:.0f} s"}, ""
@@ -120,17 +156,30 @@ class Claude:
         while True:
             if time.monotonic() >= deadline:
                 self._fail(base, f"no reply within {DEADLINE_S} s")
+            acct = self.accounts.pick(time.monotonic()) if self.accounts else None
+            if self.accounts and acct is None:  # every account rests after a usage limit
+                delay = min(300.0, max(1.0, self.accounts.wake(time.monotonic())))
+                if time.monotonic() + delay > deadline:
+                    self._fail(base, f"usage limit not lifted after {waited} s on {self.accounts.names}")
+                self._log({**base, "event": "limit-wait", "delay_s": round(delay), "detail": "every account rests"})
+                time.sleep(delay)
+                waited += delay
+                continue
             attempt += 1
             t0 = time.time()
-            got = self._run(sys_file, user, effort, deadline)
+            got = self._run(sys_file, user, effort, deadline, **({"account": acct} if acct else {}))
             if got is None:
                 self._fail(base, f"no free slot within {DEADLINE_S} s")
             res, err = got
             text = res.get("result") or ""
-            base.update(attempt=attempt, wall_ms=int((time.time() - t0) * 1000))
+            base.update(attempt=attempt, wall_ms=int((time.time() - t0) * 1000), **({"account": acct} if acct else {}))
             if res.get("is_error") or not text.strip():
                 detail = f"{res.get('api_error_status')} {text} {err}"[:400]
                 if res.get("api_error_status") == 429 or LIMIT_RE.search(detail):
+                    if acct:  # rest this account; the loop's top moves on, or waits when every account rests
+                        self.accounts.rest(acct, time.monotonic())
+                        self._log({**base, "event": "limit-wait", "delay_s": 0, "detail": detail})
+                        continue
                     delay = 60 if waited == 0 else 300
                     if time.monotonic() + delay > deadline:
                         self._fail(base, f"usage limit not lifted after {waited} s: {detail}")
