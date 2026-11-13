@@ -591,4 +591,6 @@ Update, 16:15 UTC: the DolphinBench pilot `v3pilot` failed its gate on two parts
 
 The rerun is `v3pilot2`, on `Z0_SUB_TOKEN`. It runs once, with no retry. If its gate fails, stage 3 does not run.
 
+Update, 16:30 UTC: the rerun `v3pilot2` passed its gate at 16:22 (`GATE: PASS`, every context whole in the session file, 0 closed tests in each arm). Pass counts, with no verdict as stage 2 says: hippo 12 and bm25 13 of 20, beside the official Sonnet 5 rows for the same tests (built-in 9, Mem0 9, Honcho 8). Stage 3 starts under the label `v3full`, with the rerun's code (b08f03323) and settings. It runs on `Z0_SUB_TOKEN_3`, because `Z0_SUB_TOKEN` also carries the Q lane and Terminal-Bench, and the R lane does not call Claude until the LongMemEval-M retrieval ends. The account does not change the model, the effort or a prompt.
+
 **Read before this note.** No full answer of any benchmark in this set. The BEAM smoke items stay excluded, as listed above.
