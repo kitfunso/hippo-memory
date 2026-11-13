@@ -336,6 +336,34 @@ def convert(events: list[dict], user: str, context: str | None) -> list[dict]:
     return head + ([{"role": "system", "content": context}] if context else []) + main
 
 
+APP_PREFIXES = ("mcp__dolphinbench_apps__", "mcp_dolphinbench_apps_")  # the names check_messages strips
+
+
+def fill_app_args(messages: list[dict], calls: list[dict]) -> None:
+    """Give each transcript app call the arguments the app server logged for it. The server logs every optional
+    argument the agent left out with its default and grading_calls matches exactly, so 11 v3pilot tests closed.
+    Exact matches pair first; a subset match then fills only keys the agent left out, never a value it sent."""
+    sent = []
+    for message in messages:
+        for call in message.get("tool_calls", []):
+            prefix = next((p for p in APP_PREFIXES if call["name"].startswith(p)), "")
+            sent.append((call["name"][len(prefix):], call))
+    free, paired = list(range(len(sent))), set()
+    for exact in (True, False):
+        for j, logged in enumerate(calls):
+            if j in paired:
+                continue
+            for i in free:
+                name, call = sent[i]
+                args, want = call["arguments"], logged["args"]
+                same = args == want if exact else all(k in want and want[k] == v for k, v in args.items())
+                if name == logged["tool"] and same:
+                    call["arguments"] = dict(want)
+                    paired.add(j)
+                    free.remove(i)
+                    break
+
+
 def close(messages: list[dict], error: str | None) -> list[dict]:
     """End a failed attempt's transcript validly: answer open calls, drop orphan results, add a final turn."""
     out: list[dict] = []
@@ -542,6 +570,7 @@ class HippoAdapter:
                 check_messages(messages, "transcript")
                 calls = [{k: c[k] for k in ("tool", "args", "result") if k in c} for c in load_tool_calls(calls_log)]
                 if calls:
+                    fill_app_args(messages, calls)
                     grading_calls({"messages": messages, "app_calls": calls}, "transcript")
                 return messages, None
             except SubmissionError as exc:
