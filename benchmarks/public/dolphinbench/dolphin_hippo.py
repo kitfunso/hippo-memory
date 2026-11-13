@@ -425,7 +425,7 @@ def summarize(result: Any, events: list[dict], hook_out: Path, session: dict) ->
         "rate_limit_reset_at": result.rate_limit_reset_at, "retry_after_seconds": result.retry_after_seconds,
         "total_cost_usd": float(final.get("total_cost_usd") or 0.0), "duration_ms": final.get("duration_ms"),
         "num_turns": final.get("num_turns"), "usage": final.get("usage"),
-        "memory_results": len(hook.get("results", [])), "hook_seconds": hook.get("seconds"),
+        "memory_results": len(hook.get("results", [])), "memory_kept": hook.get("kept"), "hook_seconds": hook.get("seconds"),
         "tool_calls": [call["tool"] for call in result.tool_calls],
     }
     return attempt, hook.get("context")

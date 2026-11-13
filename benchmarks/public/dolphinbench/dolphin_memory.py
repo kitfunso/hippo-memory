@@ -14,6 +14,7 @@ from pathlib import Path
 DATE_PREFIX = re.compile(r"^\[[^\]]*\]\s*")
 HEADER = "Memories from the user's past conversations that may be relevant to this request, most relevant first:\n"
 MAX_LIMIT = 50
+MAX_CONTEXT_CHARS = 9_000  # Claude Code cut every pilot context past about 10,000 chars (v3pilot, dated notes 10)
 
 
 def search(url: str, user: str, query: str, limit: int) -> list[dict]:
@@ -29,13 +30,22 @@ def render(results: list[dict]) -> str:
     return HEADER + "\n".join(f"{i}. {r['memory']}" for i, r in enumerate(results, 1))
 
 
+def fit(results: list[dict], limit: int = MAX_CONTEXT_CHARS) -> int:
+    """How many results, best first and each whole, the hook injects; the top one stays even if it alone is over."""
+    kept = min(1, len(results))
+    while kept < len(results) and len(render(results[:kept + 1])) <= limit:
+        kept += 1
+    return kept
+
+
 def hook(args: argparse.Namespace) -> int:
     started = time.monotonic()
     prompt = str(json.load(sys.stdin).get("prompt", ""))
     record: dict = {"query": DATE_PREFIX.sub("", prompt, count=1)}
     try:
         record["results"] = search(args.url, args.user, record["query"], args.limit)
-        record["context"] = render(record["results"])
+        record["kept"] = fit(record["results"])
+        record["context"] = render(record["results"][:record["kept"]])
     except (OSError, ValueError, KeyError) as exc:
         record["error"] = repr(exc)
     record["seconds"] = round(time.monotonic() - started, 3)
