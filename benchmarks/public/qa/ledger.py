@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -150,6 +152,51 @@ def exhausted_lines(choices: dict, what: str) -> list[str]:
 def trail(choice: Choice) -> dict:
     """How a stage's own result file records an item: for people only, since no stage reads that file back."""
     return {"status": choice.status, "asks": choice.asks, "rejected": list(choice.rejected)}
+
+
+def pid_alive(pid: int) -> bool:
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+    import ctypes  # os.kill(pid, 0) on Windows terminates the process, so ask the kernel instead
+    k32 = ctypes.windll.kernel32
+    h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return False
+    code = ctypes.c_ulong()
+    ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
+    k32.CloseHandle(h)
+    return bool(ok) and code.value == 259  # STILL_ACTIVE
+
+
+@contextmanager
+def one_writer(out: Path):
+    """One process at a time asks into a run folder: two would ask the same open items twice (dated notes 14)."""
+    out.mkdir(parents=True, exist_ok=True)
+    lock = out / ".writer.lock"
+    for _ in range(2):
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            # SHORTCUT: pid-only liveness; a reused pid blocks the folder until the lock file is removed by hand
+            pid = int(lock.read_text(encoding="ascii").strip() or 0)
+            if pid and pid_alive(pid):
+                sys.exit(f"{out} is in use by pid {pid}: another lane asks into it now; retry when it exits")
+            lock.unlink(missing_ok=True)
+    else:
+        sys.exit(f"could not take {lock}: remove it if no process asks into {out}")
+    os.write(fd, str(os.getpid()).encode("ascii"))
+    os.close(fd)
+    try:
+        yield
+    finally:
+        lock.unlink(missing_ok=True)
 
 
 def smoke_excluded(bench: str, universe: list[str]) -> set[str]:

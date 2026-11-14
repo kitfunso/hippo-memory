@@ -35,7 +35,7 @@ from benchmarks.common.llm_client import LLMClient  # noqa: E402
 from benchmarks.common.mem0_client import format_search_results  # noqa: E402
 from benchmarks.longmemeval import run as lme  # noqa: E402
 from claude_llm import Claude  # noqa: E402
-from qa.ledger import ANSWERER, JUDGE, Choice, Item, Ledger, require, trail  # noqa: E402
+from qa.ledger import ANSWERER, JUDGE, Choice, Item, Ledger, one_writer, require, trail  # noqa: E402
 
 # codex_judge's preamble asks for "the JSON object only", which would turn LongMemEval's yes/no judge into JSON.
 # Same no-tools wording, format left to the prompt; one value for every arm and benchmark.
@@ -392,7 +392,8 @@ def main() -> None:
     if a.stage == "verify":
         verify(a.bench, arms, a.out, pick(a.bench, arms, a.smoke))
     else:
-        run(a.bench, arms, a.out, a)
+        with one_writer(a.out):
+            run(a.bench, arms, a.out, a)
 
 
 if __name__ == "__main__":

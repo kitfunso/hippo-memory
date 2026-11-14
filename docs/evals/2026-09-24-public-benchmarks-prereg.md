@@ -632,3 +632,11 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 **What changes.** `runner/run_retrieval.py` stops a shard before it starts its server if any process already listens on the shard's port. The message names the port. Test: `tests/test_runner_retrieval_arms.py::test_a_shard_never_starts_its_server_on_a_port_another_server_holds`. The LongMemEval-M `hippo-best` retrieval that started at 14:38 UTC 14 Nov loaded the code before this change; its 8 ports were free when it started, and its servers report the `hippo-best` arm.
 
 **Read before this note.** No answer that this change can touch.
+
+### Amendment 6, dated notes 14 (2026-11-14): one process at a time asks into a run folder
+
+**Why.** On 14 Nov every `hippo-emb` and `hippo-best` store had passed its free stage, so only two serial answer lanes limited progress. Two accounts had headroom. More lanes can run at the same time, but nothing stopped two processes from asking into the same run folder. Each would see the same open items and ask them twice.
+
+**What changes.** `qa/ledger.py` has `one_writer(out)`: a lock file in the run folder that holds the pid of the process that asks into it. `qa/harness.py` takes it for the answer and judge stages, and `runner/answer_judge.py` takes it for `run`. A second process stops with a message that names the folder and the pid. The driver counts that as a failed step and tries again after 15 minutes. A rerun on a folder whose items have settled asks nothing. A lock from a dead process is taken over. Nothing changes in what is asked, in how an ask counts, or in the scores. Test: `tests/test_one_writer.py`.
+
+**Read before this note.** No answer that this change can touch.

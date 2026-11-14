@@ -39,8 +39,8 @@ REPO = PUBLIC.parent.parent
 sys.path[:0] = [str(HERE), str(PUBLIC), str(PUBLIC / "mem0")]
 from claude_llm import Claude  # noqa: E402
 from h2h import load, paired, primary_lines, read_jsonl, reading, run_all, sha, tokens_in  # noqa: E402,F401
-from qa.ledger import (ANSWERER, JUDGE, Item, Ledger, exhausted_lines, require, smoke_excluded, trail,  # noqa: E402
-                       unsettled)
+from qa.ledger import (ANSWERER, JUDGE, Item, Ledger, exhausted_lines, one_writer, require, smoke_excluded,  # noqa: E402
+                       trail, unsettled)
 from server_arms import FLAGS, SERVER_ARM as SERVER_ARMS, fallback_logs, health_ok, want_health  # noqa: E402
 
 ARMS = {"hippo365": "hippo", "bm25": "bm25"}  # arm -> the server's --arm
@@ -578,9 +578,10 @@ def main() -> None:
         ap.error("--arm full starts at retrieve: it has no store")
     if a.bonferroni is not None and (a.stage != "score" or a.bonferroni < 1):
         ap.error("--bonferroni K needs the score stage and K of 1 or more")
-    mod, qs = setup(a)
-    {"ingest": stage_ingest_retrieve, "retrieve": stage_ingest_retrieve, "answer": stage_answer, "judge": stage_judge,
-     "score": stage_score}[a.stage](a, mod, qs)
+    with one_writer(a.out) if a.stage in ("answer", "judge") else nullcontext():
+        mod, qs = setup(a)
+        {"ingest": stage_ingest_retrieve, "retrieve": stage_ingest_retrieve, "answer": stage_answer,
+         "judge": stage_judge, "score": stage_score}[a.stage](a, mod, qs)
 
 
 if __name__ == "__main__":
