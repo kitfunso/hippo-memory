@@ -34,6 +34,7 @@ TASKS = Path(os.environ.get("TBENCH_TASKS", Path.home() / "hippo-bench/tbench/da
 MODEL = "anthropic/claude-sonnet-5"
 EFFORT = "medium"
 CLAUDE_VERSION = "2.1.321"  # pinned so a multi-day run never changes agent build mid-way
+AGENT = "tb_agent:ArchivedDebianClaudeCode"  # harbor's claude-code; PYTHONPATH in harbor_env puts it on the path
 HELPER_IMAGE = "node:22-bookworm-slim"
 SETUP_SEC = 1800  # harbor's apt install of nodejs and npm took over the 360 s default in the smoke
 SEED = 1
@@ -165,13 +166,13 @@ def agent_env() -> dict[str, str]:
          "[Environment]::GetEnvironmentVariable('CLAUDE_CODE_OAUTH_TOKEN_DISABLED','User')"]).stdout.strip()
     if not token:
         sys.exit("CLAUDE_CODE_OAUTH_TOKEN_DISABLED is not set in the User environment")
-    env.update(CLAUDE_CODE_OAUTH_TOKEN=token, CLAUDE_FORCE_OAUTH="1", PYTHONIOENCODING="utf-8")
+    env.update(CLAUDE_CODE_OAUTH_TOKEN=token, CLAUDE_FORCE_OAUTH="1", PYTHONIOENCODING="utf-8", PYTHONPATH=str(HERE))
     return env
 
 
 def job_config(run: Path, bdir: Path, arm: str, idx: int, name: str, attempt: int) -> tuple[Path, str]:
     job = f"{idx:02d}-{name}-a{attempt}"
-    agent: dict = {"name": "claude-code", "model_name": MODEL, "override_setup_timeout_sec": SETUP_SEC,
+    agent: dict = {"import_path": AGENT, "model_name": MODEL, "override_setup_timeout_sec": SETUP_SEC,
                    "kwargs": {"reasoning_effort": EFFORT, "version": CLAUDE_VERSION}}
     env: dict = {"type": "docker", "delete": True}
     if arm == "hippo":
