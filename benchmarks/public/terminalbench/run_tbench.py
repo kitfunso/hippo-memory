@@ -24,6 +24,7 @@ import subprocess
 import sys
 import threading
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -37,6 +38,8 @@ CLAUDE_VERSION = "2.1.321"  # pinned so a multi-day run never changes agent buil
 AGENT = "tb_agent:ArchivedDebianClaudeCode"  # harbor's claude-code; PYTHONPATH in harbor_env puts it on the path
 HELPER_IMAGE = "node:22-bookworm-slim"
 SETUP_SEC = 1800  # harbor's apt install of nodejs and npm took over the 360 s default in the smoke
+PULL_SEC = 4 * 3600  # dated notes 15: mteb-leaderboard's image is 8.8 GB, far past harbor's 600 s environment start
+HELPER_SEC = 900  # a store snapshot or restore takes seconds; a hung docker call must fail, never block the run
 SEED = 1
 # hippo runs from a docker volume: from a Windows bind mount each call took 40 s to load, against 0.3 s.
 BUNDLE_VOL = "hippo-tbench-bundle"
@@ -121,7 +124,18 @@ def volume_name(run: Path) -> str:
 
 def helper(run: Path, bdir: Path, *cmd: str, extra: list[str] | None = None) -> subprocess.CompletedProcess:
     return sh(["docker", "run", "--rm", "-v", f"{volume_name(run)}:/hippo-store", "-v", f"{BUNDLE_VOL}:/opt/hippo:ro",
-               *(extra or []), "-w", "/", HELPER_IMAGE, *cmd])
+               *(extra or []), "-w", "/", HELPER_IMAGE, *cmd], timeout=HELPER_SEC)
+
+
+def pull_image(name: str) -> None:
+    """The task's prebuilt image, pulled before its trials so harbor's environment-start clock never times a download."""
+    image = tomllib.loads((TASKS / name / "task.toml").read_text(encoding="utf-8"))["environment"]["docker_image"]
+    if sh(["docker", "image", "inspect", image]).returncode == 0:
+        return
+    log(f"pull {image}")
+    r = sh(["docker", "pull", image], timeout=PULL_SEC)
+    if r.returncode:
+        raise SystemExit(f"pull {image} failed: {r.stderr[-300:]}; re-run resumes here")
 
 
 def init_store(run: Path, bdir: Path) -> None:
@@ -305,6 +319,7 @@ def run_all(run: Path, bdir: Path, arms: list[str], limit: int | None, only: lis
         for idx, name in order:
             todo = [a for a in arms if (name, a) not in finished]
             if todo:
+                pull_image(name)
                 list(pool.map(lambda a: run_one(run, bdir, a, idx, name, env), todo))
     log("all tasks done")
 

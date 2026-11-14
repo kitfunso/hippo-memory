@@ -640,3 +640,11 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 **What changes.** `qa/ledger.py` has `one_writer(out)`: a lock file in the run folder that holds the pid of the process that asks into it. `qa/harness.py` takes it for the answer and judge stages, and `runner/answer_judge.py` takes it for `run`. A second process stops with a message that names the folder and the pid. The driver counts that as a failed step and tries again after 15 minutes. A rerun on a folder whose items have settled asks nothing. A lock from a dead process is taken over. Nothing changes in what is asked, in how an ask counts, or in the scores. Test: `tests/test_one_writer.py`.
 
 **Read before this note.** No answer that this change can touch.
+
+### Amendment 6, dated notes 15 (2026-11-14): Terminal-Bench pulls a task's image before its trials
+
+**Why.** Task 10, `mteb-leaderboard`, uses a prebuilt image of 8.8 GB. Harbor pulls a missing image inside its environment start, which times out after 600 s. Each try timed out, and each left its `docker compose up` still pulling. The `none` arm stopped after 3 infrastructure failures. The `hippo` arm's store restore then waited on Docker with no time limit, so the driver stopped all progress from 16:01 to 17:10 UTC on 14 Nov. The parallel pulls also filled the Docker VM's page cache to 29 GB and left the machine with 1 GB of free memory.
+
+**What changes.** `terminalbench/run_tbench.py` pulls the task's `docker_image` from its `task.toml` before both arms start, with its own limit of 4 hours. A failed pull stops the run with a message, and a rerun resumes at that task. Each docker helper call (store init, snapshot, restore, export) now fails after 900 s. Nothing changes in the agent, the task, the timeouts that harbor applies, or the scoring. The `mteb-leaderboard` trials so far never started an agent, so they stay infrastructure and get retried. Test: `tests/test_tbench_pull.py`.
+
+**Read before this note.** No Terminal-Bench reward that this change can touch.
