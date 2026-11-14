@@ -616,3 +616,11 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 **Checks.** In a `debian:bullseye-slim` container with the changed sources, `apt-get install -y curl nodejs npm procps` passed and gave Node.js 12.22.12. A harbor job on the `qemu-startup` image with an invalid token passed setup, started Claude Code 2.1.321 and stopped at "401 Invalid bearer token". No token was used.
 
 **Read before this note.** Tasks 00 to 07 finished in both arms. Task 08 has 3 infrastructure attempts per arm and no graded trial. The code commit is the commit that adds this note.
+
+### Amendment 6, dated notes 12 (2026-11-14, before the LongMemEval-M `hippo-emb` check passes): the retrieval check reads the server log of the last launch
+
+**Why.** The LongMemEval-M `hippo-emb` resume of 14 Nov 14:12 UTC wrote all 500 question files, and its runner logs name no failure. Shard 6 redid whole the one user with a retried add, as dated notes 7 says. The check still failed, on 4 lines in shard 1's `server.log`: a server start that found port 8932 in use (`EADDRINUSE`). That start was at the relaunch of 12 Nov 09:42, while the server of the launch before it still ran. The next launch, 12 Nov 20:25, loaded 0 of shard 1's results and redid all its users on a server that started cleanly, so no result of the 09:42 relaunch is in the files. The check read the whole server log but only the last launch of the runner log, so the old lines failed every later resume. The server logs of the 14:12 launch name no failure.
+
+**What changes.** `runner/run_retrieval.py` writes a launch mark in each shard's `server.log` when the shard starts. A server that the supervisor restarts during the same launch stays under that mark. `check` reads the server log from the last mark, as it reads the runner log. Test: `tests/test_runner_retrieval_arms.py::test_the_check_reads_the_server_log_of_the_last_launch_only`. The resume runs again to write the mark and the check. The code commit is the commit that adds this note.
+
+**Read before this note.** No LongMemEval-M `hippo-emb` answer.

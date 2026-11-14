@@ -95,6 +95,19 @@ def test_the_check_keeps_a_retried_search_but_fails_a_retried_add(tmp_path):
     assert not rr.check(pred, ["q1"], [log], [], 0.0)["pass"]
 
 
+def test_the_check_reads_the_server_log_of_the_last_launch_only(tmp_path):
+    pred, rlog, slog = tmp_path / "pred", tmp_path / "runner.log", tmp_path / "server.log"
+    pred.mkdir()
+    write_q(pred, "q1.json", "u1")
+    rlog.write_text("\n=== launch\nTotal questions processed: 1\n", encoding="utf-8")
+    old = "hippo-mem0-server arm=hippo\nError: listen EADDRINUSE: address already in use :::8932\n"
+    slog.write_text(old + "\n=== launch\n(node:1) ExperimentalWarning: SQLite\nhippo-mem0-server arm=hippo\n", encoding="utf-8")
+    assert rr.check(pred, ["q1"], [rlog], [slog], 0.0)["pass"]
+    slog.write_text(old + "\n=== launch\nthrow er; // Unhandled 'error' event\n", encoding="utf-8")
+    res = rr.check(pred, ["q1"], [rlog], [slog], 0.0)
+    assert not res["pass"] and "server log lines name a failure" in res["problems"][0]
+
+
 @pytest.mark.parametrize("bench, units, files, owners", [
     ("longmemeval-m", [{"q1", "gpt4_ab"}, {"q2"}], ["q1.json", "_ingestion_q1.json", "gpt4_ab.json", "_progress_q2.json"],
      [0, 0, 0, 1]),

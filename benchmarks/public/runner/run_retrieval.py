@@ -98,7 +98,7 @@ def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
 
 
 def last_launch(log: Path) -> str:
-    """What the runner's last launch logged: an earlier, killed launch's users were redone from scratch."""
+    """What a runner or server log holds from its last launch: an earlier, killed launch's users were redone whole."""
     return log.read_bytes().decode("utf-8", "replace").split("\n=== ")[-1] if log.exists() else ""
 
 
@@ -184,6 +184,8 @@ class Shard:
                     "TQDM_MININTERVAL": "60", "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8",
                     "PYTHONUTF8": "1"}  # the runner reads its own files with open()'s default, which is cp1252 here
         self.rlog_path = dirp / "runner.log"
+        with (self.dir / "server.log").open("ab") as f:  # one mark per launch; a mid-launch restart stays inside it
+            f.write(f"\n=== {time.ctime()} launch\n".encode())
         self.srv = self._start_server()
         wait_health(port, self.srv, arm)
         self._launch()
@@ -341,7 +343,7 @@ def check(pred: Path, ids: list[str], runner_logs: list[Path], server_logs: list
            if BAD_LOG.search(ln) and not SEARCH_RETRY.search(ln)]
     if bad:
         problems.append(f"{len(bad)} runner log lines name a failure, e.g. {bad[0][:200]}")
-    slog = [ln for sp in server_logs for ln in sp.read_text(encoding="utf-8", errors="replace").splitlines()
+    slog = [ln for sp in server_logs for ln in last_launch(sp).splitlines()
             if BAD_LOG.search(ln) and "ExperimentalWarning" not in ln]
     if slog:
         problems.append(f"{len(slog)} server log lines name a failure, e.g. {slog[0][:200]}")
