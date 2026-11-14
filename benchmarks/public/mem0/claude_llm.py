@@ -27,6 +27,8 @@ KEEP_ENV = {
     "PROGRAMW6432", "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "TMP", "USERDOMAIN", "USERNAME", "USERPROFILE", "WINDIR",
 }
 LIMIT_RE = re.compile(r"usage limit|rate limit|hit your limit|limit reached|resets", re.I)
+# The API's usage-policy block, as the CLI prints it: the same reply to the same prompt, so asking again changes nothing.
+REFUSAL_RE = re.compile(r"API Error: [^\n]{0,60}?(?:safeguards flagged this message|can't help with this)")
 MAX_FAILURES, MAX_JSON_MISSES = 4, 3
 DEADLINE_S = 11 * 3600  # slot waits, runs and retries included, so a call fails inside the 12 h client timeouts
 
@@ -76,6 +78,14 @@ class ToolUse(RuntimeError):
 
     def __init__(self, rec: dict) -> None:
         super().__init__(f"{rec['tag']}: the reply used a tool: {rec['tools']}")
+        self.rec = rec
+
+
+class Refusal(RuntimeError):
+    """A prompt the API blocked under its usage policy: logged as an ask that is never valid (dated notes 11)."""
+
+    def __init__(self, rec: dict) -> None:
+        super().__init__(f"{rec['tag']}: the API refused the prompt: {rec['detail'][:160]}")
         self.rec = rec
 
 
@@ -187,6 +197,10 @@ class Claude:
                     time.sleep(delay)
                     waited += delay
                     continue
+                if REFUSAL_RE.search(text):
+                    rec = {**base, "event": "refusal", "detail": detail}
+                    self._log(rec)
+                    raise Refusal(rec)
                 failures += 1
                 self._log({**base, "event": "error", "detail": detail})
                 if failures >= MAX_FAILURES:

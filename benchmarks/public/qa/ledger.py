@@ -2,6 +2,7 @@
 
 Prereg Amendment 6 revision 1 items 5 to 7 and dated notes 1: an ask is a call that returned reply text; per prompt the
 first 3 asks in log order are read and the first valid one counts; none valid in 3 scores wrong and is listed.
+Dated notes 11: a usage-policy refusal is an ask that is never valid.
 Judge and score stages take every answer and verdict from here, never from their own result files.
 """
 from __future__ import annotations
@@ -15,10 +16,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mem0"))
-from claude_llm import ToolUse  # noqa: E402
+from claude_llm import REFUSAL_RE, Refusal, ToolUse  # noqa: E402
 
 ASKS = 3
-ASK_EVENTS = ("ok", "json-miss", "tool-use")  # errors, timeouts and limit waits return no text, so they are no asks
+ASK_EVENTS = ("ok", "json-miss", "tool-use", "refusal")  # errors, timeouts and limit waits return no text: no asks
 SMOKE = Path(__file__).resolve().parents[1] / "smoke_excluded.json"
 
 
@@ -88,6 +89,15 @@ def decide(asks: list[dict], item: Item) -> Choice:
     return Choice("exhausted" if len(rejected) >= ASKS else "open", len(rejected), rejected=tuple(rejected))
 
 
+def as_ask(rec: dict) -> dict | None:
+    """The record as an ask, or None. A refusal logged as an `error` before dated notes 11 is read as the refusal it is."""
+    if rec.get("event") in ASK_EVENTS:
+        return rec
+    if rec.get("event") == "error" and REFUSAL_RE.search(rec.get("detail") or ""):
+        return {**rec, "event": "refusal"}
+    return None
+
+
 class Ledger:
     """A call log's asks by (tag, user hash) in log order, read once; asks made through settle join them."""
 
@@ -96,7 +106,7 @@ class Ledger:
         self.guard, self.locks = threading.Lock(), {}
         raw = path.read_bytes() if path.exists() else b""
         for line in raw[:raw.rfind(b"\n") + 1].split(b"\n"):  # LF alone; a record still being written is no ask yet
-            if line.strip() and (rec := json.loads(line)).get("event") in ASK_EVENTS:
+            if line.strip() and (rec := as_ask(json.loads(line))):
                 self.asks.setdefault((rec["tag"], rec["user"]), []).append(rec)
 
     def choose(self, item: Item) -> Choice:
@@ -112,7 +122,7 @@ class Ledger:
             while choice.status == "open":
                 try:
                     asks.append(llm.ask(item.system, item.user, effort=item.manifest.effort, tag=item.tag))
-                except ToolUse as e:
+                except (ToolUse, Refusal) as e:
                     asks.append(e.rec)
                 choice = decide(asks, item)
             return choice
