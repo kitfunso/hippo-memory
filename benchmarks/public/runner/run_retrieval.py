@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -193,6 +194,9 @@ class Shard:
         self.thread.start()
 
     def _start_server(self) -> subprocess.Popen:
+        with socket.socket() as s:  # a live server from an earlier launch would answer this shard's /health
+            if s.connect_ex(("127.0.0.1", self.port)) == 0:
+                sys.exit(f"port {self.port} already has a server: stop the earlier launch's hippo-mem0-server first")
         slog = (self.dir / "server.log").open("ab")
         return subprocess.Popen(["node", str(SERVER), "--arm", SERVER_ARM[self.arm], "--port", str(self.port),
                                  "--data-dir", str(self.store), *FLAGS.get(self.arm, [])],

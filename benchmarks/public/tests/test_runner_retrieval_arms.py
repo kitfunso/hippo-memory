@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import socket
 
 import pytest
 
@@ -106,6 +107,22 @@ def test_the_check_reads_the_server_log_of_the_last_launch_only(tmp_path):
     slog.write_text(old + "\n=== launch\nthrow er; // Unhandled 'error' event\n", encoding="utf-8")
     res = rr.check(pred, ["q1"], [rlog], [slog], 0.0)
     assert not res["pass"] and "server log lines name a failure" in res["problems"][0]
+
+
+def test_a_shard_never_starts_its_server_on_a_port_another_server_holds(tmp_path, monkeypatch):
+    shard = object.__new__(rr.Shard)  # set only what _start_server reads
+    shard.dir, shard.arm, shard.store = tmp_path, "hippo-emb", tmp_path / "store"
+    started = []
+    monkeypatch.setattr(rr.subprocess, "Popen", lambda *a, **k: started.append(a) or Proc())
+    with socket.socket() as held:
+        held.bind(("127.0.0.1", 0))
+        held.listen()
+        shard.port = held.getsockname()[1]
+        with pytest.raises(SystemExit, match="already has a server"):
+            shard._start_server()
+    assert started == []
+    shard._start_server()
+    assert len(started) == 1
 
 
 @pytest.mark.parametrize("bench, units, files, owners", [

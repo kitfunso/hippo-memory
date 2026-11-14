@@ -624,3 +624,11 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 **What changes.** `runner/run_retrieval.py` writes a launch mark in each shard's `server.log` when the shard starts. A server that the supervisor restarts during the same launch stays under that mark. `check` reads the server log from the last mark, as it reads the runner log. Test: `tests/test_runner_retrieval_arms.py::test_the_check_reads_the_server_log_of_the_last_launch_only`. The resume runs again to write the mark and the check. The code commit is the commit that adds this note.
 
 **Read before this note.** No LongMemEval-M `hippo-emb` answer.
+
+### Amendment 6, dated notes 13 (2026-11-14): a shard never starts its server on a port another server holds
+
+**Why.** At the LongMemEval-M `hippo-emb` relaunch of 12 Nov 09:42, the server of the launch before it still held port 8932. The new server failed with `EADDRINUSE`, but the old server answered `/health` with the same arm and store, so the shard ran on it. Dated notes 12 shows that the next launch redid all of that shard's users, so no result came from it. The hole stays for later resumes.
+
+**What changes.** `runner/run_retrieval.py` stops a shard before it starts its server if any process already listens on the shard's port. The message names the port. Test: `tests/test_runner_retrieval_arms.py::test_a_shard_never_starts_its_server_on_a_port_another_server_holds`. The LongMemEval-M `hippo-best` retrieval that started at 14:38 UTC 14 Nov loaded the code before this change; its 8 ports were free when it started, and its servers report the `hippo-best` arm.
+
+**Read before this note.** No answer that this change can touch.
