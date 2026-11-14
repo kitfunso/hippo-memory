@@ -40,6 +40,8 @@ HELPER_IMAGE = "node:22-bookworm-slim"
 SETUP_SEC = 1800  # harbor's apt install of nodejs and npm took over the 360 s default in the smoke
 PULL_SEC = 4 * 3600  # dated notes 15: mteb-leaderboard's image is 8.8 GB, far past harbor's 600 s environment start
 HELPER_SEC = 900  # a store snapshot or restore takes seconds; a hung docker call must fail, never block the run
+PULL_MARGIN_GB = 5
+DOCKER_DISK = Path(os.environ.get("LOCALAPPDATA") or Path.home())  # Docker Desktop keeps its disk file here
 SEED = 1
 # hippo runs from a docker volume: from a Windows bind mount each call took 40 s to load, against 0.3 s.
 BUNDLE_VOL = "hippo-tbench-bundle"
@@ -127,15 +129,42 @@ def helper(run: Path, bdir: Path, *cmd: str, extra: list[str] | None = None) -> 
                *(extra or []), "-w", "/", HELPER_IMAGE, *cmd], timeout=HELPER_SEC)
 
 
+def task_image(name: str) -> str:
+    return tomllib.loads((TASKS / name / "task.toml").read_text(encoding="utf-8"))["environment"]["docker_image"]
+
+
+def pull_gb(image: str) -> float:
+    """Disk a pull takes: containerd keeps each layer packed and unpacked; 3 task images took 2.4 to 3.0 times."""
+    r = sh(["docker", "manifest", "inspect", "-v", image], timeout=300)
+    if r.returncode:
+        raise SystemExit(f"manifest {image} failed: {r.stderr[-300:]}; re-run resumes here")
+    d = json.loads(r.stdout)
+    for m in d if isinstance(d, list) else [d]:
+        if ((m.get("Descriptor") or {}).get("platform") or {}).get("architecture", "amd64") == "amd64":
+            return 3 * sum(lay["size"] for lay in (m.get("OCIManifest") or m.get("SchemaV2Manifest") or {})["layers"]) / 1e9
+    raise SystemExit(f"manifest {image}: no amd64 image")
+
+
 def pull_image(name: str) -> None:
     """The task's prebuilt image, pulled before its trials so harbor's environment-start clock never times a download."""
-    image = tomllib.loads((TASKS / name / "task.toml").read_text(encoding="utf-8"))["environment"]["docker_image"]
+    image = task_image(name)
     if sh(["docker", "image", "inspect", image]).returncode == 0:
         return
+    need = pull_gb(image) + PULL_MARGIN_GB
+    while (free := shutil.disk_usage(DOCKER_DISK).free / 1e9) < need:  # a full drive would stop every lane on it
+        log(f"pull {image} needs {need:.0f} GB free on {DOCKER_DISK}, {free:.0f} GB now; waiting 30 min")
+        time.sleep(1800)
     log(f"pull {image}")
     r = sh(["docker", "pull", image], timeout=PULL_SEC)
     if r.returncode:
         raise SystemExit(f"pull {image} failed: {r.stderr[-300:]}; re-run resumes here")
+
+
+def drop_image(name: str) -> None:
+    """A finished task's image goes: the 89 images together would not fit on the drive (dated notes 15)."""
+    image = task_image(name)
+    if sh(["docker", "image", "inspect", image]).returncode == 0 and (r := sh(["docker", "image", "rm", image])).returncode:
+        log(f"could not remove {image}: {r.stderr[-200:]}")
 
 
 def init_store(run: Path, bdir: Path) -> None:
@@ -321,6 +350,7 @@ def run_all(run: Path, bdir: Path, arms: list[str], limit: int | None, only: lis
             if todo:
                 pull_image(name)
                 list(pool.map(lambda a: run_one(run, bdir, a, idx, name, env), todo))
+            drop_image(name)
     log("all tasks done")
 
 
