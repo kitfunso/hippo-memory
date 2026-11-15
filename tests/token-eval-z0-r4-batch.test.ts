@@ -319,14 +319,29 @@ const H = async () => {
   const s = c.start();
   await until('the hold line', () => c.log().some((l) => l.startsWith('hold read: hold')));
   await until('the first launch', () => c.launches().length > 0);
-  await sleep(4000);
+  // The next hold read means the call that launched ha has returned, so any second launch it made is in the log.
+  const reads = cmds(c, 'z0-hookhold').length;
+  await until('the next hold read', () => cmds(c, 'z0-hookhold').length > reads);
   const launchedWhileHeld = c.launches();
   put(planted, hookRuns(0));
+  // ha is still held here, so hb launching at all proves the ok read brought the width back above 1.
   await until('the second launch', () => c.launches().length > 1);
-  const haLiveAtSecond = !fs.existsSync(`${c.dir('ha-w1')}/run/exit.txt`);
   put(release, '');
   const r = await s.done;
-  return { c, r, launchedWhileHeld, haLiveAtSecond };
+  return { c, r, launchedWhileHeld };
+};
+
+// An operator width of 0 starts nothing, under a hold too.
+const HZ = async () => {
+  const c = track(new Case({ name: 'HZ', keys1: ['za'], width: 0 }));
+  c.knob('za-w1', { fixture: KEY_FX(c, 'za'), records: 1, exit: 2, printRecords: false });
+  put(`${c.dir('zz-w1')}/run/runs.jsonl`, hookRuns(1));
+  const s = c.start();
+  await until('the hold line', () => c.log().some((l) => l.startsWith('hold read: hold')));
+  await until('a second hold read', () => cmds(c, 'z0-hookhold').length > 1);
+  const launched = c.launches();
+  await killBatch(c, s);
+  return { c, launched };
 };
 
 const BX = async () => {
@@ -740,7 +755,7 @@ function lazy<T>(fn: () => Promise<T>) {
     pending: (): Promise<unknown>[] => (started ? [started] : []),
   };
 }
-const runs = { A: lazy(A), B: lazy(B), H: lazy(H), BX: lazy(BX), K: lazy(K), L: lazy(L), G: lazy(G), G2: lazy(G2), T: lazy(T), D: lazy(D), Z: lazy(Z), R: lazy(R), RN: lazy(RN), Pq: lazy(Pq), Pf: lazy(Pf),
+const runs = { A: lazy(A), B: lazy(B), H: lazy(H), HZ: lazy(HZ), BX: lazy(BX), K: lazy(K), L: lazy(L), G: lazy(G), G2: lazy(G2), T: lazy(T), D: lazy(D), Z: lazy(Z), R: lazy(R), RN: lazy(RN), Pq: lazy(Pq), Pf: lazy(Pf),
   W1: lazy(W1), W2: lazy(W2), W3: lazy(W3), W4: lazy(W4), W5a: lazy(W5a), W5b: lazy(W5b), S: lazy(S), Q: lazy(Q),
   E: lazy(E), Bx: lazy(Bx), Sl: lazy(Sl), Pt: lazy(Pt), Pb: lazy(Pb), Pr: lazy(Pr), Pd: lazy(Pd), Ql: lazy(Ql), Zr: lazy(Zr) };
 const only = process.env.Z0_BATCH_ONLY?.split(',');
@@ -880,17 +895,21 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
 
   describe('phase 0 and the hold', () => {
     it('a hold keeps one runner alive, and the ok read brings back the full width [R102, Amendment D]', async () => {
-      const { c, launchedWhileHeld, haLiveAtSecond } = await runs.H.get();
+      const { c, launchedWhileHeld } = await runs.H.get();
       expect(launchedWhileHeld).toEqual(['ha-w1']);
       expect(c.log().find((l) => l.startsWith('hold read: '))).toBe('hold read: hold 1 of 10');
       expect(c.log().some((l) => l.startsWith('hold read: ok '))).toBe(true);
-      expect(haLiveAtSecond).toBe(true);
       expect(c.launches()).toEqual(['ha-w1', 'hb-w1']);
+    });
+
+    it('a hold with an operator width of 0 launches no runner [R102, Amendment D]', async () => {
+      const { launched } = await runs.HZ.get();
+      expect(launched).toEqual([]);
     });
 
     it('a stub runner exit 2 ends phase 0 with BATCH 1 FAILED: <k> runner exit 2 once the phase\'s other units end [O10, GO1]', async () => {
       const { c, r } = await runs.H.get();
-      expect(r).toMatchObject({ code: 3, last: 'BATCH 1 FAILED: hb-w1 runner exit 2' });
+      expect(r).toMatchObject({ code: 3, out: 'BATCH 1 FAILED: ha-w1 runner exit 2\nBATCH 1 FAILED: hb-w1 runner exit 2' });
       const b = await runs.B.get();
       expect(b.r).toMatchObject({ code: 3, out: 'BATCH 1 FAILED: ba-w1 runner exit 2' });
       expect(b.recordsLine).toEqual([false, true, true, true]);
