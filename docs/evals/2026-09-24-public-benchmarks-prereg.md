@@ -673,3 +673,14 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 4. Nothing changes in the model, the CLI, the effort, the prompts or what counts as a valid reply. On 15 Nov, a probe through `claude_llm.py` on Console key 3 gave event `ok`, models `["claude-sonnet-5"]` and CLI `2.1.321 (Claude Code)`, at $0.001. Tests: `tests/test_claude_accounts.py::test_a_console_key_bills_api_credit_and_a_subscription_token_logs_in` and `::test_a_spent_console_key_drops_out_for_the_run_and_costs_no_ask`. Each fails when its rule is removed.
 
 **Read before this note.** No answer that this change can touch. It changes only which account bills a call.
+
+### Amendment 6, dated notes 18 (2026-11-15, before any PrefEval `hippo-emb` ingest): one process at a time writes into a run folder, at every stage
+
+**Why.** Dated notes 14 locked a run folder for the answer and judge stages only. The ingest and retrieve stages of `qa/harness.py` had no lock. Lanes q and q2 both reach the PrefEval `hippo-emb` ingest, on different ports. The ingest deletes each user and adds the turns again, so two processes on one folder can store a user twice. Dated notes 16 found that fault in LongMemEval-M question `545bd2b5`.
+
+**What changes.**
+1. `qa/harness.py` takes `one_writer` for the ingest, retrieve, answer and judge stages. Only the score stage runs without it.
+2. The launcher stops a stage at once when its log says that another lane writes the folder. That lane owns the stage and the stages after it. Before this note, the launcher counted the refusal as a failure and tried 3 times.
+3. Test: `tests/test_one_writer.py::test_every_writing_stage_takes_the_folder_first` now has ingest and retrieve cases. With the old condition, the ingest case does not stop: it starts the servers and ingests.
+
+**Read before this note.** No PrefEval `hippo-emb` store. No result changes.

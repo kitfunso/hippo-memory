@@ -578,7 +578,7 @@ def main() -> None:
         ap.error("--arm full starts at retrieve: it has no store")
     if a.bonferroni is not None and (a.stage != "score" or a.bonferroni < 1):
         ap.error("--bonferroni K needs the score stage and K of 1 or more")
-    with one_writer(a.out) if a.stage in ("answer", "judge") else nullcontext():
+    with one_writer(a.out) if a.stage != "score" else nullcontext():  # dated notes 18: ingest and retrieve too
         mod, qs = setup(a)
         {"ingest": stage_ingest_retrieve, "retrieve": stage_ingest_retrieve, "answer": stage_answer,
          "judge": stage_judge, "score": stage_score}[a.stage](a, mod, qs)

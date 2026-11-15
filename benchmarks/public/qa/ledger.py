@@ -176,7 +176,8 @@ def pid_alive(pid: int) -> bool:
 
 @contextmanager
 def one_writer(out: Path):
-    """One process at a time asks into a run folder: two would ask the same open items twice (dated notes 14)."""
+    """One process at a time writes into a run folder: two would ask open items twice (dated notes 14)
+    or store one user twice (dated notes 18)."""
     out.mkdir(parents=True, exist_ok=True)
     lock = out / ".writer.lock"
     for _ in range(2):

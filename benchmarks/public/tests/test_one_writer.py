@@ -38,11 +38,13 @@ def test_a_lock_left_by_a_dead_process_is_taken_over(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("main, argv", [
+    (lambda: harness.main, ["harness.py", "ingest", "--bench", "prefeval"]),
+    (lambda: harness.main, ["harness.py", "retrieve", "--bench", "prefeval"]),
     (lambda: harness.main, ["harness.py", "answer", "--bench", "prefeval"]),
     (lambda: harness.main, ["harness.py", "judge", "--bench", "prefeval"]),
     (runner_main, ["answer_judge.py", "run", "--bench", "longmemeval-m", "--pred", "hippo-emb=x"]),
 ])
-def test_answer_judge_and_run_stages_take_the_folder_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+def test_every_writing_stage_takes_the_folder_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
                                                             main, argv) -> None:
     entry = main()
     monkeypatch.setattr(sys, "argv", [*argv, "--out", str(tmp_path)])
