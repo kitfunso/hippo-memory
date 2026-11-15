@@ -27,6 +27,7 @@ KEEP_ENV = {
     "PROGRAMW6432", "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "TMP", "USERDOMAIN", "USERNAME", "USERPROFILE", "WINDIR",
 }
 LIMIT_RE = re.compile(r"usage limit|rate limit|hit your limit|limit reached|resets", re.I)
+CREDIT_RE = re.compile(r"credit balance is too low", re.I)  # a Console key's credit is spent: it stays out for the run
 # The API's usage-policy block, as the CLI prints it: the same reply to the same prompt, so asking again changes nothing.
 REFUSAL_RE = re.compile(r"API Error: [^\n]{0,60}?(?:safeguards flagged this message|can't help with this)")
 MAX_FAILURES, MAX_JSON_MISSES = 4, 3
@@ -52,6 +53,15 @@ class Accounts:
     def rest(self, name: str, now: float) -> None:
         with self.lock:
             self.until[name] = now + self.REST_S
+
+    def retire(self, name: str) -> None:
+        with self.lock:
+            self.until[name] = float("inf")
+
+    def env_for(self, name: str) -> dict[str, str]:
+        """A subscription token logs the CLI in; any other token is a Console key that bills API credit (dated notes 17)."""
+        tok = self.tokens[name]
+        return {"CLAUDE_CODE_OAUTH_TOKEN": tok} if tok.startswith("sk-ant-oat") else {"ANTHROPIC_API_KEY": tok}
 
     def wake(self, now: float) -> float:
         """Seconds until the first resting account may be tried again."""
@@ -111,9 +121,9 @@ class Claude:
             self.accounts = Accounts(pool, os.environ)
             if not self.accounts.names:
                 raise SystemExit(f"no token is set in any of {pool}")
-            self.env["CLAUDE_CODE_OAUTH_TOKEN"] = self.accounts.tokens[self.accounts.names[0]]
         self.env["DISABLE_AUTOUPDATER"] = "1"  # one CLI version for the whole run
-        ver = subprocess.run([self.exe, "--version"], capture_output=True, env=self.env, timeout=60)
+        first = self.accounts.env_for(self.accounts.names[0]) if self.accounts else {}
+        ver = subprocess.run([self.exe, "--version"], capture_output=True, env={**self.env, **first}, timeout=60)
         self.cli = ver.stdout.decode("utf-8", "replace").strip()  # stamped on every record for the frozen manifest
 
     def _log(self, rec: dict) -> None:
@@ -131,7 +141,7 @@ class Claude:
     def _run(self, sys_file: Path, user: str, effort: str, deadline: float,
              account: str | None = None) -> tuple[dict, str] | None:
         """One `claude -p` run billed to `account`, or None if no slot frees up before the deadline."""
-        env = self.env if account is None else {**self.env, "CLAUDE_CODE_OAUTH_TOKEN": self.accounts.tokens[account]}
+        env = self.env if account is None else {**self.env, **self.accounts.env_for(account)}
         cmd = [self.exe, "-p", "--safe-mode", "--permission-mode", "manual", "--system-prompt-file", str(sys_file),
                "--tools", "", "--model", MODEL, "--effort", effort, "--no-session-persistence", "--output-format", "json"]
         if not self.slots.acquire(timeout=max(0.0, deadline - time.monotonic())):
@@ -185,6 +195,10 @@ class Claude:
             base.update(attempt=attempt, wall_ms=int((time.time() - t0) * 1000), **({"account": acct} if acct else {}))
             if res.get("is_error") or not text.strip():
                 detail = f"{res.get('api_error_status')} {text} {err}"[:400]
+                if acct and CREDIT_RE.search(detail):  # no reply, so no ask; the loop's top moves to the next account
+                    self.accounts.retire(acct)
+                    self._log({**base, "event": "credit-out", "detail": detail})
+                    continue
                 if res.get("api_error_status") == 429 or LIMIT_RE.search(detail):
                     if acct:  # rest this account; the loop's top moves on, or waits when every account rests
                         self.accounts.rest(acct, time.monotonic())

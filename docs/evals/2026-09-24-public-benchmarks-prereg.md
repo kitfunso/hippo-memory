@@ -661,3 +661,15 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 5. The `hippo-emb` LongMemEval-M score of 14 Nov (78.4 at 200 memories) included the doubled question. The new score replaces it, and the report gives both.
 
 **Read before this note.** The `hippo-emb` LongMemEval-M score of 14 Nov. No `hippo-best` LongMemEval-M answer.
+
+### Amendment 6, dated notes 17 (2026-11-15): answers may bill one Console key after the subscription accounts rest
+
+**Why.** Every subscription account in the answer pool rested from 14 Nov 23:51 UTC. Z0 round 4 needs accounts 1 and 2 and Console key 2. On 15 Nov Keith answered the question of the account split: "dont worry, use hte console api keys. yes". Before this note, every pool ended with `Z0_SUB_TOKEN`. In the environment of the running lanes, that variable held the token of account 1. From 21:01 UTC on 15 Nov, the User variable of that name holds Console key 2, so a lane that started after that time could bill it. Console key 1 is not valid: `/v1/models` returns 401.
+
+**What changes.**
+1. Each answer lane's pool is the lane's own token, then `Z0_SUB_TOKEN_3`, `BENCH_PARKED_TOKEN` and `Z0_CONSOLE_KEY_3`, in that order. Accounts 1 and 2 and Console key 2 leave the pool. The launcher reads each value from the User environment, not from the shell that starts it. The old order was `Z0_SUB_TOKEN_2`, `BENCH_PARKED_TOKEN`, `Z0_SUB_TOKEN_3`, `Z0_SUB_TOKEN`.
+2. `mem0/claude_llm.py` gives a subscription token to the CLI as `CLAUDE_CODE_OAUTH_TOKEN` and a Console key as `ANTHROPIC_API_KEY`. A call gets one credential only.
+3. If a reply says that the key's credit balance is too low, `claude_llm.py` takes that key out for the rest of the process and moves to the next account. The ledger does not count that reply as an ask, so no item loses an ask to it.
+4. Nothing changes in the model, the CLI, the effort, the prompts or what counts as a valid reply. On 15 Nov, a probe through `claude_llm.py` on Console key 3 gave event `ok`, models `["claude-sonnet-5"]` and CLI `2.1.321 (Claude Code)`, at $0.001. Tests: `tests/test_claude_accounts.py::test_a_console_key_bills_api_credit_and_a_subscription_token_logs_in` and `::test_a_spent_console_key_drops_out_for_the_run_and_costs_no_ask`. Each fails when its rule is removed.
+
+**Read before this note.** No answer that this change can touch. It changes only which account bills a call.

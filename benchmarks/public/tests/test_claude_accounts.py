@@ -69,3 +69,42 @@ def test_every_account_resting_waits_then_tries_again(tmp_path: Path, monkeypatc
     waits = [r for r in events(c) if r["event"] == "limit-wait"]
     assert waits[0]["delay_s"] == 0 and sum(r["delay_s"] for r in waits) >= Accounts.REST_S
     assert all(r["delay_s"] <= 300 for r in waits)
+
+
+SUB, KEY = "sk-ant-oat01-" + "s" * 95, "sk-ant-usr01-" + "k" * 93
+
+
+def test_a_console_key_bills_api_credit_and_a_subscription_token_logs_in(tmp_path: Path,
+                                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    c = object.__new__(Claude)  # set only what _run reads
+    c.exe, c.cwd, c.env, c.slots = "claude", tmp_path, {"PATH": "p"}, threading.BoundedSemaphore(1)
+    c.accounts = Accounts(["S", "K"], {"S": SUB, "K": KEY})
+    envs = []
+    monkeypatch.setattr(claude_llm.subprocess, "run", lambda cmd, **kw: envs.append(kw["env"]) or
+                        type("P", (), {"stdout": b'{"result": "ok"}', "stderr": b"", "returncode": 0})())
+    for acct in ("S", "K"):
+        c._run(tmp_path / "sys.txt", "u", "medium", claude_llm.time.monotonic() + 60, account=acct)
+    assert envs[0] == {"PATH": "p", "CLAUDE_CODE_OAUTH_TOKEN": SUB}
+    assert envs[1] == {"PATH": "p", "ANTHROPIC_API_KEY": KEY}
+
+
+def test_a_spent_console_key_drops_out_for_the_run_and_costs_no_ask(tmp_path: Path,
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    c = client(tmp_path, ["A", "B"])
+    clock = [1000.0]
+    monkeypatch.setattr(claude_llm.time, "monotonic", lambda: clock[0])
+    seen = []
+
+    def run(sys_file, user, effort, deadline, account=None):
+        seen.append(account)
+        if account == "A":
+            return {"is_error": True, "api_error_status": 400,
+                    "result": "API Error: 400 Your credit balance is too low to access the Anthropic API."}, ""
+        return {"result": "ok"}, ""
+
+    monkeypatch.setattr(c, "_run", run)
+    assert c.ask("sys", "user", effort="medium", tag="t1")["account"] == "B"
+    clock[0] += 10 * Accounts.REST_S  # a usage limit would be over by now; spent credit is not
+    assert c.ask("sys", "user2", effort="medium", tag="t2")["account"] == "B"
+    assert seen == ["A", "B", "B"]
+    assert [r["event"] for r in events(c)] == ["credit-out", "ok", "ok"]
