@@ -22,6 +22,7 @@ import sys
 import threading
 import time
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -40,6 +41,8 @@ SEARCH_RETRY = re.compile(r"SEARCH attempt \d+/\d+ failed")  # a search never ch
 ADD_RETRY = re.compile(r"ADD attempt \d+/\d+ failed \(user=([^)]+)\)")  # a retried add may be stored twice
 DEAD_URL = "http://127.0.0.1:9/v1"  # port 9 (discard) refuses connections: no model call can leave this machine
 MAX_RESTARTS = 20
+STOP_SEC = 60
+DOUBLED_SHARE = 0.10  # dated notes 16: a row repeated by text and time is at most 2% of any question in 11,000 files
 
 
 def sha_file(p: Path) -> str:
@@ -101,6 +104,39 @@ def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
 def last_launch(log: Path) -> str:
     """What a runner or server log holds from its last launch: an earlier, killed launch's users were redone whole."""
     return log.read_bytes().decode("utf-8", "replace").split("\n=== ")[-1] if log.exists() else ""
+
+
+def shard_runners(dirp: Path) -> list[int]:
+    """Pids of the runner processes (venv launcher and interpreter) whose output dir is this shard."""
+    if os.name == "nt":
+        ps = ("Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
+              "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }")
+        cmd = ["powershell", "-NoProfile", "-Command", ps]
+    else:
+        cmd = ["ps", "-eo", "pid=,args="]
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=STOP_SEC).stdout
+    needle = subprocess.list2cmdline(["--output-dir", str(dirp)]) + " "
+    pids = []
+    for ln in out.splitlines():
+        pid, _, args = ln.strip().partition("\t" if "\t" in ln else " ")
+        if pid.isdigit() and int(pid) != os.getpid() and " -m benchmarks." in args and needle in args + " ":
+            pids.append(int(pid))
+    return pids
+
+
+def stop_stale_runners(dirp: Path) -> int:
+    """Stops every runner that still writes to this shard: two runners on one user store each chunk twice. Killing a
+    supervisor leaves its runner alive (dated notes 16), and the next launch must not run beside it."""
+    pids = shard_runners(dirp)
+    for pid in pids:
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)] if os.name == "nt" else ["kill", "-9", str(pid)],
+                       capture_output=True, timeout=STOP_SEC)
+    deadline = time.time() + STOP_SEC
+    while (left := shard_runners(dirp)) and time.time() < deadline:
+        time.sleep(2)
+    if left:
+        sys.exit(f"runner pids {left} still write to {dirp} and did not stop: stop them, then resume")
+    return len(pids)
 
 
 def drop_retried_users(pred: Path, log: Path, port: int) -> int:
@@ -203,6 +239,9 @@ class Shard:
                                 stdout=slog, stderr=slog)
 
     def _launch(self) -> None:
+        stale = stop_stale_runners(self.dir)  # first: a live old runner would write progress files after the drops below
+        if stale:
+            self._note(f"{stale} runner processes of an earlier launch stopped")
         if self.pred.exists():
             dropped = drop_partial_users(self.pred, self.port)
             if dropped:
@@ -326,15 +365,21 @@ def check(pred: Path, ids: list[str], runner_logs: list[Path], server_logs: list
         problems.append(f"{len(missing)} question files missing, e.g. {missing[0]}")
     if extra:
         problems.append(f"{len(extra)} question files outside the design, e.g. {extra[0]}")
-    empty, short = [], 0
+    empty, doubled, short = [], [], 0
     for i in ids:
         if i in files:
             r = json.loads(files[i].read_text(encoding="utf-8"))["retrieval"]
-            if not r["search_results"] or r["total_results"] != len(r["search_results"]):
+            rows = r["search_results"]
+            if not rows or r["total_results"] != len(rows):
                 empty.append(i)
-            short += len(r["search_results"]) < 200
+            seen = Counter((x.get("memory"), x.get("created_at")) for x in rows)
+            if rows and sum(n for n in seen.values() if n > 1) >= DOUBLED_SHARE * len(rows):
+                doubled.append(i)
+            short += len(rows) < 200
     if empty:
         problems.append(f"{len(empty)} questions retrieved nothing, e.g. {empty[0]} (a failed search returns none)")
+    if doubled:
+        problems.append(f"{len(doubled)} questions show stored rows twice (two writers on one user), e.g. {doubled[0]}")
     failed_ingest = []
     for cp in sorted(pred.glob("_ingestion_*.json")):
         d = json.loads(cp.read_text(encoding="utf-8"))

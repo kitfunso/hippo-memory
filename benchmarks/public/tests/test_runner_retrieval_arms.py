@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import socket
+import subprocess
 
 import pytest
 
@@ -166,3 +167,64 @@ def test_hippo_best_may_reorder_the_first_100_but_must_show_rows_101_to_200_as_h
     assert rr.same_shown(tmp_path / "tail", tmp_path / "emb", ["q"]) == ["q"]
     assert rr.same_shown(tmp_path / "set", tmp_path / "emb", ["q"]) == ["q"]
     assert rr.same_shown(tmp_path / "none", tmp_path / "emb", ["q"]) == ["q"]
+
+
+def test_a_launch_stops_old_runners_before_it_drops_any_user(tmp_path, monkeypatch):
+    shard = object.__new__(rr.Shard)  # set only what _launch reads
+    shard.dir, shard.pred, shard.port, shard.arm, shard.idx = tmp_path, tmp_path / "pred", 1, "hippo-emb", 0
+    shard.rlog_path, shard.cmd, shard.env = tmp_path / "runner.log", ["runner"], {}
+    shard.pred.mkdir()
+    seen = []
+    monkeypatch.setattr(rr, "stop_stale_runners", lambda d: seen.append("stop") or 2)
+    for name in ("drop_partial_users", "drop_retried_users", "drop_failed_searches"):
+        monkeypatch.setattr(rr, name, lambda *a, name=name: seen.append(name) or 0)
+    monkeypatch.setattr(rr.subprocess, "Popen", lambda *a, **k: seen.append("runner") or Proc())
+    shard._launch()
+    assert seen == ["stop", "drop_partial_users", "drop_retried_users", "drop_failed_searches", "runner"]
+    assert "2 runner processes of an earlier launch stopped" in (tmp_path / "supervisor.log").read_text(encoding="utf-8")
+
+
+def test_each_old_runner_is_killed_and_one_that_lives_on_stops_the_launch(tmp_path, monkeypatch):
+    lists = [[11, 12], []]
+    monkeypatch.setattr(rr, "shard_runners", lambda d: lists.pop(0) if len(lists) > 1 else lists[0])
+    killed = []
+    monkeypatch.setattr(rr.subprocess, "run", lambda cmd, **k: killed.append(cmd[-1]))
+    assert rr.stop_stale_runners(tmp_path) == 2 and killed == ["11", "12"]
+    monkeypatch.setattr(rr, "shard_runners", lambda d: [11])
+    clock = iter(range(0, 10_000, 30))
+    monkeypatch.setattr(rr.time, "time", lambda: next(clock))
+    monkeypatch.setattr(rr.time, "sleep", lambda s: None)
+    with pytest.raises(SystemExit, match=r"runner pids \[11\] still write"):
+        rr.stop_stale_runners(tmp_path)
+
+
+def test_only_a_runner_whose_output_dir_is_the_shard_counts_as_its_runner(tmp_path, monkeypatch):
+    d0, d01 = tmp_path / "shard0", tmp_path / "shard01"
+    sep = "\t" if rr.os.name == "nt" else " "
+    line = lambda pid, *args: f"{pid}{sep}" + subprocess.list2cmdline(["python.exe", *args])
+    out = "\n".join([
+        line(101, "-m", "benchmarks.longmemeval.run", "--output-dir", str(d0), "--max-workers", "8"),
+        line(102, "-m", "benchmarks.longmemeval.run", "--output-dir", str(d01), "--max-workers", "8"),
+        line(103, "-I", "run_retrieval.py", "--out", str(d0)),
+        line(104, "-m", "benchmarks.beam.run", "--resume", "--output-dir", str(d0)),
+    ])
+    monkeypatch.setattr(rr.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, out, ""))
+    assert rr.shard_runners(d0) == [101, 104]
+
+
+def test_the_check_fails_a_question_whose_rows_were_stored_twice(tmp_path):
+    pred = tmp_path / "pred"
+    pred.mkdir()
+    rows = [{"memory": f"m{i}", "created_at": "2023-05-01"} for i in range(100)]
+
+    def put(hits):
+        pred.joinpath("q1.json").write_text(json.dumps(
+            {"user_id": "u1", "retrieval": {"search_results": hits, "total_results": len(hits)}}), encoding="utf-8")
+    put(rows + rows)
+    res = rr.check(pred, ["q1"], [], [], 0.0)
+    assert not res["pass"] and "stored rows twice" in res["problems"][0]
+    same_text_other_day = [{"memory": f"m{i}", "created_at": "2023-06-02"} for i in range(100)]
+    put(rows + same_text_other_day)
+    assert rr.check(pred, ["q1"], [], [], 0.0)["pass"]
+    put(rows + rows[:2] + [{"memory": f"n{i}", "created_at": "2023-05-01"} for i in range(98)])  # 4 of 200, as data repeats
+    assert rr.check(pred, ["q1"], [], [], 0.0)["pass"]
