@@ -308,18 +308,25 @@ const B = async () => {
 };
 
 const hookRuns = (cancelled: number) => `${Array.from({ length: 10 }, (_, i) => JSON.stringify({ arm: 'S2', kind: 'apply', sessionId: `h${i}`, hookCancels: i < cancelled ? { UserPromptSubmit: 1 } : {} })).join('\n')}\n`;
+// Under the hold ha runs alone and stays alive until released; hb must wait for the ok read, then launch beside the live ha.
 const H = async () => {
-  const c = track(new Case({ name: 'H', keys1: ['ha'] }));
-  c.knob('ha-w1', { fixture: KEY_FX(c, 'ha'), records: 1, exit: 2, printRecords: false });
+  const c = track(new Case({ name: 'H', keys1: ['ha', 'hb'] }));
+  const release = c.hold('ha');
+  c.knob('ha-w1', { fixture: KEY_FX(c, 'ha'), records: 1, exit: 2, printRecords: false, release });
+  c.knob('hb-w1', { fixture: KEY_FX(c, 'hb'), records: 1, exit: 2, printRecords: false });
   const planted = `${c.dir('zz-w1')}/run/runs.jsonl`;
   put(planted, hookRuns(1));
   const s = c.start();
   await until('the hold line', () => c.log().some((l) => l.startsWith('hold read: hold')));
+  await until('the first launch', () => c.launches().length > 0);
   await sleep(4000);
-  const launchedWhileHeld = c.launches().length;
+  const launchedWhileHeld = c.launches();
   put(planted, hookRuns(0));
+  await until('the second launch', () => c.launches().length > 1);
+  const haLiveAtSecond = !fs.existsSync(`${c.dir('ha-w1')}/run/exit.txt`);
+  put(release, '');
   const r = await s.done;
-  return { c, r, launchedWhileHeld };
+  return { c, r, launchedWhileHeld, haLiveAtSecond };
 };
 
 const BX = async () => {
@@ -872,20 +879,22 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
   });
 
   describe('phase 0 and the hold', () => {
-    it('hold launches no runner until ok [R102]', async () => {
-      const { c, launchedWhileHeld } = await runs.H.get();
-      expect(launchedWhileHeld).toBe(0);
-      expect(c.log().filter((l) => l.startsWith('hold read: '))).toEqual(['hold read: hold 1 of 10', 'hold read: ok 0 of 10']);
-      expect(c.launches()).toEqual(['ha-w1']);
+    it('a hold keeps one runner alive, and the ok read brings back the full width [R102, Amendment D]', async () => {
+      const { c, launchedWhileHeld, haLiveAtSecond } = await runs.H.get();
+      expect(launchedWhileHeld).toEqual(['ha-w1']);
+      expect(c.log().find((l) => l.startsWith('hold read: '))).toBe('hold read: hold 1 of 10');
+      expect(c.log().some((l) => l.startsWith('hold read: ok '))).toBe(true);
+      expect(haLiveAtSecond).toBe(true);
+      expect(c.launches()).toEqual(['ha-w1', 'hb-w1']);
     });
 
     it('a stub runner exit 2 ends phase 0 with BATCH 1 FAILED: <k> runner exit 2 once the phase\'s other units end [O10, GO1]', async () => {
       const { c, r } = await runs.H.get();
-      expect(r).toMatchObject({ code: 3, last: 'BATCH 1 FAILED: ha-w1 runner exit 2' });
+      expect(r).toMatchObject({ code: 3, last: 'BATCH 1 FAILED: hb-w1 runner exit 2' });
       const b = await runs.B.get();
       expect(b.r).toMatchObject({ code: 3, out: 'BATCH 1 FAILED: ba-w1 runner exit 2' });
       expect(b.recordsLine).toEqual([false, true, true, true]);
-      expect(c.launches()).toEqual(['ha-w1']);
+      expect(c.launches()).toEqual(['ha-w1', 'hb-w1']);
     });
 
     it('with width 2 and four keys, a stub that fails first leaves the two queued keys launched and finished in phase 0 [KO3]', async () => {

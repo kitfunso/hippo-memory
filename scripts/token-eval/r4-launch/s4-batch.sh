@@ -263,10 +263,11 @@ launch_ready() {
   local width entry
   [ ${#QUEUE[@]} -gt 0 ] || return 0
   read_hold
-  [ "$HOLD" = ok ] || return 0
   width=3
   [ -f "$ROOT/width.txt" ] && width=$(tr -dc '0-9' < "$ROOT/width.txt")
   [ -n "$width" ] || width=3
+  # Prereg Amendment D: a hold keeps one runner alive, since with none the window of 50 never moves and the rate can never fall.
+  [ "$HOLD" = ok ] || width=1
   while [ ${#QUEUE[@]} -gt 0 ] && [ ${#LIVE[@]} -lt "$width" ]; do
     entry=${QUEUE[0]}
     QUEUE=("${QUEUE[@]:1}")
