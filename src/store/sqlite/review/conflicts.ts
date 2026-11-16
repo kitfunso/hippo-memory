@@ -16,6 +16,8 @@ import {
 import { audit } from '../audit/audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from '../folder-files/mirrors.js';
 import { readEntriesByIds } from '../entries/entry-reads.js';
+import { upsertEntryRow } from '../entries/entry-row.js';
+import { CONFLICT_LOSER_TAG, markStale } from '../../../base/memory/stale-mark.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { ownScopeTouches } from '../../../base/scope/recall-scope.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
@@ -495,11 +497,9 @@ function weakenConflictLoser(
   loserId: string,
   fate: WeakenFate,
 ): LoserRemoval {
-  cachedStatement(
-    db,
-    `UPDATE memories SET half_life_days = MAX(?, half_life_days * ?), updated_at = datetime('now') ` +
-      `WHERE id = ? AND tenant_id = ?`,
-  ).run(fate.minHalfLifeDays, fate.halfLifeFactor, loserId, tenantId);
+  const loser = readEntriesByIds(db, [loserId], tenantId).get(loserId);
+  const cut = (days: number): number => Math.max(fate.minHalfLifeDays, days * fate.halfLifeFactor);
+  if (loser !== undefined) upsertEntryRow(db, markStale(loser, CONFLICT_LOSER_TAG, cut));
   return emptyRemoval();
 }
 

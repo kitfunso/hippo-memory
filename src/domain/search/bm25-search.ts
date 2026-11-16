@@ -85,6 +85,7 @@ export function rankBm25(
     summary: NO_SUMMARY_SCORING,
     strength: rankStrength(options),
     ablation: rankAblationOf(options),
+    asOf: options.asOf,
   };
   const scored: SearchResult[] = [];
   for (let i = 0; i < pool.length; i++) {

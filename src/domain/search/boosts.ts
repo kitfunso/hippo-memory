@@ -1,4 +1,5 @@
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 import {
   CHURN_STALE_TAG,
   DAG_LEVEL,
@@ -35,6 +36,8 @@ const OUTCOME_NUDGE_MAX = 1.15;
 // of its lexical score.
 export const STRENGTH_RANK_FLOOR = 0.5;
 export const STRENGTH_RANK_SPAN = 0.5;
+// A stale mark (replaced, invalidated, lost conflict) or a successor link counts as one wrong mark.
+const STALE_RANK_SHARE = 0.5;
 const RECENCY_RANK_FLOOR = 0.8;
 const RECENCY_RANK_SPAN = 0.2;
 const RECENCY_SCALE_DAYS = 30;
@@ -129,13 +132,16 @@ export function summaryMultipliers(entry: MemoryEntry, now: Date, s: SummaryScor
   };
 }
 
+/** Trust enters the rank without decay: decay buried old standing facts on long histories, and sleep
+ * still runs it (docs/evals/2026-11-16-changed-facts-prereg.md). */
 export function strengthRecencyMultipliers(
   entry: MemoryEntry,
-  ctx: Pick<BoostContext, 'now' | 'strength' | 'ablation'>,
+  ctx: Pick<BoostContext, 'now' | 'strength' | 'ablation' | 'asOf'>,
 ) {
+  const trust = calculateStrength(entry, ctx.now, { ...ctx.strength, decays: false });
+  const replaced = entry.confidence === 'stale' || (!ctx.asOf && isSuperseded(entry));
   return {
-    strength:
-      STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
+    strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * trust * (replaced ? STALE_RANK_SHARE : 1),
     recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, ctx.now, ctx.ablation),
   };
 }
@@ -172,6 +178,9 @@ export interface BoostContext {
   summary: SummaryScoring;
   strength: StrengthModel;
   ablation: RankAblation;
+  /** Set when the pool holds only rows current at that date, so a successor link is not a
+   * replacement yet. */
+  asOf?: string;
 }
 
 export interface AppliedBoosts {

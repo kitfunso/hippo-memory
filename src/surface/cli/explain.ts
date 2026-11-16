@@ -286,8 +286,9 @@ function printHybridBreakdown(r: SearchResult, b: ScoreBreakdown): void {
   console.log(
     `    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`,
   );
+  const outcomes = `+${r.entry.outcomePositive ?? 0}/-${r.entry.outcomeNegative ?? 0}`;
   console.log(
-    `    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`,
+    `    strength:  x${fmt(b.strengthMultiplier, 3)}  (confidence=${r.entry.confidence}, outcomes ${outcomes})`,
   );
   console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
   printBoostLines(r, b);

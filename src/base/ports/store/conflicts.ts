@@ -51,8 +51,9 @@ export interface ConflictSide {
   readonly scope: string | null;
 }
 
-/** The domain's decision, applied as given: `weaken` scales the half-life by `halfLifeFactor`,
- * never under `minHalfLifeDays`; `reject` also tombstones the value and sweeps rows
+/** The domain's decision, applied as given: `weaken` marks the loser stale under `conflict-loser`
+ * (markStale) so recall ranks it lower, scaling the half-life by `halfLifeFactor`, never under
+ * `minHalfLifeDays`, once per loser; `reject` also tombstones the value and sweeps rows
  * `ownScopeTouches(ownScope, scope)` admits. */
 export type LoserFate =
   | { readonly kind: 'weaken'; readonly halfLifeFactor: number; readonly minHalfLifeDays: number }

@@ -82,7 +82,7 @@ export interface ScoreBreakdown {
   cosine: number;
   /** Blended base score before multipliers. */
   base: number;
-  /** Multiplier from memory strength: 0.5 + 0.5*strength. */
+  /** Trust: 0.5 + 0.5 * wrong-mark share * (0.5 if stale or superseded); age never lowers it. */
   strengthMultiplier: number;
   /** Multiplier from age: 0.8 + 0.2*recencyBoost. */
   recencyMultiplier: number;

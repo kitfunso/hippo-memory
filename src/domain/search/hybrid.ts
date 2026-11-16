@@ -280,6 +280,7 @@ function hybridBoostContext(
     summary: summaryScoring(options),
     strength: rankStrength(options),
     ablation: rankAblationOf(options),
+    asOf: options.asOf,
   };
 }
 
