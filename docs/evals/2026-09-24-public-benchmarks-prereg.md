@@ -699,3 +699,18 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 7. Test: `tests/test_rescore_official.py`. With the competitor filter emptied or the yes parse loosened, it fails.
 
 **Read before this note.** The saved answers and registered verdicts, and the four audit reports. The 2,000 saved LongMemEval-S records equal the official cleaned file as prompt text. No rescore call.
+
+### Amendment 6, dated notes 20 (2026-11-16, before any answer outside the LoCoMo sample): LoCoMo over all 1,540 questions for `hippo-emb`
+
+**Why.** The published LoCoMo rows score all 1,540 category 1 to 4 questions. Our registered runs score a 400 sample (n = 395 in the primary), so the audit rates them not comparable. A 400 sample also carries about ±3 points of sampling error at 89%.
+
+**What changes.**
+1. `mem0/locomo_full.py` answers every category 1 to 4 question for `hippo-emb` at top 200, with h2h's own prompt and item tags. The retrieval is the registered emb retrieval (`retrieval-emb-locomo`, hippo 3.5.1), already on disk for every question.
+2. Its run folder `runs/locomo-emb-full` starts with a copy of the registered emb run's answer log. The 400 sample answers therefore reuse their logged replies; only the other 1,140 are asked. A dry check before this note: 400 valid, 1,140 open.
+3. The judge is the Mem0 paper's prompt on codex gpt-5.6-sol, as dated notes 19. The paper used gpt-4o-mini. No other judge runs on the full set.
+4. The score reports all 1,540, the set without the 5 smoke items, each category, and the 400 sample. The sample line must equal the dated notes 19 rescore of `locomo-h2h-emb` at top 200: a check that the reuse holds.
+5. One arm only: `hippo-emb`, the arm on the scoreboard. No control or competitor arm runs on the full set, so this run gives no paired comparison.
+6. Answers bill the dated notes 17 pool in order: `Z0_SUB_TOKEN_3`, then the parked token, then Console key 3. At list prices the 1,140 answers cost about $89 (`runs/mem0-h2h/calls-answer.jsonl`, $0.078 per answer at top 200).
+7. Test: `tests/test_locomo_full.py`. A verdict item equals the dated notes 19 item for the same answer.
+
+**Read before this note.** The seeded answer log (400 valid items, counted by the dry check). No answer outside the sample.
