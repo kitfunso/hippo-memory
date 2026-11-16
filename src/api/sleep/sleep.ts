@@ -27,9 +27,6 @@ export interface SleepResult {
    * when 0. Per-invocation counter, like `removed`. */
   dormantExpired?: number;
   mergedEpisodic: number;
-  /** Memories hidden, or only marked stale, for a newer one; each absent when 0. */
-  superseded?: number;
-  demoted?: number;
   newSemantic: number;
   dryRun: boolean;
   deduped?: {

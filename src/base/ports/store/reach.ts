@@ -11,7 +11,6 @@ export type GlobalTargetGroup =
   | 'captures'
   | 'lessonWrites'
   | 'rejections'
-  | 'consolidation'
   | 'vectors'
   | 'vectorWrites';
 

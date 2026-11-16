@@ -10,7 +10,6 @@ import { derivationScope, derivationPartitionKey } from '../../base/scope/recall
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
-import { isReplacedBy } from '../../base/memory/stale-mark.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35; // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2; // minimum cluster size to merge
@@ -144,7 +143,6 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
     const candidate =
       e.layer === Layer.Episodic &&
       !isSuperseded(e) &&
-      !isReplacedBy(e) && // a summary would hold the value a newer row replaced
       !keptAsWritten(e) &&
       !alreadyMergedIds.has(e.id) &&
       !e.pinned && // a pin merged with a look-alike would read as one of two values

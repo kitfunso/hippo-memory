@@ -418,8 +418,6 @@ function sleepCounts(o: { decayed: number; dormant: number; extractionCandidates
     removed: 6,
     removedIds: [...BY_NAME.map((t) => idOf(t, 10)), ...RETIRED.map((t) => idOf(t, 15))],
     merged: 6,
-    superseded: 0,
-    demoted: 0,
     semanticCreated: 2,
     promotedTraces: 1,
     replayed: 5,

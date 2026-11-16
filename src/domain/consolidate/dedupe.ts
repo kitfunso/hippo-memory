@@ -200,11 +200,7 @@ async function deletePairs(
   pairs: readonly DedupPair[],
   actor: string | undefined,
 ): Promise<DedupPair[]> {
-  const targets = pairs.map((p) => ({
-    id: p.removed,
-    reason: `dedup: duplicate of ${p.kept}`,
-    keptId: p.kept,
-  }));
+  const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
   const gone = new Set(
     await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR),
   );

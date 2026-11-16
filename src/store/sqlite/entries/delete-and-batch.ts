@@ -8,7 +8,6 @@ import { introducesContent, rejectedValues } from '../review/rejection.js';
 import { rejectionDigest } from '../../../base/records/rejection-digest.js';
 import type { RejectedValueRow } from '../../../base/ports/store/rejections.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { repointSuccessors } from './repoint-successors.js';
 import { insertDormantRow } from '../dormant/dormant-rows.js';
 import { log } from '../../../base/util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from '../runtime/rows.js';
@@ -164,7 +163,7 @@ function deleteTargetRow(
 export function deleteEntriesInBatches(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
-  targets: readonly { id: string; reason: string; keptId?: string }[],
+  targets: readonly { id: string; reason: string }[],
   opts: { actor?: string; automatic?: boolean },
 ): boolean[] {
   const gone = new Set<string>();
@@ -174,15 +173,12 @@ export function deleteEntriesInBatches(
         db,
         chunk.map((target) => target.id),
       );
-      const removed = chunk.filter(({ id, reason }) => {
-        const row = rows.get(id);
-        return row !== undefined && deleteTargetRow(db, row, { ...opts, reason }) !== null;
-      });
-      repointSuccessors(
-        db,
-        removed.flatMap(({ id, keptId }) => (keptId === undefined ? [] : [{ id, keptId }])),
-      );
-      return removed.map((target) => target.id);
+      return chunk
+        .filter(({ id, reason }) => {
+          const row = rows.get(id);
+          return row !== undefined && deleteTargetRow(db, row, { ...opts, reason }) !== null;
+        })
+        .map((target) => target.id);
     });
     for (const id of deleted) {
       gone.add(id);

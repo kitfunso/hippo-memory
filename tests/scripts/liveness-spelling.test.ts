@@ -119,10 +119,6 @@ const KEPT_READS = {
   'domain/graph/recall.ts': { reads: 2, why: 'successor id lookups, after the isSuperseded check' },
   'domain/search/as-of.ts': { reads: 1, why: 'successor lookup, after the isSuperseded check' },
   'store/sqlite/entries/entry-row.ts': { reads: 1, why: 'the row writer passes the stored link through' },
-  'store/sqlite/entries/repoint-successors.ts': {
-    reads: 1,
-    why: 'dedup moves links that named the deleted row to the kept row',
-  },
   'store/sqlite/recall/candidates.ts': { reads: 1, why: 'search row to entry mapper' },
   'store/sqlite/records/object-rows.ts': { reads: 2, why: `object rows: ${RECORD}` },
   'store/sqlite/records/objects.ts': { reads: 2, why: `join text on a policy row: ${RECORD}` },

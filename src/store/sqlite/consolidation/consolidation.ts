@@ -34,7 +34,6 @@ import {
 import { iterateEveryTenantEntries, listEntryIdsPage } from '../entries/entry-reads.js';
 import { iterateRowsWithObjects, listDuplicateCandidates } from './sleep-scans.js';
 import { setHalfLives } from '../entries/entry-writes.js';
-import { applySupersedeLinks } from './supersede-links.js';
 import { type Handles, type StoreFiles, waitingOpener } from '../runtime/open.js';
 import { halfLifeAuditRows, recordedHalfLifeBase } from '../../rules/half-life.js';
 import { commitInChunks } from '../entries/delete-and-batch.js';
@@ -186,10 +185,6 @@ function recordSleepBody(files: StoreFiles): Bodies<Pick<Consolidation, 'recordS
   };
 }
 
-function supersedeBodies(files: StoreFiles): Bodies<Pick<Consolidation, 'supersedeLinks'>> {
-  return { supersedeLinks: (db, links) => applySupersedeLinks(db, files, links) };
-}
-
 type BareBodies =
   | 'rejected'
   | 'particleIds'
@@ -224,7 +219,6 @@ export function sqliteConsolidation(handles: Handles): Consolidation {
     ...bound(on, storeBodies, openStore),
     ...bound(on, recordSleepBody(files), openStore),
     ...bound(on, bareBodies),
-    ...bound(on, supersedeBodies(files), sleepOpener),
     commit: chunkedCommit(handles),
     ...sleepClaim(files.hippoRoot),
   };

@@ -44,15 +44,9 @@ function sleepCountLines(result: api.SleepResult): string[] {
     `   Merged episodic:   ${result.mergedEpisodic}`,
     `   New semantic:      ${result.newSemantic}`,
   );
-  // Only when a memory was replaced or demoted, so every other render stays byte-identical.
-  const replaced = result.superseded ?? 0;
-  const demoted = result.demoted ?? 0;
-  if (replaced > 0) lines.push(`   Replaced:          ${replaced}`);
-  if (demoted > 0) lines.push(`   Demoted:           ${demoted}  (no update word)`);
   if (result.events && result.events.length > 0) {
     lines.push('\nDetails:', ...sleepEventLines(result.events, result.dryRun));
   }
-  if (replaced + demoted > 0) lines.push('  undo: hippo unsupersede <id>');
   return lines;
 }
 

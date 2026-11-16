@@ -94,13 +94,8 @@ function seed(counts: { clusters: number; dormant: number; filler: number }): Fi
     created: new Date(NOW.getTime() - ageDays * DAY_MS + n++ * 1000).toISOString(),
     lastRetrieved: new Date(NOW.getTime() - idleDays * DAY_MS).toISOString(),
   });
-  const clusterValid = new Date(NOW.getTime() - 90 * DAY_MS).toISOString();
   const clusters = Array.from({ length: counts.clusters }, (_, k) =>
-    // One valid time per cluster, so sleep's link pass reads the variants as parallel and leaves them to merge.
-    [0, 1, 2].map((j) => ({
-      ...row(`c${k}alpha c${k}beta c${k}gamma c${k}delta variant v${j}`, 90, 1),
-      validFrom: clusterValid,
-    })),
+    [0, 1, 2].map((j) => row(`c${k}alpha c${k}beta c${k}gamma c${k}delta variant v${j}`, 90, 1)),
   );
   const dormant = Array.from({ length: counts.dormant }, (_, i) => ({
     ...row(`faded d${i}alpha d${i}beta d${i}gamma`, 80, 60),

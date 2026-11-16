@@ -3,7 +3,6 @@
 
 import { auditMemories, type AuditIssue } from '../../base/memory/memory-audit.js';
 import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../domain/sharing/share.js';
-import { reconcileGlobalCopies } from '../../domain/sharing/reconcile-copies.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
@@ -59,8 +58,6 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
 /** Phase counters the consolidate audit row reports, filled in as each phase completes. */
 interface SleepCounts {
   consolidation: number;
-  hidden: number;
-  demoted: number;
   dedup: number;
   auditDeleted: number;
   ambient: number;
@@ -86,14 +83,7 @@ export async function runSleep(
 
   // Phase counters for the consolidate audit emit (in finally), accumulated per phase so a partial
   // failure still reports what got done.
-  const counts: SleepCounts = {
-    consolidation: 0,
-    hidden: 0,
-    demoted: 0,
-    dedup: 0,
-    auditDeleted: 0,
-    ambient: 0,
-  };
+  const counts: SleepCounts = { consolidation: 0, dedup: 0, auditDeleted: 0, ambient: 0 };
   let phaseError: { thrown: unknown } | null = null;
 
   try {
@@ -119,10 +109,7 @@ async function runSleepPhases(
   if (dryRun) return result;
 
   // Phase 4: Auto-share high-transfer-score memories to global.
-  if (!opts.noShare) {
-    await shareOnSleep(ctx, phases, result);
-    await reconcileCopiesOnSleep(ctx, result);
-  }
+  if (!opts.noShare) await shareOnSleep(ctx, phases, result);
 
   // Phase 5: Post-sleep ambient state summary.
   counts.ambient = await summarizeAmbient(ctx, phases, result, pages);
@@ -154,8 +141,6 @@ async function runCorePhases(
     strength: strengthOf(ctx),
   });
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
-  counts.hidden = consolidateResult.superseded;
-  counts.demoted = consolidateResult.demoted;
   const result = sleepResultFrom(consolidateResult, dryRun);
 
   // Consolidate's own read predates its writes, so it cannot stand in for these. Dedup, the audit
@@ -215,12 +200,6 @@ function sleepResultFrom(consolidateResult: ConsolidateOutcome, dryRun: boolean)
   }
   if (consolidateResult.dormantExpired > 0) {
     result.dormantExpired = consolidateResult.dormantExpired;
-  }
-  if (consolidateResult.superseded > 0) {
-    result.superseded = consolidateResult.superseded;
-  }
-  if (consolidateResult.demoted > 0) {
-    result.demoted = consolidateResult.demoted;
   }
   return result;
 }
@@ -341,22 +320,6 @@ async function shareOnSleep(
   }
 }
 
-async function reconcileCopiesOnSleep(ctx: SleepContext, result: SleepResult): Promise<void> {
-  // Only a global store that already exists holds copies; opening one here would create it.
-  const target = globalTargetOf(ctx);
-  if (target === undefined || ctx.reach?.global === undefined || ctx.reach.isGlobal) return;
-  const pairs = (result.events ?? []).flatMap((e) =>
-    e.kind === 'superseded' ? [{ oldId: e.oldId, newId: e.newId, mode: e.mode }] : [],
-  );
-  try {
-    await reconcileGlobalCopies(ctx.store, target.store, pairs);
-  } catch (err) {
-    const message = errorMessage(err);
-    log.warn(`sleep: global copies not reconciled: ${message}`, errorFields(err));
-    result.events?.push({ kind: 'phaseSkipped', phase: 'reconcile-global', message });
-  }
-}
-
 /** Returns the ambient total the audit row reports: 0 when ambient is off or no current row is
  * left. */
 async function summarizeAmbient(
@@ -462,8 +425,6 @@ async function rebuildDirtyTenant(
 
 interface SleepAuditMetadata {
   consolidationCount: number;
-  hiddenCount: number;
-  demotedCount: number;
   dedupCount: number;
   auditDeletedCount: number;
   ambientTotal: number;
@@ -492,8 +453,6 @@ async function emitSleepAudit(
     // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
     const sleepAuditMetadata: SleepAuditMetadata = {
       consolidationCount: counts.consolidation,
-      hiddenCount: counts.hidden,
-      demotedCount: counts.demoted,
       dedupCount: counts.dedup,
       auditDeletedCount: counts.auditDeleted,
       ambientTotal: counts.ambient,
