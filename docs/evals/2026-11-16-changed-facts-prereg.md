@@ -112,3 +112,15 @@ If G1 to G6 pass and every alive check passes, D merges to master and ships in a
 ## Amendment 1 (16 Nov, before any arm D guard run)
 
 **G3 hide gate and small counts.** The alive floor counts all proposals, but the gate reads hide proposals alone. With every hide correct, the Wilson 95% lower bound reaches 80% only from 17 hides (8 of 8 gives 67.6%), so a store with few hides would fail G3 for lack of data, not for wrong links. Finding 12 above already sets 20 pairs as the point where the bound has power. So: with 20 or more hide proposals, the gate stays as written. With fewer, the bound is reported and not gated, and the gate is that no labelled hide is wrong; G2b carries the hide precision. Written before D's dry run on the real store; the scorer is `rank-plan/g3-score.py`.
+
+## Amendment 2 (16 Nov, before any arm R run and before any E1 compare of D)
+
+**D failed G2b, so D does not merge.** D acted on 0 of 60 changes; the alive floor is 12 (`rank-plan/g2b-D.json`). On paper the span test passes 0 of 60: 56 pairs share fewer than 2 prefix words, and 4 change a span of more than 4 words. People write an update in new words. G3 is void: 0 proposals on the real-store copy (465 eligible rows of at most 20 words, no one-span pair). The DolphinBench v3 stores hold only source `benchmark` rows, so the pass cannot act there.
+
+**Arm R: D without the sleep pass.** R is branch `fix/rank-only`, cut from D's HEAD `8233e7aac` with the pass removed (D item 3 and its dedup repoint, share reconcile and fixture changes). R keeps items 1 (rank), 2 (conflict loser) and 4 (explain and undo). The result file names R's commit, built once.
+
+**Guards for R.** G1 and G1b as written, with R in place of D, and A's E1 outputs (`rank-plan/e1s-A`) reused. Two parts of G1 apply only to the pass and are dropped for R: the alive check that sleep acts on one pair per seed, and the NEG and VAL count. G4, G5, G6 and R1 as written, with R in place of D. G2a, G2b, G3, R2 and the undo probe test the pass, so they do not apply to R. Keith's three conditions map to G1 and G1b (fresh seeds), G4 and G5, and G6.
+
+**What a pass allows for R.** If G1, G1b, G4, G5 and G6 pass with their alive checks, R merges and ships. It supports one claim: recall no longer buries a relevant memory because of its age. Changed-fact detection gets its own registration with a new blind fixture, because the G2b fixture is now seen.
+
+**D's E1 runs.** D's E1 outputs (`rank-plan/e1s-D`) are reported, not gated, as a read of the pass on E1's template distractors.
