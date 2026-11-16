@@ -146,15 +146,30 @@ def weekly_usage(cmd: list[str], env: dict, cwd: Path) -> dict:
     raise RuntimeError("could not read the codex plan's weekly usage from `codex app-server`; no call started")
 
 
+def credit_balance(res: dict) -> float:
+    """The account's paid ChatGPT credits, 0 when it has none or the reply holds no number."""
+    c = (res.get("rateLimits") or {}).get("credits") or {}
+    try:
+        return float(c.get("balance")) if c.get("hasCredits") else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def over_ceiling(res: dict) -> str | None:
-    """Why no call may start, or None: the weekly window at CEILING or more, or plan usage no longer allowed."""
+    """Why no call may start, or None: the weekly window at CEILING or more, or plan usage no longer allowed, unless
+    CODEX_ALLOW_CREDITS=1 lets calls draw on credits above CODEX_CREDIT_FLOOR (Keith, 16 Nov, dated notes 22)."""
     week = (res.get("rateLimits") or {}).get("primary") or {}
     used = float(week.get("usedPercent", 100))
-    if used >= CEILING or not res.get("ordinaryUsageAllowed", False):
-        reset = dt.datetime.fromtimestamp(week.get("resetsAt") or 0, dt.timezone.utc).isoformat(timespec="minutes")
-        return (f"codex weekly usage limit guard: {used:.0f}% used (ceiling {CEILING:.0f}%), "
-                f"ordinary usage allowed {res.get('ordinaryUsageAllowed')}, resets {reset}")
-    return None
+    if used < CEILING and res.get("ordinaryUsageAllowed", False):
+        return None
+    allow, floor, balance = os.environ.get("CODEX_ALLOW_CREDITS") == "1", float(os.environ.get(
+        "CODEX_CREDIT_FLOOR", "1000")), credit_balance(res)
+    if allow and balance > floor and not (res.get("rateLimits") or {}).get("spendControlReached"):
+        return None
+    reset = dt.datetime.fromtimestamp(week.get("resetsAt") or 0, dt.timezone.utc).isoformat(timespec="minutes")
+    return (f"codex weekly usage limit guard: {used:.0f}% used (ceiling {CEILING:.0f}%), "
+            f"ordinary usage allowed {res.get('ordinaryUsageAllowed')}, credits {balance:.0f} "
+            f"(allowed {allow}, floor {floor:.0f}), resets {reset}")
 
 
 def outside_checkouts(folder: Path) -> bool:
@@ -292,7 +307,8 @@ class CodexJudge(Claude):
                 self.quota_at = time.monotonic()
                 week = (self.quota.get("rateLimits") or {}).get("primary") or {}
                 self._log({"event": "quota", "used_percent": week.get("usedPercent"), "resets_at": week.get("resetsAt"),
-                           "ordinary_usage_allowed": self.quota.get("ordinaryUsageAllowed")})
+                           "ordinary_usage_allowed": self.quota.get("ordinaryUsageAllowed"),
+                           "credits_balance": credit_balance(self.quota)})
             why = over_ceiling(self.quota)
         if why:
             raise RuntimeError(why)

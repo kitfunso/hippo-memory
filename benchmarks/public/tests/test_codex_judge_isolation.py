@@ -148,6 +148,24 @@ def test_the_ceiling_stops_calls_near_the_weekly_limit_and_when_usage_is_unknown
         assert re.search("usage limit|rate limit|hit your limit", why, re.I)
 
 
+def credits(res: dict, balance: str, spend_control: bool = False) -> dict:
+    res["rateLimits"].update(credits={"hasCredits": True, "unlimited": False, "balance": balance},
+                             spendControlReached=spend_control)
+    return res
+
+
+@pytest.mark.parametrize("allow,res,stops", [
+    ("1", credits(week(100, allowed=False), "2500.0000000000"), False),
+    ("1", credits(week(100, allowed=False), "1000.0"), True),
+    ("1", credits(week(100, allowed=False), "2500", spend_control=True), True),
+    ("", credits(week(100, allowed=False), "2500"), True),
+    ("1", week(100, allowed=False), True)])
+def test_credits_carry_calls_past_the_window_only_when_allowed_and_above_the_floor(monkeypatch, allow, res, stops):
+    monkeypatch.setenv("CODEX_ALLOW_CREDITS", allow)
+    monkeypatch.delenv("CODEX_CREDIT_FLOOR", raising=False)
+    assert (codex_judge.over_ceiling(res) is not None) is stops
+
+
 def test_no_call_starts_past_the_ceiling_and_no_ask_is_logged(fake_codex, tmp_path, monkeypatch):
     make, sent = fake_codex
     monkeypatch.setattr(codex_judge, "weekly_usage", lambda *a: week(96))
