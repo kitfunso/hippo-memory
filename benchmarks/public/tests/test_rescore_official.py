@@ -76,11 +76,11 @@ def test_only_keeps_one_arm_and_cutoff_and_scores_into_its_own_file(tmp_path, mo
     assert list(items) == [("hippo-emb", "top_200", "q1")]
     with pytest.raises(SystemExit, match="matches no"):
         ro.items_of("longmemeval-s", tmp_path, ("hippo-emb:top_50",))
-    (tmp_path / ro.SUB).mkdir()
+    (tmp_path / ro.SUBS["codex"]).mkdir()
     item = items[("hippo-emb", "top_200", "q1")][0]
-    write_log(tmp_path / ro.SUB / "calls-judge.jsonl", [rec(item.tag, item.user, model=JUDGE.model, cli=JUDGE.cli)])
+    write_log(tmp_path / ro.SUBS["codex"] / "calls-judge.jsonl", [rec(item.tag, item.user, model=JUDGE.model, cli=JUDGE.cli)])
     monkeypatch.setattr(ro, "smoke_excluded", lambda bench, ids: set())
     ro.score("longmemeval-s", tmp_path, ("hippo-emb:top_200",))
-    assert not (tmp_path / ro.SUB / "score.txt").exists()
-    got = json.loads((tmp_path / ro.SUB / "score-hippo-emb-top_200.json").read_text(encoding="utf-8"))
+    assert not (tmp_path / ro.SUBS["codex"] / "score.txt").exists()
+    got = json.loads((tmp_path / ro.SUBS["codex"] / "score-hippo-emb-top_200.json").read_text(encoding="utf-8"))
     assert got["hippo-emb top_200"]["official_all"] == 100.0
