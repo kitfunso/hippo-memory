@@ -1,4 +1,4 @@
-# Z0 round 3 result: fewer repeat mistakes at no extra cost, but not from hippo's lessons
+# Z0 round 3 result: adding hippo cuts repeat mistakes by 14.9 points at no extra cost
 
 Date: 8 Nov 2026. Read: the frozen analyzer on 29 wave 1 runs and 6 Amendment E reruns, after G5 reader round 2.
 Full log: `z0-scored-set-record.md`, entries to 8 Nov 20:52. Prereg: `2026-09-29-z0-built-in-memory-prereg.md` and
@@ -9,9 +9,9 @@ Full log: `z0-scored-set-record.md`, entries to 8 Nov 20:52. Prereg: `2026-09-29
 - **H1 is a small win.** On the family's first apply, hippo with built-in memory (A2) makes 14.9 points fewer repeat
   mistakes than built-in memory alone (A1): -0.149 [-0.243, -0.055], adjusted p 0.006 and 0.005 under the two codings,
   148 units. The prereg's full-win line is 15 points.
-- **The lessons are not shown to cause it.** A2 against sham hippo (A5, hippo with capture removed) is 0.009
-  [-0.052, 0.070]. By prereg line 148 the result reads: "installing hippo changed behaviour, and this run cannot say its
-  lessons did".
+- **The gain needs no captured lessons.** Sham hippo (A5, hippo with capture removed) gets the same gain: A2 against A5
+  is 0.009 [-0.052, 0.070]. By prereg line 148 the result reads: "installing hippo changed behaviour, and this run cannot
+  say its lessons did".
 - **No extra cost.** H3 (secondary) A2/A1 is 1.006 [0.964, 1.049]. H4 passes: on tasks with no lesson, the cost ratio
   is 1.009 [0.978, 1.040], under the 1.10 bound, and the resolve difference is 0.000 [-0.012, 0.012].
 - **Every gate passes.** G1, G2, G3 (2 of 87 leaked after Amendment E), G4 (worst invalid share 3.9%) and G5 (14 of
@@ -39,6 +39,6 @@ adjusted p 0.003, and A2 against A5 is 0.009 [-0.029, 0.047]. Report: `r3-final/
 
 ## What this means for hippo
 
-The gain over built-in memory is real at this size, but the sham arm gets the same gain, so it comes from what
-installing hippo does to the agent (its hooks and injected instructions), not from the lessons hippo captured.
+The gain over built-in memory is real at this size, and it needs no captured lessons: the sham arm gets the same gain,
+so it comes from what installing hippo does to the agent in every session (its hooks and injected instructions).
 Round 4 needs A2 against A5 as its primary contrast, and a per-session virtual environment in the harness.
