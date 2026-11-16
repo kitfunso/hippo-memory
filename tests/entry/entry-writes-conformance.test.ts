@@ -405,6 +405,80 @@ describe('EntryWrites.supersede', () => {
   });
 });
 
+describe('EntryWrites.unsupersede', () => {
+  const unsupersede =
+    (id: string, ownScope: string | null = null, reader: Reader = ADMIN): Call =>
+    async (g) =>
+      (await g.unsupersede(target(id, ownScope, TENANT_A, reader))).was;
+  const unsupersedeRow = (id: string, was: string) => ({
+    tenantId: TENANT_A,
+    actor: ACTOR,
+    op: 'unsupersede',
+    targetId: id,
+    metadata: { was, mode: 'hide' },
+  });
+
+  it('clears the link, resolves to the successor it had and writes one unsupersede row', async () => {
+    const { child, summary } = seeded;
+    const next = fresh('release notes are drafted on tuesdays now');
+    const side = await conforms([
+      supersede(child.id, next),
+      unsupersede(child.id),
+      readBack(TENANT_A, child.id, next.id),
+      unsupersede(child.id),
+    ]);
+    expect(side.outcomes[1]).toEqual({ value: next.id });
+    // SAFETY: the third call reads rows back, so it resolved to Row[].
+    const rows = (side.outcomes[2] as { value: Row[] }).value;
+    expect(rows.map((r) => [r.id, r.supersededBy]).sort()).toEqual(
+      [
+        [child.id, null],
+        [next.id, null],
+      ].sort(),
+    );
+    expect(rows.find((r) => r.id === child.id)?.tags).toContain(`kept-current:${next.id}`);
+    expect(side.outcomes[3]).toEqual({ error: `ConflictError: Memory ${child.id} is not superseded.` });
+    expect(added(side).filter((r) => r.op !== 'remember')).toEqual([
+      dirtied(summary),
+      { tenantId: TENANT_A, actor: ACTOR, op: 'supersede', targetId: child.id, metadata: { newId: next.id } },
+      unsupersedeRow(child.id, next.id),
+    ]);
+  });
+
+  it('answers a row out of reach as not found and a current row as not superseded, writing nothing', async () => {
+    const { note, personal, noteB } = seeded;
+    const side = await conforms([
+      unsupersede(noteB.id),
+      unsupersede(personal.id),
+      unsupersede('mem_missing'),
+      unsupersede(note.id),
+    ]);
+    expect(side.outcomes).toEqual([
+      { error: `NotFoundError: memory not found: ${noteB.id}` },
+      { error: `NotFoundError: memory not found: ${personal.id}` },
+      { error: 'NotFoundError: memory not found: mem_missing' },
+      { error: `ConflictError: Memory ${note.id} is not superseded.` },
+    ]);
+    expect(added(side)).toEqual([]);
+  });
+
+  it('refuses a member key on a row with no owner as supersede does, and keeps the link', async () => {
+    const { note } = seeded;
+    const next = fresh('deploys go out on wednesdays');
+    const side = await conforms([
+      supersede(note.id, next),
+      unsupersede(note.id, null, { role: 'member' }),
+      readBack(TENANT_A, note.id),
+    ]);
+    expect(side.outcomes[1]).toEqual({
+      error: `ForbiddenError: memory ${note.id} records no writer: change it with an admin key`,
+    });
+    // SAFETY: the third call reads rows back, so it resolved to Row[].
+    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => r.supersededBy)).toEqual([next.id]);
+    expect(added(side).map((r) => r.op)).toEqual(['remember', 'supersede']);
+  });
+});
+
 describe('EntryWrites.archiveRaw', () => {
   it('archives a raw row at the time it returns, with one archive_raw row, and marks its summary', async () => {
     const { rawChild, summary } = seeded;

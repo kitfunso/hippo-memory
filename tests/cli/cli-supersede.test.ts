@@ -122,3 +122,27 @@ describe('hippo supersede', () => {
     expect(err).toContain('already superseded');
   });
 });
+
+describe('hippo unsupersede', () => {
+  it('makes the old memory current again, names the successor it had and keeps it', async () => {
+    await hippo('remember', 'X is true');
+    const hippoRoot = join(home, '.hippo');
+    const oldId = loadAllEntries(hippoRoot, 'default')[0].id;
+    await hippo('supersede', oldId, 'X is false now');
+    const newId = readEntry(hippoRoot, oldId)!.supersededBy!;
+
+    const out = await hippo('unsupersede', oldId);
+
+    expect(out).toBe(`✓ ${oldId} is current again (was replaced by ${newId})`);
+    expect(readEntry(hippoRoot, oldId)!.supersededBy).toBeNull();
+    expect(readEntry(hippoRoot, newId)!.content).toContain('X is false now');
+  });
+
+  it('errors on a memory that is not superseded, one that does not exist and a missing id', async () => {
+    await hippo('remember', 'a current fact');
+    const id = loadAllEntries(join(home, '.hippo'), 'default')[0].id;
+    expect(await hippoErr('unsupersede', id)).toContain('not superseded');
+    expect(await hippoErr('unsupersede', 'mem_does_not_exist')).toContain('not found');
+    expect(await hippoErr('unsupersede')).toContain('Usage: hippo unsupersede <id>');
+  });
+});

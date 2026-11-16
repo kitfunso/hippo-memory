@@ -1,4 +1,4 @@
-// The write verbs: `hippo remember` and `hippo supersede`.
+// The write verbs: `hippo remember`, `hippo supersede` and `hippo unsupersede`.
 
 import { envActiveScope } from '../../base/util/env.js';
 import * as fs from 'node:fs';
@@ -289,4 +289,24 @@ export async function handleSupersede({
     fail('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
   }
   await supersedeMemory({ hippoRoot, tenantId, oldId, newContent, flags });
+}
+
+export async function handleUnsupersede({
+  hippoRoot,
+  tenantId,
+  args,
+}: CommandContext): Promise<void> {
+  const [id] = args;
+  if (!id) fail('Usage: hippo unsupersede <id>');
+  requireInit(hippoRoot);
+  let was: string;
+  try {
+    ({ was } = await api.unsupersede(cliApiContext(hippoRoot, tenantId), id));
+  } catch (err) {
+    if (err instanceof NotFoundError) printError(`Error: memory ${id} not found.`);
+    else if (err instanceof ConflictError) printError(`Error: ${err.message}`);
+    else throw err;
+    throw new CliExit(1);
+  }
+  console.log(`✓ ${id} is current again${was ? ` (was replaced by ${was})` : ''}`);
 }

@@ -86,6 +86,13 @@ export const MEMORY_VERBS = {
     --pin                  Pin the new memory (default: pinned if the old one was)`,
     ],
   }),
+  unsupersede: verb(() => import('../remember.js'), 'handleUnsupersede', {
+    flags: {},
+    usage: [
+      `
+  unsupersede <id>         Undo a supersede: the old memory is current again, the new one stays`,
+    ],
+  }),
   recall: verb(() => import('../recall.js'), 'handleRecall', {
     repairsCodexWrapper: true,
     scoped: true,

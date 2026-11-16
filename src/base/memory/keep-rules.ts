@@ -2,6 +2,12 @@
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './entry.js';
 import { isSuperseded } from './liveness.js';
+import {
+  CONFLICT_LOSER_TAG,
+  INVALIDATED_TAG,
+  REPLACED_BY_PREFIX,
+  SUPERSEDED_TAG,
+} from './stale-mark.js';
 import { calculateStrength, type StrengthModel } from './strength.js';
 
 /** An imported agent memory is kept for good: the agent's note file is its record. It needs its
@@ -48,8 +54,12 @@ export function applyOutcome(
   return updated;
 }
 
+const isSleepStaleMark = (tag: string): boolean =>
+  tag === CONFLICT_LOSER_TAG || tag.startsWith(REPLACED_BY_PREFIX);
+
 /** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its
- * churn-stale tag goes. */
+ * churn-stale tag goes, and so does a sleep stale mark (conflict-loser or replaced-by:) with its
+ * stale confidence unless a person or a decision also marked the row. */
 export function entryAfterOutcome(
   entry: MemoryEntry,
   good: boolean,
@@ -57,6 +67,13 @@ export function entryAfterOutcome(
   model: StrengthModel,
 ): MemoryEntry {
   const updated = applyOutcome(entry, good, now, model);
-  if (!good || !updated.tags.includes(CHURN_STALE_TAG)) return updated;
-  return { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
+  if (!good) return updated;
+  const sleepStale = updated.confidence === 'stale' && updated.tags.some(isSleepStaleMark);
+  const tags = updated.tags.filter(
+    (t) => t !== CHURN_STALE_TAG && !(sleepStale && isSleepStaleMark(t)),
+  );
+  const byPerson = tags.includes(INVALIDATED_TAG) || tags.includes(SUPERSEDED_TAG);
+  const confidence = sleepStale && !byPerson ? 'observed' : updated.confidence;
+  if (tags.length === updated.tags.length && confidence === updated.confidence) return updated;
+  return { ...updated, tags, confidence };
 }

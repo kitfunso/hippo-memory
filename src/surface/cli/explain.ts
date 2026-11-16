@@ -7,6 +7,10 @@ import {
   type ScoreBreakdown,
   type SearchResult,
 } from '../../base/rank/search-types.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
+import { REPLACED_BY_PREFIX } from '../../base/memory/stale-mark.js';
+import { canReadScope } from '../../base/scope/recall-scope.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
@@ -102,7 +106,34 @@ async function explainQuery({
     },
     sources: scope.origin.globalOn ? cliSecondStore(globalRoot) : undefined,
   });
-  printExplainResults({ rank, usePhysics: engine.usePhysics, query, asJson, now });
+  const successors = await successorDates(ctx, rank.results);
+  printExplainResults({ rank, usePhysics: engine.usePhysics, query, asJson, now, successors });
+}
+
+/** The successor id a row names; a blank link names none. */
+function replacementOf(entry: MemoryEntry): string | null {
+  return entry.supersededBy || null;
+}
+
+/** The id sleep named in a replaced-by: tag on a row it left current, or undefined. */
+function softReplacementOf(entry: MemoryEntry): string | undefined {
+  const tag = entry.tags.find((t) => t.startsWith(REPLACED_BY_PREFIX));
+  return tag?.slice(REPLACED_BY_PREFIX.length);
+}
+
+/** Created time of each successor the results name: from the results, else one read of the rest. */
+async function successorDates(
+  ctx: ReturnType<typeof cliApiContext>,
+  results: readonly SearchResult[],
+): Promise<ReadonlyMap<string, string>> {
+  const dates = new Map(results.map((r) => [r.entry.id, r.entry.created]));
+  const missing = new Set(results.flatMap((r) => replacementOf(r.entry) ?? []));
+  for (const id of dates.keys()) missing.delete(id);
+  if (missing.size === 0) return dates;
+  for (const row of await ctx.store.entriesByIds([...missing], ctx.tenantId)) {
+    if (canReadScope(ctx.actor, row.scope ?? null)) dates.set(row.id, row.created);
+  }
+  return dates;
 }
 
 interface ExplainScope {
@@ -160,6 +191,7 @@ interface PrintExplainResultsOptions {
   readonly query: string;
   readonly asJson: boolean;
   readonly now: Date;
+  readonly successors: ReadonlyMap<string, string>;
 }
 
 function printExplainResults({
@@ -168,6 +200,7 @@ function printExplainResults({
   query,
   asJson,
   now,
+  successors,
 }: PrintExplainResultsOptions): void {
   const hasGlobal = rank.globalEntries.length > 0;
   const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' =
@@ -187,7 +220,7 @@ function printExplainResults({
   }
 
   printExplainTable(results, query, modeUsed, candidates);
-  results.forEach((r, i) => printExplainBreakdown(r, i));
+  results.forEach((r, i) => printExplainBreakdown(r, i, successors));
 
   console.log('Note: explain does not mark memories as retrieved (read-only).');
 }
@@ -256,9 +289,26 @@ function printExplainTable(
   console.log();
 }
 
-function printExplainBreakdown(r: SearchResult, i: number): void {
+/** One line under the header: the row's successor, or the id sleep only suspects replaced it. */
+function printReplacement(entry: MemoryEntry, successors: ReadonlyMap<string, string>): void {
+  const by = replacementOf(entry);
+  if (by) {
+    const day = successors.get(by)?.slice(0, 10);
+    console.log(`    replaced by ${by}${day ? ` on ${day}` : ''}`);
+    return;
+  }
+  const maybe = softReplacementOf(entry);
+  if (maybe) console.log(`    maybe replaced by ${maybe} (stale: one value changed)`);
+}
+
+function printExplainBreakdown(
+  r: SearchResult,
+  i: number,
+  successors: ReadonlyMap<string, string>,
+): void {
   const b = r.breakdown;
   console.log(`[${i + 1}] ${r.entry.id}   composite=${fmt(r.score, 4)}`);
+  printReplacement(r.entry, successors);
   if (!b) {
     console.log('    (no breakdown available)');
     console.log();
@@ -287,8 +337,9 @@ function printHybridBreakdown(r: SearchResult, b: ScoreBreakdown): void {
     `    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`,
   );
   const outcomes = `+${r.entry.outcomePositive ?? 0}/-${r.entry.outcomeNegative ?? 0}`;
+  const lowered = `${r.entry.confidence === 'stale' ? ', stale' : ''}${isSuperseded(r.entry) ? ', replaced' : ''}`;
   console.log(
-    `    strength:  x${fmt(b.strengthMultiplier, 3)}  (confidence=${r.entry.confidence}, outcomes ${outcomes})`,
+    `    strength:  x${fmt(b.strengthMultiplier, 3)}  (confidence=${r.entry.confidence}, outcomes ${outcomes}${lowered})`,
   );
   console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
   printBoostLines(r, b);

@@ -126,6 +126,7 @@ const KEPT_READS = {
   'store/sqlite/review/conflicts.ts': { reads: 3, why: 'joined columns to conflict member mapper' },
   'store/sqlite/runtime/rows.ts': { reads: 2, why: 'row mapper and the create default' },
   'surface/cli/decisions.ts': { reads: 2, why: `printed link of ${RECORD}` },
+  'surface/cli/explain.ts': { reads: 1, why: 'the printed replacement id; a blank link names none' },
   'surface/cli/object-verbs.ts': { reads: 2, why: `printed link of ${RECORD}` },
   'surface/cli/remember.ts': { reads: 1, why: 'the conflict message names the successor id' },
 } satisfies Record<string, { readonly reads: number; readonly why: string }>;

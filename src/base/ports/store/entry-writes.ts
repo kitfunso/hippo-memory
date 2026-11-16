@@ -62,6 +62,12 @@ export interface EntryWrites {
    * (both checked in the transaction), else rejects as forget does or with ConflictError. Then
    * writes the successor as writeEntry does and one supersede row ({newId}), all or nothing. */
   supersede(write: SupersedeWrite): Promise<void>;
+  /** Undoes a supersede on a row the caller may change, in one transaction: a row with a successor
+   * loses the link, a row sleep only marked stale (a replaced-by: tag) turns observed and loses the
+   * tag. Either way it gains a kept-current: tag, so sleep skips the pair. A row in neither
+   * state rejects with ConflictError, one the caller may not change as supersede does. Writes one
+   * unsupersede row ({was, mode}) and resolves to the successor id the row had; the successor stays. */
+  unsupersede(write: EntryRemoval): Promise<{ was: string }>;
   /** Moves a raw row to raw_archive (metadata only, no content), deletes it and its full-text
    * row and writes one archive_raw row ({reason}); resolves to the archived_at written. Refuses
    * a row as forget does, and any other kind with BadRequestError. */
@@ -79,6 +85,7 @@ export const ENTRY_WRITES_EFFECTS = {
   applyOutcome: 'write',
   setPinned: 'write',
   supersede: 'write',
+  unsupersede: 'write',
   archiveRaw: 'write',
   forget: 'write',
 } as const satisfies MethodEffects<EntryWrites>;

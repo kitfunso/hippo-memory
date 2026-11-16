@@ -9,6 +9,12 @@ export const SUPERSEDED_TAG = 'superseded';
 /** The tag a resolved conflict puts on the memory it weakened. */
 export const CONFLICT_LOSER_TAG = 'conflict-loser';
 
+/** Sleep's soft mode tags a row it left current with this prefix and the id of the row that may replace it. */
+export const REPLACED_BY_PREFIX = 'replaced-by:';
+
+/** An undo tags a row with this prefix and the id of the row it kept current over, so sleep skips that pair. */
+export const KEPT_CURRENT_PREFIX = 'kept-current:';
+
 const halve = (halfLifeDays: number): number => Math.max(1, Math.floor(halfLifeDays / 2));
 
 /** The row marked stale under tag `marker`, its half-life cut (halved by default) only when it is not already stale

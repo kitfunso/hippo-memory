@@ -141,12 +141,19 @@ export type {
   ProjectSummary,
   RepairResult,
 } from './objects/projects.js';
-export { rawArchive, rawArchiveForEvent, promote, supersede } from './memories/promote.js';
+export {
+  rawArchive,
+  rawArchiveForEvent,
+  promote,
+  supersede,
+  unsupersede,
+} from './memories/promote.js';
 export type {
   ArchiveRawResult,
   PromoteResult,
   SupersedeOverrides,
   SupersedeResult,
+  UnsupersedeResult,
 } from './memories/promote.js';
 export {
   DEFAULT_KEY_TTL_DAYS,

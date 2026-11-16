@@ -1,6 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { BadRequestError } from '../../src/base/errors/api-errors.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
@@ -10,6 +10,7 @@ import {
   forget,
   promote,
   supersede,
+  unsupersede,
   rawArchive,
   authCreate,
   authListRows,
@@ -192,6 +193,94 @@ describe('api domain — recall/forget/promote/supersede', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+
+  describe('unsupersede', () => {
+    const unsupersedeRows = (): ReturnType<typeof listAuditEvents> => {
+      const db = openHippoDb(home);
+      try {
+        return listAuditEvents(db, { tenantId: 'default', op: 'unsupersede' });
+      } finally {
+        closeHippoDb(db);
+      }
+    };
+    const adminCtx = () => apiCtx(home, 'default', { subject: 'api_key:hk_undo', role: 'admin' });
+
+    it('makes the old row current again, keeps the successor, tags the pair kept and audits {was, mode}', async () => {
+      const { id: oldId } = await remember(adminCtx(), { content: 'undo-canary original belief' });
+      const { newId } = await supersede(adminCtx(), oldId, 'undo-canary updated belief');
+      const recalled = async (): Promise<string[]> =>
+        (await retrieve(adminCtx(), { query: 'undo-canary' })).results.map((r) => r.id);
+      expect(await recalled()).not.toContain(oldId);
+
+      const result = await unsupersede(adminCtx(), oldId);
+
+      expect(result).toEqual({ ok: true, id: oldId, was: newId });
+      expect(readEntry(home, oldId)?.supersededBy).toBeNull();
+      expect(readEntry(home, oldId)?.tags).toContain(`kept-current:${newId}`);
+      expect(readEntry(home, newId)?.content).toBe('undo-canary updated belief');
+      expect(await recalled()).toContain(oldId);
+      const rows = unsupersedeRows();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        actor: 'api_key:hk_undo',
+        targetId: oldId,
+        metadata: { was: newId, mode: 'hide' },
+      });
+    });
+
+    it('undoes a soft mark: the row turns observed, loses replaced-by and gains kept-current', async () => {
+      const marked = createMemory('undo-canary the rota is on tuesdays', {
+        tenantId: 'default',
+        confidence: 'stale',
+        tags: ['rota', 'replaced-by:mem_newer'],
+      });
+      writeEntry(home, marked);
+
+      const result = await unsupersede(adminCtx(), marked.id);
+
+      expect(result).toEqual({ ok: true, id: marked.id, was: 'mem_newer' });
+      const row = readEntry(home, marked.id);
+      expect(row?.confidence).toBe('observed');
+      expect(row?.tags).toEqual(['rota', 'kept-current:mem_newer']);
+      expect(unsupersedeRows()[0]).toMatchObject({ targetId: marked.id, metadata: { was: 'mem_newer', mode: 'soft' } });
+      await expect(unsupersede(adminCtx(), marked.id)).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    it('rejects a row that is not superseded with ConflictError and writes no audit row', async () => {
+      const { id } = await remember(adminCtx(), { content: 'undo-canary a current belief' });
+      const refusal = await unsupersede(adminCtx(), id).catch((e: Error) => e);
+      expect(refusal).toBeInstanceOf(ConflictError);
+      expect(refusal).toMatchObject({ message: `Memory ${id} is not superseded.` });
+
+      const { newId } = await supersede(adminCtx(), id, 'undo-canary a revised belief');
+      await unsupersede(adminCtx(), id);
+      await expect(unsupersede(adminCtx(), id)).rejects.toBeInstanceOf(ConflictError);
+      expect(readEntry(home, newId)?.supersededBy).toBeNull();
+      expect(unsupersedeRows()).toHaveLength(1);
+    });
+
+    it('answers a missing row as not found', async () => {
+      await expect(unsupersede(adminCtx(), 'mem_missing')).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('refuses a member without write rights as supersede does, and keeps the link', async () => {
+      const row = createMemory('undo-canary the team calendar', { tenantId: 'default' });
+      writeEntry(home, row);
+      const member = apiCtx(home, 'default', { subject: 'api_key:hk_member', role: 'member' });
+      const supersedeRefusal = await supersede(member, row.id, 'undo-canary the team calendar, revised').catch(
+        (e: Error) => e,
+      );
+      expect(supersedeRefusal).toBeInstanceOf(ForbiddenError);
+      const { newId } = await supersede(adminCtx(), row.id, 'undo-canary the team calendar, revised');
+
+      const refusal = await unsupersede(member, row.id).catch((e: Error) => e);
+
+      expect(refusal).toBeInstanceOf(ForbiddenError);
+      expect(String(refusal)).toBe(String(supersedeRefusal));
+      expect(readEntry(home, row.id)?.supersededBy).toBe(newId);
+      expect(unsupersedeRows()).toEqual([]);
+    });
   });
 });
 

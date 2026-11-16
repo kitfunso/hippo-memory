@@ -56,6 +56,7 @@ import type {
 import type { PinWrite } from '../../../base/ports/store/entry-writes.js';
 import type { AppendAuditOptions } from '../../../base/ports/store/types.js';
 import { deleteEntryCore } from './delete-and-batch.js';
+import { undoSupersede } from './unsupersede.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from '../runtime/handles.js';
 import { bound } from '../runtime/bound.js';
@@ -516,8 +517,16 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
       },
       openStore,
     ),
-    ...bound<Pick<EntryWrites, 'archiveRaw' | 'supersede'>>(on, {
+    ...bound<Pick<EntryWrites, 'archiveRaw' | 'supersede' | 'unsupersede'>>(on, {
       archiveRaw: (db, ...args) => archiveRaw(db, files, ...args),
+      unsupersede: (db, write) => {
+        const { was, entry } = withWriteScope(db, 'unsupersede', () => {
+          assertMayChange(db, write, write.id);
+          return undoSupersede(db, write);
+        });
+        writeEntryMirrors(files.hippoRoot, entry);
+        return { was };
+      },
       supersede: (db, write) => {
         const successor = stampOriginProject(files, write.successor);
         commitSupersede(db, { ...write, successor });

@@ -5,6 +5,7 @@ export const AUDIT_OPS = [
   'recall',
   'promote',
   'supersede',
+  'unsupersede',
   'forget',
   'archive_raw',
   'auth_revoke',

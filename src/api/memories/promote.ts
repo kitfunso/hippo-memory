@@ -175,6 +175,23 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
   return row;
 }
 
+/** Makes a superseded memory current again and leaves its successor in place. The store checks
+ * reach and write rights in its transaction, as forget does. */
+export interface UnsupersedeResult {
+  ok: true;
+  id: string;
+  was: string;
+}
+export async function unsupersede(ctx: Context, id: string): Promise<UnsupersedeResult> {
+  const { was } = await ctx.store.entryWrites.unsupersede({
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    ...scopeReaderOf(ctx.actor),
+    id,
+  });
+  return { ok: true, id, was };
+}
+
 export interface ArchiveRawResult {
   ok: true;
   archivedAt: string;

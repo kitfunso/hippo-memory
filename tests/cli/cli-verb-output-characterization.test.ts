@@ -7,6 +7,9 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { parseExplainBlocks } from '../../scripts/z6-supersession/output-checks.mjs';
 
 const savedCwd = process.cwd();
 let root: string;
@@ -149,6 +152,37 @@ describe('hippo explain', () => {
   it('says so when nothing matches', async () => {
     await remember('haddock fishing rules changed in spring');
     expect((await run('explain', 'zzqqxx')).stdout).toMatch(/^No memories matched "zzqqxx" \(scanned \d+\)\.\n$/);
+  });
+
+  it("names the replacement of a superseded row inside that row's block, with its date", async () => {
+    const oldId = await remember('haddock fishing rules allow two rods');
+    const sup = await run('supersede', oldId, 'haddock fishing rules allow one rod');
+    expect(sup.status, sup.stderr).toBe(0);
+    const newId = /→ (\S+)/.exec(sup.stdout)?.[1] ?? '';
+
+    const text = (await run('explain', 'haddock', '--include-superseded')).stdout;
+
+    const blocks: { id: string; text: string }[] = parseExplainBlocks(text);
+    expect(blocks.find((b) => b.id === oldId)?.text).toContain(
+      `    replaced by ${newId} on ${new Date().toISOString().slice(0, 10)}`,
+    );
+    expect(blocks.find((b) => b.id === newId)?.text).not.toContain('replaced by');
+    expect(blocks.find((b) => b.id === oldId)?.text).toMatch(/\(confidence=\w+, outcomes \+0\/-0, replaced\)/);
+  });
+
+  it('names the id sleep suspects replaced a stale row, and says why its strength is lowered', async () => {
+    const row = createMemory('haddock fishing season opens in june', {
+      tenantId: 'default',
+      confidence: 'stale',
+      tags: ['replaced-by:mem_abc123'],
+    });
+    writeEntry(path.join(root, '.hippo'), row);
+
+    const blocks: { id: string; text: string }[] = parseExplainBlocks((await run('explain', 'haddock')).stdout);
+
+    const text = blocks.find((b) => b.id === row.id)?.text ?? '';
+    expect(text).toContain('    maybe replaced by mem_abc123 (stale: one value changed)');
+    expect(text).toMatch(/\(confidence=stale, outcomes \+0\/-0, stale\)/);
   });
 });
 

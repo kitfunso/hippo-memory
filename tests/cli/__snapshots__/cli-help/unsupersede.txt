@@ -1,0 +1,1 @@
+  unsupersede <id>         Undo a supersede: the old memory is current again, the new one stays
