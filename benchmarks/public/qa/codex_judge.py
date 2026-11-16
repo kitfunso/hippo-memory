@@ -50,6 +50,9 @@ TOOL_LOG = re.compile(r"codex_core::tools")
 REPLY_ITEMS = ("agent_message", "reasoning", "error")  # every other item type is a tool
 LOCK_NAMES = ("auth.lock", "auth.json.lock")  # codex creates both, then writes auth.json (seen 11 Nov)
 GUARD = dt.timedelta(minutes=20)  # a call starts only if the pool's access token outlives the 900 s call cap
+# Past this share of the plan's weekly window no call starts: at 100% codex can draw on the account's paid credits.
+CEILING = float(os.environ.get("CODEX_WEEKLY_CEILING", "95"))
+QUOTA_EVERY_S = 300  # about 1 point of the weekly window per 1,000 judge calls (16 Nov), so 5 min stays well inside 5
 
 
 def _stamp(auth: Path) -> tuple[dt.datetime, dt.datetime, bytes] | None:
@@ -115,6 +118,45 @@ def read_run(rc: int, out: str, err: str) -> tuple[dict, str]:
     return res, "\n".join(loose) + "\n" + err
 
 
+def weekly_usage(cmd: list[str], env: dict, cwd: Path) -> dict:
+    """The plan's rate-limit record from `codex app-server` (account/rateLimits/read), which makes no model call."""
+    for attempt in range(3):
+        p = subprocess.Popen([*cmd, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, env=env, cwd=cwd)
+        timer = threading.Timer(60, p.kill)
+        timer.start()
+        try:
+            for msg in ({"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "codex-judge", "version": "0"}}},
+                        {"method": "initialized"}, {"id": 2, "method": "account/rateLimits/read"}):
+                p.stdin.write((json.dumps({"jsonrpc": "2.0", **msg}) + "\n").encode())
+            p.stdin.flush()
+            for line in p.stdout:
+                rec = json.loads(line)
+                if rec.get("id") == 2:
+                    if "result" in rec:
+                        return rec["result"]
+                    break
+        except (OSError, ValueError):
+            pass
+        finally:
+            timer.cancel()
+            p.kill()
+            p.wait()
+        time.sleep(20 * (attempt + 1))
+    raise RuntimeError("could not read the codex plan's weekly usage from `codex app-server`; no call started")
+
+
+def over_ceiling(res: dict) -> str | None:
+    """Why no call may start, or None: the weekly window at CEILING or more, or plan usage no longer allowed."""
+    week = (res.get("rateLimits") or {}).get("primary") or {}
+    used = float(week.get("usedPercent", 100))
+    if used >= CEILING or not res.get("ordinaryUsageAllowed", False):
+        reset = dt.datetime.fromtimestamp(week.get("resetsAt") or 0, dt.timezone.utc).isoformat(timespec="minutes")
+        return (f"codex weekly usage limit guard: {used:.0f}% used (ceiling {CEILING:.0f}%), "
+                f"ordinary usage allowed {res.get('ordinaryUsageAllowed')}, resets {reset}")
+    return None
+
+
 def outside_checkouts(folder: Path) -> bool:
     return not any((p / ".git").exists() for p in (folder, *folder.parents))
 
@@ -162,6 +204,7 @@ class CodexJudge(Claude):
         self.log_path, self.lock, self.model, self.n = log, threading.Lock(), MODEL, slots
         self.slots, self.solo = threading.BoundedSemaphore(slots), threading.Lock()
         self.home, self.main_home = home, main_home
+        self.quota_lock, self.quota_at, self.quota = threading.Lock(), -float("inf"), {}
         base = {k: v for k, v in os.environ.items() if k.upper() in KEEP_ENV}  # no OPENAI_* key: plan login only
         self.main_env = {**base, "CODEX_HOME": str(main_home)}
         # An empty profile: from any CODEX_HOME codex reads ~/.codex/auth.json and adopts it when newer (seen 11 Nov),
@@ -241,6 +284,19 @@ class CodexJudge(Claude):
                 self.slots.release()
             self.solo.release()
 
+    def _quota(self) -> None:
+        """Raises once the plan nears its weekly limit; the launchers wait out a 'usage limit' error and run again."""
+        with self.quota_lock:
+            if time.monotonic() - self.quota_at > QUOTA_EVERY_S:
+                self.quota = weekly_usage(self.cmd[:2], self.env, self.cwd.parent)
+                self.quota_at = time.monotonic()
+                week = (self.quota.get("rateLimits") or {}).get("primary") or {}
+                self._log({"event": "quota", "used_percent": week.get("usedPercent"), "resets_at": week.get("resetsAt"),
+                           "ordinary_usage_allowed": self.quota.get("ordinaryUsageAllowed")})
+            why = over_ceiling(self.quota)
+        if why:
+            raise RuntimeError(why)
+
     def _run(self, sys_file: Path, user: str, effort: str, deadline: float) -> tuple[dict, str] | None:
         """One `codex exec` run in the pool home, or None if no slot or fresh login comes before the deadline."""
         while self._ready(deadline):
@@ -248,6 +304,7 @@ class CodexJudge(Claude):
                 return None
             try:
                 if _left(self.home) > GUARD:  # a drain may have run while this thread waited for its slot
+                    self._quota()  # after _ready, so the pool's token is fresh and app-server never refreshes it
                     return self._exec(sys_file.read_bytes().decode("utf-8"), user, effort, deadline)
             finally:
                 try:

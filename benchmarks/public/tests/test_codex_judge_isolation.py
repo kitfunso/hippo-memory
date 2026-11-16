@@ -1,10 +1,12 @@
 """qa/codex_judge.py: the CLI stamp on every record, an empty working folder outside any checkout, tool use read from
-the event stream and stderr, and a preamble that a caller may replace at run time (runner/answer_judge.py does)."""
+the event stream and stderr, a preamble that a caller may replace at run time (runner/answer_judge.py does), and the
+weekly-usage ceiling that stops calls before the plan can draw on credits."""
 from __future__ import annotations
 
 import base64
 import datetime as dt
 import json
+import re
 import subprocess
 import threading
 from pathlib import Path
@@ -30,6 +32,12 @@ FORCED = "\n".join([
     '{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"hello"}}',
     '{"type":"turn.completed","usage":{"input_tokens":15569,"output_tokens":256}}'])
 ROUTER = "2026-11-11T15:48:14.983773Z ERROR codex_core::tools::router: error=code-mode host is disabled\n"
+
+
+def week(used: float, allowed: bool = True) -> dict:
+    """The shape of codex app-server's account/rateLimits/read result (codex-cli 0.164.0, 16 Nov 2026)."""
+    return {"ordinaryUsageAllowed": allowed,
+            "rateLimits": {"primary": {"usedPercent": used, "windowDurationMins": 10080, "resetsAt": 1794985177}}}
 
 
 def test_a_plain_reply_shows_no_tool():
@@ -87,6 +95,7 @@ def fake_codex(tmp_path, monkeypatch):
     monkeypatch.setattr(codex_judge, "CODEX_JS", tmp_path / "codex.js")
     monkeypatch.setattr(codex_judge.shutil, "which", lambda name: "node")
     monkeypatch.setattr(codex_judge.subprocess, "run", run)
+    monkeypatch.setattr(codex_judge, "weekly_usage", lambda *a: week(40))
     _login(tmp_path / "main")
     make = lambda **kw: codex_judge.CodexJudge(tmp_path / "out" / "calls-judge.jsonl", 1, home=tmp_path / "pool",  # noqa: E731
                                                main_home=tmp_path / "main", **kw)
@@ -129,3 +138,20 @@ def test_the_flags_keep_the_read_only_sandbox(fake_codex):
 def test_a_tool_use_record_matches_the_ledger_shape():
     r = rec("judge j1", "q", system="grade it", event="tool-use", model=JUDGE.model, cli=JUDGE.cli)
     assert decide([r] * 3, Item("judge j1", "grade it", "q", JUDGE, lambda t: t)).status == "exhausted"
+
+
+@pytest.mark.parametrize("res,stops", [(week(40), False), (week(95), True), (week(40, allowed=False), True), ({}, True)])
+def test_the_ceiling_stops_calls_near_the_weekly_limit_and_when_usage_is_unknown(res, stops):
+    why = codex_judge.over_ceiling(res)
+    assert (why is not None) is stops
+    if stops:  # run-lanes-3.sh step(): this grep waits an hour and runs the step again, uncounted
+        assert re.search("usage limit|rate limit|hit your limit", why, re.I)
+
+
+def test_no_call_starts_past_the_ceiling_and_no_ask_is_logged(fake_codex, tmp_path, monkeypatch):
+    make, sent = fake_codex
+    monkeypatch.setattr(codex_judge, "weekly_usage", lambda *a: week(96))
+    judge = make()
+    with pytest.raises(RuntimeError, match="usage limit guard: 96% used"):
+        judge.ask("grade it", "q", tag="judge j1")
+    assert sent == [] and Ledger(tmp_path / "out" / "calls-judge.jsonl").asks == {}
