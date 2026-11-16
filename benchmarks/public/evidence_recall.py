@@ -72,7 +72,7 @@ def score_run(run_dir: str, texts: dict, ks: list[int]) -> tuple[dict, dict]:
     agg: dict = defaultdict(lambda: defaultdict(list))
     per_q: dict = defaultdict(dict)
     for f in sorted(glob.glob(f"{run_dir}/*.json")):
-        q = json.load(open(f))
+        q = json.load(open(f, encoding="utf-8"))
         ev = [e for e in q.get("evidence", []) if e in texts[q["conversation_idx"]]]
         if not ev:
             continue
@@ -97,7 +97,7 @@ def main() -> None:
     ap.add_argument("--draws", type=int, default=4000)
     a = ap.parse_args()
     ks = [int(x) for x in a.k.split(",")]
-    data = json.load(open(a.dataset))
+    data = json.load(open(a.dataset, encoding="utf-8"))
     texts = {i: turn_texts(c) for i, c in enumerate(data)}
     agg, per_q = score_run(a.run_dir, texts, ks)
     for cat, m in agg.items():
