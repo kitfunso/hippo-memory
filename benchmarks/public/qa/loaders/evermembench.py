@@ -134,6 +134,9 @@ EMPTY_CONTEXT = "(No memories retrieved)"  # mem0_adapter.py:466
 LEAD = re.compile(r"^user: ")  # the server stores "role: content"; the role is not part of the authors' text
 
 
+CATEGORY_MEAN = "the Table 4 Average of the EverMemBench paper"  # dated notes 19
+
+
 def _ts(time_str: str) -> float:
     """loaders.py:432-467: the time field read as a naive datetime, taken as UTC (mem0_adapter.py:218-223)."""
     t = dt.datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M:%S")

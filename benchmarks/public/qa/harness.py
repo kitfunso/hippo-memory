@@ -538,6 +538,12 @@ def stage_score(a: argparse.Namespace, mod, qs: list[dict]) -> None:
         lines.append(f"{arm:>9}  accuracy {100 * sum(correct[(arm, i)] for i in primary) / len(primary):5.1f}  "
                      f"memories {sum(r['memories'] for r in rs) / len(rs):5.1f}  "
                      f"input tokens {sum(toks) / max(1, len(toks)):7.0f}")
+    for arm in a.arms if getattr(mod, "CATEGORY_MEAN", None) else []:  # dated notes 19: a paper's per-category average
+        by = {}
+        for i in ids:
+            by.setdefault(cats[i], []).append(correct[(arm, i)])
+        lines.append(f"secondary {arm} mean over {len(by)} categories, all items ({mod.CATEGORY_MEAN}): "
+                     f"{100 * sum(sum(v) / len(v) for v in by.values()) / len(by):5.1f}")
     if a.arm:
         lines += pair_lines(a, mod, qs, correct, primary, unit)
     else:

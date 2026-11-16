@@ -684,3 +684,18 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 3. Test: `tests/test_one_writer.py::test_every_writing_stage_takes_the_folder_first` now has ingest and retrieve cases. With the old condition, the ingest case does not stop: it starts the servers and ingests.
 
 **Read before this note.** No PrefEval `hippo-emb` store. No result changes.
+
+### Amendment 6, dated notes 19 (2026-11-16, before any rescore call): the published judge prompts over saved answers, and EverMemBench's category mean
+
+**Why.** Keith asked whether our scores compare with the official numbers. The audit (`hippo-bench/comparability/`, 15 to 16 Nov) found that our LongMemEval judge uses Mem0's single lenient prompt, where the official `evaluate_qa.py` uses a strict prompt for each question type. Our LoCoMo judge uses Mem0's 2026 runner prompt, which is more lenient than the Mem0 paper's prompt. EverMemBench's published Average is a mean over its 9 categories, and our primary is a mean over questions. All of these lines are post hoc and secondary. No registered result changes.
+
+**What changes.**
+1. `runner/rescore_official.py` judges the saved answers again with the published prompt and parse. LongMemEval: `get_anscheck_prompt` of `xiaowu0162/LongMemEval` 9e0b455, read as `'yes' in reply.lower()`. LoCoMo: `ACCURACY_PROMPT` of `mem0ai/mem0` aae5989e78 (`evaluation/metrics/llm_judge.py`), read as its JSON label. A script copies both texts verbatim into `qa/official_judges.py`; a test pins their hashes.
+2. The judge stays gpt-5.6-sol at medium through codex. The published judges are gpt-4o (LongMemEval) and gpt-4o-mini (Mem0 paper). Each score line names that gap.
+3. No answer is asked again. Every hippo arm and the `bm25` control are judged; the LoCoMo `mem0` arm is not (Keith, 13 Nov: no competitor on our tokens).
+4. Each item takes the first valid reply in 3 asks (qa/ledger.py). A LongMemEval reply with neither yes nor no, or a LoCoMo reply with no CORRECT or WRONG label, is asked again.
+5. Output goes to `<run>/official-judge/` (call log, `score.txt`, `score.json`): accuracy over all items (n = 500 LongMemEval, n = 400 LoCoMo sample) and over the primary, beside the registered judge, with the share of same verdicts.
+6. `qa/harness.py` score adds one secondary line per arm when a loader names a category mean: the mean of per-category accuracy over all items. `loaders/evermembench.py` names it, as the authors' Table 4 Average.
+7. Test: `tests/test_rescore_official.py`. With the competitor filter emptied or the yes parse loosened, it fails.
+
+**Read before this note.** The saved answers and registered verdicts, and the four audit reports. The 2,000 saved LongMemEval-S records equal the official cleaned file as prompt text. No rescore call.
