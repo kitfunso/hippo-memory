@@ -768,6 +768,16 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 
 **Read before this note.** `pipeline.yaml`, `answerer.py` lines 320 to 340 and `evaluator.py` lines 395 to 410 at `e10b3d5`, and the retrieval manifests of `evermembench` and `evermembench-emb`. No OpenAI chat call.
 
+### Amendment 6, dated notes 25 (2026-11-16, before any gpt-4o call on `hippo-best`): lane R for the reranker setup
+
+**Why.** Lane R scored `hippo-emb` at top 10 with a gpt-4o reader: 78.2 under the official judge. With Sonnet 5 at top 10 under the same judge, the registered reranker setup `hippo-best` scores 86.0 and `hippo-emb` 83.4 (lane J). We choose this arm after seeing those numbers, so the line is post hoc and secondary, and the page shows both gpt-4o lines. The published gpt-4o rows each show their own best setup.
+
+**What changes.**
+1. Lane R2. The same command as lane R with `--pred hippo-best=<longmemeval-s-best retrieval>` into `results-r2/longmemeval-s-best-gpt4o`, `--same-prompts-as results-r2/longmemeval-s-best`, top 10, then the official gpt-4o judge. Every prompt must match the registered Sonnet run by hash before any call.
+2. A 5-item smoke first. Expected cost about $12, inside the $60.
+
+**Read before this note.** Lane R's score file and lane J's `longmemeval-s-best` score file. No gpt-4o call on `hippo-best`.
+
 ### Erratum (2026-11-16)
 
 Line 24 says "The LongMemEval file records no models." That is wrong. At runner commit `4b61c5d`, `results/platform/longmemeval_results.json` metadata holds `"model": "gpt-5", "generation_model": "gpt-5"`, top 200, 500 questions. So Mem0's LongMemEval, LoCoMo and BEAM files all record gpt-5. No rule or score depends on the line. Found by the comparability audit (`hippo-bench/comparability/memory-qa-1.md`).
