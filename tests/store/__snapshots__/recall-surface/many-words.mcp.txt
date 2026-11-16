@@ -188,15 +188,15 @@
         "trace_id": 1,
       },
       {
-        "memory_id": "mem_p_noise",
+        "memory_id": "mem_x_raw",
         "result_rank": 5,
-        "score": 0.7558916983010109,
+        "score": 0.752698383272557,
         "trace_id": 1,
       },
       {
-        "memory_id": "mem_x_raw",
+        "memory_id": "mem_p_noise",
         "result_rank": 6,
-        "score": 0.752698383272557,
+        "score": 0.7481601418231391,
         "trace_id": 1,
       },
       {
@@ -310,10 +310,10 @@ deploy target is the new staging cluster in eu west
 deploy freeze applies to the billing service on fridays
 
 [verified] (strength=1.00)
-unrelated note about lunch options near the office
+raw capture of the deploy window from the golden session
 
 [verified] (strength=1.00)
-raw capture of the deploy window from the golden session
+unrelated note about lunch options near the office
 
 [verified] (strength=1.00)
 deploy checklist for team alpha runs smoke tests first

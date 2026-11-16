@@ -106,7 +106,7 @@ describe('sync BM25 search', () => {
 
   it('ranks by matched terms, adds a summary child with no shared word, and drops the superseded row', () => {
     const res = rankBm25('deploy pipeline', clone(), base);
-    expectRanked(res, ['x1', 'd1', 's1', 'c1', 'n1', 'd5', 'd2', 'd6', 'd3', 'd4']);
+    expectRanked(res, ['x1', 'd1', 's1', 'n1', 'c1', 'd5', 'd2', 'd6', 'd3', 'd4']);
     expect(res.find((r) => r.entry.id === 'c1')!.bm25).toBe(0);
   });
 
@@ -116,14 +116,14 @@ describe('sync BM25 search', () => {
       'd1',
       's1',
       'c1',
-      'd5',
       'n1',
+      'd5',
       'd2',
       'd6',
       'd4',
       'd3',
     ]);
-    expectRanked(rankBm25('first deploy', clone(), base), ['d2', 'x1', 'd1', 's1', 'n1', 'c1', 'd3', 'd5', 'd6']);
+    expectRanked(rankBm25('first deploy', clone(), base), ['d2', 'x1', 'd3', 'n1', 's1', 'd1', 'c1', 'd5', 'd6']);
   });
 
   it('a query that names the summary and its child returns the summary first', () => {
@@ -139,11 +139,11 @@ describe('sync BM25 search', () => {
       'x1',
       'd1',
       's1',
-      'c1',
       'n1',
+      'c1',
       'd5',
-      'd2',
       'o1',
+      'd2',
       'd6',
       'd3',
       'd4',
@@ -160,7 +160,7 @@ describe('hybrid without vectors', () => {
 
   it('the breakdown shows the scope, outcome, decision, churn and summary multipliers', async () => {
     const res = await hybridSearch('deploy pipeline', clone(), base);
-    expectRanked(res, ['d5', 'x1', 'd1', 's1', 'c1', 'n1', 'd2', 'd3', 'd4', 'd6']);
+    expectRanked(res, ['x1', 'd5', 'd1', 'n1', 's1', 'c1', 'd2', 'd3', 'd4', 'd6']);
     expect(breakdownOf(res, 'x1').mode).toBe('bm25-only');
     expect(breakdownOf(res, 'd5').scopeBoost).toBe(1.5);
     expect(breakdownOf(res, 'd6').scopeBoost).toBe(0.5);
@@ -179,21 +179,21 @@ describe('hybrid without vectors', () => {
       summaryDeboost: 0.5,
       summaryFreshness: false,
     });
-    expectRanked(res, ['d5', 'x1', 'd1', 'n1', 'd2', 's1', 'c1', 'd4', 'd6', 'd3']);
+    expectRanked(res, ['x1', 'd5', 'd1', 'n1', 'd2', 's1', 'c1', 'd3', 'd4', 'd6']);
     expect(breakdownOf(res, 's1')).toMatchObject({ summaryDeboost: 0.5, summaryFreshnessBoost: 1 });
   });
 
   it('asOf returns the old row alone; includeSuperseded ranks it among the rest', async () => {
     expectRanked(await hybridSearch('deploy pipeline', clone(), { ...base, asOf: ago(50) }), ['o1']);
     expectRanked(await hybridSearch('deploy pipeline', clone(), { ...base, includeSuperseded: true }), [
-      'd5',
       'x1',
+      'd5',
       'd1',
+      'n1',
       's1',
       'c1',
-      'n1',
-      'd2',
       'o1',
+      'd2',
       'd3',
       'd4',
       'd6',
@@ -247,8 +247,8 @@ function seedStore(): string {
   return root;
 }
 
-/** The blend's order with MMR on: d6, a near copy of d5, sits below d3 although it scores higher. */
-const BLEND = ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'z2', 'd3', 'd6', 'c1', 'd4'];
+/** The blend's order with MMR on; at the default lambda no near copy outscores a row MMR would put above it. */
+const BLEND = ['x1', 'd1', 's1', 'n1', 'd5', 'd2', 'z2', 'd3', 'd6', 'c1', 'd4'];
 
 describe('hybrid and physics with a store', () => {
   let root: string;
@@ -283,23 +283,25 @@ describe('hybrid and physics with a store', () => {
     const res = await hybridSearch('deploy pipeline', clone(), opts());
     expectRanked(res, BLEND, false);
     expect(breakdownOf(res, 'z2')).toMatchObject({ mode: 'hybrid', matchedTerms: [], cosine: 1 });
-    expect(score(res, 'd6')).toBeGreaterThan(score(res, 'd3'));
-    expect(breakdownOf(res, 'd6').postMmrRank).toBeGreaterThan(breakdownOf(res, 'd3').postMmrRank!);
+    // Age no longer sinks d3 under d6, so a caller's lower lambda shows the move: s1, a near copy of d1, drops under n1.
+    const diverse = await hybridSearch('deploy pipeline', clone(), { ...opts(), mmrLambda: 0.5 });
+    expect(score(diverse, 's1')).toBeGreaterThan(score(diverse, 'n1'));
+    expect(breakdownOf(diverse, 's1').postMmrRank).toBeGreaterThan(breakdownOf(diverse, 'n1').postMmrRank!);
   });
 
   it('without MMR the scores order the list, under the weight the caller set', async () => {
     const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), mmr: false, embeddingWeight: 0.3 });
-    expectRanked(res, ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'd6', 'd3', 'z2', 'd4', 'c1']);
+    expectRanked(res, ['x1', 'd1', 's1', 'n1', 'd5', 'd2', 'd3', 'd6', 'z2', 'd4', 'c1']);
     expect(breakdownOf(res, 'x1')).toMatchObject({ embeddingWeight: 0.3 });
     expect(breakdownOf(res, 'x1').postMmrRank).toBeUndefined();
   });
 
   it('rrf fuses by rank, and the graph stream lifts a related row', async () => {
     const rrf = await hybridSearch('deploy pipeline', clone(), { ...opts(), scoring: 'rrf' });
-    expectRanked(rrf, ['x1', 'c1', 'd2', 'd1', 'z2', 'd5', 's1', 'd3', 'n1', 'd6', 'd4'], false);
+    expectRanked(rrf, ['x1', 'c1', 'd2', 'd1', 'd3', 'z2', 'd5', 'n1', 's1', 'd6', 'd4'], false);
     const graphStream = { weight: 0.5, tenantId: TENANT, seedCount: 3 };
     const graph = await hybridSearch('deploy pipeline', clone(), { ...opts(), scoring: 'rrf', graphStream });
-    expectRanked(graph, ['x1', 'c1', 'd2', 'd1', 'd5', 'z2', 's1', 'd3', 'n1', 'd4', 'd6'], false);
+    expectRanked(graph, ['x1', 'c1', 'd2', 'd3', 'd1', 'z2', 'd5', 'n1', 's1', 'd4', 'd6'], false);
     expect(score(graph, 'd4')).toBeGreaterThan(score(rrf, 'd4'));
   });
 
@@ -321,7 +323,7 @@ describe('hybrid and physics with a store', () => {
   it('vector candidates add store rows the caller did not pass', async () => {
     const vectorCandidates = { tenantId: TENANT, includeSuperseded: false, limit: 5 };
     const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), vectorCandidates });
-    expectRanked(res, ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'z2', 'v1', 'v2', 'd3', 'd6', 'c1', 'd4'], false);
+    expectRanked(res, ['x1', 'd1', 's1', 'n1', 'd5', 'd2', 'z2', 'v1', 'v2', 'd3', 'd6', 'c1', 'd4'], false);
   });
 
   it('physics merges its pool with the classic one; its top row ties the classic top', async () => {
@@ -344,7 +346,12 @@ describe('hybrid and physics with a store', () => {
 
   it('physics with no provider falls back to the BM25 order', async () => {
     vi.stubEnv('OPENAI_API_KEY', undefined);
-    const res = await physicsSearch('deploy pipeline', clone(), opts());
+    // The hybrid fallback deboosts summaries and rankBm25 does not; with that off the two orders match.
+    const res = await physicsSearch('deploy pipeline', clone(), {
+      ...opts(),
+      summaryDeboost: 1,
+      summaryFreshness: false,
+    });
     expectRanked(res, ids(rankBm25('deploy pipeline', clone(), { now: NOW, budget: 100_000 })));
     expect(res.every((r) => r.cosine === 0)).toBe(true);
     expect(new Set(res.flatMap((r) => r.breakdown?.mode ?? []))).toEqual(new Set(['bm25-only']));

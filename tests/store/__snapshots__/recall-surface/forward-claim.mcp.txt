@@ -258,7 +258,7 @@
       {
         "memory_id": "mem_p_noise",
         "result_rank": 15,
-        "score": 0.6659680932618904,
+        "score": 0.6591563106519106,
         "trace_id": 1,
       },
       {

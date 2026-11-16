@@ -242,7 +242,8 @@ describe('hippo status full text', () => {
     useKeylessProvider();
     await seedEveryCase();
     expect(await status()).toEqual([
-      ...countLines(['12', '2', '6', '3', '1'], ['2', '4', '2', '0.59'], ['3', '5', '2', '2', '3']),
+      // The resolved conflict's loser (boosted) carries a stored stale mark, so it counts as stale.
+      ...countLines(['12', '2', '6', '3', '1'], ['2', '4', '2', '0.59'], ['3', '4', '2', '3', '3']),
       'Total remembered:  5',
       'Total recalled:    3',
       'Total forgotten:   1',

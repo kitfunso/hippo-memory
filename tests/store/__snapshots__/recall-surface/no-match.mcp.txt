@@ -190,7 +190,7 @@
       {
         "memory_id": "mem_p_fill0",
         "result_rank": 5,
-        "score": 0.8136821125830513,
+        "score": 0.8220907791997194,
         "trace_id": 1,
       },
       {

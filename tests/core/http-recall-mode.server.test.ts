@@ -31,13 +31,14 @@ async function recallIds(qs: string): Promise<string[]> {
 
 beforeEach(async () => {
   home = makeRoot('http-recall-mode');
-  // The better BM25 match has decayed for years; hybrid scoring must see that.
+  // The better BM25 match is years old and marked stale; hybrid scoring must see both, since age alone no longer lowers strength.
   const old = '2020-01-01T00:00:00.000Z';
   const weak = {
     ...createMemory('alpha alpha beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     created: old,
     lastRetrieved: old,
     halfLifeDays: 1,
+    confidence: 'stale' as const,
   };
   const strong = createMemory('alpha gamma delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(home, weak);

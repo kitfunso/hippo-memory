@@ -194,15 +194,15 @@
         "trace_id": 1,
       },
       {
-        "memory_id": "mem_p_fill1",
+        "memory_id": "mem_p_fill0",
         "result_rank": 6,
-        "score": 0.7864851553520936,
+        "score": 0.7927303864954507,
         "trace_id": 1,
       },
       {
-        "memory_id": "mem_p_fill0",
+        "memory_id": "mem_p_fill1",
         "result_rank": 7,
-        "score": 0.7846220294799009,
+        "score": 0.7864851553520936,
         "trace_id": 1,
       },
       {
@@ -313,10 +313,10 @@ deploy freeze applies to the billing service on fridays
 deploy log line 2 for the nightly batch
 
 [verified] (strength=1.00)
-deploy log line 1 for the nightly batch
+deploy log line 0 for the nightly batch
 
 [verified] (strength=1.00)
-deploy log line 0 for the nightly batch
+deploy log line 1 for the nightly batch
 
 [verified] (strength=1.00)
 deploy log line 3 for the nightly batch

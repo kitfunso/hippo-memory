@@ -161,10 +161,10 @@ async function onFreshStore<T>(kind: 'local' | 'wide', fn: (s: Store) => Promise
 }
 
 const printedIds = (stdout: string): string[] => [...stdout.matchAll(/^--- (\S+)/gm)].map((m) => m[1]!);
-const FILLS_DOWN = ['mem_p_fill5', 'mem_p_fill4', 'mem_p_fill3', 'mem_p_fill2', 'mem_p_trace', 'mem_p_fill1'];
+const FILLS_DOWN = ['mem_p_fill5', 'mem_p_fill4', 'mem_p_fill3', 'mem_p_fill2', 'mem_p_fill1', 'mem_p_fill0'];
 const FILLS_UP = ['mem_p_fill0', 'mem_p_fill1', 'mem_p_fill2', 'mem_p_fill3', 'mem_p_fill4', 'mem_p_fill5'];
 /** The engine order CLI and MCP share over the local store; the CLI adds the global row on top. */
-const ENGINE = ['mem_p_plain', 'mem_p_pinned', ...FILLS_DOWN, 'mem_p_fill0', 'mem_p_scoped', 'mem_p_new', 'mem_p_goal'];
+const ENGINE = ['mem_p_plain', 'mem_p_pinned', ...FILLS_DOWN, 'mem_p_trace', 'mem_p_scoped', 'mem_p_new', 'mem_p_goal'];
 /** HTTP's SQL load order with no mode: ten rows, the default limit. */
 const SQL_ORDER = ['mem_p_pinned', 'mem_p_plain', ...FILLS_UP, 'mem_p_trace', 'mem_p_scoped'];
 const SHOWN_ONCE = Object.fromEntries(ENGINE.filter((id) => id !== 'mem_p_goal').map((id) => [id, 1]));

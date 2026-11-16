@@ -153,9 +153,9 @@ const CLI_LOCAL = [
   'mem_p_fill4',
   'mem_p_fill3',
   'mem_p_fill2',
-  'mem_p_trace',
   'mem_p_fill1',
   'mem_p_fill0',
+  'mem_p_trace',
   'mem_p_scoped',
   'mem_p_new',
 ];

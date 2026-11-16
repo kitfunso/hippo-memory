@@ -57,7 +57,7 @@
         "session_id": null,
         "surface": "recall",
         "tenant_id": "default",
-        "tokens": 142,
+        "tokens": 143,
       },
     ],
     "retrieved": [
@@ -95,13 +95,13 @@
       {
         "memory_id": "mem_p_plain",
         "result_rank": 1,
-        "score": 0.9104453098338096,
+        "score": 0.9208186570786535,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_trace",
         "result_rank": 2,
-        "score": 0.8121235358917,
+        "score": 0.8198345526377561,
         "trace_id": 1,
       },
     ],
@@ -119,7 +119,7 @@
   "reply": {
     "status": 0,
     "stderr": "",
-    "stdout": "{"query":"deploy","budget":120,"results":[{"id":"mem_p_plain","score":0.9104453098338096,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_p_trace","score":0.8121235358917,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"}],"total":2,"suppressionSummary":{"totalCandidates":17,"droppedPreRank":0,"droppedByBudget":15,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+    "stdout": "{"query":"deploy","budget":120,"results":[{"id":"mem_p_plain","score":0.9208186570786535,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_p_trace","score":0.8198345526377561,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"}],"total":2,"suppressionSummary":{"totalCandidates":17,"droppedPreRank":0,"droppedByBudget":15,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
 ",
   },
 }

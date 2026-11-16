@@ -53,8 +53,8 @@ const HYBRID = [
   'mem_x_child1',
   'mem_p_new',
   'mem_p_fill2',
+  'mem_p_fill1',
   'mem_p_fill4',
-  'mem_x_raw',
 ];
 /** The physics order for "deploy", which ranks the scoped row first. */
 const PHYSICS = [
@@ -77,10 +77,10 @@ const CORE_ORDER = [
   'mem_p_scoped',
   'mem_p_fill5',
   'mem_p_new',
-  'mem_p_fill2',
   'mem_x_child1',
-  'mem_p_fill4',
+  'mem_p_fill2',
   'mem_p_fill1',
+  'mem_p_fill4',
 ];
 const goalFirst = (order: readonly string[], size = order.length): string[] => [
   'mem_p_goal',
@@ -121,10 +121,10 @@ const BAND: readonly BandCase[] = [
 
 /** The rows past the band's ten in the wide list for "deploy", in hybrid order. */
 const WIDE_TAIL = [
-  'mem_p_fill1',
   'mem_p_fill3',
-  'mem_p_goal',
+  'mem_x_raw',
   'mem_x_child2',
+  'mem_p_goal',
   'mem_p_fill0',
   CLAIM,
   'mem_p_noise',
@@ -173,8 +173,8 @@ const CORE: readonly CoreCase[] = [
       'mem_p_new',
       'mem_p_old',
       CLAIM,
-      'mem_p_plain',
       'mem_x_child1',
+      'mem_p_plain',
       'mem_p_trace',
       'mem_p_noise',
       'mem_p_scoped',

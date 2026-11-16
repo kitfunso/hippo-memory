@@ -379,6 +379,10 @@ describe('HIPPO_ABLATE_OUTCOME_FAST (decomposition arm)', () => {
 // ---------------------------------------------------------------------------
 
 describe('HIPPO_FAKE_NOW', () => {
+  // A month after the 2026-06-11 rows, close enough that the recency factor tells this clock from the wall clock.
+  const FAKE_MONTH_LATER = '2026-07-11T00:00:00.000Z';
+  const RECENCY_AT_30_DAYS = 0.8 + 0.2 * Math.exp(-1);
+
   it('injects the fake clock as the default now', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
     expect(evalNow().toISOString()).toBe('2030-01-01T00:00:00.000Z');
@@ -406,17 +410,17 @@ describe('HIPPO_FAKE_NOW', () => {
   it('flows through search scoring, not just retrieval stamping', async () => {
     // Without the search-default wiring, scoring would use the REAL clock while
     // markRetrieved stamps the fake one - inconsistent simulated time.
-    vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
+    vi.stubEnv('HIPPO_FAKE_NOW', FAKE_MONTH_LATER);
     const m = createMemory('search scoring uses the fake clock', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
+    m.created = '2026-06-11T00:00:00.000Z'; // 30 days old on the fake clock
     m.lastRetrieved = '2026-06-11T00:00:00.000Z';
     m.halfLifeDays = 7;
     const results = await hybridSearch('search scoring fake clock', [m], {
       budget: 10000,
       explain: true,
     });
-    // strengthMultiplier = 0.5 + 0.5 * strength; strength ~ 0 under the 2030 clock.
-    expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);
+    // Rank trust has no decay, so the clock shows in recency; the wall clock would give about 0.8.
+    expect(results[0].breakdown?.recencyMultiplier).toBeCloseTo(RECENCY_AT_30_DAYS, 6);
   });
 
   it('invalid value falls back to the real clock', () => {
@@ -453,10 +457,10 @@ describe('HIPPO_FAKE_NOW', () => {
     // The wrapper destructures its own `now` default and passes it explicitly
     // into hybridSearch, so the inner fallback never runs - the wrapper default
     // itself must honor the fake clock.
-    vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
+    vi.stubEnv('HIPPO_FAKE_NOW', FAKE_MONTH_LATER);
     const { searchBothHybrid } = await import('../../src/domain/sharing/search-both.js');
     const m = createMemory('wrapper clock consistency check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
+    m.created = '2026-06-11T00:00:00.000Z'; // 30 days old on the fake clock
     m.lastRetrieved = '2026-06-11T00:00:00.000Z';
     m.halfLifeDays = 7;
     const tmp = makeRoot('abl');
@@ -469,7 +473,7 @@ describe('HIPPO_FAKE_NOW', () => {
       { now: evalNow(), tenantId: ALL_TENANTS, embedderFor: resolveEmbeddingProvider, budget: 10000, explain: true },
     );
     expect(results).toHaveLength(1);
-    expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);
+    expect(results[0].breakdown?.recencyMultiplier).toBeCloseTo(RECENCY_AT_30_DAYS, 6);
   });
 
   it('explicit now parameter always wins over the fake clock', () => {

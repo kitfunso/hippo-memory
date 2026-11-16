@@ -2,7 +2,7 @@
 // environment, so frozen evals that set HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS or HIPPO_FAKE_NOW still see each one.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyOutcome, createMemory } from '../../src/entry/memory.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { calculateStrength, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { hybridSearch, search } from '../../src/entry/search.js';
 import { hybridSearchWire } from '../../src/entry/testing.js';
@@ -46,20 +46,31 @@ async function breakdownOf(entry: MemoryEntry, clock: { now?: Date } = { now: NO
   return hit.breakdown!;
 }
 
+/** Strength at NOW under the switches the environment holds, with decay on as sleep runs it. */
+const strengthNow = (entry: MemoryEntry): number => calculateStrength(entry, NOW, evalSwitches().strength);
+
 describe('the ./search entry reads each eval switch from the environment', () => {
-  it('HIPPO_ABLATE_DECAY: a month-old memory ranks as strong as a fresh one', async () => {
-    expect((await breakdownOf(aged(30))).strengthMultiplier).toBeLessThan(
-      (await breakdownOf(aged(0))).strengthMultiplier,
-    );
+  it('HIPPO_ABLATE_DECAY: age never moves the rank; the switch still cuts decay and the wrong marks', async () => {
+    // Rank trust reads no decay, so a month-old row ties a fresh one with or without the switch.
+    const live = (await breakdownOf(aged(30))).strengthMultiplier;
+    expect(live).toBe((await breakdownOf(aged(0))).strengthMultiplier);
+    const wronged = (await breakdownOf(aged(0, 0, false))).strengthMultiplier;
+    expect(strengthNow(aged(30))).toBeLessThan(strengthNow(aged(0)));
     vi.stubEnv('HIPPO_ABLATE_DECAY', '1');
-    expect((await breakdownOf(aged(30))).strengthMultiplier).toBe((await breakdownOf(aged(0))).strengthMultiplier);
+    expect((await breakdownOf(aged(30))).strengthMultiplier).toBe(live);
+    expect(strengthNow(aged(30))).toBe(strengthNow(aged(0)));
+    // Amendment A1: the decay cut also drops the wrong-mark halvings, which still lower the rank.
+    expect((await breakdownOf(aged(0, 0, false))).strengthMultiplier).toBeGreaterThan(wronged);
   });
 
-  it('HIPPO_ABLATE_RECALL_BOOST: decay runs from creation, so a recent read no longer refreshes strength', async () => {
+  it('HIPPO_ABLATE_RECALL_BOOST: the rank holds; decay runs from creation, so a recent read no longer refreshes strength', async () => {
+    // With no decay in the rank a read has nothing to refresh there, so only calculateStrength shows the cut.
     const reread = aged(30, 0);
     const live = (await breakdownOf(reread)).strengthMultiplier;
+    const refreshed = strengthNow(reread);
     vi.stubEnv('HIPPO_ABLATE_RECALL_BOOST', '1');
-    expect((await breakdownOf(reread)).strengthMultiplier).toBeLessThan(live);
+    expect((await breakdownOf(reread)).strengthMultiplier).toBe(live);
+    expect(strengthNow(reread)).toBeLessThan(refreshed);
   });
 
   it('HIPPO_ABLATE_OUTCOME: the outcome boost drops to 1', async () => {
@@ -68,13 +79,18 @@ describe('the ./search entry reads each eval switch from the environment', () =>
     expect((await breakdownOf(aged(0, 0, true))).outcomeBoost).toBe(1);
   });
 
-  it('HIPPO_ABLATE_OUTCOME_SLOW: a good outcome no longer slows decay, the fast boost stays', async () => {
+  it('HIPPO_ABLATE_OUTCOME_SLOW: a good outcome no longer slows decay, a bad one no longer halves trust, the fast boost stays', async () => {
+    // Rank trust has no decay to slow, so a good outcome ties the plain row with or without the switch.
     const plain = (await breakdownOf(aged(30))).strengthMultiplier;
-    expect((await breakdownOf(aged(30, 30, true))).strengthMultiplier).toBeGreaterThan(plain);
+    expect((await breakdownOf(aged(30, 30, true))).strengthMultiplier).toBe(plain);
+    const wronged = (await breakdownOf(aged(30, 30, false))).strengthMultiplier;
+    expect(strengthNow(aged(30, 30, true))).toBeGreaterThan(strengthNow(aged(30)));
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
     const rewarded = await breakdownOf(aged(30, 30, true));
     expect(rewarded.strengthMultiplier).toBe(plain);
     expect(rewarded.outcomeBoost).toBeGreaterThan(1);
+    expect(strengthNow(aged(30, 30, true))).toBe(strengthNow(aged(30)));
+    expect((await breakdownOf(aged(30, 30, false))).strengthMultiplier).toBeGreaterThan(wronged);
   });
 
   it('HIPPO_ABLATE_OUTCOME_FAST: the outcome boost drops to 1, the slow channel stays', async () => {
@@ -82,7 +98,9 @@ describe('the ./search entry reads each eval switch from the environment', () =>
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_FAST', '1');
     const rewarded = await breakdownOf(aged(30, 30, true));
     expect(rewarded.outcomeBoost).toBe(1);
-    expect(rewarded.strengthMultiplier).toBeGreaterThan(plain);
+    // The slow channel reaches the rank only through the wrong marks; its reward slope still slows decay.
+    expect((await breakdownOf(aged(30, 30, false))).strengthMultiplier).toBeLessThan(plain);
+    expect(strengthNow(aged(30, 30, true))).toBeGreaterThan(strengthNow(aged(30)));
   });
 
   it('HIPPO_ABLATE_RECENCY: the recency multiplier is 1', async () => {
@@ -98,9 +116,9 @@ describe('the ./search entry reads each eval switch from the environment', () =>
   });
 
   it('HIPPO_FAKE_NOW: with no `now` passed, scoring runs on the fake clock', async () => {
-    vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
-    // Dated 2026, so the 2030 clock leaves almost no strength: 0.5 + 0.5 * strength.
-    expect((await breakdownOf(aged(0), {})).strengthMultiplier).toBeLessThan(0.51);
+    vi.stubEnv('HIPPO_FAKE_NOW', '2026-07-11T12:00:00.000Z');
+    // Thirty days after NOW on the fake clock, so recency is 0.8 + 0.2 * e^-1; the wall clock gives about 0.8.
+    expect((await breakdownOf(aged(0), {})).recencyMultiplier).toBeCloseTo(0.8 + 0.2 * Math.exp(-1), 6);
   });
 
   it('the BM25 search reads them too', () => {
