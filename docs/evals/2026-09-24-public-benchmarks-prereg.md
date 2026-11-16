@@ -803,6 +803,19 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 
 **Read before this note.** Lane E's score files for `hippo-emb` and `bm25`, `mem0/evermembench_openai.py`, and the judge prompt and parse in `qa/loaders/evermembench.py`. No gpt-4o judge call.
 
+### Amendment 6, dated notes 28 (2026-11-16, before any HaluMem OpenAI call): HaluMem question answering with the paper's GPT-4o
+
+**Why.** The HaluMem paper answers and judges every system with GPT-4o (Mem0, Mem0-Graph, Zep, MemOS, Supermemory, Memobase). The audit (`hippo-bench/comparability/memory-qa-3.md` section 2) found that our data, question set, top 20, answer prompt and judge prompt already match; only the two models differ. Our Sonnet answers wait for a Claude account (18 Nov). Keith lifted the OpenAI spend cap on 16 Nov. This lane is post hoc and secondary. No registered result changes, and the extraction and update tasks stay out of scope.
+
+**What changes.**
+1. Lane H. `mem0/halumem_openai.py` rebuilds each registered answer prompt from the registered retrieval at top 20 (`qa/harness.py` `prompts_of`, with its manifest hash check) and sends it as one user message to `gpt-4o-2024-08-06` at temperature 0.0 with `max_tokens` 16384, the settings of `eval/llms.py` with `eval/.env-example` lines 3 to 5. The authors call the alias `gpt-4o`; on 16 Nov the alias served `gpt-4o-2024-08-06` (one probe call). A root file `.env copy` in the repository sets temperature 0.5; we follow the README and the example file.
+2. The judge: the authors' `EVALUATION_PROMPT_FOR_QUESTION` from the loader, on the same model and settings, one user message. The loader's `label_of` reads the reply. An invalid label is asked again, up to 3 asks, as registered.
+3. Score per variant and arm: the Correct, Hallucination and Omission ratios over all 3,467 items (`evaluation.py` `correct_qa_ratio(all)` and its siblings, an exhausted item counted in the total), and the same over the 3,462 primary items.
+4. Arms in order, Medium then Long: `hippo-emb`, the `bm25` control, `hippo-best`, `hippo365`, each from its registered retrieval. The page shows `hippo-emb`, chosen here before any answer, and lists the other arms on the card. Five questions per variant run first as a smoke with the cost per question reported.
+5. Tests: `tests/test_halumem_openai.py`. They fail if a call leaves with another model, temperature, token limit or message shape, if an exhausted item drops out of the ratio total, or if the loader reads another variant than the one asked.
+
+**Read before this note.** `eval/llms.py`, `eval/eval_memzero.py` lines 225 to 260, `eval/README.md` lines 25 to 50 and `eval/.env-example` at the audited commit, `qa/loaders/halumem.py`, and the retrieval manifests of the six HaluMem folders. One OpenAI call, the alias probe.
+
 ### Erratum (2026-11-16)
 
 Line 24 says "The LongMemEval file records no models." That is wrong. At runner commit `4b61c5d`, `results/platform/longmemeval_results.json` metadata holds `"model": "gpt-5", "generation_model": "gpt-5"`, top 200, 500 questions. So Mem0's LongMemEval, LoCoMo and BEAM files all record gpt-5. No rule or score depends on the line. Found by the comparability audit (`hippo-bench/comparability/memory-qa-1.md`).
