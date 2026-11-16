@@ -28,6 +28,7 @@ import {
 import { promoteSessionTraces, replayPass, traceWindow } from './traces.js';
 import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
+import { supersedeChangedFacts } from './supersede-pass.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type {
@@ -168,6 +169,7 @@ async function runPassesAfterDecay(
   await promoteSessionTraces(run, sessions);
   await replayPass(run);
   await llmPasses(run, llm);
+  await supersedeChangedFacts(run);
   await physicsPass(run);
   await retireHeldTexts(run);
   const mergesSkippedRejected = await mergePass(run);

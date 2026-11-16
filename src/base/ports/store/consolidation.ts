@@ -105,6 +105,9 @@ export interface Consolidation {
   /** The current distilled memories that may share a text with another, and the order partitions
    * first appear in. */
   duplicateCandidates(): Promise<DuplicateCandidates>;
+  /** Applies each link in order in one transaction; returns the ids changed, which leaves out a
+   * row another writer got to first and, for a hide, one whose replacement is gone. */
+  supersedeLinks(links: readonly SupersedeLink[]): Promise<string[]>;
   /** Tenants with pending graph work, each with its highest pending queue id. */
   dirtyGraphTenants(): Promise<{ tenantId: string; maxPendingId: number }[]>;
   /** Marks the tenant's pending graph work up to `maxId` processed; returns how many rows it
@@ -116,6 +119,15 @@ export interface Consolidation {
   claimSleep?(): Promise<SleepClaim>;
   /** Gives back a claim this store took; a claim not taken, or already given back, is a no-op. */
   releaseSleep?(): Promise<void>;
+}
+
+/** A tenant's memory `id` and the newer memory `newId` that replaces it: `hide` links it so recall
+ * skips it, `soft` marks it stale and keeps it. */
+export interface SupersedeLink {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly newId: string;
+  readonly mode: 'hide' | 'soft';
 }
 
 /** The answer to `claimSleep`: `since` is the ISO time the holder took it. */
@@ -141,6 +153,7 @@ export const CONSOLIDATION_EFFECTS = {
   recordSleep: 'write',
   auditEachRow: 'write',
   duplicateCandidates: 'read',
+  supersedeLinks: 'write',
   dirtyGraphTenants: 'read',
   markGraphDrained: 'write',
   claimSleep: 'write',

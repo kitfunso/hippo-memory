@@ -29,6 +29,7 @@ import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
+import { isSuperseded } from '../../base/memory/liveness.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 import type { DetachedWork } from '../search/detached-work.js';
@@ -257,7 +258,16 @@ function assertShareable(entry: MemoryEntry, id: string): void {
       `Refusing to share ${id}: it is a personal memory and stays with its owner on this server.`,
     );
   }
+  if (isOutdated(entry)) {
+    throw new BadRequestError(
+      `Refusing to share ${id}: a newer memory replaced it, and a copy would bring the old value back.`,
+    );
+  }
 }
+
+/** A row a newer memory replaced, or one that went stale: a global copy would keep it current. */
+const isOutdated = (entry: MemoryEntry): boolean =>
+  isSuperseded(entry) || entry.confidence === 'stale';
 
 /** List all projects that contributed memories to the global store, parsed from
  * 'shared:<project>:' or 'promoted:<path>' sources; ALL_TENANTS is the host-wide view. */
@@ -317,6 +327,7 @@ function clearsShareRules(
   if (
     isQuarantineScope(entry.scope ?? null) ||
     isPersonalScope(entry.scope ?? null) ||
+    isOutdated(entry) ||
     !isReusable(entry)
   ) {
     return false;

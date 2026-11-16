@@ -93,6 +93,7 @@ type PassEvent = EventOf<
   | 'dagProfiles'
   | 'retiredText'
   | 'merged'
+  | 'superseded'
   | 'physics'
   | 'ftsResynced'
   | 'halfLifeRescaled'
@@ -118,6 +119,10 @@ function passLine(event: PassEvent, dryRun: boolean): string {
     }
     case 'merged':
       return `  🔀 merged ${event.count} episodic entries into semantic: "${event.preview}..."`;
+    case 'superseded': {
+      const verb = event.mode === 'hide' ? 'replaced' : 'demoted';
+      return `  ${dryRun ? `would be ${verb}:` : `${verb}:`} ${event.oldId} -> ${event.newId}`;
+    }
     case 'physics':
       return physicsLine(event);
     case 'ftsResynced':
@@ -187,6 +192,7 @@ export function sleepEventLine(event: SleepEvent, dryRun: boolean): string {
     case 'dagProfiles':
     case 'retiredText':
     case 'merged':
+    case 'superseded':
     case 'physics':
     case 'ftsResynced':
     case 'halfLifeRescaled':

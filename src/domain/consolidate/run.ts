@@ -26,6 +26,10 @@ export interface ConsolidationResult {
    * without a restore. */
   dormantExpired: number;
   merged: number;
+  /** Old memories hidden behind the newer memory that changed one span of their text, and those
+   * only marked stale for it; a dry run counts the links it would make. */
+  superseded: number;
+  demoted: number;
   semanticCreated: number;
   replayed: number;
   promotedTraces: number;
@@ -116,6 +120,8 @@ export function newConsolidationResult(dryRun: boolean): ConsolidationResult {
     dormant: 0,
     dormantExpired: 0,
     merged: 0,
+    superseded: 0,
+    demoted: 0,
     semanticCreated: 0,
     replayed: 0,
     promotedTraces: 0,

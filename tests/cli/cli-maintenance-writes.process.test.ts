@@ -238,7 +238,7 @@ function seedForSleep(s: Store): void {
 }
 
 describe('hippo sleep (built CLI, no server)', () => {
-  const SLEPT = { consolidationCount: 0, dedupCount: 0, noShare: true, partial: false, triggeredByTenant: 'default' };
+  const SLEPT = { consolidationCount: 0, hiddenCount: 0, demotedCount: 0, dedupCount: 0, noShare: true, partial: false, triggeredByTenant: 'default' };
 
   it('removes audit errors on a store with two project names, and a second sleep finds none', async () => {
     const s = new Store({ spawned: true });

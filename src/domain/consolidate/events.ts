@@ -36,6 +36,9 @@ export type ConsolidateEvent =
   | { kind: 'dagProfiles'; profiles: number; l2sLinked: number }
   | { kind: 'retiredText'; id: string; successorId: string | null }
   | { kind: 'merged'; count: number; preview: string }
+  /** `newId` changed one span of `oldId`'s text: a `hide` links the old row so recall skips it, a
+   * `soft` link only marks it stale. */
+  | { kind: 'superseded'; oldId: string; newId: string; rule: 'one-span'; mode: 'hide' | 'soft' }
   | { kind: 'physics'; particles: number; shown: number; stored: number; avgVelocity: number }
   | { kind: 'ftsResynced'; indexedRows: number; memories: number }
   | { kind: 'halfLifeRescaled'; count: number; from: number; to: number }

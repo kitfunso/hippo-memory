@@ -42,9 +42,14 @@ export interface AuditMaintenance {
    * deletes one. */
   objectBackedAmong(ids: readonly string[]): Promise<Set<string>>;
   /** Deletes each removal's row with its own forget row, leaving a pinned, raw, kept or
-   * object-backing row; resolves to the ids deleted. */
+   * object-backing row; resolves to the ids deleted. A removal with `keptId` hands the rows that
+   * pointed to it, by supersede link or replaced-by tag, to `keptId` in the same transaction. */
   deleteAutomatically(
-    removals: readonly { readonly id: string; readonly reason: string }[],
+    removals: readonly {
+      readonly id: string;
+      readonly reason: string;
+      readonly keptId?: string;
+    }[],
     actor: string,
   ): Promise<string[]>;
   /** Counts (dryRun) or deletes the tenant's audit rows before `cutoff`, then appends one

@@ -63,6 +63,7 @@ import { bound } from '../runtime/bound.js';
 import { readMemoryReach } from '../runtime/tenant-lookup.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { notSupersededIn } from '../../../db/sql-predicates.js';
+import type { JsonObject } from '../../../base/util/json.js';
 
 export interface WriteEntryOptions {
   actor?: string;
@@ -471,22 +472,32 @@ export function supersedeEntry(
   return Number(result.changes ?? 0) !== 0;
 }
 
-/** Marks `id` superseded by `newId` in the caller's transaction, with the supersede audit row and
- * its summary parent's dirty mark; false when the row is gone or another writer got there first. */
+/** Marks `id` superseded by `newId` in the caller's transaction, with the supersede audit row
+ * (`metadata` joins its `newId`) and its summary parent's dirty mark; false when the row is gone,
+ * another writer got there first, or `newId` is gone or superseded itself. */
 export function supersedeInTx(
   db: DatabaseSyncLike,
-  { tenantId, id, newId, actor }: SupersedeEntryOptions & { actor: string },
+  {
+    tenantId,
+    id,
+    newId,
+    actor,
+    metadata,
+  }: SupersedeEntryOptions & { actor: string; metadata?: JsonObject },
 ): boolean {
   const won = cachedStatement(
     db,
     `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND ${notSupersededIn()} ` +
+      `AND EXISTS (SELECT 1 FROM memories WHERE id = ? AND tenant_id = ? AND ${notSupersededIn()}) ` +
       'RETURNING dag_parent_id',
-  ).get(newId, id, tenantId) as { dag_parent_id: string | null } | undefined;
+  ).get(newId, id, tenantId, newId, tenantId) as { dag_parent_id: string | null } | undefined;
   if (!won) return false;
   if (won.dag_parent_id) {
     markSummaryDirtyInTx(db, { summaryId: won.dag_parent_id, tenantId, actor });
   }
-  appendAuditEvents(db, [{ tenantId, actor, op: 'supersede', targetId: id, metadata: { newId } }]);
+  appendAuditEvents(db, [
+    { tenantId, actor, op: 'supersede', targetId: id, metadata: { newId, ...metadata } },
+  ]);
   return true;
 }
 
