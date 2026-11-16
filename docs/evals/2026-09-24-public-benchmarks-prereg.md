@@ -791,6 +791,18 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 
 **Read before this note.** `qa/loaders/dmr.py`, MemGPT appendix 6.1.1 to 6.1.3 (`hippo-bench/repos/arxiv/memgpt.txt` lines 1000 to 1150), row 0 of `msc_self_instruct.jsonl`, and the score files of `dmr`, `dmr-emb`, `dmr-best` and `dmr-full`. No OpenAI chat call.
 
+### Amendment 6, dated notes 27 (2026-11-16, before any gpt-4o judge call on EverMemBench): lane E judged again by gpt-4o
+
+**Why.** Lane E scored `hippo-emb` 44.20 and `bm25` 43.73 on the Table 4 Average, with open answers judged by codex. The paper names no judge. The repository's default judge, `gemini-3-flash-preview`, cannot run: a test call on Keith's Google key returned 402, "prepayment credits are depleted" (16 Nov). Keith lifted the OpenAI spend cap the same day. A second judge shows how far the score moves with the judge. This lane is post hoc and secondary. No registered result changes, and lane E's codex score stays the primary line.
+
+**What changes.**
+1. Lane E2. `mem0/evermembench_judge_openai.py` takes lane E's saved answers and judge items, unchanged, and sends each open-ended item's system and user prompts to `gpt-4o-2024-08-06` at temperature 0. The authors' parse reads the reply, as in lane E. Multiple choice keeps its match. The calls log to `calls-judge-gpt4o.jsonl` beside lane E's.
+2. Score: the Table 4 Average and the pooled primary accuracy under the gpt-4o judge, beside the codex Average, and the share of the 762 open-ended verdicts where the two judges agree. The file is `score-judge-gpt4o.txt` in each arm's folder.
+3. Arms in order: `hippo-emb`, `bm25`, then `hippo365` after lane E ends. Five items run first, on lane E's smoke folder, with the cost reported.
+4. Tests: `tests/test_evermembench_judge_openai.py`. They fail if the second judge sees other prompts than lane E's codex judge, if its calls share the codex log key, or if it leaves with another model or message shape.
+
+**Read before this note.** Lane E's score files for `hippo-emb` and `bm25`, `mem0/evermembench_openai.py`, and the judge prompt and parse in `qa/loaders/evermembench.py`. No gpt-4o judge call.
+
 ### Erratum (2026-11-16)
 
 Line 24 says "The LongMemEval file records no models." That is wrong. At runner commit `4b61c5d`, `results/platform/longmemeval_results.json` metadata holds `"model": "gpt-5", "generation_model": "gpt-5"`, top 200, 500 questions. So Mem0's LongMemEval, LoCoMo and BEAM files all record gpt-5. No rule or score depends on the line. Found by the comparability audit (`hippo-bench/comparability/memory-qa-1.md`).
