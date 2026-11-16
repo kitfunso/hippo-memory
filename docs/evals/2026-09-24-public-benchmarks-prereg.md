@@ -714,3 +714,15 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 7. Test: `tests/test_locomo_full.py`. A verdict item equals the dated notes 19 item for the same answer.
 
 **Read before this note.** The seeded answer log (400 valid items, counted by the dry check). No answer outside the sample.
+
+### Amendment 6, dated notes 21 (2026-11-16, before any new rescore call)
+
+**Why.** On 16 Nov at 00:20 UTC the codex plan stood at 88% of its weekly window, which resets on 18 Nov at about 07:00 UTC. At 100% the plan can draw on the account's paid credits. The full dated notes 19 rescore needs about 11,400 calls, about 10 points of the window. With 6 slots, codex also replied 429 to many calls.
+
+**What changes.**
+1. `qa/codex_judge.py` reads the weekly window from `codex app-server` before a call, at most once in 5 minutes. This makes no model call. At 95% or more, or when plan usage is no longer allowed, no call starts: the step stops with a "usage limit" error, and the launchers wait an hour and run it again. Commit d0277b39e.
+2. The rescore judges the three cells on the scoreboard first: LongMemEval-S `hippo-emb` top 200, LongMemEval-M `hippo365` top 200 and LoCoMo `hippo-emb` top 200 (`--only`, commit d3c033ad4). Each gets its own score file. Then the full dated notes 19 order runs. No item, prompt, parse or score rule changes.
+3. The rescore uses 4 codex slots, not 6.
+4. The verdicts that the stopped first launcher logged stay in the ledger and count.
+
+**Read before this note.** The 49 logged verdicts of the first launcher, as counts only. No score.
