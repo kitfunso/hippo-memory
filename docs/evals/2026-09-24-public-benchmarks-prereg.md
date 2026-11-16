@@ -742,6 +742,19 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 
 **Read before this note.** The saved answers and retrievals as file counts and prompt sizes, the Mem0 paper's evaluation files at aae5989e78, and the runner's answer path. No OpenAI chat call.
 
+### Amendment 6, dated notes 23 (2026-11-16, before any PersonaMem v1 OpenAI call): PersonaMem v1 as the MemOS suite runs it, and two corrections to note 22
+
+**Why.** All seven vendor rows of PersonaMem v1 (MemOS 61.2, Memobase 58.9, Zep 57.8, MemU 56.8, Supermemory 53.9, Mem0 43.1, MIRIX 38.4) come from MemOS's evaluation suite with gpt-4o-mini. The audit (`hippo-bench/comparability/memory-qa-2.md` section 1) found that the suite reads the same two data files and uses the same top 20 as our run. Only the answer model and the prompt differ. This lane is post hoc and secondary. No registered result changes.
+
+**What changes.**
+1. Lane P. `mem0/personamem_memos.py` answers all 589 rows of `questions_32k.csv` from the registered retrievals at top 20, as `MemTensor/MemOS` `evaluation/scripts/` at `3a16e5fe` does. The prompt is `PM_ANSWER_PROMPT` (`utils/prompts.py` lines 31 to 59, copied by script) filled by `str.format` with `question` = the row's `user_question_or_message`, `options` = the raw `all_options` cell, and `context` = `MEMOS_CONTEXT_TEMPLATE` (lines 110 to 114) over the 20 memory texts joined by newlines, as `memos_search` builds it (`personamem/pm_search.py` lines 82 to 92). The user id is `pm_exper_user_<row index>_default` (line 182). The vendors' templates differ by product; we take the MemOS one, the top vendor row's, and keep hippo's memory text as stored.
+2. The prompt goes as one system message to `gpt-4o-mini-2024-07-18` at temperature 0 (`pm_responses.py` lines 51 to 63), three runs per question (`num_runs` default 3, line 207). Each run is parsed by `extract_choice_answer` (lines 20 to 47). The score is the mean over the three runs of each run's accuracy over all 589 rows (`pm_metric.py` lines 180 to 182), with the spread across runs, plus the same mean over our 584 primary questions.
+3. Arms in order: `hippo-emb`, then the `bm25` control, then `hippo365`, each from its registered retrieval. Five questions run first as a smoke with the cost per question reported. Each run of each question takes the first valid reply in 3 asks (qa/ledger.py).
+4. Corrections to note 22. The spend log is one file per process in `results-r2/logs/openai-spend.d/`: on 16 Nov two processes split lines in one shared file. Lane R ran through `runner/answer_judge.py run --models gpt-4o --cutoffs 10 --same-prompts-as`, not a separate `lme_openai_answer.py`; its prompt check is the same.
+5. Tests: `tests/test_personamem_memos.py`. They fail if the vendored prompt changes, if the context drops a memory or changes its order, or if the score stops being the mean over runs.
+
+**Read before this note.** The MemOS evaluation files at `3a16e5fe` (`pm_search.py`, `pm_responses.py`, `pm_metric.py`, `utils/prompts.py`, `run_pm_eval.sh`) and the retrieval manifests of `personamem_v1` and `personamem_v1-emb`. No OpenAI chat call.
+
 ### Erratum (2026-11-16)
 
 Line 24 says "The LongMemEval file records no models." That is wrong. At runner commit `4b61c5d`, `results/platform/longmemeval_results.json` metadata holds `"model": "gpt-5", "generation_model": "gpt-5"`, top 200, 500 questions. So Mem0's LongMemEval, LoCoMo and BEAM files all record gpt-5. No rule or score depends on the line. Found by the comparability audit (`hippo-bench/comparability/memory-qa-1.md`).
