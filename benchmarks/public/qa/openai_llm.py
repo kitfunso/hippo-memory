@@ -7,6 +7,7 @@ Usage: OpenAIChat(log, Settings("gpt-4o-2024-08-06", max_tokens=10)).ask("", pro
 """
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import re
@@ -28,6 +29,7 @@ PRICES = {"gpt-4o-2024-08-06": (2.50, 10.00), "gpt-4o-mini-2024-07-18": (0.15, 0
 # One file per process: Windows can split a line two processes append to one file at once (16 Nov)
 SPEND = Path.home() / "hippo-bench" / "results-r2" / "logs" / "openai-spend.d"
 RESUM_S = 30  # how often a process adds up the other processes' spend again
+_CLIENTS = itertools.count()
 EFFORT = "none"  # these chat models take no reasoning effort; the ledger still compares the field
 # Error codes only: every rate-limit message also links /account/billing (16 Nov)
 FATAL = re.compile(r'"(?:insufficient_quota|invalid_api_key|billing_hard_limit_reached)"')
@@ -105,7 +107,8 @@ class OpenAIChat(Claude):
             d.mkdir(parents=True, exist_ok=True)
         self.log_path, self.lock, self.slots = log, threading.Lock(), threading.BoundedSemaphore(slots)
         self.settings, self.model, self.cli = settings, settings.model, settings.cli
-        self.spend_dir, self.spend_path = spend, spend / f"{os.getpid()}-{time.time_ns()}.jsonl"
+        # one file per client: two clients built in one clock tick (answer and judge) once shared a file (16 Nov)
+        self.spend_dir, self.spend_path = spend, spend / f"{os.getpid()}-{time.time_ns()}-{next(_CLIENTS)}.jsonl"
         self.cap = float(os.environ.get("OPENAI_BENCH_CAP_USD", "60")) if cap is None else cap
         self.spend_lock, self.mine, self.limits_logged = threading.Lock(), 0.0, False
         self.others, self.summed_at = spent(spend), time.monotonic()

@@ -8,6 +8,8 @@
   "beam-500k": [],
   "beam-1m": [],
   "beam-10m": [],
+  "beam-1m-gpt5": ["1M_17_q18_temporal_reasoning", "1M_20_q14_preference_following", "1M_22_q5_event_ordering", "1M_30_q15_preference_following", "1M_31_q7_information_extraction"],
+  "beam-10m-gpt5": [],
   "longmemeval-m": [],
   "halumem": ["2f1f897e-d67f-dbc5-6a7b-b7634a9e294f-q0000", "348492a7-cfe4-ee1d-73c3-c276d6ba8277-q0035", "4fd09df4-d0df-ff7e-bb39-5f4faedfac2c-q0000", "5c005ed8-0d18-99f8-a20e-6a776a7ea30a-q0172", "dd27d8ab-7d2d-acbe-de11-9bc249ea3829-q0136"],
   "convomem": ["cm-abstention-e1-048-284435190-25", "cm-assistant-e1-048-158715165-1", "cm-changing-e2-048-266185859-10", "cm-preference-e1-049-31133299-4", "cm-user-e1-048-193850355-3"],

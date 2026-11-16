@@ -9,6 +9,7 @@ takes the first valid reply among its first 3 asks, counted across every run, un
 Usage (runner venv): python -I answer_judge.py {run,verify} --bench B --pred hippo365=DIR --pred bm25=DIR --out DIR
 --models gpt-4o (dated notes 22, LongMemEval only): gpt-4o answers and judges with the runner's own client settings, on
 Keith's OpenAI key; --same-prompts-as RUN first checks every answer prompt against that run's call log.
+--models gpt-5 (dated notes 29, BEAM only, with --cutoffs): gpt-5 answers and judges as the runner's client sends it.
 """
 from __future__ import annotations
 
@@ -39,6 +40,7 @@ from benchmarks.longmemeval import run as lme  # noqa: E402
 from claude_llm import Claude  # noqa: E402
 from qa.ledger import ANSWERER, JUDGE, Choice, Item, Ledger, Manifest, hash16, one_writer, require, trail  # noqa: E402
 from qa.openai_llm import EFFORT, OpenAIChat, Settings  # noqa: E402
+from qa.openai_reasoning import EFFORT as GPT5_EFFORT, ReasoningChat, ReasoningSettings, reply_text  # noqa: E402
 
 # codex_judge's preamble asks for "the JSON object only", which would turn LongMemEval's yes/no judge into JSON.
 # Same no-tools wording, format left to the prompt; one value for every arm and benchmark.
@@ -55,8 +57,12 @@ def lme_cutoffs(arm: str) -> list[int]:
 BEAM_SIZES = {"beam-100k": "100K", "beam-500k": "500K", "beam-1m": "1M", "beam-10m": "10M"}
 BENCHES = ("longmemeval-s", "longmemeval-m", *BEAM_SIZES)
 CTX: contextvars.ContextVar[tuple[str, str]] = contextvars.ContextVar("ctx")  # (arm, question id) of the running task
-# llm_client.generate's defaults, which both the runner's answerer and its judge_yes_no use (lines 136 to 141, 368)
-OPENAI_MODELS = {"gpt-4o": Settings("gpt-4o-2024-08-06", max_tokens=4096)}
+# (client, effort, settings per role, benchmark kind). gpt-4o: llm_client.generate's defaults, which the answerer and
+# judge_yes_no use (lines 136 to 141, 368). gpt-5: as llm_client sends it; BEAM's judge calls are all generate_structured.
+_GPT4O, _GPT5 = Settings("gpt-4o-2024-08-06", max_tokens=4096), "gpt-5-2025-08-07"
+OPENAI_MODELS = {"gpt-4o": (OpenAIChat, EFFORT, {"answer": _GPT4O, "judge": _GPT4O}, "lme"),
+                 "gpt-5": (ReasoningChat, GPT5_EFFORT, {"answer": ReasoningSettings(_GPT5),
+                                                        "judge": ReasoningSettings(_GPT5, json_object=True)}, "beam")}
 sha = h2h.sha
 
 
@@ -127,13 +133,14 @@ class Backend:
         self.logs = {"answer": out / "calls-answer.jsonl", "judge": out / "calls-judge.jsonl"}
         self.ledgers = {role: Ledger(p) for role, p in self.logs.items()}
         self.trace: dict[tuple[str, str], list[dict]] = {}
-        s = OPENAI_MODELS.get(models)
-        self.manifests = {"answer": ANSWERER, "judge": JUDGE} if s is None else \
-            {role: Manifest(s.model, EFFORT, s.cli) for role in self.logs}
+        m = OPENAI_MODELS.get(models)
+        self.manifests = {"answer": ANSWERER, "judge": JUDGE} if m is None else \
+            {role: Manifest(m[2][role].model, m[1], m[2][role].cli) for role in self.logs}
         if live:
+            slots = {"answer": slots_answer, "judge": slots_judge}
             self.llm = {"answer": Claude(out / "claude-work", self.logs["answer"], slots_answer),
-                        "judge": codex_judge.CodexJudge(self.logs["judge"], slots_judge)} if s is None else \
-                {role: OpenAIChat(p, s, slots=slots_answer) for role, p in self.logs.items()}
+                        "judge": codex_judge.CodexJudge(self.logs["judge"], slots_judge)} if m is None else \
+                {role: m[0](p, m[2][role], slots=slots[role]) for role, p in self.logs.items()}
             for role, llm in self.llm.items():
                 require(llm, self.manifests[role])
 
@@ -148,7 +155,8 @@ class Backend:
 
     def answer(self, system: str, user: str) -> str:
         arm, qid = CTX.get()
-        c = self._settle("answer", Item(f"answer {arm} {qid} {sha(system)[:8]}", system, user, self.manifests["answer"]))
+        c = self._settle("answer", Item(f"answer {arm} {qid} {sha(system)[:8]}", system, user, self.manifests["answer"],
+                                        reply_text))
         if c.status == "exhausted":
             raise Exhausted(f"answer {arm} {qid}: {'; '.join(c.rejected)}")
         return c.value.strip()
@@ -246,7 +254,7 @@ async def evaluate(bench: str, saved: dict, be: Backend, pool: ThreadPoolExecuto
                 question_data=beam_question(saved), qi=saved["question_type_idx"], chat_size=saved["chat_size"],
                 conv_idx=saved["conversation_idx"], user_id=saved["user_id"],
                 mem0=SavedSearch(saved["retrieval"]["search_results"]), answerer=ans, judge_llm=jdg,
-                cutoffs=BEAM_CUTOFFS, top_k=200, predict_only=False, logger=logging.getLogger("beam"),
+                cutoffs=be.cutoffs or BEAM_CUTOFFS, top_k=200, predict_only=False, logger=logging.getLogger("beam"),
                 conversation_meta={"conversation_id": saved.get("conversation_id", "")})
     except Exhausted as e:
         return {"question_type": saved["question_type"], "exhausted": [str(e)]}
@@ -426,12 +434,15 @@ def main() -> None:
     ap.add_argument("--answer-slots", type=int, default=10, help="concurrent claude processes")
     ap.add_argument("--judge-slots", type=int, default=codex_judge.DEFAULT_SLOTS, help="concurrent codex processes")
     ap.add_argument("--models", choices=("registered", *OPENAI_MODELS), default="registered",
-                    help="registered: Claude answers, codex judge; gpt-4o: both on OpenAI (dated notes 22)")
-    ap.add_argument("--cutoffs", type=int, nargs="+", help="LongMemEval cutoffs in place of the arm's own")
+                    help="registered: Claude answers, codex judge; gpt-4o or gpt-5: both on OpenAI (dated notes 22, 29)")
+    ap.add_argument("--cutoffs", type=int, nargs="+", help="cutoffs in place of the arm's own")
     ap.add_argument("--same-prompts-as", type=Path, help="a run whose answer log must hold every answer prompt")
     a = ap.parse_args()
-    if a.models != "registered" and (kind_of(a.bench) != "lme" or not a.cutoffs or not a.same_prompts_as):
-        ap.error("--models gpt-4o is for LongMemEval and needs --cutoffs and --same-prompts-as")
+    if a.models != "registered":
+        kind = OPENAI_MODELS[a.models][3]
+        if kind_of(a.bench) != kind or not a.cutoffs or (kind == "lme" and not a.same_prompts_as):
+            ap.error("--models gpt-4o is for LongMemEval with --cutoffs and --same-prompts-as; "
+                     "gpt-5 is for BEAM with --cutoffs")
     arms = {s.split("=", 1)[0]: Path(s.split("=", 1)[1]) for s in a.pred}
     if a.stage == "verify":
         verify(a.bench, arms, a.out, pick(a.bench, arms, a.smoke), a.models, a.cutoffs)
