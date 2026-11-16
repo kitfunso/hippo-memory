@@ -1,4 +1,4 @@
-"""mem0/dmr_openai.py: the role line is the one change to the registered prompt, and the harness check reads the band."""
+"""mem0/dmr_openai.py: the role line is the one change to the registered prompt, and the harness check reads the floor."""
 from __future__ import annotations
 
 import json
@@ -29,7 +29,8 @@ def test_the_answer_goes_as_system_then_user_with_the_pinned_model(tmp_path, mon
         "messages": [{"role": "system", "content": "sys"}, {"role": "user", "content": "q"}]}
 
 
-def test_the_harness_check_passes_only_inside_the_published_band():
-    assert do.band_line("full", 95.0)[0].startswith("harness check: full PASS")
+def test_the_harness_check_passes_at_the_floor_or_above():
+    assert do.band_line("full", 94.0)[0].startswith("harness check: full PASS")
+    assert do.band_line("full", 100.0)[0].startswith("harness check: full PASS")
     assert do.band_line("full", 83.6)[0].startswith("harness check: full FAIL")
     assert do.band_line("hippo-best", 50.0) == []

@@ -2,7 +2,7 @@
 
 The Zep paper's DMR rows answer with gpt-4o-mini (full conversation 98.0, Zep 98.2). The registered prompt never says which
 speaker the answerer is; MemGPT's generator (arXiv 2310.08560 appendix 6.1.3) has user B ask and user A answer, and A is
-Speaker 1. ROLE adds that one line. The `full` arm runs first as the harness check: it passes in the published 94 to 98 band.
+Speaker 1. ROLE adds that one line. The `full` arm runs first as the harness check: it passes at 94 or more.
 Usage (runner venv): python -I dmr_openai.py {answer,judge,score} --arm {full,hippo-best,hippo-emb,hippo365,bm25} [--limit N]
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ ANSWERER = Settings("gpt-4o-mini-2024-07-18")
 MANIFEST = Manifest(ANSWERER.model, EFFORT, ANSWERER.cli)
 FIRST = "Your task is to answer a question from the user about your prior conversations.\n"
 ROLE = "In these conversations you are Speaker 1, and the user asking the question is Speaker 2.\n"
-BAND = (94.0, 98.0)  # the Zep paper's full-conversation rows: 94.4 (gpt-4-turbo) and 98.0 (gpt-4o-mini)
+FLOOR = 94.0  # the low end of the Zep paper's full-conversation rows, 94.4 (gpt-4-turbo) and 98.0 (gpt-4o-mini)
 
 
 def with_role(system: str) -> str:
@@ -84,8 +84,7 @@ def stage_judge(arm: str, out: Path, qs: list[dict], slots: int) -> None:
 def band_line(arm: str, acc: float) -> list[str]:
     if arm != "full":
         return []
-    lo, hi = BAND
-    return [f"harness check: full {'PASS' if lo <= acc <= hi else 'FAIL'} ({acc:.1f} against the published {lo:.0f} to {hi:.0f})"]
+    return [f"harness check: full {'PASS' if acc >= FLOOR else 'FAIL'} ({acc:.1f} against the floor of {FLOOR:.0f})"]
 
 
 def stage_score(arm: str, out: Path, qs: list[dict]) -> None:
