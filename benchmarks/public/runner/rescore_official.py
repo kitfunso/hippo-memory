@@ -5,6 +5,7 @@ ACCURACY_PROMPT and its JSON label. The judge stays gpt-5.6-sol at medium throug
 gpt-4o (LongMemEval) and gpt-4o-mini (Mem0 paper), the one gap left. No answer is asked again, and no competitor arm
 is judged (Keith, 13 Nov). Each item takes the first valid reply in 3 asks (qa/ledger.py).
 Usage (runner venv): python -I rescore_official.py {judge,score} --bench {longmemeval-s,longmemeval-m,locomo} --out RUN_DIR
+[--only ARM:CUTOFF ...]: those cells alone, scored into score-ARM-CUTOFF.txt beside the full score.txt
 """
 from __future__ import annotations
 
@@ -82,14 +83,17 @@ def locomo_items(out: Path, data: list) -> dict[tuple[str, str, str], tuple[Item
     return items
 
 
-def items_of(bench: str, out: Path) -> dict:
-    if bench == "locomo":
-        return locomo_items(out, h2h.load(h2h.LOCOMO / "data" / "locomo10.json"))
-    return lme_items(out)
+def items_of(bench: str, out: Path, only: tuple[str, ...] = ()) -> dict:
+    items = locomo_items(out, h2h.load(h2h.LOCOMO / "data" / "locomo10.json")) if bench == "locomo" else lme_items(out)
+    if only:
+        items = {k: v for k, v in items.items() if f"{k[0]}:{k[1]}" in only}
+        if not items:
+            sys.exit(f"--only {' '.join(only)} matches no (arm, cutoff) in {out}")
+    return items
 
 
-def judge(bench: str, out: Path, slots: int) -> None:
-    items = items_of(bench, out)
+def judge(bench: str, out: Path, slots: int, only: tuple[str, ...] = ()) -> None:
+    items = items_of(bench, out, only)
     log = out / SUB / "calls-judge.jsonl"
     log.parent.mkdir(exist_ok=True)
     codex_judge.PREAMBLE = PREAMBLE
@@ -107,9 +111,9 @@ def pct(keys: list, verdict: dict) -> float:
     return 100 * sum(verdict[k] for k in keys) / len(keys)
 
 
-def score(bench: str, out: Path) -> None:
+def score(bench: str, out: Path, only: tuple[str, ...] = ()) -> None:
     """Official-prompt accuracy per arm and cutoff, over all items and over the primary, beside the registered judge."""
-    items = items_of(bench, out)
+    items = items_of(bench, out, only)
     ledger = Ledger(out / SUB / "calls-judge.jsonl")
     choices = {k: ledger.choose(it) for k, (it, _) in items.items()}
     unsettled(choices, "official verdicts")
@@ -129,8 +133,9 @@ def score(bench: str, out: Path) -> None:
         lines.append(f"{arm:>10} {cut:>8}  official {row['official_all']:5.1f} n={len(every)}  primary {row['official_primary']:5.1f} "
                      f"n={len(prim)}  registered judge {row['registered_primary']:5.1f}  same verdict {same:5.1f}%")
     lines += exhausted_lines(choices, "official verdicts")
-    (out / SUB / "score.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (out / SUB / "score.json").write_text(json.dumps(js, indent=1), encoding="utf-8")
+    name = "score" + "".join(f"-{o.replace(':', '-')}" for o in only)
+    (out / SUB / f"{name}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (out / SUB / f"{name}.json").write_text(json.dumps(js, indent=1), encoding="utf-8")
     print("\n".join(lines))
 
 
@@ -140,12 +145,13 @@ def main() -> None:
     ap.add_argument("--bench", choices=tuple(NAMES), required=True)
     ap.add_argument("--out", type=Path, required=True, help="a finished run folder: results.jsonl or answers.jsonl")
     ap.add_argument("--slots", type=int, default=codex_judge.DEFAULT_SLOTS, help="concurrent codex processes")
+    ap.add_argument("--only", nargs="+", default=(), help="ARM:CUTOFF, e.g. hippo-emb:top_200 or hippo-emb:200")
     a = ap.parse_args()
     if a.stage == "score":
-        score(a.bench, a.out)
+        score(a.bench, a.out, tuple(a.only))
         return
     with one_writer(a.out):
-        judge(a.bench, a.out, a.slots)
+        judge(a.bench, a.out, a.slots, tuple(a.only))
 
 
 if __name__ == "__main__":

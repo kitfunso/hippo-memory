@@ -7,7 +7,7 @@ import inspect
 import json
 
 import pytest
-from conftest import RUNNER
+from conftest import RUNNER, rec, write_log
 
 pytest.importorskip("aiolimiter", reason="the runner modules import only with the runner venv's packages")
 if not (RUNNER / "benchmarks" / "beam" / "run.py").exists():
@@ -15,6 +15,7 @@ if not (RUNNER / "benchmarks" / "beam" / "run.py").exists():
 
 import rescore_official as ro  # noqa: E402
 from qa import official_judges  # noqa: E402
+from qa.ledger import JUDGE  # noqa: E402
 
 # sha256 of the upstream texts: LongMemEval 9e0b455 evaluate_qa.py get_anscheck_prompt; mem0 aae5989e78 ACCURACY_PROMPT
 FN_SHA = "90413115ed06dd07135f9d9ed53b14238776029eeb1a32a87ccbfbc0e2730482"
@@ -64,3 +65,22 @@ def test_the_preamble_is_answer_judges():
     import answer_judge  # noqa: F401  (sets codex_judge.PREAMBLE at import)
     import codex_judge
     assert ro.PREAMBLE == codex_judge.PREAMBLE
+
+
+def test_only_keeps_one_arm_and_cutoff_and_scores_into_its_own_file(tmp_path, monkeypatch):
+    recs = [{"arm": "hippo-emb", "result": {"question_id": "q1", "question_type": "multi-session", "question": "Q?",
+                                            "ground_truth_answer": "A", "cutoff_results": {
+                                                c: {"generated_answer": "A", "score": 1.0} for c in ("top_10", "top_200")}}}]
+    (tmp_path / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs), encoding="utf-8")
+    items = ro.items_of("longmemeval-s", tmp_path, ("hippo-emb:top_200",))
+    assert list(items) == [("hippo-emb", "top_200", "q1")]
+    with pytest.raises(SystemExit, match="matches no"):
+        ro.items_of("longmemeval-s", tmp_path, ("hippo-emb:top_50",))
+    (tmp_path / ro.SUB).mkdir()
+    item = items[("hippo-emb", "top_200", "q1")][0]
+    write_log(tmp_path / ro.SUB / "calls-judge.jsonl", [rec(item.tag, item.user, model=JUDGE.model, cli=JUDGE.cli)])
+    monkeypatch.setattr(ro, "smoke_excluded", lambda bench, ids: set())
+    ro.score("longmemeval-s", tmp_path, ("hippo-emb:top_200",))
+    assert not (tmp_path / ro.SUB / "score.txt").exists()
+    got = json.loads((tmp_path / ro.SUB / "score-hippo-emb-top_200.json").read_text(encoding="utf-8"))
+    assert got["hippo-emb top_200"]["official_all"] == 100.0
