@@ -1,0 +1,65 @@
+{
+  "v3.5.1": {
+    "dir": "hippo-v3.5.1",
+    "version": "3.5.1",
+    "commit": "9d2a57529b8240bd17f129d6fb56dc56f4b20daa",
+    "server_sha256": "11a30f331ccdd3545d21b56141f070d7e78259dec441325c7ad37d1a76323d28",
+    "dist_sha256": "b2c049d40ec7911ead6d3c167ad75e694d64d57c926711ec25909cd408642f9a",
+    "lock_sha256": "42b79dc53f70d7438e2f50978de27074e876577ec8e1a435201add44f6a2bb11",
+    "stores": "stores-v3"
+  },
+  "g6-a": {
+    "dir": "hippo-g6-a",
+    "version": "3.5.1",
+    "commit": "d86ce480b6371fd92c0f85b99fdd6a43ea49628e",
+    "server_sha256": "77e805b61a2c3fc0b688f6b6f5e66997c5f9ce6793899b0c9e59c35502f14f10",
+    "dist_sha256": "b2c049d40ec7911ead6d3c167ad75e694d64d57c926711ec25909cd408642f9a",
+    "lock_sha256": "42b79dc53f70d7438e2f50978de27074e876577ec8e1a435201add44f6a2bb11",
+    "stores": "stores-g6-a",
+    "ingest_build": "v3.5.1",
+    "store_digests": {
+      "morgan": {
+        "user_id": "dolphin-morgan",
+        "memories": 3813,
+        "sha256": "66ca60f8741575cc890088aab34504106cce1b081173c7beb2a7fb897a19dfdd"
+      },
+      "alex": {
+        "user_id": "dolphin-alex",
+        "memories": 5257,
+        "sha256": "36b7efa5053b1ae0ec38cfa8be906953fd2dcd3fda95b7deb3a1d4c4a8ae126f"
+      },
+      "riley": {
+        "user_id": "dolphin-riley",
+        "memories": 5199,
+        "sha256": "0b6cdc94fa03ae54d9e8418d0f35ab3bbb5d88930657add657d5575326176971"
+      }
+    }
+  },
+  "g6-r": {
+    "dir": "hippo-g6-r",
+    "version": "3.5.1",
+    "commit": "81fd0e92194e445154e27f41b599e06787a3f304",
+    "server_sha256": "77e805b61a2c3fc0b688f6b6f5e66997c5f9ce6793899b0c9e59c35502f14f10",
+    "dist_sha256": "6c0240a789105ec3535878e42dd1994cc6897b41d727b9144ab76401f6c05919",
+    "lock_sha256": "42b79dc53f70d7438e2f50978de27074e876577ec8e1a435201add44f6a2bb11",
+    "stores": "stores-g6-r",
+    "ingest_build": "v3.5.1",
+    "store_digests": {
+      "morgan": {
+        "user_id": "dolphin-morgan",
+        "memories": 3813,
+        "sha256": "a2e0fc251fb4c41235fe3ea4a5bdef8e57298727475e71c9cc36bceb5c2300f5"
+      },
+      "alex": {
+        "user_id": "dolphin-alex",
+        "memories": 5257,
+        "sha256": "c4bf396e67b6e7c26d1f1cececb9ab175a31e46127f286a6c79095220fbf4902"
+      },
+      "riley": {
+        "user_id": "dolphin-riley",
+        "memories": 5199,
+        "sha256": "00867fd1b4cce4565e7bb968d82455f8e930dc0a0b8f8ef634d9a5044d56cd77"
+      }
+    }
+  }
+}

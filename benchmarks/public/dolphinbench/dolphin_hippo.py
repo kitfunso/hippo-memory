@@ -1,6 +1,7 @@
 """DolphinBench adapter for hippo-memory 3.5.1 (9d2a57529), run in WSL: arms hippo and bm25 behind one hippo-mem0-server
 store per persona, Claude Code 2.1.259 as the agent. Plan: dolphinbench-feasibility.md. Commands: dolphinbench-runbook.md.
-Stages: ingest | run (judge + both arms + check) | arm | judge | check | compare | selftest."""
+Stages: ingest | run (judge + both arms + check) | arm | judge | check | compare | pair | pins | selftest.
+DOLPHIN_BUILD picks a hippo build from dolphin_builds.json, DOLPHIN_ARMS the arms, DOLPHIN_HIPPO_PORT the hippo port."""
 from __future__ import annotations
 
 import argparse
@@ -33,31 +34,49 @@ from dolphin_home import BENCH, BENCH_ENV, CODEX_DIR, ROOT  # the clone, its ven
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-ADAPTER_FILES = ("dolphin_hippo.py", "dolphin_home.py", "dolphin_memory.py", "dolphin_smoke.py", "dolphin_fake_claude.py")
+ADAPTER_FILES = ("dolphin_hippo.py", "dolphin_home.py", "dolphin_memory.py", "dolphin_smoke.py", "dolphin_fake_claude.py",
+                 "dolphin_builds.json")
 # This checkout's files a run executes, compare's bootstrap included; a real-agent run needs every one committed.
 OURS = (*(HERE / name for name in ADAPTER_FILES), HERE.parent / "evidence_recall.py")
 CODEX_PACKAGE = CODEX_DIR / "package.json"
 JUDGE_RUNS = BENCH / "runs"  # the judge proxy's work files, judge-<label>/
 BASE = Path.home() / "dolphin"
-# The server file, the dist it loads and the lockfile come from this one commit, built in a clean clone of it.
-# Run records hold what was found; check and compare refuse any record that differs from the pin.
-HIPPO = BASE / "hippo-v3.5.1"
-HIPPO_VERSION = "3.5.1"
-HIPPO_COMMIT = "9d2a57529b8240bd17f129d6fb56dc56f4b20daa"
-HIPPO_PIN = {
-    "server_sha256": "11a30f331ccdd3545d21b56141f070d7e78259dec441325c7ad37d1a76323d28",
-    "dist_sha256": "b2c049d40ec7911ead6d3c167ad75e694d64d57c926711ec25909cd408642f9a",
-    "lock_sha256": "42b79dc53f70d7438e2f50978de27074e876577ec8e1a435201add44f6a2bb11",
-}
-SERVER = HIPPO / "benchmarks/public/hippo-mem0-server.mjs"
+# One profile of dolphin_builds.json: the server file, the dist it loads and the lockfile come from one commit, built in a
+# clean clone of it. Run records hold what was found; check and compare refuse any record that differs from the pin.
+BUILDS = json.loads((HERE / "dolphin_builds.json").read_text())
+BUILD_ENV, DEFAULT_BUILD, ARMS_ENV, PORT_ENV = "DOLPHIN_BUILD", "v3.5.1", "DOLPHIN_ARMS", "DOLPHIN_HIPPO_PORT"
+BUILD: str
+HIPPO: Path
+HIPPO_VERSION: str
+HIPPO_COMMIT: str
+HIPPO_PIN: dict[str, str]
+SERVER: Path
+STORES: Path
+
+
+def use_build(name: str) -> None:
+    """Point the build globals at one profile; an unknown name exits and lists the known ones."""
+    # SHORTCUT: module globals, so one build per process unless pair rebinds them; a build object if a third caller needs it
+    global BUILD, HIPPO, HIPPO_VERSION, HIPPO_COMMIT, HIPPO_PIN, SERVER, STORES
+    if name not in BUILDS:
+        raise SystemExit(f"unknown build {name!r} in {BUILD_ENV}; known builds: {', '.join(BUILDS)}")
+    profile = BUILDS[name]
+    BUILD, HIPPO, HIPPO_VERSION, HIPPO_COMMIT = name, BASE / profile["dir"], profile["version"], profile["commit"]
+    HIPPO_PIN = {key: profile[key] for key in ("server_sha256", "dist_sha256", "lock_sha256")}
+    SERVER, STORES = HIPPO / "benchmarks/public/hippo-mem0-server.mjs", BASE / profile["stores"]
+
+
+use_build(os.environ.get(BUILD_ENV) or DEFAULT_BUILD)
 CLAUDE = BASE / "claude-code" / "bin" / "claude"
 CLAUDE_VERSION = "2.1.259"
 # Fresh folders: the v1.52.3 stores, runs and logs stay as they are, since a newer build migrates a store on open.
-STORES, RUNS, LOGS = BASE / "stores-v3", BASE / "runs-v3", BASE / "logs-v3"
+# A build's own stores come from its profile; labels keep the runs of different builds apart.
+RUNS, LOGS = BASE / "runs-v3", BASE / "logs-v3"
 WORK = Path("/tmp/dolphin-work")
 PERSONAS = ("morgan", "alex", "riley")
 ARMS = ("hippo", "bm25")
-PORTS = {"ingest": 18800, "hippo": 18801, "bm25": 18802}
+# The hippo port is overridable so two builds' hippo arms can run at once; read once, so server and adapter agree.
+PORTS = {"ingest": 18800, "hippo": int(os.environ.get(PORT_ENV) or 18801), "bm25": 18802}
 SERVER_ARM = {"ingest": "hippo", "hippo": "hippo", "bm25": "bm25"}
 JUDGE_PORT = 18765  # dolphin_smoke.PORT
 JUDGE_URL = f"http://127.0.0.1:{JUDGE_PORT}/v1/chat/completions"
@@ -88,7 +107,7 @@ USAGE_KEYS = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache
 MODEL_USAGE_KEYS = ("inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens")
 ZERO = dict.fromkeys(USAGE_KEYS, 0)
 # Benchmark data and run files; the venv and app servers the agent's own processes run from are left out, so ps passes.
-DATASET_PATH = re.compile(r"/dolphin/(runs|stores)(-v3)?/|hippo-bench/(?!\.venv|dolphinbench/mock_mcp/(repair_)?server\.py)"
+DATASET_PATH = re.compile(r"/dolphin/(runs|stores)(-[\w.-]+)?/|hippo-bench/(?!\.venv|dolphinbench/mock_mcp/(repair_)?server\.py)"
                           r"|life_sim|facts\.yaml|\b(tests|grades|hooks|apps|deferred)/(morgan|alex|riley)/")
 WEB_TOOLS = ("WebSearch", "WebFetch")  # the bare name "dolphinbench" counts only in their arguments
 APP_SERVER_NAMES = ("dolphinbench_apps", "dolphinbench-apps")  # tool and server names, not file paths
@@ -112,6 +131,14 @@ class Deferred(Exception):
 def child_env(*names: str, **fixed: str) -> dict[str, str]:
     """A child process's environment: the allowlist, the named variables that are set, then fixed values."""
     return {**{name: os.environ[name] for name in (*CHILD_ENV, *names) if name in os.environ}, **fixed}
+
+
+def selected_arms() -> tuple[str, ...]:
+    """The arms DOLPHIN_ARMS names, in ARMS order; both when it is unset."""
+    wanted = {name.strip() for name in os.environ.get(ARMS_ENV, "").split(",") if name.strip()}
+    if unknown := sorted(wanted - set(ARMS)):
+        raise SystemExit(f"{ARMS_ENV} names unknown arms {', '.join(unknown)}; choose from {', '.join(ARMS)}")
+    return tuple(arm for arm in ARMS if arm in wanted) or ARMS
 
 
 def judge_label(kind: str) -> str:
@@ -208,19 +235,38 @@ def tree_sha(root: Path) -> str:
     return digest.hexdigest()
 
 
-def hippo_identity() -> dict:
-    """The pinned commit's clone as found: commit, a clean tree, and the hashes of the server file, the dist and the
-    lockfile. The hashes must equal HIPPO_PIN, so a run never starts on another build or server."""
+def clone_state() -> dict:
+    """The selected build's clone as found: commit, a dirty-tree listing, whether it is built, and the hashes of the
+    server file, the dist and the lockfile. Nothing is compared with the pin here."""
     commit = run_text(["git", "-C", str(HIPPO), "rev-parse", "HEAD"])
     dirty = run_text(["git", "-C", str(HIPPO), "status", "--porcelain"])  # dist and node_modules are git-ignored
-    if commit != HIPPO_COMMIT or dirty or not (HIPPO / "dist" / "entry" / "testing.js").is_file():
-        raise SystemExit(f"{HIPPO} must be a clean, built clone at {HIPPO_COMMIT}, found {commit} {dirty[:200]}")
-    found = {"server_sha256": file_sha(SERVER), "dist_sha256": tree_sha(HIPPO / "dist"),
-             "lock_sha256": file_sha(HIPPO / "package-lock.json")}
+    return {"commit": commit, "dirty": dirty, "built": (HIPPO / "dist" / "entry" / "testing.js").is_file(),
+            "server_sha256": file_sha(SERVER), "dist_sha256": tree_sha(HIPPO / "dist"),
+            "lock_sha256": file_sha(HIPPO / "package-lock.json")}
+
+
+def hippo_identity() -> dict:
+    """The pinned commit's clone as found. The hashes must equal HIPPO_PIN, so a run never starts on another build or
+    server."""
+    state = clone_state()
+    if state["commit"] != HIPPO_COMMIT or state["dirty"] or not state["built"]:
+        raise SystemExit(f"{HIPPO} must be a clean, built clone at {HIPPO_COMMIT}, found {state['commit']} "
+                         f"{state['dirty'][:200]}")
+    found = {key: state[key] for key in HIPPO_PIN}
     if found != HIPPO_PIN:
         raise SystemExit(f"{HIPPO} differs from the pin: found {found}, pinned {HIPPO_PIN}")
-    return {"version": HIPPO_VERSION, "commit": commit, **found, "node": run_text([node(), "--version"]),
+    return {"version": HIPPO_VERSION, "commit": state["commit"], **found, "node": run_text([node(), "--version"]),
             "embeddings": False, "half_life": "shipped default"}
+
+
+def pins_stage() -> int:
+    """Print the selected build's clone as found, for filling a profile; it compares nothing and never refuses."""
+    if not HIPPO.is_dir():
+        print(json.dumps({"build": BUILD, "dir": str(HIPPO), "error": "no clone"}, indent=1))
+        return 1
+    version = json.loads((HIPPO / "package.json").read_text())["version"]
+    print(json.dumps({"build": BUILD, "dir": str(HIPPO), "version": version, **clone_state()}, indent=1))
+    return 0
 
 
 def pin_problems(hippo: Any) -> list[str]:
@@ -486,8 +532,10 @@ class HippoAdapter:
         return store_digest(persona)
 
     def verify_checkpoint(self, persona: str, checkpoint: dict) -> None:
-        if store_digest(persona) != checkpoint:
-            raise ValueError(f"{persona} store changed since its checkpoint")
+        # A slept-store build pins its own store digests; the ingest checkpoint is the store before that sleep.
+        expected = BUILDS[BUILD].get("store_digests", {}).get(persona, checkpoint)
+        if store_digest(persona) != expected:
+            raise ValueError(f"{persona} store differs from its checkpoint or the build's pinned store digest")
 
     def total_cost_usd(self, phase: str) -> float:
         if phase == "ingestion":
@@ -789,13 +837,13 @@ def run_stage(args: argparse.Namespace) -> int:
     shared = ["--judge", args.judge, "--label", args.label]
     # Each child gets the allowlist and only the secret it needs: the judge the codex profile, the arms the token.
     judge_env = child_env("DOLPHIN_CODEX_HOME")
-    arm_env = child_env(TOKEN_ENV if args.agent == "claude" else "DOLPHIN_FAKE_FAIL")
+    arm_env = child_env(TOKEN_ENV if args.agent == "claude" else "DOLPHIN_FAKE_FAIL", BUILD_ENV, PORT_ENV)
     with (LOGS / f"{args.label}-judge.log").open("a") as out:
         judge = subprocess.Popen([*me, "judge", *shared], env=judge_env, stdout=out, stderr=subprocess.STDOUT)
     try:
         wait_port(JUDGE_PORT, judge)
         arms = {}
-        for arm in ARMS:
+        for arm in selected_arms():
             with (LOGS / f"{args.label}-{arm}-{args.persona}.log").open("a") as out:
                 arms[arm] = subprocess.Popen(
                     [*me, "arm", "--arm", arm, "--agent", args.agent, "--persona", args.persona,
@@ -915,22 +963,30 @@ def arm_report(label: str, arm: str, persona: str, full: bool) -> dict:
 
 
 def ingest_pin_problems(persona: str) -> list[str]:
-    """How the persona's stores were ingested: the ingest record must name the pinned build."""
+    """How the persona's stores were ingested: the ingest record must name the build that ingested them, which for a
+    slept-store build is its profile's ingest_build."""
     path = RUNS / f"ingest-{persona}" / "run.json"
     if not path.is_file():
         return ["no ingest record"]
-    return pin_problems(json.loads(path.read_text())["configuration"].get("hippo"))
+    source = BUILDS[BUILDS[BUILD].get("ingest_build", BUILD)]
+    wanted = {"version": source["version"], "commit": source["commit"],
+              **{key: source[key] for key in ("server_sha256", "dist_sha256", "lock_sha256")}}
+    hippo = json.loads(path.read_text())["configuration"].get("hippo")
+    hippo = hippo if isinstance(hippo, dict) else {}
+    return [f"{key} {str(hippo.get(key))[:12]} not {value[:12]}" for key, value in wanted.items() if hippo.get(key) != value]
 
 
-def check(label: str, persona: str, expected: int) -> dict:
-    """Per-arm counts and the machine gate. Integrity parts hold in every run; the pilot adds alarms on memory found,
-    benchmark files and closed tests, which in the full run fail the test in its arm and are listed. Every saved
-    file, the judge's included, is byte-scanned for the exported token and the dummy."""
+def check(label: str, persona: str, expected: int, only: tuple[str, ...] | None = None) -> dict:
+    """Per-arm counts and the machine gate, for the arms DOLPHIN_ARMS selects or `only` names. Integrity parts hold in
+    every run; the pilot adds alarms on memory found, benchmark files and closed tests, which in the full run fail the
+    test in its arm and are listed. Every saved file, the judge's included, is byte-scanned for the exported token
+    and the dummy."""
     full = expected == FULL_TESTS
     token = os.environ.get(TOKEN_ENV, "").strip()
     secrets = {DRY_RUN_TOKEN.encode(), token.encode()} - {b""}
-    arms = {arm: arm_report(label, arm, persona, full) for arm in ARMS}
-    dirs = [RUNS / f"{label}-{arm}-{persona}" for arm in ARMS]
+    ran = only or selected_arms()
+    arms = {arm: arm_report(label, arm, persona, full) for arm in ran}
+    dirs = [RUNS / f"{label}-{arm}-{persona}" for arm in ran]
     ids = {p.stem for d in dirs for p in (d / "tests" / persona).glob("*.json")}
     scanned = [p for p in [*LOGS.glob(f"{label}-*"), *WORK.rglob("*"), *(JUDGE_RUNS / f"judge-{label}").rglob("*"),
                            *(p for d in dirs for p in d.rglob("*"))] if p.is_file()]
@@ -951,7 +1007,8 @@ def check(label: str, persona: str, expected: int) -> dict:
         "model": (failing("model_flags") or f"{MODEL} at medium effort", not failing("model_flags")),
         "judge": (failing("judge_mismatch") or "every grade", not failing("judge_mismatch")),
         "pin": ("; ".join(f"{who} {', '.join(bad)}" for who, bad in pin_bad.items() if bad)
-                or f"server, dist and lockfile of {HIPPO_COMMIT[:9]} in both arms and the ingest", not any(pin_bad.values())),
+                or f"server, dist and lockfile of {HIPPO_COMMIT[:9]} in {'both arms' if ran == ARMS else ran[0] + ' only'} "
+                   "and the ingest", not any(pin_bad.values())),
     }
     if not full:
         parts |= {
@@ -1002,12 +1059,12 @@ def pooled(reports: dict[str, dict]) -> dict:
             "helper_models": dict(sorted(helpers.items()))}
 
 
-def verify_records(label: str, personas: list[str]) -> None:
+def verify_records(label: str, personas: list[str], arms: tuple[str, ...] = ARMS) -> None:
     """compare's inputs: one configuration over arms and personas, the real agent and the codex judge, the pinned
     hippo build in every arm and ingest record, and each of OURS recorded with the hash of the committed file, which
     is also the file compare runs now."""
     records = {(arm, persona): json.loads((RUNS / f"{label}-{arm}-{persona}" / "run.json").read_text())["configuration"]
-               for arm in ARMS for persona in personas}
+               for arm in arms for persona in personas}
     configs = list(records.values())
     shared = [{k: v for k, v in c.items() if k not in ("arm", "ingest_run")} for c in configs]
     config = configs[0]
@@ -1034,10 +1091,34 @@ def verify_records(label: str, personas: list[str]) -> None:
         raise SystemExit(f"compare refused: {'; '.join(problems)}. Compare from this checkout at the recorded commit.")
 
 
+def paired(diffs: dict[tuple[str, str], int], closed: set[tuple[str, str]], personas: list[str], plus: str,
+           minus: str) -> dict[str, Any]:
+    """The public benchmarks' bootstrap (4,000 draws, seed 1) over per-test pass differences, plus minus minus. Only
+    "all" gets a reading; per persona, without Morgan 1-20 (the pilot's tests) and without tests either side closed
+    are secondary."""
+    sys.path.insert(0, str(HERE.parent))
+    from evidence_recall import boot
+    subsets = {"all": list(diffs), **{p: [k for k in diffs if k[0] == p] for p in personas},
+               "without_morgan_1_20": [k for k in diffs if not (k[0] == "morgan" and int(k[1]) <= 20)],
+               "excluding_closed": [k for k in diffs if k not in closed]}
+    report: dict[str, Any] = {}
+    for name, keys in subsets.items():
+        rows = [diffs[k] for k in keys]
+        if not rows:
+            continue
+        mean, lo, hi = boot([float(d) for d in rows])
+        report[name] = {"tests": len(rows), f"{plus}_only": rows.count(1), f"{minus}_only": rows.count(-1),
+                        "diff_pp": round(100 * mean, 2), "ci95_pp": [round(100 * lo, 2), round(100 * hi, 2)],
+                        "reading": reading(mean, lo, hi) if name == "all" else "secondary"}
+    return report
+
+
 def compare(label: str, personas: list[str]) -> dict:
-    """hippo minus bm25 pass rate, paired by test, with the public benchmarks' bootstrap (4,000 draws, seed 1).
-    Refuses a paused run, a failing gate and records that differ from the commit. Only "all" gets a reading; per
-    persona, without Morgan 1-20 (the pilot's tests) and without tests either arm closed are secondary."""
+    """hippo minus bm25 pass rate, paired by test. Refuses a paused run, a failing gate and records that differ from
+    the commit, and needs both arms: for two builds' hippo arms use pair."""
+    if selected_arms() != ARMS:
+        raise SystemExit(f"compare needs both arms ({', '.join(ARMS)}) but {ARMS_ENV} selects "
+                         f"{', '.join(selected_arms())}; to compare two builds' hippo arms use the pair stage")
     if reason := paused_reason(label):
         raise SystemExit(f"compare refused: the run paused ({reason}); publish it as paused, with no reading")
     reports, refused = {}, []
@@ -1050,8 +1131,6 @@ def compare(label: str, personas: list[str]) -> dict:
         raise SystemExit(f"compare refused: the gate fails for {', '.join(refused)}; it needs every part ok and "
                          f"{FULL_TESTS} graded tests per arm and persona (GATE lines above)")
     verify_records(label, personas)
-    sys.path.insert(0, str(HERE.parent))
-    from evidence_recall import boot
     diffs, closed = {}, set()
     for persona in personas:
         hippo, bm25 = passes(label, "hippo", persona), passes(label, "bm25", persona)
@@ -1059,20 +1138,41 @@ def compare(label: str, personas: list[str]) -> dict:
             raise SystemExit(f"{persona}: the arms graded different tests")
         diffs |= {(persona, t): int(hippo[t]) - int(bm25[t]) for t in hippo}
         closed |= {(persona, t) for a in reports[persona]["arms"].values() for t in a["closed_by_adapter"]}
-    subsets = {"all": list(diffs), **{p: [k for k in diffs if k[0] == p] for p in personas},
-               "without_morgan_1_20": [k for k in diffs if not (k[0] == "morgan" and int(k[1]) <= 20)],
-               "excluding_closed": [k for k in diffs if k not in closed]}
-    report: dict[str, Any] = {}
-    for name, keys in subsets.items():
-        rows = [diffs[k] for k in keys]
-        if not rows:
-            continue
-        mean, lo, hi = boot([float(d) for d in rows])
-        report[name] = {"tests": len(rows), "hippo_only": rows.count(1), "bm25_only": rows.count(-1),
-                        "diff_pp": round(100 * mean, 2), "ci95_pp": [round(100 * lo, 2), round(100 * hi, 2)],
-                        "reading": reading(mean, lo, hi) if name == "all" else "secondary"}
+    report = paired(diffs, closed, personas, "hippo", "bm25")
     report["arms"] = {arm: pooled({p: reports[p]["arms"][arm] for p in personas}) for arm in ARMS}
     return report
+
+
+def pair(a: tuple[str, str], b: tuple[str, str], personas: list[str]) -> dict:
+    """The hippo arm of build a's run minus build b's, paired by (persona, test), with compare's bootstrap and
+    subsets. Each side is a (label, build) and passes what compare asks of a run: not paused, the gate in its hippo
+    arm for every persona, and records that match the commit."""
+    sides: dict[str, dict[tuple[str, str], bool]] = {}
+    closed: set[tuple[str, str]] = set()
+    chosen = BUILD
+    try:
+        for name, (label, build) in (("a", a), ("b", b)):
+            use_build(build)
+            if reason := paused_reason(label):
+                raise SystemExit(f"pair refused: side {name} ({label}) paused ({reason}); publish it as paused")
+            refused = []
+            for persona in personas:
+                report = check(label, persona, FULL_TESTS, ("hippo",))
+                print(report["gate"])
+                if not report["gate_pass"]:
+                    refused.append(persona)
+                closed |= {(persona, t) for t in report["arms"]["hippo"]["closed_by_adapter"]}
+            if refused:
+                raise SystemExit(f"pair refused: the gate fails for side {name} ({label}:{build}), {', '.join(refused)}; "
+                                 f"it needs every part ok and {FULL_TESTS} graded tests per persona (GATE lines above)")
+            verify_records(label, personas, ("hippo",))
+            sides[name] = {(persona, t): ok for persona in personas for t, ok in passes(label, "hippo", persona).items()}
+    finally:
+        use_build(chosen)
+    if sides["a"].keys() != sides["b"].keys():
+        raise SystemExit("pair refused: the two sides graded different tests")
+    diffs = {key: int(sides["a"][key]) - int(sides["b"][key]) for key in sides["a"]}
+    return {"sides": {"a": ":".join(a), "b": ":".join(b)}, **paired(diffs, closed, personas, "a", "b")}
 
 
 def selftest() -> None:
@@ -1111,8 +1211,10 @@ def selftest() -> None:
     for name in ("HIPPO_FAKE_NOW", "HIPPO_ABLATE_DECAY", "DOLPHINBENCH_JUDGE_MODEL", "DOLPHIN_JUDGE_MODEL",
                  "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL", "MAX_THINKING_TOKENS"):
         assert OVERRIDES.fullmatch(name), name
-    for name in (TOKEN_ENV, "DOLPHIN_CODEX_HOME", "DOLPHIN_FAKE_FAIL", "CLAUDE_CONFIG_DIR", "PATH"):
+    for name in (TOKEN_ENV, "DOLPHIN_CODEX_HOME", "DOLPHIN_FAKE_FAIL", "CLAUDE_CONFIG_DIR", "PATH", BUILD_ENV, ARMS_ENV,
+                 PORT_ENV):
         assert not OVERRIDES.fullmatch(name), name
+    selftest_builds()
     with tempfile.TemporaryDirectory() as tmp:
         # The token variable is swapped for a dummy name, so the selftest never reads a real token.
         saved = {name: globals()[name] for name in ("RUNS", "LOGS", "WORK", "JUDGE_RUNS", "TOKEN_ENV", "git")}
@@ -1125,6 +1227,44 @@ def selftest() -> None:
         finally:
             globals().update(saved)
     print("selftest ok")
+
+
+def selftest_builds() -> None:
+    """The default profile is the build this runner pinned before profiles existed; an unknown build or arm exits; the
+    build, the arms and the hippo port come from the environment at import."""
+    today = {"dir": "hippo-v3.5.1", "version": "3.5.1", "commit": "9d2a57529b8240bd17f129d6fb56dc56f4b20daa",
+             "server_sha256": "11a30f331ccdd3545d21b56141f070d7e78259dec441325c7ad37d1a76323d28",
+             "dist_sha256": "b2c049d40ec7911ead6d3c167ad75e694d64d57c926711ec25909cd408642f9a",
+             "lock_sha256": "42b79dc53f70d7438e2f50978de27074e876577ec8e1a435201add44f6a2bb11", "stores": "stores-v3"}
+    chosen = BUILD
+    try:
+        use_build(DEFAULT_BUILD)
+        assert DEFAULT_BUILD == "v3.5.1" and BUILDS[DEFAULT_BUILD] == today, BUILDS[DEFAULT_BUILD]
+        assert (HIPPO, HIPPO_VERSION, HIPPO_COMMIT, STORES) == (
+            BASE / today["dir"], today["version"], today["commit"], BASE / today["stores"])
+        assert SERVER == BASE / today["dir"] / "benchmarks/public/hippo-mem0-server.mjs"
+        assert HIPPO_PIN == {key: today[key] for key in ("server_sha256", "dist_sha256", "lock_sha256")}
+        assert (RUNS, LOGS) == (BASE / "runs-v3", BASE / "logs-v3")
+        try:
+            use_build("nope")
+            raise AssertionError("an unknown build was accepted")
+        except SystemExit as exc:
+            assert f"known builds: {', '.join(BUILDS)}" in str(exc), str(exc)
+    finally:
+        use_build(chosen)
+    unset = {k: v for k, v in os.environ.items() if k not in (BUILD_ENV, ARMS_ENV, PORT_ENV)}
+
+    def imported(**env: str) -> subprocess.CompletedProcess:
+        code = "import dolphin_hippo as d; print(d.BUILD, d.PORTS['hippo'], ','.join(d.selected_arms()))"
+        return subprocess.run([sys.executable, "-c", code], cwd=HERE, env={**unset, **env}, capture_output=True, text=True,
+                              timeout=120)
+
+    assert imported().stdout.split() == ["v3.5.1", "18801", "hippo,bm25"], imported()
+    chosen_env = {BUILD_ENV: "g6-r", PORT_ENV: "18811", ARMS_ENV: "hippo"}
+    assert imported(**chosen_env).stdout.split() == ["g6-r", "18811", "hippo"], imported(**chosen_env)
+    for bad, text in ((BUILD_ENV, "known builds"), (ARMS_ENV, "unknown arms")):
+        refused = imported(**{**chosen_env, bad: "nope"})
+        assert refused.returncode and text in refused.stderr, refused
 
 
 def selftest_outcomes(tmp: Path) -> None:
@@ -1250,6 +1390,43 @@ def selftest_gate() -> None:
         assert report["all"]["hippo_only"] == FULL_TESTS // 2 and report["without_morgan_1_20"]["tests"] == 180
         arm = report["arms"]["hippo"]
         assert arm["helper_models"] == {"helper-model": 2 * FULL_TESTS} and arm["tokens_per_test"] == 17
+        # DOLPHIN_ARMS gates only the arms run; label u is the bm25 run recorded as a hippo run of another build, which
+        # pair reads against t's hippo arm: it must give compare's numbers, a_only and b_only for hippo_only and bm25_only.
+        second, before = RUNS / "u-hippo-morgan", BUILD
+        shutil.copytree(arm_dir("bm25"), second)
+        put(second / "run.json", {"version": 1, "release": "r", "configuration": {**config, "arm": "hippo", "ingest_run": "i"}})
+        assert not check("u", "morgan", FULL_TESTS)["gate_pass"]
+        with mock.patch.dict(os.environ, {ARMS_ENV: "hippo"}):
+            assert list(check("u", "morgan", FULL_TESTS)["arms"]) == ["hippo"] and check("u", "morgan", FULL_TESTS)["gate_pass"]
+            assert "use the pair stage" in refusal()
+        with (mock.patch.dict(BUILDS, {"fake-b": {**BUILDS[DEFAULT_BUILD], "stores": "stores-fake-b"}}),
+              mock.patch.object(sys.modules[__name__], "use_build", wraps=use_build) as bound):
+            forward = pair(("t", DEFAULT_BUILD), ("u", "fake-b"), ["morgan"])
+            assert [call.args[0] for call in bound.call_args_list] == [DEFAULT_BUILD, "fake-b", before], bound.call_args_list
+            backward = pair(("u", "fake-b"), ("t", DEFAULT_BUILD), ["morgan"])
+            grade_b = second / "grades" / "morgan" / "200.json"
+            kept_b = grade_b.read_text()
+            for damage, text in (("paused", "paused"), ("graded", "the gate fails for side b")):
+                if damage == "paused":
+                    put(second / "paused.json", {"reason": "closed 13"})
+                else:
+                    grade_b.unlink()
+                try:
+                    pair(("t", DEFAULT_BUILD), ("u", "fake-b"), ["morgan"])
+                    raise AssertionError(f"pair ran on a {damage} side")
+                except SystemExit as exc:
+                    assert text in str(exc), str(exc)
+                (second / "paused.json").unlink(missing_ok=True)
+                put(grade_b, kept_b)
+        assert BUILD == before and forward["sides"] == {"a": f"t:{DEFAULT_BUILD}", "b": "u:fake-b"}
+        counts = {"a_only", "b_only", "hippo_only", "bm25_only"}
+        assert {k: v for k, v in forward["all"].items() if k not in counts} == {
+            k: v for k, v in report["all"].items() if k not in counts}, forward["all"]
+        assert (forward["all"]["a_only"], forward["all"]["b_only"]) == (report["all"]["hippo_only"], 0)
+        assert (backward["all"]["a_only"], backward["all"]["b_only"], backward["all"]["diff_pp"]) == (0, FULL_TESTS // 2, -50.0)
+        assert (forward["all"]["reading"], backward["all"]["reading"]) == ("beats", "trails")
+        assert forward["without_morgan_1_20"]["tests"] == 180
+        shutil.rmtree(second)
         grade = arm_dir("bm25") / "grades" / "morgan" / "200.json"
         kept = grade.read_text()
         grade.unlink()
@@ -1344,6 +1521,14 @@ def selftest_pause() -> None:
     assert evaluate(runner("p", "morgan", 20, 3), "p", "hippo", "morgan") is None
 
 
+def side_spec(text: str) -> tuple[str, str]:
+    """A pair side, LABEL:BUILD."""
+    label, _, build = text.partition(":")
+    if not label or build not in BUILDS:
+        raise argparse.ArgumentTypeError(f"{text!r} is not LABEL:BUILD with a build from {', '.join(BUILDS)}")
+    return label, build
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1364,6 +1549,11 @@ def main() -> int:
     compare_stage = stages.add_parser("compare")
     compare_stage.add_argument("--label", required=True)
     compare_stage.add_argument("--personas", nargs="+", choices=PERSONAS, default=list(PERSONAS))
+    pair_stage = stages.add_parser("pair", help="hippo arm of one build's run minus another's, paired by test")
+    for side in ("a", "b"):
+        pair_stage.add_argument(f"--{side}", required=True, type=side_spec, metavar="LABEL:BUILD")
+    pair_stage.add_argument("--personas", nargs="+", choices=PERSONAS, default=list(PERSONAS))
+    stages.add_parser("pins", help="the selected build's clone as found, for filling a profile")
     stages.add_parser("selftest")
     args = parser.parse_args()
     if args.stage in ("ingest", "run", "arm", "judge") and (found := sorted(filter(OVERRIDES.fullmatch, os.environ))):
@@ -1384,6 +1574,10 @@ def main() -> int:
         return 0 if report["gate_pass"] else 1
     elif args.stage == "compare":
         print(json.dumps(compare(args.label, args.personas), indent=1))
+    elif args.stage == "pair":
+        print(json.dumps(pair(args.a, args.b, args.personas), indent=1))
+    elif args.stage == "pins":
+        return pins_stage()
     else:
         selftest()
     return 0
