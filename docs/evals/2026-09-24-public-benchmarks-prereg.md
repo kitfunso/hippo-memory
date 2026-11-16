@@ -755,6 +755,19 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 
 **Read before this note.** The MemOS evaluation files at `3a16e5fe` (`pm_search.py`, `pm_responses.py`, `pm_metric.py`, `utils/prompts.py`, `run_pm_eval.sh`) and the retrieval manifests of `personamem_v1` and `personamem_v1-emb`. No OpenAI chat call.
 
+### Amendment 6, dated notes 24 (2026-11-16, before any EverMemBench OpenAI call): EverMemBench with the paper's answer model
+
+**Why.** Table 4 of the EverMemBench paper holds GPT-4.1-mini fixed as the answer model for every memory system (Mem0 37.09, Zep 39.97, MemOS 42.55, MemoBase 34.27). The audit (`hippo-bench/comparability/memory-qa-2.md` section 4) found that the data, prompts, multiple-choice scorer, top 10 and the category mean already match ours. Only the answer model differs, and the judge, which the paper does not name. This lane is post hoc and secondary. No registered result changes.
+
+**What changes.**
+1. Lane E. `mem0/evermembench_openai.py` rebuilds each registered answer prompt from the registered retrieval at top 10 (`qa/harness.py` `prompts_of`, with its manifest hash check) and sends it as one user message to `gpt-4.1-mini-2025-04-14` at temperature 0 with `max_tokens` 1000 (`EverMind-AI/EverMemBench` `e10b3d5`, `eval/config/pipeline.yaml` lines 5 to 11, `eval/src/core/answerer.py` lines 328 to 335). The repository calls `openai/gpt-4.1-mini` through OpenRouter with provider openai only; we call OpenAI with the dated snapshot.
+2. Multiple choice scores by the authors' parse and match, as registered. Open-ended answers go to the registered judge, gpt-5.6-sol at medium through codex, with the authors' system and judge prompts. The repository's default judge is `google/gemini-3-flash-preview` at temperature 0 (`pipeline.yaml` line 17, `evaluator.py` lines 400 to 406). A Gemini judge bills Keith's Google key, which no approval covers yet, so it waits for his yes. Codex may draw ChatGPT credits (`CODEX_ALLOW_CREDITS=1`, floor 1,000).
+3. Score: the Table 4 Average, the plain mean over the 9 categories of all 2,400 items (dated notes 19), and the pooled accuracy over the 2,395 primary items.
+4. Arms in order: `hippo-emb`, then `bm25`, then `hippo365`, each from its registered retrieval. Five items run first as a smoke with the cost per item reported.
+5. Tests: `tests/test_evermembench_openai.py`. They fail if the answer leaves as anything but one user message with the pinned settings, or if the category mean weights categories by size.
+
+**Read before this note.** `pipeline.yaml`, `answerer.py` lines 320 to 340 and `evaluator.py` lines 395 to 410 at `e10b3d5`, and the retrieval manifests of `evermembench` and `evermembench-emb`. No OpenAI chat call.
+
 ### Erratum (2026-11-16)
 
 Line 24 says "The LongMemEval file records no models." That is wrong. At runner commit `4b61c5d`, `results/platform/longmemeval_results.json` metadata holds `"model": "gpt-5", "generation_model": "gpt-5"`, top 200, 500 questions. So Mem0's LongMemEval, LoCoMo and BEAM files all record gpt-5. No rule or score depends on the line. Found by the comparability audit (`hippo-bench/comparability/memory-qa-1.md`).
