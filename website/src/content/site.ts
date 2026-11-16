@@ -46,27 +46,6 @@ export const site = {
   },
 } as const;
 
-// Three wins, each quoting only numbers its linked file holds (check-readme-sync.mjs); the Z0 caveat sits in theTest.
-export const proofs: ReadonlyArray<{ stat: string; text: string; href: string; hrefLabel: string }> = [
-  {
-    stat: '11 in 100',
-    text: "Repeat mistakes 2 to 4 tasks after a correction, with hippo added to Claude Code's built-in memory. Built-in memory alone gave 21, in our test on 29 repositories.",
-    href: site.links.z0Round3,
-    hrefLabel: 'the Z0 round 3 result',
-  },
-  {
-    stat: '+16.2 points',
-    text: 'Answer accuracy over BM25 keyword search on DMR, a public memory test. Hippo with its optional local embedder and reranker scored 77.6% against 61.4%, with the same answer model.',
-    href: site.links.dmrScore,
-    hrefLabel: 'the DMR score file',
-  },
-  {
-    stat: '0 language-model calls',
-    text: 'To store the LoCoMo test conversations. Mem0 made 5,882 to store the same ones, one for each turn.',
-    href: site.links.storeCalls,
-    hrefLabel: 'the Mem0 store-call log',
-  },
-];
 
 // The hero figure's two captions follow the scene; the still shows Tuesday. Wording follows session.body.
 export const heroScene = {
@@ -113,12 +92,6 @@ export const repeatMistakes = {
   ],
 } as const;
 
-export const theTest = {
-  heading: 'We corrected Claude Code once and counted the repeats',
-  body: 'We built hippo and we ran this test, so weigh it accordingly. In real Claude Code sessions on 29 repositories, each run teaches the agent a rule, as a correction where it had just got the task wrong, and 2 to 4 tasks later gives it a task where the same mistake is possible. The plan and its pass line were registered before the run.',
-  note: "The arm with hippo cost the same, a ratio of 1.006. The gain was the same with lesson capture switched off, so this run cannot say hippo's stored lessons caused it, and round 4 makes that comparison its main one. A memory that always held the taught rule scored 7 in 100, about 4 points better than hippo. The corrections were scripted and the agent was Claude Code only, so we have no measured result for Codex or Cursor.",
-  linkLabel: 'Read the full result',
-} as const;
 
 // The home session story: the terminal lines split at each note into Monday and Tuesday.
 export const session = {

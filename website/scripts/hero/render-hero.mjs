@@ -1,5 +1,5 @@
-// Renders the hero loop with three.js into public/hero-cabinet.webp (its first frame) and public/hero-cabinet.mp4.
-// Run from website/: PW=<path to a playwright package> node scripts/hero/render-hero.mjs (ffmpeg with libx264 and libwebp on PATH).
+// Renders the cabinet scene's still frame with three.js into public/hero-cabinet.webp, the poster on the share cards.
+// Run from website/: PW=<path to a playwright package> node scripts/hero/render-hero.mjs (ffmpeg with libwebp on PATH).
 import { createServer } from 'node:http';
 import { readFile, mkdtemp, writeFile, rm, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CYCLE, STILL_T } from '../../src/scripts/hero-timeline.js';
+import { STILL_T } from '../../src/scripts/hero-timeline.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const W = 1072, H = 804, FPS = 30;
@@ -34,21 +34,15 @@ try {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/scripts/hero/render.html?w=${W}&h=${H}`);
   await page.waitForFunction(() => window.ready, null, { timeout: 60000 });
-  const count = CYCLE * FPS;
-  for (let i = 0; i < count; i++) {
-    const url = await page.evaluate((t) => window.frameAt(t), STILL_T + i / FPS);
-    await writeFile(join(frames, `f${String(i).padStart(5, '0')}.png`), Buffer.from(url.split(',')[1], 'base64'));
-  }
+  const url = await page.evaluate((t) => window.frameAt(t), STILL_T);
+  await writeFile(join(frames, 'f00000.png'), Buffer.from(url.split(',')[1], 'base64'));
   if (errors.length) throw new Error(`render page errors: ${errors.join('; ')}`);
 
-  // The frames have a transparent background; both outputs put them on white, which the page multiplies onto the paper colour.
+  // The frame has a transparent background; the poster puts it on white, which the share card multiplies onto the paper colour.
   const onWhite = ['-f', 'lavfi', '-i', `color=white:s=${W}x${H}:r=${FPS}`, '-filter_complex', '[1][0]overlay=shortest=1,format=yuv420p'];
-  const mp4 = join(root, 'public', 'hero-cabinet.mp4');
   const webp = join(root, 'public', 'hero-cabinet.webp');
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', join(frames, 'f%05d.png'), ...onWhite,
-    '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-profile:v', 'high', '-movflags', '+faststart', '-an', mp4]);
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', join(frames, 'f00000.png'), ...onWhite, '-frames:v', '1', '-c:v', 'libwebp', '-quality', '82', webp]);
-  console.log(JSON.stringify({ frames: count, size: `${W}x${H}`, mp4Bytes: (await stat(mp4)).size, webpBytes: (await stat(webp)).size }));
+  console.log(JSON.stringify({ size: `${W}x${H}`, webpBytes: (await stat(webp)).size }));
 } finally {
   await browser.close();
   server.close();

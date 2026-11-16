@@ -16,13 +16,18 @@
     "@astrojs/sitemap": "^3.7.4",
     "@fontsource/geist": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
+    "@fontsource/instrument-sans": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
     "@fontsource/newsreader": "^5.3.0",
+    "@fontsource/schibsted-grotesk": "^5.3.0",
+    "@fontsource/spline-sans-mono": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.4.4",
     "preact": "^11.1.1",
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
+    "gsap": "^3.15.1",
     "three": "^0.187.0",
     "wrangler": "^4.156.0"
   }

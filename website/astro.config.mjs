@@ -54,5 +54,7 @@ export default defineConfig({
   ],
   vite: {
     plugins: [tailwindcss()],
+    // The home ships three.js; Lighthouse marks a large script down when it has no source map.
+    build: { sourcemap: true },
   },
 });

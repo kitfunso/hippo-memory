@@ -1,109 +1,10 @@
 ---
 import '../styles/global.css';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { Font } from 'astro:assets';
-import { site } from '../content/site';
-import { pageDate } from '../lib/page-dates.mjs';
+import Head from '../components/Head.astro';
+import Beacon from '../components/Beacon.astro';
 
-interface Props {
-  title?: string;
-  description?: string;
-  /** This page's own JSON-LD nodes (TechArticle, HowTo, FAQPage), merged into the site-wide @graph. */
-  schema?: object[];
-  /** Breadcrumb name for a sub-page, read as Home > crumb. */
-  crumb?: string;
-  /** Set on article pages: adds a TechArticle node; dateModified comes from git. */
-  published?: string;
-}
-
-const {
-  title = `${site.pkg}: ${site.positioning}`,
-  description = site.description,
-  schema = [],
-  crumb,
-  published,
-} = Astro.props;
-const article = published
-  ? [{ '@type': 'TechArticle', headline: title, description, datePublished: published, dateModified: pageDate(Astro.url.pathname) }]
-  : [];
-
-// All URLs derive from astro.config `site` -> a later domain swap is one edit.
-const base = Astro.site ?? new URL('https://hippo-memory.com');
-const home = base.href;
-const canonical = new URL(Astro.url.pathname, base).href;
-
-// scripts/make-images.mjs draws one card per built page; a page built before its card exists borrows home's.
-const slug = Astro.url.pathname.replace(/^\/|\/$/g, '').replace(/\//g, '-') || 'home';
-const ogPath = existsSync(join(process.cwd(), 'public', 'og', `${slug}.png`)) ? `/og/${slug}.png` : '/og/home.png';
-const ogImage = new URL(ogPath, base).href;
-
-const id = { org: `${home}#org`, website: `${home}#website`, software: `${home}#software` };
-const graph = [
-  {
-    '@type': 'Organization',
-    '@id': id.org,
-    name: 'kitfunso',
-    url: 'https://github.com/kitfunso',
-    logo: new URL('/apple-touch-icon.png', base).href,
-    sameAs: ['https://github.com/kitfunso'],
-  },
-  {
-    '@type': 'WebSite',
-    '@id': id.website,
-    url: home,
-    name: site.pkg,
-    alternateName: [site.name],
-    description: site.description,
-    publisher: { '@id': id.org },
-    sameAs: [site.links.repo, site.links.npm],
-  },
-  {
-    '@type': 'SoftwareApplication',
-    '@id': id.software,
-    name: site.pkg,
-    alternateName: site.name,
-    applicationCategory: 'DeveloperApplication',
-    operatingSystem: 'Node.js 22.16+',
-    description: site.description,
-    url: home,
-    softwareVersion: site.version,
-    license: 'https://opensource.org/licenses/MIT',
-    author: { '@id': id.org },
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    sameAs: [site.links.repo, site.links.npm],
-    downloadUrl: site.links.npm,
-    keywords:
-      'AI agent memory, persistent memory for Claude Code, Cursor memory, Codex memory, MCP memory server, long-term memory for LLM agents, local-first, open source',
-  },
-  ...(crumb
-    ? [{
-        '@type': 'BreadcrumbList',
-        itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Home', item: home },
-          { '@type': 'ListItem', position: 2, name: crumb, item: canonical },
-        ],
-      }]
-    : []),
-  ...[...article, ...schema].map((node) => ({
-    url: canonical,
-    isPartOf: { '@id': id.website },
-    about: { '@id': id.software },
-    author: { '@id': id.org },
-    publisher: { '@id': id.org },
-    ...node,
-  })),
-];
-
-// Cloudflare Web Analytics: cookie-less, no perf hit. The token below is a PUBLIC site
-// identifier - it ships in the page HTML by design and grants no account access, so it
-// is safe to commit, and committing it keeps analytics on across every `wrangler pages
-// deploy` (which ships a pre-built dist). Override or disable per-build with
-// PUBLIC_CF_BEACON_TOKEN (set it to '' to turn the beacon off).
-// No SRI on the beacon by design: Cloudflare serves beacon.min.js as an auto-updated,
-// unversioned first-party asset and omits `integrity` in its official snippet (a pinned
-// hash would break on their rotations).
-const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d0846b1e969be40e5a';
+const props = Astro.props;
 ---
 
 <!doctype html>
@@ -112,38 +13,13 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
     <script is:inline>document.documentElement.classList.add('js');</script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="generator" content={Astro.generator} />
-    <title>{title}</title>
-    <meta name="description" content={description} />
-    <link rel="canonical" href={canonical} />
+    <Head {...props} />
     <!-- preload only the faces the first screen paints; 600 loads on use -->
     <Font cssVariable="--font-newsreader" preload={[{ weight: '400' }]} />
     <Font cssVariable="--font-geist" preload={[{ weight: '400' }, { weight: '500' }]} />
     <Font cssVariable="--font-geist-mono" preload={[{ weight: '400' }]} />
     <meta name="theme-color" content="#f7f4ee" />
     <meta name="color-scheme" content="light" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-
-    <!-- Open Graph -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:url" content={canonical} />
-    <meta property="og:image" content={ogImage} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content={title} />
-    <meta property="og:site_name" content={site.pkg} />
-
-    <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={ogImage} />
-    <meta name="twitter:image:alt" content={title} />
-
-    <script type="application/ld+json" set:html={JSON.stringify({ '@context': 'https://schema.org', '@graph': graph })} />
   </head>
   <body class="min-h-screen antialiased">
     <a
@@ -199,12 +75,6 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
         });
       })();
     </script>
-    {beaconToken && (
-      <script
-        defer
-        src="https://static.cloudflareinsights.com/beacon.min.js"
-        data-cf-beacon={JSON.stringify({ token: beaconToken })}
-      ></script>
-    )}
+    <Beacon />
   </body>
 </html>
