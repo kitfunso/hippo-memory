@@ -29,7 +29,8 @@ PRICES = {"gpt-4o-2024-08-06": (2.50, 10.00), "gpt-4o-mini-2024-07-18": (0.15, 0
 SPEND = Path.home() / "hippo-bench" / "results-r2" / "logs" / "openai-spend.d"
 RESUM_S = 30  # how often a process adds up the other processes' spend again
 EFFORT = "none"  # these chat models take no reasoning effort; the ledger still compares the field
-FATAL = re.compile(r"insufficient_quota|invalid_api_key|billing", re.I)
+# Error codes only: every rate-limit message also links /account/billing (16 Nov)
+FATAL = re.compile(r'"(?:insufficient_quota|invalid_api_key|billing_hard_limit_reached)"')
 WAIT_S = re.compile(r"try again in ([\d.]+)(ms|s)", re.I)
 
 

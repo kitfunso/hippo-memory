@@ -95,7 +95,10 @@ def test_no_call_starts_once_the_logged_spend_reaches_the_cap(tmp_path, wire):
 def test_a_rate_limit_waits_and_is_no_ask_but_a_spent_quota_stops(tmp_path, wire):
     sent, queue = wire
     llm = client(tmp_path, ol.Settings(MODEL))
-    queue += [http_error(429, '{"error": {"message": "Rate limit reached. Please try again in 20ms."}}'), ok()]
+    tpm = ('{"error": {"message": "Rate limit reached on tokens per min (TPM). Please try again in 20ms. You can '
+           'increase your rate limit by adding a payment method at https://platform.openai.com/account/billing.", '
+           '"type": "tokens", "code": "rate_limit_exceeded"}}')
+    queue += [http_error(429, tpm), ok()]
     item = Item("t", "", "p", Manifest(MODEL, ol.EFFORT, llm.cli), lambda t: t)
     assert Ledger(llm.log_path).settle(item, llm).asks == 1 and len(sent) == 2
     queue.append(http_error(429, '{"error": {"code": "insufficient_quota"}}'))
