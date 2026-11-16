@@ -37,12 +37,19 @@ tokens:
   buttons: "`btn` (ink fill) and `btn-quiet` (rule-strong outline) in global.css; pages add no button classes of their own"
   touch_targets: "44px minimum on nav items, copy buttons and button-styled links; a lone text link gets a 24px tap area from .tap"
   motion:
-    entrance: "one .rise keyframe on the hero words; nothing reveals on scroll"
-    hero_scene: "a 12-second video rendered from the three.js scene; the poster paints first; reduced motion and Save-Data keep the poster"
+    entrance: "one .rise keyframe on the PageIntro h1; nothing reveals on scroll"
     durations: "--duration-fast 150ms for hover, --duration-medium 400ms, one curve --ease-standard"
+  home:                             # the home page only (Lagoon, 2026-11-16), in src/styles/home.css
+    bg: "#0b1014"                   # blue-black page
+    mint: "#5eead4"                 # first accent and colour-bar stop
+    cyan: "#22a6c9"                 # second stop
+    cobalt: "#2f4bb3"               # third stop
+    fonts: "Schibsted Grotesk (display), Instrument Sans (body), Instrument Serif (big figures), Spline Sans Mono (code), from @fontsource"
 ---
 
 # hippo-memory.com design system
+
+The home page has its own design since 2026-11-16 (Lagoon: the `home` tokens above and `src/styles/home.css`). Everything else here holds for every other page.
 
 **2026-11-12 revamp, "Card catalogue".** The owner rejected the dark lime Terminal Native site as AI slop and asked for a full revamp after a study of successful startup sites (32 home pages; the report is in the PR). The direction:
 
@@ -56,7 +63,9 @@ The chrome stays quiet: warm paper, three ink roles, hairline rules, one accent.
 
 ## Client JavaScript
 
-- `HeroScene.astro` (about 1 KB): plays `public/hero-cabinet.mp4` (about 270 KB) over its poster `public/hero-cabinet.webp` once the hero is on screen and the browser is idle, pauses it off screen, and moves the Monday and Tuesday captions with it. Both files come from the three.js scene in `scripts/hero/cabinet.js`: run `scripts/hero/render-hero.mjs` after any change to the scene. A live WebGL scene blocked the main thread for over 2 seconds on a 4x slower phone CPU (12 Nov 2026), so three.js runs at build time only.
+- `src/scripts/home-gl.js` (three.js and GSAP, about 188 KB gzipped): the home hero's glass card deck and the pinned film in 02. The page imports it after load when the browser is idle, and the film builds its scene only when its section is within 1.5 screens; the film's layout class is set at once so anchor links land where they aim. The CSS deck (`.hero-fallback`) holds the first screen until the WebGL deck draws. Both scenes on page load blocked the main thread for 1.1 s on a 4x slower phone CPU (Lighthouse mobile 76); deferred, Lighthouse mobile scored 93 to 96 (16 Nov 2026).
+- The home page's inline scripts: the Recall demo, the tabs, copy buttons, command marquees, the colour rails, the 100-square grids and the 5,882-square call grid.
+- `public/hero-cabinet.webp`: the poster on the share cards (`scripts/make-images.mjs`), rendered from the three.js scene in `scripts/hero/cabinet.js` by `scripts/hero/render-hero.mjs`.
 - `CardCabinet.astro` (an inline SVG with a small inline script, about 52 KB gzipped with its page): the card-cabinet figure beside the /how-it-works/ intro. It tours the days by itself, pauses while the reader drags it or uses the arrow keys, and holds still under reduced motion. Edit `scripts/figure/build-cabinet.mjs` and re-run it; never edit the component by hand.
 - `DecayCurve.tsx`: the one Preact island, on /how-it-works/.
 - `src/layouts/Base.astro`: copy buttons and the scroll-edge fade.
@@ -64,10 +73,10 @@ The chrome stays quiet: warm paper, three ink roles, hairline rules, one accent.
 ## Identity
 
 Developer tool, receipts-led. The site argues with numbers and publishes its own
-bad results, each linked to its source file. The home page runs: the hero and its
-proofs, the problem, a real session, the test, how it works, why no model writes
-memories by default, the public tests with their losses, teams, local data, who
-should use something else, two FAQ answers, install.
+bad results, each linked to its source file. The home page runs: the hero, 01 a Recall
+demo on a sample store, 02 a film that follows one memory, 03 what hippo does, 04 repeat
+mistakes per 100 chances with its caveat, 05 zero model calls to store a memory, 06 one
+memory with three readers, 07 memory you own, the dashboard, questions, install.
 
 ## Hierarchy grammar
 

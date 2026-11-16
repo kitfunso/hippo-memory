@@ -1,47 +1,705 @@
 ---
-import Base from '../layouts/Base.astro';
-import Nav from '../components/Nav.astro';
-import Hero from '../components/Hero.astro';
-import HeroScene from '../components/HeroScene.astro';
-import Problem from '../components/Problem.astro';
-import Session from '../components/Session.astro';
-import HomeHow from '../components/HomeHow.astro';
-import Different from '../components/Different.astro';
-import TheTest from '../components/TheTest.astro';
-import HomeBench from '../components/HomeBench.astro';
-import HomeTeams from '../components/HomeTeams.astro';
-import LocalFirst from '../components/LocalFirst.astro';
-import Compare from '../components/Compare.astro';
-import Faq from '../components/Faq.astro';
-import GetStarted from '../components/GetStarted.astro';
-import Footer from '../components/Footer.astro';
-import { site, faqPick } from '../content/site';
+// Home page in the Lagoon design. Fonts, three.js and GSAP are bundled, so the page loads nothing from a CDN.
+import '@fontsource/schibsted-grotesk/latin-600.css';
+import '@fontsource/schibsted-grotesk/latin-700.css';
+import '@fontsource/schibsted-grotesk/latin-800.css';
+import '@fontsource/schibsted-grotesk/latin-900.css';
+import '@fontsource/instrument-sans/latin-400.css';
+import '@fontsource/instrument-sans/latin-500.css';
+import '@fontsource/instrument-sans/latin-600.css';
+import '@fontsource/instrument-serif/latin-400.css';
+import '@fontsource/spline-sans-mono/latin-400.css';
+import '@fontsource/spline-sans-mono/latin-500.css';
+import '@fontsource/spline-sans-mono/latin-600.css';
+import '../styles/home.css';
+import Head from '../components/Head.astro';
+import Beacon from '../components/Beacon.astro';
+import { site } from '../content/site';
 
-// The home FAQ is a sample; /faq/ holds every question and the FAQPage markup.
-const homeFaq = faqPick(['Do I still need CLAUDE.md?', 'What does hippo cost?']);
+const title = "hippo: one memory for every agent you'll ever use";
+const description = 'hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.';
 ---
 
-<Base title={site.title}>
-  <Nav />
-  <main id="main">
-    <Hero>
-      <HeroScene slot="figure" />
-    </Hero>
-    <Problem />
-    <Session />
-    <TheTest />
-    <HomeHow />
-    <Different />
-    <HomeBench />
-    <HomeTeams />
-    <section class="border-t border-rule bg-paper-2">
-      <div class="wrap grid gap-14 py-(--section-y) lg:grid-cols-2 lg:gap-16">
-        <LocalFirst />
-        <Compare />
+<!doctype html>
+<html lang="en-GB" class="static">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<Head title={title} description={description} />
+<meta name="theme-color" content="#0b1014">
+<meta name="color-scheme" content="dark">
+</head>
+<body>
+<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false"><defs><mask id="m-openclaw" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18"><g fill="#fff"><g fill="none" stroke="#fff" stroke-width="2.07" stroke-linecap="round"><path d="M6.926 4.563 Q6.149 1.35 3.816 1.62" /><path d="M11.074 4.563 Q11.851 1.35 14.184 1.62" /></g><rect x="5.4" y="12.96" width="2.52" height="3.24" rx="1.26" /><rect x="10.08" y="12.96" width="2.52" height="3.24" rx="1.26" /><circle cx="2.7" cy="9.59" r="1.8" /><circle cx="15.3" cy="9.59" r="1.8" /><ellipse cx="9" cy="8.64" rx="6.48" ry="5.94" /></g><g fill="#000"><ellipse cx="6.149" cy="7.69" rx="1.426" ry="1.544" /><ellipse cx="11.851" cy="7.69" rx="1.426" ry="1.544" /></g><g fill="#fff"><circle cx="5.522" cy="7.134" r="0.741" /><circle cx="11.224" cy="7.134" r="0.741" /></g></mask><symbol id="logo-16" viewBox="0 0 16 14"><rect x="2" y="1" width="3" height="1" fill="#0a0a0a"/><rect x="6" y="1" width="4" height="1" fill="#0a0a0a"/><rect x="11" y="1" width="3" height="1" fill="#0a0a0a"/><rect x="1" y="2" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="2" width="1" height="1" fill="#cfe3ea"/><rect x="3" y="2" width="1" height="1" fill="#5eead4"/><rect x="4" y="2" width="2" height="1" fill="#0a0a0a"/><rect x="6" y="2" width="4" height="1" fill="#cfe3ea"/><rect x="10" y="2" width="2" height="1" fill="#0a0a0a"/><rect x="12" y="2" width="1" height="1" fill="#5eead4"/><rect x="13" y="2" width="1" height="1" fill="#cfe3ea"/><rect x="14" y="2" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="3" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="3" width="1" height="1" fill="#5eead4"/><rect x="3" y="3" width="1" height="1" fill="#0a0a0a"/><rect x="4" y="3" width="8" height="1" fill="#cfe3ea"/><rect x="12" y="3" width="1" height="1" fill="#0a0a0a"/><rect x="13" y="3" width="1" height="1" fill="#5eead4"/><rect x="14" y="3" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="4" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="4" width="2" height="1" fill="#cfe3ea"/><rect x="5" y="4" width="1" height="1" fill="#0a0a0a"/><rect x="6" y="4" width="1" height="1" fill="#ffffff"/><rect x="7" y="4" width="2" height="1" fill="#cfe3ea"/><rect x="9" y="4" width="1" height="1" fill="#0a0a0a"/><rect x="10" y="4" width="1" height="1" fill="#ffffff"/><rect x="11" y="4" width="2" height="1" fill="#cfe3ea"/><rect x="13" y="4" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="5" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="5" width="2" height="1" fill="#cfe3ea"/><rect x="5" y="5" width="2" height="1" fill="#0a0a0a"/><rect x="7" y="5" width="2" height="1" fill="#cfe3ea"/><rect x="9" y="5" width="2" height="1" fill="#0a0a0a"/><rect x="11" y="5" width="2" height="1" fill="#cfe3ea"/><rect x="13" y="5" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="6" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="6" width="10" height="1" fill="#cfe3ea"/><rect x="13" y="6" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="7" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="7" width="12" height="1" fill="#cfe3ea"/><rect x="14" y="7" width="1" height="1" fill="#0a0a0a"/><rect x="0" y="8" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="8" width="5" height="1" fill="#cfe3ea"/><rect x="6" y="8" width="1" height="1" fill="#0a0a0a"/><rect x="7" y="8" width="2" height="1" fill="#cfe3ea"/><rect x="9" y="8" width="1" height="1" fill="#0a0a0a"/><rect x="10" y="8" width="5" height="1" fill="#cfe3ea"/><rect x="15" y="8" width="1" height="1" fill="#0a0a0a"/><rect x="0" y="9" width="2" height="1" fill="#5eead4"/><rect x="2" y="9" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="9" width="10" height="1" fill="#cfe3ea"/><rect x="13" y="9" width="1" height="1" fill="#0a0a0a"/><rect x="14" y="9" width="2" height="1" fill="#5eead4"/><rect x="2" y="10" width="12" height="1" fill="#5eead4"/><rect x="3" y="12" width="3" height="1" fill="#5eead4"/><rect x="10" y="12" width="3" height="1" fill="#5eead4"/></symbol><symbol id="logo-32" viewBox="0 0 32 27"><rect x="5" y="0" width="4" height="1" fill="#0a0a0a"/><rect x="23" y="0" width="4" height="1" fill="#0a0a0a"/><rect x="4" y="1" width="1" height="1" fill="#0a0a0a"/><rect x="5" y="1" width="4" height="1" fill="#cfe3ea"/><rect x="9" y="1" width="1" height="1" fill="#0a0a0a"/><rect x="12" y="1" width="8" height="1" fill="#0a0a0a"/><rect x="22" y="1" width="1" height="1" fill="#0a0a0a"/><rect x="23" y="1" width="4" height="1" fill="#cfe3ea"/><rect x="27" y="1" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="2" width="1" height="1" fill="#0a0a0a"/><rect x="4" y="2" width="2" height="1" fill="#cfe3ea"/><rect x="6" y="2" width="3" height="1" fill="#b8fff2"/><rect x="9" y="2" width="1" height="1" fill="#cfe3ea"/><rect x="10" y="2" width="2" height="1" fill="#0a0a0a"/><rect x="12" y="2" width="8" height="1" fill="#cfe3ea"/><rect x="20" y="2" width="2" height="1" fill="#0a0a0a"/><rect x="22" y="2" width="1" height="1" fill="#cfe3ea"/><rect x="23" y="2" width="3" height="1" fill="#b8fff2"/><rect x="26" y="2" width="2" height="1" fill="#cfe3ea"/><rect x="28" y="2" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="3" width="1" height="1" fill="#0a0a0a"/><rect x="4" y="3" width="1" height="1" fill="#cfe3ea"/><rect x="5" y="3" width="3" height="1" fill="#b8fff2"/><rect x="8" y="3" width="2" height="1" fill="#0a0a0a"/><rect x="10" y="3" width="12" height="1" fill="#cfe3ea"/><rect x="22" y="3" width="2" height="1" fill="#0a0a0a"/><rect x="24" y="3" width="3" height="1" fill="#b8fff2"/><rect x="27" y="3" width="1" height="1" fill="#cfe3ea"/><rect x="28" y="3" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="4" width="1" height="1" fill="#0a0a0a"/><rect x="4" y="4" width="1" height="1" fill="#cfe3ea"/><rect x="5" y="4" width="1" height="1" fill="#b8fff2"/><rect x="6" y="4" width="1" height="1" fill="#cfe3ea"/><rect x="7" y="4" width="1" height="1" fill="#0a0a0a"/><rect x="8" y="4" width="16" height="1" fill="#cfe3ea"/><rect x="24" y="4" width="1" height="1" fill="#0a0a0a"/><rect x="25" y="4" width="1" height="1" fill="#cfe3ea"/><rect x="26" y="4" width="1" height="1" fill="#b8fff2"/><rect x="27" y="4" width="1" height="1" fill="#cfe3ea"/><rect x="28" y="4" width="1" height="1" fill="#0a0a0a"/><rect x="4" y="5" width="1" height="1" fill="#0a0a0a"/><rect x="5" y="5" width="1" height="1" fill="#cfe3ea"/><rect x="6" y="5" width="1" height="1" fill="#0a0a0a"/><rect x="7" y="5" width="3" height="1" fill="#cfe3ea"/><rect x="10" y="5" width="2" height="1" fill="#0a0a0a"/><rect x="12" y="5" width="8" height="1" fill="#cfe3ea"/><rect x="20" y="5" width="2" height="1" fill="#0a0a0a"/><rect x="22" y="5" width="3" height="1" fill="#cfe3ea"/><rect x="25" y="5" width="1" height="1" fill="#0a0a0a"/><rect x="26" y="5" width="1" height="1" fill="#cfe3ea"/><rect x="27" y="5" width="1" height="1" fill="#0a0a0a"/><rect x="5" y="6" width="2" height="1" fill="#0a0a0a"/><rect x="7" y="6" width="2" height="1" fill="#cfe3ea"/><rect x="9" y="6" width="2" height="1" fill="#0a0a0a"/><rect x="11" y="6" width="1" height="1" fill="#ffffff"/><rect x="12" y="6" width="1" height="1" fill="#0a0a0a"/><rect x="13" y="6" width="6" height="1" fill="#cfe3ea"/><rect x="19" y="6" width="2" height="1" fill="#0a0a0a"/><rect x="21" y="6" width="1" height="1" fill="#ffffff"/><rect x="22" y="6" width="1" height="1" fill="#0a0a0a"/><rect x="23" y="6" width="2" height="1" fill="#cfe3ea"/><rect x="25" y="6" width="2" height="1" fill="#0a0a0a"/><rect x="5" y="7" width="1" height="1" fill="#0a0a0a"/><rect x="6" y="7" width="3" height="1" fill="#cfe3ea"/><rect x="9" y="7" width="4" height="1" fill="#0a0a0a"/><rect x="13" y="7" width="6" height="1" fill="#cfe3ea"/><rect x="19" y="7" width="4" height="1" fill="#0a0a0a"/><rect x="23" y="7" width="3" height="1" fill="#cfe3ea"/><rect x="26" y="7" width="1" height="1" fill="#0a0a0a"/><rect x="5" y="8" width="1" height="1" fill="#0a0a0a"/><rect x="6" y="8" width="4" height="1" fill="#cfe3ea"/><rect x="10" y="8" width="2" height="1" fill="#0a0a0a"/><rect x="12" y="8" width="8" height="1" fill="#cfe3ea"/><rect x="20" y="8" width="2" height="1" fill="#0a0a0a"/><rect x="22" y="8" width="4" height="1" fill="#cfe3ea"/><rect x="26" y="8" width="1" height="1" fill="#0a0a0a"/><rect x="5" y="9" width="1" height="1" fill="#0a0a0a"/><rect x="6" y="9" width="3" height="1" fill="#cfe3ea"/><rect x="9" y="9" width="14" height="1" fill="#7f97a1"/><rect x="23" y="9" width="3" height="1" fill="#cfe3ea"/><rect x="26" y="9" width="1" height="1" fill="#0a0a0a"/><rect x="4" y="10" width="1" height="1" fill="#0a0a0a"/><rect x="5" y="10" width="2" height="1" fill="#cfe3ea"/><rect x="7" y="10" width="2" height="1" fill="#7f97a1"/><rect x="9" y="10" width="14" height="1" fill="#cfe3ea"/><rect x="23" y="10" width="2" height="1" fill="#7f97a1"/><rect x="25" y="10" width="2" height="1" fill="#cfe3ea"/><rect x="27" y="10" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="11" width="1" height="1" fill="#0a0a0a"/><rect x="4" y="11" width="1" height="1" fill="#cfe3ea"/><rect x="5" y="11" width="2" height="1" fill="#7f97a1"/><rect x="7" y="11" width="18" height="1" fill="#cfe3ea"/><rect x="25" y="11" width="2" height="1" fill="#7f97a1"/><rect x="27" y="11" width="1" height="1" fill="#cfe3ea"/><rect x="28" y="11" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="12" width="1" height="1" fill="#0a0a0a"/><rect x="3" y="12" width="26" height="1" fill="#cfe3ea"/><rect x="29" y="12" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="13" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="13" width="28" height="1" fill="#cfe3ea"/><rect x="30" y="13" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="14" width="1" height="1" fill="#0a0a0a"/><rect x="2" y="14" width="28" height="1" fill="#cfe3ea"/><rect x="30" y="14" width="1" height="1" fill="#0a0a0a"/><rect x="0" y="15" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="15" width="30" height="1" fill="#cfe3ea"/><rect x="31" y="15" width="1" height="1" fill="#0a0a0a"/><rect x="0" y="16" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="16" width="9" height="1" fill="#cfe3ea"/><rect x="10" y="16" width="2" height="1" fill="#0a0a0a"/><rect x="12" y="16" width="8" height="1" fill="#cfe3ea"/><rect x="20" y="16" width="2" height="1" fill="#0a0a0a"/><rect x="22" y="16" width="9" height="1" fill="#cfe3ea"/><rect x="31" y="16" width="1" height="1" fill="#0a0a0a"/><rect x="0" y="17" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="17" width="8" height="1" fill="#cfe3ea"/><rect x="9" y="17" width="4" height="1" fill="#0a0a0a"/><rect x="13" y="17" width="6" height="1" fill="#cfe3ea"/><rect x="19" y="17" width="4" height="1" fill="#0a0a0a"/><rect x="23" y="17" width="8" height="1" fill="#cfe3ea"/><rect x="31" y="17" width="1" height="1" fill="#0a0a0a"/><rect x="0" y="18" width="1" height="1" fill="#0a0a0a"/><rect x="1" y="18" width="9" height="1" fill="#cfe3ea"/><rect x="10" y="18" width="2" height="1" fill="#0a0a0a"/><rect x="12" y="18" width="8" height="1" fill="#cfe3ea"/><rect x="20" y="18" width="2" height="1" fill="#0a0a0a"/><rect x="22" y="18" width="9" height="1" fill="#cfe3ea"/><rect x="31" y="18" width="1" height="1" fill="#0a0a0a"/><rect x="0" y="19" width="4" height="1" fill="#5eead4"/><rect x="4" y="19" width="1" height="1" fill="#0a0a0a"/><rect x="5" y="19" width="22" height="1" fill="#cfe3ea"/><rect x="27" y="19" width="1" height="1" fill="#0a0a0a"/><rect x="28" y="19" width="4" height="1" fill="#5eead4"/><rect x="0" y="20" width="4" height="1" fill="#5eead4"/><rect x="4" y="20" width="1" height="1" fill="#0a0a0a"/><rect x="5" y="20" width="22" height="1" fill="#cfe3ea"/><rect x="27" y="20" width="1" height="1" fill="#0a0a0a"/><rect x="28" y="20" width="4" height="1" fill="#5eead4"/><rect x="2" y="21" width="28" height="1" fill="#5eead4"/><rect x="4" y="22" width="24" height="1" fill="#5eead4"/><rect x="6" y="24" width="6" height="1" fill="#5eead4"/><rect x="20" y="24" width="6" height="1" fill="#5eead4"/><rect x="6" y="25" width="6" height="1" fill="#5eead4"/><rect x="20" y="25" width="6" height="1" fill="#5eead4"/></symbol><symbol id="i-claude" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></symbol><symbol id="i-codex" viewBox="9.6 9.6 80.8 80.8"><path d="M83.7733 42.8087C84.6678 40.1149 84.9771 37.2613 84.6807 34.4385C84.3843 31.6156 83.489 28.8885 82.0544 26.4394C77.6908 18.8436 68.9203 14.9365 60.3548 16.7725C57.9831 14.1344 54.9591 12.1668 51.5864 11.0673C48.2137 9.96772 44.611 9.77498 41.1402 10.5084C37.6694 11.2418 34.4527 12.8755 31.8132 15.2455C29.1736 17.6155 27.204 20.6383 26.1024 24.0103C23.3212 24.5806 20.6938 25.738 18.3958 27.405C16.0977 29.0721 14.1819 31.2104 12.7765 33.6772C8.36538 41.2609 9.3669 50.8267 15.2527 57.3327C14.3549 60.0251 14.0424 62.8782 14.3361 65.7012C14.6298 68.5241 15.523 71.2518 16.9558 73.7017C21.325 81.3002 30.1011 85.207 38.6712 83.3686C40.5554 85.4904 42.8707 87.1858 45.4623 88.3416C48.0539 89.4975 50.8622 90.0871 53.6999 90.0713C62.4793 90.079 70.2575 84.4114 72.9393 76.0515C75.7201 75.4802 78.347 74.3225 80.6449 72.6555C82.9427 70.9886 84.8587 68.8507 86.2649 66.3846C90.6227 58.8145 89.6172 49.3005 83.7733 42.8087ZM53.6999 84.8356C50.1955 84.8411 46.801 83.6129 44.1116 81.3661L44.5848 81.098L60.5123 71.9043C60.9087 71.6718 61.2379 71.3402 61.4674 70.942C61.6969 70.5439 61.8189 70.0929 61.8215 69.6333V47.1769L68.5553 51.072C68.6225 51.1063 68.6694 51.1707 68.6814 51.2456V69.854C68.6641 78.1208 61.9667 84.8183 53.6999 84.8356ZM21.4977 71.0843C19.7402 68.0497 19.1092 64.4925 19.7156 61.0386L20.1885 61.3225L36.1321 70.5165C36.5266 70.748 36.9757 70.87 37.4331 70.87C37.8905 70.87 38.3396 70.748 38.7341 70.5165L58.21 59.2883V67.0628C58.2081 67.1031 58.1973 67.1424 58.1782 67.1779C58.1591 67.2134 58.1322 67.2441 58.0996 67.2678L41.9671 76.5722C34.798 80.7022 25.6388 78.2463 21.4977 71.0843ZM17.3026 36.3898C19.0723 33.3357 21.8655 31.0062 25.1878 29.8138V48.7376C25.1818 49.1949 25.2986 49.6453 25.5261 50.042C25.7535 50.4387 26.0833 50.7671 26.4809 50.9928L45.8622 62.1739L39.1283 66.069C39.0919 66.0883 39.0513 66.0984 39.0101 66.0984C38.9689 66.0984 38.9283 66.0883 38.8919 66.069L22.7908 56.7809C15.6359 52.6337 13.1822 43.4816 17.3026 36.3112V36.3898ZM72.624 49.2426L53.1792 37.9512L59.8976 34.0718C59.9341 34.0524 59.9747 34.0423 60.016 34.0423C60.0573 34.0423 60.0979 34.0524 60.1344 34.0718L76.2355 43.3761C78.6973 44.7966 80.7043 46.8882 82.0221 49.4065C83.3398 51.9249 83.914 54.7661 83.6775 57.5985C83.4411 60.431 82.4038 63.1377 80.6867 65.4027C78.9696 67.6677 76.6436 69.3975 73.9803 70.3901V51.466C73.9663 51.0096 73.834 50.5647 73.5962 50.1749C73.3584 49.7851 73.0234 49.4638 72.624 49.2426ZM79.3261 39.1657L78.8529 38.8815L62.9411 29.6089C62.5442 29.376 62.0924 29.2532 61.6322 29.2532C61.172 29.2532 60.7202 29.376 60.3233 29.6089L40.8629 40.8374V33.0628C40.8587 33.0233 40.8654 32.9834 40.882 32.9473C40.8987 32.9113 40.9248 32.8803 40.9575 32.8579L57.0586 23.5692C59.5263 22.1476 62.3478 21.458 65.193 21.5811C68.0382 21.7042 70.7896 22.6348 73.1253 24.2642C75.461 25.8936 77.2845 28.1543 78.3825 30.782C79.4806 33.4097 79.8077 36.2957 79.3257 39.1025V39.1657H79.3261ZM37.1888 52.9484L30.455 49.069C30.4213 49.0487 30.3925 49.0212 30.3707 48.9884C30.3488 48.9557 30.3345 48.9186 30.3286 48.8797V30.3188C30.3323 27.4714 31.1466 24.6839 32.6761 22.2822C34.2057 19.8805 36.3874 17.9639 38.9661 16.7564C41.5448 15.549 44.4139 15.1005 47.2381 15.4636C50.0622 15.8267 52.7247 16.9862 54.9141 18.8067L54.4409 19.0748L38.5134 28.2686C38.117 28.5011 37.7879 28.8327 37.5584 29.2308C37.329 29.629 37.207 30.0799 37.2045 30.5395L37.1888 52.9487V52.9484ZM40.8472 45.0632L49.5209 40.0643L58.21 45.0635V55.0615L49.5523 60.0608L40.8632 55.0615L40.8472 45.0632Z"/></symbol><symbol id="i-cursor" viewBox="0 0 24 24"><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></symbol><symbol id="i-pi" viewBox="0 0 24 24"><path d="M0 0v24h6v-6h6v-6H6V6h6v6h6V0Zm18 12v12h6V12Z"/></symbol><symbol id="i-opencode" viewBox="0 0 24 24"><path d="M22 24H2V0h20zM17 4.8H7v14.4h10z"/></symbol><symbol id="i-mcp" viewBox="0 0 24 24"><path d="M13.85 0a4.16 4.16 0 0 0-2.95 1.217L1.456 10.66a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l9.442-9.442a2.49 2.49 0 0 1 3.541 0 2.49 2.49 0 0 1 0 3.541L8.59 12.97l-.1.1a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l.1-.098 7.03-7.034a2.49 2.49 0 0 1 3.542 0l.049.05a2.49 2.49 0 0 1 0 3.54l-8.54 8.54a1.96 1.96 0 0 0 0 2.755l1.753 1.753a.835.835 0 0 0 1.18 0 .835.835 0 0 0 0-1.18l-1.753-1.753a.266.266 0 0 1 0-.394l8.54-8.54a4.185 4.185 0 0 0 0-5.9l-.05-.05a4.16 4.16 0 0 0-2.95-1.218c-.2 0-.401.02-.6.048a4.17 4.17 0 0 0-1.17-3.552A4.16 4.16 0 0 0 13.85 0m0 3.333a.84.84 0 0 0-.59.245L6.275 10.56a4.186 4.186 0 0 0 0 5.902 4.186 4.186 0 0 0 5.902 0L19.16 9.48a.835.835 0 0 0 0-1.18.835.835 0 0 0-1.18 0l-6.985 6.984a2.49 2.49 0 0 1-3.54 0 2.49 2.49 0 0 1 0-3.54l6.983-6.985a.835.835 0 0 0 0-1.18.84.84 0 0 0-.59-.245"/></symbol><symbol id="i-openclaw" viewBox="0 0 18 18"><rect width="18" height="18" mask="url(#m-openclaw)"/></symbol></defs></svg>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="announce"><a href="https://github.com/kitfunso/hippo-memory"><span>hippo-memory {site.version} is out</span><b>See the source &rarr;</b></a></div>
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="logo" href="#top" aria-label="hippo home"><svg viewBox="0 0 16 14" shape-rendering="crispEdges" aria-hidden="true"><use href="#logo-16"/></svg>hippo</a>
+    <ul class="links" id="links">
+      <li><a href="#product">Product</a></li>
+      <li><a href="#results">Benchmarks</a></li>
+      <li><a href="/teams/">Enterprise</a></li>
+      <li><a href="https://github.com/kitfunso/hippo-memory#readme">Docs</a></li>
+      <li><a href="https://github.com/kitfunso/hippo-memory">GitHub</a></li>
+    </ul>
+    <div class="nav-r">
+      <a class="btn btn-w" href="#install">Install</a>
+      <button class="menu" type="button" aria-expanded="false" aria-controls="links" aria-label="Open the menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18" stroke="currentColor" stroke-width="1.8"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<section class="hero" id="top">
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <div class="hero-fallback" aria-hidden="true"><div class="stackart"><i style="--k:0;--c:rgba(94,234,212,.7)"></i><i style="--k:1;--c:rgba(71,216,209,.7)"></i><i style="--k:2;--c:rgba(40,189,205,.7)"></i><i style="--k:3;--c:rgba(34,166,201,.7)"></i><i style="--k:4;--c:rgba(26,150,205,.7)"></i><i style="--k:5;--c:rgba(33,125,207,.7)"></i><i style="--k:6;--c:rgba(43,95,201,.7)"></i><i style="--k:7;--c:rgba(47,75,179,.7)"></i></div></div>
+  <div class="hero-copy">
+    <h1>One memory for every agent you'll ever use</h1>
+    <p class="lead">hippo saves what you teach one coding agent in your repo, and your other agents read it, so switching agents stops meaning starting over.</p>
+    <div class="ctas">
+      <a class="btn btn-w" href="#install">Install hippo</a>
+      <button class="btn btn-g copy" type="button" data-copy="prompt">Copy setup prompt</button>
+    </div>
+    <div class="works">
+      <span class="wl">works with</span>
+      <div class="marq">
+        <div class="mtrack">
+          <span class="ag"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-claude"/></svg><span>Claude Code</span></span>
+          <span class="ag"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-codex"/></svg><span>Codex</span></span>
+          <span class="ag"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cursor"/></svg><span>Cursor</span></span>
+          <span class="ag"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pi"/></svg><span>Pi</span></span>
+          <span class="ag"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-openclaw"/></svg><span>OpenClaw</span></span>
+          <span class="ag"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-opencode"/></svg><span>OpenCode</span></span>
+          <span class="ag"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mcp"/></svg><span>any MCP client</span></span>
+          <span class="ag dup" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-claude"/></svg><span data-n="Claude Code"></span></span>
+          <span class="ag dup" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-codex"/></svg><span data-n="Codex"></span></span>
+          <span class="ag dup" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cursor"/></svg><span data-n="Cursor"></span></span>
+          <span class="ag dup" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pi"/></svg><span data-n="Pi"></span></span>
+          <span class="ag dup" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-openclaw"/></svg><span data-n="OpenClaw"></span></span>
+          <span class="ag dup" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-opencode"/></svg><span data-n="OpenCode"></span></span>
+          <span class="ag dup" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mcp"/></svg><span data-n="any MCP client"></span></span>
+        </div>
       </div>
-    </section>
-    <Faq items={homeFaq} moreHref="/faq/" />
-    <GetStarted />
-  </main>
-  <Footer />
-</Base>
+    </div>
+  </div>
+</section>
+
+<section class="try" id="try" aria-labelledby="h-try">
+  <svg class="rail" id="rail-try" aria-hidden="true"></svg>
+  <div class="wrap">
+    <div class="shead rv">
+      <span class="num" aria-hidden="true">01</span>
+      <div>
+        <h2 class="big" id="h-try">See hippo in action</h2>
+        <p class="lede">This is how your agent's memory looks. Ask it something.</p>
+      </div>
+    </div>
+    <div class="frame rv" id="demo">
+      <div class="tabs" role="tablist" aria-label="Try hippo">
+        <button class="tab" role="tab" id="t-recall" aria-controls="p-recall" aria-selected="true">Recall</button>
+        <button class="tab" role="tab" id="t-tell" aria-controls="p-tell" aria-selected="false" tabindex="-1">Tell it once</button>
+        <button class="tab" role="tab" id="t-disk" aria-controls="p-disk" aria-selected="false" tabindex="-1">On disk</button>
+      </div>
+      <div class="panel recall" role="tabpanel" id="p-recall" aria-labelledby="t-recall">
+        <aside class="store" aria-label="Sample store">
+          <div class="col-h"><code>.hippo/ store</code><code id="store-n"></code></div>
+          <ol id="store"></ol>
+        </aside>
+        <div class="center">
+          <label class="qbox" for="q"><code>hippo recall<span class="oq">&nbsp;"</span></code><input id="q" type="text" autocomplete="off" spellcheck="false" aria-label="Ask the sample store a question"><code class="suf">" --why</code></label>
+          <div class="chips" id="examples">
+            <button type="button"><code>deploy migrations</code></button>
+            <button type="button"><code>can I mock the database in tests</code></button>
+            <button type="button"><code>add a retry to the payments call</code></button>
+            <button type="button"><code>which env file does staging use</code></button>
+          </div>
+          <pre class="out" id="out" aria-live="polite"></pre>
+        </div>
+        <aside class="side" aria-label="What the agent sees">
+          <div class="col-h"><code>session start</code><code>printed first</code></div>
+          <pre class="sess" id="sess"></pre>
+          <div class="col-h"><code>this prompt adds</code><code id="adds-n"></code></div>
+          <ol class="adds" id="adds"></ol>
+        </aside>
+      </div>
+      <div class="panel tell" role="tabpanel" id="p-tell" aria-labelledby="t-tell" hidden>
+        <div class="l">
+          <label for="said">Your correction</label>
+          <textarea id="said" spellcheck="false"></textarea>
+          <div class="row"><button class="btn btn-a" id="endsess" type="button">End the session</button></div>
+          <div class="chips" id="tell-ex">
+            <button type="button"><code>always run the linter before a commit</code></button>
+            <button type="button"><code>use tabs in the Go files</code></button>
+          </div>
+          <pre class="log" id="log" aria-live="polite"></pre>
+        </div>
+        <div class="r">
+          <div class="col-h" style="padding:0 0 10px"><code>next session starts with</code></div>
+          <pre class="sess" id="sess2"></pre>
+        </div>
+      </div>
+      <div class="panel disk" role="tabpanel" id="p-disk" aria-labelledby="t-disk" hidden>
+        <div class="tree"><code>.hippo/</code><ul><li><code>hippo.db</code></li><li><code>config.json</code></li><li><code>episodic/</code><ul id="files"></ul></li></ul></div>
+        <div class="file"><div class="path" id="fpath"></div><pre id="fbody"></pre></div>
+      </div>
+    </div>
+    <p class="quiet rv">Run it on your own repo: <code>npm install -g hippo-memory</code> then <code>hippo init</code><button class="iconbtn copy" data-copy="npm install -g hippo-memory &amp;&amp; hippo init" type="button"><span class="lbl">Copy both install commands</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></p>
+  </div>
+</section>
+
+<!--@film-->
+<section class="story" id="story" data-sec="2" aria-labelledby="story-h">
+  <div class="story-pad" aria-hidden="true"></div>
+  <div class="pin">
+    <div class="win">
+      <div class="fallback" aria-hidden="true"><div class="stackart"><i style="--k:0;--c:rgba(94,234,212,.7)"></i><i style="--k:1;--c:rgba(71,216,209,.7)"></i><i style="--k:2;--c:rgba(40,189,205,.7)"></i><i style="--k:3;--c:rgba(34,166,201,.7)"></i><i style="--k:4;--c:rgba(26,150,205,.7)"></i><i style="--k:5;--c:rgba(33,125,207,.7)"></i><i style="--k:6;--c:rgba(43,95,201,.7)"></i><i style="--k:7;--c:rgba(47,75,179,.7)"></i></div></div>
+      <div class="hud" aria-hidden="true">
+        <div class="box"><i></i><i></i><i></i><i></i><span class="tag"></span></div>
+        <div class="stagenum"></div>
+      </div>
+    </div>
+    <a class="btn btn-g skipfilm" href="#product">Skip to 03 <span aria-hidden="true">&darr;</span></a>
+  </div>
+  <div class="stages">
+    <article class="stage intro"><div class="cap rv">
+      <span class="num" aria-hidden="true">02</span>
+      <h2 id="story-h">Follow one memory</h2>
+      <p>Scroll to follow one rule you gave your agent.</p>
+    </div></article>
+    <article class="stage"><div class="cap rv"><h3><span class="n">2.1</span>You correct your agent once</h3><p>Say always, never or must, and hippo's session-end hook pins it.</p></div></article>
+    <article class="stage"><div class="cap rv"><h3><span class="n">2.2</span>Next session, it's already there</h3><p>Your rules load before your first prompt.</p></div></article>
+    <article class="stage"><div class="cap rv"><h3><span class="n">2.3</span>Every agent reads it</h3><p>All your agents read one store, so switching loses nothing.</p></div></article>
+    <article class="stage"><div class="cap rv"><h3><span class="n">2.4</span>Each prompt gets what's relevant</h3><p>Your pinned rules, plus up to 5 memories that share its words.</p></div></article>
+    <article class="stage"><div class="cap rv"><h3><span class="n">2.5</span>A wrong memory gets weaker</h3><p>After a bad answer, <code>hippo outcome --bad</code> weakens the memories behind it.</p></div></article>
+    <article class="stage"><div class="cap rv"><h3><span class="n">2.6</span>A new fact replaces the old</h3><p>With <code>hippo supersede</code>, the old one leaves recall but stays on record.</p></div></article>
+    <article class="stage"><div class="cap rv"><h3><span class="n">2.7</span>Unused fades, pinned stays</h3><p>Unused memories weaken over a year or two, and pinned ones never fade.</p></div></article>
+    <div class="stage tail" aria-hidden="true"></div>
+  </div>
+</section>
+<!--/@film-->
+
+<!--@product-->
+<section class="sec" id="product" aria-labelledby="h-product">
+  <div class="wrap">
+    <div class="shead rv">
+      <span class="num" aria-hidden="true">03</span>
+      <h2 class="big" id="h-product">What hippo does</h2>
+    </div>
+    <div class="panels">
+      <article class="pc rv"><div class="fig"><svg viewBox="0 0 240 84" aria-hidden="true"><rect x="0" y="10" width="170" height="9" rx="2" fill="#25313b"/><rect x="0" y="32" width="62" height="9" rx="2" fill="#25313b"/><rect x="68" y="32" width="44" height="9" rx="2" fill="#5eead4"/><rect x="118" y="32" width="84" height="9" rx="2" fill="#25313b"/><rect x="0" y="54" width="128" height="9" rx="2" fill="#25313b"/><rect x="0" y="72" width="90" height="9" rx="2" fill="#1b2227"/></svg></div><h3><b>Capture.</b> Rules and errors from each session, found by word patterns.</h3><code class="cmd">SessionEnd hook</code></article>
+      <article class="pc rv"><div class="fig"><svg viewBox="0 0 240 84" aria-hidden="true"><rect x="0" y="6" width="200" height="12" fill="#5eead4"/><rect x="0" y="24" width="150" height="12" fill="#293641"/><rect x="0" y="42" width="112" height="12" fill="#25313b"/><rect x="0" y="60" width="70" height="12" fill="#1e272e"/><circle cx="218" cy="56" r="11" fill="none" stroke="#6b90ae" stroke-width="1.5"/><path d="M226 64 l9 9" stroke="#6b90ae" stroke-width="1.5"/></svg></div><h3><b>Recall.</b> Keyword search with no model or network call, and <code>--why</code> shows the match.</h3><code class="cmd">hippo recall "why did the deploy break" --why</code></article>
+      <article class="pc rv"><div class="fig"><svg viewBox="0 0 240 84" aria-hidden="true"><g fill="#293641"><rect x="0" y="20" width="22" height="60"/><rect x="30" y="12" width="22" height="68"/><rect x="90" y="16" width="22" height="64"/><rect x="120" y="8" width="22" height="72"/></g><rect x="60" y="56" width="22" height="24" fill="#22a6c9"/><path d="M71 18 v28 M64 39 l7 8 7-8" stroke="#22a6c9" stroke-width="1.5" fill="none"/><rect x="150" y="4" width="22" height="76" fill="#5eead4"/><path d="M190 60 v-40 M183 27 l7-8 7 8" stroke="#5eead4" stroke-width="1.5" fill="none"/></svg></div><h3><b>Outcomes.</b> A bad mark weakens a memory, and each recall keeps it longer.</h3><code class="cmd">hippo outcome --bad</code></article>
+      <article class="pc rv"><div class="fig"><svg viewBox="0 0 240 84" aria-hidden="true"><path d="M0.5 2.5 H62 L80 20 V82.5 H0.5 Z" fill="none" stroke="#4a6b86"/><path d="M62 2.5 V20 H80" fill="none" stroke="#4a6b86"/><rect x="12" y="30" width="14" height="6" fill="#5eead4"/><rect x="30" y="30" width="36" height="6" fill="#293641"/><rect x="12" y="44" width="54" height="6" fill="#293641"/><rect x="12" y="58" width="40" height="6" fill="#293641"/><path d="M96 42 h40" stroke="#6b90ae"/><rect x="112" y="38" width="8" height="8" fill="#22a6c9"/><rect x="146.5" y="22.5" width="90" height="40" fill="none" stroke="#324351"/><rect x="156" y="34" width="10" height="6" fill="#96ffec"/><rect x="170" y="34" width="52" height="6" fill="#293641"/><rect x="156" y="46" width="40" height="6" fill="#293641"/></svg></div><h3><b>Mirror.</b> A markdown copy of every memory to grep, commit and review.</h3><code class="cmd">.hippo/</code></article>
+      <article class="pc rv"><div class="fig"><svg viewBox="0 0 240 84" aria-hidden="true"><rect x="0" y="6" width="54" height="14" fill="#5eead4"/><rect x="56" y="6" width="92" height="14" fill="#c7fff3" opacity=".5"/><rect x="150" y="6" width="62" height="14" fill="#324351"/><rect x="214" y="6" width="26" height="14" fill="#22a6c9"/><g fill="none" stroke="#324351"><rect x="0.5" y="30.5" width="74" height="52"/><rect x="82.5" y="30.5" width="74" height="52"/><rect x="164.5" y="30.5" width="75" height="52"/></g><g fill="#25313b"><rect x="8" y="40" width="58" height="10"/><rect x="8" y="56" width="58" height="10"/><rect x="90" y="40" width="58" height="10"/><rect x="172" y="40" width="58" height="10"/><rect x="172" y="56" width="58" height="10"/></g><rect x="8" y="40" width="4" height="10" fill="#5eead4"/><rect x="172" y="56" width="4" height="10" fill="#22a6c9"/></svg></div><h3><b>Dashboard.</b> Memory health by project, on localhost.</h3><code class="cmd">hippo dashboard</code></article>
+      <article class="pc rv"><div class="fig"><svg viewBox="0 0 240 84" aria-hidden="true"><path d="M8 50 H150 M44 50 C 62 50, 62 22, 80 22 H112 C 130 22, 130 50, 148 50" fill="none" stroke="#4a6b86" stroke-width="1.5"/><g fill="#14181c" stroke="#6b90ae" stroke-width="1.5"><circle cx="12" cy="50" r="6"/><circle cx="44" cy="50" r="6"/><circle cx="96" cy="50" r="6"/><circle cx="96" cy="22" r="6"/></g><circle cx="148" cy="50" r="7" fill="#14181c" stroke="#5eead4" stroke-width="2"/><path d="M160 50 H178 M172 44 l6 6 -6 6" fill="none" stroke="#6b90ae" stroke-width="1.5"/><rect x="186.5" y="30.5" width="52" height="40" fill="none" stroke="#324351"/><g fill="#293641"><rect x="194" y="39" width="36" height="6"/><rect x="194" y="53" width="26" height="6"/></g><rect x="194" y="39" width="10" height="6" fill="#5eead4"/></svg></div><h3><b>Git history.</b> Learns from the last 30 days of commits, then each day's.</h3><code class="cmd">hippo learn --git</code></article>
+      <article class="pc rv"><div class="fig"><svg viewBox="0 0 240 84" aria-hidden="true"><g fill="#293641"><rect x="0" y="8" width="64" height="10"/><rect x="0" y="26" width="52" height="10"/><rect x="0" y="44" width="58" height="10"/></g><path d="M70 13 C 92 13, 92 31, 110 31 M60 31 H110 M66 49 C 92 49, 92 31, 110 31" fill="none" stroke="#6b90ae" stroke-width="1.5"/><rect x="114" y="26" width="64" height="10" fill="#5eead4"/><g fill="#1b2227"><rect x="0" y="66" width="44" height="8"/><rect x="50" y="66" width="30" height="8"/></g><path d="M86 70 H182" stroke="#324351" stroke-dasharray="3 3"/><rect x="188.5" y="52.5" width="51" height="30" fill="none" stroke="#324351"/><g fill="#1e272e"><rect x="196" y="60" width="34" height="5"/><rect x="196" y="70" width="24" height="5"/></g></svg></div><h3><b>Sleep.</b> Merges related memories and stores faded ones, ready to restore.</h3><code class="cmd">hippo sleep</code></article>
+      <article class="pc rv"><div class="fig"><svg viewBox="0 0 240 84" aria-hidden="true"><g fill="none" stroke="#4a6b86"><path d="M0.5 6.5 H34 L46 18 V44.5 H0.5 Z"/><path d="M0.5 50.5 H34 L46 62 V82.5 H0.5 Z"/></g><g fill="#293641"><rect x="8" y="22" width="28" height="5"/><rect x="8" y="32" width="20" height="5"/><rect x="8" y="64" width="28" height="5"/><rect x="8" y="72" width="16" height="5"/></g><path d="M54 26 C 90 26, 100 44, 136 44 M54 68 C 90 68, 100 44, 136 44" fill="none" stroke="#6b90ae" stroke-width="1.5"/><path d="M128 38 l8 6 -8 6" fill="none" stroke="#6b90ae" stroke-width="1.5"/><rect x="146.5" y="16.5" width="92" height="56" fill="none" stroke="#5eead4"/><g fill="#293641"><rect x="156" y="28" width="60" height="6"/><rect x="156" y="40" width="46" height="6"/><rect x="156" y="52" width="66" height="6"/></g><rect x="156" y="28" width="12" height="6" fill="#5eead4"/><rect x="156" y="52" width="12" height="6" fill="#5eead4"/></svg></div><h3><b>Import.</b> Brings in the notes your agents already keep, unchanged.</h3><code class="cmd">hippo import --agents</code></article>
+    </div>
+  </div>
+</section>
+<!--/@product-->
+
+<section class="sec alt" id="results" aria-labelledby="h-res">
+  <div class="wrap">
+    <div class="shead rv">
+      <span class="num" aria-hidden="true">04</span>
+      <div>
+        <h2 class="big" id="h-res">Repeat mistakes per 100 chances</h2>
+        <p class="lede">Real sessions on 29 repositories, with the plan registered before the run.</p>
+      </div>
+    </div>
+    <figure class="wfig rv" aria-label="Repeat mistakes per 100 chances: no memory 83, built-in memory 21, built-in memory plus hippo 11">
+      <div class="grids">
+        <div class="g"><div class="g-h"><span>No memory</span><b>83</b></div><div class="cells" data-n="83" data-seed="11"></div></div>
+        <div class="g"><div class="g-h"><span>Built-in memory</span><b>21</b></div><div class="cells" data-n="21" data-seed="29"></div></div>
+        <div class="g hp"><div class="g-h"><span>Built-in plus hippo</span><b>11</b></div><div class="cells" data-n="11" data-seed="47"></div></div>
+      </div>
+      <figcaption class="wf-foot"><span class="lg"><i class="r"></i>repeated</span><span class="lg"><i class="c"></i>clean</span><span class="cost">Cost with hippo: <b>1.006</b> times, the same</span></figcaption>
+    </figure>
+    <p class="limit rv"><span class="st" aria-hidden="true"><i style="background:var(--amber)"></i><i style="background:var(--red)"></i><i style="background:var(--plum)"></i></span><span>The gain was the same with lesson capture switched off, so this run cannot say hippo's stored lessons caused it. The test agent was Claude Code only, so there's no measured result for Codex or Cursor.</span></p>
+
+    <div class="pub">
+      <h3 class="rv">Public memory tests</h3>
+      <p class="lede rv">One answer model and scorer for every system we ran in a test.</p>
+      <div class="tests">
+        <div class="test rv"><div class="th"><b>DMR</b><code>495 questions</code></div>
+          <div class="brow"><span class="nm">full chat</span><span class="v" data-to="83.6">83.6</span><div class="track"><div class="fill top" style="--v:83.6"></div></div></div>
+          <div class="brow"><span class="nm">hippo</span><span class="v" data-to="77.6">77.6</span><div class="track"><div class="fill hp" style="--v:77.6"></div></div></div></div>
+        <div class="test rv"><div class="th"><b>PersonaMem v1</b><code>584 questions</code></div>
+          <div class="brow"><span class="nm">hippo</span><span class="v" data-to="72.4">72.4</span><div class="track"><div class="fill hp" style="--v:72.4"></div></div></div>
+          <div class="brow"><span class="nm">MemOS<small>published</small></span><span class="v" data-to="61.2">61.2</span><div class="track"><div class="fill" style="--v:61.2"></div></div></div></div>
+        <div class="test rv"><div class="th"><b>LongMemEval-S</b><code>495 questions</code></div>
+          <div class="brow"><span class="nm">hippo</span><span class="v" data-to="88.5">88.5</span><div class="track"><div class="fill hp" style="--v:88.5"></div></div></div></div>
+        <div class="test rv"><div class="th"><b>LoCoMo</b><code>395 questions</code></div>
+          <div class="brow"><span class="nm">Mem0</span><span class="v" data-to="94.9">94.9</span><div class="track"><div class="fill top" style="--v:94.9"></div></div></div>
+          <div class="brow"><span class="nm">hippo</span><span class="v" data-to="89.4">89.4</span><div class="track"><div class="fill hp" style="--v:89.4"></div></div></div></div>
+      </div>
+      <p class="pubnote rv">hippo used its local embedder, plus its local reranker on DMR. MemOS's score is from its own setup.</p>
+      <a class="more" href="/benchmarks/">How we test &rarr;</a>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="calls" aria-labelledby="h-calls">
+  <div class="wrap">
+    <div class="shead rv">
+      <span class="num" aria-hidden="true">05</span>
+      <div>
+        <h2 class="big" id="h-calls">Zero model calls to store a memory</h2>
+        <p class="lede">Other memory tools run what you save through a language model, an LLM on top of your LLM.</p>
+      </div>
+    </div>
+    <figure class="cg rv" aria-label="Language-model calls to store the LoCoMo test chats: Mem0 5,882, hippo 0">
+      <div class="cg-screen"><div class="cg-panes">
+        <div class="cg-pane"><div class="cg-h"><b>Mem0</b><span>calls to store LoCoMo</span></div><div class="cg-n hot" id="cgCount">5,882</div><canvas id="cgA" aria-hidden="true"></canvas></div>
+        <div class="cg-pane"><div class="cg-h"><b>hippo</b><span>calls to store LoCoMo</span></div><div class="cg-n">0</div><canvas id="cgB" aria-hidden="true"></canvas></div>
+      </div></div>
+    </figure>
+<!--@chart-->
+    <figure class="cbars rv" aria-label="Language-model calls to store one memory, default setup, by product">
+      <div class="cb-h" aria-hidden="true"><span>LLM calls per memory</span><span class="ticks"><i style="left:0">0</i><i style="left:33.333%">1</i><i style="left:66.667%">2</i><i style="left:100%">3</i></span><span></span><span>unit</span></div>
+      <div class="cb us"><span class="nm">hippo</span><span class="trk"></span><span class="val">0</span><span class="u">per memory, default path</span></div>
+      <div class="cb"><span class="nm">Mem0</span><span class="trk"><i class="bar" style="--v:1;--d:.05s"></i></span><span class="val">1</span><span class="u">per add</span></div>
+      <div class="cb"><span class="nm">Zep (Graphiti)</span><span class="trk"><i class="bar plus" style="--v:2;--d:.15s"></i></span><span class="val">2+</span><span class="u">per episode, more for duplicates and dates</span></div>
+      <div class="cb"><span class="nm">Letta</span><span class="trk"><i class="bar plus" style="--v:2;--d:.25s"></i></span><span class="val">2+</span><span class="u">per turn that writes memory, V1 server</span></div>
+      <div class="cb"><span class="nm">Supermemory</span><span class="trk unk">count not public</span><span class="val"></span><span class="u">uses a model, per its docs <span class="lo">low confidence</span></span></div>
+      <div class="cb"><span class="nm">Cognee</span><span class="trk"><i class="bar" style="--v:1;--d:.35s"></i></span><span class="val">1</span><span class="u">per text chunk, with a key</span></div>
+      <div class="cb"><span class="nm">LangMem</span><span class="trk"><i class="bar plus" style="--v:1;--d:.45s"></i></span><span class="val">1+</span><span class="u">per run</span></div>
+      <div class="cb"><span class="nm">MemOS</span><span class="trk"><i class="bar" style="--v:1;--d:.55s"></i></span><span class="val">1</span><span class="u">per message window</span></div>
+    </figure>
+<!--/@chart-->
+    <div class="cnote rv">
+<!--@loco-->      <p><b>Storing the LoCoMo test chats took Mem0 5,882 language-model calls, one per turn, and hippo none.</b></p>
+<!--/@loco-->      <p>Counts come from each product's public code and docs, 13 Nov 2026.</p>
+      <p>The exception is <code>hippo sleep</code>, which sends text to Anthropic when <code>ANTHROPIC_API_KEY</code> is set, and <code>&#123;"extraction":&#123;"enabled":false&#125;&#125;</code> turns it off.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt" id="readers" aria-labelledby="h-readers">
+  <div class="wrap">
+    <div class="shead rv">
+      <span class="num" aria-hidden="true">06</span>
+      <div>
+        <h2 class="big" id="h-readers">One memory, three readers</h2>
+        <p class="lede">You, your team and your platform lead read the same store.</p>
+      </div>
+    </div>
+    <div class="readers">
+      <article class="reader rv"><pre><span class="m">session start, payments-api</span>
+<span class="a">## Rules from the user</span>
+- never log access tokens
+- run the migration before the deploy
+
+<span class="a">&gt;</span> add a retry around the charge call</pre>
+        <div class="rb"><h3>The developer</h3><p>Say a rule with never, always or must, and every session starts with it.</p></div></article>
+      <article class="reader rv"><pre><span class="m">pull request, .hippo/ mirror</span>
+<span class="add">+ the test suite must hit a real database,</span>
+<span class="add">+   a mocked one hid a bug</span>
+<span class="del">- the v1 billing API is current</span>
+<span class="add">+ the v1 billing API is deprecated</span>
+<span class="m">2 reviewers approved</span></pre>
+        <div class="rb"><h3>The team</h3><p>Commit the markdown copy and review a rule in a pull request.</p></div></article>
+      <article class="reader rv"><pre><span class="m">hippo team server</span>
+tenants        <span class="a">yes</span>
+API keys       <span class="a">scrypt-hashed</span>
+roles          <span class="a">admin, member</span>
+scope grants   <span class="a">per key</span>
+audit log      <span class="a">every change</span></pre>
+        <div class="rb"><h3>The platform lead</h3><p>One team server gives everyone the same store and their own key.</p></div></article>
+    </div>
+
+    <div class="plat">
+      <h3 class="rv">Works with your team's agents</h3>
+      <ul class="agents">
+        <li class="rv"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-claude"/></svg><b>Claude Code</b><code>CLAUDE.md + 8 hooks</code></li>
+        <li class="rv"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-codex"/></svg><b>Codex</b><code>AGENTS.md + 2 hooks</code></li>
+        <li class="rv"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cursor"/></svg><b>Cursor</b><code>reads AGENTS.md</code></li>
+        <li class="rv"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pi"/></svg><b>Pi</b><code>reads AGENTS.md</code></li>
+        <li class="rv"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-openclaw"/></svg><b>OpenClaw</b><code>plugin</code></li>
+        <li class="rv"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-opencode"/></svg><b>OpenCode</b><code>plugin</code></li>
+        <li class="rv"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-mcp"/></svg><b>Any MCP client</b><code>hippo mcp, 13 tools</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="own" aria-labelledby="h-own">
+  <div class="wrap">
+    <div class="shead rv">
+      <span class="num" aria-hidden="true">07</span>
+      <div>
+        <h2 class="big" id="h-own">Memory is infrastructure you own</h2>
+        <p class="lede">Your agents' memory belongs in a file you can read, diff and delete, whichever agent you use next year.</p>
+      </div>
+    </div>
+    <div class="own">
+      <div class="rv">
+        <div class="plans">
+          <div class="plan"><b>Today</b><p>A team server that shares one store over MCP, with API keys, roles, an audit log, and Slack and GitHub connectors.</p></div>
+          <div class="plan dash"><b>Planned</b><p>A commercial edition with SSO, SCIM, SIEM export, hosting and an SLA.</p></div>
+        </div>
+        <p class="pilot"><span>There's no team result yet, so open an issue for a holdout pilot.</span><a href="/teams/">Enterprise &rarr;</a></p>
+      </div>
+      <figure class="editor rv" aria-label="A memory change as it shows up in a pull request">
+        <div class="bar2" aria-hidden="true"><b></b><b></b><b></b><code>.hippo/episodic/mem_9c4e1a7d20b3.md</code></div>
+<pre><span class="hd">@@ markdown mirror @@</span>
+<span class="del">- new endpoints go under /v1</span>
+<span class="add">+ API v1 is deprecated,</span>
+<span class="add">+   new endpoints go under /v2</span>
+<span class="add">+ supersedes: mem_5f2b1c8e93a0</span></pre>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt" id="dash" aria-labelledby="h-dash">
+  <div class="wrap">
+    <h2 class="big rv" id="h-dash">See what your agents remember</h2>
+    <p class="lede rv"><code>hippo dashboard</code> opens a local page with each project's memory health.</p>
+    <figure class="dashf rv">
+      <div class="glowbg"><div class="browser"><div class="bbar" aria-hidden="true"><i></i><i></i><i></i><span>localhost:3333</span></div><img src="data:image/webp;base64,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" width="1440" height="780" loading="lazy" decoding="async" alt="The hippo dashboard on a demo store, showing total memories, at-risk share, open conflicts and embedding coverage by project"></div></div>
+      <figcaption>Real screenshot, demo store.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="sec" id="questions" aria-labelledby="h-q">
+  <div class="wrap">
+    <h2 class="big rv" id="h-q">Questions</h2>
+    <dl class="faq">
+      <div class="rv"><dt>Why hippo when there are other memory tools?</dt><dd>It runs locally with no extra language model, keeps memory in files you can read, and serves every agent from one store.</dd></div>
+      <div class="rv"><dt>Does my code leave my machine?</dt><dd>Recall is offline by default, and text only leaves through settings you switch on, or <code>hippo sleep</code> when <code>ANTHROPIC_API_KEY</code> is set.</dd></div>
+      <div class="rv"><dt>Do I still need CLAUDE.md or AGENTS.md?</dt><dd>Keep them for short standing rules. Let hippo hold the lessons.</dd></div>
+      <div class="rv"><dt>Will it miss things?</dt><dd>A rule without never, always or must can be missed, so pin it with <code>hippo remember "…" --pin</code>.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="install" id="install" aria-labelledby="h-install">
+  <svg class="rail" id="rail-install" aria-hidden="true"></svg>
+  <div class="rows" aria-hidden="true">
+    <div class="mq float"><div class="mqt" id="mq1"></div></div>
+    <div class="mq rev float"><div class="mqt" id="mq2"></div></div>
+    <div class="mq float"><div class="mqt" id="mq3"></div></div>
+  </div>
+  <div class="wrap">
+    <h2 class="big rv" id="h-install">Paste one prompt into your agent</h2>
+    <div class="setup rv" id="setupbox">
+      <div class="blk">
+        <code class="lab">set up hippo with your agent</code>
+        <div class="promptpill"><code id="prompt-text">Install hippo-memory for me by following https://github.com/kitfunso/hippo-memory/blob/master/llms-install.md step by step. Run every command yourself and finish with hippo doctor.</code>
+          <button class="iconbtn copy" data-copy="prompt" type="button"><span class="lbl">Copy the setup prompt</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div>
+      </div>
+      <div class="two">
+        <div class="blk"><code class="lab">or by hand</code><div class="cmdline"><code>npm install -g hippo-memory</code><button class="iconbtn copy" data-copy="npm install -g hippo-memory" type="button"><span class="lbl">Copy the install command</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div></div>
+        <div class="blk"><code class="lab">then, in your project</code><div class="cmdline"><code>hippo init</code><button class="iconbtn copy" data-copy="hippo init" type="button"><span class="lbl">Copy the init command</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div></div>
+      </div>
+    </div>
+    <div class="ctas rv">
+      <a class="btn btn-g" href="https://github.com/kitfunso/hippo-memory/blob/master/llms-install.md">Read llms-install.md</a>
+      <a class="btn btn-a" href="https://github.com/kitfunso/hippo-memory">View on GitHub</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="hippo home"><svg viewBox="0 0 16 14" shape-rendering="crispEdges" aria-hidden="true"><use href="#logo-16"/></svg>hippo</a>
+    <nav aria-label="Footer">
+      <a href="https://github.com/kitfunso/hippo-memory">GitHub</a>
+      <a href="https://www.npmjs.com/package/hippo-memory">npm</a>
+      <a href="https://github.com/kitfunso/hippo-memory#readme">Docs</a>
+      <a href="/teams/">Enterprise</a>
+      <a href="https://github.com/kitfunso/hippo-memory/blob/master/llms-install.md">llms-install.md</a>
+      <a href="https://github.com/kitfunso/hippo-memory/blob/master/LICENSE">MIT licence</a>
+    </nav>
+    <span>hippo-memory {site.version}, built by kitfunso</span>
+  </div>
+</footer>
+
+
+<!-- page behaviour, no imports, so it runs even if the 3D module fails -->
+<script is:inline>
+(function () {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // Mobile menu
+  const menu = $('.menu'), links = $('#links');
+  menu.addEventListener('click', () => { const open = links.classList.toggle('open'); menu.setAttribute('aria-expanded', String(open)); });
+  links.addEventListener('click', (e) => { if (e.target.closest('a')) { links.classList.remove('open'); menu.setAttribute('aria-expanded', 'false'); } });
+
+  // Sample store: made-up memories except the first two, which come from the demo store's real recall output.
+  const STORE = [
+    { id: 'mem_8e4ca54dcb2c', kind: 'error', tags: 'error, path:payments-api', st: 1, ret: 2, text: 'deploy failed: forgot to run migrations before the deploy' },
+    { id: 'mem_22f16003d809', kind: 'rule', pinned: true, tags: 'rule, path:payments-api', st: 1, ret: 2, text: 'run the migration before the deploy, the release script does not run it for you' },
+    { id: 'mem_4c1e9a07b2d3', kind: 'rule', pinned: true, tags: 'rule, path:payments-api', st: 1, ret: 6, text: 'never log access tokens, mask them before anything reaches the logger' },
+    { id: 'mem_1fd6a3b0c912', kind: 'rule', pinned: true, tags: 'rule, path:payments-api', st: 1, ret: 3, text: 'integration tests must hit the real database, never a mock, a mock hid a bug in the billing query' },
+    { id: 'mem_7e03c5d1a6f2', kind: 'rule', pinned: true, tags: 'rule, path:payments-api', st: 1, ret: 4, text: 'the payments retry is already idempotent, do not wrap it in a second retry' },
+    { id: 'mem_c40a9e7d2b61', kind: 'lesson', tags: 'path:payments-api', st: 0.9, ret: 2, text: 'staging and production use different env files, staging reads .env.staging' },
+    { id: 'mem_5f2b1c8e93a0', kind: 'decision', tags: 'decision, path:payments-api', st: 0.7, ret: 1, text: 'API v1 is deprecated, new endpoints go under /v2' },
+    { id: 'mem_e6a4d02f7c39', kind: 'error', tags: 'error, path:payments-api', st: 0.9, ret: 1, text: 'make e2e fails on a cold cache, read the browser log before you retry it' },
+    { id: 'mem_0b9f6e3a1d58', kind: 'decision', tags: 'decision, path:payments-api', st: 0.6, ret: 1, text: 'design review agreed: buttons use sentence case, one primary action per screen' },
+    { id: 'mem_8c71d4b2e0a9', kind: 'lesson', tags: 'path:payments-api', st: 0.8, ret: 1, text: 'the deploy script reads DATABASE_URL from the env file, so the wrong env file deploys to the wrong database' },
+    { id: 'mem_2a5e9c03f6d4', kind: 'lesson', tags: 'path:payments-api', st: 0.8, ret: 1, text: 'payments webhooks can arrive out of order, store the event id and drop duplicates' },
+    { id: 'mem_6d0f3b7a8e12', kind: 'error', tags: 'error, path:payments-api', st: 1, ret: 1, text: 'retrying the payments call by hand charged a test card twice, the retry belongs in the client' },
+  ];
+  const STOP = new Set(['the', 'a', 'an', 'to', 'of', 'in', 'on', 'and', 'or', 'is', 'it', 'for', 'i', 'can', 'do', 'does', 'use', 'so', 'by', 'you', 'what', 'which', 'why', 'did']);
+  const tokenize = (t) => t.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((w) => w.length > 1 && !STOP.has(w));
+  function search(query) {
+    const q = [...new Set(tokenize(query))];
+    const docs = STORE.map((m) => tokenize(m.text));
+    const N = docs.length, avg = docs.reduce((a, d) => a + d.length, 0) / N, df = new Map();
+    docs.forEach((d) => new Set(d).forEach((t) => df.set(t, (df.get(t) || 0) + 1)));
+    return STORE.map((m, i) => {
+      const tf = new Map(); docs[i].forEach((t) => tf.set(t, (tf.get(t) || 0) + 1));
+      let score = 0; const hit = [];
+      for (const t of q) {
+        const f = tf.get(t) || 0; if (!f) continue;
+        hit.push(t);
+        const n = df.get(t), idf = Math.log((N - n + 0.5) / (n + 0.5) + 1);
+        score += idf * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * docs[i].length / avg));
+      }
+      return { m, score, hit };
+    }).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
+  }
+  const hl = (text, hits) => { const set = new Set(hits); return text.split(/(\w+)/).map((p, i) => (i % 2 && set.has(p.toLowerCase()) ? `<mark>${esc(p)}</mark>` : esc(p))).join(''); };
+  const bar = (st) => '█'.repeat(Math.round(st * 10)).padEnd(10, ' ');
+
+  const q = $('#q'), out = $('#out');
+  function renderStore(hits) {
+    $('#store').innerHTML = STORE.map((m) => { const h = hits.get(m.id); return `<li class="${h ? 'hit' : ''}"><span class="k ${m.kind}"></span><span class="t">${h ? hl(m.text, h.hit) : esc(m.text)}</span></li>`; }).join('');
+    $('#store-n').textContent = `${STORE.length} memories`;
+  }
+  const sessionBlock = (fresh) => `<span class="h">## Rules from the user</span>\n` + STORE.filter((m) => m.pinned).map((m) => `<span class="${m.id === fresh ? 'new' : ''}">- ${esc(m.text)}</span>`).join('\n');
+  function run() {
+    const query = q.value.trim();
+    const res = query ? search(query) : [];
+    renderStore(new Map(res.map((r) => [r.m.id, r])));
+    if (!query) { out.innerHTML = '<span class="w">Type a question your agent might ask.</span>'; $('#adds').innerHTML = ''; $('#adds-n').textContent = ''; return; }
+    const tokens = res.reduce((a, r) => a + Math.ceil(r.m.text.length / 4) + 28, 0);
+    let s = `<span class="ps">$ hippo recall "${esc(query)}" --why</span>\n`;
+    if (!res.length) s += `No memories share a word with that yet. Try deploy, payments or database.`;
+    else {
+      s += `Found ${res.length} memories (${tokens} tokens) for: "${esc(query)}"\n`;
+      s += res.map((r) => `\n<span class="h">--- ${r.m.id} [episodic] [verified] score=${r.score.toFixed(3)} strength=${r.m.st.toFixed(2)}</span>\n    [${bar(r.m.st)}] tags: ${r.m.tags} | retrieved: ${r.m.ret}x\n    <span class="w">reason: matched terms [${r.hit.join(', ')}]</span>\n\n<span class="tx">${hl(r.m.text, r.hit)}</span>\n`).join('');
+    }
+    out.innerHTML = s;
+    const extra = res.filter((r) => !r.m.pinned).slice(0, 5);
+    $('#adds-n').textContent = `${extra.length} of up to 5`;
+    $('#adds').innerHTML = extra.map((r) => `<li><span class="id">${r.m.id}</span><br>${hl(r.m.text, r.hit)}</li>`).join('') || '<li>Pinned rules only.</li>';
+  }
+  let typing = null;
+  function typeInto(text) {
+    clearInterval(typing);
+    if (reduce) { q.value = text; run(); return; }
+    q.value = ''; let i = 0;
+    typing = setInterval(() => { q.value = text.slice(0, ++i); run(); if (i >= text.length) clearInterval(typing); }, 55);
+  }
+  q.addEventListener('input', () => { clearInterval(typing); run(); });
+  q.addEventListener('focus', () => clearInterval(typing));
+  $('#examples').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) typeInto(b.textContent.trim()); });
+  $('#sess').innerHTML = sessionBlock();
+  run();
+  let typed = false;
+  new IntersectionObserver((es, ob) => { if (es[0].isIntersecting && !typed) { typed = true; ob.disconnect(); setTimeout(() => typeInto('deploy migrations'), reduce ? 0 : 300); } }, { threshold: 0.25 }).observe($('#demo'));
+
+  // Tell it once: the rule-word check hippo runs when a session ends.
+  const said = $('#said'), log = $('#log');
+  said.value = 'never commit the .env.production file';
+  let n = 0;
+  function endSession() {
+    const text = said.value.trim();
+    if (!text) { log.textContent = 'Type a correction first.'; return; }
+    const word = (text.match(/\b(never|always|must)\b/i) || [])[1];
+    if (!word) { log.textContent = `SessionEnd: no rule word found, so this can be missed.\nPin it by hand: hippo remember "${text}" --pin`; $('#sess2').innerHTML = sessionBlock(); return; }
+    const id = 'mem_' + (0xa0b1c2d3e4f5 + (++n) * 7919).toString(16).slice(-12);
+    STORE.push({ id, kind: 'rule', pinned: true, tags: 'rule, path:payments-api', st: 1, ret: 0, text });
+    log.textContent = `SessionEnd: rule word "${word.toLowerCase()}" found\npinned as ${id}\nIn the next session, and in Recall.`;
+    $('#sess2').innerHTML = sessionBlock(id);
+    $('#sess').innerHTML = sessionBlock();
+    picked = id; renderFiles(); run();
+  }
+  $('#endsess').addEventListener('click', endSession);
+  $('#tell-ex').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { said.value = b.textContent.trim(); endSession(); } });
+  $('#sess2').innerHTML = sessionBlock();
+  log.textContent = 'Press End the session to run the check.';
+
+  // On disk: each memory's markdown mirror.
+  let picked = STORE[1].id;
+  function renderFiles() {
+    $('#files').innerHTML = STORE.map((m) => `<li><button type="button" aria-pressed="${m.id === picked}" data-id="${m.id}">${m.id}.md</button></li>`).join('');
+    const m = STORE.find((x) => x.id === picked);
+    $('#fpath').textContent = `.hippo/episodic/${m.id}.md`;
+    $('#fbody').innerHTML = `<span class="fm">---\nid: ${m.id}\nlayer: episodic\ntags: [${m.tags}]\nhalf_life_days: ${m.kind === 'error' ? 730 : 365}\npinned: ${!!m.pinned}\nstrength: ${m.st.toFixed(2)}\n---</span>\n\n${esc(m.text)}`;
+  }
+  $('#files').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { picked = b.dataset.id; renderFiles(); } });
+  renderFiles();
+
+  // Tabs
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  function select(t, focus) {
+    tabs.forEach((x) => { const on = x === t; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; $('#' + x.getAttribute('aria-controls')).hidden = !on; });
+    if (focus) t.focus();
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => select(t, true));
+    t.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') select(tabs[(i + 1) % tabs.length], true);
+      if (e.key === 'ArrowLeft') select(tabs[(i + tabs.length - 1) % tabs.length], true);
+    });
+  });
+
+  // Copy buttons
+  const PROMPT = $('#prompt-text').textContent.trim();
+  document.querySelectorAll('.copy').forEach((b) => b.addEventListener('click', async () => {
+    const text = b.dataset.copy === 'prompt' ? PROMPT : b.dataset.copy;
+    try { await navigator.clipboard.writeText(text); }
+    catch (err) {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      console.warn('hippo: clipboard API blocked, used the fallback copy', err);
+    }
+    const l = b.querySelector('.lbl');
+    if (l) { const old = l.textContent; l.textContent = 'Copied'; b.classList.add('done'); setTimeout(() => { l.textContent = old; b.classList.remove('done'); }, 1600); }
+    else { const old = b.textContent; b.textContent = 'Copied'; setTimeout(() => { b.textContent = old; }, 1600); }
+  }));
+
+  // Floating command rows
+  const ROWS = [
+    ['hippo init', 'hippo recall "why did the deploy break" --why', 'hippo remember "never log access tokens" --pin', 'hippo outcome --good', 'hippo doctor', 'hippo init --scan ~', 'hippo dashboard'],
+    ['hippo outcome --bad', 'hippo supersede mem_a1b2c3 "billing moved to bun"', 'hippo recall "payments retry" --budget 2000', 'hippo sleep', 'hippo mcp', 'hippo init --no-schedule'],
+    ['hippo remember "deploy failed: forgot migrations" --error', 'hippo forget <id>', 'hippo dormant restore <id>', 'hippo init --no-hooks', 'hippo recall "staging env file" --why'],
+  ];
+  ROWS.forEach((row, i) => {
+    const html = row.map((c) => `<code><b>${esc(c.split(' ')[0])}</b> ${esc(c.split(' ').slice(1).join(' '))}</code>`).join('');
+    $('#mq' + (i + 1)).innerHTML = html + html;
+  });
+
+  // 100-square grids: repeats are red, shuffled with a fixed seed.
+  const rng = (a) => () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  document.querySelectorAll('.cells').forEach((el) => {
+    const nRep = Number(el.dataset.n), r = rng(Number(el.dataset.seed));
+    const idx = Array.from({ length: 100 }, (_, i) => i);
+    for (let i = 99; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    const on = new Set(idx.slice(0, nRep)), rank = new Map(idx.map((v, k) => [v, k]));
+    el.innerHTML = Array.from({ length: 100 }, (_, i) => `<i${on.has(i) ? ' class="rep"' : ''} style="transition-delay:${(reduce ? 0 : (i * 6 + (on.has(i) ? 600 + rank.get(i) * 14 : 0)))}ms"></i>`).join('');
+  });
+
+  // Reveal, count up and grow on scroll
+  const countUp = (el) => {
+    const to = Number(el.dataset.to), dec = (el.dataset.to.split('.')[1] || '').length, t0 = performance.now(), dur = 1300;
+    const tick = (now) => { const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3); el.textContent = (to * e).toFixed(dec); if (p < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  };
+  const io = new IntersectionObserver((es) => es.forEach((en) => {
+    if (!en.isIntersecting) return;
+    const el = en.target; io.unobserve(el);
+    el.classList.add('in');
+    if (el.classList.contains('test') && !reduce) {
+      el.querySelectorAll('.fill').forEach((f, i) => { f.animate([{ width: '0%' }, { width: `calc(${f.style.getPropertyValue('--v')} * 1%)` }], { duration: 1300, delay: i * 90, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }); });
+      el.querySelectorAll('[data-to]').forEach(countUp);
+    }
+  }), { threshold: 0.2 });
+  document.querySelectorAll('.rv, .float, .cells').forEach((el) => io.observe(el));
+
+  // Film captions light up while they sit in the middle of the window.
+  const capIO = new IntersectionObserver((es) => es.forEach((en) => en.target.classList.toggle('on', en.isIntersecting)), { rootMargin: '-38% 0px -38% 0px' });
+  document.querySelectorAll('.stage .cap').forEach((c) => capIO.observe(c));
+  // The skip link shows while film stages 1 to 7 sit in the middle of the window.
+  const skip = document.querySelector('.skipfilm'), live = new Set();
+  const skipIO = new IntersectionObserver((es) => { es.forEach((en) => (en.isIntersecting ? live.add(en.target) : live.delete(en.target))); skip.classList.toggle('on', live.size > 0); }, { rootMargin: '-38% 0px -38% 0px' });
+  document.querySelectorAll('.stage:not(.intro):not(.tail)').forEach((s) => skipIO.observe(s));
+
+  // Convex-style stripes that bend around a box (from 8)
+  const SW = () => (innerWidth < 760 ? 11 : 16);
+  function rail(svg, host, box, o, end = box) {
+    const H = host.getBoundingClientRect(), B = box.getBoundingClientRect(), W = H.width, sw = SW();
+    const x0 = B.right - H.left + o.dx, yA = B.top - H.top + o.dy, yB = end.getBoundingClientRect().bottom - H.top + o.db;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H.height}`);
+    svg.innerHTML = ['#5eead4', '#22a6c9', '#2f4bb3'].map((c, i) => {
+      const yc = yA + sw / 2 + i * sw, xc = x0 + sw / 2 + i * sw, ybc = yB + sw / 2 + i * sw, r1 = 14 + (2 - i) * sw, r2 = 14 + i * sw;
+      return `<path d="M${W + 4} ${yc} H${xc + r1} A${r1} ${r1} 0 0 0 ${xc} ${yc + r1} V${ybc - r2} A${r2} ${r2} 0 0 1 ${xc - r2} ${ybc} H-4" fill="none" stroke="${c}" stroke-width="${sw + 0.6}"/>`;
+    }).join('');
+  }
+  const drawRails = () => {
+    rail($('#rail-try'), $('.try'), $('#demo'), innerWidth < 760 ? { dx: -60, dy: 60, db: 24 } : { dx: 26, dy: 110, db: 30 }, $('#try .quiet'));
+    rail($('#rail-install'), $('.install'), $('#setupbox'), innerWidth < 760 ? { dx: -60, dy: -40, db: 64 } : { dx: 40, dy: 34, db: 110 });
+  };
+  new ResizeObserver(drawRails).observe(document.body);
+  if (document.fonts) document.fonts.ready.then(drawRails);
+  drawRails();
+})();
+</script>
+
+<!-- the scene: 6's glass index cards, and 11's pinned film that follows one of them -->
+<script>
+// three.js and GSAP load after first paint, and the film builds only near its section: on load they blocked the main thread for 1.1 s.
+const root = document.documentElement;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// A test context cost 350 ms on a slow phone; three.js throws on a failed context and both scenes catch that.
+const glOK = 'WebGLRenderingContext' in window;
+if (!glOK) root.classList.add('no-gl');
+else {
+  const gl = () => import('../scripts/home-gl.js');
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+  const start = () => idle(() => gl().then((m) => m.hero()).catch((err) => { root.classList.add('no-gl'); console.warn('hippo: the hero scene did not load, keeping the CSS cards', err); }), { timeout: 2500 });
+  if (document.readyState === 'complete') start(); else addEventListener('load', start, { once: true });
+  if (!reduce) {
+    // The film layout is set now so anchor jumps land where they aim; only its WebGL waits.
+    root.style.setProperty('--vh', `${Math.min(innerHeight, 1600)}px`);
+    root.classList.replace('static', 'gl');
+    const story = document.getElementById('story');
+    new IntersectionObserver((es, io) => {
+      if (!es[0].isIntersecting) return;
+      io.disconnect();
+      gl().then((m) => m.film()).catch((err) => { root.classList.replace('gl', 'static'); console.warn('hippo: the film did not load, keeping the static stages', err); });
+    }, { rootMargin: '150% 0px' }).observe(story);
+  }
+}
+</script>
+<script is:inline>
+// One square per model call, from the dark journey mockup: Mem0's 5,882 calls to store LoCoMo against hippo's 0.
+(() => {
+  const N = 5882, cA = document.getElementById('cgA'), cB = document.getElementById('cgB'), countEl = document.getElementById('cgCount');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let shown = reduce ? N : 0, geom = null;
+  const layout = () => {
+    const w = cA.parentElement.clientWidth - 44, step = w < 420 ? 3 : 4, cols = Math.floor(w / step), rows = Math.ceil(N / cols), dpr = Math.min(devicePixelRatio || 1, 2);
+    for (const c of [cA, cB]) { c.width = cols * step * dpr; c.height = rows * step * dpr; c.style.width = cols * step + 'px'; c.style.height = rows * step + 'px'; }
+    geom = { step, cols, dpr };
+  };
+  const draw = () => {
+    const { step, cols, dpr } = geom, s = step - 1, a = cA.getContext('2d'), b = cB.getContext('2d');
+    a.setTransform(dpr, 0, 0, dpr, 0, 0); b.setTransform(dpr, 0, 0, dpr, 0, 0);
+    a.clearRect(0, 0, cA.width, cA.height); b.clearRect(0, 0, cB.width, cB.height);
+    b.fillStyle = 'rgba(255,255,255,0.055)';
+    for (let i = 0; i < N; i++) {
+      const x = (i % cols) * step, y = Math.floor(i / cols) * step;
+      b.fillRect(x, y, s, s);
+      a.fillStyle = i < shown ? (i % 97 === 0 ? '#b0e7f4' : '#3dbfe1') : 'rgba(255,255,255,0.055)';
+      a.fillRect(x, y, s, s);
+    }
+  };
+  layout(); draw();
+  addEventListener('resize', () => { layout(); draw(); });
+  if (reduce) return;
+  countEl.textContent = '0';
+  new IntersectionObserver((es, ob) => {
+    if (!es[0].isIntersecting) return;
+    ob.disconnect();
+    const t0 = performance.now(), dur = 1600;
+    const tick = (now) => { const p = Math.min((now - t0) / dur, 1), e = 1 - Math.pow(1 - p, 3); shown = Math.round(N * e); countEl.textContent = shown.toLocaleString('en-GB'); draw(); if (p < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }, { threshold: 0.25 }).observe(cA);
+})();
+</script>
+<Beacon />
+</body>
+</html>
