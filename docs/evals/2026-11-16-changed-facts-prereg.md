@@ -108,3 +108,7 @@ If G1 to G6 pass and every alive check passes, D merges to master and ships in a
 - **Finding 11, stale share for merge sources.** Not added. A merge source is not wrong. E1 with sleep now measures sleep and merge under the new rank; if merged rows and their sources crowd the top results there, that is the next fix.
 - **Finding 2, resolved conflicts as a block.** Not added (see NOT-DONE).
 - **Finding 13, the shared-store Z6 run.** Dropped, as the review says it cannot fail. G2b holds the look-alikes.
+
+## Amendment 1 (16 Nov, before any arm D guard run)
+
+**G3 hide gate and small counts.** The alive floor counts all proposals, but the gate reads hide proposals alone. With every hide correct, the Wilson 95% lower bound reaches 80% only from 17 hides (8 of 8 gives 67.6%), so a store with few hides would fail G3 for lack of data, not for wrong links. Finding 12 above already sets 20 pairs as the point where the bound has power. So: with 20 or more hide proposals, the gate stays as written. With fewer, the bound is reported and not gated, and the gate is that no labelled hide is wrong; G2b carries the hide precision. Written before D's dry run on the real store; the scorer is `rank-plan/g3-score.py`.
