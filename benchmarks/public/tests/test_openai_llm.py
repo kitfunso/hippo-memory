@@ -54,7 +54,7 @@ def wire(monkeypatch):
 
 
 def client(tmp_path, settings: ol.Settings, cap: float = 60.0) -> ol.OpenAIChat:
-    return ol.OpenAIChat(tmp_path / "calls.jsonl", settings, slots=2, spend=tmp_path / "spend.jsonl", cap=cap)
+    return ol.OpenAIChat(tmp_path / "calls.jsonl", settings, slots=2, spend=tmp_path / "spend", cap=cap)
 
 
 def test_published_settings_go_on_the_wire_and_the_ledger_takes_the_reply(tmp_path, wire):
@@ -68,7 +68,7 @@ def test_published_settings_go_on_the_wire_and_the_ledger_takes_the_reply(tmp_pa
     assert choice.status == "valid" and choice.asks == 1
     assert sent == [{"model": MODEL, "temperature": 0.0, "messages": [{"role": "user", "content": "judge this"}],
                      "response_format": {"type": "json_object"}}]
-    spend = [json.loads(x) for x in (tmp_path / "spend.jsonl").read_text().splitlines()]
+    spend = [json.loads(x) for x in llm.spend_path.read_text().splitlines()]
     assert spend[0]["usd"] == pytest.approx((1000 * 0.15 + 10 * 0.60) / 1e6)
 
 
@@ -83,7 +83,8 @@ def test_a_system_role_prompt_and_max_tokens_are_sent_as_set(tmp_path, wire):
 
 def test_no_call_starts_once_the_logged_spend_reaches_the_cap(tmp_path, wire):
     sent, queue = wire
-    (tmp_path / "spend.jsonl").write_text(json.dumps({"usd": 5.0}) + "\n")
+    (tmp_path / "spend").mkdir()
+    (tmp_path / "spend" / "other.jsonl").write_text(json.dumps({"usd": 5.0}) + "\n")
     llm = client(tmp_path, ol.Settings(MODEL), cap=5.0)
     queue.append(ok())
     with pytest.raises(RuntimeError, match="openai spend cap"):
@@ -100,6 +101,19 @@ def test_a_rate_limit_waits_and_is_no_ask_but_a_spent_quota_stops(tmp_path, wire
     queue.append(http_error(429, '{"error": {"code": "insufficient_quota"}}'))
     with pytest.raises(RuntimeError, match="refused the key or the account"):
         llm.ask("", "q", effort=ol.EFFORT, tag="u")
+
+
+def test_each_process_writes_its_own_file_and_sees_the_others_spend(tmp_path, wire, monkeypatch):
+    sent, queue = wire
+    monkeypatch.setattr(ol, "RESUM_S", -1)
+    a, b = client(tmp_path, ol.Settings(MODEL), cap=0.0025), client(tmp_path, ol.Settings(MODEL), cap=0.0025)
+    queue += [ok(pt=10_000), ok(pt=10_000)]
+    a.ask("", "p", effort=ol.EFFORT, tag="t")
+    assert a.spend_path != b.spend_path and b"\r" not in a.spend_path.read_bytes()
+    b.ask("", "q", effort=ol.EFFORT, tag="u")
+    with pytest.raises(RuntimeError, match="openai spend cap"):
+        a.ask("", "r", effort=ol.EFFORT, tag="v")
+    assert len(sent) == 2
 
 
 def test_retry_after_reads_the_header_then_the_message():

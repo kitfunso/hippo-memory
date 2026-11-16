@@ -25,7 +25,9 @@ URL = "https://api.openai.com/v1/chat/completions"
 # USD per 1M tokens, input and output, at developers.openai.com/api/docs/pricing (read 16 Nov 2026)
 PRICES = {"gpt-4o-2024-08-06": (2.50, 10.00), "gpt-4o-mini-2024-07-18": (0.15, 0.60),
           "gpt-4.1-mini-2025-04-14": (0.40, 1.60)}
-SPEND = Path.home() / "hippo-bench" / "results-r2" / "logs" / "openai-spend.jsonl"
+# One file per process: Windows can split a line two processes append to one file at once (16 Nov)
+SPEND = Path.home() / "hippo-bench" / "results-r2" / "logs" / "openai-spend.d"
+RESUM_S = 30  # how often a process adds up the other processes' spend again
 EFFORT = "none"  # these chat models take no reasoning effort; the ledger still compares the field
 FATAL = re.compile(r"insufficient_quota|invalid_api_key|billing", re.I)
 WAIT_S = re.compile(r"try again in ([\d.]+)(ms|s)", re.I)
@@ -52,10 +54,14 @@ def cost(model: str, usage: dict) -> float:
     return ((usage.get("prompt_tokens") or 0) * pin + (usage.get("completion_tokens") or 0) * pout) / 1e6
 
 
-def spent(path: Path) -> float:
-    if not path.exists():
-        return 0.0
-    return sum(json.loads(line)["usd"] for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+def spent(folder: Path, skip: Path | None = None) -> float:
+    """USD logged by every process's spend file but `skip`; a last line a kill cut short is not counted."""
+    total = 0.0
+    for f in folder.glob("*.jsonl"):
+        if f != skip:
+            raw = f.read_bytes()
+            total += sum(json.loads(line)["usd"] for line in raw[:raw.rfind(b"\n") + 1].split(b"\n") if line.strip())
+    return total
 
 
 def api_key() -> str:
@@ -94,28 +100,32 @@ class OpenAIChat(Claude):
             raise SystemExit(f"{settings.model} has no list price in qa/openai_llm.py PRICES")
         work = log.parent / "openai-work"
         self.cwd, self.sysdir = work / "cwd", work / "system-prompts"  # attributes Claude.ask and _log read
-        for d in (self.cwd, self.sysdir, spend.parent):
+        for d in (self.cwd, self.sysdir, spend):
             d.mkdir(parents=True, exist_ok=True)
         self.log_path, self.lock, self.slots = log, threading.Lock(), threading.BoundedSemaphore(slots)
         self.settings, self.model, self.cli = settings, settings.model, settings.cli
-        self.spend_path = spend
+        self.spend_dir, self.spend_path = spend, spend / f"{os.getpid()}-{time.time_ns()}.jsonl"
         self.cap = float(os.environ.get("OPENAI_BENCH_CAP_USD", "60")) if cap is None else cap
-        self.spend_lock, self.spent, self.limits_logged = threading.Lock(), spent(spend), False
+        self.spend_lock, self.mine, self.limits_logged = threading.Lock(), 0.0, False
+        self.others, self.summed_at = spent(spend), time.monotonic()
 
     def _check_cap(self) -> None:
         with self.spend_lock:
-            if self.spent >= self.cap:
-                raise RuntimeError(f"openai spend cap: {self.spent:.2f} USD logged in {self.spend_path}, "
+            if time.monotonic() - self.summed_at > RESUM_S:
+                self.others, self.summed_at = spent(self.spend_dir, skip=self.spend_path), time.monotonic()
+            if self.others + self.mine >= self.cap:
+                raise RuntimeError(f"openai spend cap: {self.others + self.mine:.2f} USD logged in {self.spend_dir}, "
                                    f"cap {self.cap:.2f} (OPENAI_BENCH_CAP_USD)")
 
     def _charge(self, model: str, usage: dict) -> float:
         usd = cost(model if model in PRICES else self.model, usage)
+        line = json.dumps({"ts": round(time.time(), 3), "log": str(self.log_path), "model": model,
+                           "prompt_tokens": usage.get("prompt_tokens"),
+                           "completion_tokens": usage.get("completion_tokens"), "usd": round(usd, 6)}) + "\n"
         with self.spend_lock:
-            self.spent += usd
-            with self.spend_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps({"ts": round(time.time(), 3), "log": str(self.log_path), "model": model,
-                                    "prompt_tokens": usage.get("prompt_tokens"),
-                                    "completion_tokens": usage.get("completion_tokens"), "usd": round(usd, 6)}) + "\n")
+            self.mine += usd
+            with self.spend_path.open("ab") as f:
+                f.write(line.encode("utf-8"))
         return usd
 
     def _body(self, system: str, user: str) -> bytes:

@@ -7,6 +7,8 @@ through codex_judge.py. Every call is logged, and every saved result must be rep
 `verify` runs the same code again with no calls allowed and compares (prereg Amendment 5 items 2 and 3). Each prompt
 takes the first valid reply among its first 3 asks, counted across every run, under the frozen manifest (qa/ledger.py).
 Usage (runner venv): python -I answer_judge.py {run,verify} --bench B --pred hippo365=DIR --pred bm25=DIR --out DIR
+--models gpt-4o (dated notes 22, LongMemEval only): gpt-4o answers and judges with the runner's own client settings, on
+Keith's OpenAI key; --same-prompts-as RUN first checks every answer prompt against that run's call log.
 """
 from __future__ import annotations
 
@@ -35,7 +37,8 @@ from benchmarks.common.llm_client import LLMClient  # noqa: E402
 from benchmarks.common.mem0_client import format_search_results  # noqa: E402
 from benchmarks.longmemeval import run as lme  # noqa: E402
 from claude_llm import Claude  # noqa: E402
-from qa.ledger import ANSWERER, JUDGE, Choice, Item, Ledger, one_writer, require, trail  # noqa: E402
+from qa.ledger import ANSWERER, JUDGE, Choice, Item, Ledger, Manifest, hash16, one_writer, require, trail  # noqa: E402
+from qa.openai_llm import EFFORT, OpenAIChat, Settings  # noqa: E402
 
 # codex_judge's preamble asks for "the JSON object only", which would turn LongMemEval's yes/no judge into JSON.
 # Same no-tools wording, format left to the prompt; one value for every arm and benchmark.
@@ -52,6 +55,8 @@ def lme_cutoffs(arm: str) -> list[int]:
 BEAM_SIZES = {"beam-100k": "100K", "beam-500k": "500K", "beam-1m": "1M", "beam-10m": "10M"}
 BENCHES = ("longmemeval-s", "longmemeval-m", *BEAM_SIZES)
 CTX: contextvars.ContextVar[tuple[str, str]] = contextvars.ContextVar("ctx")  # (arm, question id) of the running task
+# llm_client.generate's defaults, which both the runner's answerer and its judge_yes_no use (lines 136 to 141, 368)
+OPENAI_MODELS = {"gpt-4o": Settings("gpt-4o-2024-08-06", max_tokens=4096)}
 sha = h2h.sha
 
 
@@ -116,16 +121,21 @@ class Backend:
     """Claude and the codex judge behind the call logs: each prompt gets the first valid reply among its first 3 asks,
     counted across every run (qa/ledger.py). A replay (live=False) never asks."""
 
-    def __init__(self, out: Path, slots_answer: int, slots_judge: int, live: bool) -> None:
-        self.live, self.lock = live, threading.Lock()
+    def __init__(self, out: Path, slots_answer: int, slots_judge: int, live: bool, models: str = "registered",
+                 cutoffs: list[int] | None = None) -> None:
+        self.live, self.lock, self.cutoffs = live, threading.Lock(), cutoffs
         self.logs = {"answer": out / "calls-answer.jsonl", "judge": out / "calls-judge.jsonl"}
         self.ledgers = {role: Ledger(p) for role, p in self.logs.items()}
         self.trace: dict[tuple[str, str], list[dict]] = {}
+        s = OPENAI_MODELS.get(models)
+        self.manifests = {"answer": ANSWERER, "judge": JUDGE} if s is None else \
+            {role: Manifest(s.model, EFFORT, s.cli) for role in self.logs}
         if live:
             self.llm = {"answer": Claude(out / "claude-work", self.logs["answer"], slots_answer),
-                        "judge": codex_judge.CodexJudge(self.logs["judge"], slots_judge)}
-            require(self.llm["answer"], ANSWERER)
-            require(self.llm["judge"], JUDGE)
+                        "judge": codex_judge.CodexJudge(self.logs["judge"], slots_judge)} if s is None else \
+                {role: OpenAIChat(p, s, slots=slots_answer) for role, p in self.logs.items()}
+            for role, llm in self.llm.items():
+                require(llm, self.manifests[role])
 
     def _settle(self, role: str, item: Item) -> Choice:
         c = self.ledgers[role].settle(item, self.llm[role]) if self.live else self.ledgers[role].choose(item)
@@ -138,7 +148,7 @@ class Backend:
 
     def answer(self, system: str, user: str) -> str:
         arm, qid = CTX.get()
-        c = self._settle("answer", Item(f"answer {arm} {qid} {sha(system)[:8]}", system, user, ANSWERER))
+        c = self._settle("answer", Item(f"answer {arm} {qid} {sha(system)[:8]}", system, user, self.manifests["answer"]))
         if c.status == "exhausted":
             raise Exhausted(f"answer {arm} {qid}: {'; '.join(c.rejected)}")
         return c.value.strip()
@@ -152,14 +162,15 @@ class Backend:
             v = parse_json_reply(text)
             return v if valid_structured(system, v) else None
 
-        c = self._settle("judge", Item(f"judge {arm} {qid} {sha(system)[:8]}", system, user, JUDGE, usable))
+        c = self._settle("judge", Item(f"judge {arm} {qid} {sha(system)[:8]}", system, user, self.manifests["judge"],
+                                       usable))
         return c.value if c.status == "valid" else {}
 
     def yes_no(self, user: str) -> tuple[bool, str]:
         """LongMemEval's yes/no judge, asked again on a reply with neither word. With none in 3 asks the item is no,
         as the runner counts such a reply."""
         arm, qid = CTX.get()
-        c = self._settle("judge", Item(f"judge {arm} {qid} {sha('')[:8]}", "", user, JUDGE, yes_no_of))
+        c = self._settle("judge", Item(f"judge {arm} {qid} {sha('')[:8]}", "", user, self.manifests["judge"], yes_no_of))
         return c.value if c.status == "valid" else (False, "")
 
 
@@ -229,7 +240,7 @@ async def evaluate(bench: str, saved: dict, be: Backend, pool: ThreadPoolExecuto
         if kind_of(bench) == "lme":
             res = json.loads(json.dumps(saved))
             await lme.apply_longmemeval_answerer_judge_to_saved_result(res, ans, jdg,  # type: ignore[arg-type]
-                                                                       lme_cutoffs(CTX.get()[0]))
+                                                                       be.cutoffs or lme_cutoffs(CTX.get()[0]))
         else:
             res = await beam.process_question(
                 question_data=beam_question(saved), qi=saved["question_type_idx"], chat_size=saved["chat_size"],
@@ -296,15 +307,40 @@ def check_inputs(out: Path, arms: dict[str, Path], ids: list[str]) -> None:
             sys.exit(f"{len(bad)} retrieval files of {arm} differ from the ones this run started with, e.g. {bad[0]}; use a new --out")
 
 
+def check_same_prompts(arms: dict[str, Path], ids: list[str], cutoffs: list[int], ref: Path) -> None:
+    """Dated notes 22: before any call, each LongMemEval answer prompt of this run is one the reference run sent,
+    built as run.py lines 748 to 772 build it, and matched by hash to the reference call log under the same tag."""
+    sent: dict[str, set[str]] = {}
+    for r in h2h.read_jsonl(ref / "calls-answer.jsonl"):
+        sent.setdefault(r["tag"], set()).add(r["user"])
+    bad, n = [], 0
+    for arm, d in arms.items():
+        files = pred_files(d)
+        for qid in ids:
+            saved = load_pred(files[qid])
+            date = lme.parse_longmemeval_date_human(saved["question_date"]) if saved.get("question_date") else ""
+            for c in cutoffs:
+                hits = sorted(saved["retrieval"]["search_results"][:c], key=lambda x: x.get("created_at") or "")
+                prompt = lme.get_answer_generation_prompt(question=saved["question"], search_results=hits,
+                                                          question_date=date, user_profile=saved.get("user_profile"))
+                n += 1
+                if hash16(prompt) not in sent.get(f"answer {arm} {qid} {sha('')[:8]}", set()):
+                    bad.append(f"{arm} {qid} top {c}")
+    if bad:
+        sys.exit(f"{len(bad)} of {n} answer prompts were never sent by {ref.name}, e.g. {bad[0]}")
+    print(f"same prompts: all {n} answer prompts equal ones {ref.name} sent", flush=True)
+
+
 def results_on_file(out: Path) -> dict:
     recs = h2h.records(out / "results.jsonl", lambda r: (r["arm"], r["qid"]))
     return recs
 
 
-def verify(bench: str, arms: dict[str, Path], out: Path, ids: list[str]) -> dict:
+def verify(bench: str, arms: dict[str, Path], out: Path, ids: list[str], models: str = "registered",
+           cutoffs: list[int] | None = None) -> dict:
     """Every saved result, made again from the call logs alone: same prompts, same replies, same result, or stop."""
     recs = results_on_file(out)
-    be = Backend(out, 1, 1, live=False)
+    be = Backend(out, 1, 1, live=False, models=models, cutoffs=cutoffs)
     pool = ThreadPoolExecutor(4)
     bad = []
 
@@ -340,11 +376,13 @@ def run(bench: str, arms: dict[str, Path], out: Path, a: argparse.Namespace) -> 
     if not a.smoke:  # a smoke run answers a subset, which the manifest does not cover
         for arm, d in arms.items():
             check_retrieval(arm, d, ids)
+    if a.same_prompts_as:
+        check_same_prompts(arms, ids, a.cutoffs or LME_CUTOFFS, a.same_prompts_as)
     check_inputs(out, arms, ids)
-    done =verify(bench, arms, out, ids) if (out / "results.jsonl").exists() else {}
+    done = verify(bench, arms, out, ids, a.models, a.cutoffs) if (out / "results.jsonl").exists() else {}
     jobs = [(arm, qid) for qid in ids for arm in arms if (arm, qid) not in done]
     random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits every arm alike
-    be = Backend(out, a.answer_slots, a.judge_slots, live=True)
+    be = Backend(out, a.answer_slots, a.judge_slots, live=True, models=a.models, cutoffs=a.cutoffs)
     pool = ThreadPoolExecutor(a.tasks + 8)
     failed: list[str] = []
     print(f"{len(jobs)} questions to answer and judge, {len(done)} already done", flush=True)
@@ -374,7 +412,7 @@ def run(bench: str, arms: dict[str, Path], out: Path, a: argparse.Namespace) -> 
     asyncio.run(go())
     if failed:
         sys.exit(f"{len(failed)} of {len(jobs)} questions failed; rerun to retry them:\n" + "\n".join(failed[:20]))
-    verify(bench, arms, out, ids)
+    verify(bench, arms, out, ids, a.models, a.cutoffs)
 
 
 def main() -> None:
@@ -387,10 +425,16 @@ def main() -> None:
     ap.add_argument("--tasks", type=int, default=24, help="questions in flight")
     ap.add_argument("--answer-slots", type=int, default=10, help="concurrent claude processes")
     ap.add_argument("--judge-slots", type=int, default=codex_judge.DEFAULT_SLOTS, help="concurrent codex processes")
+    ap.add_argument("--models", choices=("registered", *OPENAI_MODELS), default="registered",
+                    help="registered: Claude answers, codex judge; gpt-4o: both on OpenAI (dated notes 22)")
+    ap.add_argument("--cutoffs", type=int, nargs="+", help="LongMemEval cutoffs in place of the arm's own")
+    ap.add_argument("--same-prompts-as", type=Path, help="a run whose answer log must hold every answer prompt")
     a = ap.parse_args()
+    if a.models != "registered" and (kind_of(a.bench) != "lme" or not a.cutoffs or not a.same_prompts_as):
+        ap.error("--models gpt-4o is for LongMemEval and needs --cutoffs and --same-prompts-as")
     arms = {s.split("=", 1)[0]: Path(s.split("=", 1)[1]) for s in a.pred}
     if a.stage == "verify":
-        verify(a.bench, arms, a.out, pick(a.bench, arms, a.smoke))
+        verify(a.bench, arms, a.out, pick(a.bench, arms, a.smoke), a.models, a.cutoffs)
     else:
         with one_writer(a.out):
             run(a.bench, arms, a.out, a)
