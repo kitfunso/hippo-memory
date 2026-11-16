@@ -726,3 +726,7 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 4. The verdicts that the stopped first launcher logged stay in the ledger and count.
 
 **Read before this note.** The 49 logged verdicts of the first launcher, as counts only. No score.
+
+### Erratum (2026-11-16)
+
+Line 24 says "The LongMemEval file records no models." That is wrong. At runner commit `4b61c5d`, `results/platform/longmemeval_results.json` metadata holds `"model": "gpt-5", "generation_model": "gpt-5"`, top 200, 500 questions. So Mem0's LongMemEval, LoCoMo and BEAM files all record gpt-5. No rule or score depends on the line. Found by the comparability audit (`hippo-bench/comparability/memory-qa-1.md`).
