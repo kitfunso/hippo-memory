@@ -34,11 +34,14 @@
  *   bm25-outcome    all off but the fast outcome channel + probe ranks by raw BM25 x outcomeMultiplier
  *   bm25-newest     all three + probe ranks by raw BM25, ties newest first
  *   Flags: --recency-days <n> sets the recency scale; --lookalike-window v1 dates
- *   hard negatives within v1's sessions (both recorded in meta).
+ *   hard negatives within v1's sessions; --sleep ends each session with one real
+ *   consolidation (all recorded in meta).
  *
- * NO sleep/consolidation in E1 (that is E3's dimension); no embeddings (the
- * lexical+lifecycle composite exercises every mechanism under test; the
- * embedding blend is orthogonal to the ablations).
+ * No sleep/consolidation unless --sleep (opt-in; the registered E1 runs none, that
+ * is E3's dimension). --sleep runs the published consolidate() at the session's
+ * simulated time with no model and no share, and probes drop superseded rows.
+ * No embeddings (the lexical+lifecycle composite exercises every mechanism under
+ * test; the embedding blend is orthogonal to the ablations).
  *
  * Run (pilot):  node scripts/e1-lifecycle/run.mjs --arms full,all-off --seeds 1 --facts 300
  */
@@ -50,6 +53,8 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory, applyOutcome } from '../../dist/entry/memory.js';
+import { consolidate } from '../../dist/entry/sleep.js';
+import { isSuperseded } from '../../dist/base/memory/liveness.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { loadAllEntriesIn, writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
 import { storeFilesOf } from '../../dist/store/sqlite/runtime/handles.js';
@@ -70,6 +75,8 @@ const OUT_DIR = path.join(REPO, 'benchmarks', 'e1-lifecycle', 'raw');
 let SWEEP_HALF_LIFE = 7;
 // Round-2 tuning grid: the search recency scale in days; null keeps the product's 30.
 let SWEEP_RECENCY_DAYS = null;
+// --sleep: one real consolidation after each session's outcomes; off reproduces the registered E1.
+let SWEEP_SLEEP = false;
 
 const ARM_ENV = {
   'full': {},
@@ -131,6 +138,8 @@ async function probeTopEntries(probe, entries, arm, probeNow) {
 
 async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
   const probeNow = new Date(Date.parse(epochDate) + 60 * 60 * 1000); // +1h after session
+  // Default recall drops superseded rows, loadAllEntriesIn returns them; dormant rows are not in `memories`.
+  const live = entries.filter((e) => !isSuperseded(e));
   let active = 0, current5 = 0, staleEligible = 0, staleHit = 0;
   let trapEligible = 0, trapHit = 0, contraEligible = 0, contraHit = 0;
   let hotActive = 0, hotCurrent5 = 0, mrrSum = 0;
@@ -143,7 +152,7 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
     active++;
     if (probe.hot) hotActive++;
 
-    const top = await probeTopEntries(probe, entries, arm, probeNow);
+    const top = await probeTopEntries(probe, live, arm, probeNow);
     const texts = top.map((e) => e.content);
     const curTok = probe.tokens[cur.version];
     const rank = texts.findIndex((t) => t.includes(curTok));
@@ -239,15 +248,52 @@ async function runScheduledRetrievals(files, retrievals) {
   }
 }
 
+/** Returns how many outcomes were skipped because a sleep had removed or set aside their target. */
 function applyScheduledOutcomes(files, outcomes, idMap, sessionIndex) {
+  let skipped = 0;
   for (const o of outcomes) {
     const hippoId = idMap.get(o.memoryRef);
     if (!hippoId) throw new Error(`outcome before ingestion: ${o.memoryRef} at session ${sessionIndex}`);
     const entry = loadAllEntriesIn(files).find((e) => e.id === hippoId);
+    if (!entry && SWEEP_SLEEP) { skipped++; continue; }
     if (!entry) throw new Error(`outcome target missing from store: ${hippoId}`);
     const updated = applyOutcome(entry, o.good);
     writeEntryIn(files, updated);
   }
+  return skipped;
+}
+
+// consolidate() opens its own connection beside E1's shared one; with the API key unset it calls no model,
+// and it never shares to a global store.
+async function sleepOnce(hippoRoot, session) {
+  const result = await consolidate(hippoRoot, { now: new Date(session.date) });
+  const counts = {};
+  for (const [k, v] of Object.entries(result)) if (typeof v === 'number') counts[k] = v;
+  const eventKinds = {};
+  for (const ev of result.events) eventKinds[ev.kind] = (eventKinds[ev.kind] ?? 0) + 1;
+  const sleep = { counts, eventKinds };
+  if (result.phaseFailures.length > 0) sleep.phaseFailures = result.phaseFailures.map((f) => `${f.phase}: ${f.message}`);
+  return sleep;
+}
+
+const VALUE_TOKEN = /VAL(\d+)X(\d+)D\d+/g;
+const valueTokens = (text) => [...text.matchAll(VALUE_TOKEN)].map((m) => ({ fact: m[1], version: Number(m[2]) }));
+
+/** Superseded rows grouped by what their successor row holds: a distractor (content has NEG), an update (a value
+ * token of the same fact at a higher version), or other (anything else, a missing successor included). */
+function supersededBySuccessorKind(entries) {
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  const out = { total: 0, distractor: 0, update: 0, other: 0 };
+  for (const e of entries) {
+    if (!isSuperseded(e)) continue;
+    out.total++;
+    const next = byId.get(e.supersededBy);
+    if (next?.content.includes('NEG')) { out.distractor++; continue; }
+    const mine = valueTokens(e.content);
+    const isUpdate = next && valueTokens(next.content).some((n) => mine.some((m) => m.fact === n.fact && n.version > m.version));
+    out[isUpdate ? 'update' : 'other']++;
+  }
+  return out;
 }
 
 /**
@@ -264,7 +310,9 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
 
   const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), `hippo-e1-${arm}-s${seed}-`));
   const epochs = [];
+  const savedApiKey = process.env.ANTHROPIC_API_KEY;
   try {
+    if (SWEEP_SLEEP) delete process.env.ANTHROPIC_API_KEY; // no model call in a sleep
     setArmEnv(arm);
     setSimulatedNow(protocol.sessions[0].date);
     initStore(hippoRoot);
@@ -285,11 +333,15 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
         // 2. Scheduled mutating retrievals - CLI-parity block.
         await runScheduledRetrievals(files, retrievalsBySession.get(session.index) ?? []);
         // 3. Scheduled outcomes on EXPLICIT ids (never last_retrieval_ids).
-        applyScheduledOutcomes(files, outcomesBySession.get(session.index) ?? [], idMap, session.index);
+        const outcomesSkipped = applyScheduledOutcomes(files, outcomesBySession.get(session.index) ?? [], idMap, session.index);
+        // 3b. --sleep: one real consolidation at this session's simulated time, before the probes.
+        const sleep = SWEEP_SLEEP ? await sleepOnce(hippoRoot, session) : null;
 
         // 4. READ-ONLY probes (explicit now; no markRetrieved; no writes).
         const entries = loadAllEntriesIn(files);
-        epochs.push(await probeEpoch(protocol, entries, session.index, session.date, arm));
+        const epoch = await probeEpoch(protocol, entries, session.index, session.date, arm);
+        if (sleep) epoch.sleep = { ...sleep, outcomesSkipped, supersededBySuccessorKind: supersededBySuccessorKind(entries) };
+        epochs.push(epoch);
       }
     });
     // Only the final epoch is judged, so only it keeps per-probe rows (compare.mjs hierarchical CI).
@@ -297,6 +349,7 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
 
     if (inspect) await inspect(hippoRoot, idMap);
   } finally {
+    if (SWEEP_SLEEP && savedApiKey !== undefined) process.env.ANTHROPIC_API_KEY = savedApiKey;
     for (const v of ABLATION_VARS) delete process.env[v];
     _resetAblationCacheForTests();
     fs.rmSync(hippoRoot, { recursive: true, force: true });
@@ -308,6 +361,7 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
       protocolCounts: protocol.meta.counts, ranAt: new Date().toISOString(),
       halfLife: SWEEP_HALF_LIFE,
       recencyDays: SWEEP_RECENCY_DAYS ?? undefined,
+      sleep: SWEEP_SLEEP || undefined,
       lookalikeWindow: protocol.meta.lookalikeWindow,
     },
     epochs,
@@ -343,6 +397,7 @@ if (isMain) {
     process.exit(1);
   }
   SWEEP_RECENCY_DAYS = recencyDays === null ? null : Number(recencyDays);
+  SWEEP_SLEEP = args.includes('--sleep');
   const lookalikeWindow = getArg('lookalike-window', null);
   if (lookalikeWindow !== null) genOpts.lookalikeWindow = lookalikeWindow;
   const outDir = path.resolve(getArg('out-dir', OUT_DIR));
@@ -366,6 +421,14 @@ if (isMain) {
           `R@5=${last.currentR5?.toFixed(3)} stale=${last.staleIntrusionRate?.toFixed(3)} ` +
           `trap=${last.trapPersistenceRate?.toFixed(3)} hot=${last.hotR5?.toFixed(3)}`
         );
+        if (SWEEP_SLEEP) {
+          const perSession = result.epochs.map((e) => {
+            const c = e.sleep.counts;
+            return `${e.epoch}:${c.removed}/${c.dormant}/${c.merged}/${c.semanticCreated}`;
+          });
+          console.log(`  sleep per session (removed/dormant/merged/semantic): ${perSession.join(' ')} | ` +
+            `final superseded by successor kind: ${JSON.stringify(last.sleep.supersededBySuccessorKind)}`);
+        }
       }
     }
   })().catch((e) => { console.error(e); process.exit(1); });
