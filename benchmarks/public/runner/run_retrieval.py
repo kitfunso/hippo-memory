@@ -234,8 +234,10 @@ class Shard:
             if s.connect_ex(("127.0.0.1", self.port)) == 0:
                 sys.exit(f"port {self.port} already has a server: stop the earlier launch's hippo-mem0-server first")
         slog = (self.dir / "server.log").open("ab")
+        # HIPPO_SERVER_DIST compares two hippo builds on one harness (2026-11-16 rank-age prereg, G3)
+        dist = ["--dist", os.environ["HIPPO_SERVER_DIST"]] if os.environ.get("HIPPO_SERVER_DIST") else []
         return subprocess.Popen(["node", str(SERVER), "--arm", SERVER_ARM[self.arm], "--port", str(self.port),
-                                 "--data-dir", str(self.store), *FLAGS.get(self.arm, [])],
+                                 "--data-dir", str(self.store), *FLAGS.get(self.arm, []), *dist],
                                 stdout=slog, stderr=slog)
 
     def _launch(self) -> None:
