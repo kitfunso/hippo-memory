@@ -28,9 +28,9 @@ function markReplacedInTx(db: DatabaseSyncLike, link: SupersedeLink): MemoryEntr
   const marked = markStale(entry, `${REPLACED_BY_PREFIX}${newId}`, keepHalfLife);
   const won = cachedStatement(
     db,
-    `UPDATE memories SET confidence = 'stale', tags_json = ?, updated_at = datetime('now') ` +
+    `UPDATE memories SET confidence = ?, tags_json = ?, updated_at = datetime('now') ` +
       `WHERE id = ? AND tenant_id = ? AND confidence = ? AND ${notSupersededIn()}`,
-  ).run(JSON.stringify(marked.tags), id, tenantId, entry.confidence);
+  ).run(marked.confidence, JSON.stringify(marked.tags), id, tenantId, entry.confidence);
   if (Number(won.changes ?? 0) === 0) return null;
   syncFtsRow(db, marked);
   appendAuditEvents(db, [

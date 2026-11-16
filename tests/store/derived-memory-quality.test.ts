@@ -14,6 +14,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 const captured = { layer: Layer.Episodic, source: 'capture', confidence: 'observed' } as const;
+// One valid time, so sleep's link pass reads the pair as parallel and leaves it to merge.
+const AT = '2026-06-01T00:00:00.000Z';
+const atOnce = (entry: ReturnType<typeof createMemory>) => ({ ...entry, validFrom: AT });
 let root: string;
 beforeEach(() => {
   root = makeRoot('derived-quality');
@@ -23,7 +26,7 @@ beforeEach(() => {
 describe('quality at automatic derivation boundaries', () => {
   it('keeps incomplete sources out of both merge and extraction without deleting them', async () => {
     const inputs = ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy'];
-    for (const content of inputs) writeEntry(root, createMemory(content, captured));
+    for (const content of inputs) writeEntry(root, atOnce(createMemory(content, captured)));
     const result = await consolidate(root);
     expect(result.merged).toBe(0);
     expect(result.extractionCandidates).toBe(0);
@@ -32,7 +35,7 @@ describe('quality at automatic derivation boundaries', () => {
 
   it("derives from a person's rows whatever the automatic check says of the text", async () => {
     for (const content of ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy']) {
-      writeEntry(root, createMemory(content, { layer: Layer.Episodic }));
+      writeEntry(root, atOnce(createMemory(content, { layer: Layer.Episodic })));
     }
     const result = await consolidate(root);
     expect(result.merged).toBe(2);
