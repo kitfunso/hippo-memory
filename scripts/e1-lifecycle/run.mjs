@@ -236,7 +236,7 @@ function ingestMemories(files, seed, memories, idMap) {
 
 // hybridSearch -> markRetrieved -> persistence gated exactly like cli.ts cmdRecall.
 async function runScheduledRetrievals(files, retrievals) {
-  const entriesNow = () => loadAllEntriesIn(files);
+  const entriesNow = () => loadAllEntriesIn(files).filter((e) => !isSuperseded(e));
   for (const r of retrievals) {
     const entries = entriesNow();
     const results = await hybridSearch(r.query, entries, { budget: PROBE_BUDGET, minResults: PROBE_TOP_K });
