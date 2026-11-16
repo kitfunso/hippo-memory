@@ -778,6 +778,19 @@ Update, 17:20 UTC: `Z0_SUB_TOKEN_3` reached its weekly limit at 17:16 (reset 18 
 
 **Read before this note.** Lane R's score file and lane J's `longmemeval-s-best` score file. No gpt-4o call on `hippo-best`.
 
+### Amendment 6, dated notes 26 (2026-11-16, before any DMR OpenAI call): DMR with gpt-4o-mini answers and a stated speaker role
+
+**Why.** The Zep paper's DMR rows answer with gpt-4o-mini: full conversation 98.0, Zep 98.2 (https://arxiv.org/html/2501.13956v1). The audit (`hippo-bench/comparability/memory-qa-1.md` section 4) found that our harness caps the score: the `full` arm scores 83.6 with Sonnet 5, and the answer prompt never says which speaker the answerer is. MemGPT's generator prompt (arXiv 2310.08560 appendix 6.1.3) writes a question "from user A to user B", and its example has B ask and A answer; the data stores the answer under `self_instruct.A` and the question under `B`. In row 0, A answers "Taylor Swift!" and the first persona list, Speaker 1's, holds "I like Taylor Swift". The loader's word-overlap count leans the same way (270 rows to Speaker 1, 61 to Speaker 2, 160 tie). This lane is post hoc and secondary. No registered result changes.
+
+**What changes.**
+1. Lane D. `mem0/dmr_openai.py` rebuilds each registered answer prompt from the registered retrieval at top 20 (`qa/harness.py` `prompts_of`, with its manifest hash check) and adds one line after the first sentence of the system prompt: "In these conversations you are Speaker 1, and the user asking the question is Speaker 2." Nothing else in the prompt changes. The system prompt and the question go as a system and a user message to `gpt-4o-mini-2024-07-18` at temperature 0.
+2. The judge stays as registered: gpt-5.6-sol at medium through codex with MemGPT's 6.1.2 prompt (`qa/loaders/dmr.py`). Neither paper names its judge.
+3. Arms in order: `full` first, as the harness check, then `hippo-best`, `hippo-emb`, `hippo365` and the `bm25` control, each from its registered retrieval. The check passes when `full` scores 94 to 98 over all 500 rows, the band of the published full-conversation rows. If it fails, the retrieval arms still run (about $0.60), the row stays not comparable, and the page shows each arm against `full` only. The role line does not change after the check.
+4. Score: accuracy over all 500 rows and over the 495 primary rows, and the count of NO ANSWER replies. Five questions run first as a smoke with the cost per question reported. Each answer and verdict takes the first valid reply in 3 asks (qa/ledger.py).
+5. Tests: `tests/test_dmr_openai.py`. They fail if the role line moves or anything else in the prompt changes, if the answer leaves with another model or message shape, or if the harness check reads another band.
+
+**Read before this note.** `qa/loaders/dmr.py`, MemGPT appendix 6.1.1 to 6.1.3 (`hippo-bench/repos/arxiv/memgpt.txt` lines 1000 to 1150), row 0 of `msc_self_instruct.jsonl`, and the score files of `dmr`, `dmr-emb`, `dmr-best` and `dmr-full`. No OpenAI chat call.
+
 ### Erratum (2026-11-16)
 
 Line 24 says "The LongMemEval file records no models." That is wrong. At runner commit `4b61c5d`, `results/platform/longmemeval_results.json` metadata holds `"model": "gpt-5", "generation_model": "gpt-5"`, top 200, 500 questions. So Mem0's LongMemEval, LoCoMo and BEAM files all record gpt-5. No rule or score depends on the line. Found by the comparability audit (`hippo-bench/comparability/memory-qa-1.md`).
