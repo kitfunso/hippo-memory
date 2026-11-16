@@ -267,12 +267,12 @@ function applyScheduledOutcomes(files, outcomes, idMap, sessionIndex) {
 // and it never shares to a global store.
 async function sleepOnce(hippoRoot, session) {
   const result = await consolidate(hippoRoot, { now: new Date(session.date) });
-  const counts = {};
-  for (const [k, v] of Object.entries(result)) if (typeof v === 'number') counts[k] = v;
+  // Every other field of ConsolidationResult is a count.
+  const { summariesRebuildCapped: _capped, dryRun: _dry, removedIds: _ids, events, phaseFailures, ...counts } = result;
   const eventKinds = {};
-  for (const ev of result.events) eventKinds[ev.kind] = (eventKinds[ev.kind] ?? 0) + 1;
+  for (const ev of events) eventKinds[ev.kind] = (eventKinds[ev.kind] ?? 0) + 1;
   const sleep = { counts, eventKinds };
-  if (result.phaseFailures.length > 0) sleep.phaseFailures = result.phaseFailures.map((f) => `${f.phase}: ${f.message}`);
+  if (phaseFailures.length > 0) sleep.phaseFailures = phaseFailures.map((f) => `${f.phase}: ${f.message}`);
   return sleep;
 }
 

@@ -70,7 +70,7 @@ async function runPair(o, pair, group) {
 }
 
 async function pool(items, n, fn) {
-  const out = new Array(items.length);
+  const out = Array.from({ length: items.length });
   let next = 0;
   await Promise.all(Array.from({ length: n }, async () => {
     while (next < items.length) { const i = next++; out[i] = await fn(items[i]); }
@@ -91,7 +91,7 @@ const jobs = [...changes.pairs.map((p) => [p, 'change']), ...looks.pairs.map((p)
 const results = await pool(jobs, o.workers, ([p, g]) => runPair(o, p, g).catch((e) => ({ id: p.id, group: g, kind: p.kind, error: e.message })));
 const errors = results.filter((r) => r.error);
 const count = (g, acts) => results.filter((r) => r.group === g && acts.includes(r.action)).length;
-const nC = changes.pairs.length, nL = looks.pairs.length;
+const nC = changes.pairs.length;
 const summary = {
   lookalikeHidden: count('lookalike', ['hide']),
   lookalikeActed: count('lookalike', ['hide', 'soft', 'other']),
