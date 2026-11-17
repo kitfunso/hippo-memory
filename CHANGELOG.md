@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.6.0 - 2026-11-17
+
+### Added
+
+- **`HIPPO_READ_ONLY=1` uses a store without changing it.** `hippo recall`, `hippo context`, the `UserPromptSubmit` hook and the MCP tools `hippo_recall`, `hippo_context` and `hippo_assemble` give the same answers as without it, and `hippo.db`, its WAL and the mirror files keep every byte: each connection runs `PRAGMA query_only = ON` after its schema step, a store with a WAL opens read-only so its close checkpoints nothing, and a missing store reads as an empty one. The write verbs `remember`, `supersede`, `refine`, `outcome`, `resolve`, `decide`, `invalidate`, `forget`, `learn`, `promote`, `share` and `import` exit 1 with `read-only: not saved (HIPPO_READ_ONLY=1)`, and the MCP tools `hippo_remember`, `hippo_outcome`, `hippo_learn`, `hippo_resolve` and `hippo_share` return that text as an error result. `capture`, `capture-error`, `sleep`, `pre-compact`, `post-compact` and `session-end` log one line and do nothing, so a session end starts no sleep worker, and `hippo serve` does not start. A benchmark can now freeze a store for its test phase, as DolphinBench's official setup needs.
+- **The Claude Code plugin starts hippo's MCP server.** Its new `.mcp.json` runs `hippo mcp` as the server `hippo-memory`, so a plugin install gets the recall, context and memory tools as well as the hooks.
+
+### Changed
+
+- **`npm run deploy` in `website/` now deploys only a clean checkout of the newest master.** It fetches `origin` first and stops with a fix line when the checkout has uncommitted changes or its HEAD is not `origin/master`. On 2026-11-10 the 3.5.1 site deploy ran from the release branch and replaced a print-style fix that had merged to master minutes before.
+
+### Fixed
+
+- **The website prints in dark ink on white.** A paper print or "Save as PDF" drops page backgrounds, which left the dark theme's light text on a white page and hid the gradient headings. A print block now sets dark text, shows every section, and leaves out the nav chips, the copy buttons and the background canvas.
+
+### Documentation
+
+- **The Z0 round 3 result now leads with its win (`docs/evals/2026-11-08-z0-round3-result.md`).** The title reads "adding hippo cuts repeat mistakes by 14.9 points at no extra cost", and the sham-arm bullet and the closing note say the gain needs no captured lessons, because sham hippo gets the same gain. No figure, interval or quoted prereg line changes, and every line keeps its number, so the round 4 prereg's line citations still hold.
+- **Z0 round 4 pre-registration (`docs/evals/2026-11-10-z0-round4-prereg.md`).** Round 4 tests whether Sonnet 5.5 with hippo matches Opus 5.5 with built-in memory on tasks solved and repeat mistakes at a lower cost per solved task, with Sonnet alone as the gate that keeps a cheaper model from winning on its own. It reruns round 3's 29 repositories on a new branch cut from round 3's frozen tree plus the code its items 1 to 12 need: an arm table, the new tests and their verdict rule, cost per solved task, one pinned model and effort per arm, a G1 check of every request, prices keyed by model, one venv for each Python task, the new sizer and Level check, the pilot tools and the spend ledger. On 10 Nov the founder approved the pilot and $2,140.00 in all; a whole-run check after the pilot, at 5 seeds, asks again before batch 1 if the run does not fit (on round 3's figures and a $40 pilot, when r is above 0.79), and no session runs before the freeze. Each round 3 figure it cites has a kept script in `docs/evals/z0-r4/`, behind a frozen-read gate, or names the stored file it comes from.
+
 ## 3.5.1 - 2026-11-10
 
 ### Added
