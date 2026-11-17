@@ -1,7 +1,7 @@
 # DolphinBench, official Claude Code + Sonnet 5 setup: pre-registration
 
 **Date:** 2026-11-17
-**Status:** fixed before the first real turn. Fields marked `REFILL AT SETUP` change when setup runs on the 3.6.0 build; the run record (`/opt/dolphin-official/setup.json`, copied into every test run's `configuration.json`) is the binding value.
+**Status:** fixed before the first real turn. The `hippo` and `plugin_sha256` fields come from the 3.6.0 setup; the run record (`/opt/dolphin-official/setup.json`, copied into every test run's `configuration.json`) is the binding value.
 **Plan:** `hippo-bench/dolphinbench-official-plan.html`. **Review:** `hippo-bench/dolphinbench-official-plan-review.md` (rows 1-28).
 **Runner:** `benchmarks/public/dolphinbench/dolphin_official.py`, launched by `run-dolphin-official.sh`.
 
@@ -19,8 +19,8 @@ The score is tests passed of 600 (Morgan, Alex and Riley, 200 each). It compares
   "claude_install": "/opt/claude-2.1.259/bin/claude, root-owned 0755; init event version checked every turn",
   "ingestion_effort": null,
   "test_effort": "medium",
-  "hippo": "3.6.0 tag (REFILL AT SETUP: npm spec and sha512 integrity)",
-  "plugin_sha256": "REFILL AT SETUP (3.6.0 plugin, official tree_hash rule)",
+  "hippo": "hippo-memory@3.6.0, integrity sha512-E+y9gv1Sk05IXUwN4RK+TNNuYoJGt8q+2/JSezwG8hxP0QFunEqz7lJ19pSAmd3q/zTeYTShL8qf1Gb34+i9ng== (matches the registry)",
+  "plugin_sha256": "b4bfdfac4e441060f72a81b4e2058ede72ffe2035dc8a3df842a15d8389fbc6e (v3.6.0 tag 4b7501631, extensions/claude-code-plugin, version 0.6.2, own .mcp.json, no overlay)",
   "rank": "v3.5.1 rank (decision 1)",
   "mcp_server": "hippo-memory (plugin .mcp.json: command hippo, args [mcp]); Claude Code names it plugin:hippo-memory:hippo-memory",
   "node": "v22.22.0",
@@ -152,7 +152,7 @@ Found while building the runner:
 
 ## Open before the full run
 
-- Run setup on the 3.6.0 build and plugin; refill `hippo` and `plugin_sha256` above from setup.json.
+- Done 2026-11-17T11:09Z: setup on the 3.6.0 build and plugin. The plugin tree hash equals the proof plugin's, so the fake-agent proof covers the same plugin files.
 - Expect `test_store_changed` false under 3.6.0's `HIPPO_READ_ONLY`; a true value there is a finding, not noise.
 - The real smoke decides the user-fact gate; the fake result is not evidence either way.
 - Hook p95 is measured at smoke store size only; the review asks for a size near the end of Morgan.
