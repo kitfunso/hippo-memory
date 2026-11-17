@@ -66,19 +66,18 @@ Built-in plus hippoN
 repeatedcleanCost with hippo: N times, the same
 The gain was the same with lesson capture switched off, so this run cannot say hippo's stored lessons caused it. The test agent was Claude Code only, so there's no measured result for Codex or Cursor.
 Public memory tests
-One answer model and scorer for every system we ran in a test.
-DMRN questions
-full chatN
-hippoN
-PersonaMem vN questions
-hippoN
-MemOSpublishedN
-LongMemEval-SN questions
-hippoN
-LoCoMoN questions
-MemN
-hippoN
-hippo used its local embedder, plus its local reranker on DMR. MemOS's score is from its own setup.
+Each test runs in the setup behind its published scores, so hippo's number sits beside theirs.
+TesthippoMemNZepMemOSSupermemoryHonchoMemobaseOther
+LoCoMo, MemN paper setupLong chat recall, gpt-No-mini answers N N (MemN published score, opens in a new tab)N (Zep, published score, opens in a new tab)----N (MemNg, published score, opens in a new tab)MemNg
+LongMemEval-S, gpt-No readerLong chat recall, gpt-No answers N -N (Zep, published score, opens in a new tab)-N (Supermemory, published score, opens in a new tab)--N (EmergenceMem Internal, published score, opens in a new tab)EmergenceMem Internal
+PersonaMem vN MemOS suite setupPersonalisation, gpt-No-mini answers N N (MemN published score, opens in a new tab)N (Zep, published score, opens in a new tab)N (MemOS, published score, opens in a new tab)N (Supermemory, published score, opens in a new tab)-N (Memobase, published score, opens in a new tab)N (MemU, published score, opens in a new tab)MemU
+EverMemBench, GPT-N-mini answersChanging facts, GPT-N-mini answers N N (MemN published score, opens in a new tab)N (Zep, published score, opens in a new tab)N (MemOS, published score, opens in a new tab)--N (Memobase, published score, opens in a new tab)N (Full Context, published score, opens in a new tab)Full Context
+HaluMem-MediumHallucination control, GPT-No answers N N (MemN published score, opens in a new tab)N (Zep, published score, opens in a new tab)N (MemOS, published score, opens in a new tab)N (Supermemory, published score, opens in a new tab)-N (Memobase, published score, opens in a new tab)N (MemN-Graph, published score, opens in a new tab)MemN-Graph
+HaluMem-LongHallucination control, GPT-No answers running N (MemN published score, opens in a new tab)N (Zep, published score, opens in a new tab)N (MemOS, published score, opens in a new tab)N (Supermemory, published score, opens in a new tab)-N (Memobase, published score, opens in a new tab)N (MemN-Graph, published score, opens in a new tab)MemN-Graph
+DolphinBench, official Claude Code setupAgent memory, Claude Code with Sonnet N running N (MemN published score, opens in a new tab)---N (Honcho, published score, opens in a new tab)-N (Built-in, published score, opens in a new tab)Built-in
+Where hippo lost in our own setup:
+On LoCoMo, a public test of questions about long conversations, MemN scored N to hippo's N
+Handing the model the whole chat beat hippo by N points on another public test, N to N
 How we test &rarr;
 N Zero model calls to store a memory
 Other memory tools run what you save through a language model, an LLM on top of your LLM.
