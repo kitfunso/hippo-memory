@@ -14,7 +14,7 @@ Example::
 
     from hippo_memory import HippoSync
 
-    with HippoSync(base_url="http://127.0.0.1:3737") as client:
+    with HippoSync(base_url="http://127.0.0.1:6789") as client:
         mem = client.remember(content="bug fix lesson")
         results = client.recall(q="bug fix")
         ctx = client.get_context(budget=1500)
@@ -88,7 +88,7 @@ class HippoSync:
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:3737",
+        base_url: str = "http://127.0.0.1:6789",
         api_key: str | None = None,
         timeout: float = 30.0,
     ):

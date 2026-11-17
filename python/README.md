@@ -21,7 +21,7 @@ You also need the `hippo-memory` npm package running locally:
 ```bash
 npm install -g hippo-memory
 hippo init       # creates a .hippo directory
-hippo serve --port 3737   # the port this SDK uses by default; the server's own default is 6789
+hippo serve      # binds 127.0.0.1:6789 by default
 ```
 
 `hippo serve` takes no request without an API key, from this machine too. With no `api_key`, the client sends `HIPPO_API_KEY`, else, for a server on `127.0.0.1`, `::1` or `localhost`, the member key `hippo serve` wrote to `server.key`: in the `.hippo` folder nearest the working folder, else in the global store (`HIPPO_HOME`). This is the rule the hippo CLI follows. To act as another key, mint one (see Authentication).
@@ -35,7 +35,7 @@ import asyncio
 from hippo_memory import Hippo
 
 async def main():
-    async with Hippo(base_url="http://127.0.0.1:3737") as client:
+    async with Hippo(base_url="http://127.0.0.1:6789") as client:
         # Persist a memory
         mem = await client.remember(content="bug fix lesson", tags=["error"])
         print(mem.id)

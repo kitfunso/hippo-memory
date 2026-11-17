@@ -18,7 +18,8 @@ export function pathKey(env) {
 
 export function sh(cmd, cwd, env, timeoutMs = 30 * 60_000, input = undefined) {
   const r = spawnSync(cmd, { cwd, env, shell: true, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 28, input });
-  return { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '', timedOut: r.error?.code === 'ETIMEDOUT' };
+  // status ?? 1 hides a spawn error or a kill, so the raw signal and error code go back too.
+  return { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '', timedOut: r.error?.code === 'ETIMEDOUT', signal: r.signal ?? null, errorCode: r.error?.code ?? null };
 }
 
 const MAX_OUTPUT = 1 << 28;

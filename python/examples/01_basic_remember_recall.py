@@ -15,7 +15,7 @@ from hippo_memory import Hippo
 
 
 async def main() -> None:
-    async with Hippo(base_url="http://127.0.0.1:3737", api_key=os.environ["HIPPO_API_KEY"]) as client:
+    async with Hippo(base_url="http://127.0.0.1:6789", api_key=os.environ["HIPPO_API_KEY"]) as client:
         # Persist 3 memories
         for content in [
             "bug fix: prevent shared tag array mutation in learnFromRepo",
