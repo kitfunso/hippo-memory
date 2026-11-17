@@ -14,7 +14,7 @@ import '@fontsource/spline-sans-mono/latin-600.css';
 import '../styles/home.css';
 import Head from '../components/Head.astro';
 import Beacon from '../components/Beacon.astro';
-import { losses, site } from '../content/site';
+import { site } from '../content/site';
 import board from '../data/all-benchmarks.json';
 
 interface Score { value: string; system: string | null; url: string }
@@ -23,6 +23,11 @@ interface BoardRow { name: string; task: string; hippo: { value: string | null; 
 const boardRows: readonly BoardRow[] = board.official;
 const boardCols = board.columns.filter((c) => boardRows.some((r) => r.cells[c]));
 const topOf = (r: BoardRow) => Math.max(...[r.hippo.value, ...Object.values(r.cells).map((x) => x?.value)].filter((v): v is string => !!v).map(Number));
+const rankOf = (r: BoardRow) => {
+  const others = Object.values(r.cells).filter((x): x is Score => !!x).map((x) => Number(x.value));
+  const k = 1 + others.filter((v) => v > Number(r.hippo.value)).length;
+  return `${['1st', '2nd', '3rd'][k - 1] ?? `${k}th`} of ${others.length + 1}`;
+};
 
 const title = "hippo: one memory for every agent you'll ever use";
 const description = 'hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.';
@@ -239,7 +244,7 @@ const description = 'hippo writes what you teach a coding agent into a store in 
             {boardRows.map((r) => (
               <tr>
                 <th scope="row"><b>{r.name}</b><small>{r.task}</small></th>
-                <td class:list={['hp', !r.hippo.status && Number(r.hippo.value) === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <span class="v">{r.hippo.value}</span>}</td>
+                <td class:list={['hp', !r.hippo.status && Number(r.hippo.value) === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span><small>{rankOf(r)}</small></>}</td>
                 {boardCols.map((c) => {
                   const x = r.cells[c];
                   if (!x) return <td class="na">-</td>;
@@ -250,7 +255,6 @@ const description = 'hippo writes what you teach a coding agent into a store in 
           </tbody>
         </table>
       </div>
-      <div class="limit lost rv"><span class="st" aria-hidden="true"><i style="background:var(--amber)"></i><i style="background:var(--red)"></i><i style="background:var(--plum)"></i></span><div><p>Where hippo lost in our own setup:</p><ul>{losses.items.map((l) => <li><a href={l.href}>{l.text}</a></li>)}</ul></div></div>
       <a class="more" href="/benchmarks/">How we test &rarr;</a>
     </div>
   </div>

@@ -39,8 +39,8 @@ the design rules and `README.md` the dev and deploy commands. Read both before a
   `Base` and the home page use both.
 - The home page (`src/pages/index.astro`) is one standalone page with its own styles
   (`src/styles/home.css`) and WebGL module (`src/scripts/home-gl.js`); it uses no other component.
-  `scripts/check-readme-sync.mjs` makes it keep the Z0 caveat and both public-test losses.
-  /benchmarks/ states every loss in its own copy.
+  `scripts/check-readme-sync.mjs` makes it keep the Z0 caveat. Its scoreboard shows only the
+  official-setup rows, the ones comparable with published scores; /benchmarks/ states every loss in its own copy.
 
 ## Checks before a PR
 

@@ -274,9 +274,6 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .board td.best .v{font-weight:600}.board td.best .v,.board td.best small{color:var(--red)}
 .board .run{font:500 12px var(--mono);color:var(--mute);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap}
 .board .na{color:var(--mute)}
-.limit.lost{max-width:none;margin-top:12px;font-weight:500}
-.lost ul{margin:6px 0 0;padding-left:18px;color:var(--soft)}.lost li+li{margin-top:4px}
-.lost a{color:inherit;text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px}.lost a:hover{color:var(--amber);text-decoration-color:currentColor}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:6px;color:var(--amber);font-weight:600;text-decoration:none}
 .more:hover{text-decoration:underline}
