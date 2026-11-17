@@ -9,8 +9,8 @@ Add this block to your `CLAUDE.md` (project root or `~/.claude/CLAUDE.md` for gl
 ```markdown
 ## Memory (Hippo)
 
-Hippo manages project memory across sessions. It decays old memories, strengthens
-retrieved ones, and merges related episodes into one memory during sleep.
+Hippo keeps this project's memory across sessions, in one store that Codex, Cursor
+and any MCP client read too.
 
 ### At session start
 
@@ -36,7 +36,7 @@ When you hit an error or unexpected failure:
 hippo remember "<what failed, why, and how you fixed it>" --error
 ```
 
-The `--error` flag doubles the half-life. Production incidents don't quietly disappear.
+The `--error` flag doubles the half-life, so the lesson lasts twice as long.
 
 When something is permanent and should never decay:
 
@@ -53,13 +53,13 @@ hippo outcome --good   # the recalled memories were useful
 hippo outcome --bad    # the recalled memories were irrelevant or wrong
 ```
 
-This tightens the feedback loop. Good memories strengthen; irrelevant ones decay faster.
+Good marks make a memory last longer, and bad marks make it fade faster.
 
 ### Periodic maintenance
 
 Consolidation runs automatically when Claude Code exits (via a `SessionEnd` hook in `~/.claude/settings.json`). This is installed by `hippo init`, `hippo setup`, or `hippo hook install claude-code`.
 
-The hook runs `hippo session-end --log-file <path>`, which spawns a detached child process that runs `hippo sleep` then `hippo capture --last-session` in sequence and writes their output to `~/.hippo/logs/claude-code-sleep.log`. Detaching is the only way to survive the TUI teardown — otherwise Claude Code SIGTERM's the hook before consolidation finishes.
+The hook runs `hippo session-end --log-file <path>`, which spawns a detached child process that runs `hippo sleep` then `hippo capture --last-session` in sequence and writes their output to `~/.hippo/logs/claude-code-sleep.log`. Detaching is the only way to survive the TUI teardown, because Claude Code sends SIGTERM to the hook before consolidation finishes.
 
 A companion `SessionStart` hook (installed automatically) prints that log on your next session start between `=== Previous session hippo consolidation ===` banners and clears it. It prints on stderr: Claude Code adds SessionStart stdout to the model's context, and the log is for you, not the model. To read it, start `claude --debug` and open `~/.claude/debug/<session-id>.txt`. When the last sleep failed or a compaction summary was set aside, the hook also shows you one line on screen, such as `Hippo: 1 compaction summary set aside as .bad. Run hippo doctor for details.` Claude Code shows that line to you and does not add it to the model's context.
 
@@ -94,14 +94,15 @@ hippo init
 Hippo auto-detects Claude Code and:
 1. Patches `CLAUDE.md` with hippo's own block, which is shorter than the snippet above
 2. Adds 8 hooks to `~/.claude/settings.json`; the `SessionEnd` one runs `hippo sleep` on session exit
+3. Schedules a daily run at 6:15am that stores lessons from the day's commits
 
-No copy-paste needed, no cron required.
+To skip the hooks: `hippo init --no-hooks`. To skip the daily run: `hippo init --no-schedule`.
 
-To skip auto-detection: `hippo init --no-hooks`
+The [Claude Code plugin](../extensions/claude-code-plugin) is the alternative to these hooks. Use one, not both.
 
 ## Notes
 
-- Hippo stores everything in `.hippo/` in your project root. It's markdown on disk. Commit it or gitignore it, your call.
+- Hippo stores everything in `.hippo/` in your project root. The store is SQLite (`.hippo/hippo.db`) with markdown mirrors beside it. Commit the mirrors to review rules in a pull request, or gitignore the folder.
 - `--budget 3000` is a good default for Claude Code sessions. Increase for larger context tasks. The budget counts the whole printed block, headings and tags included.
 - If the project has no `.hippo/` yet, run `hippo init` first.
 - For global memory across projects, run `hippo init --global`. The global store defaults to `~/.hippo/` but respects `$HIPPO_HOME` and `$XDG_DATA_HOME/hippo`.

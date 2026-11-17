@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Draws public/favicon.svg, public/apple-touch-icon.png and a 1200x630 Open Graph card per built page, captioned
-// with its <title>. Run after `astro build`, then build again so each page links its own card. Needs Chrome (or
-// CHROME=<path>); `--social <file.png>` also draws the 1280x640 GitHub social preview.
+// Draws public/favicon.svg, favicon-48.png and apple-touch-icon.png from public/logo.svg, and a 1200x630 Open Graph
+// card per built page, captioned with its <title>. Run after `astro build`, then build again so each page links its
+// own card. Needs Chrome (or CHROME=<path>); `--social <file.png>` also draws the 1280x640 GitHub social preview.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,15 +12,27 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
 const pub = join(root, 'public');
 const PAPER = '#f7f4ee', PAPER_2 = '#fdfbf7', INK = '#1f1b16', INK_2 = '#5e554a', ACCENT = '#1d5b43';
+const TILE = '#111417'; // the home page header
 const CHROME = process.env.CHROME
   || { win32: 'C:/Program Files/Google/Chrome/Application/chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }[process.platform]
   || 'google-chrome';
 
-// The mark is a paper `h` on the bottle-green accent, drawn as strokes so it needs no font and still reads at 16 px.
-const mark = ({ size, rounded = true }) =>
-  `<svg xmlns="http://www.w3.org/2000/svg"${size ? ` width="${size}" height="${size}"` : ''} viewBox="0 0 64 64">`
-  + `<rect width="64" height="64"${rounded ? ' rx="14"' : ''} fill="${ACCENT}"/>`
-  + `<path d="M22 13V51M22 33C24 27 29 25 34 25C39 25 42 28 42 34V51" fill="none" stroke="${PAPER}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// public/logo.svg is the one source of the mark, so a new icon is that file swapped and this script rerun.
+function readLogo(file) {
+  const m = /<svg\b([^>]*)>([\s\S]*)<\/svg>/.exec(readFileSync(file, 'utf8'));
+  const box = m && /\bviewBox="([^"]+)"/.exec(m[1]);
+  if (!box) throw new Error(`${file}: needs a root <svg> with a viewBox`);
+  const [x, y, w, h] = box[1].trim().split(/[\s,]+/).map(Number);
+  // Root attributes such as shape-rendering stay; size and the default namespace belong to the tile.
+  const attrs = m[1].replace(/\s(?:xmlns|viewBox|width|height)="[^"]*"/g, '').trim();
+  return { x, y, w, h, attrs, body: m[2] };
+}
+const logo = readLogo(join(pub, 'logo.svg'));
+const side = Math.max(logo.w, logo.h) * 1.25;
+const mark = (size) =>
+  `<svg xmlns="http://www.w3.org/2000/svg"${size ? ` width="${size}" height="${size}"` : ''} viewBox="0 0 ${side} ${side}"${logo.attrs ? ` ${logo.attrs}` : ''}>`
+  + `<rect width="${side}" height="${side}" fill="${TILE}"/>`
+  + `<g transform="translate(${(side - logo.w) / 2 - logo.x} ${(side - logo.h) / 2 - logo.y})">${logo.body}</g></svg>`;
 
 const font = (pkg, file) => readFileSync(join(root, 'node_modules', '@fontsource', pkg, 'files', file)).toString('base64');
 const faces = [['Newsreader', 'newsreader', 'newsreader-latin-400-normal.woff2', 400], ['Geist Mono', 'geist-mono', 'geist-mono-latin-400-normal.woff2', 400]]
@@ -30,7 +42,7 @@ const faces = [['Newsreader', 'newsreader', 'newsreader-latin-400-normal.woff2',
 const tmp = mkdtempSync(join(tmpdir(), 'hippo-images-'));
 function shoot(html, width, height, out) {
   const page = join(tmp, 'page.html');
-  writeFileSync(page, `<!doctype html><html><head><meta charset="utf-8"><style>${faces}*{margin:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px;overflow:hidden;background:${PAPER}}</style></head><body>${html}</body></html>`);
+  writeFileSync(page, `<!doctype html><html><head><meta charset="utf-8"><style>${faces}*{margin:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px;overflow:hidden;background:${PAPER}}svg{display:block}</style></head><body>${html}</body></html>`);
   execFileSync(CHROME, [
     '--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--force-device-scale-factor=1',
     `--user-data-dir=${join(tmp, 'profile')}`, '--virtual-time-budget=3000',
@@ -45,7 +57,7 @@ const card = (title, path, width, height) => {
   const size = text.length > 48 ? 54 : 62;
   return `<div style="position:relative;display:flex;flex-direction:column;justify-content:space-between;height:${height}px;padding:64px 72px;color:${INK}">`
     + `<img src="${poster}" style="position:absolute;right:28px;top:50%;transform:translateY(-50%);width:${Math.round(width * 0.44)}px;mix-blend-mode:multiply">`
-    + `<div style="display:flex;align-items:center;gap:18px;font:400 40px Newsreader">${mark({ size: 52 })}<span>hippo</span></div>`
+    + `<div style="display:flex;align-items:center;gap:18px;font:400 40px Newsreader">${mark(60)}<span>hippo</span></div>`
     + `<h1 style="position:relative;font:400 ${size}px/1.08 Newsreader;max-width:${Math.round(width * 0.47)}px">${text}</h1>`
     + `<div style="position:relative;display:flex;gap:28px;align-items:center;font:400 24px 'Geist Mono';color:${INK_2}">`
     + `<span style="border:1px solid rgba(31,27,22,.2);border-radius:12px;padding:14px 20px;background:${PAPER_2};color:${INK}"><span style="color:${ACCENT};margin-right:12px">$</span>npm install -g hippo-memory</span>`
@@ -67,8 +79,9 @@ function pages(dir) {
 try {
   const built = pages(dist);
   if (!built.length) throw new Error('no pages in dist/: run astro build first');
-  writeFileSync(join(pub, 'favicon.svg'), `${mark({})}\n`);
-  shoot(mark({ size: 180, rounded: false }), 180, 180, join(pub, 'apple-touch-icon.png'));
+  writeFileSync(join(pub, 'favicon.svg'), `${mark()}\n`);
+  shoot(mark(48), 48, 48, join(pub, 'favicon-48.png'));
+  shoot(mark(180), 180, 180, join(pub, 'apple-touch-icon.png'));
   rmSync(join(pub, 'og'), { recursive: true, force: true });
   mkdirSync(join(pub, 'og'));
   for (const { path, title } of built) {
@@ -80,7 +93,7 @@ try {
     const home = built.find((p) => p.path === '/');
     shoot(card(home.title, '/', 1280, 640), 1280, 640, process.argv[social + 1]);
   }
-  console.log(`wrote favicon.svg, apple-touch-icon.png and ${built.length} cards in public/og/`);
+  console.log(`wrote favicon.svg, favicon-48.png, apple-touch-icon.png and ${built.length} cards in public/og/`);
 } finally {
   rmSync(tmp, { recursive: true, force: true, maxRetries: 5 });
 }

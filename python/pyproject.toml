@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{name = "Kit", email = "skfsk27@gmail.com"}]
-keywords = ["memory", "ai-agents", "rag", "hippo-memory"]
+keywords = ["memory", "agent-memory", "ai-agents", "coding-agent", "mcp", "local-first", "hippo-memory"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",

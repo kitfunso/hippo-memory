@@ -81,12 +81,11 @@
     "coding-agent",
     "agents",
     "llm",
-    "rag",
     "retrieval",
-    "hybrid-search",
     "embeddings",
     "sqlite",
     "local-first",
+    "open-source",
     "cli",
     "context",
     "recall"

@@ -16,9 +16,10 @@ npm run preview   # serve the built dist/
 
 ## Images
 
-`scripts/make-images.mjs` draws the favicon, the apple-touch icon and one 1200x630 Open
-Graph card per page (`public/og/<slug>.png`, captioned with the page's `<title>`). It
-reads the built pages, so after adding a page or changing a title run `npm run build`,
+`scripts/make-images.mjs` draws `favicon.svg`, `favicon-48.png`, the apple-touch icon and
+one 1200x630 Open Graph card per page (`public/og/<slug>.png`, captioned with the page's
+`<title>`). Every icon and the mark on each card come from `public/logo.svg`, so a new
+icon means replacing that one file and rerunning the script. It reads the built pages, so after adding a page or changing a title run `npm run build`,
 then `node scripts/make-images.mjs`, then `npm run build` again so the page links its own
 card; a page without one uses `/og/home.png`. It needs Chrome (`CHROME=<path>` if Chrome
 is not in its default place). `--social <file.png>` also draws the 1280x640 GitHub social

@@ -15,7 +15,7 @@ workspace `.hippo/` store and automatically merges your shared `~/.hippo/` memor
 during `recall` and `context`.
 
 If you enable `autoSleep` in the plugin config, OpenClaw session-end
-consolidation now runs in a detached background worker. The session can end
+consolidation runs in a detached background worker. The session can end
 immediately while `hippo sleep` finishes in the background.
 
 Daily cadence is separate. `hippo init` registers the workspace and installs a

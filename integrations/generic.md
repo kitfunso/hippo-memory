@@ -12,11 +12,11 @@ Copy these into your system prompt, agent instructions, or tool configuration.
 ## Memory System
 
 You have access to a memory system called Hippo. It stores information between
-sessions. Memories decay over time unless they are retrieved. Errors are
-remembered longer. You can strengthen memories by using them.
+sessions, in one store your other coding agents read too. Unused memories fade,
+each recall keeps one longer, and errors last twice as long.
 
-Memory is stored in .hippo/ in the current working directory (markdown files,
-no database required).
+Memory is stored in .hippo/ in the current working directory: a SQLite database
+with markdown mirrors you can read.
 
 ### How to use it
 
@@ -205,7 +205,7 @@ Hippo ships with a native MCP server. Add to your client config:
 }
 ```
 
-Exposes 10 tools: recall, remember, outcome, context, status, learn, conflicts, resolve, share, peers.
+Exposes 13 tools: `hippo_recall`, `hippo_assemble`, `hippo_drill`, `hippo_remember`, `hippo_outcome`, `hippo_context`, `hippo_status`, `hippo_learn`, `hippo_conflicts`, `hippo_resolve`, `hippo_share`, `hippo_peers`, `hippo_predict_baserate`.
 
 ---
 
