@@ -37,7 +37,6 @@ export const site = {
     license: `${REPO}/blob/master/LICENSE`,
     jevEval: `${REPO}/blob/master/docs/evals/2026-09-19-jev-reranker.md`,
     z0Round3: `${REPO}/blob/master/docs/evals/2026-11-08-z0-round3-result.md`,
-    locomoScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/locomo-h2h-emb.txt`,
     dmrScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/dmr-best.txt`,
     storeCalls: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/mem0-locomo-ingest-gate.json`,
     // Pilot requests open a GitHub issue until a booking link exists.
@@ -104,14 +103,6 @@ export const publicTests = {
   heading: 'On public question-answering tests',
   body: 'These tests ask questions about long conversations, a different job from stopping a repeated mistake, so we show them as supporting evidence. Within each test, every system we ran used the same answer model and the same scorer. Hippo ran with its optional local embedder, and on DMR with its local reranker too.',
   linkLabel: 'Every result, and where hippo lost',
-} as const;
-
-// The two public-test losses, shown under the home table; /benchmarks/ lists the rest in its own words.
-export const losses = {
-  items: [
-    { text: "On LoCoMo, a public test of questions about long conversations, Mem0 scored 94.9 to hippo's 89.4.", href: site.links.locomoScore },
-    { text: 'Handing the model the whole chat beat hippo by 6.1 points on another public test, 83.6 to 77.6.', href: site.links.dmrScore },
-  ],
 } as const;
 
 // Markdown in each text, rendered with mdInline. Commands are shown as typed.
