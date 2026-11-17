@@ -349,6 +349,15 @@ export const TOOLS: readonly McpToolDefinition[] = [
 
 export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
+/** The tools that save, which answer the read-only refusal under HIPPO_READ_ONLY=1. */
+export const WRITE_TOOLS: ReadonlySet<string> = new Set([
+  'hippo_remember',
+  'hippo_outcome',
+  'hippo_learn',
+  'hippo_resolve',
+  'hippo_share',
+]);
+
 // api.retrieve rejects these itself, so MCP and HTTP callers get the same typed error code for the
 // same bad value.
 export const ARGS_CHECKED_BY_API = new Map<string, ReadonlySet<string>>([

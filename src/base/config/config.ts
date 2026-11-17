@@ -194,6 +194,8 @@ export interface RuntimeSettings {
   /** HIPPO_LOSS_AVERSION_RATIO, which scales an error memory's strength; strength scoring
    * applies its floor. */
   readonly lossAversionRatio?: number;
+  /** HIPPO_READ_ONLY=1: the store refuses every write, so a read skips its own bookkeeping. */
+  readonly readOnly?: boolean;
   /** Where the CLEF rerankers send a request; without it they keep the native order. */
   readonly clef?: ClefSettings;
 }

@@ -8,6 +8,7 @@ import { appendAuditEvents } from '../audit/audit.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import type { PredictionBaserate } from '../../../base/ports/store/types.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { isReadOnlyHandle } from '../../../db/connect.js';
 import { plural } from '../../../base/util/format.js';
 
 /** One closed prediction as the baserate reads it: both values set. */
@@ -98,8 +99,10 @@ export function computePredictionBaserate(
     rows.map((r) => ({ estimate: r.estimate_value, actual: r.actual_value })),
   );
   // An empty class is audited too, since an agent probing one is a signal; the recall path passes
-  // false and audits its own hint.
-  if (emitAudit) auditBaserateRead(db, { tenantId, actor, classTag, nClosed: baserate.nClosed });
+  // false and audits its own hint, and a read-only store keeps no row of the read.
+  if (emitAudit && !isReadOnlyHandle(db)) {
+    auditBaserateRead(db, { tenantId, actor, classTag, nClosed: baserate.nClosed });
+  }
   return baserate;
 }
 

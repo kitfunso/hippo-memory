@@ -18,7 +18,7 @@ export {
   type SqliteServerRuntime,
 } from './runtime/server-runtime.js';
 export type { SqliteStoreOptions } from './runtime/grant.js';
-export { StoreRuntime } from '../../db/store-runtime.js';
+export { StoreRuntime, type StoreRuntimeOptions } from '../../db/store-runtime.js';
 export type { RequestStores } from '../../db/index.js';
 export { tenantOfApiKey, type ResolveOptions } from './runtime/tenant.js';
 export { askingNearestFirst } from './vectors/vector-reads.js';

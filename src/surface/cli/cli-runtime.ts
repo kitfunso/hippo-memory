@@ -1,6 +1,7 @@
 // The CLI command's store runtime, apart from api-context.ts so cli.ts can end a command without
 // loading the verbs' store wiring.
 import { withStoreRuntime, type StoreRuntime } from '../open-store.js';
+import { envReadOnly } from '../../base/util/env.js';
 
 // One command per process, so its runtime is root state as its session is; between commands a store
 // pools nothing.
@@ -16,12 +17,15 @@ export function cliRuntime(): StoreRuntime | undefined {
  * command run inside another, as a test's in-process runCli is, shares the outer one's runtime. */
 export async function runCliCommand<T>(fn: () => Promise<T>): Promise<T> {
   if (commandRuntime !== undefined) return fn();
-  return withStoreRuntime(async (runtime) => {
-    commandRuntime = runtime;
-    try {
-      return await fn();
-    } finally {
-      commandRuntime = undefined;
-    }
-  });
+  return withStoreRuntime(
+    async (runtime) => {
+      commandRuntime = runtime;
+      try {
+        return await fn();
+      } finally {
+        commandRuntime = undefined;
+      }
+    },
+    { readOnly: envReadOnly() },
+  );
 }

@@ -42,6 +42,8 @@ export function openStore(
   // A store worker's reader: its writer ran the steps below before this thread was sent a job, and
   // this connection cannot write them.
   if (session?.setupDoneFor === hippoRoot) return db;
+  // A read-only store keeps its folder as it is: no mirror folder, due mirror or first-open row.
+  if (grant.runtime?.readOnly === true) return db;
   const at = { hippoRoot, runtime: grant.runtime };
   try {
     ensureMirrorDirectories(at);

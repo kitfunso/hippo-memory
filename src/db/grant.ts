@@ -73,7 +73,7 @@ export class DbGrant {
     DbGrant.#allow(this, hippoRoot);
     const file = getHippoDbPath(hippoRoot);
     if (!existsSync(file)) throw new Error(`No existing Hippo database at ${file}`);
-    const db = new DatabaseSync(file, { readOnly });
+    const db = new DatabaseSync(file, { readOnly: readOnly || this.#runtime?.readOnly === true });
     try {
       db.exec(`PRAGMA busy_timeout = ${DEFAULT_BUSY_WAIT_MS}`);
       return fn(db);

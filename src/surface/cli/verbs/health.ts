@@ -135,6 +135,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   outcome: verb(() => import('../curate.js'), 'handleOutcome', {
+    readOnly: 'refuse',
     repairsCodexWrapper: true,
     scoped: true,
     flags: { switches: ['bad', 'good'], values: ['id'] },
@@ -157,6 +158,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   resolve: verb(() => import('../conflicts.js'), 'handleResolve', {
+    readOnly: 'refuse',
     needs: ['conflicts'],
     destructive: true,
     flags: { switches: ['forget', 'reject-loser'], values: ['keep', 'reason'] },
@@ -248,6 +250,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   'capture-error': verb(() => import('../hooks/capture-error.js'), 'handleCaptureError', {
+    readOnly: 'skip',
     needs: ['failureLog', 'lessonWrites'],
     flags: { values: ['format', 'runtime'] },
     usage: [

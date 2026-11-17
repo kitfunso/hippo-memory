@@ -57,6 +57,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   remember: verb(() => import('../remember.js'), 'handleRemember', {
+    readOnly: 'refuse',
     repairsCodexWrapper: true,
     flags: {
       switches: ['error', 'extract', 'force', 'global', 'inferred', 'observed', 'pin', 'verified'],
@@ -76,6 +77,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   supersede: verb(() => import('../remember.js'), 'handleSupersede', {
+    readOnly: 'refuse',
     destructive: true,
     flags: { switches: ['pin'], values: ['layer'], lists: ['tag'] },
     usage: [
@@ -235,6 +237,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   refine: verb(() => import('../maintenance.js'), 'handleRefine', {
+    readOnly: 'refuse',
     flags: { switches: ['all', 'dry-run', 'json'], values: ['model'], numbers: ['limit'] },
     usage: [
       `
@@ -299,6 +302,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   sleep: verb(() => import('../sleep.js'), 'handleSleep', {
+    readOnly: 'skip',
     needs: ['graphReads', 'vectors'],
     repairsCodexWrapper: true,
     destructive: true,
@@ -317,6 +321,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   'daily-runner': verb(() => import('../daily-runner.js'), 'handleDailyRunner', {
+    readOnly: 'skip',
     needs: ['reports'],
     flags: {},
     usage: [

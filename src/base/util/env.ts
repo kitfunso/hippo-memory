@@ -28,6 +28,7 @@ const FLAGS = {
   HIPPO_REQUIRE_SERVER: false,
   HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL: false,
   HIPPO_ALLOW_CLEARTEXT: false,
+  HIPPO_READ_ONLY: true,
   SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK: false,
   GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK: false,
 } as const satisfies Record<string, boolean>;
@@ -174,6 +175,7 @@ export function envRuntimeSettings(): RuntimeSettings {
     dagRebuildCap: envDagRebuildCap(),
     activeScope: envActiveScope() ?? undefined,
     lossAversionRatio: envLossAversionRatio(),
+    readOnly: envReadOnly(),
     clef: envClefSettings(),
   };
 }
@@ -227,6 +229,7 @@ export const envSkipAutoIntegrations = bool('HIPPO_SKIP_AUTO_INTEGRATIONS');
 export const envSkipSchedule = bool('HIPPO_SKIP_SCHEDULE');
 export const envMcpStdio = bool('HIPPO_MCP_STDIO');
 export const envRequireServer = bool('HIPPO_REQUIRE_SERVER');
+export const envReadOnly = bool('HIPPO_READ_ONLY');
 const envRequireSessionScopedFreshTail = bool('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
 export const envStdinWaitMs = posInt('HIPPO_STDIN_WAIT_MS');
 export function envLogLevel(): string {

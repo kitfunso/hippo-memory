@@ -10,6 +10,7 @@ import {
   StoreRuntime,
   type ServerRuntimeOptions,
   type SqliteServerRuntime,
+  type StoreRuntimeOptions,
 } from '../store/sqlite/index.js';
 
 export {
@@ -54,8 +55,11 @@ export const publishedDefaultStore: (
 
 /** Runs `fn` on a store runtime of its own, disposed with the work `fn` detached on it once `fn`
  * settles, or closed by its exit hook if the process exits first. */
-export async function withStoreRuntime<T>(fn: (runtime: StoreRuntime) => Promise<T>): Promise<T> {
-  const runtime = new StoreRuntime();
+export async function withStoreRuntime<T>(
+  fn: (runtime: StoreRuntime) => Promise<T>,
+  opts: StoreRuntimeOptions = {},
+): Promise<T> {
+  const runtime = new StoreRuntime(opts);
   const onExit = (): void => runtime.closeNow();
   process.once('exit', onExit);
   try {

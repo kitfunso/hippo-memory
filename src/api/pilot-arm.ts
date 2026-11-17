@@ -26,5 +26,8 @@ export async function sessionPilotArm(
   const rate = home.config.pilot.holdoutRateBp;
   if (rate <= 0) return null;
   const { ownTenantOnly } = opts;
-  return home.ledger.pilotArm(tenantId, sessionId, rate, { write, ownTenantOnly });
+  return home.ledger.pilotArm(tenantId, sessionId, rate, {
+    write: write && opts.reach.readOnly !== true,
+    ownTenantOnly,
+  });
 }

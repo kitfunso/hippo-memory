@@ -3,7 +3,7 @@
 import type { LedgerTurn } from '../base/ports/store.js';
 import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
 import type { LastSent } from '../base/session/skip-unchanged.js';
-import type { Context, GlobalInReach, LedgerHome } from './types.js';
+import { readOnlyOf, type Context, type GlobalInReach, type LedgerHome } from './types.js';
 import {
   createDeliveryRecorder,
   type DeliveryFault,
@@ -18,6 +18,8 @@ import { errorMessage, log, errorFields } from '../base/util/log.js';
 export interface LedgerReach {
   readonly local?: LedgerHome;
   readonly global?: GlobalInReach;
+  /** Under HIPPO_READ_ONLY=1 the rows are still read, so a skip decision holds, and never booked. */
+  readonly readOnly?: true;
 }
 
 function homeOf(global: GlobalInReach): LedgerHome {
@@ -30,9 +32,13 @@ function homeOf(global: GlobalInReach): LedgerHome {
 
 /** Only a store that keeps a ledger has one, and a local one needs a reach that says the caller
  * has a store. */
-export function ledgerReachOf(ctx: Pick<Context, 'reach'>, shared?: boolean): LedgerReach {
+export function ledgerReachOf(
+  ctx: Pick<Context, 'reach' | 'config'>,
+  shared?: boolean,
+): LedgerReach {
   const local = ctx.reach?.hasLocal === true ? ctx.reach.ledger : undefined;
-  return shared === true ? { local } : { local, global: ctx.reach?.global };
+  const reach: LedgerReach = shared === true ? { local } : { local, global: ctx.reach?.global };
+  return readOnlyOf(ctx) ? { ...reach, readOnly: true } : reach;
 }
 
 /** The call's own store, else the global store (the prompt hook fires where none is); null with
@@ -45,12 +51,14 @@ export function ledgerHome(reach: LedgerReach): LedgerHome | null {
 
 /** Books one row in ledgerHome's store, best-effort. */
 export async function bookTokenUse(use: TokenUse, reach: LedgerReach): Promise<void> {
+  if (reach.readOnly === true) return;
   await ledgerHome(reach)?.ledger.recordTurn({ uses: [use] });
 }
 
 /** Books a turn's rows and then its delivery event on one connection of ledgerHome's store,
  * best-effort. */
 export async function bookLedgerTurn(turn: LedgerTurn, reach: LedgerReach): Promise<void> {
+  if (reach.readOnly === true) return;
   await ledgerHome(reach)?.ledger.recordTurn(turn);
 }
 
@@ -60,6 +68,7 @@ export async function bookLedgerTurnPerRow(
   turn: Omit<LedgerTurn, 'perRow'>,
   reach: LedgerReach,
 ): Promise<void> {
+  if (reach.readOnly === true) return;
   await ledgerHome(reach)?.ledger.recordTurn({ ...turn, perRow: true });
 }
 
@@ -91,6 +100,7 @@ export async function startDeliveryRecorder(
   ctx: Context,
   start: DeliveryStart,
 ): Promise<DeliveryRecorder | null> {
+  if (readOnlyOf(ctx)) return null;
   try {
     // The same store the token ledger writes to, so its config governs both.
     const reach = ledgerReachOf(ctx);

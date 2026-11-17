@@ -64,6 +64,14 @@ The `PreCompact` hook runs `hippo pre-compact` to record the compaction, snapsho
 
 The `SessionEnd` hook runs `hippo session-end`, which starts a detached `hippo sleep` and `hippo capture --last-session` and writes their output to `~/.hippo/logs/last-sleep.log`. The next session start prints that log through `hippo last-sleep` on stderr, so the log stays out of the model's context. To see what was consolidated, start `claude --debug` and read `~/.claude/debug/<session-id>.txt`. When the last sleep failed or a compaction summary was set aside, you see one line on screen that points you to `hippo doctor`.
 
+### MCP tools
+
+The plugin's `.mcp.json` starts `hippo mcp` as the MCP server `hippo-memory`, so Claude can call `hippo_recall`, `hippo_context`, `hippo_remember` and the other hippo tools directly.
+
+### Read-only mode
+
+Start Claude Code with `HIPPO_READ_ONLY=1` to use a store without changing it, for example in the test phase of a benchmark. Recall, context, the prompt hook and the MCP read tools answer as before and write nothing. `hippo_remember`, `hippo_outcome`, `hippo_learn`, `hippo_resolve` and `hippo_share` return `read-only: not saved (HIPPO_READ_ONLY=1)`. The capture, compaction and session-end hooks log one line and do nothing, so no sleep starts.
+
 ### Memory skill
 
 Use `/hippo-memory:memory` to manually invoke the memory skill, or Claude will auto-invoke it based on context.
@@ -79,6 +87,7 @@ claude-code-plugin/
       SKILL.md           # Memory skill (auto-invoked)
   hooks/
     hooks.json           # SessionStart, UserPromptSubmit, PreCompact, PostCompact, PostToolUseFailure, SessionEnd
+  .mcp.json              # Starts hippo mcp as the hippo-memory MCP server
   README.md
 ```
 

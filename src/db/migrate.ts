@@ -113,7 +113,7 @@ export interface OpenFacts {
 
 /** The probe's facts when the store is current and whole, so the open can skip every DDL
  * statement; else null. Runs the binary check either way. */
-function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
+export function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   let probe: SchemaProbe | undefined;
   try {
     probe = db.prepare(SCHEMA_PROBE_SQL).get() as SchemaProbe | undefined;

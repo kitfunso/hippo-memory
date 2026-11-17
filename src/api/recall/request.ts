@@ -15,7 +15,7 @@ import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContextOptions } from '../context/context-types.js';
-import type { Context } from '../types.js';
+import { readOnlyOf, type Context } from '../types.js';
 import { rankCtxOf, rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
 import { BUDGET_RANKED } from './profiles.js';
 import {
@@ -329,9 +329,9 @@ async function recordShown(
     strengthen: strengthenOf(ctx, ids),
     trace: traceOf(ctx, opts, core, shown.results),
   };
-  const audited = await finishOrReport(() =>
-    finishShown(store, core.lastRecall, writes, ids.length > 0),
-  );
+  const audited =
+    !readOnlyOf(ctx) &&
+    (await finishOrReport(() => finishShown(store, core.lastRecall, writes, ids.length > 0)));
   if (audited && second !== undefined) await finishSecond(ctx, second, recallRow, heldElsewhere);
   // The caller prints whether or not the record was written, so the ring and the ledger still take
   // this list; `written` holds back the count.

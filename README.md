@@ -803,6 +803,8 @@ The command runs with no shell, so each argument reaches the program as written.
 
 On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked against the card's live run and the command is refused, unchanged, if the two do not match.
 
+`HIPPO_READ_ONLY=1` uses a store without changing it, for example in the test phase of a benchmark. `hippo recall`, `hippo context`, the prompt hook and the MCP read tools give the same answers and write nothing: no recall counts, token-ledger rows, audit rows or mirror files, and a store with a WAL keeps its WAL. `remember`, `supersede`, `refine`, `outcome`, `resolve`, `decide`, `invalidate`, `forget`, `learn`, `promote`, `share` and `import`, and the MCP tools `hippo_remember`, `hippo_outcome`, `hippo_learn`, `hippo_resolve` and `hippo_share`, answer `read-only: not saved (HIPPO_READ_ONLY=1)` and save nothing (the CLI exits 1). `capture`, `capture-error`, `sleep`, `pre-compact`, `post-compact` and `session-end` log one line and do nothing, `hippo serve` does not start, and any other command that writes to the store fails with the store's own read-only error.
+
 ---
 
 ## Framework Integrations
@@ -935,7 +937,7 @@ Plugin docs: [extensions/openclaw-plugin/](extensions/openclaw-plugin/). Integra
 
 ### Claude Code Plugin
 
-Plugin with session, prompt and compaction hooks plus error auto-capture. See [extensions/claude-code-plugin/](extensions/claude-code-plugin/).
+Plugin with session, prompt and compaction hooks, error auto-capture, and the `hippo-memory` MCP server (`hippo mcp`). See [extensions/claude-code-plugin/](extensions/claude-code-plugin/).
 
 Full integration details: [integrations/](integrations/)
 
