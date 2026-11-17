@@ -311,6 +311,17 @@ def on_limit(paths: Paths, receipt: dict, turns: Turns, agent: str) -> tuple[str
     return pick_token(agent, paths.controller / "tokens.jsonl")
 
 
+def hold_ingest_lock(paths: Paths):
+    """Personas ingest in parallel, so a second ingest on one persona exits before it touches that store."""
+    lock = (paths.controller / ".ingest.lock").open("w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock.close()
+        raise SystemExit(f"another ingest is writing {paths.root}") from None
+    return lock
+
+
 def ingest_run(args: Namespace, total: int | None = None) -> dict:
     """Ingests --limit more messages (all with 0), or up to `total` completed when the smoke passes one."""
     setup = load_setup()
@@ -322,6 +333,7 @@ def ingest_run(args: Namespace, total: int | None = None) -> dict:
     paths = Paths(args.run, args.persona)
     paths.controller.mkdir(parents=True, exist_ok=True)
     paths.controller.chmod(0o700)
+    _lock = hold_ingest_lock(paths)
     token_name, token = pick_token(args.agent, paths.controller / "tokens.jsonl")
     config = plugin_config(cc, paths, setup, args.agent, token)
     if not paths.receipt.exists():
