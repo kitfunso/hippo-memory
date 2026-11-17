@@ -1,0 +1,4 @@
+### Changed
+
+- **Hippo's one-line description is now "One memory for every agent you'll ever use."** It replaces "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents." in the npm, MCP registry, OpenClaw, Claude Code plugin and Python SDK manifests, the extension and integration docs, the README title line and the CLI help header. `server.json` and the CLI header carry the tagline alone; the other manifests add the home page sentence after it.
+- **The favicon, the apple-touch icon and the README title now show the pixel hippo from the home page.** `website/public/favicon-48.png` is new, with its own icon link in `Head.astro`, and `website/public/logo.svg` holds the bare mark for the README image. The share cards in `website/public/og/` still carry the old mark.
