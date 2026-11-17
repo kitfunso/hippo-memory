@@ -2,12 +2,7 @@
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in
 // surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
-import {
-  envReadOnly,
-  envSkipAutoIntegrations,
-  envTenant,
-  validateFlags,
-} from './base/util/env.js';
+import { envReadOnly, envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import { READ_ONLY_REFUSAL } from './base/errors/read-only.js';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';

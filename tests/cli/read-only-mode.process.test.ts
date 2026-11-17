@@ -40,7 +40,7 @@ const WAL_FRAME = [
   "const { DatabaseSync } = require('node:sqlite');",
   'const db = new DatabaseSync(process.argv[1]);',
   "db.exec('PRAGMA wal_autocheckpoint = 0');",
-  "db.prepare(\"INSERT OR REPLACE INTO meta (key, value) VALUES ('read_only_test', ?)\").run(process.argv[2]);",
+  'db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (\'read_only_test\', ?)").run(process.argv[2]);',
   'process.exit(0);',
 ].join('\n');
 
@@ -154,7 +154,12 @@ const SURFACES: readonly Surface[] = [
     input: (tag) => JSON.stringify({ session_id: `read-only-${tag}`, prompt: 'what about the queue' }),
     shows: 'additionalContext',
   },
-  { name: 'MCP hippo_recall, hippo_context and hippo_assemble', args: ['mcp'], input: () => frames(MCP_READS), shows: 'Found' },
+  {
+    name: 'MCP hippo_recall, hippo_context and hippo_assemble',
+    args: ['mcp'],
+    input: () => frames(MCP_READS),
+    shows: 'Found',
+  },
 ];
 
 const CASES = SURFACES.flatMap((surface, i) =>
