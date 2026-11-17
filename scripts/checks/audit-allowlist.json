@@ -1,0 +1,7 @@
+{
+  "GHSA-fc5q-39xc-vjpf": {
+    "package": "picomatch",
+    "reason": "ReDoS in extglob patterns. Every release up to 4.0.7, the latest, is affected and none is patched. It reaches only dev tools (vite, vitest, dependency-cruiser), which match globs from our own config, never user input.",
+    "expires": "2026-12-01"
+  }
+}
