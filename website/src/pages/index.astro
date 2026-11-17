@@ -239,11 +239,11 @@ const description = 'hippo writes what you teach a coding agent into a store in 
             {boardRows.map((r) => (
               <tr>
                 <th scope="row"><b>{r.name}</b><small>{r.task}</small></th>
-                <td class="hp">{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <span class:list={['v', Number(r.hippo.value) === topOf(r) && 'top']}>{r.hippo.value}</span>}</td>
+                <td class:list={['hp', !r.hippo.status && Number(r.hippo.value) === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <span class="v">{r.hippo.value}</span>}</td>
                 {boardCols.map((c) => {
                   const x = r.cells[c];
                   if (!x) return <td class="na">-</td>;
-                  return <td><a class:list={['v', Number(x.value) === topOf(r) && 'top']} href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr"> ({x.system ?? c}, published score, opens in a new tab)</span></a>{x.system && <small>{x.system}</small>}</td>;
+                  return <td class:list={[Number(x.value) === topOf(r) && 'best']}><a class="v" href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr"> ({x.system ?? c}, published score, opens in a new tab)</span></a>{x.system && <small>{x.system}</small>}</td>;
                 })}
               </tr>
             ))}
