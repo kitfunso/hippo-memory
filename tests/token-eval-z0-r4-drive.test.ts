@@ -377,6 +377,17 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     expect(outcome(await moved.run('smoke'))).toEqual([3, line2]);
     expect(moved.entries()).toEqual([moved.entry({ step: 'smoke', exit: 3, stopId: 'tag', line: line2 })]);
 
+    // Amendment H: once z0-r4-freeze-3 exists it is the tag in force, ahead of freeze-2 and freeze-1.
+    const three = mk('three', makeCheckout(w.base, 'three-co'));
+    git(three.checkout, 'commit', '--allow-empty', '-qm', 'freeze-2 commit');
+    git(three.checkout, 'tag', 'z0-r4-freeze-2');
+    git(three.checkout, 'commit', '--allow-empty', '-qm', 'freeze-3 commit');
+    git(three.checkout, 'tag', 'z0-r4-freeze-3');
+    git(three.checkout, 'checkout', '-q', '--detach', 'z0-r4-freeze-2');
+    const line4 = `DRIVE: smoke must run on z0-r4-freeze-3; HEAD is ${three.entry({ step: 'smoke', exit: 3 }).commit}`;
+    expect(outcome(await three.run('smoke'))).toEqual([3, line4]);
+    expect(three.entries()).toEqual([three.entry({ step: 'smoke', exit: 3, stopId: 'tag', tag: 'z0-r4-freeze-3', line: line4 })]);
+
     const dirty = mk('dirty');
     put(`${w.checkout}/stray.txt`, 'x');
     try {

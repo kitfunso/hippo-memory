@@ -10,12 +10,13 @@ import { readPins } from './z0-budget.mjs';
 export const FREEZE_1 = 'z0-r4-freeze-1';
 export const FREEZE_2 = 'z0-r4-freeze-2';
 
-/** One list (plan :406): after an entry with one of these ids the run is over; plans, founder-go, cause and step 8 still run. */
-export const TERMINAL_STOPS = ['g1-run', 'g2', 'g4', 'off-pin', 'g3', 't1-power', 'broken-design', 'read-invalid', 'no-version', 'second-failure', 'founder-stop'];
+/** One list (plan :406): after an entry with one of these ids the run is over; plans, founder-go, cause and step 8 still run.
+ * Amendment H moved t1-power out: it now waits on a power go, as power-go does. */
+export const TERMINAL_STOPS = ['g1-run', 'g2', 'g4', 'off-pin', 'g3', 'broken-design', 'read-invalid', 'no-version', 'second-failure', 'founder-stop'];
 /** Stops the driver logs for a refused call; they say nothing about the step's own outcome, so no outcome lookup reads them. */
 export const REFUSALS = ['tag', 'pins', 'order'];
 
-// `logged` is the step that logs the stop and `resumes` the step it holds back: whole-run-r and power-go wait on the step after theirs.
+// `logged` is the step that logs the stop and `resumes` the step it holds back: whole-run-r, power-go and t1-power wait on the step after theirs.
 const RESUME_ROWS = {
   'smoke-fit': { question: 'figure', logged: 'smoke', resumes: 'smoke' },
   'pilot-fit': { question: 'figure', logged: '1', resumes: '1' },
@@ -24,6 +25,7 @@ const RESUME_ROWS = {
   'whole-run-r': { question: 'whole-run', logged: '2', resumes: '3' },
   'batch1-fit': { question: 'figure', logged: '3', resumes: '3' },
   'power-go': { question: 'power', logged: '4', resumes: '5' },
+  't1-power': { question: 'power', logged: '4', resumes: '5' },
   'batch2-figure': { question: 'figure', logged: '5', resumes: '5' },
 };
 /** Each stop that resumes on a founder go, with the question that go answers. */
@@ -188,6 +190,9 @@ export function gate({ entries: all, step, tag, commit, pinsSha256, claudeVersio
   const last = lastOf(before);
   let follows = last?.exit === 0;
   if (last?.exit === 4 && step in FOLLOWS_EXIT_4) follows = goAfter(entries, entries.lastIndexOf(last), FOLLOWS_EXIT_4[step], null);
+  // A stop of the step before that resumes this step (t1-power, Amendment H) follows once its own question has a go.
+  const row = RESUME_ROWS[last?.stopId];
+  if (!follows && row !== undefined && row.logged === before && row.resumes === step) follows = goAfter(entries, entries.lastIndexOf(last), row.question, null);
   if (last?.exit === 6 && step === '7') follows = true;
   return follows ? { ok: true, line: null } : no(`DRIVE: step ${step} needs step ${before} at 0`);
 }

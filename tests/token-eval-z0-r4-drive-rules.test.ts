@@ -82,6 +82,18 @@ describe('the order rule', () => {
     expect(refusal([E({ step: '4', exit: 3, stopId: 'fault' }), go], '5')).toEqual(no('DRIVE: step 5 needs step 4 at 0'));
   });
 
+  it('lets step 5 follow step 4\'s t1-power stop only once a later power go exited 0 (Amendment H)', () => {
+    const t1 = E({ step: '4', exit: 3, stopId: 't1-power' });
+    const go = (over: Partial<Entry> = {}) => E({ step: 'founder-go', exit: 0, question: 'power', stop: false, ...over });
+    expect(refusal([t1], '5')).toEqual(no('DRIVE: t1-power needs a power go'));
+    expect(refusal([go(), t1], '5'), 'a go logged before the stop').toEqual(no('DRIVE: t1-power needs a power go'));
+    expect(refusal([t1, go({ exit: 1 })], '5'), 'a go that exited 1').toEqual(no('DRIVE: t1-power needs a power go'));
+    expect(refusal([t1, go({ question: 'figure' })], '5'), 'another question').toEqual(no('DRIVE: t1-power needs a power go'));
+    expect(refusal([t1, go({ stop: true, stopId: 'founder-stop' })], '5'), 'a founder stop ends the run').toEqual(no('DRIVE: the run stopped at founder-stop; no claim'));
+    expect(refusal([t1, go()], '5')).toEqual(OK);
+    expect(refusal([t1, go()], '6'), 'step 6 still needs step 5 at 0').toEqual(no('DRIVE: step 6 needs step 5 at 0'));
+  });
+
   it('lets step 7 follow step 6\'s exit 6, and no other non-zero exit', () => {
     expect(refusal([E({ step: '6', exit: 6, stopId: 'cap' })], '7')).toEqual(OK);
     expect(refusal([E({ step: '6', exit: 3, stopId: 'batch-failed' })], '7')).toEqual(no('DRIVE: step 7 needs step 6 at 0'));
@@ -93,7 +105,8 @@ describe('the order rule', () => {
     expect(refusal([], '8')).toEqual(none);
     expect(refusal([E({ step: '7', exit: 3, stopId: 'fault' })], '8')).toEqual(none);
     expect(refusal([E({ step: '7', exit: 0 })], '8')).toEqual(OK);
-    expect(refusal([E({ step: '4', exit: 3, stopId: 't1-power' })], '8')).toEqual(OK);
+    expect(refusal([E({ step: '4', exit: 3, stopId: 't1-power' })], '8'), 't1-power waits on the founder (Amendment H)').toEqual(none);
+    expect(refusal([E({ step: '4', exit: 3, stopId: 't1-power' }), E({ step: 'founder-go', exit: 0, stopId: 'founder-stop', question: 'power', stop: true })], '8')).toEqual(OK);
   });
 });
 
@@ -120,8 +133,8 @@ describe('step 1\'s smoke rule', () => {
 });
 
 describe('TERMINAL_STOPS', () => {
-  it('lists the plan\'s eleven ids once each', () => {
-    expect(TERMINAL_STOPS).toEqual(['g1-run', 'g2', 'g4', 'off-pin', 'g3', 't1-power', 'broken-design', 'read-invalid', 'no-version', 'second-failure', 'founder-stop']);
+  it('lists the plan\'s ids once each, without t1-power since Amendment H', () => {
+    expect(TERMINAL_STOPS).toEqual(['g1-run', 'g2', 'g4', 'off-pin', 'g3', 'broken-design', 'read-invalid', 'no-version', 'second-failure', 'founder-stop']);
   });
 
   it('refuses smoke, steps 1 to 7 and stage-checks with the stopped line, and passes plans, founder-go, cause and step 8', () => {
@@ -133,15 +146,17 @@ describe('TERMINAL_STOPS', () => {
   });
 
   it('stops the run on a terminal entry anywhere in the log, not only the last, and names the first', () => {
-    const entries = [E({ step: '3', exit: 3, stopId: 'g2' }), E({ step: '4', exit: 3, stopId: 't1-power' }), E({ step: '3', exit: 0 })];
+    const entries = [E({ step: '3', exit: 3, stopId: 'g2' }), E({ step: '4', exit: 3, stopId: 'broken-design' }), E({ step: '3', exit: 0 })];
     expect(refusal(entries, 'smoke')).toEqual(no('DRIVE: the run stopped at g2; no claim'));
   });
 
   it('reads the terminal id and its step through the terminal command, a cause entry giving the step it explained', () => {
     const root = makeRoot();
     expect(cli(['terminal', '--root', root])).toEqual({ code: 0, stdout: '', stderr: '' });
-    logFile(root, 'drive-log.jsonl', [E({ step: '3', exit: 3, stopId: 'g2' }), E({ step: '4', exit: 3, stopId: 't1-power' })]);
+    logFile(root, 'drive-log.jsonl', [E({ step: '3', exit: 3, stopId: 'g2' }), E({ step: '4', exit: 3, stopId: 'broken-design' })]);
     expect(cli(['terminal', '--root', root])).toEqual({ code: 0, stdout: 'g2 3\n', stderr: '' });
+    logFile(root, 'drive-log.jsonl', [E({ step: '4', exit: 3, stopId: 't1-power' })]);
+    expect(cli(['terminal', '--root', root]).stdout, 't1-power is no terminal entry (Amendment H)').toBe('');
     logFile(root, 'drive-log.jsonl', [E({ step: 'cause', exit: 3, stopId: 'no-version', kind: 'no-version', failedStep: 'smoke' })]);
     expect(cli(['terminal', '--root', root]).stdout).toBe('no-version smoke\n');
     logFile(root, 'drive-log.jsonl', [E({ step: 'founder-go', exit: 0, stopId: 'founder-stop', question: 'figure', stop: true })]);
@@ -162,10 +177,11 @@ describe('RESUMES', () => {
     { id: 'whole-run-r', question: 'whole-run', logged: '2', code: 4, at: '3', base: [one0] },
     { id: 'batch1-fit', question: 'figure', logged: '3', code: 3, at: '3', base: [two0] },
     { id: 'power-go', question: 'power', logged: '4', code: 4, at: '5', base: none },
+    { id: 't1-power', question: 'power', logged: '4', code: 3, at: '5', base: none },
     { id: 'batch2-figure', question: 'figure', logged: '5', code: 5, at: '5', base: [four0] },
   ];
 
-  it('holds the plan\'s eight rows', () => {
+  it('holds the plan\'s eight rows and Amendment H\'s t1-power row', () => {
     expect(RESUMES).toEqual(Object.fromEntries(ROWS.map((r) => [r.id, r.question])));
   });
 

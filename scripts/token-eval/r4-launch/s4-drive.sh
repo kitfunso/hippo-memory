@@ -727,6 +727,7 @@ step_cause() {
 step_stage_checks() {
   local diff rc freeze
   if [ "$PRINT" != 1 ]; then
+    # Stage-checks and the other-cause rule serve smoke and step 1 only, so they stay at freeze-2 after Amendment H's freeze-3.
     freeze=$(git -C "$CHECKOUT" rev-parse -q --verify 'refs/tags/z0-r4-freeze-2^{commit}' 2> /dev/null)
     [ -n "$freeze" ] && [ "$freeze" = "$COMMIT" ] || stop3 tag "DRIVE: stage-checks needs HEAD at z0-r4-freeze-2; HEAD is ${COMMIT:-unknown}"
     last_line "$ROOT/dryrun.log"
@@ -767,7 +768,8 @@ case $STEP in plans | founder-go | cause | stage-checks) ;; *) wait_quiet ;; esa
 
 COMMIT=$(git -C "$CHECKOUT" rev-parse HEAD 2> /dev/null)
 TAG=''
-if git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-2 > /dev/null 2>&1; then TAG=z0-r4-freeze-2
+if git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-3 > /dev/null 2>&1; then TAG=z0-r4-freeze-3
+elif git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-2 > /dev/null 2>&1; then TAG=z0-r4-freeze-2
 elif git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-1 > /dev/null 2>&1; then TAG=z0-r4-freeze-1; fi
 
 # Every entry from here on carries the pins sha and the claude version, a refusal too.
