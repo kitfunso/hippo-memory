@@ -292,16 +292,19 @@ jobs:
           HIPPO_REQUIRE_SYMLINKS: '1'
 
   # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
-  # One Windows job set the wall time of the whole run, so the Windows suite splits in two.
+  # One slow job sets the wall time of the whole run, so the Windows and macOS suites split in three.
   suite:
     name: suite (${{ matrix.os }}, ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, shard: 1/2 }
-          - { os: windows-latest, shard: 2/2 }
-          - { os: macos-latest, shard: 1/1 }
+          - { os: windows-latest, shard: 1/3 }
+          - { os: windows-latest, shard: 2/3 }
+          - { os: windows-latest, shard: 3/3 }
+          - { os: macos-latest, shard: 1/3 }
+          - { os: macos-latest, shard: 2/3 }
+          - { os: macos-latest, shard: 3/3 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
