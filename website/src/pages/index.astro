@@ -17,11 +17,14 @@ import Beacon from '../components/Beacon.astro';
 import { site } from '../content/site';
 import board from '../data/all-benchmarks.json';
 
-interface Score { value: string; system: string | null; url: string }
-interface BoardRow { name: string; task: string; hippo: { value: string | null; status: string | null }; cells: Partial<Record<string, Score>> }
+interface Score { value: string; system: string | null; model: string; detail: string | null; url: string }
+interface BoardRow { name: string; task: string; tag: string; hippo: { value: string | null; setting: string | null; status: string | null }; cells: Partial<Record<string, Score>> }
 // The official-setup rows of /benchmarks/, read from the same file, so the two pages cannot disagree.
 const boardRows: readonly BoardRow[] = board.official;
 const boardCols = board.columns.filter((c) => boardRows.some((r) => r.cells[c]));
+const metaOf = (x: Score) => [x.system, x.model, x.detail].filter(Boolean).join(' · ');
+// Odd items are hyphenated words such as gpt-4o-mini; the template keeps each on one line.
+const byHyphen = (t: string | null) => (t ?? '').split(/(\S+-\S+)/);
 const topOf = (r: BoardRow) => Math.max(...[r.hippo.value, ...Object.values(r.cells).map((x) => x?.value)].filter((v): v is string => !!v).map(Number));
 const rankOf = (r: BoardRow) => {
   const others = Object.values(r.cells).filter((x): x is Score => !!x).map((x) => Number(x.value));
@@ -243,12 +246,12 @@ const description = 'hippo writes what you teach a coding agent into a store in 
           <tbody>
             {boardRows.map((r) => (
               <tr>
-                <th scope="row"><b>{r.name}</b><small>{r.task}</small></th>
-                <td class:list={['hp', !r.hippo.status && Number(r.hippo.value) === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span><small>{rankOf(r)}</small></>}</td>
+                <th scope="row"><b>{r.name}</b><small>{r.task}</small><span class:list={['kind', r.tag.includes('caveat') && 'cav']}>{r.tag}</span></th>
+                <td class:list={['hp', !r.hippo.status && Number(r.hippo.value) === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span><small>{rankOf(r)}</small><small>{byHyphen(r.hippo.setting).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></>}</td>
                 {boardCols.map((c) => {
                   const x = r.cells[c];
                   if (!x) return <td class="na">-</td>;
-                  return <td class:list={[Number(x.value) === topOf(r) && 'best']}><a class="v" href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr"> ({x.system ?? c}, published score, opens in a new tab)</span></a>{x.system && <small>{x.system}</small>}</td>;
+                  return <td class:list={[Number(x.value) === topOf(r) && 'best']}><a class="v" href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr"> ({x.system ?? c}, published score, opens in a new tab)</span></a><small>{byHyphen(metaOf(x)).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></td>;
                 })}
               </tr>
             ))}

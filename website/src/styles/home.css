@@ -267,12 +267,15 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .board tbody th b{display:block;font:700 15px/1.25 var(--display);color:var(--fg)}
 .board small{display:block;margin-top:4px;font-size:12px;line-height:1.3;color:var(--mute)}
 .board thead .hp{color:var(--amber)}
+.board .hp{width:168px}
 .board .v{font:400 15px var(--mono);font-variant-numeric:tabular-nums;color:var(--soft)}
 .board a.v{text-decoration:none}.board a.v:hover{color:var(--amber);text-decoration:underline}
 .board .hp .v{color:var(--amber)}
 .board td.best{background:color-mix(in srgb,var(--red) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 55%,transparent)}
 .board td.best .v{font-weight:600}.board td.best .v,.board td.best small{color:var(--red)}
-.board .run{font:500 12px var(--mono);color:var(--mute);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.board .run,.board .kind{font:500 12px var(--mono);color:var(--mute);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.board .kind{display:inline-block;margin-top:8px}.board .kind.cav{border-style:dashed}
+.board .nw{white-space:nowrap}
 .board .na{color:var(--mute)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:6px;color:var(--amber);font-weight:600;text-decoration:none}
