@@ -271,7 +271,7 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .board .v{font:400 15px var(--mono);font-variant-numeric:tabular-nums;color:var(--soft)}
 .board a.v{text-decoration:none}.board a.v:hover{color:var(--amber);text-decoration:underline}
 .board .hp .v{color:var(--amber)}
-.board .v.top{font-weight:600;color:var(--fg)}.board .hp .v.top{color:var(--amber)}
+.board .v.top{font-weight:600}.board .v.top,.board .v.top+small,.board a.v.top:hover{color:var(--red)}
 .board .run{font:500 12px var(--mono);color:var(--mute);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap}
 .board .na{color:var(--mute)}
 .limit.lost{max-width:none;margin-top:12px;font-weight:500}
