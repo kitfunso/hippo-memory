@@ -17,16 +17,17 @@ interface Props {
   caption: string;
 }
 const { set, caption } = Astro.props;
-const rows = data[set] as Row[];
+const rows: readonly Row[] = data[set];
 const cols = data.columns.filter((c) => rows.some((r) => r.cells[c]));
 const badge = 'inline-flex rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap';
-const TAGS: Record<string, string> = {
+const TAGS = {
   'official setup': 'border-accent/30 bg-accent/[0.07] text-accent-deep',
   'official setup, with a caveat': 'border-dashed border-accent/50 text-accent-deep',
   'our own setup': 'border-rule-strong bg-paper-3 text-ink-2',
-};
+} as const;
+const isTag = (t: string): t is keyof typeof TAGS => Object.hasOwn(TAGS, t);
 const tagOf = (t: string) => {
-  if (!TAGS[t]) throw new Error(`AllBenchmarks: no style for the tag "${t}"`);
+  if (!isTag(t)) throw new Error(`AllBenchmarks: no style for the tag "${t}"`);
   return TAGS[t];
 };
 const meta = (x: Cell) => [x.system, x.model, x.detail].filter(Boolean).join(' · ');
