@@ -24,12 +24,12 @@ Leave this to Claude, which notes your corrections and preferences.
 hippo
 What comes up as you work, such as a failed command or a fact that changed. It is recalled when it matches the task and shared with your other agents.
 Measured against built-in memory
-Hippo runs beside Claude Code's own memory, so the fair test is built-in memory alone against built-in memory plus hippo on the same tasks. We ran it on N repositories, registered first.
+Hippo runs beside Claude Code's own memory, so the fair test is built-in memory alone against built-in memory plus hippo on the same tasks. We ran it on N repositories, registered first, and published the test as AI-PsychosisBench.
 No memory Nin N
 Claude Code's built-in memory Nin N
 Built-in memory plus hippo Nin N
 Built-in memory does most of the work, taking repeats from N in N to N Adding hippo took them to N at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. One early clue, from a debugging read and no verdict, is that in the capture-off arm Claude Code's own memory already held the taught rule at N of N first chances to repeat.
-The round N result (opens in new tab)
+The round N result (opens in new tab) · AI-PsychosisBench (opens in new tab)
 Bringing CLAUDE.md notes into hippo
 $ hippo import --claude CLAUDE.md --dry-run $ hippo import --claude CLAUDE.md The import skips hippo's own block and any duplicates. After that, hippo sleep at the end of each session also imports new auto memory notes, so they reach the store your other agents read.
 CLAUDE.md questions

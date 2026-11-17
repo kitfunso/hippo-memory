@@ -37,6 +37,7 @@ export const site = {
     license: `${REPO}/blob/master/LICENSE`,
     jevEval: `${REPO}/blob/master/docs/evals/2026-09-19-jev-reranker.md`,
     z0Round3: `${REPO}/blob/master/docs/evals/2026-11-08-z0-round3-result.md`,
+    aiPsychosisBench: 'https://github.com/kitfunso/AI-PsychosisBench',
     dmrScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/dmr-best.txt`,
     storeCalls: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/mem0-locomo-ingest-gate.json`,
     // Pilot requests open a GitHub issue until a booking link exists.

@@ -13,12 +13,12 @@ Docs
 What we measured, and where hippo lost
 We built hippo and ran these tests, so read them as a vendor's numbers. We ran rivals on the same answer model where we could. Scores marked published come from each team's own setup, so we give no ranks.
 Repeat mistakes in real Claude Code sessions
-Each run corrects Claude Code once and then, N to N tasks later, gives it a task where the same mistake is possible. We ran it on N repositories, registered first (opens in new tab).
+Each run corrects Claude Code once and then, N to N tasks later, gives it a task where the same mistake is possible. We ran it on N repositories, registered first (opens in new tab), and published the test as AI-PsychosisBench (opens in new tab), so any memory can run on the same tasks.
 No memory Nin N
 Claude Code's built-in memory Nin N
 Built-in memory plus hippo Nin N
 The chart counts first chances N to N tasks after the correction. The registered measure, the first chance in each mistake family over N units, gives N points fewer repeats with hippo [N N], at the same cost, a ratio of N [N N]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
-What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round N tests that. The corrections were scripted, the agent was Claude Code only, and the test code and run records are not in the public repo. The round before was inconclusive, at N points fewer on N repositories.
+What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round N tests that. The corrections were scripted and the agent was Claude Code only. The test code and task data are public in AI-PsychosisBench; the run records are not. The round before was inconclusive, at N points fewer on N repositories.
 Official-setup rows side by side
 Hippo N run with the same answer model, judge and settings as the published rows.
 Hippo and the published scores, on benchmarks run in their official setup Benchmark hippo MemNZepMemOSSupermemoryHonchoMemobaseOther
