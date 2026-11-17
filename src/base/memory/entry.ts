@@ -122,15 +122,28 @@ export const USER_RULE_TAG = 'from-user';
 /** Tag and category of a later statement capture keeps with no rule word. */
 export const CAPTURED_NOTE_TAG = 'captured-note';
 
-/** A note can be a one-off order, so only a matching prompt or an explicit recall may bring it back. */
-export function isCapturedNote(entry: { readonly tags: readonly string[] }): boolean {
-  return entry.tags.includes(CAPTURED_NOTE_TAG);
+/** Tag and source of a message the person typed, which session capture saves whole. */
+export const USER_MESSAGE_TAG = 'user-message';
+
+export function isUserMessage(entry: { readonly tags?: readonly string[] }): boolean {
+  return entry.tags?.includes(USER_MESSAGE_TAG) === true;
+}
+
+/** The tags that keep an unpinned row out of ambient context. */
+export const RECALL_ONLY_TAGS = [CAPTURED_NOTE_TAG, USER_MESSAGE_TAG] as const;
+
+/** A note can be a one-off order and a message is chat, so only a matching prompt or an explicit
+ * recall may bring either back. */
+export function isRecallOnly(entry: { readonly tags: readonly string[] }): boolean {
+  return RECALL_ONLY_TAGS.some((tag) => entry.tags.includes(tag));
 }
 
 /** `tags` without the tags only capture may set, for every tag a person types or vouches for: a
  * typed tag must not make a row print as the person's rule, and a corrected note is no longer a note. */
 export function withoutCaptureTags(tags: readonly string[]): string[] {
-  return tags.filter((t) => t !== USER_RULE_TAG && t !== CAPTURED_NOTE_TAG);
+  return tags.filter(
+    (t) => t !== USER_RULE_TAG && t !== CAPTURED_NOTE_TAG && t !== USER_MESSAGE_TAG,
+  );
 }
 
 /** A memory counts as high schema fit strictly above this. */

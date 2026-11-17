@@ -1,6 +1,7 @@
 ---
 // Shared head tags: title, canonical, share card and JSON-LD. Base and the home page both use it.
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { site } from '../content/site';
 import { pageDate } from '../lib/page-dates.mjs';
@@ -34,8 +35,11 @@ const canonical = new URL(Astro.url.pathname, base).href;
 
 // scripts/make-images.mjs draws one card per built page; a page built before its card exists borrows home's.
 const slug = Astro.url.pathname.replace(/^\/|\/$/g, '').replace(/\//g, '-') || 'home';
-const ogPath = existsSync(join(process.cwd(), 'public', 'og', `${slug}.png`)) ? `/og/${slug}.png` : '/og/home.png';
-const ogImage = new URL(ogPath, base).href;
+const cardFile = (name: string) => join(process.cwd(), 'public', 'og', name);
+const card = existsSync(cardFile(`${slug}.png`)) ? `${slug}.png` : 'home.png';
+// X and LinkedIn cache a card image by its URL, so the URL changes whenever the image does.
+const cardHash = createHash('sha256').update(readFileSync(cardFile(card))).digest('hex').slice(0, 10);
+const ogImage = new URL(`/og/${card}?v=${cardHash}`, base).href;
 
 const id = { org: `${home}#org`, website: `${home}#website`, software: `${home}#software` };
 const graph = [

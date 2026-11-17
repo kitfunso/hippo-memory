@@ -3,6 +3,7 @@
 One line per gate. Each runs from the repo root as `node scripts/checks/<name>`.
 
 - `check-agent-inventory.mjs`: an agent named in the docs must be in docs/integrations/agent-inventory.json, without an overclaim.
+- `check-audit.mjs`: npm audit finds nothing at moderate or worse in the root or ui/; a dev-only advisory with no patched release may wait in `audit-allowlist.json` until its expiry date.
 - `check-caught-error-logs.mjs`: log calls and hook side-log writes inside catch blocks and error listeners per file may fall, never rise.
 - `check-comment-history.mjs`: ticket codes, version tags, dates and plan paths in src comments may fall, never rise.
 - `check-dist-imports.mjs`: a script, benchmark, eval or test imports only dist files and names the build still makes.

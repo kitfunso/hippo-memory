@@ -363,7 +363,7 @@ describe('failed-tool capture', () => {
     });
   });
 
-  it('stores an unverified error memory once, however often it repeats', async () => {
+  it('stores an unverified error memory once, however often it repeats, and embeds it once', async () => {
     const { dir } = scratch();
     try {
       initTestStore(dir);
@@ -372,15 +372,18 @@ describe('failed-tool capture', () => {
         tool_input: { command: 'npm run build' },
         error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo',
       };
-      expect(await captureToolFailure(failureTarget(dir), payload)).toBe('stored');
+      const embedded: string[] = [];
+      const target = { ...failureTarget(dir), embed: (entry: { id: string }) => embedded.push(entry.id) };
+      expect(await captureToolFailure(target, payload)).toBe('stored');
       expect(
-        await captureToolFailure(failureTarget(dir), {
+        await captureToolFailure(target, {
           ...payload,
           error: 'Exit code 2\nsrc/a.ts(40,9): error TS2304: Cannot find name foo',
         }),
       ).toBe('duplicate');
       const rows = loadAllEntries(dir, 'default');
       expect(rows).toHaveLength(1);
+      expect(embedded).toEqual([rows[0]!.id]);
       expect(rows[0]!.tags).toEqual(expect.arrayContaining(['error', 'auto-captured']));
       expect(rows[0]!.confidence).toBe('observed');
       expect(failureSignature('line 12 at 0xdeadbeef')).toBe(failureSignature('line 40 at 0x1234567'));

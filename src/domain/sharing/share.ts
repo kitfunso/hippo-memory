@@ -9,6 +9,7 @@ import {
   ERROR_TAG,
   EXTRACTED_TAG,
   CAPTURED_NOTE_TAG,
+  USER_MESSAGE_TAG,
 } from '../../base/memory/entry.js';
 import { strengthModelFor } from '../../base/memory/eval-switches.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -82,6 +83,7 @@ const TRANSFERABLE_TAGS = new Set([
  * inherit them. */
 export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
   CAPTURED_NOTE_TAG,
+  USER_MESSAGE_TAG,
   'git-learned',
   'session-digest',
   ...AGENT_MEMORY_TAGS,
@@ -95,6 +97,7 @@ export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
  * detection keeps its own list. */
 export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   CAPTURED_NOTE_TAG,
+  USER_MESSAGE_TAG,
   EXTRACTED_TAG,
   'session-digest',
   COMPACTION_MEMORY_TAG,

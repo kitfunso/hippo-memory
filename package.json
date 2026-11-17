@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "description": "One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.",
   "mcpName": "io.github.kitfunso/hippo-memory",
   "type": "module",
@@ -52,7 +52,7 @@
     "fmt": "oxfmt src tests scripts bin",
     "fmt:check": "oxfmt --check src tests scripts bin",
     "sbom": "node scripts/sbom.mjs",
-    "audit:security": "npm audit --audit-level=moderate && npm --prefix ui audit --audit-level=moderate",
+    "audit:security": "node scripts/checks/check-audit.mjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
     "build:ui": "cd ui && npm ci && npm run build",

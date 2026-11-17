@@ -264,11 +264,11 @@
       "name": "HaluMem-Long",
       "task": "Hallucination control, GPT-4o answers",
       "tag": "official setup, with a caveat",
-      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. The run paused when the OpenAI credit ran out on 16 Nov, so the row has no score yet. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
+      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. The paid credit ran out on 16 Nov; since 17 Nov the run answers on the free daily OpenAI tokens, so the row has no score yet. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
       "hippo": {
         "value": null,
         "setting": null,
-        "status": "paused"
+        "status": "running"
       },
       "cells": {
         "Mem0": {
@@ -325,11 +325,11 @@
       "name": "DolphinBench, official Claude Code setup",
       "task": "Agent memory, Claude Code with Sonnet 5",
       "tag": "official setup",
-      "reason": "The same setup as the published Claude Code rows: one Claude Code turn with the hippo plugin for each of the 13,539 messages, each test in a fresh sandbox with memory writes off, Sonnet 5 and the gpt-5.6-sol judge. The run is in build, so there is no score yet.",
+      "reason": "The same setup as the published Claude Code rows: one Claude Code turn with the hippo plugin for each of the 13,539 messages, each test in a fresh sandbox with memory writes off, Sonnet 5 and the gpt-5.6-sol judge. The full run on hippo 3.7.0 started on 17 Nov, so there is no score yet.",
       "hippo": {
         "value": null,
         "setting": null,
-        "status": "in build"
+        "status": "running"
       },
       "cells": {
         "Mem0": {

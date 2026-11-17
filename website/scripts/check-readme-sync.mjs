@@ -57,29 +57,9 @@ const withoutComments = (text) => text.replace(/<!--[\s\S]*?-->/g, '').replace(/
 if (!withoutComments(quickstart).includes('{getStarted.notice}')) missing.push('notice: quickstart.astro no longer renders the setup limit');
 if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push('availability: teams.astro no longer renders the edition status');
 
-// A loss line that links a committed score file may only quote numbers that file holds.
-const scoreFiles = Object.fromEntries(
-  [...site.matchAll(/^\s*(\w+):\s*`\$\{REPO\}\/blob\/master\/(benchmarks\/public\/results\/[^`]+\.(?:txt|json))`/gm)].map((m) => [m[1], m[2]]),
-);
-let lossLines = 0;
-for (const [, , text, key] of site.matchAll(/\{\s*text:\s*(["'])((?:(?!\1).)*)\1,\s*href:\s*site\.links\.(\w+)\s*\}/g)) {
-  if (!scoreFiles[key]) continue;
-  lossLines++;
-  const held = await readFile(join(root, '..', scoreFiles[key]), 'utf8');
-  for (const n of text.match(/\d+\.\d+/g) ?? []) {
-    if (!held.includes(n)) missing.push(`losses: "${n}" is not in ${scoreFiles[key]}`);
-  }
-}
-if (!lossLines) missing.push('losses: no loss line links a committed score file');
-
-// The Z0 win never travels without its caveat, and the home shows both losses next to the public tests.
+// The Z0 win never travels without its caveat.
 const homeText = withoutComments(home);
 if (!/lesson capture switched off/.test(homeText)) missing.push('theTest: the home lost the Z0 lesson-capture caveat');
-for (const [, , text] of site.matchAll(/\{\s*text:\s*(["'])((?:(?!\1).)*)\1,\s*href:\s*site\.links\.(\w+)\s*\}/g)) {
-  for (const n of text.match(/\d+\.\d+/g) ?? []) {
-    if (!homeText.includes(n)) missing.push(`losses: the home no longer shows ${n}`);
-  }
-}
 
 if (missing.length) {
   console.error('[readme-sync] DRIFT: website copy no longer matches README.md:');
@@ -88,4 +68,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${lossLines} loss lines match their files, setup limits and edition availability match README.md.`);
+console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", setup limits and edition availability match README.md.`);

@@ -1,7 +1,7 @@
 // hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up
 // the mirror folders.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
-import { USER_RULE_TAG, type MemoryEntry } from '../../../base/memory/entry.js';
+import { isUserMessage, USER_RULE_TAG, type MemoryEntry } from '../../../base/memory/entry.js';
 import type { HeldText } from '../../../base/ports/store/types.js';
 import { duplicateKey, heldTextKeys, storedTextKeys } from '../../../base/util/same-text.js';
 import { ruleReplaces } from '../../../base/memory/rule-replaces.js';
@@ -63,8 +63,12 @@ function writeCapturedEntries(
   const written: MemoryEntry[] = [];
   const actor = opts.actor ?? CLI_ACTOR;
   const outcomes = withWriteScope(db, 'capture_write', () => {
-    const rows = heldRows(db, entries, opts.dedup);
+    // A message is the transcript and an item is what capture made of it, so each lane dedupes
+    // only against its own rows, and a held message never stops a rule.
+    const all = heldRows(db, entries, opts.dedup);
+    const rows = all.filter((row) => !isUserMessage(row));
     const held = storedTextKeys(rows);
+    const heldMessages = storedTextKeys(all.filter(isUserMessage));
     return entries.map((entry): CapturedOutcome => {
       const stamped = stampOriginProject(files, entry);
       // A stated rule replaces an unpinned or untagged-pin capture copy of its own project, which
@@ -72,10 +76,16 @@ function writeCapturedEntries(
       const project = entry.tags.includes(USER_RULE_TAG)
         ? ruleProjectNames(stamped, opts.dedup)
         : null;
-      const stops = project ? storedTextKeys(rows.filter((r) => !ruleReplaces(r, project))) : held;
+      const stops = isUserMessage(entry)
+        ? heldMessages
+        : project
+          ? storedTextKeys(rows.filter((r) => !ruleReplaces(r, project)))
+          : held;
       if (stops.has(duplicateKey(entry.content))) return 'skipped';
-      // One rejected entry must not abort the rest of this capture's entries.
-      const outcome = gatedWrite(db, files, stamped, { actor: opts.actor });
+      // One rejected entry must not abort the rest of this capture's entries. A person wrote a
+      // message, as with imported notes, and the worth check drops a one-line fact.
+      const worthCheck = !isUserMessage(stamped);
+      const outcome = gatedWrite(db, files, stamped, { actor: opts.actor, worthCheck });
       if (outcome === 'skipped:rejected') return 'rejected';
       if (outcome !== 'written') return 'skipped';
       if (project) {
@@ -87,7 +97,9 @@ function writeCapturedEntries(
       return 'captured';
     });
   });
-  for (const entry of written) writeEntryMirrors(files.hippoRoot, entry);
+  // A message gets no markdown mirror: the transcript is its source, and a mirror is a file a team
+  // may commit.
+  for (const entry of written) if (!isUserMessage(entry)) writeEntryMirrors(files.hippoRoot, entry);
   if (!opts.lean && written.length > 0) updateStatsOn(db, files, { remembered: written.length });
   return outcomes;
 }
