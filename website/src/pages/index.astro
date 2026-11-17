@@ -14,7 +14,15 @@ import '@fontsource/spline-sans-mono/latin-600.css';
 import '../styles/home.css';
 import Head from '../components/Head.astro';
 import Beacon from '../components/Beacon.astro';
-import { site } from '../content/site';
+import { losses, site } from '../content/site';
+import board from '../data/all-benchmarks.json';
+
+interface Score { value: string; system: string | null; url: string }
+interface BoardRow { name: string; task: string; hippo: { value: string | null; status: string | null }; cells: Partial<Record<string, Score>> }
+// The official-setup rows of /benchmarks/, read from the same file, so the two pages cannot disagree.
+const boardRows: readonly BoardRow[] = board.official;
+const boardCols = board.columns.filter((c) => boardRows.some((r) => r.cells[c]));
+const topOf = (r: BoardRow) => Math.max(...[r.hippo.value, ...Object.values(r.cells).map((x) => x?.value)].filter((v): v is string => !!v).map(Number));
 
 const title = "hippo: one memory for every agent you'll ever use";
 const description = 'hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.';
@@ -222,22 +230,27 @@ const description = 'hippo writes what you teach a coding agent into a store in 
     <p class="limit rv"><span class="st" aria-hidden="true"><i style="background:var(--amber)"></i><i style="background:var(--red)"></i><i style="background:var(--plum)"></i></span><span>The gain was the same with lesson capture switched off, so this run cannot say hippo's stored lessons caused it. The test agent was Claude Code only, so there's no measured result for Codex or Cursor.</span></p>
 
     <div class="pub">
-      <h3 class="rv">Public memory tests</h3>
-      <p class="lede rv">One answer model and scorer for every system we ran in a test.</p>
-      <div class="tests">
-        <div class="test rv"><div class="th"><b>DMR</b><code>495 questions</code></div>
-          <div class="brow"><span class="nm">full chat</span><span class="v" data-to="83.6">83.6</span><div class="track"><div class="fill top" style="--v:83.6"></div></div></div>
-          <div class="brow"><span class="nm">hippo</span><span class="v" data-to="77.6">77.6</span><div class="track"><div class="fill hp" style="--v:77.6"></div></div></div></div>
-        <div class="test rv"><div class="th"><b>PersonaMem v1</b><code>584 questions</code></div>
-          <div class="brow"><span class="nm">hippo</span><span class="v" data-to="72.4">72.4</span><div class="track"><div class="fill hp" style="--v:72.4"></div></div></div>
-          <div class="brow"><span class="nm">MemOS<small>published</small></span><span class="v" data-to="61.2">61.2</span><div class="track"><div class="fill" style="--v:61.2"></div></div></div></div>
-        <div class="test rv"><div class="th"><b>LongMemEval-S</b><code>495 questions</code></div>
-          <div class="brow"><span class="nm">hippo</span><span class="v" data-to="88.5">88.5</span><div class="track"><div class="fill hp" style="--v:88.5"></div></div></div></div>
-        <div class="test rv"><div class="th"><b>LoCoMo</b><code>395 questions</code></div>
-          <div class="brow"><span class="nm">Mem0</span><span class="v" data-to="94.9">94.9</span><div class="track"><div class="fill top" style="--v:94.9"></div></div></div>
-          <div class="brow"><span class="nm">hippo</span><span class="v" data-to="89.4">89.4</span><div class="track"><div class="fill hp" style="--v:89.4"></div></div></div></div>
+      <h3 class="rv" id="h-pub">Public memory tests</h3>
+      <p class="lede rv">Each test runs in the setup behind its published scores, so hippo's number sits beside theirs.</p>
+      <div class="board rv" tabindex="0" role="region" aria-labelledby="h-pub">
+        <table>
+          <thead><tr><th scope="col">Test</th><th scope="col" class="hp">hippo</th>{boardCols.map((c) => <th scope="col">{c}</th>)}</tr></thead>
+          <tbody>
+            {boardRows.map((r) => (
+              <tr>
+                <th scope="row"><b>{r.name}</b><small>{r.task}</small></th>
+                <td class="hp">{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <span class:list={['v', Number(r.hippo.value) === topOf(r) && 'top']}>{r.hippo.value}</span>}</td>
+                {boardCols.map((c) => {
+                  const x = r.cells[c];
+                  if (!x) return <td class="na">-</td>;
+                  return <td><a class:list={['v', Number(x.value) === topOf(r) && 'top']} href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr"> ({x.system ?? c}, published score, opens in a new tab)</span></a>{x.system && <small>{x.system}</small>}</td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <p class="pubnote rv">hippo used its local embedder, plus its local reranker on DMR. MemOS's score is from its own setup.</p>
+      <div class="limit lost rv"><span class="st" aria-hidden="true"><i style="background:var(--amber)"></i><i style="background:var(--red)"></i><i style="background:var(--plum)"></i></span><div><p>Where hippo lost in our own setup:</p><ul>{losses.items.map((l) => <li><a href={l.href}>{l.text}</a></li>)}</ul></div></div>
       <a class="more" href="/benchmarks/">How we test &rarr;</a>
     </div>
   </div>
@@ -592,20 +605,11 @@ audit log      <span class="a">every change</span></pre>
     el.innerHTML = Array.from({ length: 100 }, (_, i) => `<i${on.has(i) ? ' class="rep"' : ''} style="transition-delay:${(reduce ? 0 : (i * 6 + (on.has(i) ? 600 + rank.get(i) * 14 : 0)))}ms"></i>`).join('');
   });
 
-  // Reveal, count up and grow on scroll
-  const countUp = (el) => {
-    const to = Number(el.dataset.to), dec = (el.dataset.to.split('.')[1] || '').length, t0 = performance.now(), dur = 1300;
-    const tick = (now) => { const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3); el.textContent = (to * e).toFixed(dec); if (p < 1) requestAnimationFrame(tick); };
-    requestAnimationFrame(tick);
-  };
+  // Reveal on scroll
   const io = new IntersectionObserver((es) => es.forEach((en) => {
     if (!en.isIntersecting) return;
     const el = en.target; io.unobserve(el);
     el.classList.add('in');
-    if (el.classList.contains('test') && !reduce) {
-      el.querySelectorAll('.fill').forEach((f, i) => { f.animate([{ width: '0%' }, { width: `calc(${f.style.getPropertyValue('--v')} * 1%)` }], { duration: 1300, delay: i * 90, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }); });
-      el.querySelectorAll('[data-to]').forEach(countUp);
-    }
   }), { threshold: 0.2 });
   document.querySelectorAll('.rv, .float, .cells').forEach((el) => io.observe(el));
 

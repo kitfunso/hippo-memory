@@ -75,11 +75,7 @@ if (!lossLines) missing.push('losses: no loss line links a committed score file'
 // The Z0 win never travels without its caveat, and the home shows both losses next to the public tests.
 const homeText = withoutComments(home);
 if (!/lesson capture switched off/.test(homeText)) missing.push('theTest: the home lost the Z0 lesson-capture caveat');
-for (const [, , text] of site.matchAll(/\{\s*text:\s*(["'])((?:(?!\1).)*)\1,\s*href:\s*site\.links\.(\w+)\s*\}/g)) {
-  for (const n of text.match(/\d+\.\d+/g) ?? []) {
-    if (!homeText.includes(n)) missing.push(`losses: the home no longer shows ${n}`);
-  }
-}
+if (!homeText.includes('{losses.items.map(')) missing.push('losses: index.astro no longer renders losses.items from site.ts');
 
 if (missing.length) {
   console.error('[readme-sync] DRIFT: website copy no longer matches README.md:');
