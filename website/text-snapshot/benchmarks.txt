@@ -19,101 +19,84 @@ Claude Code's built-in memory Nin N
 Built-in memory plus hippo Nin N
 The chart counts first chances N to N tasks after the correction. The registered measure, the first chance in each mistake family over N units, gives N points fewer repeats with hippo [N N], at the same cost, a ratio of N [N N]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
 What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round N tests that. The corrections were scripted, the agent was Claude Code only, and the test code and run records are not in the public repo. The round before was inconclusive, at N points fewer on N repositories.
-Five public tests of answering from memory
-Hippo N retrieves with its free local embedder, plus its free local reranker where a card says so. Claude Sonnet N answers, and each benchmark's own scorer marks the answer. BMN is plain keyword search, the baseline to beat. Gaps are paired question by question before rounding, and intervals are N%.
-hippo
-run here, same answer model and scorer
-published, each team's own setup
-PersonaMem vN N questions about N personas
-source ↗ (the PersonaMem vN score file, opens in new tab)
-Hippo scored N ahead of BMN at N by N points [N N]. Every published score we found is lower, led by MemOS at N though each comes from its own setup and answer model.
-N% hippo answer accuracy, local embedder, N questions Ahead of BMN by N points
-All scores
-SystemSetupScore
-hippo Run here N%
-hippo, embeddings off Run here N%
-BMN Run here N%
-MemOS Published N%
-Memobase Published N%
-Zep Published N%
-MemU Published N%
-Supermemory Published N%
-GPT-N and Gemini-N Published N%
-MemN Published N%
-Llama-N-Maverick Published N%
-MIRIX Published N%
-LoCoMo, N questions about long conversations
-source ↗ (the LoCoMo score file, opens in new tab)
-With up to N memories a question, MemN scored N hippo N and BMN N Hippo trails MemN by N points [N N], and by N at N memories, and is level with BMN Storing the conversations took MemN N language-model calls and hippo none.
-N% hippo answer accuracy, local embedder, N questions Level with BMN
-Behind MemN by N points
-All scores
-SystemSetupScore
-MemN Run here N%
-EverMemOS Published N%
-MemN Published N%
-Backboard Published N%
-Honcho Published N%
-Hindsight Published N%
-hippo Run here N%
-hippo, embeddings off Run here N%
-Full chat Published N%
-BMN Run here N%
-MIRIX Published N%
-Zep Published N%
-gbrain Published N%
-LangMem Published N%
-Memobase Published N%
-Letta Published N%
-OpenAI Memory Published N%
-A-Mem Published N%
-LongMemEval-S, N questions, each with its own earlier chat sessions
-source ↗ (the LongMemEval-S score file, opens in new tab)
-With nearly every session in context, hippo scored N level with BMN at N Given only the top N memories, hippo with its local reranker beat BMN by N points [N N], N to N
-N% hippo answer accuracy, local embedder, N questions Level with BMN
-All scores
-SystemSetupScore
-Mastra Published N%
-gbrain Published N%
-MemN Published N%
-Backboard Published N%
-Honcho Published N%
-Hindsight Published N%
-Memoria Published N%
-hippo Run here N%
-hippo, embeddings off Run here N%
-BMN Run here N%
-EmergenceMem Internal Published N%
-Supermemory Published N%
-EverMemOS Published N%
-Zep Published N%
-Full chat Published N%
-DMR, N questions
-source ↗ (the DMR score file, opens in new tab)
-With its local reranker on, hippo scored N ahead of BMN at N by N points [N N]. Handing the model the whole chat scored N which beats hippo by N points [N N]. Zep publishes N and MemGPT N
-N% hippo answer accuracy, local embedder and reranker, N questions Ahead of BMN by N points
-Behind Full chat by N points
-All scores
-SystemSetupScore
-Zep Published N%
-Full chat Published N%
-MemGPT Published N%
-Full chat Run here N%
-hippo Run here N%
-hippo, embedder only Run here N%
-BMN Run here N%
-hippo, embeddings off Run here N%
-Recursive Summarization Published N%
-HotPotQA-N N questions
-source ↗ (the HotPotQA-N score file, opens in new tab)
-Too few questions to separate hippo's FN a score for word overlap with the expected answer, of N from BMN's N
-FN N hippo answer FN local embedder and reranker, N questions Level with BMN
-All scores
-SystemSetupScore
-hippo Run here FN N
-hippo, embedder only Run here FN N
-hippo, embeddings off Run here FN N
-BMN Run here FN N
+Official-setup rows side by side
+Hippo N run with the same answer model, judge and settings as the published rows.
+Hippo and the published scores, on benchmarks run in their official setup Benchmark hippo MemNZepMemOSSupermemoryHonchoMemobaseOther
+LoCoMo, MemN paper setup Long chat recall, gpt-No-mini answers official setup How it ran
+Run as the MemN paper ran it, with MemN's released evaluation code (memNai/memN aaeNeN): all N questions in categories N to N N memories per speaker, gpt-No-mini answers under the paper's prompt, and the code's gpt-No-mini judge. The paper itself does not name its judge. One run. The paper's full-context baseline scores N above every memory row. Compare the overall score only: our category labels follow our own mapping.
+hippo N embedder, N per speaker, all N MemN N (MemN published source, opens in new tab) gpt-No-mini Zep N (Zep, published source, opens in new tab) gpt-No-mini -no published score-no published score-no published score-no published score Other N (MemNg, published source, opens in new tab) MemNg · gpt-No-mini
+LongMemEval-S, gpt-No reader Long chat recall, gpt-No answers official setup How it ran
+The answer model and the judge match the published gpt-No rows: gpt-No-N-N-N reads hippo's top N memories, and the official script's prompts on gpt-No-N-N-N judge all N questions. Each system keeps its own retrieval, as in the published rows. The cell shows the reranker setup, N; the embedder setup scores N We chose the reranker after seeing its Sonnet scores and recorded that before its run. EmergenceMem does not name its judge.
+hippo N reranker, top N (embedder N), official gpt-No judge -no published score Zep N (Zep, published source, opens in new tab) gpt-No -no published score Supermemory N (Supermemory, published source, opens in new tab) gpt-No -no published score-no published score Other N (EmergenceMem Internal, published source, opens in new tab) EmergenceMem Internal · gpt-No-N-N-N
+PersonaMem vN MemOS suite setup Personalisation, gpt-No-mini answers official setup How it ran
+Run as MemOS's evaluation suite runs every vendor row (MemTensor/MemOS NaNeNfe): the same data files and top N PM_ANSWER_PROMPT as one system message to gpt-No-mini-N-N-N at temperature N N runs per question, scored as the mean of the run accuracies over all N rows. Each system keeps its own retrieval and memory text.
+hippo N embedder, top N mean of N runs MemN N (MemN published source, opens in new tab) gpt-No-mini Zep N (Zep, published source, opens in new tab) gpt-No-mini MemOS N (MemOS, published source, opens in new tab) gpt-No-mini Supermemory N (Supermemory, published source, opens in new tab) gpt-No-mini -no published score Memobase N (Memobase, published source, opens in new tab) gpt-No-mini Other N (MemU, published source, opens in new tab) MemU · gpt-No-mini
+EverMemBench, GPT-N-mini answers Changing facts, GPT-N-mini answers official setup, with a caveat How it ran
+The answer model, prompts, top N multiple-choice scorer and the N-category mean match the paper's Table N (EverMind-AI/EverMemBench eNbNdN): gpt-N-mini-N-N-N at temperature N answers all N items. One setting differs: open answers are judged by gpt-N-sol through codex with the authors' prompts, and the repository's default judge is gemini-N-flash-preview; the paper names no judge. A second judge, gpt-No-N-N-N with the same prompts, agrees with codex on N% of open verdicts and scores hippo N The default setup scores N with codex and N with gpt-No.
+hippo N embedder, top N mean of N categories MemN N (MemN published source, opens in new tab) GPT-N-mini Zep N (Zep, published source, opens in new tab) GPT-N-mini MemOS N (MemOS, published source, opens in new tab) GPT-N-mini -no published score-no published score Memobase N (Memobase, published source, opens in new tab) GPT-N-mini Other N (Full Context, published source, opens in new tab) Full Context · GPT-N-mini
+HaluMem-Medium Hallucination control, GPT-No answers official setup, with a caveat How it ran
+Question answering only, with the paper's GPT-No answers and judge (gpt-No-N-N-N temperature N) and the same data, question set, top N and prompts. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.
+hippo N embedder, top N GPT-No answers and judge MemN N (MemN published source, opens in new tab) GPT-No Zep N (Zep, published source, opens in new tab) GPT-No MemOS N (MemOS, published source, opens in new tab) GPT-No Supermemory N (Supermemory, published source, opens in new tab) GPT-No -no published score Memobase N (Memobase, published source, opens in new tab) GPT-No Other N (MemN-Graph, published source, opens in new tab) MemN-Graph · GPT-No
+HaluMem-Long Hallucination control, GPT-No answers official setup, with a caveat How it ran
+Question answering only, with the paper's GPT-No answers and judge (gpt-No-N-N-N temperature N), the same setup as the HaluMem-Medium row. The run paused when the OpenAI credit ran out on N Nov, so the row has no score yet. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.
+hippo paused MemN N (MemN published source, opens in new tab) GPT-No Zep N (Zep, published source, opens in new tab) GPT-No MemOS N (MemOS, published source, opens in new tab) GPT-No Supermemory N (Supermemory, published source, opens in new tab) GPT-No -no published score Memobase N (Memobase, published source, opens in new tab) GPT-No Other N (MemN-Graph, published source, opens in new tab) MemN-Graph · GPT-No
+DolphinBench, official Claude Code setup Agent memory, Claude Code with Sonnet N official setup How it ran
+The same setup as the published Claude Code rows: one Claude Code turn with the hippo plugin for each of the N messages, each test in a fresh sandbox with memory writes off, Sonnet N and the gpt-N-sol judge. The run is in build, so there is no score yet.
+hippo in build MemN N (MemN published source, opens in new tab) Claude Code, Sonnet N · N/N -no published score-no published score-no published score Honcho N (Honcho, published source, opens in new tab) Claude Code, Sonnet N · N/N -no published score Other N (Built-in, published source, opens in new tab) Built-in · Claude Code, Sonnet N · N/N
+Our own setup
+Every other benchmark we ran. Our setup differs from the published rows, so these scores do not sit beside theirs.
+Hippo in our own setup, with the published scores from other setups Benchmark hippo MemNZepMemOSSupermemoryHonchoHindsightEverMemOSMemobaseOther
+LoCoMo Long chat recall, Sonnet N answers our own setup How it ran
+Judged again with the MemN paper's prompt on gpt-No-mini, the judge in MemN's released code. This row still scores a N-question sample with Sonnet N answers, and the published rows use all N questions. The "LoCoMo, MemN paper setup" row runs that setup in full.
+hippo N embedder, top N gpt-No-mini judge, N sample MemN N (MemN published source, opens in new tab) not stated · unit not stated Zep N (Zep, published source, opens in new tab) not stated -no published score-no published score Honcho N (Honcho, published source, opens in new tab) Claude Haiku N Hindsight N (Hindsight, published source, opens in new tab) Gemini-N Pro EverMemOS N (EverMemOS, published source, opens in new tab) not stated Memobase N (Memobase, published source, opens in new tab) not stated Other N (Backboard, published source, opens in new tab) Backboard · not stated
+LongMemEval-S Long chat recall, Sonnet N answers our own setup How it ran
+Judged with the official script's prompt for each question type and its judge, gpt-No-N-N-N over all N questions. One setting differs: the answer model is Sonnet N and each published row uses its own. The MemN cell used its runner's lenient judge prompt, so it stays grey. The "LongMemEval-S, gpt-No reader" row uses a gpt-No reader.
+hippo N embedder, top N official gpt-No judge MemN N (MemN published source, opens in new tab) not stated · unit not stated Zep N (Zep, published source, opens in new tab) gpt-No -no published score Supermemory N (Supermemory, published source, opens in new tab) gemini-N-pro Honcho N (Honcho, published source, opens in new tab) Gemini N Pro Hindsight N (Hindsight, published source, opens in new tab) Gemini-N Pro EverMemOS N (EverMemOS, published source, opens in new tab) not stated -no published score Other N (Mastra Observational Memory, published source, opens in new tab) Mastra Observational Memory · gpt-N-mini
+LongMemEval-M Very long chat recall, Sonnet N answers our own setup How it ran
+Judged with the official script's prompts and its gpt-No-N-N-N judge, over all N questions. The answer model is Sonnet N No product publishes an answer score for M.
+hippo N default, top N official gpt-No judge -no published score-no published score-no published score-no published score-no published score-no published score-no published score-no published score-no published score
+DMR Multi-session recall, Sonnet N answers our own setup How it ran
+Our harness caps the score: the whole chat scores N% here, against N% to N% in the Zep paper.
+hippo N reranker, top N -no published score Zep N (Zep, published source, opens in new tab) gpt-No-mini -no published score-no published score-no published score-no published score-no published score-no published score Other N (Full-conversation baseline, published source, opens in new tab) Full-conversation baseline · gpt-No-mini
+DMR, gpt-No-mini answers Multi-session recall, gpt-No-mini answers our own setup How it ran
+gpt-No-mini answers, as in Zep's rows, and the prompt now says the answerer is Speaker N The harness check failed: the whole chat scores N here, against N for the paper's full-conversation row with the same model, so our setup still caps the score. Compare each system with the whole chat in its own setup only: Zep +N points, hippo's reranker setup -N points. Neither paper names its judge.
+hippo N reranker, top N Speaker N role -no published score Zep N (Zep, published source, opens in new tab) gpt-No-mini -no published score-no published score-no published score-no published score-no published score-no published score Other N (Full-conversation baseline, published source, opens in new tab) Full-conversation baseline · gpt-No-mini
+PersonaMem vN Personalisation, Sonnet N answers our own setup How it ran
+The vendor rows all answer with gpt-No-mini under MemOS's prompt, one model for every system. Against the authors' own board of full-context models (best N%), our score compares with a caveat. A rule that picks the longest option scores N%.
+hippo N embedder, top N MemN N (MemN published source, opens in new tab) gpt-No-mini Zep N (Zep, published source, opens in new tab) gpt-No-mini MemOS N (MemOS, published source, opens in new tab) gpt-No-mini Supermemory N (Supermemory, published source, opens in new tab) gpt-No-mini -no published score-no published score-no published score Memobase N (Memobase, published source, opens in new tab) gpt-No-mini Other N (MemU, published source, opens in new tab) MemU · gpt-No-mini
+PersonaMem vN Personalisation, Sonnet N answers our own setup How it ran
+The paper's row uses the same text split and scorer with another answer model. The MemOS and EverMemOS rows do not say how they ran. A rule that picks the longest option scores N%.
+hippo N embedder, top N -no published score-no published score MemOS N (MemOS, published source, opens in new tab) not stated -no published score-no published score-no published score EverMemOS N (EverMemOS, published source, opens in new tab) not stated -no published score Other N (QwenN-NB agentic memory, published source, opens in new tab) QwenN-NB agentic memory · QwenN-NB-Instruct-N
+PrefEval Preference following, Sonnet N answers our own setup How it ran
+The paper's RAG rows keep the whole chat in the prompt; ours shows N retrieved turns. The vendor rows use another data split, top N and gpt-No-mini.
+hippo N default, top N MemN N (MemN published source, opens in new tab) gpt-No-mini Zep N (Zep, published source, opens in new tab) gpt-No-mini MemOS N (MemOS, published source, opens in new tab) gpt-No-mini Supermemory N (Supermemory, published source, opens in new tab) gpt-No-mini -no published score-no published score-no published score Memobase N (Memobase, published source, opens in new tab) gpt-No-mini Other N (Claude N Sonnet + RAG, published source, opens in new tab) Claude N Sonnet + RAG · Claude N Sonnet
+EverMemBench Changing facts, Sonnet N answers our own setup How it ran
+Every published row answers with GPT-N-mini, one model for every system, and ours answers with Sonnet N
+hippo N default, top N mean of N categories MemN N (MemN published source, opens in new tab) GPT-N-mini Zep N (Zep, published source, opens in new tab) GPT-N-mini MemOS N (MemOS, published source, opens in new tab) GPT-N-mini -no published score-no published score-no published score-no published score Memobase N (Memobase, published source, opens in new tab) GPT-N-mini Other N (Full Context, published source, opens in new tab) Full Context · Gemini-N-Flash
+BEAM-NK Long-horizon memory, Sonnet N answers our own setup How it ran
+Hindsight uses another answer prompt and Gemini models with a budget it does not state. Honcho scores event ordering another way. cognee ran one conversation. MemN publishes no NK score.
+hippo N embedder -no published score-no published score-no published score-no published score Honcho N (Honcho, published source, opens in new tab) claude-haiku-N-N Hindsight N (Hindsight, published source, opens in new tab) not stated -no published score-no published score Other N (cognee, published source, opens in new tab) cognee · not stated
+BEAM-NK Long-horizon memory, Sonnet N answers our own setup How it ran
+Hindsight uses another answer prompt and Gemini models with a budget it does not state. Honcho scores event ordering another way. The LIGHT row comes from the paper's scorer.
+hippo N embedder -no published score-no published score-no published score-no published score Honcho N (Honcho, published source, opens in new tab) claude-haiku-N-N Hindsight N (Hindsight, published source, opens in new tab) not stated -no published score-no published score Other N (LIGHT, published source, opens in new tab) LIGHT · Llama-N-Maverick
+BEAM-N Long-horizon memory, Sonnet N answers our own setup How it ran
+MemN's row uses the same runner code, prompts and scorer. MemN answered and judged with gpt-N and showed N memories; we use Sonnet N gpt-N-sol and N The other rows use other scorers or setups.
+hippo N default MemN N (MemN published source, opens in new tab) gpt-N -no published score-no published score-no published score Honcho N (Honcho, published source, opens in new tab) claude-haiku-N-N Hindsight N (Hindsight, published source, opens in new tab) not stated -no published score-no published score Other N (LIGHT, published source, opens in new tab) LIGHT · Llama-N-Maverick
+BEAM-N Long-horizon memory, Sonnet N answers our own setup How it ran
+MemN's row uses the same runner code, prompts and scorer. MemN answered and judged with gpt-N and showed N memories; we use Sonnet N gpt-N-sol and N The other rows use other scorers or setups.
+hippo N embedder MemN N (MemN published source, opens in new tab) gpt-N -no published score-no published score-no published score Honcho N (Honcho, published source, opens in new tab) claude-haiku-N-N Hindsight N (Hindsight, published source, opens in new tab) not stated -no published score-no published score Other up to N (cognee, published source, opens in new tab) cognee · not stated
+ConvoMem Conversation memory, Sonnet N answers our own setup How it ran
+The sample design is ours, and no published number exists at N conversations. The MemPalace row is a N-item sample with no stated model or judge.
+hippo N default, top N -no published score-no published score-no published score-no published score-no published score-no published score-no published score-no published score Other N (MemPalace, published source, opens in new tab) MemPalace · not stated
+HotPotQA-N Multi-hop questions, FN Sonnet N answers our own setup How it ran
+FN over all N questions with Cognee's own scorer, from one run with Sonnet N answers. Cognee averages N runs and names no answer model, and one question moves the score by about N points.
+hippo N reranker, top N all N questions, one run MemN N (MemN published source, opens in new tab) not stated -no published score-no published score-no published score-no published score-no published score-no published score-no published score Other N (Cognee, published source, opens in new tab) Cognee · not stated
+DolphinBench, shortcut run Agent memory, Claude Code with Sonnet N our own setup How it ran
+Our run wrote each message straight to the store with no agent turn, used a recall hook we wrote, and judged through codex, which the official validator rejects.
+hippo N N/N · Claude Code, Sonnet N MemN N (MemN published source, opens in new tab) Claude Code, Sonnet N · N/N -no published score-no published score-no published score Honcho N (Honcho, published source, opens in new tab) Claude Code, Sonnet N · N/N -no published score-no published score-no published score Other N (Built-in, published source, opens in new tab) Built-in · Claude Code, Sonnet N · N/N
+Terminal-Bench N Agent coding tasks, Claude Code with Sonnet N our own setup How it ran
+The first N of N tasks, N trial each at medium effort; the rule is N trials, and the matching Claude Code row used max effort. The N board is closed, and the open board is N
+hippo N/N first N of N tasks, N trial; Claude Code with no memory N/N -no published score-no published score-no published score-no published score-no published score-no published score-no published score-no published score-no published score
 Finding the right session
 On LongMemEval-S, hippo's benchmark scripts put an answer session in the top five for N% of N questions with the free local MiniLM embedder. That is the best of five settings, chosen after the run, on a measure close to its ceiling. Requiring every answer session, the same runs score N to N%, and gbrain is ahead at N% with a paid reranker. The hippo recall command on a default install scores N% [N N]. On one store of all N sessions, recall fell to N% in June N
 What the two rerankers bought
@@ -126,7 +109,7 @@ The old N-day default was a bug that cost recall, so the default moved to N days
 Seven smaller experiments failed, stalled or were thrown out, among them a correction detector at N precision against a N bar.
 One early headline number did not reproduce, and we retracted it.
 Check our work
-The score files for the five public tests and their write-ups are in the repo, under benchmarks/public.
+The score files for five of these public tests and their write-ups are in the repo, under benchmarks/public.
 Benchmark results (opens in new tab) Eval documents (opens in new tab) Report a mistake (opens in new tab)
 hippo
 Agents

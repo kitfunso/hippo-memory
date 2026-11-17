@@ -5,12 +5,12 @@ import Footer from '../components/Footer.astro';
 import PageIntro from '../components/PageIntro.astro';
 import { site } from '../content/site';
 import RepeatMistakes from '../components/RepeatMistakes.astro';
-import PublicBenchmarks from '../components/PublicBenchmarks.astro';
+import AllBenchmarks from '../components/AllBenchmarks.astro';
 
 const title = 'hippo benchmarks: the wins and the losses';
 // Meta, OG, Twitter and JSON-LD all reuse this string.
 const description =
-  "Hippo's own Claude Code test, and five public memory benchmarks where we ran hippo, BM25 and Mem0 with one answer model. The losses stay in, such as LoCoMo answers, where Mem0 leads hippo by 5.6 points.";
+  "Hippo's own Claude Code test, and every public memory benchmark we ran, split into official-setup scores and our own-setup runs. The losses stay in.";
 
 const publicDir = `${site.links.repo}/tree/master/benchmarks/public`;
 const evalIndexUrl = `${site.links.repo}/blob/master/docs/evals/README.md`;
@@ -42,13 +42,19 @@ const codeCls = 'rounded bg-paper-3 px-1.5 py-0.5 font-mono text-sm text-ink-2';
       </div>
     </section>
 
-    <section id="public" class="relative border-t border-rule">
+    <section id="official-setup" class="relative border-t border-rule">
       <div class="wrap py-(--section-y)">
-        <h2 class="text-balance">Five public tests of answering from memory</h2>
-        <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-ink-2">
-          Hippo 3.5.1 retrieves with its free local embedder, plus its free local reranker where a card says so. Claude Sonnet 5 answers, and each benchmark's own scorer marks the answer. BM25 is plain keyword search, the baseline to beat. Gaps are paired question by question before rounding, and intervals are 95%.
-        </p>
-        <PublicBenchmarks />
+        <h2 class="text-balance">Official-setup rows side by side</h2>
+        <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-ink-2">Hippo 3.5.1 run with the same answer model, judge and settings as the published rows.</p>
+        <AllBenchmarks set="official" caption="Hippo and the published scores, on benchmarks run in their official setup" />
+      </div>
+    </section>
+
+    <section id="own-setup" class="relative border-t border-rule">
+      <div class="wrap py-(--section-y)">
+        <h2 class="text-balance">Our own setup</h2>
+        <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-ink-2">Every other benchmark we ran. Our setup differs from the published rows, so these scores do not sit beside theirs.</p>
+        <AllBenchmarks set="own" caption="Hippo in our own setup, with the published scores from other setups" />
       </div>
     </section>
 
@@ -90,7 +96,7 @@ const codeCls = 'rounded bg-paper-3 px-1.5 py-0.5 font-mono text-sm text-ink-2';
       <div class="wrap py-(--section-y)">
         <h2 class="text-balance">Check our work</h2>
         <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
-          The score files for the five public tests and their write-ups are in the repo, under <code class={codeCls}>benchmarks/public</code>.
+          The score files for five of these public tests and their write-ups are in the repo, under <code class={codeCls}>benchmarks/public</code>.
         </p>
         <div class="mt-7 flex flex-wrap gap-3">
           <a href={publicDir} target="_blank" rel="noopener noreferrer" class="btn">Benchmark results<span class="sr-only"> (opens in new tab)</span></a>

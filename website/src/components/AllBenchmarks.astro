@@ -1,0 +1,84 @@
+---
+// One setup's benchmarks as a table: hippo beside each published score. A stacked card per row below md.
+// Data: src/data/all-benchmarks.json, written by hippo-bench's scoreboard_extras.py --site-json from the score files.
+import data from '../data/all-benchmarks.json';
+
+interface Cell { value: string; system: string | null; model: string; detail: string | null; url: string; muted: boolean }
+interface Row {
+  name: string;
+  task: string;
+  tag: string;
+  reason: string;
+  hippo: { value: string | null; setting: string | null; status: string | null };
+  cells: Partial<Record<string, Cell>>;
+}
+interface Props {
+  set: 'official' | 'own';
+  caption: string;
+}
+const { set, caption } = Astro.props;
+const rows: readonly Row[] = data[set];
+const cols = data.columns.filter((c) => rows.some((r) => r.cells[c]));
+const badge = 'inline-flex rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap';
+const TAGS = {
+  'official setup': 'border-accent/30 bg-accent/[0.07] text-accent-deep',
+  'official setup, with a caveat': 'border-dashed border-accent/50 text-accent-deep',
+  'our own setup': 'border-rule-strong bg-paper-3 text-ink-2',
+} as const;
+const isTag = (t: string): t is keyof typeof TAGS => Object.hasOwn(TAGS, t);
+const tagOf = (t: string) => {
+  if (!isTag(t)) throw new Error(`AllBenchmarks: no style for the tag "${t}"`);
+  return TAGS[t];
+};
+const meta = (x: Cell) => [x.system, x.model, x.detail].filter(Boolean).join(' · ');
+---
+
+<div class="rounded-xl border border-rule bg-paper-2 md:overflow-x-auto" data-scroll-x>
+  <table role="table" class="w-full text-left text-sm max-md:block md:min-w-[66rem]">
+    <caption class="sr-only">{caption}</caption>
+    <thead role="rowgroup" class="border-b border-rule-strong text-xs text-ink-3 max-md:sr-only">
+      <tr role="row">
+        <th role="columnheader" scope="col" class="sticky left-0 z-10 w-[13rem] bg-paper-2 px-4 py-3 font-medium">Benchmark</th>
+        <th role="columnheader" scope="col" class="w-[8.5rem] bg-accent/[0.07] px-3 py-3 font-medium text-accent">hippo</th>
+        {cols.map((c) => <th role="columnheader" scope="col" class="px-3 py-3 font-medium">{c}</th>)}
+      </tr>
+    </thead>
+    <tbody role="rowgroup" class="divide-y divide-rule max-md:block">
+      {rows.map((r) => (
+        <tr role="row" class="align-top max-md:grid max-md:grid-cols-2 max-md:gap-x-4 sm:max-md:grid-cols-3 max-md:gap-y-4 max-md:p-5">
+          <th role="rowheader" scope="row" class="px-4 pt-4 pb-1 text-left font-normal max-md:col-span-full max-md:p-0 md:sticky md:left-0 md:z-10 md:bg-paper-2">
+            <span class="block font-medium text-ink">{r.name}</span>
+            <span class="mt-1 block text-xs text-ink-3">{r.task}</span>
+            <span class:list={[badge, 'mt-2', tagOf(r.tag)]}>{r.tag}</span>
+            <details>
+              <summary class="inline-flex min-h-11 cursor-pointer items-center font-mono text-xs text-ink-2 hover:text-accent">How it ran</summary>
+              <p class="pb-3 text-xs leading-relaxed text-ink-2">{r.reason}</p>
+            </details>
+          </th>
+          <td role="cell" class="bg-accent/[0.07] px-3 py-4 max-md:col-span-full max-md:rounded-lg max-md:px-4 max-md:py-3">
+            <span class="mb-1 block text-xs text-ink-3 md:hidden">hippo</span>
+            {r.hippo.status ? (
+              <span class:list={[badge, 'border-rule-strong bg-paper-2 text-ink-2']}>{r.hippo.status}</span>
+            ) : (
+              <>
+                <span class="block font-mono font-medium tabular-nums text-accent max-md:text-2xl">{r.hippo.value}</span>
+                <span class="mt-1 block text-xs text-ink-2">{r.hippo.setting}</span>
+              </>
+            )}
+          </td>
+          {cols.map((c) => {
+            const x = r.cells[c];
+            if (!x) return <td role="cell" class="px-3 py-4 text-ink-3 max-md:hidden"><span aria-hidden="true">-</span><span class="sr-only">no published score</span></td>;
+            return (
+              <td role="cell" class="px-3 py-4 max-md:p-0">
+                <span class="mb-1 block text-xs text-ink-3 md:hidden">{c}</span>
+                <a href={x.url} target="_blank" rel="noopener noreferrer" class:list={['font-mono tabular-nums underline-offset-4 hover:text-accent hover:underline hover:decoration-accent', x.muted ? 'font-normal text-ink-3 no-underline' : 'font-medium text-ink underline decoration-rule-strong']}>{x.value}<span class="sr-only"> ({x.system ?? c}, published source, opens in new tab)</span></a>
+                <span class:list={['mt-1 block text-xs [overflow-wrap:break-word]', x.muted ? 'text-ink-3' : 'text-ink-2']}>{meta(x)}</span>
+              </td>
+            );
+          })}
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
