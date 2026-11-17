@@ -5,7 +5,7 @@ description: Project memory powered by Hippo. Use when starting a session, after
 
 # Hippo Memory
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
 Memories decay over time unless retrieved. Errors stick longer. Sleep consolidates.
 
 ## At the start of a task

@@ -1,6 +1,6 @@
 # hippo-memory-sdk (Python SDK)
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
 
 This package is a thin async HTTP wrapper. Run `hippo serve` from the npm package alongside, then use this SDK to talk to it from Python.
 

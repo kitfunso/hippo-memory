@@ -9,7 +9,7 @@ Add this to `AGENTS.md` in the project root. Cursor reads that file as an altern
 ```
 ## Memory System (Hippo)
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
 Memories decay. Retrieval strengthens them. Errors stick longer. Sleep consolidates.
 
 ### Before each task

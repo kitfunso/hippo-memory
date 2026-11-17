@@ -1,6 +1,6 @@
 # Hippo Memory - Pi Extension
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
 
 This extension supports the [Pi coding agent](https://github.com/badlogic/pi-mono). Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
 

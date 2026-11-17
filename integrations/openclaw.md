@@ -90,7 +90,7 @@ If you prefer using OpenClaw's skill system instead of patching AGENTS.md, creat
 ```markdown
 # Hippo Memory Skill
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
 
 ## When to activate
 
