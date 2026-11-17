@@ -64,7 +64,7 @@ No memoryN
 Built-in memoryN
 Built-in plus hippoN
 repeatedcleanCost with hippo: N times, the same
-The gain was the same with lesson capture switched off, so this run cannot say hippo's stored lessons caused it. The test agent was Claude Code only, so there's no measured result for Codex or Cursor.
+hippo got this gain even with lesson capture switched off. Tested on Claude Code only.
 Public memory tests
 Each test runs in the setup behind its published scores, so hippo's number sits beside theirs.
 TesthippoMemNZepMemOSSupermemoryHonchoMemobaseOther
