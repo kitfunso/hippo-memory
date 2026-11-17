@@ -8,7 +8,7 @@ Example::
 
     from hippo_memory import Hippo
 
-    async with Hippo(base_url="http://127.0.0.1:3737") as client:
+    async with Hippo(base_url="http://127.0.0.1:6789") as client:
         mem = await client.remember(content="bug fix lesson", tags=["error"])
         results = await client.recall(q="bug fix")
         ctx = await client.get_context(budget=1500)
@@ -74,7 +74,7 @@ class Hippo:
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:3737",
+        base_url: str = "http://127.0.0.1:6789",
         api_key: str | None = None,
         timeout: float = 30.0,
     ):
