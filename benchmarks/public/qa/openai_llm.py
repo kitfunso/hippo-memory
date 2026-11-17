@@ -25,18 +25,19 @@ from pathlib import Path
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[1] / "mem0"), str(Path(__file__).resolve().parents[1])]
 from claude_llm import DEADLINE_S, Claude  # noqa: E402
-from qa.ledger import pid_alive  # noqa: E402
+from qa.ledger import hash16, pid_alive  # noqa: E402
 
 URL = "https://api.openai.com/v1/chat/completions"
 # USD per 1M tokens, input and output, at developers.openai.com/api/docs/pricing (read 16 Nov 2026)
 PRICES = {"gpt-4o-2024-08-06": (2.50, 10.00), "gpt-4o-mini-2024-07-18": (0.15, 0.60), "gpt-4o-mini": (0.15, 0.60),
-          "gpt-4.1-mini-2025-04-14": (0.40, 1.60)}
+          "gpt-4.1-mini-2025-04-14": (0.40, 1.60), "gpt-5-mini-2025-08-07": (0.25, 2.00)}
 # The org's free-token pools on traffic shared with OpenAI (Keith, 17 Nov 2026); a model in neither would bill
 BIG = ("gpt-4o-2024-08-06", "gpt-4.1", "gpt-5-2025-08-07", "gpt-5.6-sol")
-SMALL = ("gpt-4o-mini", "gpt-4o-mini-2024-07-18", "gpt-4.1-mini-2025-04-14")
+SMALL = ("gpt-4o-mini", "gpt-4o-mini-2024-07-18", "gpt-4.1-mini-2025-04-14",
+         "gpt-5-mini-2025-08-07")  # 2.5M Build group: help.openai.com/en/articles/10306912 (read 17 Nov 2026)
 # Max output tokens, the worst case of a call sent with no token limit (developers.openai.com/api/docs/models, 17 Nov)
 MAX_OUT = {"gpt-4o-2024-08-06": 16_384, "gpt-4o-mini": 16_384, "gpt-4o-mini-2024-07-18": 16_384, "gpt-4.1": 32_768,
-           "gpt-4.1-mini-2025-04-14": 32_768, "gpt-5-2025-08-07": 128_000}
+           "gpt-4.1-mini-2025-04-14": 32_768, "gpt-5-2025-08-07": 128_000, "gpt-5-mini-2025-08-07": 128_000}
 INPUT_LIMIT = {"gpt-5-2025-08-07": 272_000}  # the API refuses a longer prompt unbilled (dated notes 29)
 DAY_S, WAKE_S = 86_400, 30  # the free day starts at 00:00 UTC; a waiting call wakes 30 s after it
 # One file per process: Windows can split a line two processes append to one file at once (16 Nov)
@@ -58,13 +59,18 @@ class Settings:
     temperature: float | None = 0.0  # None sends none, so the API's default applies
     max_tokens: int | None = None
     json_object: bool = False
+    response_format: str = ""  # a JSON response_format sent as is (a strict json_schema); "" sends none
+    top_p: float | None = None  # None sends none, as response_format; MemoryAgentBench's summary judge sets both
+    seed: int | None = None
 
     @property
     def cli(self) -> str:
         """Stamped on every record, so the ledger never takes a reply made with other settings."""
         temp = "unset" if self.temperature is None else self.temperature
+        fmt = f" response_format={hash16(self.response_format)}" if self.response_format else ""  # older stamps unchanged
+        fmt += "".join(f" {k}={v}" for k, v in (("top_p", self.top_p), ("seed", self.seed)) if v is not None)
         return (f"openai chat.completions role={self.role} temperature={temp} "
-                f"max_tokens={self.max_tokens} json_object={self.json_object}")
+                f"max_tokens={self.max_tokens} json_object={self.json_object}{fmt}")
 
 
 def cost(model: str, usage: dict) -> float:
@@ -316,6 +322,9 @@ class OpenAIChat(Claude):
             body["max_tokens"] = s.max_tokens
         if s.json_object:
             body["response_format"] = {"type": "json_object"}
+        if s.response_format:
+            body["response_format"] = json.loads(s.response_format)
+        body.update({k: v for k, v in (("top_p", s.top_p), ("seed", s.seed)) if v is not None})
         return json.dumps(body).encode("utf-8")
 
     def _post(self, body: bytes, deadline: float) -> tuple[dict | None, dict]:

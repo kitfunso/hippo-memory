@@ -16,5 +16,8 @@
   "evermembench": ["F_SH_Top01_001", "F_TP_Top01_005", "MA_C_Top01_049", "MA_P_Top01_063", "P_Style_Top01_012"],
   "prefeval": ["education_learning_styles-000", "entertain_shows-008", "lifestyle_dietary-041", "shop_fashion-004", "travel_activities-014"],
   "personamem_v2": ["pm2-0000", "pm2-1000", "pm2-2000", "pm2-3000", "pm2-4000"],
-  "prefeval-memos": ["pref-0000", "pref-0200", "pref-0400", "pref-0600", "pref-0800"]
+  "prefeval-memos": ["pref-0000", "pref-0200", "pref-0400", "pref-0600", "pref-0800"],
+  "memoryagentbench": ["lme-c000-q012", "infbench_sum-c025-q000", "sh_qa-c000-q043", "icl_nlu-c000-q027", "fc_mh-c000-q059"],
+  "memfail": ["coexisting-000", "conditional-000", "conditional-hard-000", "persona-000", "long-hop-000"],
+  "locomo-plus": ["lp-0000", "lp-0496", "lp-0992", "lp-1488", "lp-1986"]
 }

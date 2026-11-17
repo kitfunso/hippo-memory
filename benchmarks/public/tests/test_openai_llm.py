@@ -236,3 +236,10 @@ def test_no_token_limit_counts_the_model_maximum_and_no_temperature_sends_none(t
     body = json.loads(llm._body("s", "q"))
     assert "temperature" not in body and "temperature=unset" in llm.cli
     assert ol.worst_case(body)[1] == 16_384
+
+
+def test_gpt5_mini_is_in_the_small_free_pool_at_its_list_price(tmp_path, wire):
+    # help.openai.com/en/articles/10306912 lists gpt-5-mini-2025-08-07 in the 2.5M Build group (read 17 Nov 2026)
+    llm = client(tmp_path, ol.Settings("gpt-5-mini-2025-08-07", temperature=None))
+    assert llm.pool == "small" and ol.PRICES["gpt-5-mini-2025-08-07"] == (0.25, 2.00)
+    assert ol.worst_case(json.loads(llm._body("", "q")))[1] == 128_000

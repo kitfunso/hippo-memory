@@ -51,7 +51,9 @@ def test_cluster_boot_resamples_whole_units():
 
 
 def test_smoke_file_holds_exactly_the_ids_the_prereg_registers():
-    doc = (PUBLIC.parents[1] / "docs" / "evals" / "2026-09-24-public-benchmarks-prereg.md").read_text(encoding="utf-8")
+    evals = PUBLIC.parents[1] / "docs" / "evals"  # the prereg, plus a lane's dated note in its own file
+    doc = "\n".join(p.read_text(encoding="utf-8") for p in
+                    [evals / "2026-09-24-public-benchmarks-prereg.md", *sorted(evals.glob("notes-*.md"))])
     # the list is the first sentence after the label: "none. The M smokes (`id`...)" registers no exclusion
     lists = [re.findall(r"`([^`]+)`", line.split("Smoke items, excluded:", 1)[1].split(". ", 1)[0])
              for line in doc.splitlines() if "Smoke items, excluded:" in line]
