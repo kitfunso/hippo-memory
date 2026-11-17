@@ -15,5 +15,6 @@
   "convomem": ["cm-abstention-e1-048-284435190-25", "cm-assistant-e1-048-158715165-1", "cm-changing-e2-048-266185859-10", "cm-preference-e1-049-31133299-4", "cm-user-e1-048-193850355-3"],
   "evermembench": ["F_SH_Top01_001", "F_TP_Top01_005", "MA_C_Top01_049", "MA_P_Top01_063", "P_Style_Top01_012"],
   "prefeval": ["education_learning_styles-000", "entertain_shows-008", "lifestyle_dietary-041", "shop_fashion-004", "travel_activities-014"],
-  "personamem_v2": ["pm2-0000", "pm2-1000", "pm2-2000", "pm2-3000", "pm2-4000"]
+  "personamem_v2": ["pm2-0000", "pm2-1000", "pm2-2000", "pm2-3000", "pm2-4000"],
+  "prefeval-memos": ["pref-0000", "pref-0200", "pref-0400", "pref-0600", "pref-0800"]
 }

@@ -1,10 +1,17 @@
-"""qa/openai_llm.py: the published settings go on the wire, the ledger takes the record, the spend cap stops calls."""
+"""qa/openai_llm.py: the published settings go on the wire, the ledger takes the record, the spend and free-token caps
+stop calls."""
 from __future__ import annotations
 
 import email.message
 import io
 import json
+import os
+import subprocess
+import sys
+import time
 import urllib.error
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -48,6 +55,8 @@ def wire(monkeypatch):
         return Reply(nxt)
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    for pool in ("BIG", "SMALL"):
+        monkeypatch.delenv(f"OPENAI_FREE_DAILY_{pool}", raising=False)
     monkeypatch.setattr(ol.urllib.request, "urlopen", urlopen)
     monkeypatch.setattr(ol.time, "sleep", lambda s: None)
     return sent, queue
@@ -125,3 +134,105 @@ def test_retry_after_reads_the_header_then_the_message():
     assert ol.retry_after(h, "") == 0.25
     assert ol.retry_after(email.message.Message(), "Please try again in 1.5s.") == 1.5
     assert ol.retry_after(email.message.Message(), "") == 5.0
+
+
+PUBLIC = Path(__file__).resolve().parents[1]
+# Another lane's process: it logs a call's tokens, or holds a call in flight until its stdin closes and then dies.
+CHILD = f"""
+import sys
+from pathlib import Path
+sys.path[:0] = [{str(PUBLIC)!r}, {str(PUBLIC / "qa")!r}, {str(PUBLIC / "mem0")!r}]
+import openai_llm as ol
+spend = Path(sys.argv[1])
+llm = ol.OpenAIChat(spend.parent / "child-calls.jsonl", ol.Settings("{MODEL}"), slots=1, spend=spend)
+if sys.argv[2] == "charge":
+    llm._charge(llm.model, {{"prompt_tokens": 5000, "completion_tokens": 1000}})
+else:
+    print(llm.free.take("small", 3000, 10**9), flush=True)
+    sys.stdin.read()
+"""
+
+
+def test_the_free_cap_counts_every_process_spend_and_calls_in_flight(tmp_path, wire, monkeypatch):
+    sent, queue = wire
+    monkeypatch.setenv("OPENAI_FREE_DAILY_SMALL", "10000")
+    spend, script = tmp_path / "spend", tmp_path / "child.py"
+    script.write_text(CHILD, encoding="utf-8")
+    env = {**os.environ, "OPENAI_API_KEY": "test-key", "PYTHONUTF8": "1"}
+    subprocess.run([sys.executable, "-I", str(script), str(spend), "charge"], env=env, check=True, timeout=60)
+    holder = subprocess.Popen([sys.executable, "-I", str(script), str(spend), "hold"], env=env, text=True,
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        assert holder.stdout.readline().strip() == "(True, 6000)"
+        llm = client(tmp_path, ol.Settings(MODEL, max_tokens=1000))
+        assert llm.free.take("small", 1001, 10_000) == (False, 9000)
+    finally:
+        holder.stdin.close()
+        holder.wait(60)
+    assert llm.free.take("small", 1001, 10_000) == (True, 6000)  # the dead holder's call no longer counts
+    llm.free.give_back("small", 1001)
+    queue.append(ok(pt=3000, ct=900))
+    llm.ask("", "p", effort=ol.EFFORT, tag="t")
+    assert len(sent) == 1 and not list(spend.glob("*.inflight"))
+    assert llm.free.take("small", 101, 10_000) == (False, 9900)
+
+
+def test_a_call_past_the_free_cap_waits_for_the_next_utc_day(tmp_path, wire, monkeypatch):
+    sent, queue = wire
+    monkeypatch.setenv("OPENAI_FREE_DAILY_SMALL", "10000")
+    clock, slept = [datetime(2026, 11, 17, 23, 0, tzinfo=timezone.utc).timestamp()], []
+
+    def sleep(s: float) -> None:
+        assert len(slept) < 3, "the wait never ends"
+        slept.append(s)
+        clock[0] += s
+
+    monkeypatch.setattr(ol, "utc_now", lambda: clock[0])
+    monkeypatch.setattr(ol.time, "sleep", sleep)
+    client(tmp_path, ol.Settings(MODEL))._charge(MODEL, {"prompt_tokens": 9000, "completion_tokens": 500})
+    llm = client(tmp_path, ol.Settings(MODEL, max_tokens=500))
+    queue.append(ok(pt=30, ct=5))
+    assert llm.ask("", "p", effort=ol.EFFORT, tag="t")["event"] == "ok"
+    assert slept == [3630.0] and len(sent) == 1
+    waits = [r for r in map(json.loads, llm.log_path.read_text().splitlines()) if r.get("event") == "free-cap-wait"]
+    assert [(w["pool"], w["used"], w["until"]) for w in waits] == [("small", 9500, "2026-11-18T00:00:30Z")]
+    rec = json.loads(llm.spend_path.read_text().splitlines()[0])
+    assert time.gmtime(rec["ts"])[:3] == (2026, 11, 18) and rec["pool"] == "small"
+    assert client(tmp_path, ol.Settings(MODEL)).free.take("small", 0, 10_000) == (True, 35)  # a new reader's today
+
+
+def test_every_spend_folder_counts_and_a_record_without_a_pool_goes_by_its_model(tmp_path, wire, monkeypatch):
+    monkeypatch.setenv("OPENAI_FREE_DAILY_BIG", "10000")
+    gpt4o = "gpt-4o-2024-08-06"
+    other = ol.OpenAIChat(tmp_path / "a.jsonl", ol.Settings(gpt4o), spend=tmp_path / "openai-spend-gpt5.d", cap=60.0)
+    other._charge("gpt-5-2025-08-07", {"prompt_tokens": 6000, "completion_tokens": 900})
+    legacy = {"ts": time.time(), "model": gpt4o, "prompt_tokens": 3000, "completion_tokens": 0, "usd": 0.0}
+    (tmp_path / "openai-spend.d").mkdir()
+    (tmp_path / "openai-spend.d" / "legacy.jsonl").write_text(json.dumps(legacy) + "\n")
+    llm = ol.OpenAIChat(tmp_path / "b.jsonl", ol.Settings(gpt4o, max_tokens=10), spend=tmp_path / "openai-spend.d",
+                        cap=60.0)
+    assert llm.free.take("big", 101, 10_000) == (False, 9900)
+    assert llm.free.take("small", 101, 10_000) == (True, 0)
+
+
+def test_a_model_in_no_free_pool_refuses_to_run(tmp_path, wire, monkeypatch):
+    monkeypatch.setitem(ol.PRICES, "gpt-4o-2099-01-01", (1.0, 1.0))
+    with pytest.raises(SystemExit, match="neither free-token pool"):
+        client(tmp_path, ol.Settings("gpt-4o-2099-01-01"))
+
+
+def test_a_call_bigger_than_the_whole_free_day_stops_and_sends_nothing(tmp_path, wire, monkeypatch):
+    sent, _ = wire
+    monkeypatch.setenv("OPENAI_FREE_DAILY_SMALL", "1000")
+    monkeypatch.setattr(ol.time, "sleep", lambda s: pytest.fail("it waited for a day that can never hold it"))
+    llm = client(tmp_path, ol.Settings(MODEL, max_tokens=2000))
+    with pytest.raises(RuntimeError, match="owner's yes"):
+        llm.ask("", "p", effort=ol.EFFORT, tag="t")
+    assert sent == [] and not list((tmp_path / "spend").glob("*.inflight"))
+
+
+def test_no_token_limit_counts_the_model_maximum_and_no_temperature_sends_none(tmp_path, wire):
+    llm = client(tmp_path, ol.Settings(MODEL, temperature=None))
+    body = json.loads(llm._body("s", "q"))
+    assert "temperature" not in body and "temperature=unset" in llm.cli
+    assert ol.worst_case(body)[1] == 16_384
