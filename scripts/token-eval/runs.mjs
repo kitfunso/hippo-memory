@@ -141,7 +141,11 @@ export function hippoInit(run, fakeHome) {
   const env = { ...childEnv(run.env), HOME: fakeHome, USERPROFILE: fakeHome };
   // --no-schedule: init would otherwise register a machine-wide Task Scheduler job.
   const r = sh(`"${process.execPath}" "${HIPPO_JS}" init --no-schedule`, run.dirs.work, env);
-  if (r.status !== 0) throw new Error(`hippo init failed in ${run.dirs.work}: ${r.stderr.slice(-500)}`);
+  if (r.status !== 0) {
+    // A Windows CI run failed here with empty stderr, so the status, signal, spawn error and stdout name the cause.
+    const why = `status ${r.status}, signal ${r.signal}, spawn error ${r.errorCode}`;
+    throw new Error(`hippo init failed in ${run.dirs.work} (${why}): ${r.stderr.slice(-500)} ${r.stdout.slice(-500)}`);
+  }
   const cfgPath = path.join(run.dirs.work, '.hippo', 'config.json');
   let cfg = {};
   try {
