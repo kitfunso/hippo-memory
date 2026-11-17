@@ -8,4 +8,4 @@ hippo 3.5.1 retrieves, Claude Sonnet 5 answers, and each benchmark's scorer mark
 - `competitors.json`: published scores, each with its source URL and a quote; rows we could not fetch from a source page are under `unverified` and not used.
 - `mem0-locomo-ingest-gate.json`: the check on Mem0's LoCoMo store run, including its 5,882 extraction calls.
 
-The benchmarks page reads `website/src/data/public-benchmarks.json`. Rebuild it from these files with `python benchmarks/public/site_data.py`.
+The Mem0 comparison page (`/vs/mem0/`) reads `website/src/data/public-benchmarks.json`. Rebuild it from these files with `python benchmarks/public/site_data.py`.
