@@ -1,0 +1,175 @@
+diff -ruN a/harness/claude_plugin_agent.py b/harness/claude_plugin_agent.py
+--- a/harness/claude_plugin_agent.py
++++ b/harness/claude_plugin_agent.py
+@@ -18,6 +18,11 @@
+             "mcp__plugin_honcho_honcho__create_conclusion",
+             "mcp__plugin_honcho_honcho__delete_conclusion",
+         ]}}
++    if provider == "hippo-memory":
++        return {"HIPPO_READ_ONLY": "1"}, {"permissions": {"deny": [
++            f"mcp__plugin_hippo-memory_hippo-memory__{tool}" for tool in (
++                "hippo_remember", "hippo_outcome", "hippo_learn", "hippo_resolve", "hippo_share")
++        ]}}
+     raise ValueError("Unsupported Claude evaluation plugin")
+ 
+ 
+@@ -49,10 +54,11 @@
+         setup = {"plugin_dirs": [], "env": {}}
+         switches, settings = {}, {}
+     else:
+-        setup = configure_plugin(provider, home, project, Path(request["plugin_source"]), {
+-            "namespace": request["namespace"], "api_url": request["api_url"],
+-            "api_key": os.environ[provider.upper() + "_API_KEY"],
+-        })
++        setup = configure_plugin(provider, home, project, Path(request["plugin_source"]), (
++            {"model_cache": request["model_cache"]} if provider == "hippo-memory" else {
++                "namespace": request["namespace"], "api_url": request["api_url"],
++                "api_key": os.environ[provider.upper() + "_API_KEY"],
++            }))
+         switches, settings = evaluation_settings(provider)
+     mcp = home / "apps.json"
+     mcp.write_text(json.dumps({"mcpServers": {"dolphinbench_apps": {
+diff -ruN a/harness/claude_plugin_setup.py b/harness/claude_plugin_setup.py
+--- a/harness/claude_plugin_setup.py
++++ b/harness/claude_plugin_setup.py
+@@ -14,7 +14,7 @@
+ from typing import Any
+ 
+ 
+-_PROVIDERS = frozenset({"builtin", "mem0", "honcho", "hindsight", "supermemory"})
++_PROVIDERS = frozenset({"builtin", "mem0", "honcho", "hindsight", "supermemory", "hippo-memory"})
+ 
+ 
+ def _required(settings: dict[str, Any], name: str) -> str:
+@@ -127,6 +127,12 @@
+     result: dict[str, Any] = {"env": {}, "plugin_dirs": [], "settings": {}}
+     if provider == "builtin":
+         return result
++    if provider == "hippo-memory":
++        # Hippo keeps its store in the agent's home, so it has no namespace, key or URL.
++        result["plugin_dirs"] = [str(_plugin_root(source))]
++        result["env"] = {"HIPPO_HOME": str(home / ".hippo"),
++                         "HIPPO_MODEL_CACHE": _required(settings, "model_cache")}
++        return result
+ 
+     namespace = _required(settings, "namespace")
+     api_key = _required(settings, "api_key")
+diff -ruN a/harness/run_simulation.py b/harness/run_simulation.py
+--- a/harness/run_simulation.py
++++ b/harness/run_simulation.py
+@@ -945,7 +945,7 @@
+ 
+ def _load_exact_memory_identity(path_value: str | None, provider: str) -> dict[str, str]:
+     """Load the explicitly supplied, already-seeded retrieval identity."""
+-    if provider not in _EXTERNAL_MEMORY_PROVIDERS | {_CLAUDE_NATIVE_MEMORY_PROVIDER}:
++    if provider not in _EXTERNAL_MEMORY_PROVIDERS | {_CLAUDE_NATIVE_MEMORY_PROVIDER, "hippo-memory"}:
+         raise RuntimeError(
+             "unsupported memory provider for an isolated Claude Code test run"
+         )
+@@ -969,6 +969,11 @@
+         if not isinstance(config_dir, str) or not Path(config_dir).is_dir():
+             raise RuntimeError("Claude native-memory seed directory is missing or unreadable")
+         return {"seed_config_dir": str(Path(config_dir).resolve())}
++    if provider == "hippo-memory":
++        store = identity.get("store_sha256")
++        if not isinstance(store, str) or not store:
++            raise RuntimeError("Hippo identity must name the post-drain store hash of its seed")
++        return {"store_sha256": store}
+     if provider == "mem0":
+         user_id = identity.get("user_id") or identity.get("userId")
+         if not isinstance(user_id, str) or not user_id:
+@@ -1058,7 +1063,7 @@
+     allowed_tools = [
+         *(f"mcp__dolphinbench_apps__{tool}" for tool in app_tools),
+     ]
+-    if provider not in {_CLAUDE_NATIVE_MEMORY_PROVIDER, "mem0", "honcho"}:
++    if provider not in {_CLAUDE_NATIVE_MEMORY_PROVIDER, "mem0", "honcho", "hippo-memory"}:
+         raise RuntimeError(
+             "This retained runner does not execute Claude external-memory evaluations."
+         )
+@@ -1111,7 +1116,7 @@
+         )
+     provider = args.provider
+     plugin_connection = None
+-    if provider in {"mem0", "honcho", _CLAUDE_NATIVE_MEMORY_PROVIDER}:
++    if provider in {"mem0", "honcho", _CLAUDE_NATIVE_MEMORY_PROVIDER, "hippo-memory"}:
+         payload = json.loads(Path(args.memory_provider_identity_path).read_text())
+         plugin_connection = payload.get("claude_plugin")
+         if not isinstance(plugin_connection, dict) or plugin_connection.get("provider") != provider:
+diff -ruN a/reference/execution/claude_agent.py b/reference/execution/claude_agent.py
+--- a/reference/execution/claude_agent.py
++++ b/reference/execution/claude_agent.py
+@@ -8,7 +8,6 @@
+ 
+ from harness.claude_driver import ClaudeResult, _trace_events
+ from reference.execution.agent_container import image_backend
+-from reference.execution.modal_agent import ModalAgentContainer
+ 
+ 
+ ROOT = Path(__file__).resolve().parents[2]
+@@ -17,10 +16,15 @@
+ def run_plugin(message, *, connection, mcp_config, test_root, env, model,
+                narrative_time=None, timeout=1800, _startup_attempt=0):
+     image = connection["agent_image"]
+-    if image_backend(image) != "modal-sandbox":
++    if image == "local-bwrap":
++        # One root bubblewrap sandbox per test on this host, in place of one Modal Sandbox.
++        from reference.execution.local_bwrap_agent import LocalBwrapAgentContainer as AgentContainer
++    elif image_backend(image) != "modal-sandbox":
+         raise ValueError("Claude plugin evaluation requires a clean Modal agent image")
++    else:
++        from reference.execution.modal_agent import ModalAgentContainer as AgentContainer
+     provider = connection["provider"]
+-    if provider not in {"mem0", "honcho", "claude_native_memory"}:
++    if provider not in {"mem0", "honcho", "claude_native_memory", "hippo-memory"}:
+         raise ValueError("Unsupported Claude evaluation plugin")
+     apps = mcp_config["mcpServers"]["dolphinbench_apps"]
+     with tempfile.TemporaryDirectory(prefix="db-claude-agent-") as raw:
+@@ -42,7 +46,9 @@
+             "home": connection["home"], "project": connection["project"],
+             "app_tools": connection["app_tools"],
+         }
+-        if provider != "claude_native_memory":
++        if provider == "hippo-memory":
++            request.update({"plugin_source": connection["plugin_source"], "model_cache": connection["model_cache"]})
++        elif provider != "claude_native_memory":
+             request.update({
+                 "namespace": connection["namespace"], "api_url": connection["api_url"],
+                 "plugin_source": connection["plugin_source"],
+@@ -52,7 +58,7 @@
+         if "CLAUDE_CODE_EFFORT_LEVEL" in env:
+             environment["CLAUDE_CODE_EFFORT_LEVEL"] = env["CLAUDE_CODE_EFFORT_LEVEL"]
+         endpoints, ports = {}, {}
+-        if provider != "claude_native_memory":
++        if provider not in {"claude_native_memory", "hippo-memory"}:
+             key = provider.upper() + "_API_KEY"
+             environment[key] = "evaluation-read-only"
+             endpoints = {"memory": {
+@@ -66,7 +72,7 @@
+         returned = Path(test_root) / ("agent-output" if not _startup_attempt
+                                       else f"agent-output-retry-{_startup_attempt}")
+         returned.mkdir()
+-        runner = ModalAgentContainer(
++        runner = AgentContainer(
+             image, payload, ["python", "-m", "harness.claude_plugin_agent"], environment,
+             [apps["command"], *apps.get("args", [])], {**os.environ, **apps.get("env", {})},
+             endpoints=endpoints, ports=ports, reuse_key=f"claude-plugin-{provider}",
+diff -ruN a/reference/runtimes/claude_code.py b/reference/runtimes/claude_code.py
+--- a/reference/runtimes/claude_code.py
++++ b/reference/runtimes/claude_code.py
+@@ -648,6 +648,7 @@
+         "honcho": {"HONCHO_API_KEY", "HONCHO_ENDPOINT", "HONCHO_WORKSPACE", "HONCHO_PEER_NAME", "HONCHO_AI_PEER"},
+         "hindsight": set(),
+         "supermemory": {"SUPERMEMORY_CC_API_KEY", "SUPERMEMORY_API_URL", "SUPERMEMORY_MCP_URL", "SUPERMEMORY_REPO_TAG"},
++        "hippo-memory": {"HIPPO_HOME", "HIPPO_MODEL_CACHE"},
+     }
+     if provider not in allowed or set(plugin_env) - allowed[provider]:
+         raise ValueError("Unexpected environment settings for this plugin")
+@@ -669,6 +670,7 @@
+     "honcho": ("mcp__plugin_honcho_honcho__*",),
+     "hindsight": ("mcp__hindsight__*",),
+     "supermemory": ("mcp__plugin_supermemory_supermemory__*",),
++    "hippo-memory": ("mcp__plugin_hippo-memory_hippo-memory__*",),
+ }
+ _CREDENTIAL_FIELD_NAMES = frozenset({
+     "api_key",
