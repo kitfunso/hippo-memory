@@ -71,7 +71,7 @@ const meta = (x: Cell) => [x.system, x.model, x.detail].filter(Boolean).join(' Â
             return (
               <td role="cell" class="px-3 py-4 max-md:p-0">
                 <span class="mb-1 block text-xs text-ink-3 md:hidden">{c}</span>
-                <a href={x.url} target="_blank" rel="noopener noreferrer" class:list={['font-mono tabular-nums underline decoration-rule-strong underline-offset-4 hover:text-accent hover:decoration-accent', x.muted ? 'text-ink-3' : 'font-medium text-ink']}>{x.value}<span class="sr-only"> ({x.system ?? c}, published source, opens in new tab)</span></a>
+                <a href={x.url} target="_blank" rel="noopener noreferrer" class:list={['font-mono tabular-nums underline-offset-4 hover:text-accent hover:underline hover:decoration-accent', x.muted ? 'font-normal text-ink-3 no-underline' : 'font-medium text-ink underline decoration-rule-strong']}>{x.value}<span class="sr-only"> ({x.system ?? c}, published source, opens in new tab)</span></a>
                 <span class:list={['mt-1 block text-xs [overflow-wrap:break-word]', x.muted ? 'text-ink-3' : 'text-ink-2']}>{meta(x)}</span>
               </td>
             );

@@ -8,7 +8,7 @@
     "Hindsight",
     "EverMemOS",
     "Memobase",
-    "Best other"
+    "Other"
   ],
   "official": [
     {
@@ -38,7 +38,7 @@
           "url": "https://arxiv.org/html/2504.19413",
           "muted": false
         },
-        "Best other": {
+        "Other": {
           "value": "68.44",
           "system": "Mem0g",
           "model": "gpt-4o-mini",
@@ -75,7 +75,7 @@
           "url": "https://arxiv.org/html/2512.12818v1",
           "muted": false
         },
-        "Best other": {
+        "Other": {
           "value": "86.0",
           "system": "EmergenceMem Internal",
           "model": "gpt-4o-2024-08-06",
@@ -136,7 +136,7 @@
           "url": "https://arxiv.org/html/2507.03724v4",
           "muted": false
         },
-        "Best other": {
+        "Other": {
           "value": "56.8",
           "system": "MemU",
           "model": "gpt-4o-mini",
@@ -189,7 +189,7 @@
           "url": "https://arxiv.org/html/2602.01313v3",
           "muted": false
         },
-        "Best other": {
+        "Other": {
           "value": "37.44",
           "system": "Full Context",
           "model": "GPT-4.1-mini",
@@ -250,8 +250,69 @@
           "url": "https://arxiv.org/html/2511.03506v3",
           "muted": false
         },
-        "Best other": {
+        "Other": {
           "value": "54.66",
+          "system": "Mem0-Graph",
+          "model": "GPT-4o",
+          "detail": null,
+          "url": "https://arxiv.org/html/2511.03506v3",
+          "muted": false
+        }
+      }
+    },
+    {
+      "name": "HaluMem-Long",
+      "task": "Hallucination control, GPT-4o answers",
+      "tag": "official setup, with a caveat",
+      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. The run paused when the OpenAI credit ran out on 16 Nov, so the row has no score yet. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
+      "hippo": {
+        "value": null,
+        "setting": null,
+        "status": "paused"
+      },
+      "cells": {
+        "Mem0": {
+          "value": "28.11",
+          "system": null,
+          "model": "GPT-4o",
+          "detail": null,
+          "url": "https://arxiv.org/html/2511.03506v3",
+          "muted": false
+        },
+        "Zep": {
+          "value": "50.19",
+          "system": null,
+          "model": "GPT-4o",
+          "detail": null,
+          "url": "https://arxiv.org/html/2511.03506v3",
+          "muted": false
+        },
+        "MemOS": {
+          "value": "64.44",
+          "system": null,
+          "model": "GPT-4o",
+          "detail": null,
+          "url": "https://arxiv.org/html/2511.03506v3",
+          "muted": false
+        },
+        "Supermemory": {
+          "value": "53.77",
+          "system": null,
+          "model": "GPT-4o",
+          "detail": null,
+          "url": "https://arxiv.org/html/2511.03506v3",
+          "muted": false
+        },
+        "Memobase": {
+          "value": "33.60",
+          "system": null,
+          "model": "GPT-4o",
+          "detail": null,
+          "url": "https://arxiv.org/html/2511.03506v3",
+          "muted": false
+        },
+        "Other": {
+          "value": "32.44",
           "system": "Mem0-Graph",
           "model": "GPT-4o",
           "detail": null,
@@ -287,7 +348,7 @@
           "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/honcho/README.md",
           "muted": false
         },
-        "Best other": {
+        "Other": {
           "value": "26.3",
           "system": "Built-in",
           "model": "Claude Code, Sonnet 5",
@@ -358,7 +419,7 @@
           "url": "https://arxiv.org/html/2512.12818v1",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "90.0",
           "system": "Backboard",
           "model": "not stated",
@@ -427,7 +488,7 @@
           "url": "https://evermind.ai/blogs/everos-sota-results-across-four-memory-benchmarks-and-what-it-means-for-llm-agents",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "94.87",
           "system": "Mastra Observational Memory",
           "model": "gpt-5-mini",
@@ -468,7 +529,7 @@
           "url": "https://arxiv.org/html/2501.13956v1",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "98.0",
           "system": "Full-conversation baseline",
           "model": "gpt-4o-mini",
@@ -497,7 +558,7 @@
           "url": "https://arxiv.org/html/2501.13956v1",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "98.0",
           "system": "Full-conversation baseline",
           "model": "gpt-4o-mini",
@@ -558,7 +619,7 @@
           "url": "https://arxiv.org/html/2507.03724v4",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "56.8",
           "system": "MemU",
           "model": "gpt-4o-mini",
@@ -595,7 +656,7 @@
           "url": "https://evermind.ai/blogs/top-ai-memory-systems-benchmarked-in-2026",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "55.2",
           "system": "Qwen3-4B agentic memory",
           "model": "Qwen3-4B-Instruct-2507",
@@ -656,7 +717,7 @@
           "url": "https://arxiv.org/html/2507.03724v4",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "92.15",
           "system": "Claude 3 Sonnet + RAG",
           "model": "Claude 3 Sonnet",
@@ -709,7 +770,7 @@
           "url": "https://arxiv.org/html/2602.01313v3",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "72.61",
           "system": "Full Context",
           "model": "Gemini-3-Flash",
@@ -746,7 +807,7 @@
           "url": "https://hindsight.vectorize.io/blog/2026/04/02/beam-sota",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "79.0",
           "system": "cognee",
           "model": "not stated",
@@ -783,7 +844,7 @@
           "url": "https://hindsight.vectorize.io/blog/2026/04/02/beam-sota",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "35.9",
           "system": "LIGHT",
           "model": "Llama-4-Maverick",
@@ -828,7 +889,7 @@
           "url": "https://hindsight.vectorize.io/blog/2026/04/02/beam-sota",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "33.6",
           "system": "LIGHT",
           "model": "Llama-4-Maverick",
@@ -873,7 +934,7 @@
           "url": "https://hindsight.vectorize.io/blog/2026/04/02/beam-sota",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "up to 67.0",
           "system": "cognee",
           "model": "not stated",
@@ -894,73 +955,12 @@
         "status": null
       },
       "cells": {
-        "Best other": {
+        "Other": {
           "value": "92.9",
           "system": "MemPalace",
           "model": "not stated",
           "detail": null,
           "url": "https://vectorize.io/articles/mempalace-benchmarks",
-          "muted": true
-        }
-      }
-    },
-    {
-      "name": "HaluMem-Long",
-      "task": "Hallucination control, Sonnet 5 answers",
-      "tag": "our own setup",
-      "reason": "Question answering only. The paper answers and judges with GPT-4o; this run used Sonnet 5 and gpt-5.6-sol, and it stopped on 17 Nov before any answer. The GPT-4o run stopped when the OpenAI credit ran out on 16 Nov. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
-      "hippo": {
-        "value": null,
-        "setting": null,
-        "status": "stopped"
-      },
-      "cells": {
-        "Mem0": {
-          "value": "28.11",
-          "system": null,
-          "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
-          "muted": true
-        },
-        "Zep": {
-          "value": "50.19",
-          "system": null,
-          "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
-          "muted": true
-        },
-        "MemOS": {
-          "value": "64.44",
-          "system": null,
-          "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
-          "muted": true
-        },
-        "Supermemory": {
-          "value": "53.77",
-          "system": null,
-          "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
-          "muted": true
-        },
-        "Memobase": {
-          "value": "33.60",
-          "system": null,
-          "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
-          "muted": true
-        },
-        "Best other": {
-          "value": "32.44",
-          "system": "Mem0-Graph",
-          "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
           "muted": true
         }
       }
@@ -984,7 +984,7 @@
           "url": "https://www.cognee.ai/knowledge-graph-memory-benchmarks",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "84.1",
           "system": "Cognee",
           "model": "not stated",
@@ -1021,7 +1021,7 @@
           "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/honcho/README.md",
           "muted": true
         },
-        "Best other": {
+        "Other": {
           "value": "26.3",
           "system": "Built-in",
           "model": "Claude Code, Sonnet 5",
