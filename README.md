@@ -2,7 +2,7 @@
 
 **One memory for every agent you'll ever use.**
 
-hippo saves what you teach one coding agent in your repo, and your other agents read it, so switching agents stops meaning starting over.
+Inspired by the human hippocampus, hippo saves what you teach one coding agent in your repo, and your other agents read it, so switching agents stops meaning starting over.
 
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![npm downloads](https://img.shields.io/npm/dm/hippo-memory)](https://npmjs.com/package/hippo-memory)

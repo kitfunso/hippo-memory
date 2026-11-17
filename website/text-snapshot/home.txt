@@ -7,7 +7,7 @@ Docs
 GitHub
 Install
 One memory for every agent you'll ever use
-hippo saves what you teach one coding agent in your repo, and your other agents read it, so switching agents stops meaning starting over.
+Inspired by the human hippocampus, hippo saves what you teach one coding agent in your repo, and your other agents read it, so switching agents stops meaning starting over.
 Install hippo Copy setup prompt
 works with Claude Code Codex Cursor Pi OpenClaw OpenCode any MCP client
 N See hippo in action
