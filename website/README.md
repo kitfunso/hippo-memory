@@ -21,7 +21,10 @@ Graph card per page (`public/og/<slug>.png`, captioned with the page's `<title>`
 reads the built pages, so after adding a page or changing a title run `npm run build`,
 then `node scripts/make-images.mjs`, then `npm run build` again so the page links its own
 card; a page without one uses `/og/home.png`. It needs Chrome (`CHROME=<path>` if Chrome
-is not in its default place). `--social <file.png>` also draws the 1280x640 GitHub social
+is not in its default place). It records each card's title in `scripts/og-titles.json`, and
+`npm run build` fails when a page title differs from its card's, so a card never keeps an old
+caption. The card link carries a hash of the image (`/og/home.png?v=<hash>`), because X and
+LinkedIn keep an image they fetched under the same link. `--social <file.png>` also draws the 1280x640 GitHub social
 preview, which is uploaded by hand in the repo settings.
 
 ## Deploy (Cloudflare Pages)
