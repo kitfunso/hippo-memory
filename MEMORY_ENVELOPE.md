@@ -22,7 +22,7 @@ Every row in `memories` carries the canonical envelope as of schema v14 (A3) + v
 
 ## CLI surface (v15)
 
-- `--kind` accepts `distilled` (default) or `superseded` only. `raw` is reserved for ingestion connectors (E1.x: Slack/Jira/Gmail) that route deletions through `archiveRawMemory`. `hippo forget` and conflict resolution abort on `kind='raw'` via the append-only trigger, and sleep never deletes one (the decay pass keeps a faded raw row in place, and the quality audit skips raw rows), so exposing `--kind raw` would create unforgettable memories. `archived` is an internal sentinel set only inside `archiveRawMemory`'s SAVEPOINT.
+- `--kind` accepts `distilled` (default) or `superseded` only. `raw` is reserved for ingestion connectors (E1.x: Slack/Jira/Gmail) and for the messages session capture saves whole (`src/surface/capture/user-messages.ts`); their removal goes through `archiveRawMemory` (`hippo forget <id> --archive --reason <why>`). `hippo forget` and conflict resolution abort on `kind='raw'` via the append-only trigger, and sleep never deletes one (the decay pass keeps a faded raw row in place, and the quality audit skips raw rows), so exposing `--kind raw` would create unforgettable memories. `archived` is an internal sentinel set only inside `archiveRawMemory`'s SAVEPOINT.
 - `--scope <value>` writes the envelope `scope` column AND adds a `scope:<value>` tag (additive dual-write). Recall's `--scope` filter currently matches the tag form. When envelope-column-based filtering lands (post-A5), this dual-write becomes a transition aid; until then the duplication is intentional.
 - `--owner <value>` and `--artifact-ref <uri>` are passed through unchanged; format is advisory (`user:<id>` / `agent:<id>` for owner; URI scheme for artifact_ref).
 
@@ -30,7 +30,7 @@ Every row in `memories` carries the canonical envelope as of schema v14 (A3) + v
 
 - **Do not use `INSERT OR REPLACE` on `memories`.** SQLite fires the `BEFORE DELETE` trigger during conflict resolution; on a `kind='raw'` row this aborts the upsert. Use `upsertEntryRow` (ON CONFLICT DO UPDATE) in `src/store/entry-row.ts` or `archiveRawMemory` for raw rows.
 - **Do not directly `DELETE FROM memories` for `kind='raw'`.** Always go through `archiveRawMemory(db, id, { reason, who })` so the audit trail in `raw_archive` is preserved. A cleanup pass that deletes rows (decay, dedup, the quality audit) must skip raw rows: one refused DELETE rolls back the whole batch, and the same row refuses it again on every later run.
-- **Ingestion code must declare `kind` explicitly** when writing genuinely raw transcripts. The default in `createMemory()` is `'distilled'`; current callers (`importers.ts` for ChatGPT/Claude/Cursor pastes, `capture.ts` for session capture) keep this default because their content is curated/processed, not raw transcript. When E1.x connectors land (Slack/Jira/Gmail), they MUST set `kind: 'raw'` explicitly.
+- **Ingestion code must declare `kind` explicitly** when writing genuinely raw transcripts. The default in `createMemory()` is `'distilled'`; `importers.ts` (ChatGPT/Claude/Cursor pastes) and the lessons `capture.ts` extracts keep this default because their content is processed, not raw transcript. The messages session capture saves whole are raw transcript, so `capture.ts` writes them with `kind: 'raw'`, an `owner` and an `artifact_ref`. When E1.x connectors land (Slack/Jira/Gmail), they MUST set `kind: 'raw'` explicitly.
 
 ## Surfacing
 

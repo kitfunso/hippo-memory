@@ -163,9 +163,11 @@ export interface HippoConfig {
     maxVectors: number;
   };
   /** Session capture. `followUpRules: 'model'` sends the person's scrubbed turns after the first to
-   * Anthropic (ANTHROPIC_API_KEY), which picks the sentences that state a lasting rule. Default 'off'. */
+   * Anthropic (ANTHROPIC_API_KEY), which picks the sentences that state a lasting rule. Default 'off'.
+   * `userMessages` saves each message the person types as a raw row. Default true. */
   capture: {
     followUpRules: 'off' | 'model';
+    userMessages: boolean;
   };
   /** What the composition root read from the environment for this command or request;
    * config.json never sets it. */
@@ -317,6 +319,7 @@ export const DEFAULT_CONFIG: HippoConfig = {
   },
   capture: {
     followUpRules: 'off',
+    userMessages: true,
   },
 };
 

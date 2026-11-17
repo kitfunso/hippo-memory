@@ -1,4 +1,4 @@
-import { MemoryEntry, EXTRACTED_TAG, Layer } from '../../base/memory/entry.js';
+import { MemoryEntry, EXTRACTED_TAG, Layer, isUserMessage } from '../../base/memory/entry.js';
 import {
   calculateStrength,
   type DecayBasis,
@@ -57,6 +57,8 @@ export async function detectConflicts(
       entry.layer !== Layer.Semantic &&
       // An unreviewed quarantined row must not taint a visible memory as conflicted.
       !isQuarantineScope(entry.scope ?? null) &&
+      // A message is a dated record of what the person said, not a claim kept true.
+      !isUserMessage(entry) &&
       (rescuedIds.has(entry.id) ||
         calculateStrength(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
     if (!live) continue;

@@ -111,7 +111,7 @@ const CASES: KeyCase[] = [
     badField: { name: 'maxVectors', value: 'many', reads: 200_000 },
   },
   {
-    ...block('capture', { followUpRules: 'model' }),
+    ...block('capture', { followUpRules: 'model', userMessages: false }),
     bad: 'model',
     badField: { name: 'followUpRules', value: 'gpt', reads: 'off' },
   },

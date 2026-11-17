@@ -5,7 +5,7 @@
 import type { ContextWith } from '../../api/types.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import { createMemory, ERROR_TAG } from '../../base/memory/entry.js';
+import { createMemory, ERROR_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import {
   failureHash,
   failureSignature,
@@ -22,6 +22,8 @@ export type FailureTarget = Pick<
   'tenantId' | 'store' | 'config'
 > & {
   readonly infra: Pick<InfraPorts, 'clock'>;
+  /** Embeds a stored lesson off the hook's path; without it the row has no vector. */
+  readonly embed?: (entry: MemoryEntry) => void;
 };
 
 /**
@@ -97,7 +99,7 @@ export interface LessonCaller {
 }
 
 export async function storeLesson(
-  { tenantId, store, config, infra }: FailureTarget,
+  { tenantId, store, config, infra, embed }: FailureTarget,
   text: string,
   caller?: LessonCaller,
 ): Promise<'stored' | 'duplicate'> {
@@ -121,5 +123,6 @@ export async function storeLesson(
       ? { entry, actor: CLI_ACTOR }
       : { entry: { ...entry, originProject: caller.originProject }, actor: caller.actor };
   await store.entryWrites.writeEntry(write);
+  embed?.(write.entry);
   return 'stored';
 }

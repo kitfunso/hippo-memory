@@ -1,6 +1,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createMemory, Layer, USER_RULE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
+import {
+  createMemory,
+  isUserMessage,
+  Layer,
+  USER_MESSAGE_TAG,
+  USER_RULE_TAG,
+  type MemoryEntry,
+} from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { ruleReplaces } from '../../base/memory/rule-replaces.js';
 import { isCertainReason, storedDefect } from '../../base/memory/memory-quality.js';
@@ -32,6 +39,7 @@ import type { StoreGroups } from '../../base/ports/store.js';
 import type { Llm } from '../../base/ports/llm.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
+import { userMessageItems, userMessageRef } from './user-messages.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -44,6 +52,11 @@ export interface CaptureOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   sessionTurns?: readonly SessionTurn[];
+  /** The session the turns came from; without it a transcript's file name stands in. */
+  sessionId?: string;
+  /** Save the messages the person typed too. Only a session-end worker sets it, and only for the
+   * folder's own store, so a scanned transcript or the global store never gets them. */
+  saveMessages?: boolean;
   /** False when `sessionTurns` is a later slice of the session (a turn capture), so its first user
    * turn answers the agent. */
   fromStart?: boolean;
@@ -133,7 +146,7 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 
   const read = readCaptureTexts(options);
   if (read === null) return;
-  const { texts, userTexts, firstFollowUp, followUps } = read;
+  const { texts, userTexts, firstFollowUp, followUps, turns } = read;
 
   if (texts.every((text) => text.trim().length === 0)) {
     console.log('No text to capture from.');
@@ -147,7 +160,13 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
   const dedup = await captureDedup(target.store.folderFiles, options);
   const rules = await modelRules(target, dedup, followUps);
   const patterned = extractFromTexts(scrubbed, userTexts, firstFollowUp);
-  const extracted = scrubbedItems(withFollowUpRules(patterned, rules, scrub), scrub);
+  // A message dedupes only against messages, so a rule it states is kept as a rule too.
+  const keepsMessages = options.saveMessages === true && target.config.capture.userMessages;
+  const messages = keepsMessages ? userMessageItems(turns, scrub) : [];
+  const extracted = [
+    ...scrubbedItems(withFollowUpRules(patterned, rules, scrub), scrub),
+    ...messages,
+  ];
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
@@ -188,6 +207,7 @@ async function captureFromCli(
   const writeOpts: CaptureWriteOptions = {
     tenantId: options.global ? undefined : options.tenantId,
     originProject: options.originProject,
+    sessionId: options.sessionId ?? transcriptSession(options.transcriptPath),
     lean: false,
     dedup,
     now: evalClock()(),
@@ -196,6 +216,11 @@ async function captureFromCli(
     return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys, ruleKeys);
   }
   return previewCapture({ store, config }, writeOpts, extracted, keys, ruleKeys);
+}
+
+/** A Claude Code or Codex transcript is named for its session. */
+function transcriptSession(transcriptPath: string | undefined): string | undefined {
+  return transcriptPath ? path.basename(transcriptPath, '.jsonl') : undefined;
 }
 
 /** The items with `scrub` applied to each text, as a path stores them; scrubbing can make two
@@ -207,11 +232,20 @@ export function scrubbedItems(
   return oncePerText(items.map((item) => ({ ...item, content: scrub(item.content) })));
 }
 
+/** A message is the transcript and an item is what capture made of it, so each dedupes in its own
+ * lane: the same text can be both, and a held message never stops a rule. */
+function laneKey(item: { readonly content: string; readonly tags?: readonly string[] }): string {
+  const key = duplicateKey(item.content);
+  return isUserMessage(item) ? `${USER_MESSAGE_TAG}\n${key}` : key;
+}
+
 /** Held keys, each twin's clean text too when a held row has its old text and repair keeps that
- * row: a pinned row, or one whose text is no certain defect. */
-export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
+ * row: a pinned row, or one whose text is no certain defect. A held message adds its lane key. */
+export function heldKeysOf(all: readonly HeldText[], twins: readonly BoldTwin[]): Set<string> {
+  const rows = all.filter((row) => !isUserMessage(row));
   const keys = storedTextKeys(rows);
   for (const key of twinKeys(rows, twins)) keys.add(key);
+  for (const row of all) if (isUserMessage(row)) keys.add(laneKey(row));
   return keys;
 }
 
@@ -219,10 +253,11 @@ export function heldKeysOf(rows: readonly HeldText[], twins: readonly BoldTwin[]
  * but one the store's write replaces, which holds the rule's exact text, so a bold twin still
  * stops it. */
 export function ruleHeldKeysOf(
-  rows: readonly HeldText[],
+  all: readonly HeldText[],
   twins: readonly BoldTwin[],
   ruleProject: readonly string[],
 ): Set<string> {
+  const rows = all.filter((row) => !isUserMessage(row));
   const keys = storedTextKeys(rows.filter((row) => !ruleReplaces(row, ruleProject)));
   for (const key of twinKeys(rows, twins)) keys.add(key);
   return keys;
@@ -303,6 +338,8 @@ interface CaptureTexts {
   readonly userTexts: number;
   readonly firstFollowUp?: number;
   readonly followUps: string[];
+  /** Every turn of the session or slice, for the messages the person typed. */
+  readonly turns: readonly SessionTurn[];
 }
 
 /** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a
@@ -312,7 +349,7 @@ function readCaptureTexts(options: CaptureOptions): CaptureTexts | null {
   switch (options.source) {
     case 'stdin': {
       try {
-        return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0, followUps: [] };
+        return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0, followUps: [], turns: [] };
       } catch (err) {
         log.warn(`reading stdin failed: ${errorMessage(err)}`, errorFields(err));
         console.error('No input on stdin. Pipe text in or use --file <path>.');
@@ -331,7 +368,12 @@ function readCaptureTexts(options: CaptureOptions): CaptureTexts | null {
         process.exitCode = 1;
         return null;
       }
-      return { texts: [fs.readFileSync(options.filePath, 'utf8')], userTexts: 0, followUps: [] };
+      return {
+        texts: [fs.readFileSync(options.filePath, 'utf8')],
+        userTexts: 0,
+        followUps: [],
+        turns: [],
+      };
     }
     case 'last-session':
       return readSessionTexts(options);
@@ -363,6 +405,7 @@ function readSessionTexts(options: CaptureOptions): CaptureTexts | null {
     userTexts: users.length,
     firstFollowUp: opener,
     followUps: userTurns.slice(opener),
+    turns,
   };
 }
 
@@ -414,7 +457,7 @@ function planCapture(
   const plan: CapturePlan = { entries: [], keys: [], slots: [] };
   const firstSlot = new Map<string, number>();
   for (const item of extracted) {
-    const key = duplicateKey(item.content);
+    const key = laneKey(item);
     let slot = isHeld(item, key) ? -1 : firstSlot.get(key);
     if (slot === undefined) {
       slot = plan.entries.push(build(item)) - 1;
@@ -479,7 +522,7 @@ async function previewCapture(
 ): Promise<CaptureTally> {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const held = heldCheck(keys, ruleKeys);
-  const fresh = extracted.filter((item) => !held(item, duplicateKey(item.content)));
+  const fresh = extracted.filter((item) => !held(item, laneKey(item)));
   const refused = await rejections.refusedAmong(
     fresh.map((item) => {
       const entry = captureEntry(item, options, config.defaultHalfLifeDays);
@@ -488,7 +531,7 @@ async function previewCapture(
   );
   let next = 0;
   for (const item of extracted) {
-    if (held(item, duplicateKey(item.content))) {
+    if (held(item, laneKey(item))) {
       tally.skipped++;
       console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
     } else if (refused[next++] === true) {
@@ -509,6 +552,7 @@ function captureEntry(
   options: CaptureWriteOptions,
   baseHalfLifeDays: number,
 ): MemoryEntry {
+  if (isUserMessage(item)) return userMessageEntry(item, options, baseHalfLifeDays);
   // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in
   // 'default'. A rule the person stated is pinned, so it injects even when a later prompt shares
@@ -523,6 +567,33 @@ function captureEntry(
       source: 'capture',
       confidence: 'observed',
       pinned: stated,
+      tenantId: options.tenantId,
+      sourceSessionId: options.sessionId,
+      baseHalfLifeDays,
+    },
+    options.now,
+  );
+  if (options.originProject === undefined) return created;
+  return { ...created, originProject: projectId(options.originProject) };
+}
+
+/** A message the person typed is raw transcript, so it is stored as written (MEMORY_ENVELOPE.md)
+ * with its owner and source. */
+function userMessageEntry(
+  item: ExtractedItem,
+  options: CaptureWriteOptions,
+  baseHalfLifeDays: number,
+): MemoryEntry {
+  const created = createMemory(
+    item.content,
+    {
+      kind: 'raw',
+      layer: Layer.Episodic,
+      tags: [USER_MESSAGE_TAG],
+      source: USER_MESSAGE_TAG,
+      confidence: 'observed',
+      owner: `user:${options.actor ?? 'local'}`,
+      artifactRef: userMessageRef(options.sessionId, item.content),
       tenantId: options.tenantId,
       sourceSessionId: options.sessionId,
       baseHalfLifeDays,

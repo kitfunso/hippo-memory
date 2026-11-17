@@ -255,9 +255,9 @@ describe('context prints the handoff or the digest, never both', () => {
 
   it('hides the digest behind its own session handoff, even when it is the only memory', async () => {
     await claudeWorker('S1', claudeTranscript('s1'));
-    expect(loadAllEntries(path.join(repo, '.hippo'), 'default').map((e) => e.id)).toEqual([
-      sessionDigestId('default', 'S1'),
-    ]);
+    // The message saved whole is recall-only, so context never shows it.
+    const rows = loadAllEntries(path.join(repo, '.hippo'), 'default').filter((e) => !e.tags.includes('user-message'));
+    expect(rows.map((e) => e.id)).toEqual([sessionDigestId('default', 'S1')]);
     const text = await context('additional-context');
     expect(text).not.toContain('hippo handoff latest');
     expect(text).not.toContain('Changed:');
