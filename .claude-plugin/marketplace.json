@@ -5,13 +5,13 @@
     "url": "https://github.com/kitfunso/hippo-memory"
   },
   "metadata": {
-    "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents."
+    "description": "One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store."
   },
   "plugins": [
     {
       "name": "hippo-memory",
       "source": "./extensions/claude-code-plugin",
-      "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
+      "description": "One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.",
       "version": "0.6.2",
       "homepage": "https://github.com/kitfunso/hippo-memory",
       "license": "MIT"

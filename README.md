@@ -1,6 +1,6 @@
-# 🦛 Hippo
+# <img src="https://hippo-memory.com/logo.svg" alt="" width="48" height="42"> Hippo
 
-**Your corrections, remembered by Claude Code, Codex and Cursor.**
+**One memory for every agent you'll ever use.**
 
 Hippo is open-source memory that runs on your machine and gives the rules it captured back to the agent when a new session starts. In our Claude Code test on 29 repositories, adding it to built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.
 
