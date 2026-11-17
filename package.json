@@ -52,7 +52,7 @@
     "fmt": "oxfmt src tests scripts bin",
     "fmt:check": "oxfmt --check src tests scripts bin",
     "sbom": "node scripts/sbom.mjs",
-    "audit:security": "npm audit --audit-level=moderate && npm --prefix ui audit --audit-level=moderate",
+    "audit:security": "node scripts/checks/check-audit.mjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
     "build:ui": "cd ui && npm ci && npm run build",
