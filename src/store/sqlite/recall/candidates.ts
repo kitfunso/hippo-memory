@@ -2,7 +2,7 @@ import type { StoreModel } from '../runtime/open.js';
 import {
   type ConfidenceLevel,
   type MemoryEntry,
-  CAPTURED_NOTE_TAG,
+  RECALL_ONLY_TAGS,
   ERROR_TAG,
   Layer,
   schemaFitFrom,
@@ -408,8 +408,9 @@ export function listContextCandidates(
   filter: ContextCandidateFilter,
 ): MemoryEntry[] {
   // In the SQL, before the cap: a filter after it would let notes fill the cap and starve other rows.
+  const notRecallOnly = RECALL_ONLY_TAGS.map((tag) => `instr(tags_json, '"${tag}"') = 0`);
   const rowsWhere = contextRowsWhere(tenantId, filter, [
-    `(pinned = 1 OR instr(tags_json, '"${CAPTURED_NOTE_TAG}"') = 0)`,
+    `(pinned = 1 OR (${notRecallOnly.join(' AND ')}))`,
   ]);
   const { params } = rowsWhere;
   const cap = Math.max(0, Math.trunc(filter.cap));

@@ -125,6 +125,7 @@ async function captureCodexRollout(
     tenantId,
     originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
     sessionTurns: scan?.turns,
+    saveMessages: store === hippoRoot,
   };
   try {
     await runCapture(captureTarget(store, 'full'), captureOpts);

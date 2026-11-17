@@ -105,6 +105,7 @@ export async function captureFailureForCaller(
   let logged: FailureOutcome = 'store-failed';
   try {
     const caller = { actor: key.owner, originProject: req.project.name, origins: key.project };
+    // No embed: a server process keeps the model off its request path, as lean capture does.
     const outcome =
       failure.skip === null ? await storeLesson(ctx, failure.text, caller) : failure.skip;
     logged = outcome;

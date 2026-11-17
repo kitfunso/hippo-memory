@@ -96,7 +96,17 @@ function runSessionEndWork({
     capture: async (into, turns, originProject, fromStart) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;
       if (root === undefined) return false;
-      const ended = { tenantId, flags, transcriptPath, turns, originProject, fromStart, mode };
+      const saveMessages = into === ctx;
+      const ended = {
+        tenantId,
+        flags,
+        transcriptPath,
+        turns,
+        originProject,
+        fromStart,
+        mode,
+        saveMessages,
+      };
       return captureEndedSession(root, ended);
     },
     digest: (scan, key, log) =>
@@ -132,12 +142,23 @@ interface EndedCapture {
   readonly fromStart: boolean;
   /** The run's mode, not the flag: a worker also runs the requests other workers queued. */
   readonly mode: WorkerMode;
+  /** True for the folder's own store: the global one never gets what the person typed. */
+  readonly saveMessages: boolean;
 }
 
 /** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 async function captureEndedSession(
   store: string,
-  { tenantId, flags, transcriptPath, turns, originProject, fromStart, mode }: EndedCapture,
+  {
+    tenantId,
+    flags,
+    transcriptPath,
+    turns,
+    originProject,
+    fromStart,
+    mode,
+    saveMessages,
+  }: EndedCapture,
 ): Promise<boolean> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   try {
@@ -150,6 +171,8 @@ async function captureEndedSession(
       tenantId,
       originProject,
       sessionTurns: turns,
+      sessionId: stringFlag(flags, 'session-id'),
+      saveMessages,
       fromStart,
     });
     return true;

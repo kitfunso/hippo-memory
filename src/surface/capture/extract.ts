@@ -177,6 +177,14 @@ function pairedBold(line: string): number[] {
  * real pair goes; a glob, `2**10` or `**kwargs` has no partner and stays as written. */
 const boldPairs: Cutter = (line) => pairedBold(line).sort((a, b) => a - b);
 
+/** `text` without its paired bold markers, which can split an address or key past the scrubber. */
+export function withoutBold(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => cutOut(line, boldPairs(line)))
+    .join('\n');
+}
+
 /** `line` without the two characters at each of the sorted `cuts`, built in one pass. */
 function cutOut(line: string, cuts: readonly number[]): string {
   let out = '';

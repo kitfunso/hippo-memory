@@ -201,9 +201,14 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
   configKey(
     'capture',
-    block('an object like {"followUpRules": "model"}', D.capture, (read) => ({
-      followUpRules: read('followUpRules', choice(D.capture.followUpRules, 'off', 'model')),
-    })),
+    block(
+      'an object like {"followUpRules": "model", "userMessages": false}',
+      D.capture,
+      (read) => ({
+        followUpRules: read('followUpRules', choice(D.capture.followUpRules, 'off', 'model')),
+        userMessages: read('userMessages', flag(D.capture.userMessages)),
+      }),
+    ),
   ),
 ];
 

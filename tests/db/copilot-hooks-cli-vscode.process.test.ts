@@ -286,7 +286,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
 
-    expect(await stop(transcript)).toContain('Captured 1 items (0 skipped as duplicates');
+    expect(await stop(transcript)).toContain('Captured 2 items (0 skipped as duplicates');
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
 
@@ -307,7 +307,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     // The temp file shows the kill landed between the write and the rename.
     expect(fs.existsSync(sessionFile(`.cursor.json.${pid}.tmp`))).toBe(true);
 
-    expect(await stop(transcript)).toContain('Captured 0 items (1 skipped as duplicates');
+    expect(await stop(transcript)).toContain('Captured 0 items (2 skipped as duplicates');
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
     await waitFor(() => !sessionLockHeld(), { what: 'session lock released', timeoutMs: WORKER_WAIT_MS });
@@ -335,7 +335,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
     // The second worker has no preload, so two lines with this pid mean the first worker saved the cursor twice.
     expect(fault.saves()).toEqual([pid, pid]);
-    expect(readLog(logFile())).toContain('Captured 1 items (0 skipped as duplicates');
+    expect(readLog(logFile())).toContain('Captured 2 items (0 skipped as duplicates');
     expect(fs.existsSync(sessionFile('.queued'))).toBe(false);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
   });

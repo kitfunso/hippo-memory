@@ -1,5 +1,5 @@
 // Which rows a context call loads.
-import { isCapturedNote, type MemoryEntry } from '../../base/memory/entry.js';
+import { isRecallOnly, type MemoryEntry } from '../../base/memory/entry.js';
 import type {
   AmbientLoadResult,
   ContextCandidateFilter,
@@ -110,7 +110,7 @@ async function loadAmbientEntries(
     // SHORTCUT: a search filters notes after its limit, so a query matching 200 notes returns fewer rows or none;
     // push it into the search SQL if a store gets there.
     return {
-      entries: rows.filter((e) => ownTenant(e) && admit(e) && (e.pinned || !isCapturedNote(e))),
+      entries: rows.filter((e) => ownTenant(e) && admit(e) && (e.pinned || !isRecallOnly(e))),
     };
   }
   // The store applies the quality floor too, or its recent-N load stops short of a store whose
