@@ -23,7 +23,7 @@ export function printSlackWorkspacesUsage(): void {
 }
 
 export const USAGE_HEADER = `
-Hippo - Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+Hippo - One memory for every agent you'll ever use.
 
 Usage: hippo <command> [options]
 

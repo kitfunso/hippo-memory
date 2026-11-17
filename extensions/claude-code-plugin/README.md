@@ -1,12 +1,12 @@
 # Hippo Memory - Claude Code Plugin
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
 
-Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
+The plugin keeps what comes up as you work, such as a rule you stated, a tool call that failed or a fact that changed, and puts it back in front of Claude Code in later sessions. It is the alternative to the hooks `hippo init` installs. Use one, not both.
 
 ## Install
 
-### From marketplace (when published)
+### From the marketplace
 
 ```
 /plugin marketplace add kitfunso/hippo-memory
@@ -33,11 +33,11 @@ Install hippo CLI globally:
 npm install -g hippo-memory
 ```
 
-Initialize in your project:
+Initialize in your project. `--no-hooks` leaves the hooks to the plugin:
 
 ```bash
 cd your-project
-hippo init
+hippo init --no-hooks
 ```
 
 ## What It Does
@@ -91,14 +91,6 @@ claude-code-plugin/
   README.md
 ```
 
-## How It Differs from claude-mem
+## Model calls
 
-| | Hippo | claude-mem |
-|---|---|---|
-| Memory model | Decay + retrieval strengthening | Save everything |
-| API calls | None by default. If `ANTHROPIC_API_KEY` is set, `hippo sleep` sends memory text to Anthropic; `{"extraction":{"enabled":false}}` stops it | Uses Claude API for compression |
-| Cross-tool | Works across Claude Code, Codex, Cursor, OpenClaw | Claude Code only |
-| Token cost | No session-start context call; the per-prompt block, sent again only when it changes | Variable |
-| Outcome feedback | Yes (strengthens/weakens memories) | No |
-| Error priority | 2x half-life for errors | No distinction |
-| Memecoin | No | Yes ($CMEM on Solana) |
+Storing a memory makes no model call. The exception is `hippo sleep`, which sends text to Anthropic when `ANTHROPIC_API_KEY` is set, and `{"extraction":{"enabled":false}}` turns it off.

@@ -5,8 +5,8 @@ description: Project memory powered by Hippo. Use when starting a session, after
 
 # Hippo Memory
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
-Memories decay over time unless retrieved. Errors stick longer. Sleep consolidates.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
+Unused memories weaken over a year or two, each recall keeps one longer, and pinned rules never fade.
 
 ## At the start of a task
 
@@ -32,7 +32,7 @@ hippo remember "<the lesson in 1-2 sentences>" --tag <category>
 hippo remember "<what failed, why, and how you fixed it>" --error
 ```
 
-The `--error` flag doubles the half-life. Hard lessons don't fade quietly.
+The `--error` flag doubles the half-life, so the lesson lasts twice as long.
 
 ## After completing work successfully
 
@@ -51,6 +51,14 @@ hippo outcome --bad
 ```bash
 hippo recall "<what's going wrong>" --budget 2000 --why
 ```
+
+## When a stored fact is no longer true
+
+```bash
+hippo supersede <id> "<the new fact>"
+```
+
+The old memory leaves recall but stays on record.
 
 ## When making an architectural decision
 

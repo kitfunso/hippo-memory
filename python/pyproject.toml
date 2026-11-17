@@ -5,12 +5,12 @@ build-backend = "uv_build"
 [project]
 name = "hippo-memory-sdk"
 version = "0.3.2"
-description = "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents."
+description = "One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{name = "Kit", email = "skfsk27@gmail.com"}]
-keywords = ["memory", "ai-agents", "rag", "hippo-memory"]
+keywords = ["memory", "agent-memory", "ai-agents", "coding-agent", "mcp", "local-first", "hippo-memory"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",

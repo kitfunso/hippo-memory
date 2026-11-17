@@ -1,8 +1,8 @@
 # Hippo Memory - OpenClaw Plugin
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
 
-Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
+The plugin puts your project's memories in front of the OpenClaw agent at session start, saves the errors its tools hit and gives it hippo's memory tools. Claude Code, Codex, Cursor and any MCP client read the same store.
 
 ## Install
 
@@ -101,17 +101,9 @@ When `autoLearn` is enabled, the plugin captures tool errors as memories. To pre
 
 Errors that pass these three filters are stored with `hippo remember`.
 
-### How it differs from claude-mem
+### Model calls
 
-| | Hippo | claude-mem |
-|---|---|---|
-| Decay | Yes, 365-day half-life by default | No, saves everything |
-| Retrieval strengthening | Yes | No |
-| Outcome feedback | Yes | No |
-| Cross-tool | Claude Code, Codex, Cursor, OpenClaw | Claude Code only |
-| API calls | None by default. If `ANTHROPIC_API_KEY` is set, `hippo sleep` sends memory text to Anthropic; `{"extraction":{"enabled":false}}` stops it | Uses Claude API for compression |
-| Token cost | ~1500 tokens/session (configurable) | Variable |
-| Memecoin | No | Yes ($CMEM on Solana) |
+Storing a memory makes no model call. The exception is `hippo sleep`, which sends text to Anthropic when `ANTHROPIC_API_KEY` is set, and `{"extraction":{"enabled":false}}` turns it off.
 
 ## Requirements
 

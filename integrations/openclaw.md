@@ -15,7 +15,7 @@ workspace `.hippo/` store and automatically merges your shared `~/.hippo/` memor
 during `recall` and `context`.
 
 If you enable `autoSleep` in the plugin config, OpenClaw session-end
-consolidation now runs in a detached background worker. The session can end
+consolidation runs in a detached background worker. The session can end
 immediately while `hippo sleep` finishes in the background.
 
 Daily cadence is separate. `hippo init` registers the workspace and installs a
@@ -90,7 +90,7 @@ If you prefer using OpenClaw's skill system instead of patching AGENTS.md, creat
 ```markdown
 # Hippo Memory Skill
 
-Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.
 
 ## When to activate
 
