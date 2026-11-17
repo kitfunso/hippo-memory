@@ -26,7 +26,7 @@ const MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeLessThan|toBeLessThanOrEqual|toBeGr
 // By file and exact line, so an edited line is read again; the value says why a slow runner cannot fail it.
 const ALLOWED = new Map([
   [
-    'eval/token-eval-z0-turns.test.ts: expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);',
+    'eval/token-eval-z0-turns-resume-limits-and-planted-files.test.ts: expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);',
     "the bound is the same step's own span, taken in the same run, which a slow runner only widens",
   ],
   [

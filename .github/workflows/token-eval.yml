@@ -19,6 +19,7 @@ on:
       - 'tests/fixtures/z0-contract.ts'
       - 'tests/fixtures/z0-gen.ts'
       - 'tests/fixtures/z0-harness.ts'
+      - 'tests/fixtures/z0-turns-harness.ts'
       - 'vitest.config.ts'
       - 'vitest.eval.config.ts'
       - 'package.json'
