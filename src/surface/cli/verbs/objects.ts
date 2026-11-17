@@ -37,6 +37,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   decide: verb(() => import('../decisions.js'), 'handleDecide', {
+    readOnly: 'refuse',
     needs: ['objects'],
     flags: { values: ['context', 'status', 'supersedes'], numbers: ['limit'] },
     usage: [
@@ -176,6 +177,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   invalidate: verb(() => import('../curate.js'), 'handleInvalidate', {
+    readOnly: 'refuse',
     destructive: true,
     flags: { switches: ['churn', 'dry-run'], values: ['id', 'reason'] },
     usage: [

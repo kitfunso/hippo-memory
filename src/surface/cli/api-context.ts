@@ -247,6 +247,7 @@ export function cliSecondStore(root: string): GlobalInReach {
 export function cliLedgerReach(hippoRoot: string): LedgerReach {
   return ledgerReachOf({
     reach: cliReach(hippoRoot, cliStore(hippoRoot), cliInfra().embedderFor),
+    config: cliConfig(hippoRoot),
   });
 }
 

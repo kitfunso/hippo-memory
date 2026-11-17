@@ -5,7 +5,7 @@ import type { RequiredStore, RecallWrites } from '../../base/ports/store.js';
 import type { TokenSurface } from '../../base/ports/store/ledger.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
-import { strengthOf, type Context } from '../types.js';
+import { readOnlyOf, strengthOf, type Context } from '../types.js';
 import { keepShownIds } from './last-recalled.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
@@ -230,7 +230,8 @@ export async function recordShownRecall(
   }
   const items = how.counts === 'none' ? 0 : shown.ids.length;
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.
-  if (shown.written && (how.counts === 'every' || items > 0)) await store.bumpRecallStats(items);
+  const counted = shown.written && !readOnlyOf(ctx) && (how.counts === 'every' || items > 0);
+  if (counted) await store.bumpRecallStats(items);
   // The ledger books text that was sent, so its row does not wait on the audit write.
   await recordTokens(ctx, how.ledger, {
     items,

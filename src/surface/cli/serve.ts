@@ -3,7 +3,13 @@
 import { randomBytes } from 'node:crypto';
 import { installCrashHandlers } from '../../base/util/crash-handlers.js';
 import { printDashboardBanner, reportListenFailure } from './dashboard-banner.js';
-import { envBodyTimeoutMs, envPort, envTlsCert, envTlsKey } from '../../base/util/env.js';
+import {
+  envBodyTimeoutMs,
+  envPort,
+  envReadOnly,
+  envTlsCert,
+  envTlsKey,
+} from '../../base/util/env.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -102,6 +108,8 @@ function keyRuleLine(hippoRoot: string): string {
 }
 
 export async function handleServe({ hippoRoot, flags }: CommandContext): Promise<void> {
+  // The server's own runtime and worker threads write, so the switch stops it rather than leak.
+  if (envReadOnly()) fail('hippo serve does not run under HIPPO_READ_ONLY=1; read with hippo mcp');
   requireInit(hippoRoot);
   const portRaw = stringFlag(flags, 'port') ?? envPort() ?? DEFAULT_SERVER_PORT;
   const port = Number(portRaw);

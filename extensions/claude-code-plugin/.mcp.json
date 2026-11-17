@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "hippo-memory": {
+      "command": "hippo",
+      "args": ["mcp"]
+    }
+  }
+}

@@ -17,7 +17,7 @@ import { selectBySearch } from './context-search.js';
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from '../recall/finish.js';
 import { keepShownIds } from '../recall/last-recalled.js';
-import type { Context, ContextWith } from '../types.js';
+import { readOnlyOf, type Context, type ContextWith } from '../types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import {
   NO_QUERY,
@@ -76,7 +76,7 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
   if (items.length === 0 && noSections) {
     // A query that found nothing is the coverage-gap signal, so it still gets a trace; pinned-only
     // stays read-only.
-    if (!plan.pinnedOnly) await traceEmptyContext(ctx, opts, plan);
+    if (!plan.pinnedOnly && !readOnlyOf(ctx)) await traceEmptyContext(ctx, opts, plan);
     return { entries: [], tokens: 0 };
   }
 
@@ -236,14 +236,17 @@ async function recordRetrieval(
     })),
   };
   const writes = { goalLog: [], audit: [], trace, strengthen: strengthenOf(ctx, retrievedIds) };
-  // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the
-  // recall without one.
-  const store = ctx.store;
-  const traceId = store.lastRecall
-    ? await store.lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
-    : await store.finishRecall(writes).then(() => null);
-  plan.obs?.traced(traceId);
-  await store.bumpRecallStats(selected.length);
+  // A read-only store keeps its rows; the reply still shows them as this retrieval left them.
+  if (!readOnlyOf(ctx)) {
+    // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the
+    // recall without one.
+    const store = ctx.store;
+    const traceId = store.lastRecall
+      ? await store.lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
+      : await store.finishRecall(writes).then(() => null);
+    plan.obs?.traced(traceId);
+    await store.bumpRecallStats(selected.length);
+  }
 
   // Replace selectedItems entries with markRetrieved-updated copies so the returned ContextResult
   // reflects post-recall state.

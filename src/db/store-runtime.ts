@@ -29,15 +29,26 @@ export function storeKey(hippoRoot: string): string {
   return path.resolve(hippoRoot, 'hippo.db');
 }
 
+/** What a root states when it makes its runtime. */
+export interface StoreRuntimeOptions {
+  /** Every connection opened under the runtime refuses writes once its schema is settled. */
+  readonly readOnly?: boolean;
+}
+
 export class StoreRuntime {
   /** Mirror and stats writes held back to at most one per interval per root. */
   readonly held = new HeldWrites();
+  readonly readOnly: boolean;
   readonly #settled = new Map<string, Set<string>>();
   readonly #open = new Set<OpenSession>();
   readonly #idle = new Map<string, DatabaseSyncLike[]>();
   readonly #background = new Set<string>();
   readonly #stats = new Map<string, StatsCounts>();
   readonly #detached = new DetachedSet();
+
+  constructor(opts: StoreRuntimeOptions = {}) {
+    this.readOnly = opts.readOnly === true;
+  }
 
   /** Whether `step` has run to its end on the store at `key`. */
   hasRun(key: string, step: string): boolean {

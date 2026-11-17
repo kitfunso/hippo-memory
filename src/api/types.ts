@@ -150,6 +150,11 @@ export function contextReach(
   return withConfig;
 }
 
+/** Whether the root runs under HIPPO_READ_ONLY=1, where a read skips the writes it would make. */
+export function readOnlyOf(ctx: Pick<Context, 'config'>): boolean {
+  return ctx.config.runtime?.readOnly === true;
+}
+
 /** Whether the store serves many people: the root's reach says, else the store's config for an
  * integrator's store. */
 export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {

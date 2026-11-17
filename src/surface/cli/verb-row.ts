@@ -41,6 +41,8 @@ export interface VerbRow {
   readonly destructive?: true;
   /** Unset: --dry-run is honoured exactly when the verb declares it; `false` refuses it even so. */
   readonly dryRun?: false | DryRunForm;
+  /** Under HIPPO_READ_ONLY=1, 'refuse' exits 1 and 'skip' exits 0 before the verb opens anything. */
+  readonly readOnly?: 'refuse' | 'skip';
 }
 
 export interface VerbSpec extends VerbRow {

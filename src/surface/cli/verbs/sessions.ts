@@ -157,6 +157,7 @@ export const SESSION_VERBS = {
     ],
   }),
   forget: verb(() => import('../curate.js'), 'handleForget', {
+    readOnly: 'refuse',
     destructive: true,
     scoped: true,
     flags: { switches: ['archive', 'dry-run'], values: ['reason'] },
@@ -194,6 +195,7 @@ export const SESSION_VERBS = {
     ],
   }),
   learn: verb(() => import('../learn.js'), 'handleLearn', {
+    readOnly: 'refuse',
     needs: ['lessonWrites', 'vectors', 'vectorWrites'],
     scoped: true,
     flags: { switches: ['git'], values: ['repos'], numbers: ['days'] },
@@ -206,6 +208,7 @@ export const SESSION_VERBS = {
     ],
   }),
   promote: verb(() => import('../transfer.js'), 'handlePromote', {
+    readOnly: 'refuse',
     scoped: true,
     flags: {},
     usage: [
@@ -214,6 +217,7 @@ export const SESSION_VERBS = {
     ],
   }),
   share: verb(() => import('../transfer.js'), 'handleShare', {
+    readOnly: 'refuse',
     needs: ['vectors', 'vectorWrites'],
     dryRun: {
       form: '--auto',
@@ -245,6 +249,7 @@ export const SESSION_VERBS = {
     ],
   }),
   import: verb(() => import('../memory-import.js'), 'handleImport', {
+    readOnly: 'refuse',
     flags: {
       switches: ['agents', 'dry-run', 'global'],
       values: ['chatgpt', 'claude', 'cursor', 'file', 'markdown', 'name', 'scope', 'vault'],
@@ -280,6 +285,7 @@ export const SESSION_VERBS = {
     ],
   }),
   capture: verb(() => import('../hooks/capture.js'), 'handleCapture', {
+    readOnly: 'skip',
     repairsCodexWrapper: true,
     flags: {
       switches: ['dry-run', 'global', 'last-session', 'stdin'],
@@ -334,6 +340,7 @@ export const SESSION_VERBS = {
     ],
   }),
   'session-end': verb(() => import('../hooks/session-end.js'), 'handleSessionEnd', {
+    readOnly: 'skip',
     // Its sleep step reads --dry-run, but the capture after it writes for real.
     dryRun: false,
     flags: {
@@ -360,6 +367,7 @@ export const SESSION_VERBS = {
     () => import('../hooks/session-end-worker.js'),
     'handleSessionEndWorker',
     {
+      readOnly: 'skip',
       needs: ['sessions', 'reports'],
       dryRun: false,
       flags: {
@@ -369,6 +377,7 @@ export const SESSION_VERBS = {
     },
   ),
   'pre-compact': verb(() => import('../hooks/pre-compact.js'), 'handlePreCompact', {
+    readOnly: 'skip',
     flags: { values: ['format', 'log-file', 'runtime'] },
     usage: [
       `
@@ -388,6 +397,7 @@ export const SESSION_VERBS = {
     ],
   }),
   'post-compact': verb(() => import('../hooks/post-compact.js'), 'handlePostCompact', {
+    readOnly: 'skip',
     flags: { values: ['log-file'] },
     usage: [
       `
@@ -407,6 +417,7 @@ export const SESSION_VERBS = {
     () => import('../hooks/codex-session-end-worker.js'),
     'handleCodexSessionEndWorker',
     {
+      readOnly: 'skip',
       flags: { values: ['codex-home', 'history-path', 'log-file', 'start-offset', 'started-at'] },
     },
   ),

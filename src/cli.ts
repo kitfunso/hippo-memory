@@ -2,7 +2,13 @@
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in
 // surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
-import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
+import {
+  envReadOnly,
+  envSkipAutoIntegrations,
+  envTenant,
+  validateFlags,
+} from './base/util/env.js';
+import { READ_ONLY_REFUSAL } from './base/errors/read-only.js';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './surface/hooks-install/codex-wrapper.js';
@@ -248,6 +254,15 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
   }
 }
 
+// Before the verb reads stdin or opens a store, so a hook leaves no row, mirror file or worker.
+function stopReadOnly(command: string, mode: 'refuse' | 'skip'): void {
+  if (mode === 'skip') {
+    log.warn(`hippo ${command}: skipped under HIPPO_READ_ONLY=1`);
+    return;
+  }
+  fail(READ_ONLY_REFUSAL);
+}
+
 async function main(
   command: string,
   args: string[],
@@ -283,6 +298,10 @@ async function main(
     throw new CliExit(1);
   }
   assertVerbPorted(spec, CLI_STORE);
+  if (spec.readOnly !== undefined && envReadOnly()) {
+    stopReadOnly(command, spec.readOnly);
+    return;
+  }
   const run = (): void | Promise<void> =>
     spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
   await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());

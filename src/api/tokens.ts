@@ -4,7 +4,7 @@ import { rethrowIfStoreBlocked } from '../base/util/store-blocked.js';
 import type { TokenSummary, TokenSurface } from '../base/ports/store/ledger.js';
 import type { FailureSummary } from '../base/ports/store/rejections.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
-import type { Context, ContextWith } from './types.js';
+import { readOnlyOf, type Context, type ContextWith } from './types.js';
 import { DAY_MS } from '../base/util/time.js';
 
 /** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since
@@ -14,6 +14,7 @@ export async function recordTokens(
   surface: TokenSurface,
   use: { items: number; tokens: number; sessionId?: string | null },
 ): Promise<void> {
+  if (readOnlyOf(ctx)) return;
   try {
     await ctx.store.recordTokens({
       tenantId: ctx.tenantId,

@@ -20,6 +20,7 @@ import {
 } from '../runtime/rows.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../../base/rank/search-types.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { withTempTables } from '../../../db/connect.js';
 import { escapeLike } from '../../../base/util/escape.js';
 import { ftsAnyPhrase } from './fts-phrase.js';
 import { placeholders } from '../../../db/sql.js';
@@ -435,12 +436,14 @@ const vocabReady = new WeakSet<DatabaseSyncLike>();
 
 function ensureRarestVocab(db: DatabaseSyncLike): void {
   if (vocabReady.has(db)) return;
-  db.exec(
-    `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`,
-  );
-  db.exec(
-    `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_trigram_vocab USING fts5vocab(main, 'memories_trigram', 'row')`,
-  );
+  withTempTables(db, () => {
+    db.exec(
+      `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`,
+    );
+    db.exec(
+      `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_trigram_vocab USING fts5vocab(main, 'memories_trigram', 'row')`,
+    );
+  });
   vocabReady.add(db);
 }
 

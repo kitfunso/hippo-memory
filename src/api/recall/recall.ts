@@ -13,7 +13,13 @@ import type {
   ShowRanking,
   StoreRanking,
 } from './types.js';
-import { type Context, ownerOrSubject, RecallContractError, sharedStoreOf } from '../types.js';
+import {
+  type Context,
+  ownerOrSubject,
+  readOnlyOf,
+  RecallContractError,
+  sharedStoreOf,
+} from '../types.js';
 import {
   callerOf,
   recallAuditMetadata,
@@ -201,6 +207,7 @@ async function finishRecall(
   writes: RecallWrites,
   shownIds: readonly string[],
 ): Promise<void> {
+  if (readOnlyOf(ctx)) return;
   await ctx.store.finishRecall({
     ...writes,
     audit: [...(opts.trace?.leadingAudit ?? []), ...writes.audit],

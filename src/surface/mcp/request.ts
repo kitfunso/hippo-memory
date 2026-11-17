@@ -31,7 +31,9 @@ import {
   type ToolCall,
   type ToolHandler,
 } from './protocol.js';
-import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
+import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API, WRITE_TOOLS } from './tools.js';
+import { READ_ONLY_REFUSAL } from '../../base/errors/read-only.js';
+import { readOnlyOf } from '../../api/types.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
 import {
@@ -206,7 +208,10 @@ async function callTool<S extends RequiredStore>(
   // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
   const run = toolRun(toolName, ctx);
   if (run === undefined) return errorReply(id, INTERNAL_ERROR, STORE_NOT_PORTED_MESSAGE);
-  const refusal = sharedStoreRefusal(toolName, ctx);
+  const refusal =
+    WRITE_TOOLS.has(toolName) && readOnlyOf(ctx)
+      ? READ_ONLY_REFUSAL
+      : sharedStoreRefusal(toolName, ctx);
   if (refusal !== undefined) {
     return resultReply(id, { content: [{ type: 'text', text: refusal }], isError: true });
   }

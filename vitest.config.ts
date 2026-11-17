@@ -54,6 +54,8 @@ function isolateTestEnvironment() {
   delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
   // This shell may itself be a Claude Code session; the var would leak into every spawned CLI child and falsify null-session_id trace assertions.
   delete process.env.CLAUDE_CODE_SESSION_ID;
+  // A shell that runs hippo read-only would make every test's store refuse its writes.
+  delete process.env.HIPPO_READ_ONLY;
   // check-test-env.mjs fails a secret, endpoint or path that src/base/util/env.ts reads and this list lacks.
   for (const k of SCRUBBED_ENV_KEYS) delete process.env[k];
   // No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.
@@ -135,6 +137,7 @@ export default defineConfig({
       USERPROFILE: isolatedUserHome,
       APPDATA: isolatedAppData,
       HIPPO_SKIP_SCHEDULE: '1',
+      HIPPO_READ_ONLY: '',
       ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
       ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
       ...Object.fromEntries(SCRUBBED_ENV_KEYS.map((k) => [k, ''])),
