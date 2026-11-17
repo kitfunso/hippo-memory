@@ -1,4 +1,5 @@
-// Post-build guard: glued inline tags, duplicate ids, DESIGN.md colour drift, American spelling, locked visible text.
+// Post-build guard: glued inline tags, duplicate ids, DESIGN.md colour drift, American spelling, locked visible text,
+// share cards drawn from an old page title.
 // Run by `npm run build`; `--update` rewrites text-snapshot/ instead of comparing against it.
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
@@ -11,6 +12,8 @@ const UPDATE = process.argv.includes('--update');
 const GLUE = [/[A-Za-z0-9:;,.)]<(a|code|strong|em)[ >]/g, /<\/(a|code|strong|em)>[A-Za-z(]/g];
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', nbsp: ' ', middot: '·' };
 const TEXT_FIX = 'Site wording is locked: if this change is meant, run "npm --prefix website run snapshot" and commit website/text-snapshot.';
+const CARD_TITLES = join(SITE, 'scripts', 'og-titles.json');
+const CARD_FIX = 'Fix: after "astro build", run "node scripts/make-images.mjs", then "npm run build", and commit public/og and scripts/og-titles.json.';
 // Site prose is British English with -ise endings (DESIGN.md Copy rules); proper names keep their own spelling.
 const US_UK = JSON.parse(readFileSync(join(SITE, 'scripts', 'us-uk.json'), 'utf8'));
 const KEEP = ['MIT License', 'Recursive Summarization'];
@@ -126,6 +129,18 @@ function compareSnapshots(pages) {
   }
 }
 
+/** A share card is an image of the page title, so a title change needs the cards drawn again.
+ * @param {{slug: string, html: string}[]} pages */
+function staleCards(pages) {
+  const drawn = existsSync(CARD_TITLES) ? JSON.parse(readFileSync(CARD_TITLES, 'utf8')) : {};
+  for (const { slug, html } of pages) {
+    if (slug === '404') continue;
+    const title = (html.match(/<title>([^<]*)<\/title>/) || [])[1];
+    if (drawn[slug] === undefined) fail(`${slug}: no share card is drawn for this page. ${CARD_FIX}`);
+    else if (drawn[slug] !== title) fail(`${slug}: the share card shows "${drawn[slug]}", the page title is "${title}". ${CARD_FIX}`);
+  }
+}
+
 function main() {
   if (!existsSync(DIST)) { console.error('[check-build] FAIL dist/ is missing. Fix: run "astro build" first.'); process.exit(1); }
   const pages = readPages();
@@ -138,6 +153,7 @@ function main() {
   }
   const hexes = designHexes();
   unusedHexes(hexes).forEach((h) => fail(`DESIGN.md: ${h} is in the front matter but nowhere in src/ or scripts/. Fix: correct DESIGN.md or the code.`));
+  staleCards(pages);
   if (UPDATE) syncSnapshots(pages); else compareSnapshots(pages);
   if (fails.length) { console.error(fails.join('\n')); process.exit(1); }
   const tail = UPDATE ? `wrote ${pages.length} text snapshots` : 'text matches snapshot';

@@ -46,7 +46,7 @@ const card = (title, path, width, height) => {
   return `<div style="position:relative;display:flex;flex-direction:column;justify-content:space-between;height:${height}px;padding:64px 72px;color:${INK}">`
     + `<img src="${poster}" style="position:absolute;right:28px;top:50%;transform:translateY(-50%);width:${Math.round(width * 0.44)}px;mix-blend-mode:multiply">`
     + `<div style="display:flex;align-items:center;gap:18px;font:400 40px Newsreader">${mark({ size: 52 })}<span>hippo</span></div>`
-    + `<h1 style="position:relative;font:400 ${size}px/1.08 Newsreader;max-width:${Math.round(width * 0.47)}px">${text}</h1>`
+    + `<h1 style="position:relative;text-wrap:balance;font:400 ${size}px/1.08 Newsreader;max-width:${Math.round(width * 0.47)}px">${text}</h1>`
     + `<div style="position:relative;display:flex;gap:28px;align-items:center;font:400 24px 'Geist Mono';color:${INK_2}">`
     + `<span style="border:1px solid rgba(31,27,22,.2);border-radius:12px;padding:14px 20px;background:${PAPER_2};color:${INK}"><span style="color:${ACCENT};margin-right:12px">$</span>npm install -g hippo-memory</span>`
     + `<span>hippo-memory.com${path === '/' ? '' : path}</span></div></div>`;
@@ -71,10 +71,14 @@ try {
   shoot(mark({ size: 180, rounded: false }), 180, 180, join(pub, 'apple-touch-icon.png'));
   rmSync(join(pub, 'og'), { recursive: true, force: true });
   mkdirSync(join(pub, 'og'));
+  const drawn = {};
   for (const { path, title } of built) {
     const slug = path.replace(/^\/|\/$/g, '').replace(/\//g, '-') || 'home';
     shoot(card(title, path, 1200, 630), 1200, 630, join(pub, 'og', `${slug}.png`));
+    drawn[slug] = title;
   }
+  // check-build.mjs compares these with each page's title, so a card cannot keep an old caption.
+  writeFileSync(join(root, 'scripts', 'og-titles.json'), `${JSON.stringify(drawn, null, 2)}\n`);
   const social = process.argv.indexOf('--social');
   if (social > 0) {
     const home = built.find((p) => p.path === '/');

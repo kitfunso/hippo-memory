@@ -1,0 +1,16 @@
+{
+  "benchmarks": "hippo benchmarks: the wins and the losses",
+  "claude-code": "Claude Code memory between sessions | hippo",
+  "codex": "Codex CLI memory across sessions | hippo",
+  "cursor": "Cursor memory between sessions, with MCP | hippo",
+  "faq": "hippo FAQ: setup, data, cost and test results",
+  "how-it-works": "How hippo works: recall, decay and what we measured",
+  "home": "hippo: one memory for every agent you&#39;ll ever use",
+  "mcp": "MCP memory server for Claude Code, Cursor and Windsurf | hippo",
+  "quickstart": "hippo quickstart: two commands",
+  "teams": "hippo for teams: what exists today and what is planned",
+  "vs-claude-memory": "CLAUDE.md vs MEMORY.md vs hippo: what goes where",
+  "vs-letta": "hippo vs Letta: memory for the agents you already run",
+  "vs-mem0": "hippo vs mem0: a local, open-source alternative",
+  "vs-zep": "hippo vs Zep: a local Zep alternative"
+}
