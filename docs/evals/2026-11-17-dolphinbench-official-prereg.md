@@ -102,10 +102,20 @@ The smoke also records memories by source, per-turn usage from stream-json, and 
 
 | Field | Value |
 |---|---|
-| Seconds per turn | TBD from the real smoke |
-| Usage per turn (input, output, cache read, cache write) | TBD |
-| 13,539 turns: hours, tokens, share of weekly limit per token | TBD |
-| Rate-limit headers before and after | TBD |
+| Seconds per turn | 15.9 (real smoke, 20 turns, 2026-11-17) |
+| Usage per turn (input, output, cache read, cache write) | 5.2, 865.8, 47,934, 5,806 |
+| 13,539 turns: hours, tokens, share of weekly limit per token | 59.8 h; 11.7M output, 649M cache read, 78.6M cache write; Z0_SUB_TOKEN_1 7-day header read 0.0 before and after |
+| Rate-limit headers before and after | Z0_SUB_TOKEN_1 7d: 0.0 and 0.0 |
+
+### Real smoke result (2026-11-17, run `smoke`, hippo 3.6.0): FAILED, full ingest held
+
+Passed: project_recall (direct 4 hits, agent called recall, 4 hits, plugin MCP server connected), hook_p95, hook_timeouts, versions, drained.
+
+Failed:
+- **user_facts, 2 of 20 (gate 5).** The project store holds 3 capture rows, 1 tool-failure row and 20 session digests. Each digest is the agent's final reply ("Noted, sounds like Kibo's had a long day"), not the user's message. One capture row is an agent line. hippo's fact extractor (`src/domain/learn/extract.ts`) needs `ANTHROPIC_API_KEY`, which the driver strips (deviation 7). The agent often said it saved a fact; it wrote Claude Code's native memory files, not hippo.
+- **one_vector_per_memory.** The tool-failure row `mem_3420056e0f7c`, written by the failure hook, has no vector. The 6 capture and shared rows all have one, so the embedder works in the sandbox.
+
+These are product findings, not harness faults. Per the stop rule, the full ingest waits for Keith's decision.
 
 ## Tokens and 429s
 
