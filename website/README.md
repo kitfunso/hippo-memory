@@ -17,8 +17,10 @@ npm run preview   # serve the built dist/
 ## Images
 
 `scripts/make-images.mjs` draws the favicon, the apple-touch icon and one 1200x630 Open
-Graph card per page (`public/og/<slug>.png`, captioned with the page's `<title>`). It
-reads the built pages, so after adding a page or changing a title run `npm run build`,
+Graph card per page (`public/og/<slug>.png`). The home card is a screenshot of the built
+home page without its release bar; the other cards show the page's `<title>`. It
+reads the built pages, so after adding a page, changing a title or changing the home page
+hero run `npm run build`,
 then `node scripts/make-images.mjs`, then `npm run build` again so the page links its own
 card; a page without one uses `/og/home.png`. It needs Chrome (`CHROME=<path>` if Chrome
 is not in its default place). It records each card's title in `scripts/og-titles.json`, and
