@@ -22,6 +22,10 @@ code,pre,kbd{font-family:var(--mono)}
 :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:6px}
 h2.big{font:400 clamp(34px,4.4vw,58px)/1.02 var(--display);letter-spacing:-.015em;text-wrap:balance}
 .lede{margin-top:16px;color:var(--soft);font-size:18px;max-width:52ch}
+/* page head of a dark sub-page (/teams/): clears the floating nav, colour bar under the title */
+.ptop{padding:clamp(150px,15vw,200px) 0 clamp(64px,8vw,104px)}
+.ptop h1{font:400 clamp(44px,5.6vw,76px)/1.02 var(--display);letter-spacing:-.015em;max-width:20ch;text-wrap:balance}
+.ptop h1::after{content:"";display:block;width:54px;height:3px;margin-top:28px;background:var(--bar)}
 p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var(--card2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 20px;border-radius:999px;font:600 15px/1 var(--body);text-decoration:none;cursor:pointer;border:1px solid transparent;transition:transform .15s,background .15s,border-color .15s}
 .btn:active{transform:translateY(1px)}
@@ -37,6 +41,7 @@ p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var
 .num{position:relative;display:block;font:500 108px/.84 var(--mono);letter-spacing:-.07em;color:#334554;user-select:none;font-variant-numeric:tabular-nums;padding-bottom:20px}
 .num::after{content:"";position:absolute;left:6px;bottom:0;width:54px;height:3px;background:var(--bar)}
 .shead .lede{max-width:56ch}
+.shead .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
 
 /* top bar: 10's dotted strip, in the colour bar's three colours */
 .announce{position:relative;min-height:44px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--line);overflow:hidden;background:#080a0b}
@@ -52,7 +57,7 @@ p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var
 .logo svg{width:32px;height:28px;flex:none}
 .links{display:flex;gap:2px;list-style:none;padding:0;margin:0}
 .links a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:9px;text-decoration:none;color:var(--soft);font-size:15px;font-weight:500}
-.links a:hover{background:var(--card2);color:var(--fg)}
+.links a:hover,.links a[aria-current="page"]{background:var(--card2);color:var(--fg)}
 .nav-r{margin-left:auto;display:flex;align-items:center;gap:8px}
 .menu{display:none;width:44px;height:44px;border-radius:10px;border:1px solid var(--line2);background:transparent;color:var(--fg);cursor:pointer;align-items:center;justify-content:center}
 .menu svg{width:20px;height:20px}

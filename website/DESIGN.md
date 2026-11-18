@@ -39,7 +39,7 @@ tokens:
   motion:
     entrance: "one .rise keyframe on the PageIntro h1; nothing reveals on scroll"
     durations: "--duration-fast 150ms for hover, --duration-medium 400ms, one curve --ease-standard"
-  home:                             # the home page only (Lagoon, 2026-11-16), in src/styles/home.css
+  home:                             # the home page and /teams/ (Lagoon, 2026-11-16), layouts/Lagoon.astro + src/styles/home.css
     bg: "#0b1014"                   # blue-black page
     mint: "#5eead4"                 # first accent and colour-bar stop
     cyan: "#22a6c9"                 # second stop
@@ -49,7 +49,7 @@ tokens:
 
 # hippo-memory.com design system
 
-The home page has its own design since 2026-11-16 (Lagoon: the `home` tokens above and `src/styles/home.css`). Everything else here holds for every other page.
+The home page and /teams/ use the Lagoon design (the `home` tokens above, `layouts/Lagoon.astro` and `src/styles/home.css`) since 2026-11-16 and 2026-11-18. Everything else here holds for every other page.
 
 **2026-11-12 revamp, "Card catalogue".** The owner rejected the dark lime Terminal Native site as AI slop and asked for a full revamp after a study of successful startup sites (32 home pages; the report is in the PR). The direction:
 

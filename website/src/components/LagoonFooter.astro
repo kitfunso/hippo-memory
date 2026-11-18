@@ -1,0 +1,24 @@
+---
+// The footer of the dark (Lagoon) pages.
+import { site } from '../content/site';
+
+interface Props {
+  home?: boolean;
+}
+const { home = false } = Astro.props;
+---
+
+<footer>
+  <div class="wrap">
+    <a class="logo" href={home ? '#top' : '/'} aria-label="hippo home"><svg viewBox="0 0 16 14" shape-rendering="crispEdges" aria-hidden="true"><use href="#logo-16"/></svg>hippo</a>
+    <nav aria-label="Footer">
+      <a href="https://github.com/kitfunso/hippo-memory">GitHub</a>
+      <a href="https://www.npmjs.com/package/hippo-memory">npm</a>
+      <a href="https://github.com/kitfunso/hippo-memory#readme">Docs</a>
+      <a href="/teams/">Enterprise</a>
+      <a href="https://github.com/kitfunso/hippo-memory/blob/master/llms-install.md">llms-install.md</a>
+      <a href="https://github.com/kitfunso/hippo-memory/blob/master/LICENSE">MIT licence</a>
+    </nav>
+    <span>hippo-memory {site.version}, built by kitfunso</span>
+  </div>
+</footer>

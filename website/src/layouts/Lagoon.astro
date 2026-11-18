@@ -1,0 +1,41 @@
+---
+// The dark (Lagoon) shell of the home page: its head, fonts, nav and footer, for any page that wants the home look.
+import { Font } from 'astro:assets';
+import '../styles/home.css';
+import Head from '../components/Head.astro';
+import Beacon from '../components/Beacon.astro';
+import LagoonNav from '../components/LagoonNav.astro';
+import LagoonFooter from '../components/LagoonFooter.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  crumb?: string;
+  htmlClass?: string;
+  home?: boolean;
+}
+const { title, description, crumb, htmlClass, home = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en-GB" class={htmlClass}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<Head title={title} description={description} crumb={crumb} />
+<Font cssVariable="--font-newsreader" preload={[{ weight: '400' }]} />
+<Font cssVariable="--font-geist" preload={[{ weight: '400' }, { weight: '500' }]} />
+<Font cssVariable="--font-geist-mono" preload={[{ weight: '400' }]} />
+<meta name="theme-color" content="#0b1014">
+<meta name="color-scheme" content="dark">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<slot name="top" />
+<LagoonNav home={home} />
+<slot />
+<LagoonFooter home={home} />
+<slot name="end" />
+<Beacon />
+</body>
+</html>
