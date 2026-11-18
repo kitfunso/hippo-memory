@@ -1,45 +1,65 @@
 ---
-import Base from '../layouts/Base.astro';
-import Nav from '../components/Nav.astro';
-import Footer from '../components/Footer.astro';
-import Section from '../components/Section.astro';
-import PageIntro from '../components/PageIntro.astro';
+import Lagoon from '../layouts/Lagoon.astro';
 import { enterprise, site, REPO } from '../content/site';
 ---
 
-<Base
+<Lagoon
   title="hippo for teams: what exists today and what is planned"
   description="The commercial edition of hippo is planned and not released. This page lists what teams can run today under the MIT licence (an HTTP server with tenants, API keys and an audit log) and what is still planned."
   crumb="Teams"
 >
-  <Nav />
   <main id="main">
-    <PageIntro>
-      <Fragment slot="title">Hippo for teams is planned. Here is what exists today.</Fragment>
-      <p>{enterprise.availability}</p>
-    </PageIntro>
-
-    <Section title="What you can run today" alt split>
-      <p>
-        The MIT core includes an HTTP server with tenants, API keys, admin and member roles, per-key scope grants and an audit log on every change. Keys are stored scrypt-hashed, and one API call deletes a memory. Slack and GitHub connectors bring in what your team has already written down.
-      </p>
-    </Section>
-
-    <Section title="What is planned" split>
-      <p>
-        SSO, SCIM, SIEM export, a hosted service and an SLA are planned, with Jira and Notion connectors next. None of it is released.
-      </p>
-    </Section>
-
-    <Section title="How we would measure it with you" id="measured-on-your-work-against-a-holdout" alt split>
-      <p>
-        The fair test is a holdout, where a random share of sessions runs without memory and you compare cost per merged PR and repeat errors between the two groups. We have no team result to show. If your team wants to try, open an issue and tell us what you'd need.
-      </p>
-      <div class="flex flex-wrap gap-3 pt-2">
-        <a href={`${REPO}/issues/new`} target="_blank" rel="noopener noreferrer" class="btn">Open an issue<span class="sr-only"> (opens in new tab)</span></a>
-        <a href={site.links.security} target="_blank" rel="noopener noreferrer" class="btn-quiet">Security policy<span class="sr-only"> (opens in new tab)</span></a>
+    <section class="ptop">
+      <div class="wrap">
+        <h1>Hippo for teams is planned. Here is what exists today.</h1>
+        <p class="lede">{enterprise.availability}</p>
       </div>
-    </Section>
+    </section>
+
+    <section class="sec alt" id="what-you-can-run-today" aria-labelledby="h-today">
+      <div class="wrap">
+        <div class="shead">
+          <span class="num" aria-hidden="true">01</span>
+          <div>
+            <h2 class="big" id="h-today">What you can run today</h2>
+            <p class="lede">
+              The MIT core includes an HTTP server with tenants, API keys, admin and member roles, per-key scope grants and an audit log on every change. Keys are stored scrypt-hashed, and one API call deletes a memory. Slack and GitHub connectors bring in what your team has already written down.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="what-is-planned" aria-labelledby="h-planned">
+      <div class="wrap">
+        <div class="shead">
+          <span class="num" aria-hidden="true">02</span>
+          <div>
+            <h2 class="big" id="h-planned">What is planned</h2>
+            <p class="lede">
+              SSO, SCIM, SIEM export, a hosted service and an SLA are planned, with Jira and Notion connectors next. None of it is released.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec alt" id="measured-on-your-work-against-a-holdout" aria-labelledby="h-measure">
+      <div class="wrap">
+        <div class="shead">
+          <span class="num" aria-hidden="true">03</span>
+          <div>
+            <h2 class="big" id="h-measure">How we would measure it with you</h2>
+            <p class="lede">
+              The fair test is a holdout, where a random share of sessions runs without memory and you compare cost per merged PR and repeat errors between the two groups. We have no team result to show. If your team wants to try, open an issue and tell us what you'd need.
+            </p>
+            <div class="ctas">
+              <a href={`${REPO}/issues/new`} target="_blank" rel="noopener noreferrer" class="btn btn-w">Open an issue<span class="sr-only"> (opens in new tab)</span></a>
+              <a href={site.links.security} target="_blank" rel="noopener noreferrer" class="btn btn-g">Security policy<span class="sr-only"> (opens in new tab)</span></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
-  <Footer />
-</Base>
+</Lagoon>

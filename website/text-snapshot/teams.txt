@@ -1,28 +1,17 @@
 hippo for teams: what exists today and what is planned
-Skip to content hippo How it works
-Teams
+Skip to content hippo Product
 Benchmarks
-Compare
+Enterprise
 Docs
-N Install
-How it works
-Teams
-Benchmarks
-Compare
-Docs
+GitHub
+Install
 Hippo for teams is planned. Here is what exists today.
 The commercial edition is planned; its private repository is a scaffold, not a released enterprise product.
-What you can run today
+N What you can run today
 The MIT core includes an HTTP server with tenants, API keys, admin and member roles, per-key scope grants and an audit log on every change. Keys are stored scrypt-hashed, and one API call deletes a memory. Slack and GitHub connectors bring in what your team has already written down.
-What is planned
+N What is planned
 SSO, SCIM, SIEM export, a hosted service and an SLA are planned, with Jira and Notion connectors next. None of it is released.
-How we would measure it with you
+N How we would measure it with you
 The fair test is a holdout, where a random share of sessions runs without memory and you compare cost per merged PR and repeat errors between the two groups. We have no team result to show. If your team wants to try, open an issue and tell us what you'd need.
 Open an issue (opens in new tab) Security policy (opens in new tab)
-hippo
-Agents
-Claude CodeCursorCodexMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
-QuickstartHow it worksBenchmarksTeamsFAQ Resources
-GitHubnpmDocsChangelogLicence (MIT)
-hippo-memory vN MIT, built by kitfunso
+hippo GitHub npm Docs Enterprise llms-install.md MIT licence hippo-memory N built by kitfunso
