@@ -44,7 +44,7 @@ tokens:
     mint: "#5eead4"                 # first accent and colour-bar stop
     cyan: "#22a6c9"                 # second stop
     cobalt: "#2f4bb3"               # third stop
-    fonts: "Schibsted Grotesk (display), Instrument Sans (body), Instrument Serif (big figures), Spline Sans Mono (code), from @fontsource"
+    fonts: "Newsreader 400 (headings, logo, big figures), Geist (body, small labels, score table), Geist Mono (code), loaded with the same Astro <Font> tags as Base.astro"
 ---
 
 # hippo-memory.com design system
