@@ -1205,11 +1205,11 @@ mem0 uses a language model to extract memories, and its hosted MCP server keeps 
 
 ### Is this just RAG?
 
-Partly. Recall is search, BM25 plus embeddings, which `hippo init` installs. The difference is that the store changes as your agent works. A memory you mark wrong drops down the results, a newer fact replaces an old one, and unused memories fade.
+Partly. Recall is search, BM25 plus embeddings if you install them. The difference is that the store changes as your agent works. A memory you mark wrong drops down the results, a newer fact replaces an old one, and unused memories fade.
 
 ### Does it need embeddings?
 
-No, but recall is better with them. Without an embedder, recall runs on BM25 alone, with no model and no network call. `hippo init` installs the free local embedder, which downloads its 87 MB model the first time it embeds. With it on, hippo scored higher than without it on two of five public answer tests, by 3.4 and 11.9 points, with no clear difference on the other three.
+No. Recall runs on BM25 out of the box, with no model and no network call. With the optional free local embedder on, hippo scored higher than without it on two of five public answer tests, by 3.4 and 11.9 points, with no clear difference on the other three.
 
 ### Do I still need CLAUDE.md?
 
@@ -1221,7 +1221,7 @@ Yes, for short standing rules such as build commands and code style. Claude Code
 
 ### Where does hippo keep my data?
 
-On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default, apart from the local embedder's one-time model download. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (`capture.followUpRules`), `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that last one off.
+On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (`capture.followUpRules`), `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that last one off.
 
 ### What does hippo cost?
 
