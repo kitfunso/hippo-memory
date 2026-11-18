@@ -24,6 +24,7 @@ import {
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
+import { embedderInstallAdvice } from './embedder-install.js';
 
 const MAX_FAILED_SHOWN = 5;
 const MAX_PAIRS_SHOWN = 15;
@@ -237,8 +238,7 @@ function readyEmbedProvider(ctx: CliContext, given?: EmbeddingProvider): Embeddi
     return null;
   }
   if (embedProvider.kind === 'local') {
-    console.log('Embeddings not available. Install @huggingface/transformers to enable:');
-    console.log('  npm install @huggingface/transformers');
+    console.log(`Embeddings not available. To turn them on, ${embedderInstallAdvice()}`);
     process.exitCode = 1;
   } else {
     printError(

@@ -18,7 +18,7 @@ Inspired by the human hippocampus, hippo saves what you teach one coding agent i
 Works with:    Claude Code, Codex, Cursor, Pi, OpenClaw, OpenCode, any MCP client
 Imports from:  ChatGPT, Claude (CLAUDE.md), Cursor (.cursorrules), Slack, markdown
 Storage:       SQLite with markdown mirrors you can read and commit
-Dependencies:  Zero runtime deps. Node.js 22.16+. Optional embeddings: bring-your-own local Transformers.js (`npm i @huggingface/transformers`, or legacy `@xenova/transformers`) or an opt-in API embedder (OpenAI/Voyage/Cohere). Nothing is auto-installed.
+Dependencies:  Zero runtime deps. Node.js 22.16+. Embeddings: `hippo init` installs the local Transformers.js embedder (`@huggingface/transformers@4.3.2`, about 480 MB) into a global npm install, and `--no-embeddings` skips it. An API embedder (OpenAI/Voyage/Cohere) is opt-in.
 ```
 
 **Contents:** [Install](#install) · [Follow one memory](#follow-one-memory) · [What hippo does](#what-hippo-does) · [Results](#repeat-mistakes-per-100-chances) · [Setup in detail](#setup-in-detail) · [Agent setup](#framework-integrations) · [MCP server](#mcp-server) · [How it works](#how-it-works) · [CLI](#cli-reference) · [Comparison](#comparison) · [Benchmarks](#benchmarks) · [FAQ](#faq) · [Contributing](#contributing)
@@ -44,7 +44,7 @@ hippo init
 
 Installing the package alone captures nothing, and what runs after init depends on the agent.
 
-`hippo init` creates a `.hippo/` store in the project, adds a short block to an existing `CLAUDE.md` or `AGENTS.md`, installs Claude Code's hooks and schedules a daily run at 6:15am that stores lessons from the day's commits. `--no-hooks` and `--no-schedule` skip those parts. Codex runs hippo's hooks only once you trust them in `/hooks`. `hippo doctor` checks the install. [What hippo init changes](#what-hippo-init-changes) lists every file it writes, and [llms-install.md](llms-install.md) is the guide the prompt above follows.
+`hippo init` creates a `.hippo/` store in the project, adds a short block to an existing `CLAUDE.md` or `AGENTS.md`, installs Claude Code's hooks, schedules a daily run at 6:15am that stores lessons from the day's commits and installs the local embedder for recall by meaning. `--no-hooks`, `--no-schedule` and `--no-embeddings` skip those parts. Codex runs hippo's hooks only once you trust them in `/hooks`. `hippo doctor` checks the install. [What hippo init changes](#what-hippo-init-changes) lists every file it writes, and [llms-install.md](llms-install.md) is the guide the prompt above follows.
 
 ---
 
@@ -195,6 +195,7 @@ Run `hippo init` inside one project. This is everything it writes, in the projec
 - **OpenCode,** when the project has `.opencode/` or `opencode.json`: a plugin at `~/.config/opencode/plugins/hippo.ts`.
 - **Codex,** when the project has `AGENTS.md` or `.codex` and Codex is installed (`$CODEX_HOME`, else `~/.codex`, exists): 2 hook entries in Codex's `hooks.json`, one on UserPromptSubmit that sends your pinned memories plus up to 5 that match the prompt with every prompt and one on SessionStart after a compaction. **Codex runs them only after you trust them once in `/hooks`.** Init also prints `hippo hook install codex`, the opt-in that wraps the Codex launcher to capture sessions; `hippo hook uninstall codex` removes hippo's hooks and the wrapper.
 - **A daily run at 6:15am,** one per machine: a crontab line on Linux and macOS, a scheduled task named `hippo-daily-runner` on Windows. It runs `hippo learn --git --days 1` and then `hippo sleep` in every project listed in `~/.hippo/workspaces.json`, and init adds this project to that list.
+- **The local embedder,** when hippo is a global npm install and no embedder is installed yet: `@huggingface/transformers@4.3.2` in the same global folder, about 480 MB. It goes in before anything else, can take a few minutes, and runs with `--ignore-scripts`, so no install script in that package tree runs. Its model (`Xenova/all-MiniLM-L6-v2`, 87 MB) downloads from Hugging Face the first time hippo embeds. Under npx, pnpm, yarn, bun or as a project dependency, init prints the command for that setup instead. `npm uninstall -g hippo-memory` leaves the embedder in place; `npm uninstall -g @huggingface/transformers` removes it.
 - **Agent memories.** On every run, the notes your coding agents keep about this project go into its store, and the ones about you go into the global store. [Agent memories](#agent-memories) lists what is read.
 
 ```bash
@@ -210,7 +211,7 @@ hippo init
 #    Scheduled machine-level daily runner (6:15am) via crontab
 ```
 
-To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and agent memory import. `HIPPO_SKIP_AUTO_INTEGRATIONS=1` skips the same files and hooks that `--no-hooks` does, and `HIPPO_SKIP_SCHEDULE=1` skips the daily run as `--no-schedule` does.
+To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, `--no-embeddings` the embedder install, and `--no-learn` the git history and agent memory import. `HIPPO_SKIP_AUTO_INTEGRATIONS=1` skips the same files and hooks that `--no-hooks` does, `HIPPO_SKIP_SCHEDULE=1` skips the daily run as `--no-schedule` does, and `HIPPO_SKIP_EMBEDDER_INSTALL=1` skips the embedder as `--no-embeddings` does.
 
 ### Agent memories
 
@@ -1204,11 +1205,11 @@ mem0 uses a language model to extract memories, and its hosted MCP server keeps 
 
 ### Is this just RAG?
 
-Partly. Recall is search, BM25 plus embeddings if you install them. The difference is that the store changes as your agent works. A memory you mark wrong drops down the results, a newer fact replaces an old one, and unused memories fade.
+Partly. Recall is search, BM25 plus embeddings, which `hippo init` installs. The difference is that the store changes as your agent works. A memory you mark wrong drops down the results, a newer fact replaces an old one, and unused memories fade.
 
 ### Does it need embeddings?
 
-No. Recall runs on BM25 out of the box, with no model and no network call. With the optional free local embedder on, hippo scored higher than without it on two of five public answer tests, by 3.4 and 11.9 points, with no clear difference on the other three.
+No, but recall is better with them. Without an embedder, recall runs on BM25 alone, with no model and no network call. `hippo init` installs the free local embedder, which downloads its 87 MB model the first time it embeds. With it on, hippo scored higher than without it on two of five public answer tests, by 3.4 and 11.9 points, with no clear difference on the other three.
 
 ### Do I still need CLAUDE.md?
 
@@ -1220,7 +1221,7 @@ Yes, for short standing rules such as build commands and code style. Claude Code
 
 ### Where does hippo keep my data?
 
-On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (`capture.followUpRules`), `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that last one off.
+On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default, apart from the local embedder's one-time model download. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (`capture.followUpRules`), `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that last one off.
 
 ### What does hippo cost?
 

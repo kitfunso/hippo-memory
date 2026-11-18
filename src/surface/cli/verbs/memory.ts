@@ -39,7 +39,7 @@ export const MEMORY_VERBS = {
     repairsCodexWrapper: true,
     scoped: true,
     flags: {
-      switches: ['global', 'no-hooks', 'no-learn', 'no-schedule'],
+      switches: ['global', 'no-embeddings', 'no-hooks', 'no-learn', 'no-schedule'],
       values: ['scan'],
       numbers: ['days'],
     },
@@ -52,6 +52,8 @@ export const MEMORY_VERBS = {
     --no-hooks             Skip auto-detecting and installing agent hooks
                            (HIPPO_SKIP_AUTO_INTEGRATIONS=1 does the same)
     --no-schedule          Skip auto-creating the machine-level daily runner
+    --no-embeddings        Skip installing the local embedder (@huggingface/transformers)
+                           (HIPPO_SKIP_EMBEDDER_INSTALL=1 does the same)
     --no-learn             Skip seeding memories from git history and importing
                            coding agents' own memories (every init imports those)`,
     ],

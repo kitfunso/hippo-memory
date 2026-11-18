@@ -60,6 +60,8 @@ function isolateTestEnvironment() {
   for (const k of SCRUBBED_ENV_KEYS) delete process.env[k];
   // No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.
   process.env.HIPPO_SKIP_SCHEDULE = '1';
+  // No test may run a real `npm install -g`; a test of the embedder install clears this and fakes npm.
+  process.env.HIPPO_SKIP_EMBEDDER_INSTALL = '1';
 
   return { runTmp, isolatedHippoHome, isolatedUserHome, isolatedAppData };
 }
@@ -137,6 +139,7 @@ export default defineConfig({
       USERPROFILE: isolatedUserHome,
       APPDATA: isolatedAppData,
       HIPPO_SKIP_SCHEDULE: '1',
+      HIPPO_SKIP_EMBEDDER_INSTALL: '1',
       HIPPO_READ_ONLY: '',
       ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
       ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
