@@ -13,7 +13,7 @@ import { installOpencodePlugin } from '../hooks-install/opencode.js';
 import { initMemoryStore } from '../../api/store-init.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
-import { memoryList } from '../../api/memories/memories.js';
+import { memoryCountAll, memoryList } from '../../api/memories/memories.js';
 import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
@@ -43,6 +43,9 @@ import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { appendHookBlock, HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks-install/instructions.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
 import { SEED_DAYS_SCAN, SEED_DAYS_SINGLE } from './flag-defaults.js';
+import { installLocalEmbedder } from './embedder-install.js';
+import { loadConfig } from '../../host/config-file.js';
+import { plural } from '../../base/util/format.js';
 
 // An unreadable or vanished folder is expected while scanning; any other failure is worth a line.
 const QUIET_SCAN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR']);
@@ -223,6 +226,9 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
 
   console.log(`Found ${repos.length} repositories:\n`);
 
+  const stores = [hippoHomeDir(), ...repos.map((repo) => path.join(repo, HIPPO_DIR))];
+  const hadStores = stores.some((store) => isInitialized(store));
+  const embedderAdded = maybeInstallEmbedder(hippoHomeDir(), flags);
   const globalRoot = initGlobalFirst();
   const seedDays = numberFlag(flags, 'days') ?? SEED_DAYS_SCAN;
   const machine = currentMachine();
@@ -240,6 +246,12 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
     printAgentImport(agentImport, '');
   }
   console.log(`Global store: ${globalRoot}`);
+  if (embedderAdded && hadStores) {
+    console.log(
+      'Memories stored before this run have no vectors yet: run `hippo embed` in each project ' +
+        'and `hippo embed --global` to add them.',
+    );
+  }
   if (initInstallsIntegrations(flags)) installScanHooks(repos);
   if (!boolFlag(flags, 'no-schedule')) {
     setupDailySchedule(globalRoot);
@@ -249,8 +261,10 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
 
 async function initGlobalOnly(tenantId: string, flags: CliFlags): Promise<void> {
   const globalRoot = hippoHomeDir();
+  const embedderAdded = maybeInstallEmbedder(globalRoot, flags);
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
+    if (embedderAdded) await printEmbedHint(globalRoot, tenantId, 'hippo embed --global');
   } else {
     cliInitGlobal();
     console.log('Initialized global Hippo store at', globalRoot);
@@ -292,8 +306,10 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   }
 
   const alreadyExists = isInitialized(hippoRoot);
+  const embedderAdded = maybeInstallEmbedder(hippoRoot, flags);
   if (alreadyExists) {
     console.log('Already initialized at', hippoRoot);
+    if (embedderAdded) await printEmbedHint(hippoRoot, tenantId, 'hippo embed');
   } else {
     await initMemoryStore(cliApiContext(hippoRoot, tenantId));
     console.log('Initialized Hippo at', hippoRoot);
@@ -322,6 +338,22 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   // Every run, not only the first: an agent's notes change between inits.
   if (learn) {
     printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())));
+  }
+}
+
+/** First in every init path: a killed install leaves no store to skip the first-run seed, and
+ * the memories init writes get vectors as they land. */
+function maybeInstallEmbedder(configRoot: string, flags: CliFlags): boolean {
+  if (boolFlag(flags, 'no-embeddings')) return false;
+  return installLocalEmbedder(loadConfig(configRoot).embeddings);
+}
+
+/** The embedder arrived after this store already held memories, and those have no vectors yet. */
+async function printEmbedHint(root: string, tenantId: string, command: string): Promise<void> {
+  const count = await memoryCountAll(cliApiContext(root, tenantId));
+  if (count > 0) {
+    const stored = plural(count, 'memory', 'memories');
+    console.log(`   Run \`${command}\` to add vectors to the ${stored} stored before now.`);
   }
 }
 

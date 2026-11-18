@@ -28,8 +28,9 @@ Before you run anything in this step, tell the user what `hippo init` changes:
 - When the project has `AGENTS.md` or `.codex` and Codex is installed, 2 hook entries in Codex's `hooks.json`. Codex runs them only after the user trusts them once in `/hooks`, so tell the user to do that, and never write Codex's trust settings yourself.
 - A daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It learns from each registered project's commits and runs `hippo sleep` there.
 - On the first run, an import of this project's Claude Code auto memory, from its folder under `~/.claude/projects/`.
+- When hippo is a global npm install, the local embedder for recall by meaning: `@huggingface/transformers@4.3.2` in npm's global folder, about 480 MB, with no install scripts run. Its 87 MB model downloads from Hugging Face the first time hippo embeds. This step can take a few minutes, so give `hippo init` a 10-minute timeout. Under npx, init prints how to add it instead.
 
-`--no-hooks` leaves out the instruction-file blocks and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and auto memory import. Codex session capture is opt-in: run `hippo hook install codex`.
+`--no-hooks` leaves out the instruction-file blocks and hooks, `--no-schedule` the daily run, `--no-embeddings` the embedder, and `--no-learn` the git history and auto memory import. Codex session capture is opt-in: run `hippo hook install codex`.
 
 Then, in the root of the project the user works in, run it with any flags the user chose:
 

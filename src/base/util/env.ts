@@ -24,6 +24,7 @@ const FLAGS = {
   HIPPO_AVAILABILITY: false,
   HIPPO_SKIP_AUTO_INTEGRATIONS: false,
   HIPPO_SKIP_SCHEDULE: false,
+  HIPPO_SKIP_EMBEDDER_INSTALL: false,
   HIPPO_MCP_STDIO: false,
   HIPPO_REQUIRE_SERVER: false,
   HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL: false,
@@ -227,6 +228,7 @@ export function envTenant(): string {
 // Install and CLI switches.
 export const envSkipAutoIntegrations = bool('HIPPO_SKIP_AUTO_INTEGRATIONS');
 export const envSkipSchedule = bool('HIPPO_SKIP_SCHEDULE');
+export const envSkipEmbedderInstall = bool('HIPPO_SKIP_EMBEDDER_INSTALL');
 export const envMcpStdio = bool('HIPPO_MCP_STDIO');
 export const envRequireServer = bool('HIPPO_REQUIRE_SERVER');
 export const envReadOnly = bool('HIPPO_READ_ONLY');
