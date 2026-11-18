@@ -263,7 +263,8 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .view button:hover{color:var(--fg);background:var(--card2)}
 .view button[aria-pressed="true"]{background:var(--amber);color:#101316}
 .view button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-.board{--hpl:color-mix(in srgb,var(--amber) 70%,transparent);margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+/* Positioned so the board, not the page, holds and clips the sr-only labels in its cells. */
+.board{position:relative;--hpl:color-mix(in srgb,var(--amber) 70%,transparent);margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
 .view+.board{margin-top:12px}
 .board[data-view="simple"] .dt,.board[data-view="detail"] .sm{display:none}
 .board:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
