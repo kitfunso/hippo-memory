@@ -1,0 +1,31 @@
+# Dated notes, 2026-11-17: InMind as its evaluation package runs a memory system
+
+Post hoc and secondary, like lanes F and D (prereg Amendment 6, dated notes 30 and 31). No registered result changes.
+
+**Why.** InMind (arXiv 2607.24368) asks whether a memory system applies a stored user fact when a later query reaches it only through world knowledge (a nut allergy, then a macaron recipe). Table 1 runs six memory systems twice, once with MiniLM (all-MiniLM-L6-v2) and once with text-embedding-3-large, all with GPT-5-mini as answerer and binary judge. Keith (17 Nov): every public benchmark runs in its published setup, so hippo's row sits next to these on equal terms. hippo-emb embeds with `Xenova/all-MiniLM-L6-v2`, so its row compares with the MiniLM block.
+
+**Published rows (Table 1, %, naive / target recall / application, 125 tasks).** MiniLM: A-RAG 97.6 / 5.6 / 4.8; xMemory 84.8 / 3.2 / 4.8; Mem0 76.0 / 2.4 / 3.2; A-Mem 99.2 / 2.4 / 6.4; HippoRAG 2 93.6 / 0.8 / 8.8; MemoryOS 87.2 / 2.4 / 8.0. text-embedding-3-large: A-RAG 93.6 / 11.2 / 7.2; xMemory 91.2 / 6.4 / 6.4; Mem0 76.8 / 6.4 / 6.4; A-Mem 100.0 / 12.0 / 9.6; HippoRAG 2 96.0 / 2.4 / 5.6; MemoryOS 96.8 / 7.2 / 14.4. Controls: Naive RAG MiniLM 92.0 / 0.8 / 9.6, emb3-large 97.6 / 6.4 / 16.0, BM25 53.6 / 3.2 / 9.6; backbone with the fact in context, application 84.0.
+
+**What changes.**
+1. Code. `inmind/vendor.py` imports InMind's own code from `imlrz/InMind` at `5a2ab268` (clone in `~/hippo-bench/vendor/InMind`). The repo has no licence file, so none of its code is copied. `qa/vendor_pin.py` stops the lane unless the clone is at that commit and each of the 10 files used is the commit's blob. Used: `build_timeline.py` (the per-task timeline), `build_judge_payloads.py` (judge prompts and user payloads), `validate_submission.py`, the answer and judge prompt files.
+2. Data. `~/hippo-bench/datasets/inmind/` holds `git show` copies of `inmind.jsonl` (125 tasks), `lme_s_background.jsonl` (47 sessions, 486 turns, MIT from LongMemEval) and `manifest.json`; each must match the release's SHA-256 (`SHA256SUMS`, the manifest).
+3. Store. One hippo store per task, as the protocol starts each task from an empty state. The 47 sessions go in turn by turn in order, the task's user and assistant pair at the end of session 9 (after 41 background user turns, 38 sessions before the queries), as `build_timeline.py` builds it. hippo's server stores each message as `<role>: <content>`. No turn gets a timestamp: the target has none in the protocol, so every memory is dated by insertion and the target keeps its middle place. Arm `hippo-emb`, server flags of dated notes 5.
+4. Retrieval. The naive query and the indirect query each search the same frozen store for the top 10. Table 11 (Mem0) and Table 12 (A-Mem) retrieve the top 10; HippoRAG 2 and Naive RAG use 5, xMemory 3 plus 5. hippo is a flat dense store, as Mem0 and A-Mem are, so 10.
+5. Context. The answerer sees the retrieved memories as `- <memory>` lines in rank order. The protocol fixes no format; it asks that the exact text shown be kept and judged, and the submission file keeps it.
+6. Answer. `answer_system.txt` with `{context}` replaced, as the system message; the query as the user message. `gpt-5-mini-2025-08-07`, `max_completion_tokens` 16,384, no temperature or top-p (Table 6, evaluation README). An empty reply is the answer "".
+7. Judge. Three binary judges per task on the repo's prompts and user payloads (`build_judge_payloads.py`): naive (naive context and answer), target recall (indirect context, no answer), application (indirect context and answer). `gpt-5-mini-2025-08-07`, `max_completion_tokens` 4,096, no temperature. A valid verdict is a JSON object whose `score` is the integer 0 or 1, alone or in one code fence.
+8. Score. Each metric is the share of tasks judged 1, over all 125 tasks as the README says, and over the 120 primary tasks. A verdict with no valid reply in 3 asks scores 0 and is listed. The score stage writes `submission.jsonl` in the repo's result format and stops unless the repo's `validate_submission.py` accepts it.
+9. Output: `results-r2/inmind/<arm>/`; the smoke in `results-r2/inmind/smoke/`.
+
+**Deviations that stay.**
+- Embedder build. hippo runs the Xenova ONNX port of all-MiniLM-L6-v2 inside hippo's own hybrid search; the paper's systems run the sentence-transformers model. This is the memory system under test, the one part that differs by design.
+- Snapshot. The paper names GPT-5-mini; we pin `gpt-5-mini-2025-08-07`, its one snapshot. OpenAI shuts it down on 11 Dec 2026 (deprecations page, read 17 Nov), so a full run must finish before then.
+- Retries. The repo gives no retry rule. Each call has 3 asks in the ledger, and the first valid reply counts.
+- Sampling. gpt-5-mini answers and verdicts vary run to run. The paper made one of each per task, and so do we.
+
+**Order.** For `hippo-emb`: `ingest`, `retrieve`, `answer`, `judge`, `score`; then `bm25`. A smoke runs first: 5 tasks' stores are built and searched, and the first of them is answered and judged (5 calls, inside the 50k-token smoke budget). The smoke writes integrity counts and tokens only, never a score, and `estimate` scales its measured tokens to the full run. Its tasks are the `inmind` key of `smoke_excluded.json` and stay out of the primary.
+Smoke items, excluded: `task-0`, `task-54`, `task-114`, `task-163` and `task-225`. They are rows 0, 31, 62, 93 and 124 of `inmind.jsonl`.
+
+**Tests.** `tests/test_inmind.py`. They fail if the clone or the data leave their pin, if a prompt's text changes, if the target leaves the end of session 9 or a turn gets a timestamp, if the answer or a judge leaves with another model, a temperature or another token cap, if the answer prompt holds a judge-only field (`explanation`, `relation`, `entity_1`, `entity_2`), if the smoke tasks leave the table, or if a verdict counts without a JSON integer score of 0 or 1.
+
+**Read before this note.** At `5a2ab268`: `README.md`, `evaluation/README.md`, `skills/evaluate-inmind/SKILL.md` and `references/protocol.md`, the four prompt files, `build_timeline.py`, `build_judge_payloads.py`, `validate_submission.py`, `validate_release.py`, the background manifest and README. The paper's Section 4, Table 1 and Appendix 15 (Tables 6 to 15), arXiv HTML.

@@ -30,7 +30,8 @@ from qa.ledger import hash16, pid_alive  # noqa: E402
 URL = "https://api.openai.com/v1/chat/completions"
 # USD per 1M tokens, input and output, at developers.openai.com/api/docs/pricing (read 16 Nov 2026)
 PRICES = {"gpt-4o-2024-08-06": (2.50, 10.00), "gpt-4o-mini-2024-07-18": (0.15, 0.60), "gpt-4o-mini": (0.15, 0.60),
-          "gpt-4.1-mini-2025-04-14": (0.40, 1.60), "gpt-5-mini-2025-08-07": (0.25, 2.00)}
+          "gpt-4.1-mini-2025-04-14": (0.40, 1.60), "gpt-5-mini-2025-08-07": (0.25, 2.00),
+          "gpt-4.1": (2.00, 8.00)}  # gpt-4.1: developers.openai.com/api/docs/models/gpt-4.1 (read 17 Nov 2026)
 # The org's free-token pools on traffic shared with OpenAI (Keith, 17 Nov 2026); a model in neither would bill
 BIG = ("gpt-4o-2024-08-06", "gpt-4.1", "gpt-5-2025-08-07", "gpt-5.6-sol")
 SMALL = ("gpt-4o-mini", "gpt-4o-mini-2024-07-18", "gpt-4.1-mini-2025-04-14",
@@ -62,6 +63,7 @@ class Settings:
     response_format: str = ""  # a JSON response_format sent as is (a strict json_schema); "" sends none
     top_p: float | None = None  # None sends none, as response_format; MemoryAgentBench's summary judge sets both
     seed: int | None = None
+    shots: str = ""  # a JSON list of fixed few-shot messages sent between the system and the user message (TriggerBench)
 
     @property
     def cli(self) -> str:
@@ -69,6 +71,7 @@ class Settings:
         temp = "unset" if self.temperature is None else self.temperature
         fmt = f" response_format={hash16(self.response_format)}" if self.response_format else ""  # older stamps unchanged
         fmt += "".join(f" {k}={v}" for k, v in (("top_p", self.top_p), ("seed", self.seed)) if v is not None)
+        fmt += f" shots={hash16(self.shots)}" if self.shots else ""
         return (f"openai chat.completions role={self.role} temperature={temp} "
                 f"max_tokens={self.max_tokens} json_object={self.json_object}{fmt}")
 
@@ -317,7 +320,8 @@ class OpenAIChat(Claude):
     def _body(self, system: str, user: str) -> bytes:
         s = self.settings
         body = {"model": s.model, **({} if s.temperature is None else {"temperature": s.temperature}),
-                "messages": ([{"role": "system", "content": system}] if system else []) + [{"role": s.role, "content": user}]}
+                "messages": ([{"role": "system", "content": system}] if system else []) +
+                (json.loads(s.shots) if s.shots else []) + [{"role": s.role, "content": user}]}
         if s.max_tokens is not None:
             body["max_tokens"] = s.max_tokens
         if s.json_object:
