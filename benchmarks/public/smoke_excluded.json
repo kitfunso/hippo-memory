@@ -19,5 +19,10 @@
   "prefeval-memos": ["pref-0000", "pref-0200", "pref-0400", "pref-0600", "pref-0800"],
   "memoryagentbench": ["lme-c000-q012", "infbench_sum-c025-q000", "sh_qa-c000-q043", "icl_nlu-c000-q027", "fc_mh-c000-q059"],
   "memfail": ["coexisting-000", "conditional-000", "conditional-hard-000", "persona-000", "long-hop-000"],
-  "locomo-plus": ["lp-0000", "lp-0496", "lp-0992", "lp-1488", "lp-1986"]
+  "locomo-plus": ["lp-0000", "lp-0496", "lp-0992", "lp-1488", "lp-1986"],
+  "inmind": ["task-0", "task-54", "task-114", "task-163", "task-225"],
+  "meme": ["pl_001-b3", "pl_001-a4", "pl_001-a6", "pl_001-a0", "pl_001-a5"],
+  "triggerbench": ["tb-pc-seed_02", "tb-po-seed_01_absolute_blind_action", "tb-nc-logical_adherence_001", "tb-pc-interrupt_seed_001", "tb-nc-seed_b01"],
+  "stalebench": ["anchored-q000", "anchored-q075", "anchored-q149", "anchor_free-q000", "anchor_free-q075"],
+  "precisionmembench": ["happy-stack-repository-layer", "canonical-name-match-mara", "cap-stress-kitchen-sink-exceeds-twelve", "recency-tiebreak-reinforcement", "relation-does-not-appear-as-entity"]
 }
