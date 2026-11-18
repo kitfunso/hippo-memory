@@ -255,7 +255,7 @@ const description = 'hippo writes what you teach a coding agent into a store in 
               const lead = leadOf(r);
               return (
               <tr>
-                <th scope="row"><b>{r.name}</b><small>{r.task}</small><span class:list={['kind', r.caveat && 'cav']}>{tagHead(r.tag)}<span class="dt">{r.tag.slice(tagHead(r.tag).length)}</span></span>{r.caveat && <small class="dt cv">{r.caveat}</small>}</th>
+                <th scope="row"><b>{r.name}</b><small class="dt">{r.task}</small><span class:list={['kind', r.caveat && 'cav']}>{tagHead(r.tag)}<span class="dt">{r.tag.slice(tagHead(r.tag).length)}</span></span>{r.caveat && <small class="dt cv">{r.caveat}</small>}</th>
                 <td class:list={['hp', !r.hippo.status && r.hippo.num === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span><small>{rankOf(r)}</small>{lead && <small class="dt">1st is <a href={lead.url} target="_blank" rel="noopener noreferrer">{lead.system ?? lead.name} {lead.value}<span class="sr-only"> (published score, opens in a new tab)</span></a></small>}<small class="dt">{byHyphen(r.hippo.setting).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></>}</td>
                 {boardCols.map((c) => {
                   const x = r.rivals.find((y) => y.name === c);
