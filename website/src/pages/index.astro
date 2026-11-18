@@ -21,6 +21,7 @@ interface Cell { value: string; num: number; scale: string; model: string; detai
 interface Row { setup: string; model: string; shared: boolean; base: { name: string; value: string; url: string } | null; hippo: { value: string | null; num: number | null; status: string | null; setting: string | null; caveat: boolean }; cells: Partial<Record<string, Cell>> }
 interface Test { name: string; slug: string; task: string; columns: string[]; rows: Row[]; own: Partial<Record<string, Cell>> }
 // One table per test from the file /benchmarks/ reads, so the two pages cannot disagree. Each row is one published setup.
+// SAFETY: hippo-bench grid_home.py writes the home block in this shape, and test_grid_home.py checks it.
 const tests = board.home as readonly Test[];
 const scoresOf = (r: Row) => Object.values(r.cells).filter((x): x is Cell => !!x);
 // Odd items are hyphenated words such as gpt-4o-mini; the template keeps each on one line.
