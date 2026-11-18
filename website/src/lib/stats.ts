@@ -10,6 +10,8 @@
  * build-log warning so a persistently-failing fetch is noticed, not silently shipped.
  */
 
+import { execFileSync } from 'node:child_process';
+
 const REPO_API = 'https://api.github.com/repos/kitfunso/hippo-memory';
 // hippo-memory's first npm publish date. Lifetime total, not last-month: a monotonic
 // headline number reads better than a monthly figure that dips between release spikes,
@@ -46,11 +48,22 @@ function isNumber<T>(value: T): value is T & number {
   return typeof value === 'number';
 }
 
-async function fetchJson<T>(url: string, ms = 3000): Promise<T> {
+// Anonymous GitHub API calls share a 60-an-hour limit per IP and 403 on a busy box; a token lifts it to 5,000.
+function githubToken(): string | null {
+  const env = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (env) return env;
+  try {
+    return execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }).trim() || null;
+  } catch {
+    return null; // no gh CLI or not logged in: the anonymous call runs, and a failure names the missing token
+  }
+}
+
+async function fetchJson<T>(url: string, headers: Record<string, string> = {}, ms = 3000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
-    const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json', ...headers } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     // SAFETY: this only names the property T expects to read off an
     // external JSON response — every caller runtime-checks each field's
@@ -74,12 +87,14 @@ export function getStats(): Promise<Stats> {
     let stars = FALLBACK.stars;
     let downloads = FALLBACK.downloads;
 
+    const token = githubToken();
     try {
-      const gh = await fetchJson<GitHubRepoResponse>(REPO_API);
+      const gh = await fetchJson<GitHubRepoResponse>(REPO_API, token ? { Authorization: `Bearer ${token}` } : {});
       if (isNumber(gh.stargazers_count)) stars = gh.stargazers_count;
       else throw new Error('no stargazers_count');
     } catch (err) {
-      console.warn(`[stats] GitHub stars fetch failed, using fallback ${FALLBACK.stars}:`, String(err));
+      const hint = token ? '' : ' (no GitHub token: set GITHUB_TOKEN or run gh auth login)';
+      console.warn(`[stats] GitHub stars fetch failed${hint}, using fallback ${FALLBACK.stars}:`, String(err));
     }
 
     try {
