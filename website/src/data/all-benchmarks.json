@@ -669,7 +669,7 @@
           "system": null,
           "model": "not stated",
           "detail": null,
-          "url": "https://raw.githubusercontent.com/MemTensor/MemOS/main/README.md",
+          "url": "https://raw.githubusercontent.com/MemTensor/MemOS/7f64e49d9af3e2e970104237751e96401792b615/README.md",
           "muted": true
         },
         "EverMemOS": {
@@ -1091,6 +1091,7 @@
         "Memori",
         "MemoryLake",
         "MemOS",
+        "MIRIX",
         "OpenAI Memory",
         "Supermemory",
         "ThreadAtlas",
@@ -1183,6 +1184,16 @@
             "caveat": false
           },
           "cells": {
+            "MIRIX": {
+              "value": "85.38",
+              "num": 85.38,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini",
+              "detail": null,
+              "tag": "paper author",
+              "url": "https://arxiv.org/html/2507.07957",
+              "quote": "MIRIX | 85.11 | 83.70 | 65.62 | 88.39 | 85.38"
+            },
             "Zep": {
               "value": "79.09",
               "num": 79.09,
@@ -1431,6 +1442,16 @@
           "tag": null,
           "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L59",
           "quote": "| EverOS | 96.67 | 91.84 | 89.72 | 76.04 | 93.05 | - | [EverMemOS paper](https://arxiv.org/abs/2601.02163) |"
+        },
+        "gbrain": {
+          "value": "80.0",
+          "num": 80.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/garrytan/gbrain-evals/blob/bb5ef9527477cce994000d5b96183ff10c9041fe/README.md",
+          "quote": "On LoCoMo (10 conversations), `baseline-full-context` scored 84.2% and gbrain-defaults 80.0%"
         },
         "Hindsight": {
           "value": "92.0",
@@ -1800,6 +1821,16 @@
           "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L58",
           "quote": "| EverOS | 97.14 | 85.71 | 93.33 | 77.44 | 73.68 | 89.74 | 83.0 | - | [EverMemOS paper](https://arxiv.org/abs/2601.02163) |"
         },
+        "gbrain": {
+          "value": "94.8",
+          "num": 94.8,
+          "scale": "0-100",
+          "model": "Opus 5.5",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/garrytan/gbrain-evals/blob/bb5ef9527477cce994000d5b96183ff10c9041fe/README.md",
+          "quote": "474 of 500 (94.8%), above Sonnet 4.6's 451 on the same saved results"
+        },
         "Hindsight": {
           "value": "94.6",
           "num": 94.6,
@@ -1811,24 +1842,24 @@
           "quote": "| Hindsight | - | - | - | - | - | - | 94.6 | - | [Hindsight Benchmarks](https://benchmarks.hindsight.vectorize.io/) |"
         },
         "Honcho": {
-          "value": "90.4",
-          "num": 90.4,
+          "value": "92.6",
+          "num": 92.6,
           "scale": "0-100",
-          "model": "Claude Haiku 4.5",
+          "model": "Gemini 3 Pro",
           "detail": null,
           "tag": null,
           "url": "https://espirai-blog.pages.dev/research/Benchmarking-Honcho",
-          "quote": "With Claude Haiku 4.5 as the chat endpoint model, Honcho scores 90.4% on LongMem S"
+          "quote": "90.4% on LongMem S (92.6% with Gemini 3 Pro)"
         },
         "Mastra": {
-          "value": "84.23",
-          "num": 84.23,
+          "value": "94.87",
+          "num": 94.87,
           "scale": "0-100",
-          "model": "gpt-4o",
+          "model": "gpt-5-mini",
           "detail": "Mastra Observational Memory",
           "tag": null,
           "url": "https://mastra.ai/research/observational-memory",
-          "quote": "OM with gpt-4o (84.23%) is the highest openly reproducible score that uses the official benchmark model, gpt-4o."
+          "quote": "gpt-4o                  84.23%  ████████████████░░░░\ngemini-3-flash-preview  89.20%  ██████████████████░░\ngemini-3-pro-preview    93.27%  ███████████████████░\ngpt-5-mini              94.87%  ███████████████████░"
         },
         "Mem0": {
           "value": "94.4",
@@ -2834,6 +2865,16 @@
           "tag": null,
           "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L53",
           "quote": "| EverOS | 53.25 | - | [EverMemOS paper](https://arxiv.org/abs/2601.02163) |"
+        },
+        "MemOS": {
+          "value": "40.58",
+          "num": 40.58,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://raw.githubusercontent.com/MemTensor/MemOS/7f64e49d9af3e2e970104237751e96401792b615/README.md",
+          "quote": "| PersonaMem v2   | 40.58 |"
         }
       }
     },

@@ -99,6 +99,7 @@ IMLogic, Table 5, conversation level	TACITREE	30.46
 IMLogic, Table 5, conversation level	hippo	not run
 LoCoMo, MIRIX paper setup	Full context	87.52
 LoCoMo, MIRIX paper setup	LangMem	78.05
+LoCoMo, MIRIX paper setup	MIRIX	85.38
 LoCoMo, MIRIX paper setup	Mem0	62.47
 LoCoMo, MIRIX paper setup	Zep	79.09
 LoCoMo, MIRIX paper setup	hippo	not run
@@ -139,6 +140,7 @@ LoCoMo, own report	MemoryLake	94.03
 LoCoMo, own report	Supermemory	77.1
 LoCoMo, own report	ThreadAtlas	89.22
 LoCoMo, own report	Zep	94.7
+LoCoMo, own report	gbrain	80.0
 LoCoMo, own report	mem9	86.85
 LongMemEval-S, OmniMemEval shared setup	Cognee	51.80
 LongMemEval-S, OmniMemEval shared setup	EverOS	80.40
@@ -164,13 +166,14 @@ LongMemEval-S, gpt-4o reader	hippo	81.8
 LongMemEval-S, own report	Backboard	93.4
 LongMemEval-S, own report	EverOS	83.0
 LongMemEval-S, own report	Hindsight	94.6
-LongMemEval-S, own report	Honcho	90.4
-LongMemEval-S, own report	Mastra	84.23
+LongMemEval-S, own report	Honcho	92.6
+LongMemEval-S, own report	Mastra	94.87
 LongMemEval-S, own report	Mem0	94.4
 LongMemEval-S, own report	Memoria	88.78
 LongMemEval-S, own report	Supermemory	95.0
 LongMemEval-S, own report	ThreadAtlas	87.40
 LongMemEval-S, own report	Zep	90.2
+LongMemEval-S, own report	gbrain	94.8
 MedMemoryBench, Table 2, Efficient setting	A-Mem	44.84
 MedMemoryBench, Table 2, Efficient setting	HippoRAG	33.69
 MedMemoryBench, Table 2, Efficient setting	Letta	51.21
@@ -251,6 +254,7 @@ PersonaMem v2, OmniMemEval shared setup	Zep	32.34
 PersonaMem v2, OmniMemEval shared setup	hippo	not run
 PersonaMem v2, OmniMemEval shared setup	mem9	30.76
 PersonaMem v2, own report	EverOS	53.25
+PersonaMem v2, own report	MemOS	40.58
 PrecisionMemBench, README harness at 61a712a1	A-Mem	7/77
 PrecisionMemBench, README harness at 61a712a1	Cognee	9/77
 PrecisionMemBench, README harness at 61a712a1	Hindsight	11/77
