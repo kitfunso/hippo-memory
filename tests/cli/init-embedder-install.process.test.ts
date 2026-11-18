@@ -68,14 +68,12 @@ describe('hippo init installs the local embedder from a global npm install', () 
     return r.stdout;
   }
 
-  const npmCalls = (): string[][] =>
-    fs.existsSync(npmLog)
-      ? fs
-          .readFileSync(npmLog, 'utf8')
-          .split('\n')
-          .filter(Boolean)
-          .map((line) => JSON.parse(line) as string[])
-      : [];
+  const npmCalls = (): string[][] => {
+    if (!fs.existsSync(npmLog)) return [];
+    const lines = fs.readFileSync(npmLog, 'utf8').split('\n').filter(Boolean);
+    // SAFETY: the fake npm writes each line as JSON.stringify of its string argv.
+    return lines.map((line) => JSON.parse(line) as string[]);
+  };
 
   it('installs into its own prefix before it makes the store, and only once', () => {
     const first = hippo('init', '--no-learn', '--no-schedule');

@@ -45,7 +45,6 @@ function machine(over: Over): Machine {
     calls.push({ file, args, opts });
     if (over.fail) throw over.fail;
     installed = over.installedAfter ?? true;
-    return null;
   };
   const files = new Set((over.files ?? [LINUX_NPM]).map((p) => path.resolve(p)));
   const deps: EmbedderInstallDeps = {

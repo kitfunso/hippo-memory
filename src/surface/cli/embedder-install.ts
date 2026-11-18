@@ -8,7 +8,7 @@ import type { EmbeddingsConfig } from '../../base/config/config.js';
 import { PACKAGE_ROOT } from '../../base/config/package-root.js';
 import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { envSkipEmbedderInstall } from '../../base/util/env.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 
 /** Exact: a global install has no lockfile, so this pin is the one review gate on the tree. */
 const EMBEDDER_PACKAGE = '@huggingface/transformers@4.3.2';
@@ -21,7 +21,7 @@ const PROJECT_ADD: ReadonlyArray<readonly [lockfile: string, command: string]> =
   ['bun.lockb', 'bun add'],
 ];
 
-export type RunNode = (file: string, args: readonly string[], opts: ExecFileSyncOptions) => unknown;
+export type RunNode = (file: string, args: readonly string[], opts: ExecFileSyncOptions) => void;
 
 /** What the step reads from the machine; tests pass stand-ins. */
 export interface EmbedderInstallDeps {
@@ -64,8 +64,9 @@ function layoutOf(deps: EmbedderInstallDeps): Layout {
 }
 
 function adviceFor(layout: Layout, deps: EmbedderInstallDeps): string {
-  if (layout.kind === 'npm-global')
+  if (layout.kind === 'npm-global') {
     return `run: npm install -g --ignore-scripts ${EMBEDDER_PACKAGE}`;
+  }
   if (layout.kind === 'npx') {
     return 'install hippo globally (npm install -g hippo-memory), then run hippo init again';
   }
@@ -88,12 +89,13 @@ function npmCliFor(prefix: string, deps: EmbedderInstallDeps): string | undefine
   return [path.join(prefix, lib, NPM_CLI), path.join(beside, NPM_CLI)].find(deps.exists);
 }
 
-function failureLine(err: unknown): string {
-  const { code, status } = err as { code?: unknown; status?: unknown };
-  if (code === 'ETIMEDOUT') return 'npm ran for 10 minutes, so hippo stopped it.';
-  if (typeof status === 'number')
-    return `npm stopped with exit code ${status}; its error is above.`;
-  return `npm did not start (${errorMessage(err).split(/\r?\n/, 1)[0]}).`;
+/** execFileSync puts npm's exit code on the error it throws; a kill or a failed start leaves none. */
+function failureLine(error: Error): string {
+  if (errorCode(error) === 'ETIMEDOUT') return 'npm ran for 10 minutes, so hippo stopped it.';
+  if ('status' in error && Number.isInteger(error.status)) {
+    return `npm stopped with exit code ${String(error.status)}; its error is above.`;
+  }
+  return `npm did not start (${error.message.split(/\r?\n/, 1)[0]}).`;
 }
 
 /** Installs the local embedder into hippo's own npm global folder, else prints how; never throws.
@@ -133,8 +135,9 @@ export function installLocalEmbedder(
       { stdio: ['ignore', 'inherit', 'inherit'], timeout: INSTALL_TIMEOUT_MS },
     );
   } catch (err) {
-    log.info(`embedder install failed: ${errorMessage(err)}`, errorFields(err));
-    console.log(`${failureLine(err)} For recall by meaning, ${adviceFor(layout, deps)}`);
+    const error = err instanceof Error ? err : new Error(errorMessage(err));
+    log.info(`embedder install failed: ${error.message}`, errorFields(error));
+    console.log(`${failureLine(error)} For recall by meaning, ${adviceFor(layout, deps)}`);
     return false;
   }
   if (!deps.installed()) {
