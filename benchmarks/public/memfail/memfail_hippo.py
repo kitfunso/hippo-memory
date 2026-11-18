@@ -309,7 +309,7 @@ def main() -> None:
     out = Run.base / a.arm
     if a.stage == "estimate":
         import estimate
-        return estimate.main(DATA(), OUT / "smoke", a.arm)
+        return estimate.main(DATA(), OUT / "smoke", a.arm, sys.modules[__name__])
     if a.stage == "replies":
         with one_writer(Run.base):
             return run_replies(DATA(), a.slots)

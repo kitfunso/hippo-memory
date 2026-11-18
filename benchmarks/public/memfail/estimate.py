@@ -11,6 +11,7 @@ import math
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean
+from types import ModuleType
 
 import vendor as v
 
@@ -36,7 +37,7 @@ def store_tokens(facts: list[str], reply_tokens: float) -> float:
     return sum(tok(f"- user: {f}") + 1 for f in facts) + len(facts) * (reply_tokens + tok("- assistant: ") + 1)
 
 
-def main(data: dict, smoke: Path, arm: str) -> None:
+def main(data: dict, smoke: Path, arm: str, mh: ModuleType) -> None:
     out = smoke / arm
     replies = ok_records(smoke / "calls-reply.jsonl")
     answers = ok_records(out / "calls-answer.jsonl")
@@ -49,7 +50,7 @@ def main(data: dict, smoke: Path, arm: str) -> None:
                                   f"{reply_out:.0f}; {len(answers)} answers, mean {ans_in:.0f} in, {ans_out:.0f} out"], 0, 0
     for task, d in data.items():
         facts = [f for c in d["storage"] for f in c]
-        smoke_store = smoke_store_tokens(out, task)
+        smoke_store = smoke_store_tokens(mh, out, task)
         full_store = store_tokens(facts, reply_text)
         calls = defaultdict(list)
         for f in (out / "judge" / task).glob("*.jsonl"):
@@ -80,9 +81,8 @@ def main(data: dict, smoke: Path, arm: str) -> None:
     print("\n".join(lines))
 
 
-def smoke_store_tokens(out: Path, task: str) -> int:
-    """The smoke store as the judges saw it: format_all_memories over the rebuilt list."""
-    import memfail_hippo as mh
+def smoke_store_tokens(mh: ModuleType, out: Path, task: str) -> int:
+    """The smoke store as the judges saw it. mh is the running script: a fresh import would lose its smoke flag."""
     turns = dict(mh.conversations())[f"memfail-{task}"]
     return tok(v.module(v.TASKS[task].judge).format_all_memories(mh.all_memories(turns)))
 

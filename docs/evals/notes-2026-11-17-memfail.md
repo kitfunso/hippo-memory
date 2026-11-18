@@ -42,4 +42,6 @@ Smoke items, excluded: `coexisting-000`, `conditional-000`, `conditional-hard-00
 
 **Smoke.** Started 17 Nov 21:02 UTC by `results-r2/run-memfail-smoke.sh`; it waits at the free-token cap for the 00:00 UTC free day, then writes `results-r2/memfail/smoke/hippo-emb/smoke.txt` and `smoke/estimate.txt`.
 
+**Smoke result (18 Nov).** Every stage ran on all 5 questions with 0 analysis errors. The measured mean reply is 165 tokens, so the full run's upper bound is 86.9M input and 2.3M output tokens: 35.7 days of the whole free small pool, or $26.34 at list price. A free-only full run cannot finish before the 11 Dec shutdown, so the full run waits for Keith's figure.
+
 **Read before this note.** At `61ab3028`: `src/evaluation.py`, `src/llm.py`, `src/prompt_templates.py`, `src/dataset.py`, the four `evaluate_*.py` scripts and their shell scripts, the four `analyze_errors.py` judges, and the Mem0 wrapper in `src/memory.py` at `7ccb5b8`. The paper's text, Table 2, Figure 1 and Appendix D (arXiv v1 HTML).
